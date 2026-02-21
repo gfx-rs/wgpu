@@ -401,6 +401,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             self.cmd_buffer.commands.push(C::CopyTextureToTexture {
                 src: src_raw,
                 src_target,
+                src_format: src.format,
                 dst: dst_raw,
                 dst_target,
                 copy,

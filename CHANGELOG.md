@@ -150,6 +150,8 @@ By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
 - `DisplayHandle` should now be passed to `InstanceDescriptor` for correct EGL initialization on Wayland. By @MarijnS95 in [#8012](https://github.com/gfx-rs/wgpu/pull/8012)
   Note that the existing workaround to create surfaces before the adapter is no longer valid.
 - Changing shader constants now correctly recompiles the shader. By @DerSchmale in [#8291](https://github.com/gfx-rs/wgpu/pull/8291).
+- Fix copying depth texture to texture and copying cubemap to buffer, by @beicause in [#9082
+](https://github.com/gfx-rs/wgpu/pull/9082)
 
 ### Documentation
 

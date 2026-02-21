@@ -880,6 +880,7 @@ enum Command {
     CopyTextureToTexture {
         src: glow::Texture,
         src_target: BindTarget,
+        src_format: wgt::TextureFormat,
         dst: glow::Texture,
         dst_target: BindTarget,
         copy: crate::TextureCopy,

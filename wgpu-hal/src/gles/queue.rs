@@ -671,61 +671,128 @@ impl super::Queue {
             C::CopyTextureToTexture {
                 src,
                 src_target,
+                src_format,
                 dst,
                 dst_target,
                 ref copy,
             } => {
-                //TODO: handle 3D copies
-                unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo)) };
-                if is_layered_target(src_target) {
-                    //TODO: handle GLES without framebuffer_texture_3d
-                    unsafe {
-                        gl.framebuffer_texture_layer(
-                            glow::READ_FRAMEBUFFER,
-                            glow::COLOR_ATTACHMENT0,
-                            Some(src),
-                            copy.src_base.mip_level as i32,
-                            copy.src_base.array_layer as i32,
-                        )
-                    };
-                } else {
-                    unsafe {
-                        gl.framebuffer_texture_2d(
-                            glow::READ_FRAMEBUFFER,
-                            glow::COLOR_ATTACHMENT0,
-                            src_target,
-                            Some(src),
-                            copy.src_base.mip_level as i32,
-                        )
-                    };
+                if src_format.is_compressed() {
+                    log::error!("Copying compressed texture to texture is disallowed");
+                    return;
                 }
 
-                unsafe { gl.bind_texture(dst_target, Some(dst)) };
-                if is_layered_target(dst_target) {
+                let (src_depth_or_layer, dst_depth_or_layer, depth_or_layers) =
+                    if dst_target == glow::TEXTURE_3D {
+                        (
+                            copy.src_base.origin.z,
+                            copy.dst_base.origin.z,
+                            copy.size.depth,
+                        )
+                    } else {
+                        (copy.src_base.array_layer, copy.dst_base.array_layer, 1)
+                    };
+
+                let version = gl.version();
+                let is_min_es_3_2 = version.is_embedded && (version.major, version.minor) >= (3, 2);
+                let is_min_4_3 = !version.is_embedded && (version.major, version.minor) >= (4, 3);
+                if is_min_es_3_2 || is_min_4_3 {
                     unsafe {
-                        gl.copy_tex_sub_image_3d(
+                        gl.copy_image_sub_data(
+                            src,
+                            src_target,
+                            copy.src_base.mip_level as i32,
+                            copy.src_base.origin.x as i32,
+                            copy.src_base.origin.y as i32,
+                            src_depth_or_layer as i32,
+                            dst,
                             dst_target,
                             copy.dst_base.mip_level as i32,
                             copy.dst_base.origin.x as i32,
                             copy.dst_base.origin.y as i32,
-                            get_z_offset(dst_target, &copy.dst_base) as i32,
-                            copy.src_base.origin.x as i32,
-                            copy.src_base.origin.y as i32,
+                            dst_depth_or_layer as i32,
                             copy.size.width as i32,
                             copy.size.height as i32,
-                        )
+                            copy.size.depth as i32,
+                        );
                     };
-                } else {
+                    return;
+                }
+
+                let (attachment, blit_mask) = match copy.src_base.aspect {
+                    crate::FormatAspects::COLOR => {
+                        (glow::COLOR_ATTACHMENT0, glow::COLOR_BUFFER_BIT)
+                    }
+                    crate::FormatAspects::DEPTH => (glow::DEPTH_ATTACHMENT, glow::DEPTH_BUFFER_BIT),
+                    crate::FormatAspects::STENCIL => {
+                        (glow::STENCIL_ATTACHMENT, glow::STENCIL_BUFFER_BIT)
+                    }
+                    crate::FormatAspects::DEPTH_STENCIL => (
+                        glow::DEPTH_STENCIL_ATTACHMENT,
+                        glow::DEPTH_BUFFER_BIT | glow::STENCIL_BUFFER_BIT,
+                    ),
+                    _ => unimplemented!(),
+                };
+
+                unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo)) };
+                unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw_fbo)) };
+
+                for z in 0..depth_or_layers {
+                    let src_layer = src_depth_or_layer + z;
+                    let dst_layer = dst_depth_or_layer + z;
+                    if is_layered_target(src_target) {
+                        unsafe {
+                            gl.framebuffer_texture_layer(
+                                glow::READ_FRAMEBUFFER,
+                                attachment,
+                                Some(src),
+                                copy.src_base.mip_level as i32,
+                                src_layer as i32,
+                            )
+                        };
+                    } else {
+                        unsafe {
+                            gl.framebuffer_texture_2d(
+                                glow::READ_FRAMEBUFFER,
+                                attachment,
+                                get_2d_target(src_target, src_layer),
+                                Some(src),
+                                copy.src_base.mip_level as i32,
+                            )
+                        };
+                    }
+                    if is_layered_target(dst_target) {
+                        unsafe {
+                            gl.framebuffer_texture_layer(
+                                glow::DRAW_FRAMEBUFFER,
+                                attachment,
+                                Some(dst),
+                                copy.dst_base.mip_level as i32,
+                                dst_layer as i32,
+                            )
+                        };
+                    } else {
+                        unsafe {
+                            gl.framebuffer_texture_2d(
+                                glow::DRAW_FRAMEBUFFER,
+                                attachment,
+                                get_2d_target(dst_target, dst_layer),
+                                Some(dst),
+                                copy.dst_base.mip_level as i32,
+                            )
+                        };
+                    }
                     unsafe {
-                        gl.copy_tex_sub_image_2d(
-                            get_2d_target(dst_target, copy.dst_base.array_layer),
-                            copy.dst_base.mip_level as i32,
+                        gl.blit_framebuffer(
+                            copy.src_base.origin.x as i32,
+                            copy.src_base.origin.y as i32,
+                            (copy.src_base.origin.x + copy.size.width) as i32,
+                            (copy.src_base.origin.y + copy.size.height) as i32,
                             copy.dst_base.origin.x as i32,
                             copy.dst_base.origin.y as i32,
-                            copy.src_base.origin.x as i32,
-                            copy.src_base.origin.y as i32,
-                            copy.size.width as i32,
-                            copy.size.height as i32,
+                            (copy.dst_base.origin.x + copy.size.width) as i32,
+                            (copy.dst_base.origin.y + copy.size.height) as i32,
+                            blit_mask,
+                            glow::NEAREST,
                         )
                     };
                 }
@@ -876,17 +943,11 @@ impl super::Queue {
                 dst_target: _,
                 ref copy,
             } => {
-                let block_size = src_format.block_copy_size(None).unwrap();
                 if src_format.is_compressed() {
-                    log::error!("Not implemented yet: compressed texture copy to buffer");
+                    log::error!("Copying compressed texture to buffer is disallowed");
                     return;
                 }
-                if src_target == glow::TEXTURE_CUBE_MAP
-                    || src_target == glow::TEXTURE_CUBE_MAP_ARRAY
-                {
-                    log::error!("Not implemented yet: cubemap texture copy to buffer");
-                    return;
-                }
+                let block_size = src_format.block_copy_size(None).unwrap();
                 let format_desc = self.shared.describe_texture_format(src_format);
                 let row_texels = copy
                     .buffer_layout
@@ -939,7 +1000,19 @@ impl super::Queue {
                         };
                         read_pixels(copy.buffer_layout.offset);
                     }
-                    glow::TEXTURE_2D_ARRAY => {
+                    glow::TEXTURE_CUBE_MAP => {
+                        unsafe {
+                            gl.framebuffer_texture_2d(
+                                glow::READ_FRAMEBUFFER,
+                                glow::COLOR_ATTACHMENT0,
+                                get_2d_target(src_target, copy.texture_base.array_layer),
+                                Some(src),
+                                copy.texture_base.mip_level as i32,
+                            )
+                        };
+                        read_pixels(copy.buffer_layout.offset);
+                    }
+                    glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY => {
                         unsafe {
                             gl.framebuffer_texture_layer(
                                 glow::READ_FRAMEBUFFER,
@@ -967,7 +1040,6 @@ impl super::Queue {
                             read_pixels(offset);
                         }
                     }
-                    glow::TEXTURE_CUBE_MAP | glow::TEXTURE_CUBE_MAP_ARRAY => unimplemented!(),
                     _ => unreachable!(),
                 }
             }
