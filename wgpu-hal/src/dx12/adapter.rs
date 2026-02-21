@@ -1236,7 +1236,7 @@ impl crate::Adapter for super::Adapter {
 
     // Don't put barriers between inclusive uses
     // DX12 implicitly orders renderpasses on the same resources.
-    fn ordered_texture_usages(&self) -> wgt::TextureUses {
+    fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
         wgt::TextureUses::INCLUSIVE
             | wgt::TextureUses::COLOR_TARGET
             | wgt::TextureUses::DEPTH_STENCIL_WRITE
