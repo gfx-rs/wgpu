@@ -16,7 +16,7 @@ pub enum BindSamplerTarget {
 ///
 /// See the module documentation's section on external textures for details.
 ///
-/// [`External`]: crate::ir::ImageClass::External
+/// [`External`]: ../../naga/ir/enum.ImageClass.html#variant.External
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
@@ -55,7 +55,9 @@ pub struct EntryPointResources {
 
     /// The slot of a buffer that contains an array of `u32`,
     /// one for the size of each bound buffer that contains a runtime array,
-    /// in order of [`crate::GlobalVariable`] declarations.
+    /// in order of [`GlobalVariable`] declarations.
+    ///
+    /// [`GlobalVariable`]: ../../naga/ir/struct.GlobalVariable.html
     pub sizes_buffer: Option<Slot>,
 }
 

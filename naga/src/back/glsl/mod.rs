@@ -397,16 +397,18 @@ pub enum Error {
     /// A error occurred while writing to the output.
     #[error("Format error")]
     FmtError(#[from] FmtError),
-    /// The specified [`Version`] doesn't have all required [`Features`].
+    /// The specified [`GlslVersion`] doesn't have all required [`Features`].
     ///
     /// Contains the missing [`Features`].
+    ///
+    /// [`GlslVersion`]:
     #[error("The selected version doesn't support {0:?}")]
     MissingFeatures(Features),
     /// [`AddressSpace::Immediate`](crate::AddressSpace::Immediate) was used more than
     /// once in the entry point, which isn't supported.
     #[error("Multiple immediates aren't supported")]
     MultipleImmediateData,
-    /// The specified [`Version`] isn't supported.
+    /// The specified [`GlslVersion`] isn't supported.
     #[error("The specified version isn't supported")]
     VersionNotSupported,
     /// The entry point couldn't be found.
