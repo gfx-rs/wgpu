@@ -121,6 +121,12 @@ Bottom level categories:
 - Fixed use of a texture view without `TextureUsage::TEXTURE_BINDING` as a read-only depth attachment. By @andyleiserson in [#9346](https://github.com/gfx-rs/wgpu/pull/9346).
 - Fixed a `debug_assert` during stride validation for indirect multi draw. By @kristoff3r in [#9332](https://github.com/gfx-rs/wgpu/pull/9332)
 
+### Dependency Updates
+
+#### WebGPU
+
+- Upgrade vendored `wasm-bindgen` WebGPU bindings to 0.2.115 and adapt the `webgpu` backend to the new API. `ExternalImageSource::VideoFrame` no longer requires `--cfg=web_sys_unstable_apis`, as `web_sys::VideoFrame` is now stable. The GLES backend still requires the cfg to upload `VideoFrame`s, since `glow` still needs to adapt. By @evilpie in [#9090](https://github.com/gfx-rs/wgpu/pull/9090).
+
 ## v29.0.1 (2026-03-26)
 
 This release includes `wgpu-core`, `wgpu-hal` and `wgpu-types` version `29.0.1`. All other crates remain at their previous versions.
