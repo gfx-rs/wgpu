@@ -141,6 +141,8 @@ pub struct PhysicalDeviceFeatures {
 
     /// Features provided by `VK_KHR_vulkan_memory_model`, promoted to Vulkan 1.2
     vulkan_memory_model: Option<vk::PhysicalDeviceVulkanMemoryModelFeaturesKHR<'static>>,
+
+    shader_draw_parameters: Option<vk::PhysicalDeviceShaderDrawParametersFeatures<'static>>,
 }
 
 impl PhysicalDeviceFeatures {
@@ -224,6 +226,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.vulkan_memory_model {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.shader_draw_parameters {
             info = info.push_next(feature);
         }
         info
@@ -606,6 +611,14 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            shader_draw_parameters: if device_api_version >= vk::API_VERSION_1_1 {
+                Some(
+                    vk::PhysicalDeviceShaderDrawParametersFeatures::default()
+                        .shader_draw_parameters(true),
+                )
+            } else {
+                None
+            },
         }
     }
 
@@ -635,7 +648,7 @@ impl PhysicalDeviceFeatures {
             | F::PIPELINE_CACHE
             | F::SHADER_EARLY_DEPTH_TEST
             | F::TEXTURE_ATOMIC
-            | F::EXPERIMENTAL_PASSTHROUGH_SHADERS;
+            | F::PASSTHROUGH_SHADERS;
 
         let mut dl_flags = Df::COMPUTE_SHADERS
             | Df::BASE_VERTEX
@@ -1006,6 +1019,13 @@ impl PhysicalDeviceFeatures {
             !caps.cooperative_matrix_properties.is_empty(),
         );
 
+        features.set(
+            F::SHADER_DRAW_INDEX,
+            self.shader_draw_parameters
+                .is_some_and(|a| a.shader_draw_parameters != 0)
+                || caps.supports_extension(c"VK_KHR_shader_draw_parameters"),
+        );
+
         (features, dl_flags)
     }
 }
@@ -1146,6 +1166,10 @@ impl PhysicalDeviceProperties {
                 // - `VK_KHR_16bit_storage` requires `VK_KHR_storage_buffer_storage_class`, however
                 //   we require that one already.
                 extensions.push(khr::_16bit_storage::NAME);
+            }
+
+            if requested_features.contains(wgt::Features::SHADER_DRAW_INDEX) {
+                extensions.push(khr::shader_draw_parameters::NAME);
             }
         }
 
@@ -1829,6 +1853,13 @@ impl super::InstanceShared {
                 features2 = features2.push_next(next);
             }
 
+            if capabilities.device_api_version >= vk::API_VERSION_1_1 {
+                let next = features
+                    .shader_draw_parameters
+                    .insert(vk::PhysicalDeviceShaderDrawParametersFeatures::default());
+                features2 = features2.push_next(next);
+            }
+
             unsafe { get_device_properties.get_physical_device_features2(phd, &mut features2) };
             features2.features
         } else {
@@ -2187,6 +2218,7 @@ impl super::Adapter {
         drop_callback: Option<crate::DropCallback>,
         enabled_extensions: &[&'static CStr],
         features: wgt::Features,
+        limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
         family_index: u32,
         queue_index: u32,
@@ -2358,6 +2390,10 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::FragmentBarycentricKHR);
             }
 
+            if features.contains(wgt::Features::SHADER_DRAW_INDEX) {
+                capabilities.push(spv::Capability::DrawParameters);
+            }
+
             let mut flags = spv::WriterFlags::empty();
             flags.set(
                 spv::WriterFlags::DEBUG,
@@ -2450,6 +2486,11 @@ impl super::Adapter {
                 // We need to build this separately for each invocation, so just default it out here
                 binding_map: BTreeMap::default(),
                 debug_info: None,
+                task_dispatch_limits: Some(naga::back::TaskDispatchLimits {
+                    max_mesh_workgroups_per_dim: limits.max_task_mesh_workgroups_per_dimension,
+                    max_mesh_workgroups_total: limits.max_task_mesh_workgroup_total_count,
+                }),
+                mesh_shader_primitive_indices_clamp: true,
             }
         };
 
@@ -2562,6 +2603,7 @@ impl super::Adapter {
     pub unsafe fn open_with_callback<'a>(
         &self,
         features: wgt::Features,
+        limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
         callback: Option<Box<super::CreateDeviceCallback<'a>>>,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
@@ -2624,6 +2666,7 @@ impl super::Adapter {
                 None,
                 &enabled_extensions,
                 features,
+                limits,
                 memory_hints,
                 family_info.queue_family_index,
                 0,
@@ -2638,10 +2681,10 @@ impl crate::Adapter for super::Adapter {
     unsafe fn open(
         &self,
         features: wgt::Features,
-        _limits: &wgt::Limits,
+        limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        unsafe { self.open_with_callback(features, memory_hints, None) }
+        unsafe { self.open_with_callback(features, limits, memory_hints, None) }
     }
 
     unsafe fn texture_format_capabilities(

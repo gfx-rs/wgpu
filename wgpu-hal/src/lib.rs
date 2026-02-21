@@ -1708,7 +1708,6 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
                 <Self::A as Api>::AccelerationStructure,
             >,
         >;
-
     unsafe fn place_acceleration_structure_barrier(
         &mut self,
         barrier: AccelerationStructureBarrier,
@@ -1718,6 +1717,10 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         &mut self,
         acceleration_structure: &<Self::A as Api>::AccelerationStructure,
         buf: &<Self::A as Api>::Buffer,
+    );
+    unsafe fn set_acceleration_structure_dependencies(
+        command_buffers: &[&<Self::A as Api>::CommandBuffer],
+        dependencies: &[&<Self::A as Api>::AccelerationStructure],
     );
 }
 

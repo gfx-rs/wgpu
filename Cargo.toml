@@ -122,8 +122,7 @@ env_logger = { version = "0.11", default-features = false }
 fern = "0.7"
 flume = "0.12"
 futures-lite = "2"
-getrandom = "0.3"
-glam = "0.31.0"
+glam = "0.32.0"
 glob = "0.3"
 half = { version = "2.5", default-features = false } # We require 2.5 to have `Arbitrary` support.
 hashbrown = { version = "0.16", default-features = false, features = [
@@ -133,7 +132,7 @@ hashbrown = { version = "0.16", default-features = false, features = [
 heck = "0.5"
 hexf-parse = "0.2"
 image = { version = "0.25", default-features = false, features = ["png"] }
-indexmap = { version = "2.8", default-features = false }
+indexmap = { version = "2.11.4", default-features = false }
 indicatif = "0.18"
 itertools = { version = "0.14" }
 jobserver = "0.1"
@@ -184,7 +183,7 @@ ron = "0.12"
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
 rustc-hash = { version = "1.1", default-features = false }
 serde_json = "1.0.143"
-serde = { version = "1.0.219", default-features = false }
+serde = { version = "1.0.225", default-features = false }
 shell-words = "1"
 smallvec = "1.14"
 spirv = { version = "0.3", git = "https://github.com/gfx-rs/rspirv", rev = "89ce4d0e64c91b0635f617409dc57cb031749a39" }
@@ -192,7 +191,7 @@ static_assertions = "1.1"
 strum = { version = "0.27.1", default-features = false, features = ["derive"] }
 syn = "2.0.98"
 tempfile = "3"
-toml = "0.9.0"
+toml = "1.0.0"
 trybuild = "1"
 tracy-client = "0.18"
 thiserror = { version = "2.0.12", default-features = false }
@@ -204,7 +203,6 @@ xshell = "0.2.2"
 
 # Metal dependencies
 block2 = "0.6.2"
-dispatch2 = "0.3.0"
 objc2 = "0.6.3"
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
@@ -220,7 +218,6 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = [
 objc2-metal = { version = "0.3.2", default-features = false, features = [
     "std",
     "block2",
-    "dispatch2",
     "MTLAllocation",
     "MTLBlitCommandEncoder",
     "MTLBlitPass",
@@ -250,6 +247,10 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "MTLTexture",
     "MTLTypes",
     "MTLVertexDescriptor",
+    "MTLAccelerationStructure",
+    "MTLAccelerationStructureTypes",
+    "MTLAccelerationStructureCommandEncoder",
+    "MTLResidencySet",
 ] }
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
     "std",
@@ -288,11 +289,11 @@ windows = { version = "0.62", default-features = false }
 # wasm32 dependencies
 console_error_panic_hook = "0.1.5"
 console_log = "1"
-js-sys = { version = "0.3.77", default-features = false }
-wasm-bindgen = "0.2.100"
-wasm-bindgen-futures = "0.4.43"
+js-sys = { version = "0.3.85", default-features = false }
+wasm-bindgen = { version = "0.2.108", default-features = false }
+wasm-bindgen-futures = { version = "0.4.58", default-features = false }
 wasm-bindgen-test = "0.3"
-web-sys = { version = "0.3.77", default-features = false }
+web-sys = { version = "0.3.85", default-features = false }
 web-time = "1.1.0"
 
 # deno dependencies

@@ -234,9 +234,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> webgpu_sys::GpuText
         TextureFormat::Bgra8UnormSrgb => tf::Bgra8unormSrgb,
         // Packed 32-bit formats
         TextureFormat::Rgb9e5Ufloat => tf::Rgb9e5ufloat,
-        TextureFormat::Rgb10a2Uint => {
-            unimplemented!("Current version of web_sys is missing {texture_format:?}")
-        }
+        TextureFormat::Rgb10a2Uint => tf::Rgb10a2uint,
         TextureFormat::Rgb10a2Unorm => tf::Rgb10a2unorm,
         TextureFormat::Rg11b10Ufloat => tf::Rg11b10ufloat,
         // 64-bit formats
@@ -2575,20 +2573,11 @@ impl dispatch::QueueInterface for WebQueue {
         data: &[u8],
     ) {
         let buffer = buffer.as_webgpu();
-        /* Skip the copy once gecko allows BufferSource instead of ArrayBuffer
-        self.inner.write_buffer_with_f64_and_u8_array_and_f64_and_f64(
-            &buffer.buffer,
-            offset as f64,
-            data,
-            0f64,
-            data.len() as f64,
-        );
-        */
         self.inner
-            .write_buffer_with_f64_and_buffer_source_and_f64_and_f64(
+            .write_buffer_with_f64_and_u8_slice_and_f64_and_f64(
                 &buffer.inner,
                 offset as f64,
-                &js_sys::Uint8Array::from(data).buffer(),
+                data,
                 0f64,
                 data.len() as f64,
             )
@@ -2667,18 +2656,10 @@ impl dispatch::QueueInterface for WebQueue {
         }
         mapped_data_layout.set_offset(data_layout.offset as f64);
 
-        /* Skip the copy once gecko allows BufferSource instead of ArrayBuffer
-        self.inner.write_texture_with_u8_array_and_gpu_extent_3d_dict(
-            &map_texture_copy_view(texture),
-            data,
-            &mapped_data_layout,
-            &map_extent_3d(size),
-        );
-        */
         self.inner
-            .write_texture_with_buffer_source_and_gpu_extent_3d_dict(
+            .write_texture_with_u8_slice_and_gpu_extent_3d_dict(
                 &map_texture_copy_view(texture),
-                &js_sys::Uint8Array::from(data).buffer(),
+                data,
                 &mapped_data_layout,
                 &map_extent_3d(size),
             )
@@ -3235,19 +3216,16 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         }
     }
 
-    fn insert_debug_marker(&self, _label: &str) {
-        // Not available in gecko yet
-        // self.insert_debug_marker(label);
+    fn insert_debug_marker(&self, label: &str) {
+        self.inner.insert_debug_marker(label)
     }
 
-    fn push_debug_group(&self, _label: &str) {
-        // Not available in gecko yet
-        // self.push_debug_group(label);
+    fn push_debug_group(&self, group_label: &str) {
+        self.inner.push_debug_group(group_label)
     }
 
     fn pop_debug_group(&self) {
-        // Not available in gecko yet
-        // self.pop_debug_group();
+        self.inner.pop_debug_group()
     }
 
     fn write_timestamp(&self, _query_set: &dispatch::DispatchQuerySet, _query_index: u32) {
@@ -3357,19 +3335,16 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
         panic!("IMMEDIATES feature must be enabled to call set_immediates")
     }
 
-    fn insert_debug_marker(&mut self, _label: &str) {
-        // Not available in gecko yet
-        // self.inner.insert_debug_marker(label);
+    fn insert_debug_marker(&mut self, label: &str) {
+        self.inner.insert_debug_marker(label);
     }
 
-    fn push_debug_group(&mut self, _group_label: &str) {
-        // Not available in gecko yet
-        // self.inner.push_debug_group(group_label);
+    fn push_debug_group(&mut self, group_label: &str) {
+        self.inner.push_debug_group(group_label);
     }
 
     fn pop_debug_group(&mut self) {
-        // Not available in gecko yet
-        // self.inner.pop_debug_group();
+        self.inner.pop_debug_group();
     }
 
     fn write_timestamp(&mut self, _query_set: &dispatch::DispatchQuerySet, _query_index: u32) {
@@ -3646,33 +3621,28 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         panic!("MESH_SHADER feature must be enabled to call multi_draw_mesh_tasks_indirect_count")
     }
 
-    fn insert_debug_marker(&mut self, _label: &str) {
-        // Not available in gecko yet
-        // self.inner.insert_debug_marker(label);
+    fn insert_debug_marker(&mut self, label: &str) {
+        self.inner.insert_debug_marker(label);
     }
 
-    fn push_debug_group(&mut self, _group_label: &str) {
-        // Not available in gecko yet
-        // self.inner.push_debug_group(group_label);
+    fn push_debug_group(&mut self, group_label: &str) {
+        self.inner.push_debug_group(group_label);
     }
 
     fn pop_debug_group(&mut self) {
-        // Not available in gecko yet
-        // self.inner.pop_debug_group();
+        self.inner.pop_debug_group();
     }
 
     fn write_timestamp(&mut self, _query_set: &dispatch::DispatchQuerySet, _query_index: u32) {
         panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a render pass.")
     }
 
-    fn begin_occlusion_query(&mut self, _query_index: u32) {
-        // Not available in gecko yet
-        // self.inner.begin_occlusion_query(query_index);
+    fn begin_occlusion_query(&mut self, query_index: u32) {
+        self.inner.begin_occlusion_query(query_index);
     }
 
     fn end_occlusion_query(&mut self) {
-        // Not available in gecko yet
-        // self.inner.end_occlusion_query();
+        self.inner.end_occlusion_query();
     }
 
     fn begin_pipeline_statistics_query(
@@ -3680,14 +3650,11 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         _query_set: &dispatch::DispatchQuerySet,
         _query_index: u32,
     ) {
-        // Not available in gecko yet
-        // let query_set = query_set.as_webgpu();
-        // self.inner.begin_pipeline_statistics_query(query_set, query_index);
+        // Removed from WebGPU in https://github.com/gpuweb/gpuweb/pull/2296
     }
 
     fn end_pipeline_statistics_query(&mut self) {
-        // Not available in gecko yet
-        // self.inner.end_pipeline_statistics_query();
+        // Removed from WebGPU https://github.com/gpuweb/gpuweb/pull/2296
     }
 
     fn execute_bundles(

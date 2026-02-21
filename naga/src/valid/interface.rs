@@ -254,6 +254,7 @@ impl VaryingContext<'_> {
                     | Bi::SubgroupId
                     | Bi::SubgroupSize
                     | Bi::SubgroupInvocationId => Capabilities::SUBGROUP,
+                    Bi::DrawIndex => Capabilities::DRAW_INDEX,
                     _ => Capabilities::empty(),
                 };
                 if !self.capabilities.contains(required) {
@@ -278,7 +279,7 @@ impl VaryingContext<'_> {
                             && !self.output,
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
-                    Bi::DrawID => (
+                    Bi::DrawIndex => (
                         // Always allowed in task/vertex stage. Allowed in mesh stage if there is no task stage in the pipeline.
                         (self.stage == St::Vertex
                             || self.stage == St::Task
@@ -1371,9 +1372,11 @@ impl super::Validator {
             }
             // Task shaders must have a single `MeshTaskSize` output, and nothing else.
             if ep.stage == crate::ShaderStage::Task {
-                let ok = result_built_ins.contains(&crate::BuiltIn::MeshTaskSize)
-                    && result_built_ins.len() == 1
-                    && self.location_mask.is_empty();
+                let ok = module.types[fr.ty].inner
+                    == crate::TypeInner::Vector {
+                        size: crate::VectorSize::Tri,
+                        scalar: crate::Scalar::U32,
+                    };
                 if !ok {
                     return Err(EntryPointError::WrongTaskShaderEntryResult.with_span());
                 }

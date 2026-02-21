@@ -22,8 +22,7 @@ impl Alignment {
 
     pub const fn new(n: u32) -> Option<Self> {
         if n.is_power_of_two() {
-            // SAFETY: value can't be 0 since we just checked if it's a power of 2
-            Some(Self(unsafe { NonZeroU32::new_unchecked(n) }))
+            Some(Self(NonZeroU32::new(n).unwrap()))
         } else {
             None
         }
@@ -71,8 +70,7 @@ impl ops::Mul for Alignment {
     type Output = Alignment;
 
     fn mul(self, rhs: Alignment) -> Self::Output {
-        // SAFETY: both lhs and rhs are powers of 2, the result will be a power of 2
-        Self(unsafe { NonZeroU32::new_unchecked(self.0.get() * rhs.0.get()) })
+        Self(NonZeroU32::new(self.0.get() * rhs.0.get()).unwrap())
     }
 }
 
@@ -88,7 +86,7 @@ impl From<crate::VectorSize> for Alignment {
 
 impl From<crate::CooperativeSize> for Alignment {
     fn from(size: crate::CooperativeSize) -> Self {
-        Self(unsafe { NonZeroU32::new_unchecked(size as u32) })
+        Self(NonZeroU32::new(size as u32).unwrap())
     }
 }
 

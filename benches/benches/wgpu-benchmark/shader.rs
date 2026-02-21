@@ -366,14 +366,16 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
         let mut data = Vec::new();
         let mut writer = naga::back::spv::Writer::new(&Default::default()).unwrap();
         for input in &inputs.inner {
+            let shared_info = WriterSharedOptions {
+                mesh_output_validation: input.options.mesh_output_validation,
+                task_limits: input.options.task_limits,
+                bounds_checks_policies: input.options.bounds_check_policies,
+            };
             if input.options.targets.unwrap().contains(Targets::SPIRV) {
                 if input.filename().contains("pointer-function-arg") {
                     continue;
                 }
-                let opt = input
-                    .options
-                    .spv
-                    .to_options(input.options.bounds_check_policies, None);
+                let opt = input.options.spv.to_options(&shared_info, None);
                 if writer.set_options(&opt).is_ok() {
                     let _ = writer.write(
                         input.module.as_ref().unwrap(),

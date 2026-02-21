@@ -633,7 +633,13 @@ impl super::Adapter {
             super::PrivateCapabilities::TEXTURE_STORAGE,
             supported((3, 0), (4, 2)),
         );
-        private_caps.set(super::PrivateCapabilities::DEBUG_FNS, gl.supports_debug());
+        let is_mali = renderer.to_lowercase().contains("mali");
+        let debug_fns_enabled = match backend_options.debug_fns {
+            wgt::GlDebugFns::Auto => gl.supports_debug() && !is_mali,
+            wgt::GlDebugFns::ForceEnabled => gl.supports_debug(),
+            wgt::GlDebugFns::Disabled => false,
+        };
+        private_caps.set(super::PrivateCapabilities::DEBUG_FNS, debug_fns_enabled);
         private_caps.set(
             super::PrivateCapabilities::INVALIDATE_FRAMEBUFFER,
             supported((3, 0), (4, 3)),

@@ -94,6 +94,14 @@ webgpu:api,validation,createBindGroup:texture_must_have_correct_component_type:*
 webgpu:api,validation,createBindGroup:texture_must_have_correct_dimension:*
 webgpu:api,validation,createBindGroupLayout:duplicate_bindings:*
 fails-if(vulkan) webgpu:api,validation,createBindGroupLayout:max_dynamic_buffers:*
+fails-if(vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"sampler":{"type":"comparison"}}
+fails-if(vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"sampler":{"type":"filtering"}}
+fails-if(vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"sampler":{"type":"non-filtering"}}
+fails-if(dx12,vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"storageTexture":{"access":"read-only","format":"r32float"}}
+fails-if(dx12,vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"storageTexture":{"access":"read-write","format":"r32float"}}
+fails-if(dx12,vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"storageTexture":{"access":"write-only","format":"r32float"}}
+fails-if(dx12,vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"texture":{"multisampled":false,"sampleType":"unfilterable-float"}}
+fails-if(dx12,vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"texture":{"multisampled":true,"sampleType":"unfilterable-float"}}
 webgpu:api,validation,createBindGroupLayout:maximum_binding_limit:*
 webgpu:api,validation,createBindGroupLayout:multisampled_validation:*
 webgpu:api,validation,createBindGroupLayout:storage_texture,formats:*
@@ -370,13 +378,18 @@ webgpu:shader,validation,expression,call,builtin,textureNumSamples:*
 fails-if(vulkan) webgpu:shader,validation,expression,call,builtin,textureSampleBaseClampToEdge:*
 webgpu:shader,validation,expression,call,builtin,textureStore:*
 webgpu:shader,validation,expression,call,builtin,trunc:*
-// FAIL: others in `value_constructor` due to https://github.com/gfx-rs/wgpu/issues/4720, possibly more
 webgpu:shader,validation,expression,call,builtin,value_constructor:array_value:*
+webgpu:shader,validation,expression,call,builtin,value_constructor:array_zero_value:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:matrix_zero_value:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:must_use:ctor="mat4x4";use=true
+webgpu:shader,validation,expression,call,builtin,value_constructor:partial_eval:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:scalar_value:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:scalar_zero_value:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:struct_value:*
+webgpu:shader,validation,expression,call,builtin,value_constructor:struct_zero_value:*
+webgpu:shader,validation,expression,call,builtin,value_constructor:vector_copy:*
+webgpu:shader,validation,expression,call,builtin,value_constructor:vector_elementwise:*
+webgpu:shader,validation,expression,call,builtin,value_constructor:vector_mixed:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:vector_splat:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:vector_zero_value:*
 webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:*

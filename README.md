@@ -96,25 +96,35 @@ For an overview of all the components in the gfx-rs ecosystem, see [the big pict
 
 ## MSRV policy
 
-TL;DR: If you're using `wgpu`, our MSRV is **1.93**.
+TL;DR: If you're using `wgpu`, our MSRV is **1.87**. If you're running our tests or examples, our MSRV is **1.93**.
+
+We will avoid bumping the MSRV of `wgpu` without good reason, and such a change is considered breaking.
 
 <details>
 <summary> Specific Details </summary>
 
-Due to complex dependants, we have two MSRV policies:
+Due to complex dependants, we have three MSRV policies:
 
-- `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.90**.
+- `wgpu`'s MSRV is **1.87**
+- `wgpu-core` (and hence `wgpu-hal`, `naga`, and `wgpu-types`)'s MSRV is **1.87**.
 - The rest of the workspace has an MSRV of **1.93**.
 
-It is enforced on CI (in "/.github/workflows/ci.yml") with the `CORE_MSRV` and `REPO_MSRV` variables.
+It is enforced on CI (in "/.github/workflows/ci.yml") with the `WGPU_MSRV`, `CORE_MSRV`, and `REPO_MSRV` variables, respectively.
 This version can only be upgraded in breaking releases, though we release a breaking version every three months.
 
-The `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates should never
-require an MSRV ahead of Firefox's MSRV for nightly builds, as
-determined by the value of `MINIMUM_RUST_VERSION` in
-[`python/mozboot/mozboot/util.py`][util].
+The following rules apply:
+- The `wgpu-core` crate should never require an MSRV ahead of Firefox's MSRV for nightly builds, as
+determined by the value of `MINIMUM_RUST_VERSION` in [`python/mozboot/mozboot/util.py`][moz-msrv].
+- The `wgpu` crate should never require an MSRV ahead of Servo's MSRV, as determined by the value of
+their rust-version declaration in [`Cargo.toml`][servo-msrv]
+- The repository MSRV should never require an MSRV higher than `stable - 3`. For example, if stable is
+at 1.97, the repository MSRV should be no higher than 1.94. This is to allow people who are using a decently-updated
+OS-provided rust to be able to build our repository. Consider cross checking with [NixOS][nixos-msrv], though this
+is not required.
 
-[util]: https://searchfox.org/mozilla-central/source/python/mozboot/mozboot/util.py
+[moz-msrv]: https://searchfox.org/mozilla-central/source/python/mozboot/mozboot/util.py
+[servo-msrv]: https://github.com/servo/servo/blob/main/Cargo.toml#L23
+[nixos-msrv]: https://search.nixos.org/packages?show=rustc
 
 </details>
 

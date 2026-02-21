@@ -207,7 +207,7 @@ impl Frontend {
                     "gl_VertexIndex" => BuiltIn::VertexIndex,
                     "gl_SampleID" => BuiltIn::SampleIndex,
                     "gl_LocalInvocationIndex" => BuiltIn::LocalInvocationIndex,
-                    "gl_DrawID" => BuiltIn::DrawID,
+                    "gl_DrawID" => BuiltIn::DrawIndex,
                     _ => return Ok(None),
                 };
 

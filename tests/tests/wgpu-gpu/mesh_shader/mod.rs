@@ -99,7 +99,7 @@ fn get_shaders(
         unreachable!();
     }
     // In the case that the platform does support mesh shaders, the dummy
-    // shader is used to avoid requiring EXPERIMENTAL_PASSTHROUGH_SHADERS.
+    // shader is used to avoid requiring PASSTHROUGH_SHADERS.
     match backend {
         wgpu::Backend::Vulkan => {
             let compiled = compile_wgsl(device);
@@ -395,7 +395,7 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
             .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
             .features(
                 wgpu::Features::EXPERIMENTAL_MESH_SHADER
-                    | wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS
+                    | wgpu::Features::PASSTHROUGH_SHADERS
                     | match draw_type {
                         DrawType::Standard | DrawType::Indirect | DrawType::MultiIndirect => {
                             wgpu::Features::empty()
