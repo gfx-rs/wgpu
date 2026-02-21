@@ -1776,7 +1776,7 @@ impl crate::Device for super::Device {
                         location: at.shader_location,
                         binding: i as u32,
                         format: conv::map_vertex_format(at.format),
-                        offset: at.offset,
+                        offset: at.offset as u32,
                     });
                 }
             }

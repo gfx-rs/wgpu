@@ -3936,7 +3936,7 @@ impl Device {
                 };
                 let mut last_stride = 0;
                 for attribute in vb_state.attributes.iter() {
-                    let attribute_stride = attribute.offset as u64 + attribute.format.size();
+                    let attribute_stride = attribute.offset + attribute.format.size();
                     if attribute_stride > max_stride {
                         return Err(
                             pipeline::CreateRenderPipelineError::VertexAttributeStrideTooLarge {
@@ -3948,11 +3948,11 @@ impl Device {
                     }
 
                     let required_offset_alignment = attribute.format.size().min(4);
-                    if attribute.offset % required_offset_alignment as u32 != 0 {
+                    if attribute.offset % required_offset_alignment != 0 {
                         return Err(
                             pipeline::CreateRenderPipelineError::InvalidVertexAttributeOffset {
                                 location: attribute.shader_location,
-                                offset: attribute.offset as u64,
+                                offset: attribute.offset,
                             },
                         );
                     }
@@ -3987,7 +3987,7 @@ impl Device {
                         return Err(
                             pipeline::CreateRenderPipelineError::InvalidVertexAttributeOffset {
                                 location: attribute.shader_location,
-                                offset: attribute.offset as u64,
+                                offset: attribute.offset,
                             },
                         );
                     }

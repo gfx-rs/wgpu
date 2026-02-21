@@ -1301,7 +1301,7 @@ impl crate::Device for super::Device {
                     let format_desc = conv::describe_vertex_format(vat.format);
                     attributes.push(super::AttributeDesc {
                         location: vat.shader_location,
-                        offset: vat.offset,
+                        offset: vat.offset as u32,
                         buffer_index: index as u32,
                         format_desc,
                     });

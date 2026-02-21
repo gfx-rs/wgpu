@@ -1120,9 +1120,7 @@ impl crate::Device for super::Device {
                             } else {
                                 vbl.attributes
                                     .iter()
-                                    .map(|attribute| {
-                                        attribute.offset as u64 + attribute.format.size()
-                                    })
+                                    .map(|attribute| attribute.offset + attribute.format.size())
                                     .max()
                                     .unwrap_or(0)
                                     .try_into()
@@ -1205,9 +1203,7 @@ impl crate::Device for super::Device {
                                 let stride = vb
                                     .attributes
                                     .iter()
-                                    .map(|attribute| {
-                                        attribute.offset + attribute.format.size() as u32
-                                    })
+                                    .map(|attribute| attribute.offset + attribute.format.size())
                                     .max()
                                     .unwrap_or(0);
                                 unsafe {

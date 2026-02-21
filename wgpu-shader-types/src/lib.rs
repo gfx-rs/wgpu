@@ -356,7 +356,7 @@ pub struct VertexAttribute {
     /// Shader location associated with this attribute
     pub shader_location: u32,
     /// Offset in bytes from start of vertex buffer structure
-    pub offset: u32,
+    pub offset: u64,
     /// Format code to help us unpack the attribute into the type
     /// used by the shader. Codes correspond to a 0-based index of
     /// <https://gpuweb.github.io/gpuweb/#enumdef-gpuvertexformat>.

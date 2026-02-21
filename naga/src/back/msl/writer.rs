@@ -7637,7 +7637,7 @@ template <typename A>
 
                         // Emit call to unpacking function
                         write!(self.out, "{func_name}({elem_name}.data[{offset}]",)?;
-                        for i in (offset + 1)..(offset + func.byte_count) {
+                        for i in (offset as u32 + 1)..(offset as u32 + func.byte_count) {
                             write!(self.out, ", {elem_name}.data[{i}]")?;
                         }
                         write!(self.out, ")")?;
