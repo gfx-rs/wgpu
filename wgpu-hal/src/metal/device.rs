@@ -1,10 +1,5 @@
 use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
-use core::{
-    ffi::c_void,
-    ptr::{self, NonNull},
-    sync::atomic,
-};
-use dispatch2::DispatchData;
+use core::{ptr::NonNull, sync::atomic};
 use std::{thread, time};
 
 use bytemuck::TransparentWrapper;
@@ -988,20 +983,11 @@ impl crate::Device for super::Device {
                 num_workgroups,
             } => {
                 // SAFETY: this creates a reference to `file` that is dropped before `file` is dropped.
-                let data = unsafe {
-                    DispatchData::new(
-                        NonNull::new(file.as_ptr() as *mut c_void).unwrap(),
-                        file.len(),
-                        None,
-                        ptr::null_mut(),
-                    )
-                };
-                let library = self
-                    .shared
-                    .device
-                    .newLibraryWithData_error(&data)
-                    .map_err(|e| crate::ShaderError::Compilation(format!("Metallib: {e:?}")))?;
-                drop(data);
+                let library = super::library_from_metallib::new_library_from_metallib_bytes(
+                    &self.shared.device,
+                    file,
+                )
+                .map_err(|e| crate::ShaderError::Compilation(format!("Metallib: {e:?}")))?;
                 Ok(super::ShaderModule {
                     source: ShaderModuleSource::Passthrough(PassthroughShader {
                         library,

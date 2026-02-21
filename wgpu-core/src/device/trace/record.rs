@@ -893,12 +893,14 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         A::WriteBuffer {
             id,
             data,
-            range,
+            offset,
+            size,
             queued,
         } => A::WriteBuffer {
             id,
             data,
-            range,
+            offset,
+            size,
             queued,
         },
         A::WriteTexture {

@@ -380,6 +380,7 @@ impl super::Adapter {
                 wgt::DxcShaderModel::V6_6 => ShaderModel::_6_6,
                 wgt::DxcShaderModel::V6_7 => ShaderModel::_6_7,
                 wgt::DxcShaderModel::V6_8 => ShaderModel::_6_8,
+                wgt::DxcShaderModel::V6_9 => ShaderModel::_6_9,
             };
 
             let shader_model = max_device_shader_model.min(max_dxc_shader_model);
@@ -404,7 +405,8 @@ impl super::Adapter {
                 ShaderModel::_6_5 => naga::back::hlsl::ShaderModel::V6_5,
                 ShaderModel::_6_6 => naga::back::hlsl::ShaderModel::V6_6,
                 ShaderModel::_6_7 => naga::back::hlsl::ShaderModel::V6_7,
-                _ => unreachable!(),
+                ShaderModel::_6_8 => naga::back::hlsl::ShaderModel::V6_8,
+                ShaderModel::_6_9 => naga::back::hlsl::ShaderModel::V6_9,
             }
         } else {
             naga::back::hlsl::ShaderModel::V5_1

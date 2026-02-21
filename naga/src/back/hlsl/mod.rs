@@ -256,6 +256,8 @@ pub enum ShaderModel {
     V6_5,
     V6_6,
     V6_7,
+    V6_8,
+    V6_9,
 }
 
 impl ShaderModel {
@@ -271,6 +273,8 @@ impl ShaderModel {
             Self::V6_5 => "6_5",
             Self::V6_6 => "6_6",
             Self::V6_7 => "6_7",
+            Self::V6_8 => "6_8",
+            Self::V6_9 => "6_9",
         }
     }
 }

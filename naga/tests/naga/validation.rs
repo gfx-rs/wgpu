@@ -781,32 +781,408 @@ fn bad_texture_dimensions_level() {
     assert!(validate("1").is_ok());
 }
 
+// Adds IR for `override len: u32` and the type `array<u32, len>`.
+fn make_override_array(module: &mut ir::Module) -> naga::Handle<ir::Type> {
+    let span = naga::Span::default();
+
+    let ty_u32 = module.types.insert(
+        ir::Type {
+            name: Some("u32".into()),
+            inner: ir::TypeInner::Scalar(Scalar::U32),
+        },
+        span,
+    );
+
+    let len = module.overrides.append(
+        ir::Override {
+            name: Some("len".into()),
+            id: None,
+            ty: ty_u32,
+            init: None,
+        },
+        span,
+    );
+
+    module.types.insert(
+        ir::Type {
+            name: Some("array<u32, len>".into()),
+            inner: ir::TypeInner::Array {
+                base: ty_u32,
+                size: ir::ArraySize::Pending(len),
+                stride: 4,
+            },
+        },
+        span,
+    )
+}
+
+// Adds IR for type `array<u32>`.
+fn make_runtime_array(module: &mut ir::Module) -> naga::Handle<ir::Type> {
+    let span = naga::Span::default();
+
+    let ty_u32 = module.types.insert(
+        ir::Type {
+            name: Some("u32".into()),
+            inner: ir::TypeInner::Scalar(Scalar::U32),
+        },
+        span,
+    );
+
+    module.types.insert(
+        ir::Type {
+            name: Some("array<u32>".into()),
+            inner: ir::TypeInner::Array {
+                base: ty_u32,
+                size: ir::ArraySize::Dynamic,
+                stride: 4,
+            },
+        },
+        span,
+    )
+}
+
+// Adds a local variable `var x: ty = ty();`.
+fn make_zero_value_local_variable(fun: &mut Function, ty: naga::Handle<ir::Type>) {
+    let span = naga::Span::default();
+
+    let ex_zero = fun.expressions.append(Expression::ZeroValue(ty), span);
+
+    fun.local_variables.append(
+        naga::LocalVariable {
+            name: Some("x".into()),
+            ty,
+            init: Some(ex_zero),
+        },
+        span,
+    );
+}
+
 #[test]
-fn zero_value_dyn_array_error() {
-    let source = r#"
-        @compute @workgroup_size(1)
-        fn main() {
-            let a = array<f32>();
-        }
-    "#;
-    let module = naga::front::wgsl::parse_str(source).expect("module should parse");
+fn invalid_local_var_override_sized_array() {
+    // Similar to a test in wgsl_errors::invalid_local_vars.
+    // ```
+    // override len: u32;
+    // var<workgroup> arr: array<u32, len>;
+    // fn f() {
+    //     var x: array<u32, len> = arr;
+    // }
+    // ```
+    let span = naga::Span::default();
+    let mut module = ir::Module::default();
+
+    let ty_array = make_override_array(&mut module);
+
+    let var_arr = module.global_variables.append(
+        naga::GlobalVariable {
+            name: Some("arr".into()),
+            space: naga::AddressSpace::WorkGroup,
+            binding: None,
+            ty: ty_array,
+            init: None,
+        },
+        span,
+    );
+
+    let mut fun = Function {
+        name: Some("f".into()),
+        ..Default::default()
+    };
+
+    let ex_global = fun
+        .expressions
+        .append(Expression::GlobalVariable(var_arr), span);
+    let ex_load = fun
+        .expressions
+        .append(Expression::Load { pointer: ex_global }, span);
+
+    fun.local_variables.append(
+        naga::LocalVariable {
+            name: Some("x".into()),
+            ty: ty_array,
+            init: Some(ex_load),
+        },
+        span,
+    );
+
+    module.functions.append(fun, span);
+
     let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
         .validate(&module)
-        .map_err(|err| err.into_inner()); // discard spans
+        .expect_err("module should be invalid")
+        .into_inner();
+
     assert!(matches!(
         err,
-        Err(naga::valid::ValidationError::EntryPoint {
-            stage: _,
-            name: _,
-            source: naga::valid::EntryPointError::Function(
-                naga::valid::FunctionError::Expression {
-                    handle: _,
-                    source: naga::valid::ExpressionError::ZeroValue(
-                        naga::valid::ZeroValueError::RuntimeSizedArray
-                    )
-                }
-            )
-        })
+        valid::ValidationError::Function {
+            source: valid::FunctionError::LocalVariable {
+                name: local_var_name,
+                source: valid::LocalVariableError::InvalidType(_),
+                ..
+            },
+            ..
+        } if local_var_name == "x"
+    ));
+}
+
+#[test]
+fn invalid_zero_value_runtime_array() {
+    // Similar to a test in wgsl_errors::invalid_zero_value_constructors.
+    // ```
+    // fn main() {
+    //     var x = array<u32>();
+    // }
+    // ```
+    let span = naga::Span::default();
+    let mut module = ir::Module::default();
+
+    let ty_array = make_runtime_array(&mut module);
+
+    let mut fun = Function {
+        name: Some("f".into()),
+        ..Default::default()
+    };
+
+    make_zero_value_local_variable(&mut fun, ty_array);
+
+    module.functions.append(fun, span);
+
+    let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .expect_err("module should be invalid")
+        .into_inner();
+
+    assert!(matches!(
+        err,
+        valid::ValidationError::Function {
+            source: valid::FunctionError::LocalVariable {
+                name: local_var_name,
+                source: valid::LocalVariableError::InvalidType(_),
+                ..
+            },
+            ..
+        } if local_var_name == "x"
+    ));
+}
+
+#[test]
+fn invalid_zero_value_override_array() {
+    // Similar to a test in wgsl_errors::invalid_zero_value_constructors.
+    // ```
+    // override len: u32;
+    // fn main() {
+    //     var x = array<u32, len>();
+    // }
+    // ```
+    let span = naga::Span::default();
+    let mut module = ir::Module::default();
+
+    let ty_array = make_override_array(&mut module);
+
+    let mut fun = Function {
+        name: Some("f".into()),
+        ..Default::default()
+    };
+
+    make_zero_value_local_variable(&mut fun, ty_array);
+
+    module.functions.append(fun, span);
+
+    let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .expect_err("module should be invalid")
+        .into_inner();
+
+    assert!(matches!(
+        err,
+        valid::ValidationError::Function {
+            source: valid::FunctionError::LocalVariable {
+                name: local_var_name,
+                source: valid::LocalVariableError::InvalidType(_),
+                ..
+            },
+            ..
+        } if local_var_name == "x"
+    ));
+}
+
+#[test]
+fn invalid_zero_value_texture() {
+    // Similar to a test in wgsl_errors::invalid_zero_value_constructors.
+    // ```
+    // fn main() {
+    //     var x = texture_2d<f32>();
+    // }
+    // ```
+    use naga::{ImageClass, ImageDimension, Module, Type, TypeInner};
+
+    let span = naga::Span::default();
+    let mut module = Module::default();
+
+    let ty_texture = module.types.insert(
+        Type {
+            name: Some("texture_2d<f32>".into()),
+            inner: TypeInner::Image {
+                dim: ImageDimension::D2,
+                arrayed: false,
+                class: ImageClass::Sampled {
+                    kind: naga::ScalarKind::Float,
+                    multi: false,
+                },
+            },
+        },
+        span,
+    );
+
+    let mut fun = Function {
+        name: Some("f".into()),
+        ..Default::default()
+    };
+
+    make_zero_value_local_variable(&mut fun, ty_texture);
+
+    module.functions.append(fun, span);
+
+    let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .expect_err("module should be invalid")
+        .into_inner();
+
+    assert!(matches!(
+        err,
+        valid::ValidationError::Function {
+            source: valid::FunctionError::LocalVariable {
+                name: local_var_name,
+                source: valid::LocalVariableError::InvalidType(_),
+                ..
+            },
+            ..
+        } if local_var_name == "x"
+    ));
+}
+
+/// Test for non-zero-value runtime-sized array constructor.
+#[test]
+fn invalid_constructor_runtime_array() {
+    // Similar to a test in wgsl_errors::invalid_zero_value_constructors.
+    // ```
+    // fn main() {
+    //     var x = array<u32>(0, 1, 2);
+    // }
+    // ```
+    let span = naga::Span::default();
+    let mut module = ir::Module::default();
+
+    let ty_array = make_runtime_array(&mut module);
+
+    let mut fun = Function {
+        name: Some("f".into()),
+        ..Default::default()
+    };
+
+    // Create component expressions
+    let ex_0 = fun
+        .expressions
+        .append(Expression::Literal(naga::Literal::U32(0)), span);
+    let ex_1 = fun
+        .expressions
+        .append(Expression::Literal(naga::Literal::U32(1)), span);
+    let ex_2 = fun
+        .expressions
+        .append(Expression::Literal(naga::Literal::U32(2)), span);
+
+    // Create a Compose expression to construct the array
+    let ex_compose = fun.expressions.append(
+        Expression::Compose {
+            ty: ty_array,
+            components: vec![ex_0, ex_1, ex_2],
+        },
+        span,
+    );
+
+    fun.local_variables.append(
+        naga::LocalVariable {
+            name: Some("x".into()),
+            ty: ty_array,
+            init: Some(ex_compose),
+        },
+        span,
+    );
+
+    module.functions.append(fun, span);
+
+    let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .expect_err("module should be invalid")
+        .into_inner();
+
+    assert!(matches!(
+        err,
+        valid::ValidationError::Function {
+            source: valid::FunctionError::LocalVariable {
+                name: local_var_name,
+                source: valid::LocalVariableError::InvalidType(_),
+                ..
+            },
+            ..
+        } if local_var_name == "x"
+    ));
+}
+
+#[test]
+fn invalid_constructor_unsized_struct() {
+    // Similar to a test in wgsl_errors::invalid_zero_value_constructors:
+    // ```
+    // struct Unsized { data: array<f32> }
+    // fn main() {
+    //     var x: Unsized = Unsized();
+    // }
+    // ```
+    use naga::{Module, StructMember, Type, TypeInner};
+
+    let span = naga::Span::default();
+    let mut module = Module::default();
+
+    let ty_array = make_runtime_array(&mut module);
+
+    let ty_unsized = module.types.insert(
+        Type {
+            name: Some("Unsized".into()),
+            inner: TypeInner::Struct {
+                members: vec![StructMember {
+                    name: Some("data".into()),
+                    ty: ty_array,
+                    binding: None,
+                    offset: 0,
+                }],
+                span: 4,
+            },
+        },
+        span,
+    );
+
+    let mut fun = Function {
+        name: Some("main".into()),
+        ..Default::default()
+    };
+
+    make_zero_value_local_variable(&mut fun, ty_unsized);
+
+    module.functions.append(fun, span);
+
+    let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .expect_err("module should be invalid")
+        .into_inner();
+
+    assert!(matches!(
+        err,
+        valid::ValidationError::Function {
+            source: valid::FunctionError::LocalVariable {
+                source: valid::LocalVariableError::InvalidType(_),
+                ..
+            },
+            ..
+        },
     ));
 }
 
