@@ -123,7 +123,7 @@ impl GlslVersion {
         *self >= GlslVersion::Desktop(420) || *self >= GlslVersion::new_gles(300)
     }
 
-    pub fn from_api_version(api_version: ApiVersion) -> Self {
+    pub fn from_api_version(_api_version: ApiVersion) -> Self {
         // Source: https://en.wikipedia.org/wiki/OpenGL_Shading_Language#Versions
         todo!()
     }
