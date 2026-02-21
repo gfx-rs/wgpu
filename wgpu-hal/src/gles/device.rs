@@ -1109,14 +1109,15 @@ impl crate::Device for super::Device {
         self.counters.pipeline_layouts.add(1);
 
         let glsl_version = self.shared.shading_language_version;
-        let context_lock = self.shared.context.lock();
-        let version = context_lock.version();
-        let api_version = wst::glsl::ApiVersion {
-            version: (version.major * 100 + version.minor) as u16,
-            is_embedded: version.is_embedded,
-            is_webgl: glsl_version.is_webgl(),
+        let api_version = {
+            let context_lock = self.shared.context.lock();
+            let version = context_lock.version();
+            wst::glsl::ApiVersion {
+                version: (version.major * 100 + version.minor) as u16,
+                is_embedded: version.is_embedded,
+                is_webgl: glsl_version.is_webgl(),
+            }
         };
-        drop(context_lock);
 
         let options_desc = wgs::glsl::GlslCompileOptionsDesc {
             api_version,
