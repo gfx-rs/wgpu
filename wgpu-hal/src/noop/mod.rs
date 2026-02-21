@@ -284,11 +284,11 @@ impl crate::Adapter for Context {
         wgt::PresentationTimestamp::INVALID_TIMESTAMP
     }
 
-    fn get_buffer_ordered(&self) -> wgt::BufferUses {
+    fn get_ordered_buffer_usages(&self) -> wgt::BufferUses {
         wgt::BufferUses::INCLUSIVE | wgt::BufferUses::MAP_WRITE
     }
 
-    fn get_texture_ordered(&self) -> wgt::TextureUses {
+    fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
         wgt::TextureUses::INCLUSIVE
             | wgt::TextureUses::COLOR_TARGET
             | wgt::TextureUses::DEPTH_STENCIL_WRITE

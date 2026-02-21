@@ -37,9 +37,9 @@ pub trait DynAdapter: DynResource {
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
 
-    fn get_buffer_ordered(&self) -> wgt::BufferUses;
+    fn get_ordered_buffer_usages(&self) -> wgt::BufferUses;
 
-    fn get_texture_ordered(&self) -> wgt::TextureUses;
+    fn get_ordered_texture_usages(&self) -> wgt::TextureUses;
 }
 
 impl<A: Adapter + DynResource> DynAdapter for A {
@@ -71,11 +71,11 @@ impl<A: Adapter + DynResource> DynAdapter for A {
         unsafe { A::get_presentation_timestamp(self) }
     }
 
-    fn get_buffer_ordered(&self) -> wgt::BufferUses {
-        A::get_buffer_ordered(self)
+    fn get_ordered_buffer_usages(&self) -> wgt::BufferUses {
+        A::get_ordered_buffer_usages(self)
     }
 
-    fn get_texture_ordered(&self) -> wgt::TextureUses {
-        A::get_texture_ordered(self)
+    fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
+        A::get_ordered_texture_usages(self)
     }
 }

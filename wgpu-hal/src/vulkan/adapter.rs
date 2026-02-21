@@ -2795,14 +2795,15 @@ impl crate::Adapter for super::Adapter {
         }
     }
 
-    fn get_buffer_ordered(&self) -> wgt::BufferUses {
+    fn get_ordered_buffer_usages(&self) -> wgt::BufferUses {
         wgt::BufferUses::INCLUSIVE | wgt::BufferUses::MAP_WRITE
     }
 
-    // Vulcan makes very few execution ordering guarantees
+    // Vulkan makes very few execution ordering guarantees
     // see https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#synchronization-implicit
     // We just don't want to insert barriers between inclusive uses
-    fn get_texture_ordered(&self) -> wgt::TextureUses {
+    // See https://github.com/gfx-rs/wgpu/issues/8853
+    fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
         wgt::TextureUses::INCLUSIVE
     }
 }

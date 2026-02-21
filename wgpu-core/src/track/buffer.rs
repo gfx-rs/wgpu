@@ -77,7 +77,7 @@ impl BufferBindGroupState {
 pub(crate) struct BufferUsageScope {
     state: Vec<BufferUses>,
     metadata: ResourceMetadata<Arc<Buffer>>,
-    ordered_mask: BufferUses,
+    ordered_uses_mask: BufferUses,
 }
 
 impl Default for BufferUsageScope {
@@ -85,7 +85,7 @@ impl Default for BufferUsageScope {
         Self {
             state: Vec::new(),
             metadata: ResourceMetadata::new(),
-            ordered_mask: BufferUses::empty(),
+            ordered_uses_mask: BufferUses::empty(),
         }
     }
 }
@@ -109,8 +109,8 @@ impl BufferUsageScope {
         self.metadata.set_size(size);
     }
 
-    pub fn set_ordered_mask(&mut self, ordered_mask: BufferUses) {
-        self.ordered_mask = ordered_mask;
+    pub fn set_ordered_uses_mask(&mut self, ordered_uses_mask: BufferUses) {
+        self.ordered_uses_mask = ordered_uses_mask;
     }
 
     /// Extend the vectors to let the given index be valid.
@@ -290,11 +290,11 @@ pub(crate) struct BufferTracker {
 
     temp: Vec<PendingTransition<BufferUses>>,
 
-    ordered_mask: BufferUses,
+    ordered_uses_mask: BufferUses,
 }
 
 impl BufferTracker {
-    pub fn new(ordered_mask: BufferUses) -> Self {
+    pub fn new(ordered_uses_mask: BufferUses) -> Self {
         Self {
             start: Vec::new(),
             end: Vec::new(),
@@ -303,7 +303,7 @@ impl BufferTracker {
 
             temp: Vec::new(),
 
-            ordered_mask,
+            ordered_uses_mask,
         }
     }
 
@@ -558,7 +558,7 @@ impl BufferTracker {
                 index,
                 start_state_provider,
                 &mut self.temp,
-                self.ordered_mask,
+                self.ordered_uses_mask,
             )
         };
 
@@ -571,16 +571,16 @@ pub(crate) struct DeviceBufferTracker {
     current_states: Vec<BufferUses>,
     metadata: ResourceMetadata<Weak<Buffer>>,
     temp: Vec<PendingTransition<BufferUses>>,
-    ordered_mask: BufferUses,
+    ordered_uses_mask: BufferUses,
 }
 
 impl DeviceBufferTracker {
-    pub fn new(ordered_mask: BufferUses) -> Self {
+    pub fn new(ordered_uses_mask: BufferUses) -> Self {
         Self {
             current_states: Vec::new(),
             metadata: ResourceMetadata::new(),
             temp: Vec::new(),
-            ordered_mask,
+            ordered_uses_mask,
         }
     }
 
@@ -648,7 +648,7 @@ impl DeviceBufferTracker {
                 index,
                 start_state_provider.clone(),
                 &mut self.temp,
-                self.ordered_mask,
+                self.ordered_uses_mask,
             )
         };
         unsafe { update(&mut self.current_states, index, start_state_provider) };
@@ -682,7 +682,7 @@ impl DeviceBufferTracker {
                     index,
                     start_state_provider,
                     &mut self.temp,
-                    self.ordered_mask,
+                    self.ordered_uses_mask,
                 )
             };
             unsafe { update(&mut self.current_states, index, end_state_provider) };
@@ -783,16 +783,12 @@ unsafe fn barrier(
     index: usize,
     state_provider: BufferStateProvider<'_>,
     barriers: &mut Vec<PendingTransition<BufferUses>>,
-    ordered_mask: BufferUses,
+    ordered_uses_mask: BufferUses,
 ) {
     let current_state = unsafe { *current_states.get_unchecked(index) };
     let new_state = unsafe { state_provider.get_state(index) };
 
-    if skip_barrier(
-        current_state,
-        ordered_mask.contains(current_state),
-        new_state,
-    ) {
+    if skip_barrier(current_state, ordered_uses_mask, new_state) {
         return;
     }
 
