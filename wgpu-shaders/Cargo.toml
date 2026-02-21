@@ -65,7 +65,7 @@ ir-out = ["naga?/deserialize"]
 [dependencies]
 naga = { workspace = true, optional = true }
 wgpu-types = { workspace = true, default-features = false }
-wgpu-shader-types = { workspace = true, default-features = false }
+wgpu-shader-types = { workspace = true }
 
 serde = { workspace = true, optional = true, features = ["alloc", "derive"] }
 profiling = { workspace = true, default-features = false }

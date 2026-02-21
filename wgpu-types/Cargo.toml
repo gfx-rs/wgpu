@@ -62,7 +62,7 @@ serde = { workspace = true, default-features = false, features = [
     "alloc",
     "derive",
 ], optional = true }
-wgpu-shader-types = { workspace = true, default-features = false }
+wgpu-shader-types = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = { workspace = true, optional = true, default-features = false }

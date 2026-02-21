@@ -30,7 +30,6 @@ struct vertex_Input {
 struct vertex_Output {
     metal::float4 position [[position, invariant]];
     float _varying [[user(loc1), center_perspective]];
-    float _point_size [[point_size]];
 };
 vertex vertex_Output vertex_(
   vertex_Input varyings [[stage_in]]
@@ -40,7 +39,7 @@ vertex vertex_Output vertex_(
     const auto color = varyings.color;
     uint tmp = (vertex_index + instance_index) + color;
     const auto _tmp = VertexOutput {metal::float4(1.0), static_cast<float>(tmp)};
-    return vertex_Output { _tmp.position, _tmp._varying, 1.0 };
+    return vertex_Output { _tmp.position, _tmp._varying };
 }
 
 
@@ -90,7 +89,6 @@ struct vertex_two_structsInput {
 };
 struct vertex_two_structsOutput {
     metal::float4 member_3 [[position, invariant]];
-    float _point_size [[point_size]];
 };
 vertex vertex_two_structsOutput vertex_two_structs(
   uint index_1 [[vertex_id]]
@@ -100,5 +98,5 @@ vertex vertex_two_structsOutput vertex_two_structs(
     const Input2_ in2_ = { index_2 };
     uint index = 2u;
     uint _e8 = index;
-    return vertex_two_structsOutput { metal::float4(static_cast<float>(in1_.index), static_cast<float>(in2_.index), static_cast<float>(_e8), 0.0), 1.0 };
+    return vertex_two_structsOutput { metal::float4(static_cast<float>(in1_.index), static_cast<float>(in2_.index), static_cast<float>(_e8), 0.0) };
 }

@@ -204,8 +204,8 @@ required-features = ["gles", "naga-dep"]
 #####################
 
 [dependencies]
-wgpu-shaders = { workspace = true, default-features = false }
-wgpu-shader-types = { workspace = true, default-features = false }
+wgpu-shaders = { workspace = true }
+wgpu-shader-types = { workspace = true }
 wgpu-types = { workspace = true, default-features = false }
 
 # Dependencies in the lib and empty backend
