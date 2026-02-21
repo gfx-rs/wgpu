@@ -74,10 +74,8 @@
         WriteBuffer(
             id: PointerId(0x110),
             data: File("data1.bin"),
-            range: (
-                start: 0,
-                end: 16,
-            ),
+            offset: 0,
+            size: 16,
             queued: true,
         ),
         Submit(1, [
