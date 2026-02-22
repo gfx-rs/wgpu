@@ -755,17 +755,7 @@ impl super::PrivateCapabilities {
             format_depth32float_none: os_type != super::OsType::Macos,
             format_bgr10a2_all: Self::supports_any(device, BGR10A2_ALL),
             format_bgr10a2_no_write: !Self::supports_any(device, BGR10A2_ALL),
-            max_buffers_per_stage: if metal3
-                || metal4
-                || (family_check && device.supportsFamily(MTLGPUFamily::Apple6))
-                || (family_check && device.supportsFamily(MTLGPUFamily::Mac2))
-            {
-                1_000_000
-            } else if family_check && device.supportsFamily(MTLGPUFamily::Apple4) {
-                96
-            } else {
-                31
-            },
+            max_buffers_per_stage: 31,
             max_vertex_buffers: 31.min(crate::MAX_VERTEX_BUFFERS as u32), // duplicative of `apply_hal_limits`
             max_textures_per_stage: if os_type == super::OsType::Macos
                 || (family_check && device.supportsFamily(MTLGPUFamily::Apple6))
@@ -930,6 +920,7 @@ impl super::PrivateCapabilities {
             // https://developer.apple.com/documentation/metal/mtldevice/hasunifiedmemory
             has_unified_memory: if available!(macos = 15.0, ios = 13.0, tvos = 13.0, visionos = 1.0)
             {
+                // On Xcode frame capture this call causes a crash, fall back to feature table.
                 if Self::is_capture_mtl_device(device) {
                     Some(family_check && device.supportsFamily(MTLGPUFamily::Apple6))
                 } else {
@@ -1006,6 +997,7 @@ impl super::PrivateCapabilities {
                 tvos = 18.0,
                 visionos = 2.0,
             ) {
+                // On Xcode frame capture this call causes a crash, fall back to feature table.
                 if Self::is_capture_mtl_device(device) {
                     metal4 || (family_check && device.supportsFamily(MTLGPUFamily::Apple6))
                 } else {
