@@ -34,7 +34,7 @@ use crate::{
     dispatch::{self, BlasCompactCallback, BufferMappedRangeInterface},
     BindingResource, Blas, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage,
     CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations,
-    ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas,
+    ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas, WriteOnly,
 };
 use crate::{dispatch::DispatchAdapter, util::Mutex};
 
@@ -3973,13 +3973,14 @@ impl Drop for CoreSurfaceOutputDetail {
 }
 
 impl dispatch::QueueWriteBufferInterface for CoreQueueWriteBuffer {
-    fn slice(&self) -> &[u8] {
-        panic!()
+    #[inline]
+    fn len(&self) -> usize {
+        self.mapping.len()
     }
 
     #[inline]
-    fn slice_mut(&mut self) -> &mut [u8] {
-        self.mapping.slice_mut()
+    unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]> {
+        unsafe { self.mapping.write_slice() }
     }
 }
 impl Drop for CoreQueueWriteBuffer {
@@ -3992,13 +3993,18 @@ impl Drop for CoreQueueWriteBuffer {
 
 impl dispatch::BufferMappedRangeInterface for CoreBufferMappedRange {
     #[inline]
-    fn slice(&self) -> &[u8] {
+    fn len(&self) -> usize {
+        self.size
+    }
+
+    #[inline]
+    unsafe fn read_slice(&self) -> &[u8] {
         unsafe { slice::from_raw_parts(self.ptr.as_ptr(), self.size) }
     }
 
     #[inline]
-    fn slice_mut(&mut self) -> &mut [u8] {
-        unsafe { slice::from_raw_parts_mut(self.ptr.as_ptr(), self.size) }
+    unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]> {
+        unsafe { WriteOnly::new(NonNull::slice_from_raw_parts(self.ptr, self.size)) }
     }
 
     #[cfg(webgpu)]
