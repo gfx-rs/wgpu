@@ -10,7 +10,12 @@
 
 extern crate wgpu_hal as hal;
 
-#[cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos")))]
+#[cfg(not(any(
+    target_arch = "wasm32",
+    target_os = "ios",
+    target_os = "visionos",
+    target_env = "ohos"
+)))]
 fn main() {
     use std::ffi::CString;
 
@@ -307,10 +312,11 @@ fn main() {
 #[cfg(any(
     all(target_arch = "wasm32", not(target_os = "emscripten")),
     target_os = "ios",
-    target_os = "visionos"
+    target_os = "visionos",
+    target_env = "ohos"
 ))]
 fn main() {
-    eprintln!("This example is not supported on Windows and non-emscripten wasm32")
+    eprintln!("This example is not supported on this platform")
 }
 
 #[cfg(not(any(
