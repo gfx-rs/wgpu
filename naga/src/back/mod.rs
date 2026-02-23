@@ -9,8 +9,6 @@ Backend functions that export shader [`Module`](super::Module)s into binary and 
     )
 )]
 
-use alloc::string::String;
-
 #[cfg(dot_out)]
 pub mod dot;
 #[cfg(glsl_out)]
@@ -108,8 +106,8 @@ impl core::fmt::Display for Level {
 #[cfg(any(hlsl_out, msl_out))]
 fn get_entry_points(
     module: &crate::ir::Module,
-    entry_point: Option<&(crate::ir::ShaderStage, String)>,
-) -> Result<core::ops::Range<usize>, (crate::ir::ShaderStage, String)> {
+    entry_point: Option<&(crate::ir::ShaderStage, alloc::string::String)>,
+) -> Result<core::ops::Range<usize>, (crate::ir::ShaderStage, alloc::string::String)> {
     use alloc::borrow::ToOwned;
 
     if let Some(&(stage, ref name)) = entry_point {

@@ -85,7 +85,7 @@ impl FeaturesManager {
     }
 
     /// Checks that all required [`Features`] are available for the specified
-    /// [`Version`] otherwise returns an [`Error::MissingFeatures`].
+    /// [`GlslVersion`] otherwise returns an [`Error::MissingFeatures`].
     pub fn check_availability(&self, version: GlslVersion) -> BackendResult {
         // Will store all the features that are unavailable
         let mut missing = Features::empty();
