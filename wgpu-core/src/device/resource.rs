@@ -904,6 +904,7 @@ impl Device {
             wgt::PollType::Poll => smallvec![],
         };
 
+        #[allow(unused_mut)]
         let mut current_duration = Duration::ZERO;
         // Wait for the submission index if requested.
         for &(queue_id, target_submission_index) in &wait_submission_indices {
