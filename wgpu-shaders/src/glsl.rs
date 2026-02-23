@@ -14,11 +14,6 @@ pub struct GlslCompileOptionsDesc {
     pub shader_draw_parameters: bool,
     pub binding_map: wst::glsl::BindingMap,
 }
-impl GlslCompileOptionsDesc {
-    pub fn maximum_compat() -> Self {
-        todo!()
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct GlslCompileOptions {
@@ -28,8 +23,6 @@ pub struct GlslCompileOptions {
     pub api_version: wst::glsl::ApiVersion,
     #[cfg(feature = "naga-dep")]
     pub glsl_version: wst::glsl::GlslVersion,
-    #[cfg(feature = "naga-dep")]
-    pub binding_map: wst::glsl::BindingMap,
 }
 impl GlslCompileOptions {
     pub fn new(desc: GlslCompileOptionsDesc) -> Self {
@@ -50,13 +43,12 @@ impl GlslCompileOptions {
             Self {
                 options: Options {
                     version: desc.glsl_version,
-                    writer_flags: naga::back::glsl::WriterFlags::empty(),
-                    binding_map: Default::default(),
+                    writer_flags,
+                    binding_map: desc.binding_map,
                     zero_initialize_workgroup_memory: true,
                 },
                 api_version: desc.api_version,
                 glsl_version: desc.glsl_version,
-                binding_map: desc.binding_map,
             }
         }
         #[cfg(not(feature = "naga-dep"))]
