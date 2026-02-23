@@ -1180,7 +1180,7 @@ impl Queue {
                     .drain(init_layer_range)
                     .collect::<Vec<core::ops::Range<u32>>>()
                 {
-                    let mut trackers = self.device.per_queue_data[0].get().unwrap().trackers.lock();
+                    let mut trackers = self.shared.trackers.lock();
                     crate::command::clear_texture(
                         &dst,
                         TextureInitRange {
@@ -1216,7 +1216,7 @@ impl Queue {
             size: hal_copy_size,
         };
 
-        let mut trackers = self.device.per_queue_data[0].get().unwrap().trackers.lock();
+        let mut trackers = self.shared.trackers.lock();
         let transitions = trackers
             .textures
             .set_single(&dst, selector, wgt::TextureUses::COPY_DST);
