@@ -5054,6 +5054,7 @@ dependencies = [
  "js-sys",
  "libtest-mimic",
  "log",
+ "naga",
  "nanorand",
  "nv-flip",
  "parking_lot",

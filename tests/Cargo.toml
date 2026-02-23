@@ -47,6 +47,13 @@ wgpu-core = { workspace = true, features = ["trace"] }
 wgpu-hal = { workspace = true, features = ["validation_canary"] }
 wgpu-macros.workspace = true
 wgpu-types.workspace = true
+naga = { workspace = true, features = [
+    "spv-out",
+    "wgsl-out",
+    "hlsl-out",
+    "msl-out",
+    "glsl-out",
+] }
 
 anyhow.workspace = true
 arrayvec.workspace = true
