@@ -103,8 +103,8 @@ pub use self::egl::{AdapterContext, AdapterContextLock};
 #[cfg(not(any(windows, webgl)))]
 pub use self::egl::{Instance, Surface};
 
-pub use wgs::glsl::BindGroupLayoutInfo;
-pub use wgs::glsl::{
+pub use wgs::out::glsl::BindGroupLayoutInfo;
+pub use wgs::out::glsl::{
     BindingRegister, NameBindingMap, SamplerBindMap, MAX_SAMPLERS, MAX_TEXTURE_SLOTS,
 };
 
@@ -543,7 +543,7 @@ impl crate::DynBindGroupLayout for BindGroupLayout {}
 #[derive(Debug)]
 pub struct PipelineLayout {
     group_infos: Box<[BindGroupLayoutInfo]>,
-    shader_options: wgs::glsl::GlslCompileOptions,
+    shader_options: wgs::out::glsl::GlslCompileOptions,
 }
 
 impl crate::DynPipelineLayout for PipelineLayout {}

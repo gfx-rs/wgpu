@@ -2293,36 +2293,37 @@ impl super::Adapter {
             None
         };
 
-        let compile_options = wgs::spv::SpvCompileOptions::new(wgs::spv::SpvCompileOptionsDesc {
-            lang_version: match self.phd_capabilities.device_api_version {
-                // Use maximum supported SPIR-V version according to
-                // <https://github.com/KhronosGroup/Vulkan-Docs/blob/19b7651/appendices/spirvenv.adoc?plain=1#L21-L40>.
-                vk::API_VERSION_1_0..vk::API_VERSION_1_1 => (1, 0),
-                vk::API_VERSION_1_1..vk::API_VERSION_1_2 => (1, 3),
-                vk::API_VERSION_1_2..vk::API_VERSION_1_3 => (1, 5),
-                vk::API_VERSION_1_3.. => (1, 6),
-                _ => unreachable!(),
-            },
-            features,
-            task_dispatch_limits: wst::TaskDispatchLimits {
-                max_mesh_workgroups_per_dim: limits.max_task_mesh_workgroups_per_dimension,
-                max_mesh_workgroups_total: limits.max_task_mesh_workgroup_total_count,
-            },
-            downlevel_flags: self.downlevel_flags,
-            instance_flags: self.instance.flags,
-            shader_non_semantic_info: self.instance.flags.contains(wgt::InstanceFlags::DEBUG)
-                && (self.instance.instance_api_version >= vk::API_VERSION_1_3
-                    || enabled_extensions.contains(&khr::shader_non_semantic_info::NAME)),
-            vendor_could_be_qualcomm: self.phd_capabilities.properties.vendor_id
-                == crate::auxil::db::qualcomm::VENDOR,
-            shader_integer_dot_product: self.private_caps.shader_integer_dot_product,
-            shader_int8: self.private_caps.shader_int8,
-            native_zero_init: self.private_caps.zero_initialize_workgroup_memory,
-            shader_input_output_16: features.contains(wgt::Features::SHADER_F16)
-                && self.phd_features.supports_storage_input_output_16(),
-            robust_buffer_access2: self.private_caps.robust_buffer_access2,
-            robust_image_access: self.private_caps.robust_image_access,
-        });
+        let compile_options =
+            wgs::out::spv::SpvCompileOptions::new(wgs::out::spv::SpvCompileOptionsDesc {
+                lang_version: match self.phd_capabilities.device_api_version {
+                    // Use maximum supported SPIR-V version according to
+                    // <https://github.com/KhronosGroup/Vulkan-Docs/blob/19b7651/appendices/spirvenv.adoc?plain=1#L21-L40>.
+                    vk::API_VERSION_1_0..vk::API_VERSION_1_1 => (1, 0),
+                    vk::API_VERSION_1_1..vk::API_VERSION_1_2 => (1, 3),
+                    vk::API_VERSION_1_2..vk::API_VERSION_1_3 => (1, 5),
+                    vk::API_VERSION_1_3.. => (1, 6),
+                    _ => unreachable!(),
+                },
+                features,
+                task_dispatch_limits: wst::TaskDispatchLimits {
+                    max_mesh_workgroups_per_dim: limits.max_task_mesh_workgroups_per_dimension,
+                    max_mesh_workgroups_total: limits.max_task_mesh_workgroup_total_count,
+                },
+                downlevel_flags: self.downlevel_flags,
+                instance_flags: self.instance.flags,
+                shader_non_semantic_info: self.instance.flags.contains(wgt::InstanceFlags::DEBUG)
+                    && (self.instance.instance_api_version >= vk::API_VERSION_1_3
+                        || enabled_extensions.contains(&khr::shader_non_semantic_info::NAME)),
+                vendor_could_be_qualcomm: self.phd_capabilities.properties.vendor_id
+                    == crate::auxil::db::qualcomm::VENDOR,
+                shader_integer_dot_product: self.private_caps.shader_integer_dot_product,
+                shader_int8: self.private_caps.shader_int8,
+                native_zero_init: self.private_caps.zero_initialize_workgroup_memory,
+                shader_input_output_16: features.contains(wgt::Features::SHADER_F16)
+                    && self.phd_features.supports_storage_input_output_16(),
+                robust_buffer_access2: self.private_caps.robust_buffer_access2,
+                robust_image_access: self.private_caps.robust_image_access,
+            });
 
         let raw_queue = {
             profiling::scope!("vkGetDeviceQueue");

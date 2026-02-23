@@ -92,7 +92,7 @@ impl super::Device {
         match stage.module.source {
             ShaderModuleSource::Naga(ref naga_shader) => {
                 let result = naga_shader
-                    .compile_msl(wgs::msl::MslShaderDesc {
+                    .compile_msl(wgs::out::msl::MslShaderDesc {
                         options: alloc::borrow::Cow::Borrowed(&self.shader_options),
                         entry_point: Some((stage.entry_point, naga_stage)),
                         resources: &layout.per_stage_map[naga_stage],
@@ -103,13 +103,13 @@ impl super::Device {
                         is_point_primitive: primitive_class == MTLPrimitiveTopologyClass::Point,
                     })
                     .map_err(|e| match e {
-                        wgs::ShaderCompilationError::Linkage(info) => {
+                        wgs::out::ShaderCompilationError::Linkage(info) => {
                             crate::PipelineError::Linkage(stage_bit, info)
                         }
-                        wgs::ShaderCompilationError::PipelineConstants(info) => {
+                        wgs::out::ShaderCompilationError::PipelineConstants(info) => {
                             crate::PipelineError::PipelineConstants(stage_bit, info)
                         }
-                        wgs::ShaderCompilationError::EntryPoint => {
+                        wgs::out::ShaderCompilationError::EntryPoint => {
                             crate::PipelineError::EntryPoint(naga_stage)
                         }
                     })?;
@@ -218,9 +218,11 @@ impl super::Device {
     ) -> super::Device {
         let shared = Arc::new(super::AdapterShared::new(raw));
         super::Device {
-            shader_options: wgs::msl::MslCompileOptions::new(wgs::msl::MslCompileOptionsDesc {
-                lang_version: super::map_msl_version(shared.private_caps.msl_version),
-            }),
+            shader_options: wgs::out::msl::MslCompileOptions::new(
+                wgs::out::msl::MslCompileOptionsDesc {
+                    lang_version: super::map_msl_version(shared.private_caps.msl_version),
+                },
+            ),
             shared,
             features,
             counters: Default::default(),

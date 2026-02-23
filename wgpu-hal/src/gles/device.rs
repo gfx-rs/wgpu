@@ -1,6 +1,6 @@
 use alloc::{borrow::ToOwned, format, string::ToString as _, sync::Arc, vec, vec::Vec};
 use core::{cmp::max, convert::TryInto, num::NonZeroU32, ptr, sync::atomic::Ordering};
-use wgs::glsl::NameBindingMap;
+use wgs::out::glsl::NameBindingMap;
 
 use arrayvec::ArrayVec;
 use glow::HasContext;
@@ -18,7 +18,7 @@ struct CompilationContext<'a> {
     layout: &'a super::PipelineLayout,
     sampler_map: &'a mut super::SamplerBindMap,
     name_binding_map: &'a mut NameBindingMap,
-    immediates_items: &'a mut Vec<wgs::glsl::GlslImmediateItem>,
+    immediates_items: &'a mut Vec<wgs::out::glsl::GlslImmediateItem>,
     multiview_mask: Option<NonZeroU32>,
     clip_distance_count: &'a mut u32,
 }
@@ -27,7 +27,7 @@ impl CompilationContext<'_> {
     fn consume_reflection(
         self,
         gl: &glow::Context,
-        reflection_info: wgs::glsl::GlslReflectionInfo,
+        reflection_info: wgs::out::glsl::GlslReflectionInfo,
         naga_stage: wst::ShaderStage,
         program: glow::Program,
     ) {
@@ -175,7 +175,7 @@ impl super::Device {
         context: CompilationContext,
         program: glow::Program,
     ) -> Result<glow::Shader, crate::PipelineError> {
-        let desc = wgs::glsl::GlslShaderDesc {
+        let desc = wgs::out::glsl::GlslShaderDesc {
             options: alloc::borrow::Cow::Borrowed(&context.layout.shader_options),
             stage: naga_stage,
             entry_point: stage.entry_point,
@@ -1119,7 +1119,7 @@ impl crate::Device for super::Device {
             }
         };
 
-        let options_desc = wgs::glsl::GlslCompileOptionsDesc {
+        let options_desc = wgs::out::glsl::GlslCompileOptionsDesc {
             api_version,
             glsl_version,
             shader_texture_shadow_lod: self
@@ -1132,7 +1132,7 @@ impl crate::Device for super::Device {
                 .contains(PrivateCapabilities::FULLY_FEATURED_INSTANCING),
             binding_map,
         };
-        let options = wgs::glsl::GlslCompileOptions::new(options_desc);
+        let options = wgs::out::glsl::GlslCompileOptions::new(options_desc);
 
         Ok(super::PipelineLayout {
             group_infos: group_infos.into_boxed_slice(),

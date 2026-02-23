@@ -652,7 +652,7 @@ impl super::Device {
                 runtime_checks,
             } => {
                 let spv = naga_shader
-                    .compile_spv(wgs::spv::SpvShaderDesc {
+                    .compile_spv(wgs::out::spv::SpvShaderDesc {
                         options: Cow::Borrowed(&self.compile_options),
                         runtime_checks,
                         entry_point: Some((stage.entry_point.to_owned(), naga_stage)),
@@ -1672,7 +1672,7 @@ impl crate::Device for super::Device {
             }
             crate::ShaderInput::Naga(naga_shader) => {
                 // TODO
-                let spv = naga_shader.compile_spv(wgs::spv::SpvShaderDesc {
+                let spv = naga_shader.compile_spv(wgs::out::spv::SpvShaderDesc {
                     options: Cow::Borrowed(&self.compile_options),
                     runtime_checks: desc.runtime_checks,
                     entry_point: None,

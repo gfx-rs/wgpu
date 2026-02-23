@@ -436,7 +436,7 @@ pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
     counters: Arc<wgt::HalCounters>,
-    shader_options: wgs::msl::MslCompileOptions,
+    shader_options: wgs::out::msl::MslCompileOptions,
 }
 
 pub struct Surface {

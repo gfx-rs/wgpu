@@ -522,7 +522,7 @@ pub struct Device {
     // Struct members are dropped from first to last, put the Device last to ensure that
     // all resources that depends on it are destroyed before it like the mem_allocator
     shared: Arc<DeviceShared>,
-    compile_options: wgs::spv::SpvCompileOptions<'static>,
+    compile_options: wgs::out::spv::SpvCompileOptions<'static>,
 }
 
 impl Drop for Device {

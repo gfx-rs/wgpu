@@ -66,9 +66,3 @@ impl fmt::Debug for NagaShader {
         write!(formatter, "Naga shader")
     }
 }
-
-pub enum ShaderCompilationError {
-    EntryPoint,
-    PipelineConstants(String),
-    Linkage(String),
-}

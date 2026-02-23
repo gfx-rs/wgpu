@@ -506,10 +506,10 @@ pub enum ShaderError {
     Device(#[from] DeviceError),
 }
 
-impl From<wgs::ShaderCompilationError> for ShaderError {
-    fn from(value: wgs::ShaderCompilationError) -> Self {
+impl From<wgs::out::ShaderCompilationError> for ShaderError {
+    fn from(value: wgs::out::ShaderCompilationError) -> Self {
         match value {
-            wgs::ShaderCompilationError::Linkage(info) => Self::Compilation(info),
+            wgs::out::ShaderCompilationError::Linkage(info) => Self::Compilation(info),
             _ => unreachable!(),
         }
     }
@@ -527,16 +527,16 @@ pub enum PipelineError {
     PipelineConstants(wgt::ShaderStages, String),
 }
 
-impl From<(wgs::ShaderCompilationError, wst::ShaderStage)> for PipelineError {
-    fn from((value, stage): (wgs::ShaderCompilationError, wst::ShaderStage)) -> Self {
+impl From<(wgs::out::ShaderCompilationError, wst::ShaderStage)> for PipelineError {
+    fn from((value, stage): (wgs::out::ShaderCompilationError, wst::ShaderStage)) -> Self {
         match value {
-            wgs::ShaderCompilationError::Linkage(info) => {
+            wgs::out::ShaderCompilationError::Linkage(info) => {
                 Self::Linkage(auxil::map_naga_stage(stage), info)
             }
-            wgs::ShaderCompilationError::PipelineConstants(info) => {
+            wgs::out::ShaderCompilationError::PipelineConstants(info) => {
                 Self::PipelineConstants(auxil::map_naga_stage(stage), info)
             }
-            wgs::ShaderCompilationError::EntryPoint => Self::EntryPoint(stage),
+            wgs::out::ShaderCompilationError::EntryPoint => Self::EntryPoint(stage),
         }
     }
 }
