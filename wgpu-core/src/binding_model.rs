@@ -22,7 +22,7 @@ use crate::{
     api_log,
     device::{bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
-    pipeline::{ComputePipeline, RenderPipeline},
+    pipeline::{ComputePipeline, RayTracingPipeline, RenderPipeline},
     resource::{
         Buffer, DestroyedResourceError, ExternalTexture, InvalidOrDestroyedResourceError,
         InvalidResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,
@@ -732,6 +732,7 @@ pub(crate) enum ExclusivePipeline {
     None,
     Render(Weak<RenderPipeline>),
     Compute(Weak<ComputePipeline>),
+    RayTracing(Weak<RayTracingPipeline>),
 }
 
 impl From<&Arc<RenderPipeline>> for ExclusivePipeline {
@@ -743,6 +744,12 @@ impl From<&Arc<RenderPipeline>> for ExclusivePipeline {
 impl From<&Arc<ComputePipeline>> for ExclusivePipeline {
     fn from(pipeline: &Arc<ComputePipeline>) -> Self {
         Self::Compute(Arc::downgrade(pipeline))
+    }
+}
+
+impl From<&Arc<RayTracingPipeline>> for ExclusivePipeline {
+    fn from(pipeline: &Arc<RayTracingPipeline>) -> Self {
+        Self::RayTracing(Arc::downgrade(pipeline))
     }
 }
 
@@ -762,6 +769,13 @@ impl fmt::Display for ExclusivePipeline {
                     p.error_ident().fmt(f)
                 } else {
                     f.write_str("ComputePipeline")
+                }
+            }
+            ExclusivePipeline::RayTracing(p) => {
+                if let Some(p) = p.upgrade() {
+                    p.error_ident().fmt(f)
+                } else {
+                    f.write_str("RayTracingPipeline")
                 }
             }
         }

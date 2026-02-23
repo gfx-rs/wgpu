@@ -8,7 +8,7 @@ use crate::{
         Command, ComputeCommand, PassTimestampWrites, PointerReferences, RenderCommand,
         RenderPassColorAttachment, ResolvedRenderPassDepthStencilAttachment,
     },
-    device::trace::{Data, DataKind},
+    device::trace::{Data, DataKind, TraceRayTracingPipelineDescriptor},
     id::{markers, PointerId},
     storage::StorageItem,
 };
@@ -773,6 +773,34 @@ impl<'a> IntoTrace for crate::pipeline::ComputePipelineDescriptor<'a> {
     }
 }
 
+impl<'a> IntoTrace for crate::pipeline::RayTracingPipelineDescriptor<'a> {
+    type Output = TraceRayTracingPipelineDescriptor<'a>;
+
+    fn into_trace(self) -> Self::Output {
+        TraceRayTracingPipelineDescriptor {
+            label: self.label,
+            layout: self.layout.into_trace(),
+            ray_generation: self.ray_generation.into_trace(),
+            miss: self.miss.into_trace(),
+            intersections: self
+                .intersections
+                .into_iter()
+                .map(|intersection| match intersection {
+                    crate::pipeline::RayTracingIntersectionDescriptor::Triangles {
+                        closest_hit,
+                        any_hit,
+                    } => crate::pipeline::RayTracingIntersectionDescriptor::Triangles {
+                        closest_hit: closest_hit.into_trace(),
+                        any_hit: any_hit.map(|a| a.into_trace()),
+                    },
+                })
+                .collect(),
+            cache: self.cache.map(|c| c.into_trace()),
+            max_recursion_depth: self.max_recursion_depth,
+        }
+    }
+}
+
 impl<'a> IntoTrace for crate::pipeline::ProgrammableStageDescriptor<'a> {
     type Output =
         crate::pipeline::ProgrammableStageDescriptor<'a, PointerId<markers::ShaderModule>>;
@@ -894,11 +922,21 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
             pipeline,
             index,
         },
+        A::GetRayTracingPipelineBindGroupLayout {
+            id,
+            pipeline,
+            index,
+        } => A::GetRayTracingPipelineBindGroupLayout {
+            id,
+            pipeline,
+            index,
+        },
         A::DropPipelineLayout(layout) => A::DropPipelineLayout(layout),
         A::DropBindGroup(bind_group) => A::DropBindGroup(bind_group),
         A::DropShaderModule(shader_module) => A::DropShaderModule(shader_module),
         A::DropComputePipeline(pipeline) => A::DropComputePipeline(pipeline),
         A::DropRenderPipeline(pipeline) => A::DropRenderPipeline(pipeline),
+        A::DropRayTracingPipeline(pipeline) => A::DropRayTracingPipeline(pipeline),
         A::DropPipelineCache(cache) => A::DropPipelineCache(cache),
         A::DropRenderBundle(render_bundle) => A::DropRenderBundle(render_bundle),
         A::DestroyQuerySet(query_set) => A::DestroyQuerySet(query_set),
@@ -1121,6 +1159,30 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
                     targets: Cow::Owned(f.targets.into_owned()),
                 }),
                 multiview_mask: desc.multiview_mask,
+                cache: desc.cache,
+            },
+        },
+        A::CreateRayTracingPipeline { id, desc } => A::CreateRayTracingPipeline {
+            id,
+            desc: crate::pipeline::RayTracingPipelineDescriptor {
+                label: owned_label(&desc.label),
+                layout: desc.layout,
+                ray_generation: owned_stage(desc.ray_generation),
+                miss: owned_stage(desc.miss),
+                intersections: desc
+                    .intersections
+                    .into_iter()
+                    .map(|i| match i {
+                        crate::pipeline::RayTracingIntersectionDescriptor::Triangles {
+                            closest_hit,
+                            any_hit,
+                        } => crate::pipeline::RayTracingIntersectionDescriptor::Triangles {
+                            closest_hit: owned_stage(closest_hit),
+                            any_hit: any_hit.map(owned_stage),
+                        },
+                    })
+                    .collect::<Vec<_>>(),
+                max_recursion_depth: desc.max_recursion_depth,
                 cache: desc.cache,
             },
         },

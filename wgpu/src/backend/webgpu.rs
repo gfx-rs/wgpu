@@ -1458,6 +1458,12 @@ pub struct WebComputePipeline {
 }
 
 #[derive(Debug, Clone)]
+pub struct WebRayTracingPipeline {
+    /// Unique identifier for this RayTracingPipeline.
+    ident: crate::cmp::Identifier,
+} // no ray tracing pipelines on web
+
+#[derive(Debug, Clone)]
 pub struct WebPipelineCache {
     /// Unique identifier for this PipelineCache.
     ident: crate::cmp::Identifier,
@@ -1566,6 +1572,7 @@ impl_send_sync!(WebQuerySet);
 impl_send_sync!(WebPipelineLayout);
 impl_send_sync!(WebRenderPipeline);
 impl_send_sync!(WebComputePipeline);
+impl_send_sync!(WebRayTracingPipeline);
 impl_send_sync!(WebPipelineCache);
 impl_send_sync!(WebCommandEncoder);
 impl_send_sync!(WebComputePassEncoder);
@@ -1596,6 +1603,7 @@ crate::cmp::impl_eq_ord_hash_proxy!(WebQuerySet => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebPipelineLayout => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebRenderPipeline => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebComputePipeline => .ident);
+crate::cmp::impl_eq_ord_hash_proxy!(WebRayTracingPipeline => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebPipelineCache => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebCommandEncoder => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebComputePassEncoder => .ident);
@@ -2472,6 +2480,13 @@ impl dispatch::DeviceInterface for WebDevice {
         .into()
     }
 
+    fn create_ray_tracing_pipeline(
+        &self,
+        _desc: &crate::RayTracingPipelineDescriptor<'_>,
+    ) -> dispatch::DispatchRayTracingPipeline {
+        unreachable!("ray tracing is not web.")
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         _desc: &crate::PipelineCacheDescriptor<'_>,
@@ -3186,6 +3201,17 @@ impl dispatch::ComputePipelineInterface for WebComputePipeline {
     }
 }
 impl Drop for WebComputePipeline {
+    fn drop(&mut self) {
+        // no-op
+    }
+}
+
+impl dispatch::RayTracingPipelineInterface for WebRayTracingPipeline {
+    fn get_bind_group_layout(&self, _index: u32) -> dispatch::DispatchBindGroupLayout {
+        unreachable!("ray tracing is not web.")
+    }
+}
+impl Drop for WebRayTracingPipeline {
     fn drop(&mut self) {
         // no-op
     }

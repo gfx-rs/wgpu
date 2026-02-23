@@ -454,6 +454,11 @@ pub struct CoreRenderPipeline {
 }
 
 #[derive(Debug)]
+pub struct CoreRayTracingPipeline {
+    pub(crate) wgpu_ray_tracing_pipeline: Arc<wgc::pipeline::RayTracingPipeline>,
+}
+
+#[derive(Debug)]
 pub struct CoreComputePass {
     pass: wgc::command::ComputePass,
 
@@ -582,6 +587,7 @@ crate::cmp::impl_eq_ord_hash_arc_address!(CoreQuerySet => .wgpu_query_set);
 crate::cmp::impl_eq_ord_hash_arc_address!(CorePipelineLayout => .wgpu_pipeline_layout);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreRenderPipeline => .wgpu_render_pipeline);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreComputePipeline => .wgpu_compute_pipeline);
+crate::cmp::impl_eq_ord_hash_arc_address!(CoreRayTracingPipeline => .wgpu_ray_tracing_pipeline);
 crate::cmp::impl_eq_ord_hash_arc_address!(CorePipelineCache => .wgpu_pipeline_cache);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreCommandEncoder => .wgpu_command_encoder);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreComputePass => .id);
@@ -1345,6 +1351,74 @@ impl dispatch::DeviceInterface for CoreDevice {
         .into()
     }
 
+    fn create_ray_tracing_pipeline(
+        &self,
+        desc: &crate::RayTracingPipelineDescriptor<'_>,
+    ) -> dispatch::DispatchRayTracingPipeline {
+        use wgc::pipeline as pipe;
+
+        fn downcast_rt_stage<'a>(
+            stage: &'a crate::RayTracingStage<'a>,
+        ) -> pipe::ProgrammableStageDescriptor<'a> {
+            pipe::ProgrammableStageDescriptor {
+                module: stage.module.inner.as_core().wgpu_shader_module.clone(),
+                entry_point: stage.entry_point.map(Borrowed),
+                constants: stage
+                    .compilation_options
+                    .constants
+                    .iter()
+                    .map(|&(key, value)| (String::from(key), value))
+                    .collect(),
+                zero_initialize_workgroup_memory: stage
+                    .compilation_options
+                    .zero_initialize_workgroup_memory,
+            }
+        }
+
+        let descriptor = pipe::RayTracingPipelineDescriptor {
+            label: desc.label.map(Borrowed),
+            layout: desc
+                .layout
+                .map(|pll| pll.inner.as_core().wgpu_pipeline_layout.clone()),
+            ray_generation: downcast_rt_stage(&desc.ray_generation),
+            miss: downcast_rt_stage(&desc.miss),
+            intersections: desc
+                .intersection_descs
+                .iter()
+                .map(|intersection_desc| match intersection_desc {
+                    crate::RayTracingIntersectionDescriptor::Triangle {
+                        closest_hit,
+                        any_hit,
+                    } => pipe::RayTracingIntersectionDescriptor::Triangles {
+                        closest_hit: downcast_rt_stage(closest_hit),
+                        any_hit: any_hit.as_ref().map(|stage| downcast_rt_stage(stage)),
+                    },
+                })
+                .collect::<Vec<_>>(),
+            max_recursion_depth: desc.max_recersion_depth,
+            cache: desc
+                .cache
+                .map(|cache| cache.inner.as_core().wgpu_pipeline_cache.clone()),
+        };
+
+        let (wgpu_ray_tracing_pipeline, error) =
+            self.wgpu_device.create_ray_tracing_pipeline(descriptor);
+        if let Some(cause) = error {
+            if let wgc::pipeline::CreateRayTracingPipelineError::Internal { stage, ref error } =
+                cause
+            {
+                log::error!("Shader translation error for stage {:?}: {}", stage, error);
+                log::error!("Please report it to https://github.com/gfx-rs/wgpu");
+            }
+            self.wgpu_device
+                .handle_error(cause, desc.label, "Device::create_ray_tracing_pipeline");
+        }
+        CoreRayTracingPipeline {
+            wgpu_ray_tracing_pipeline,
+        }
+        .into()
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         desc: &crate::PipelineCacheDescriptor<'_>,
@@ -1985,6 +2059,22 @@ impl dispatch::RenderPipelineInterface for CoreRenderPipeline {
             self.wgpu_render_pipeline
                 .device()
                 .handle_error_nolabel(err, "RenderPipeline::get_bind_group_layout")
+        }
+        CoreBindGroupLayout {
+            wgpu_bind_group_layout,
+        }
+        .into()
+    }
+}
+
+impl dispatch::RayTracingPipelineInterface for CoreRayTracingPipeline {
+    fn get_bind_group_layout(&self, index: u32) -> dispatch::DispatchBindGroupLayout {
+        let (wgpu_bind_group_layout, error) =
+            self.wgpu_ray_tracing_pipeline.get_bind_group_layout(index);
+        if let Some(err) = error {
+            self.wgpu_ray_tracing_pipeline
+                .device()
+                .handle_error_nolabel(err, "RayTracingPipeline::get_bind_group_layout")
         }
         CoreBindGroupLayout {
             wgpu_bind_group_layout,

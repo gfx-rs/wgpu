@@ -2214,6 +2214,14 @@ pub enum ShaderStageForValidation {
     },
     Compute,
     Task,
+    RayGeneration,
+    Miss,
+    ClosestHit {
+        triangle: bool,
+    },
+    AnyHit {
+        triangle: bool,
+    },
 }
 
 impl ShaderStageForValidation {
@@ -2224,6 +2232,10 @@ impl ShaderStageForValidation {
             Self::Fragment { .. } => naga::ShaderStage::Fragment,
             Self::Compute => naga::ShaderStage::Compute,
             Self::Task => naga::ShaderStage::Task,
+            Self::RayGeneration => naga::ShaderStage::RayGeneration,
+            Self::Miss => naga::ShaderStage::Miss,
+            Self::AnyHit { .. } => naga::ShaderStage::AnyHit,
+            Self::ClosestHit { .. } => naga::ShaderStage::ClosestHit,
         }
     }
 
@@ -2234,6 +2246,10 @@ impl ShaderStageForValidation {
             Self::Fragment { .. } => wgt::ShaderStages::FRAGMENT,
             Self::Compute => wgt::ShaderStages::COMPUTE,
             Self::Task => wgt::ShaderStages::TASK,
+            Self::RayGeneration => wgt::ShaderStages::RAY_GENERATION,
+            Self::Miss => wgt::ShaderStages::MISS,
+            Self::AnyHit { .. } => wgt::ShaderStages::ANY_HIT,
+            Self::ClosestHit { .. } => wgt::ShaderStages::CLOSEST_HIT,
         }
     }
 }

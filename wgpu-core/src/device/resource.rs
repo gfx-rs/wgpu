@@ -2861,7 +2861,7 @@ impl Device {
 
     /// Generate information about late-validated buffer bindings for pipelines.
     //TODO: should this be combined with `get_introspection_bind_group_layouts` in some way?
-    fn make_late_sized_buffer_groups(
+    pub(super) fn make_late_sized_buffer_groups(
         shader_binding_sizes: &FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         layout: &binding_model::PipelineLayout,
     ) -> ArrayVec<pipeline::LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }> {
@@ -3110,6 +3110,9 @@ impl Device {
                 }
                 Bt::AccelerationStructure { vertex_return } => {
                     self.require_features(wgt::Features::EXPERIMENTAL_RAY_QUERY)
+                        .or_else(|_| {
+                            self.require_features(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+                        })
                         .map_err(|e| CreateBindGroupLayoutError::Entry {
                             binding: entry.binding,
                             error: e.into(),
@@ -4266,7 +4269,7 @@ impl Device {
         Ok(layout)
     }
 
-    fn create_derived_pipeline_layout(
+    pub(super) fn create_derived_pipeline_layout(
         self: &Arc<Self>,
         mut derived_group_layouts: Box<ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>>,
         immediate_size: u32,

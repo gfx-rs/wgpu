@@ -47,6 +47,10 @@ pub struct Player {
         wgc::id::PointerId<wgc::id::markers::ComputePipeline>,
         Arc<wgc::pipeline::ComputePipeline>,
     >,
+    ray_tracing_pipelines: HashMap<
+        wgc::id::PointerId<wgc::id::markers::RayTracingPipeline>,
+        Arc<wgc::pipeline::RayTracingPipeline>,
+    >,
     pipeline_caches: HashMap<
         wgc::id::PointerId<wgc::id::markers::PipelineCache>,
         Arc<wgc::pipeline::PipelineCache>,
@@ -76,6 +80,7 @@ impl Default for Player {
             render_bundles: HashMap::new(),
             render_pipelines: HashMap::new(),
             compute_pipelines: HashMap::new(),
+            ray_tracing_pipelines: HashMap::new(),
             pipeline_caches: HashMap::new(),
             query_sets: HashMap::new(),
             buffers: HashMap::new(),
@@ -197,6 +202,15 @@ impl Player {
                 index,
             } => {
                 let pipeline = self.resolve_compute_pipeline_id(pipeline);
+                let (bgl, _error) = pipeline.get_bind_group_layout(index);
+                self.bind_group_layouts.insert(id, bgl);
+            }
+            Action::GetRayTracingPipelineBindGroupLayout {
+                id,
+                pipeline,
+                index,
+            } => {
+                let pipeline = self.resolve_ray_tracing_pipeline_id(pipeline);
                 let (bgl, _error) = pipeline.get_bind_group_layout(index);
                 self.bind_group_layouts.insert(id, bgl);
             }
@@ -339,6 +353,16 @@ impl Player {
                 self.render_pipelines
                     .remove(&id)
                     .expect("invalid render pipeline");
+            }
+            Action::CreateRayTracingPipeline { id, desc } => {
+                let descriptor = self.resolve_ray_tracing_pipeline_descriptor(desc);
+                let (rt_pipeline, _error) = device.create_ray_tracing_pipeline(descriptor);
+                self.ray_tracing_pipelines.insert(id, rt_pipeline);
+            }
+            Action::DropRayTracingPipeline(id) => {
+                self.ray_tracing_pipelines
+                    .remove(&id)
+                    .expect("invalid ray tracing pipeline");
             }
             Action::CreatePipelineCache { id, desc } => {
                 let (cache, _error) = unsafe { device.create_pipeline_cache(&desc) };
@@ -556,6 +580,16 @@ impl Player {
             .clone()
     }
 
+    fn resolve_ray_tracing_pipeline_id(
+        &self,
+        id: wgc::id::PointerId<wgc::id::markers::RayTracingPipeline>,
+    ) -> Arc<wgc::pipeline::RayTracingPipeline> {
+        self.ray_tracing_pipelines
+            .get(&id)
+            .expect("invalid ray tracing pipeline")
+            .clone()
+    }
+
     fn resolve_pipeline_cache_id(
         &self,
         id: wgc::id::PointerId<wgc::id::markers::PipelineCache>,
@@ -695,6 +729,61 @@ impl Player {
             fragment,
             multiview_mask: desc.multiview_mask,
             cache: desc.cache.map(|id| self.resolve_pipeline_cache_id(id)),
+        }
+    }
+
+    fn resolve_ray_tracing_pipeline_descriptor<'a>(
+        &self,
+        desc: wgc::device::trace::TraceRayTracingPipelineDescriptor<'a>,
+    ) -> wgc::pipeline::RayTracingPipelineDescriptor<'a> {
+        let layout = desc.layout.map(|id| self.resolve_pipeline_layout_id(id));
+
+        wgc::pipeline::RayTracingPipelineDescriptor {
+            label: desc.label,
+            layout,
+            cache: desc.cache.map(|id| self.resolve_pipeline_cache_id(id)),
+            ray_generation: wgc::pipeline::ProgrammableStageDescriptor {
+                module: self.resolve_shader_module_id(desc.ray_generation.module),
+                entry_point: desc.ray_generation.entry_point,
+                constants: desc.ray_generation.constants,
+                zero_initialize_workgroup_memory: desc
+                    .ray_generation
+                    .zero_initialize_workgroup_memory,
+            },
+            miss: wgc::pipeline::ProgrammableStageDescriptor {
+                module: self.resolve_shader_module_id(desc.miss.module),
+                entry_point: desc.miss.entry_point,
+                constants: desc.miss.constants,
+                zero_initialize_workgroup_memory: desc.miss.zero_initialize_workgroup_memory,
+            },
+            intersections: desc
+                .intersections
+                .into_iter()
+                .map(|intersections| match intersections {
+                    wgc::pipeline::RayTracingIntersectionDescriptor::Triangles {
+                        closest_hit,
+                        any_hit,
+                    } => wgc::pipeline::RayTracingIntersectionDescriptor::Triangles {
+                        closest_hit: wgc::pipeline::ProgrammableStageDescriptor {
+                            module: self.resolve_shader_module_id(closest_hit.module),
+                            entry_point: closest_hit.entry_point,
+                            constants: closest_hit.constants,
+                            zero_initialize_workgroup_memory: closest_hit
+                                .zero_initialize_workgroup_memory,
+                        },
+                        any_hit: any_hit.map(|any_hit| {
+                            wgc::pipeline::ProgrammableStageDescriptor {
+                                module: self.resolve_shader_module_id(any_hit.module),
+                                entry_point: any_hit.entry_point,
+                                constants: any_hit.constants,
+                                zero_initialize_workgroup_memory: any_hit
+                                    .zero_initialize_workgroup_memory,
+                            }
+                        }),
+                    },
+                })
+                .collect(),
+            max_recursion_depth: desc.max_recursion_depth,
         }
     }
 

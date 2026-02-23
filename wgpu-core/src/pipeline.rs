@@ -1150,3 +1150,208 @@ impl RenderPipeline {
         (bgl, error)
     }
 }
+
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum CreateRayTracingPipelineError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("Unable to derive an implicit layout")]
+    Implicit(#[from] ImplicitLayoutError),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
+    #[error("Error matching {stage:?} shader requirements against the pipeline")]
+    Stage {
+        stage: wgt::ShaderStages,
+        #[source]
+        error: validation::StageError,
+    },
+    #[error("In the provided shader, the type given for group {group} binding {binding} has a size of {size}. As the device does not support `DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED`, the type must have a size that is a multiple of 16 bytes.")]
+    UnalignedShader { group: u32, binding: u32, size: u64 },
+    #[error("Internal error in {stage:?} shader: {error}")]
+    Internal {
+        stage: wgt::ShaderStages,
+        error: String,
+    },
+    #[error("Pipeline constant error in {stage:?} shader: {error}")]
+    PipelineConstants {
+        stage: wgt::ShaderStages,
+        error: String,
+    },
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
+}
+
+impl WebGpuError for CreateRayTracingPipelineError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
+
+            Self::Internal { .. } => ErrorType::Internal,
+
+            Self::Implicit(_)
+            | Self::Stage { .. }
+            | Self::UnalignedShader { .. }
+            | Self::PipelineConstants { .. } => ErrorType::Validation,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum RayTracingIntersectionDescriptor<'a, SM = Arc<ShaderModule>> {
+    Triangles {
+        closest_hit: ProgrammableStageDescriptor<'a, SM>,
+        any_hit: Option<ProgrammableStageDescriptor<'a, SM>>,
+    },
+}
+
+/// Describes a ray tracing pipeline.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct RayTracingPipelineDescriptor<
+    'a,
+    PLL = Arc<PipelineLayout>,
+    SM = Arc<ShaderModule>,
+    PLC = Arc<PipelineCache>,
+> {
+    pub label: Label<'a>,
+    /// The layout of bind groups for this pipeline.
+    pub layout: Option<PLL>,
+    /// The ray generation stage descriptor
+    pub ray_generation: ProgrammableStageDescriptor<'a, SM>,
+    /// The miss stage descriptor
+    pub miss: ProgrammableStageDescriptor<'a, SM>,
+    /// All the descriptors for intersection functions
+    pub intersections: Vec<RayTracingIntersectionDescriptor<'a, SM>>,
+    /// The maximum amount entry points are allowed to recurse
+    pub max_recursion_depth: u32,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<PLC>,
+}
+
+#[derive(Debug)]
+pub struct ShaderBindingData {
+    pub(crate) raw: ManuallyDrop<Box<dyn hal::DynBuffer>>,
+    pub(crate) device: Arc<Device>,
+}
+
+impl Drop for ShaderBindingData {
+    fn drop(&mut self) {
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            self.device.raw().destroy_buffer(raw);
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct RayTracingPipelineState {
+    pub(crate) raw: ManuallyDrop<Box<dyn hal::DynRayTracingPipeline>>,
+    pub(crate) layout: Arc<PipelineLayout>,
+    pub(crate) _shader_modules: Vec<Arc<ShaderModule>>,
+}
+
+#[derive(Debug)]
+pub struct RayTracingPipeline {
+    pub(crate) state: ResourceState<RayTracingPipelineState>,
+    pub(crate) device: Arc<Device>,
+    #[expect(unused)]
+    pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
+    pub(crate) tracking_data: TrackingData,
+}
+
+impl Drop for RayTracingPipeline {
+    fn drop(&mut self) {
+        resource_log!("Destroy raw {}", self.error_ident());
+
+        #[cfg(feature = "trace")]
+        {
+            use crate::device::trace;
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DropRayTracingPipeline(unsafe {
+                    trace::to_trace(self)
+                }));
+            }
+        }
+
+        let ResourceState::Valid(state) = &mut self.state else {
+            return;
+        };
+
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut state.raw) };
+        unsafe {
+            self.device.raw().destroy_ray_tracing_pipeline(raw);
+        }
+    }
+}
+
+crate::impl_resource_type!(RayTracingPipeline);
+crate::impl_labeled!(RayTracingPipeline);
+crate::impl_parent_device!(RayTracingPipeline);
+crate::impl_storage_item!(RayTracingPipeline);
+crate::impl_trackable!(RayTracingPipeline);
+
+impl RayTracingPipeline {
+    #[expect(unused)]
+    pub(crate) fn raw(&self) -> Result<&dyn hal::DynRayTracingPipeline, InvalidResourceError> {
+        let ResourceState::Valid(state) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        Ok(state.raw.as_ref())
+    }
+
+    pub(crate) fn invalid(device: Arc<Device>, label: String) -> Arc<Self> {
+        Arc::new(Self {
+            tracking_data: TrackingData::new(device.tracker_indices.compute_pipelines.clone()),
+            state: ResourceState::Invalid,
+            device,
+            late_sized_buffer_groups: ArrayVec::new(),
+            label,
+        })
+    }
+
+    pub(crate) fn layout(&self) -> Result<&Arc<PipelineLayout>, InvalidResourceError> {
+        let ResourceState::Valid(state) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        Ok(&state.layout)
+    }
+
+    pub fn get_bind_group_layout_inner(
+        self: &Arc<Self>,
+        index: u32,
+    ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
+        self.layout()?.get_bind_group_layout(index, self.into())
+    }
+
+    pub fn get_bind_group_layout(
+        self: &Arc<Self>,
+        index: u32,
+    ) -> (Arc<BindGroupLayout>, Option<GetBindGroupLayoutError>) {
+        let (bgl, error) = match self.get_bind_group_layout_inner(index) {
+            Ok(bgl) => (bgl, None),
+            Err(e) => (
+                BindGroupLayout::invalid(&self.device, String::new()),
+                Some(e),
+            ),
+        };
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.device.trace.lock() {
+            use crate::device::trace;
+            use trace::IntoTrace;
+            trace.add(trace::Action::GetRayTracingPipelineBindGroupLayout {
+                id: bgl.to_trace(),
+                pipeline: self.to_trace(),
+                index,
+            });
+        };
+        (bgl, error)
+    }
+}
