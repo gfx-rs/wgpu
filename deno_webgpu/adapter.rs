@@ -23,6 +23,8 @@ use crate::Instance;
 #[derive(WebIDL)]
 #[webidl(dictionary)]
 pub(crate) struct GPURequestAdapterOptions {
+  #[webidl(default = "core".into())]
+  pub feature_level: String,
   pub power_preference: Option<GPUPowerPreference>,
   #[webidl(default = false)]
   pub force_fallback_adapter: bool,
@@ -498,7 +500,7 @@ impl GPUAdapterInfo {
   #[getter]
   #[string]
   fn architecture(&self) -> &'static str {
-    "" // TODO: wgpu#2170
+    "" // TODO(https://github.com/gfx-rs/wgpu/issues/8649): implement when wgpu has architecture detection
   }
 
   #[getter]
@@ -525,7 +527,6 @@ impl GPUAdapterInfo {
 
   #[getter]
   fn is_fallback_adapter(&self) -> bool {
-    // TODO(lucacasonato): report correctly from wgpu
-    false
+    self.info.device_type == wgpu_types::DeviceType::Cpu
   }
 }

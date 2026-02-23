@@ -10,6 +10,7 @@
 
 unittests:*
 
+webgpu:api,operation,adapter,requestAdapter:*
 webgpu:api,operation,buffers,createBindGroup:buffer_binding_resource:*
 webgpu:api,operation,command_buffer,basic:*
 webgpu:api,operation,command_buffer,copyBufferToBuffer:*

@@ -33,17 +33,24 @@ impl IndirectValidation {
         device: &dyn hal::DynDevice,
         required_limits: &wgt::Limits,
         required_features: &wgt::Features,
+        instance_flags: wgt::InstanceFlags,
         backend: wgt::Backend,
         queue_index: u32,
     ) -> Result<Self, DeviceError> {
-        let dispatch = match Dispatch::new(device, required_limits, queue_index) {
+        let dispatch = match Dispatch::new(device, instance_flags, required_limits, queue_index) {
             Ok(dispatch) => dispatch,
             Err(e) => {
                 log::error!("indirect-validation error: {e:?}");
                 return Err(DeviceError::Lost);
             }
         };
-        let draw = match Draw::new(device, required_features, backend, queue_index) {
+        let draw = match Draw::new(
+            device,
+            required_features,
+            instance_flags,
+            backend,
+            queue_index,
+        ) {
             Ok(draw) => draw,
             Err(e) => {
                 log::error!("indirect-draw-validation error: {e:?}");
@@ -80,12 +87,14 @@ impl BindGroups {
             &device.limits,
             buffer_size,
             buffer,
+            device.instance_flags,
         )?;
         let draw = indirect_validation.draw.create_src_bind_group(
             device.raw(),
             &device.adapter.limits(),
             buffer_size,
             buffer,
+            device.instance_flags,
         )?;
 
         match (dispatch, draw) {
