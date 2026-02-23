@@ -47,6 +47,8 @@ impl Default for super::CommandState {
 ///
 /// Combines [`naga::ShaderStage`] and an encoder of the appropriate type for
 /// that stage.
+///
+/// [`naga::ShaderStage`]: wst::ShaderStage
 enum Encoder<'e> {
     Vertex(&'e ProtocolObject<dyn MTLRenderCommandEncoder>),
     Fragment(&'e ProtocolObject<dyn MTLRenderCommandEncoder>),

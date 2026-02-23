@@ -1024,7 +1024,7 @@ struct CommandState {
     ///
     /// See `device::CompiledShader::sized_bindings` for more details.
     ///
-    /// [`ResourceBinding`]: naga::ResourceBinding
+    /// [`ResourceBinding`]: wst::ResourceBinding
     storage_buffer_length_map: FastHashMap<wst::ResourceBinding, wgt::BufferSize>,
 
     vertex_buffer_size_map: FastHashMap<u64, wgt::BufferSize>,

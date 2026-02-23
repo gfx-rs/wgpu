@@ -790,6 +790,8 @@ impl crate::DynSampler for Sampler {}
 /// Information about a binding within a specific BindGroupLayout / BindGroup.
 /// This will be used to construct a [`naga::back::spv::BindingInfo`], where
 /// the descriptor set value will be taken from the index of the group.
+///
+/// [`naga::back::spv::BindingInfo`]: wst::spv::BindingInfo
 #[derive(Copy, Clone, Debug)]
 struct BindingInfo {
     binding: u32,
