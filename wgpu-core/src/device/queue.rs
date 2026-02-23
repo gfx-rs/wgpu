@@ -113,6 +113,7 @@ impl Queue {
                 device.raw(),
                 &device.limits,
                 &device.features,
+                device.instance_flags,
                 device.adapter.backend(),
                 index,
             )?)
