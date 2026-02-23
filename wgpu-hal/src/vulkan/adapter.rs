@@ -100,6 +100,9 @@ pub struct PhysicalDeviceFeatures {
     /// [`Instance::expose_adapter`]: super::Instance::expose_adapter
     ray_query: Option<vk::PhysicalDeviceRayQueryFeaturesKHR<'static>>,
 
+    /// Features provided by `VK_KHR_ray_tracing_pipeline`.
+    ray_tracing_pipeline: Option<vk::PhysicalDeviceRayTracingPipelineFeaturesKHR<'static>>,
+
     /// Features provided by `VK_KHR_zero_initialize_workgroup_memory`, promoted
     /// to Vulkan 1.3.
     zero_initialize_workgroup_memory:
@@ -190,6 +193,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.ray_query {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.ray_tracing_pipeline {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.shader_atomic_int64 {
@@ -473,6 +479,14 @@ impl PhysicalDeviceFeatures {
             },
             ray_query: if enabled_extensions.contains(&khr::ray_query::NAME) {
                 Some(vk::PhysicalDeviceRayQueryFeaturesKHR::default().ray_query(true))
+            } else {
+                None
+            },
+            ray_tracing_pipeline: if enabled_extensions.contains(&khr::ray_tracing_pipeline::NAME) {
+                Some(
+                    vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::default()
+                        .ray_tracing_pipeline(true),
+                )
             } else {
                 None
             },
@@ -959,6 +973,14 @@ impl PhysicalDeviceFeatures {
             supports_acceleration_structure_binding_array,
         );
 
+        features.set(
+            F::EXPERIMENTAL_RAY_TRACING_PIPELINES
+            // Ditto.
+                | F::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
+            supports_acceleration_structures
+                && caps.supports_extension(khr::ray_tracing_pipeline::NAME),
+        );
+
         let rg11b10ufloat_renderable = supports_format(
             instance,
             phd,
@@ -1330,12 +1352,24 @@ impl PhysicalDeviceProperties {
             extensions.push(khr::draw_indirect_count::NAME);
         }
 
-        // Require `VK_KHR_deferred_host_operations`, `VK_KHR_acceleration_structure` `VK_KHR_buffer_device_address` (for acceleration structures) and`VK_KHR_ray_query` if `EXPERIMENTAL_RAY_QUERY` was requested
-        if requested_features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
+        // Require `VK_KHR_deferred_host_operations`, `VK_KHR_acceleration_structure` `VK_KHR_buffer_device_address` (for acceleration structures) if either `EXPERIMENTAL_RAY_QUERY` or `EXPERIMENTAL_RAY_TRACING_PIPELINES` were requested.
+        if requested_features.intersects(
+            wgt::Features::EXPERIMENTAL_RAY_QUERY
+                | wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES,
+        ) {
             extensions.push(khr::deferred_host_operations::NAME);
             extensions.push(khr::acceleration_structure::NAME);
             extensions.push(khr::buffer_device_address::NAME);
+        }
+
+        // Require `VK_KHR_ray_query` if `EXPERIMENTAL_RAY_QUERY` was requested
+        if requested_features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
             extensions.push(khr::ray_query::NAME);
+        }
+
+        // Require `VK_KHR_ray_tracing_pipeline` if `EXPERIMENTAL_RAY_TRACING_PIPELINES` was requested
+        if requested_features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES) {
+            extensions.push(khr::ray_tracing_pipeline::NAME);
         }
 
         if requested_features.contains(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN) {
@@ -2526,6 +2560,15 @@ impl super::Adapter {
         } else {
             None
         };
+        let ray_tracing_pipeline_fns =
+            if enabled_extensions.contains(&khr::ray_tracing_pipeline::NAME) {
+                Some(khr::ray_tracing_pipeline::Device::new(
+                    &self.instance.raw,
+                    &raw_device,
+                ))
+            } else {
+                None
+            };
         let mesh_shading_fns = if enabled_extensions.contains(&ext::mesh_shader::NAME) {
             Some(ext::mesh_shader::Device::new(
                 &self.instance.raw,
@@ -2665,13 +2708,17 @@ impl super::Adapter {
                 true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
             );
             flags.set(
-                spv::WriterFlags::PRINT_ON_RAY_QUERY_INITIALIZATION_FAIL,
+                spv::WriterFlags::PRINT_ON_RAY_QUERY_INITIALIZATION_FAIL
+                    | spv::WriterFlags::PRINT_ON_TRACE_RAYS_FAIL,
                 self.instance.flags.contains(wgt::InstanceFlags::DEBUG)
                     && (self.instance.instance_api_version >= vk::API_VERSION_1_3
                         || enabled_extensions.contains(&khr::shader_non_semantic_info::NAME)),
             );
             if features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
                 capabilities.push(spv::Capability::RayQueryKHR);
+            }
+            if features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES) {
+                capabilities.push(spv::Capability::RayTracingKHR);
             }
             if features.contains(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN) {
                 capabilities.push(spv::Capability::RayQueryPositionFetchKHR)
@@ -2789,6 +2836,7 @@ impl super::Adapter {
                 draw_indirect_count: indirect_count_fn,
                 timeline_semaphore: timeline_semaphore_fn,
                 ray_tracing: ray_tracing_fns,
+                ray_tracing_pipelines: ray_tracing_pipeline_fns,
                 mesh_shading: mesh_shading_fns,
                 external_memory_fd: external_memory_fd_fn,
             },

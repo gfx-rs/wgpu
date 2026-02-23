@@ -478,6 +478,7 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+    type RayTracingPipeline = RayTracingPipeline;
     type PipelineCache = PipelineCache;
 
     type AccelerationStructure = AccelerationStructure;
@@ -499,6 +500,7 @@ crate::impl_dyn_resource!(
     PipelineLayout,
     QuerySet,
     Queue,
+    RayTracingPipeline,
     RenderPipeline,
     Sampler,
     ShaderModule,
@@ -1330,6 +1332,11 @@ impl crate::DynComputePipeline for ComputePipeline {}
 
 unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
+
+#[derive(Debug)]
+pub struct RayTracingPipeline {}
+
+impl crate::DynRayTracingPipeline for RayTracingPipeline {}
 
 #[derive(Debug)]
 pub struct PipelineCache;
