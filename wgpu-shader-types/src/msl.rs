@@ -115,6 +115,7 @@ pub struct TranslationInfo {
 pub struct VertexBufferMapping {
     pub id: u32,
     pub stride: u32,
-    pub step_mode: crate::VertexStepMode,
+    /// None represents a constant index of zero, i.e. zero stride.
+    pub step_mode: Option<crate::VertexStepMode>,
     pub attributes: Vec<crate::VertexAttribute>,
 }

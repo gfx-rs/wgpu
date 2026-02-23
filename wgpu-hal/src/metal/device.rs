@@ -1126,10 +1126,10 @@ impl crate::Device for super::Device {
                                     .try_into()
                                     .unwrap()
                             },
-                            step_mode: match vbl.step_mode {
+                            step_mode: (vbl.array_stride != 0).then_some(match vbl.step_mode {
                                 wgt::VertexStepMode::Vertex => wgt::VertexStepMode::Vertex,
                                 wgt::VertexStepMode::Instance => wgt::VertexStepMode::Instance,
-                            },
+                            }),
                             attributes,
                         };
                         vertex_buffer_mappings.push(mapping);

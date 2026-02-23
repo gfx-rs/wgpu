@@ -6635,7 +6635,7 @@ template <typename A>
         struct VertexBufferMappingResolved<'a> {
             id: u32,
             stride: u32,
-            step_mode: wst::VertexStepMode,
+            step_mode: Option<wst::VertexStepMode>,
             ty_name: String,
             param_name: String,
             elem_name: String,
@@ -6672,12 +6672,13 @@ template <typename A>
                 );
 
                 match vbm.step_mode {
-                    wst::VertexStepMode::Vertex => {
+                    Some(wst::VertexStepMode::Vertex) => {
                         needs_vertex_id = true;
                     }
-                    wst::VertexStepMode::Instance => {
+                    Some(wst::VertexStepMode::Instance) => {
                         needs_instance_id = true;
                     }
+                    None => (),
                 }
 
                 let buffer_ty = self.namer.call(format!("vb_{buffer_id}_type").as_str());
@@ -7557,20 +7558,21 @@ template <typename A>
                     let idx = &vbm.id;
                     let stride = &vbm.stride;
                     let index_name = match vbm.step_mode {
-                        wst::VertexStepMode::Vertex => {
+                        Some(wst::VertexStepMode::Vertex) => {
                             if let Some(ref name) = v_existing_id {
                                 name
                             } else {
                                 &v_id
                             }
                         }
-                        wst::VertexStepMode::Instance => {
+                        Some(wst::VertexStepMode::Instance) => {
                             if let Some(ref name) = i_existing_id {
                                 name
                             } else {
                                 &i_id
                             }
                         }
+                        None => "0",
                     };
                     write!(
                         self.out,

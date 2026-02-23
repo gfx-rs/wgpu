@@ -142,79 +142,96 @@ impl super::NagaShader {
             let (shader, info) =
                 naga::back::msl::write_string(&module, &module_info, &options, &pipeline_options)
                     .map_err(|e| crate::ShaderCompilationError::Linkage(format!("MSL: {e:?}")))?;
+
             for (i, e) in info.entry_point_names.iter().enumerate() {
                 if let Err(e) = e {
                     return Err(crate::ShaderCompilationError::Linkage(format!(
                         "Error in entry point {}: {e}",
-                        self.module.entry_points[i].name
+                        module.entry_points[i].name
                     )));
                 }
             }
-            let entry_points = info
-                .entry_point_names
-                .into_iter()
-                .enumerate()
-                .map(|(i, e)| {
-                    let e = e.unwrap();
-                    let ep = &self.module.entry_points[i];
-                    let ep_info = self.info.get_entry_point(i);
-                    let mut wg_memory_sizes = Vec::new();
-                    let mut immutable_buffer_mask = 0;
-                    let mut sized_bindings = Vec::new();
-                    for (handle, var) in self.module.global_variables.iter() {
-                        if ep_info[handle].is_empty() {
-                            continue;
-                        }
-                        match var.space {
-                            naga::AddressSpace::WorkGroup => {
-                                wg_memory_sizes.push(
-                                    self.module.types[var.ty].inner.size(self.module.to_ctx()),
-                                );
-                            }
-                            naga::AddressSpace::Uniform | naga::AddressSpace::Storage { .. } => {
-                                let br = match var.binding {
-                                    Some(br) => br,
-                                    None => continue,
-                                };
-                                let storage_access_store = match var.space {
-                                    naga::AddressSpace::Storage { access } => {
-                                        access.contains(naga::StorageAccess::STORE)
-                                    }
-                                    _ => false,
-                                };
 
-                                // check for an immutable buffer
-                                if !ep_info[handle].is_empty() && !storage_access_store {
-                                    let slot = ep_resources.resources[&br].buffer.unwrap();
-                                    immutable_buffer_mask |= 1 << slot;
-                                }
+            let ep_range = if let Some((ep_name, ep_stage)) = desc.entry_point {
+                let ep_index = module
+                    .entry_points
+                    .iter()
+                    .position(|ep| ep.name == ep_name && ep.stage == ep_stage)
+                    .expect("entry point not found in module");
+                ep_index..ep_index + 1
+            } else {
+                0..module.entry_points.len()
+            };
 
-                                let mut dynamic_array_container_ty = var.ty;
-                                if let naga::TypeInner::Struct { ref members, .. } =
-                                    module.types[var.ty].inner
-                                {
-                                    dynamic_array_container_ty = members.last().unwrap().ty;
-                                }
-                                if let naga::TypeInner::Array {
-                                    size: naga::ArraySize::Dynamic,
-                                    ..
-                                } = module.types[dynamic_array_container_ty].inner
-                                {
-                                    sized_bindings.push(br);
-                                }
-                            }
-                            _ => (),
+            let mut entry_points = Vec::new();
+            for ep_index in ep_range {
+                let ep = &module.entry_points[ep_index];
+                let ep_info = module_info.get_entry_point(ep_index);
+
+                let mut wg_memory_sizes = Vec::new();
+                let mut immutable_buffer_mask = 0;
+                let mut sized_bindings = Vec::new();
+
+                for (handle, var) in module.global_variables.iter() {
+                    if ep_info[handle].is_empty() {
+                        continue;
+                    }
+                    match var.space {
+                        naga::AddressSpace::WorkGroup => {
+                            wg_memory_sizes.push(module.types[var.ty].inner.size(module.to_ctx()));
                         }
+                        naga::AddressSpace::Uniform | naga::AddressSpace::Storage { .. } => {
+                            let br = match var.binding {
+                                Some(br) => br,
+                                None => continue,
+                            };
+                            let storage_access_store = match var.space {
+                                naga::AddressSpace::Storage { access } => {
+                                    access.contains(naga::StorageAccess::STORE)
+                                }
+                                _ => false,
+                            };
+
+                            if !ep_info[handle].is_empty() && !storage_access_store {
+                                let slot = ep_resources.resources[&br].buffer.unwrap();
+                                immutable_buffer_mask |= 1 << slot;
+                            }
+
+                            let mut dynamic_array_container_ty = var.ty;
+                            if let naga::TypeInner::Struct { ref members, .. } =
+                                module.types[var.ty].inner
+                            {
+                                dynamic_array_container_ty = members.last().unwrap().ty;
+                            }
+                            if let naga::TypeInner::Array {
+                                size: naga::ArraySize::Dynamic,
+                                ..
+                            } = module.types[dynamic_array_container_ty].inner
+                            {
+                                sized_bindings.push(br);
+                            }
+                        }
+                        _ => (),
                     }
-                    MslEntryPointCompileResult {
-                        compiled_name: e,
-                        workgroup_size: ep.workgroup_size,
-                        wg_memory_sizes,
-                        immutable_buffer_mask,
-                        sized_bindings,
+                }
+                let compiled_name = match info.entry_point_names[ep_index] {
+                    Ok(ref name) => name.clone(),
+                    Err(ref e) => {
+                        return Err(crate::ShaderCompilationError::Linkage(format!(
+                            "MSL entry point error: {e}"
+                        )))
                     }
-                })
-                .collect();
+                };
+
+                entry_points.push(MslEntryPointCompileResult {
+                    compiled_name,
+                    workgroup_size: ep.workgroup_size,
+                    wg_memory_sizes,
+                    immutable_buffer_mask,
+                    sized_bindings,
+                });
+            }
+
             Ok(MslCompileResult {
                 shader,
                 entry_points,
