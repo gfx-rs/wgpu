@@ -295,6 +295,12 @@ impl crate::CommandEncoder for CommandBuffer {
         copy: wgt::AccelerationStructureCopy,
     ) {
     }
+
+    unsafe fn set_acceleration_structure_dependencies(
+        command_buffers: &[&CommandBuffer],
+        dependencies: &[&Resource],
+    ) {
+    }
 }
 
 impl Command {

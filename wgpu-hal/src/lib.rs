@@ -1710,7 +1710,6 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
                 <Self::A as Api>::AccelerationStructure,
             >,
         >;
-
     unsafe fn transition_acceleration_structures<'a, T>(&mut self, barriers: T)
     where
         T: Iterator<Item = AccelerationStructureBarrier<'a, <Self::A as Api>::Buffer>>;
@@ -1719,6 +1718,10 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         &mut self,
         acceleration_structure: &<Self::A as Api>::AccelerationStructure,
         buf: &<Self::A as Api>::Buffer,
+    );
+    unsafe fn set_acceleration_structure_dependencies(
+        command_buffers: &[&<Self::A as Api>::CommandBuffer],
+        dependencies: &[&<Self::A as Api>::AccelerationStructure],
     );
 }
 

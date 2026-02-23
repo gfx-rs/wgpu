@@ -520,7 +520,7 @@ pub fn feature_names_to_features(
       GPUFeatureName::ShaderI16 => Features::SHADER_I16,
       GPUFeatureName::ShaderPrimitiveIndex => Features::SHADER_PRIMITIVE_INDEX,
       GPUFeatureName::ShaderEarlyDepthTest => Features::SHADER_EARLY_DEPTH_TEST,
-      GPUFeatureName::PassthroughShaders => Features::EXPERIMENTAL_PASSTHROUGH_SHADERS,
+      GPUFeatureName::PassthroughShaders => Features::PASSTHROUGH_SHADERS,
     };
     features.set(feature, true);
   }
@@ -680,7 +680,7 @@ pub fn features_to_feature_names(
   if features.contains(wgpu_types::Features::SHADER_EARLY_DEPTH_TEST) {
     return_features.insert(ShaderEarlyDepthTest);
   }
-  if features.contains(wgpu_types::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS) {
+  if features.contains(wgpu_types::Features::PASSTHROUGH_SHADERS) {
     return_features.insert(PassthroughShaders);
   }
 
