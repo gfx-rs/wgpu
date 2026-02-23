@@ -685,6 +685,13 @@ impl Adapter {
             .min_storage_buffer_offset_alignment
             .max(MIN_BUFFER_OFFSET_ALIGNMENT_LOWER_BOUND);
 
+        if cfg!(not(feature = "std")) {
+            raw.info.supported_queue_families = vec![wgt::QueueFamilyInfo {
+                num_queues: 1,
+                usage: wgt::QueueUsageFlags::all(),
+            }];
+        }
+
         Self { raw }
     }
 

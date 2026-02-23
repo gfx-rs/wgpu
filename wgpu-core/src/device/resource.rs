@@ -14,7 +14,6 @@ use core::{
     time::Duration,
 };
 use hal::ShouldBeNonZeroExt;
-use std::time::Instant;
 
 use arrayvec::ArrayVec;
 use bitflags::Flags;
@@ -926,16 +925,20 @@ impl Device {
 
             // For multi-queue there are multiple queues to poll, so we subtract the time we've already waited
             // so as not to multiply the maximum timeout. However, web doesn't support time, so we have to skip
-            // this check on web. That's fine because webgpu and webgl don't support multi-queue
-            #[cfg(not(target_arch = "wasm32"))]
-            let start_time = Instant::now();
+            // this check on web. That's fine because webgpu and webgl don't support multi-queue.
+            //
+            // Wgpu-core separately ensures that if the `std` feature is disabled, adapters expose only one queue.
+            #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
+            let start_time = std::time::Instant::now();
+
             let wait_result = unsafe {
                 self.raw()
                     .wait(fence.as_ref(), target_submission_index, wait_timeout)
             };
-            #[cfg(not(target_arch = "wasm32"))]
+
+            #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
             {
-                let end_time = Instant::now();
+                let end_time = std::time::Instant::now();
                 current_duration += end_time - start_time;
             }
 
