@@ -18,19 +18,11 @@ use serde::Serialize;
 use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
-    device::{bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
-    id::{BindGroupLayoutId, BufferId, ExternalTextureId, SamplerId, TextureViewId, TlasId},
-    init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
-    pipeline::{ComputePipeline, RenderPipeline},
-    resource::{
+    Label, device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, bgl}, id::{BindGroupLayoutId, BufferId, ExternalTextureId, SamplerId, TextureViewId, TlasId}, init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction}, pipeline::{ComputePipeline, RayTracingPipeline, RenderPipeline}, resource::{
         Buffer, DestroyedResourceError, ExternalTexture, InvalidResourceError, Labeled,
         MissingBufferUsageError, MissingTextureUsageError, RawResourceAccess, ResourceErrorIdent,
         Sampler, TextureView, Tlas, TrackingData,
-    },
-    resource_log,
-    snatch::{SnatchGuard, Snatchable},
-    track::{BindGroupStates, ResourceUsageCompatibilityError},
-    Label,
+    }, resource_log, snatch::{SnatchGuard, Snatchable}, track::{BindGroupStates, ResourceUsageCompatibilityError}
 };
 
 #[derive(Clone, Debug, Error)]
@@ -722,6 +714,7 @@ pub(crate) enum ExclusivePipeline {
     None,
     Render(Weak<RenderPipeline>),
     Compute(Weak<ComputePipeline>),
+    RayTracing(Weak<RayTracingPipeline>),
 }
 
 impl From<&Arc<RenderPipeline>> for ExclusivePipeline {
@@ -752,6 +745,13 @@ impl fmt::Display for ExclusivePipeline {
                     p.error_ident().fmt(f)
                 } else {
                     f.write_str("ComputePipeline")
+                }
+            }
+            ExclusivePipeline::RayTracing(p) => {
+                if let Some(p) = p.upgrade() {
+                    p.error_ident().fmt(f)
+                } else {
+                    f.write_str("RayTracingPipeline")
                 }
             }
         }
