@@ -1124,6 +1124,10 @@ pub struct PhysicalDeviceProperties {
     acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructurePropertiesKHR<'static>>,
 
     /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_KHR_ray_tracing_pipeline` extension.
+    ray_tracing_pipeline: Option<vk::PhysicalDeviceRayTracingPipelinePropertiesKHR<'static>>,
+
+    /// Additional `vk::PhysicalDevice` properties from the
     /// `VK_KHR_driver_properties` extension, promoted to Vulkan 1.2.
     driver: Option<vk::PhysicalDeviceDriverPropertiesKHR<'static>>,
 
@@ -1777,6 +1781,12 @@ impl PhysicalDeviceProperties {
                     acceleration_structure.min_acceleration_structure_scratch_offset_alignment
                 },
             ),
+            ray_tracing_pipeline_group_data_size: self.ray_tracing_pipeline.map_or(
+                0,
+                |ray_tracing_pipeline| {
+                    ray_tracing_pipeline.shader_group_handle_size
+                },
+            ),
         }
     }
 }
@@ -1818,6 +1828,9 @@ impl super::InstanceShared {
                 let supports_acceleration_structure =
                     capabilities.supports_extension(khr::acceleration_structure::NAME);
 
+                let supports_ray_tracing_pipeline =
+                    capabilities.supports_extension(khr::ray_tracing_pipeline::NAME);
+
                 let supports_mesh_shader = capabilities.supports_extension(ext::mesh_shader::NAME);
 
                 let mut properties2 = vk::PhysicalDeviceProperties2KHR::default();
@@ -1846,6 +1859,13 @@ impl super::InstanceShared {
                     let next = capabilities
                         .acceleration_structure
                         .insert(vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default());
+                    properties2 = properties2.push_next(next);
+                }
+
+                if supports_ray_tracing_pipeline {
+                    let next = capabilities
+                        .ray_tracing_pipeline
+                        .insert(vk::PhysicalDeviceRayTracingPipelinePropertiesKHR::default());
                     properties2 = properties2.push_next(next);
                 }
 
@@ -2356,6 +2376,7 @@ impl super::Instance {
                 .map(|a| a.max_multiview_instance_index)
                 .unwrap_or(0),
             scratch_buffer_alignment: alignments.ray_tracing_scratch_buffer_alignment,
+            ray_tracing_pipeline_group_data_size: alignments.ray_tracing_pipeline_group_data_size,
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),

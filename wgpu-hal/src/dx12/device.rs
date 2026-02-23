@@ -2223,6 +2223,10 @@ impl crate::Device for super::Device {
         unreachable!("ray tracing pipelines not yet implemented")
     }
 
+    unsafe fn get_raytracing_pipeline_group_data(&self, _pipeline: super::RayTracingPipeline, _groups: core::ops::Range<u32>) -> Result<Vec<u8>, crate::DeviceError> {
+        unimplemented!("ray tracing pipelines not yet implemented")
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         _desc: &crate::PipelineCacheDescriptor<'_>,

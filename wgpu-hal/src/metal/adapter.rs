@@ -1414,6 +1414,8 @@ impl super::CapabilitiesQuery {
                 >())
                 .unwrap(),
                 ray_tracing_scratch_buffer_alignment: 1,
+                /// Not yet supported
+                ray_tracing_pipeline_group_data_size: 0,
             },
             downlevel,
             cooperative_matrix_properties: self.cooperative_matrix_properties(),
