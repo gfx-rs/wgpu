@@ -288,8 +288,9 @@ pub use dynamic::{
     DynAccelerationStructure, DynAcquiredSurfaceTexture, DynAdapter, DynBindGroup,
     DynBindGroupLayout, DynBuffer, DynCommandBuffer, DynCommandEncoder, DynComputePipeline,
     DynDevice, DynExposedAdapter, DynFence, DynInstance, DynOpenDevice, DynPipelineCache,
-    DynPipelineLayout, DynQuerySet, DynQueue, DynRenderPipeline, DynResource, DynSampler,
-    DynShaderModule, DynSurface, DynSurfaceTexture, DynTexture, DynTextureView,
+    DynPipelineLayout, DynQuerySet, DynQueue, DynRayTracingPipeline, DynRenderPipeline,
+    DynResource, DynSampler, DynShaderModule, DynSurface, DynSurfaceTexture, DynTexture,
+    DynTextureView,
 };
 
 #[allow(unused)]
@@ -1065,6 +1066,7 @@ pub trait Device: WasmNotSendSync {
     ) -> Result<<Self::A as Api>::ComputePipeline, PipelineError>;
     unsafe fn destroy_compute_pipeline(&self, pipeline: <Self::A as Api>::ComputePipeline);
 
+    #[allow(clippy::type_complexity)]
     unsafe fn create_ray_tracing_pipeline(
         &self,
         desc: &RayTracingPipelineDescriptor<
@@ -2547,10 +2549,7 @@ pub struct RenderPipelineDescriptor<
 }
 
 #[derive(Clone, Debug)]
-pub struct RayObjectIntersectionState<
-    'a,
-    M: DynShaderModule + ?Sized,
-> {
+pub struct RayObjectIntersectionState<'a, M: DynShaderModule + ?Sized> {
     pub closest_hit: ProgrammableStage<'a, M>,
     pub any_hit: Option<ProgrammableStage<'a, M>>,
 }
@@ -2873,8 +2872,6 @@ pub struct AccelerationStructureTriangleTransform<'a, B: DynBuffer + ?Sized> {
 
 pub use wgt::AccelerationStructureFlags as AccelerationStructureBuildFlags;
 pub use wgt::AccelerationStructureGeometryFlags;
-
-use crate::dynamic::DynRayTracingPipeline;
 
 bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

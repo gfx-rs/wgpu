@@ -114,6 +114,7 @@ pub struct HalCounters {
     pub bind_group_layouts: InternalCounter,
     pub render_pipelines: InternalCounter,
     pub compute_pipelines: InternalCounter,
+    pub ray_tracing_pipelines: InternalCounter,
     pub pipeline_layouts: InternalCounter,
     pub samplers: InternalCounter,
     pub command_encoders: InternalCounter,

@@ -1470,6 +1470,10 @@ bitflags_array! {
         #[name("wgpu-memory-decoration-volatile")]
         const MEMORY_DECORATION_VOLATILE = 1 << 62;
 
+        /// Allows for constructing ray tracing pipelines.
+        #[name("wgpu-ray-tracing-pipelines")]
+        const EXPERIMENTAL_RAY_TRACING_PIPELINES = 1 << 63;
+
         // Adding a new feature? All bits in the first u64 are used. Use the second u64 (bits 64+).
     }
 

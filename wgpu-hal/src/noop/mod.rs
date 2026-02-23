@@ -60,6 +60,7 @@ impl crate::Api for Api {
     type PipelineLayout = Resource;
     type ShaderModule = Resource;
     type RenderPipeline = Resource;
+    type RayTracingPipeline = Resource;
     type ComputePipeline = Resource;
 }
 
@@ -76,6 +77,7 @@ impl crate::DynPipelineCache for Resource {}
 impl crate::DynPipelineLayout for Resource {}
 impl crate::DynQuerySet for Resource {}
 impl crate::DynRenderPipeline for Resource {}
+impl crate::DynRayTracingPipeline for Resource {}
 impl crate::DynSampler for Resource {}
 impl crate::DynShaderModule for Resource {}
 impl crate::DynSurfaceTexture for Resource {}
@@ -389,6 +391,13 @@ impl crate::Device for Context {
         Ok(Resource)
     }
     unsafe fn destroy_compute_pipeline(&self, pipeline: Resource) {}
+    unsafe fn create_ray_tracing_pipeline(
+        &self,
+        desc: &crate::RayTracingPipelineDescriptor<Resource, Resource, Resource>,
+    ) -> Result<Resource, crate::PipelineError> {
+        Ok(Resource)
+    }
+    unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: Resource) {}
     unsafe fn create_pipeline_cache(
         &self,
         desc: &crate::PipelineCacheDescriptor<'_>,

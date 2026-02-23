@@ -1024,6 +1024,12 @@ pub fn map_acceleration_structure_usage_to_barrier(
             | vk::PipelineStageFlags::COMPUTE_SHADER;
         access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
     }
+    if usage.contains(crate::AccelerationStructureUses::SHADER_INPUT)
+        && features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+    {
+        stages |= vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR;
+        access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
+    }
     if usage.contains(crate::AccelerationStructureUses::COPY_SRC) {
         stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
         access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
