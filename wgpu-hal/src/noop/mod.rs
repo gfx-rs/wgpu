@@ -180,6 +180,7 @@ pub const CAPABILITIES: crate::Capabilities = {
             uniform_bounds_check_alignment: wgt::BufferSize::MIN,
             raw_tlas_instance_size: 0,
             ray_tracing_scratch_buffer_alignment: 1,
+            ray_tracing_pipeline_group_data_size: 1,
         },
         downlevel: wgt::DownlevelCapabilities {
             flags: wgt::DownlevelFlags::all(),
@@ -398,6 +399,13 @@ impl crate::Device for Context {
         Ok(Resource)
     }
     unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: Resource) {}
+    unsafe fn get_raytracing_pipeline_group_data(
+        &self,
+        pipeline: Resource,
+        groups: core::ops::Range<u32>,
+    ) -> Result<Vec<u8>, crate::DeviceError> {
+        Ok(vec![0; groups.count()])
+    }
     unsafe fn create_pipeline_cache(
         &self,
         desc: &crate::PipelineCacheDescriptor<'_>,

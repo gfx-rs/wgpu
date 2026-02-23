@@ -2346,6 +2346,34 @@ impl crate::Device for super::Device {
         self.counters.ray_tracing_pipelines.sub(1);
     }
 
+    unsafe fn get_raytracing_pipeline_group_data(
+        &self,
+        pipeline: super::RayTracingPipeline,
+        groups: core::ops::Range<u32>,
+    ) -> Result<Vec<u8>, crate::DeviceError> {
+        let fns = self
+            .shared
+            .extension_fns
+            .ray_tracing_pipelines
+            .as_ref()
+            .unwrap();
+
+        let num = groups.end - groups.start;
+
+        unsafe {
+            fns.get_ray_tracing_shader_group_handles(
+                pipeline.raw,
+                groups.start,
+                num,
+                (num * self
+                    .shared
+                    .private_caps
+                    .ray_tracing_pipeline_group_data_size) as usize,
+            )
+        }
+        .map_err(super::map_host_device_oom_err)
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         desc: &crate::PipelineCacheDescriptor<'_>,

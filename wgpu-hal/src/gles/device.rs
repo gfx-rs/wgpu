@@ -1589,6 +1589,14 @@ impl crate::Device for super::Device {
         unimplemented!("Ray tracing is unsupported on GL")
     }
 
+    unsafe fn get_raytracing_pipeline_group_data(
+        &self,
+        _pipeline: super::RayTracingPipeline,
+        _groups: core::ops::Range<u32>,
+    ) -> Result<Vec<u8>, crate::DeviceError> {
+        unimplemented!("Ray tracing is unsupported on GL")
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         _: &crate::PipelineCacheDescriptor<'_>,

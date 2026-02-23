@@ -1080,6 +1080,11 @@ pub trait Device: WasmNotSendSync {
         >,
     ) -> Result<<Self::A as Api>::RayTracingPipeline, PipelineError>;
     unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: <Self::A as Api>::RayTracingPipeline);
+    unsafe fn get_raytracing_pipeline_group_data(
+        &self,
+        pipeline: <Self::A as Api>::RayTracingPipeline,
+        groups: Range<u32>,
+    ) -> Result<Vec<u8>, DeviceError>;
 
     unsafe fn create_pipeline_cache(
         &self,
@@ -1986,6 +1991,10 @@ pub struct Alignments {
 
     /// What the scratch buffer for building an acceleration structure must be aligned to
     pub ray_tracing_scratch_buffer_alignment: u32,
+
+    /// How large a single piece of group data is. That is, how large the vector returned
+    /// from `device.get_raytracing_pipeline_group_data(&pipeline, n..(n+1))` is.
+    pub ray_tracing_pipeline_group_data_size: u32,
 }
 
 #[derive(Clone, Debug)]

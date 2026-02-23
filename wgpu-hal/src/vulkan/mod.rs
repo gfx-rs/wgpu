@@ -393,6 +393,11 @@ struct PrivateCapabilities {
     /// these usages do not have as high of an alignment requirement using the buffer as
     ///  a scratch buffer when building acceleration structures.
     scratch_buffer_alignment: u32,
+
+    /// `get_raytracing_pipeline_group_data` requires both a group count and a data size.
+    /// The data size parameter is just this * the group count, so we store this to not
+    /// require an unnecessary parameter.
+    ray_tracing_pipeline_group_data_size: u32,
 }
 
 bitflags::bitflags!(
