@@ -616,3 +616,29 @@ fn is_value_init_supported(module: &crate::Module, ty: Handle<crate::Type>) -> b
         _ => false,
     }
 }
+
+pub fn supported_capabilities() -> valid::Capabilities {
+    use valid::Capabilities as Caps;
+
+    // Lots of these aren't supported on GLES in general, but naga is able to write them without panicking.
+
+    Caps::IMMEDIATES
+        | Caps::FLOAT64
+        | Caps::PRIMITIVE_INDEX
+        | Caps::CLIP_DISTANCE
+        | Caps::MULTIVIEW
+        | Caps::EARLY_DEPTH_TEST
+        | Caps::MULTISAMPLED_SHADING
+        | Caps::DUAL_SOURCE_BLENDING
+        | Caps::CUBE_ARRAY_TEXTURES
+        | Caps::SHADER_INT64
+        | Caps::SHADER_INT64_ATOMIC_ALL_OPS
+        | Caps::TEXTURE_ATOMIC
+        | Caps::TEXTURE_INT64_ATOMIC
+        | Caps::SUBGROUP
+        | Caps::SUBGROUP_BARRIER
+        | Caps::SHADER_FLOAT16
+        | Caps::SHADER_FLOAT16_IN_FLOAT32
+        | Caps::SHADER_BARYCENTRICS
+        | Caps::DRAW_INDEX
+}

@@ -385,12 +385,17 @@ impl super::Adapter {
         // NOTE: GL_ARB_compute_shader adds support for indirect dispatch
         let indirect_execution = supported((3, 1), (4, 3))
             || (extensions.contains("GL_ARB_draw_indirect") && supports_compute);
+        let supports_cube_array = supported((3, 2), (4, 0))
+            || (supported((3, 1), (4, 0)) && extensions.contains("GL_EXT_texture_cube_map_array"));
 
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
-            | wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES
             | wgt::DownlevelFlags::COMPARISON_SAMPLERS
             | wgt::DownlevelFlags::SHADER_F16_IN_F32;
+        downlevel_flags.set(
+            wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES,
+            supports_cube_array,
+        );
         downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, supports_compute);
         downlevel_flags.set(
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,
