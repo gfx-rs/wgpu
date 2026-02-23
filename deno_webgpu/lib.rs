@@ -11,6 +11,8 @@ use deno_core::op2;
 use deno_core::v8;
 use deno_core::GarbageCollected;
 use deno_core::OpState;
+use serde::de::IntoDeserializer;
+use serde::Deserialize as _;
 pub use wgpu_core;
 pub use wgpu_types;
 use wgpu_types::PowerPreference;
@@ -199,6 +201,16 @@ impl GPU {
       )));
       state.borrow::<Instance>()
     };
+
+    // Check that the feature level string is valid.
+    // `wgpu` does not support compatibility-level adapters. As permitted
+    // by the spec, we always return a core-level adapter.
+    wgpu_types::FeatureLevel::deserialize(IntoDeserializer::<
+      serde::de::value::Error,
+    >::into_deserializer(
+      options.feature_level.as_str()
+    ))
+    .ok()?;
 
     let descriptor = wgpu_core::instance::RequestAdapterOptions {
       power_preference: options

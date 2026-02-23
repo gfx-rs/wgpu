@@ -9,6 +9,23 @@ use serde::{Deserialize, Serialize};
 #[cfg(doc)]
 use crate::{Features, TextureUsages};
 
+/// A set of requested capabilities when choosing a physical adapter.
+///
+/// Corresponds to the defined values of [WebGPU feature level string](
+/// https://gpuweb.github.io/gpuweb/#feature-level-string).
+///
+/// `wgpu` does not support compatibility-level adapters per se.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+pub enum FeatureLevel {
+    #[default]
+    /// The `core` capability set
+    Core,
+    /// The `compatibility` capability set
+    Compatibility,
+}
+
 /// Options for requesting adapter.
 ///
 /// Corresponds to [WebGPU `GPURequestAdapterOptions`](

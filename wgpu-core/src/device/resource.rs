@@ -483,6 +483,7 @@ impl Device {
                 raw_device.as_ref(),
                 &desc.required_limits,
                 &desc.required_features,
+                instance_flags,
                 adapter.backend(),
             )?)
         } else {
