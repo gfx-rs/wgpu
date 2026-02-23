@@ -10,7 +10,7 @@ fn staging_belt_random_test() {
     let mut rng = nanorand::WyRand::new_seed(0xDEAD_BEEF);
     let buffer_size = 1024;
     let align = wgpu::COPY_BUFFER_ALIGNMENT;
-    let mut belt = wgpu::util::StagingBelt::new(device.clone(), buffer_size / 2, &queue);
+    let mut belt = wgpu::util::StagingBelt::new(device.clone(), buffer_size / 2, 0);
     let target_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         initial_queue: None,
         label: None,
@@ -47,10 +47,9 @@ fn staging_belt_panics_with_invalid_buffer_usages() {
     #[track_caller]
     fn test_if_panics(usage: wgpu::BufferUsages) {
         let result = std::panic::catch_unwind(|| {
-            let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
-            let queue = queues.into_iter().next().unwrap();
+            let (device, _) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
             let _belt =
-                wgpu::util::StagingBelt::new_with_buffer_usages(device.clone(), 512, usage, &queue);
+                wgpu::util::StagingBelt::new_with_buffer_usages(device.clone(), 512, usage, 0);
         });
 
         if let Err(panic) = result {
@@ -96,35 +95,33 @@ fn staging_belt_panics_with_invalid_buffer_usages() {
 
 #[test]
 fn staging_belt_works_with_non_exclusive_buffer_usages() {
-    let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
-    let queue = queues.into_iter().next().unwrap();
+    let (device, _) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
     let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(
         device.clone(),
         512,
         wgpu::BufferUsages::COPY_SRC,
-        &queue,
+        0,
     );
     let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(
         device.clone(),
         512,
         wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::MAP_WRITE,
-        &queue,
+        0,
     );
     let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(
         device.clone(),
         512,
         wgpu::BufferUsages::MAP_WRITE,
-        &queue,
+        0,
     );
 }
 
 #[test]
 fn staging_belt_works_with_exclusive_buffer_usages_with_mappable_primary_buffers() {
-    let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor {
+    let (device, _) = wgpu::Device::noop(&wgpu::DeviceDescriptor {
         required_features: wgpu::Features::MAPPABLE_PRIMARY_BUFFERS,
         ..Default::default()
     });
-    let queue = queues.into_iter().next().unwrap();
 
     // This tests that `StagingBelt::new_with_buffer_usages` works for any buffer usages that contain anything else than `COPY_SRC | MAP_WRITE`.
     //
@@ -134,15 +131,14 @@ fn staging_belt_works_with_exclusive_buffer_usages_with_mappable_primary_buffers
         .iter()
     {
         // Check that the constructor doesn't panic without explicit `MAP_WRITE`
-        let _belt =
-            wgpu::util::StagingBelt::new_with_buffer_usages(device.clone(), 512, usage, &queue);
+        let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(device.clone(), 512, usage, 0);
 
         // Check that the constructor doesn't panic with explicitly `MAP_WRITE`
         let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(
             device.clone(),
             512,
             wgpu::BufferUsages::MAP_WRITE,
-            &queue,
+            0,
         );
     }
 }

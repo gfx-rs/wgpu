@@ -47,7 +47,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     /// If this render bundle will rendering to multiple array layers in the attachments at the same time.
     pub multiview: Option<NonZeroU32>,
     /// The queue to which this may be submitted.
-    pub queue: Option<&'a Queue>,
+    pub queue: Option<u32>,
 }
 static_assertions::assert_impl_all!(RenderBundleEncoderDescriptor<'_>: Send, Sync);
 

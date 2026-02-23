@@ -2,8 +2,6 @@ use alloc::borrow::ToOwned as _;
 
 use wgt::TextureDataOrder;
 
-use crate::Queue;
-
 /// Describes a [Buffer](crate::Buffer) when allocating.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BufferInitDescriptor<'a> {
@@ -15,7 +13,7 @@ pub struct BufferInitDescriptor<'a> {
     /// will panic.
     pub usage: wgt::BufferUsages,
     /// The queue with ownership at resource creation time. None defaults to the first queue.
-    pub initial_queue: Option<&'a Queue>,
+    pub initial_queue: Option<u32>,
 }
 
 /// Utility methods not meant to be in the main API.

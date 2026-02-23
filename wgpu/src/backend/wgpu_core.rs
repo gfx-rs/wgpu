@@ -148,7 +148,7 @@ impl ContextWgpuCore {
         let descriptor = desc.map_label_and_view_formats_and_queue(
             |l| l.map(Borrowed),
             |v| v.to_vec(),
-            |q| q.map(|q| q.index).unwrap_or(0),
+            |q| q.unwrap_or(0),
         );
         let (id, error) = unsafe {
             self.0
@@ -185,7 +185,7 @@ impl ContextWgpuCore {
             self.0.create_buffer_from_hal::<A>(
                 hal_buffer,
                 device.id,
-                &desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.map(|q| q.index).unwrap_or(0)),
+                &desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.unwrap_or(0)),
                 None,
             )
         };
@@ -1598,7 +1598,7 @@ impl dispatch::DeviceInterface for CoreDevice {
     fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> dispatch::DispatchBuffer {
         let (id, error) = self.context.0.device_create_buffer(
             self.id,
-            &desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.map(|q| q.index).unwrap_or(0)),
+            &desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.unwrap_or(0)),
             None,
         );
         if let Some(cause) = error {
@@ -1618,7 +1618,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         let wgt_desc = desc.map_label_and_view_formats_and_queue(
             |l| l.map(Borrowed),
             |v| v.to_vec(),
-            |q| q.map(|q| q.index).unwrap_or(0),
+            |q| q.unwrap_or(0),
         );
         let (id, error) = self
             .context
@@ -1646,8 +1646,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         desc: &crate::ExternalTextureDescriptor<'_>,
         planes: &[&crate::TextureView],
     ) -> dispatch::DispatchExternalTexture {
-        let wgt_desc =
-            desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.map(|q| q.index).unwrap_or(0));
+        let wgt_desc = desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.unwrap_or(0));
         let planes = planes
             .iter()
             .map(|plane| plane.inner.as_core().id)
@@ -1680,7 +1679,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         let global = &self.context.0;
         let (id, handle, error) = global.device_create_blas(
             self.id,
-            &desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.map(|q| q.index).unwrap_or(0)),
+            &desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.unwrap_or(0)),
             sizes,
             None,
         );
@@ -1703,7 +1702,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         let global = &self.context.0;
         let (id, error) = global.device_create_tlas(
             self.id,
-            &desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.map(|q| q.index).unwrap_or(0)),
+            &desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.unwrap_or(0)),
             None,
         );
         if let Some(cause) = error {
@@ -1776,8 +1775,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         &self,
         desc: &crate::CommandEncoderDescriptor<'_>,
     ) -> dispatch::DispatchCommandEncoder {
-        let new_desc =
-            desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.map(|q| q.index).unwrap_or(0));
+        let new_desc = desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.unwrap_or(0));
         let (id, error) = self.context.0.device_create_command_encoder(
             self.id,
             self.queue_ids[new_desc.queue as usize],
@@ -1812,7 +1810,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             sample_count: desc.sample_count,
             multiview: desc.multiview,
         };
-        let queue_index = desc.queue.map(|q| q.index).unwrap_or(0);
+        let queue_index = desc.queue.unwrap_or(0);
         let encoder = match wgc::command::RenderBundleEncoder::new(
             &descriptor,
             self.id,
