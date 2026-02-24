@@ -80,10 +80,10 @@ pub struct PerQueueData {
 
     // Optional so that we can destroy this.
     pub(crate) timestamp_normalizer: Option<crate::timestamp_normalization::TimestampNormalizer>,
+    pub(crate) raw: Box<dyn hal::DynQueue>,
 }
 
 pub struct Queue {
-    raw: Box<dyn hal::DynQueue>,
     pub(crate) pending_writes: Mutex<PendingWrites>,
     life_tracker: Mutex<LifetimeTracker>,
     pub(crate) index: u32,
@@ -156,11 +156,11 @@ impl Queue {
             trackers: Mutex::new(rank::DEVICE_TRACKERS, QueueTracker::new()),
             indirect_validation,
             timestamp_normalizer: Some(timestamp_normalizer),
+            raw,
         });
 
         Ok((
             Queue {
-                raw,
                 device,
                 pending_writes: Mutex::new(rank::QUEUE_PENDING_WRITES, pending_writes),
                 life_tracker: Mutex::new(rank::QUEUE_LIFE_TRACKER, LifetimeTracker::new()),
@@ -194,7 +194,7 @@ impl Queue {
     }
 
     pub(crate) fn raw(&self) -> &dyn hal::DynQueue {
-        self.raw.as_ref()
+        self.shared.raw.as_ref()
     }
 
     #[track_caller]

@@ -163,9 +163,10 @@ impl Surface {
         } else {
             return Err(SurfaceError::NotConfigured);
         };
-        let queue = device.get_queue(SURFACE_QUEUE_ID).unwrap();
 
-        let fence = queue.shared.fence.read();
+        let queue = device.get_queue_shared(SURFACE_QUEUE_ID);
+
+        let fence = queue.fence.read();
 
         let suf = self.raw(device.backend()).unwrap();
         let (texture, status) = match unsafe {
@@ -239,9 +240,7 @@ impl Surface {
                 let texture = Arc::new(texture);
 
                 device
-                    .get_queue(SURFACE_QUEUE_ID)
-                    .unwrap()
-                    .shared
+                    .get_queue_shared(SURFACE_QUEUE_ID)
                     .trackers
                     .lock()
                     .textures
@@ -291,7 +290,7 @@ impl Surface {
         let device = &present.device;
 
         device.check_is_valid()?;
-        let queue = device.get_queue(SURFACE_QUEUE_ID).unwrap();
+        let queue = device.get_queue_shared(SURFACE_QUEUE_ID);
 
         let texture = present
             .acquired_texture
@@ -306,7 +305,7 @@ impl Surface {
             None => return Err(SurfaceError::TextureDestroyed),
             Some(resource::TextureInner::Surface { raw }) => {
                 let raw_surface = self.raw(device.backend()).unwrap();
-                let raw_queue = queue.raw();
+                let raw_queue = &queue.raw;
                 unsafe { raw_queue.present(raw_surface, raw) }
             }
             _ => unreachable!(),
