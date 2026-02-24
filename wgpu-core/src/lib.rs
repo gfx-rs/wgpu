@@ -223,7 +223,7 @@ pub(crate) fn get_greatest_common_divisor(mut a: u32, mut b: u32) -> u32 {
     }
 }
 
-/// Using more queues than this will result in tons of unnecessary allocation due to smallvecs
+/// Using more queues than this may result in allocations in more places due to use of smallvecs
 pub const QUEUE_SOFT_LIMIT: usize = 1;
 /// An array that stores data per-queue, avoiding allocations for `QUEUE_SOFT_LIMIT` number of queues.
 pub type PerQueueArray<T> = smallvec::SmallVec<[T; QUEUE_SOFT_LIMIT]>;
