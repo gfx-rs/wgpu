@@ -29,7 +29,7 @@ pub type AccelerationStructureUpdateMode = wgt::AccelerationStructureUpdateMode;
 static_assertions::assert_impl_all!(AccelerationStructureUpdateMode: Send, Sync);
 
 /// Descriptor to create bottom level acceleration structures.
-pub type CreateBlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>, Option<u32>>;
+pub type CreateBlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(CreateBlasDescriptor<'_>: Send, Sync);
 
 /// Safe instance for a [Tlas].

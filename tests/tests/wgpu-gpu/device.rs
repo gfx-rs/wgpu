@@ -190,7 +190,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             depth_or_array_layers: 1,
         };
         let texture_for_view = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: texture_extent,
             mip_level_count: 2,
@@ -203,7 +203,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         let target_view = texture_for_view.create_view(&wgpu::TextureViewDescriptor::default());
 
         let texture_for_read = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: texture_extent,
             mip_level_count: 2,
@@ -215,7 +215,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         });
 
         let texture_for_write = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: texture_extent,
             mip_level_count: 2,
@@ -228,28 +228,28 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
 
         // Create some buffers.
         let buffer_source = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: 256,
             usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
         let buffer_dest = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: 256,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let buffer_for_map = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: 256,
             usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
         let buffer_for_unmap = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: 256,
             usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
@@ -300,7 +300,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         // Since the device is lost, we check that they succeed.
 
         let _ = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: ctx.device.limits().max_buffer_size * 2,
             usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
@@ -308,7 +308,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         });
 
         let _ = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: wgpu::Extent3d {
                 width: ctx.device.limits().max_texture_dimension_2d * 2,
@@ -578,7 +578,7 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
                 });
 
         let my_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: wgpu::Extent3d {
                 width: 1024,
@@ -670,7 +670,7 @@ static DEVICE_DESTROY_THEN_BUFFER_CLEANUP: GpuTestConfiguration = GpuTestConfigu
 
         // Create a buffer to be left around until the device is destroyed.
         let _buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: 256,
             usage: wgpu::BufferUsages::MAP_READ,
@@ -684,7 +684,7 @@ static DEVICE_DESTROY_THEN_BUFFER_CLEANUP: GpuTestConfiguration = GpuTestConfigu
             depth_or_array_layers: 1,
         };
         let _texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: texture_extent,
             mip_level_count: 2,

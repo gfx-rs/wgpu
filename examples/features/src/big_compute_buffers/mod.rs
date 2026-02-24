@@ -50,7 +50,7 @@ pub async fn execute_gpu_inner(
     let (staging_buffers, storage_buffers, bind_group, compute_pipeline) = setup(device, numbers);
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
     {
@@ -195,7 +195,7 @@ fn create_storage_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::B
         .enumerate()
         .map(|(e, seg)| {
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: Some(&format!("Storage Buffer-{e}")),
                 contents: bytemuck::cast_slice(seg),
                 usage: wgpu::BufferUsages::STORAGE
@@ -214,7 +214,7 @@ fn create_staging_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::B
             let size = std::mem::size_of_val(chunks[e]) as u64;
 
             device.create_buffer(&wgpu::BufferDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: Some(&format!("staging buffer-{e}")),
                 size,
                 usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,

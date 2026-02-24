@@ -446,7 +446,7 @@ pub(crate) struct BufferPendingMapping {
     pub(crate) _parent_buffer: Arc<Buffer>,
 }
 
-pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>, u32>;
+pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 
 #[derive(Debug)]
 pub struct Buffer {
@@ -1340,7 +1340,7 @@ impl Drop for FlushedStagingBuffer {
     }
 }
 
-pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::TextureFormat>, u32>;
+pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::TextureFormat>>;
 
 #[derive(Debug)]
 pub(crate) enum TextureInner {
@@ -1381,7 +1381,7 @@ pub enum TextureClearMode {
 pub struct Texture {
     pub(crate) inner: Snatchable<TextureInner>,
     pub(crate) device: Arc<Device>,
-    pub(crate) desc: wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>, u32>,
+    pub(crate) desc: wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
     pub(crate) _hal_usage: wgt::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) initialization_status: RwLock<TextureInitTracker>,
@@ -1516,7 +1516,7 @@ impl Texture {
 
     pub(crate) fn get_clear_view<'a>(
         clear_mode: &'a TextureClearMode,
-        desc: &'a wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>, u32>,
+        desc: &'a wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
         mip_level: u32,
         depth_or_layer: u32,
     ) -> &'a dyn hal::DynTextureView {
@@ -2046,7 +2046,7 @@ crate::impl_labeled!(TextureView);
 crate::impl_parent_device!(TextureView);
 crate::impl_storage_item!(TextureView);
 
-pub type ExternalTextureDescriptor<'a> = wgt::ExternalTextureDescriptor<Label<'a>, u32>;
+pub type ExternalTextureDescriptor<'a> = wgt::ExternalTextureDescriptor<Label<'a>>;
 
 #[derive(Debug)]
 pub struct ExternalTexture {
@@ -2329,8 +2329,8 @@ impl QuerySet {
     }
 }
 
-pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>, u32>;
-pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>, u32>;
+pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
+pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
 
 pub type BlasPrepareCompactResult = Result<(), BlasPrepareCompactError>;
 

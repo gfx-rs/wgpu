@@ -183,7 +183,7 @@ impl Example {
         device: &wgpu::Device,
     ) -> wgpu::TextureView {
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             size: wgpu::Extent3d {
                 width: config.width,
                 height: config.height,
@@ -223,14 +223,14 @@ impl crate::framework::Example for Example {
         let vertex_size = size_of::<Vertex>();
         let (cube_vertex_data, cube_index_data) = create_cube();
         let cube_vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Cubes Vertex Buffer"),
             contents: bytemuck::cast_slice(&cube_vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
         let cube_index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Cubes Index Buffer"),
             contents: bytemuck::cast_slice(&cube_index_data),
             usage: wgpu::BufferUsages::INDEX,
@@ -238,14 +238,14 @@ impl crate::framework::Example for Example {
 
         let (plane_vertex_data, plane_index_data) = create_plane(7);
         let plane_vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Plane Vertex Buffer"),
             contents: bytemuck::cast_slice(&plane_vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
         let plane_index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Plane Index Buffer"),
             contents: bytemuck::cast_slice(&plane_index_data),
             usage: wgpu::BufferUsages::INDEX,
@@ -294,7 +294,7 @@ impl crate::framework::Example for Example {
         };
         // Note: dynamic uniform offsets also have to be aligned to `Limits::min_uniform_buffer_offset_alignment`.
         let entity_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: num_entities * uniform_alignment,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -378,7 +378,7 @@ impl crate::framework::Example for Example {
         });
 
         let shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             size: Self::SHADOW_SIZE,
             mip_level_count: 1,
             sample_count: 1,
@@ -433,7 +433,7 @@ impl crate::framework::Example for Example {
         ];
         let light_uniform_size = (Self::MAX_LIGHTS * size_of::<LightRaw>()) as wgpu::BufferAddress;
         let light_storage_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: light_uniform_size,
             usage: if supports_storage_resources {
@@ -478,7 +478,7 @@ impl crate::framework::Example for Example {
             });
 
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: None,
                 size: uniform_size,
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -600,7 +600,7 @@ impl crate::framework::Example for Example {
                 num_lights: [lights.len() as u32, 0, 0, 0],
             };
             let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: Some("Uniform Buffer"),
                 contents: bytemuck::bytes_of(&forward_uniforms),
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -747,7 +747,7 @@ impl crate::framework::Example for Example {
         }
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: None,
         });
 

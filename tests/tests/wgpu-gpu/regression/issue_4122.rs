@@ -10,7 +10,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 
 async fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
     let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("gpu_buffer"),
         size,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
@@ -18,7 +18,7 @@ async fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
     });
 
     let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("cpu_buffer"),
         size,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -32,7 +32,7 @@ async fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("encoder"),
         });
 

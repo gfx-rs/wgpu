@@ -233,7 +233,7 @@ fn out_of_order_as_build(ctx: TestingContext) {
     let mut encoder_tlas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("TLAS 1"),
         });
 
@@ -242,7 +242,7 @@ fn out_of_order_as_build(ctx: TestingContext) {
     let mut encoder_blas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("BLAS 1"),
         });
 
@@ -270,7 +270,7 @@ fn out_of_order_as_build(ctx: TestingContext) {
     let mut encoder_blas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("BLAS 2"),
         });
 
@@ -279,7 +279,7 @@ fn out_of_order_as_build(ctx: TestingContext) {
     let mut encoder_tlas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("TLAS 2"),
         });
 
@@ -324,7 +324,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
     let mut encoder_blas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("BLAS 1"),
         });
 
@@ -333,7 +333,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
     let mut encoder_tlas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("TLAS 1"),
         });
 
@@ -342,7 +342,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
     let mut encoder_blas2 = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("BLAS 2"),
         });
 
@@ -419,7 +419,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
     let mut encoder_blas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("BLAS 3"),
         });
 
@@ -428,7 +428,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
     let mut encoder_blas2 = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("BLAS 4"),
         });
 
@@ -437,7 +437,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
     let mut encoder_tlas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("TLAS 2"),
         });
 
@@ -498,7 +498,7 @@ fn empty_build(ctx: TestingContext) {
     let mut encoder_safe = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("BLAS 1"),
         });
 
@@ -520,7 +520,7 @@ static BUILD_WITH_TRANSFORM: GpuTestConfiguration = GpuTestConfiguration::new()
 
 fn build_with_transform(ctx: TestingContext) {
     let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         contents: &[0; size_of::<[[f32; 3]; 3]>()],
         usage: BufferUsages::BLAS_INPUT,
@@ -529,7 +529,7 @@ fn build_with_transform(ctx: TestingContext) {
     let transform = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&[
                 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
@@ -551,7 +551,7 @@ fn build_with_transform(ctx: TestingContext) {
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE
                 | AccelerationStructureFlags::USE_TRANSFORM,
             update_mode: AccelerationStructureUpdateMode::Build,
-            initial_queue: None,
+            initial_queue: 0,
         },
         BlasGeometrySizeDescriptors::Triangles {
             descriptors: vec![blas_size.clone()],
@@ -563,7 +563,7 @@ fn build_with_transform(ctx: TestingContext) {
         max_instances: 1,
         flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
         update_mode: AccelerationStructureUpdateMode::Build,
-        initial_queue: None,
+        initial_queue: 0,
     });
     tlas[0] = Some(TlasInstance::new(
         &blas,
@@ -575,7 +575,7 @@ fn build_with_transform(ctx: TestingContext) {
     let mut encoder_build = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("BUILD 1"),
         });
 
@@ -622,7 +622,7 @@ fn only_blas_vertex_return(ctx: TestingContext) {
     let mut encoder_blas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("BLAS 1"),
         });
 
@@ -631,7 +631,7 @@ fn only_blas_vertex_return(ctx: TestingContext) {
     let mut encoder_tlas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("TLAS 1"),
         });
 
@@ -749,7 +749,7 @@ fn only_tlas_vertex_return(ctx: TestingContext) {
     let mut encoder_blas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("BLAS 1"),
         });
 
@@ -758,7 +758,7 @@ fn only_tlas_vertex_return(ctx: TestingContext) {
     let mut encoder_tlas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("TLAS 1"),
         });
 
@@ -811,7 +811,7 @@ fn test_as_build_format_stride(
     invalid_combination: bool,
 ) {
     let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         contents: &vec![0; (format.min_acceleration_structure_vertex_stride() * 3) as usize],
         usage: BufferUsages::BLAS_INPUT,
@@ -831,7 +831,7 @@ fn test_as_build_format_stride(
             label: Some("BLAS"),
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
             update_mode: AccelerationStructureUpdateMode::Build,
-            initial_queue: None,
+            initial_queue: 0,
         },
         BlasGeometrySizeDescriptors::Triangles {
             descriptors: vec![blas_size.clone()],
@@ -841,7 +841,7 @@ fn test_as_build_format_stride(
     let mut command_encoder = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("BLAS_1"),
         });
     command_encoder.build_acceleration_structures(

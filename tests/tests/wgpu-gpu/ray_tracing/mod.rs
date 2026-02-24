@@ -46,7 +46,7 @@ impl AsBuildContext {
         additional_tlas_flags: AccelerationStructureFlags,
     ) -> Self {
         let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             contents: &[0; mem::size_of::<[[f32; 3]; 3]>()],
             usage: BufferUsages::BLAS_INPUT,
@@ -65,7 +65,7 @@ impl AsBuildContext {
                 label: Some("BLAS"),
                 flags: AccelerationStructureFlags::PREFER_FAST_TRACE | additional_blas_flags,
                 update_mode: AccelerationStructureUpdateMode::Build,
-                initial_queue: None,
+                initial_queue: 0,
             },
             BlasGeometrySizeDescriptors::Triangles {
                 descriptors: vec![blas_size.clone()],
@@ -77,7 +77,7 @@ impl AsBuildContext {
             max_instances: 1,
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE | additional_tlas_flags,
             update_mode: AccelerationStructureUpdateMode::Build,
-            initial_queue: None,
+            initial_queue: 0,
         });
 
         tlas[0] = Some(TlasInstance::new(

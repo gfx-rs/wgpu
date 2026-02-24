@@ -48,7 +48,7 @@ fn invalid_vertex_format_blas_create(ctx: TestingContext) {
                     label: Some("BLAS"),
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                     update_mode: AccelerationStructureUpdateMode::Build,
-                    initial_queue: None,
+                    initial_queue: 0,
                 },
                 BlasGeometrySizeDescriptors::Triangles {
                     descriptors: vec![blas_size.clone()],
@@ -91,7 +91,7 @@ fn mismatched_index_blas_create(ctx: TestingContext) {
                     label: Some("BLAS1"),
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                     update_mode: AccelerationStructureUpdateMode::Build,
-                    initial_queue: None,
+                    initial_queue: 0,
                 },
                 BlasGeometrySizeDescriptors::Triangles {
                     descriptors: vec![blas_size.clone()],
@@ -121,7 +121,7 @@ fn mismatched_index_blas_create(ctx: TestingContext) {
                     label: Some("BLAS2"),
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                     update_mode: AccelerationStructureUpdateMode::Build,
-                    initial_queue: None,
+                    initial_queue: 0,
                 },
                 BlasGeometrySizeDescriptors::Triangles {
                     descriptors: vec![blas_size.clone()],
@@ -143,7 +143,7 @@ fn unsupported_acceleration_structure_resources(ctx: TestingContext) {
         &ctx.device,
         || {
             ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: None,
                 size: 4,
                 usage: wgpu::BufferUsages::BLAS_INPUT,

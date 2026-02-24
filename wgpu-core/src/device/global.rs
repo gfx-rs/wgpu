@@ -1145,7 +1145,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         queue_id: QueueId,
-        desc: &wgt::CommandEncoderDescriptor<Label, u32>,
+        desc: &wgt::CommandEncoderDescriptor<Label>,
         id_in: Option<id::CommandEncoderId>,
     ) -> (
         id::CommandEncoderId,

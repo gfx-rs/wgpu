@@ -135,7 +135,7 @@ use crate::*;
 /// #     size: 400,
 /// #     usage: wgpu::BufferUsages::MAP_WRITE,
 /// #     mapped_at_creation: false,
-/// #     initial_queue: None,
+/// #     initial_queue: 0,
 /// # });
 /// let capturable = buffer.clone();
 /// buffer.map_async(wgpu::MapMode::Write, .., move |result| {
@@ -844,7 +844,7 @@ impl MapContext {
 ///
 /// Corresponds to [WebGPU `GPUBufferDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpubufferdescriptor).
-pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>, Option<u32>>;
+pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(BufferDescriptor<'_>: Send, Sync);
 
 /// Error occurred when trying to async map a buffer.

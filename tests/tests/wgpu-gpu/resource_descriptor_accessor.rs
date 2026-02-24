@@ -9,7 +9,7 @@ static BUFFER_SIZE_AND_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: 1234,
             usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,

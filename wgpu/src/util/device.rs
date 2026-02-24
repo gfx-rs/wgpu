@@ -13,7 +13,7 @@ pub struct BufferInitDescriptor<'a> {
     /// will panic.
     pub usage: wgt::BufferUsages,
     /// The queue with ownership at resource creation time. None defaults to the first queue.
-    pub initial_queue: Option<u32>,
+    pub initial_queue: u32,
 }
 
 /// Utility methods not meant to be in the main API.

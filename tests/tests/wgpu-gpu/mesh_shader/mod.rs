@@ -163,7 +163,7 @@ fn create_depth(
         depth_or_array_layers: 1,
     };
     let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: image_size,
         mip_level_count: 1,
@@ -246,7 +246,7 @@ fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
     });
     if info.draw {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: None,
         });
         {
@@ -336,7 +336,7 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestIn
         DrawType::Standard => None,
         DrawType::Indirect | DrawType::MultiIndirect | DrawType::MultiIndirectCount => Some(
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: None,
                 usage: wgpu::BufferUsages::INDIRECT,
                 contents: bytemuck::bytes_of(&[1u32; 4]),
@@ -346,7 +346,7 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestIn
     let count_buffer = match draw_type {
         DrawType::MultiIndirectCount => Some(device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: None,
                 usage: wgpu::BufferUsages::INDIRECT,
                 contents: bytemuck::bytes_of(&[1u32; 1]),
@@ -355,7 +355,7 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestIn
         _ => None,
     };
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
     {

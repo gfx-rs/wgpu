@@ -148,7 +148,7 @@ impl ComputepassState {
                     format: wgpu::TextureFormat::Rgba8UnormSrgb,
                     usage: wgpu::TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
-                    initial_queue: None,
+                    initial_queue: 0,
                 });
             texture_views.push(texture.create_view(&wgpu::TextureViewDescriptor {
                 label: Some(&format!("Texture View {i}")),
@@ -175,7 +175,7 @@ impl ComputepassState {
                     format: wgpu::TextureFormat::R32Float,
                     usage: wgpu::TextureUsages::STORAGE_BINDING,
                     view_formats: &[],
-                    initial_queue: None,
+                    initial_queue: 0,
                 });
             storage_texture_views.push(texture.create_view(&wgpu::TextureViewDescriptor {
                 label: Some(&format!("StorageTexture View {i}")),
@@ -192,7 +192,7 @@ impl ComputepassState {
                 size: BUFFER_SIZE,
                 usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
-                initial_queue: None,
+                initial_queue: 0,
             }));
         }
         random.shuffle(&mut storage_buffers);
@@ -395,7 +395,7 @@ impl ComputepassState {
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: None,
-                    queue: None,
+                    queue: 0,
                 });
 
         let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -424,7 +424,7 @@ impl ComputepassState {
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: None,
-                    queue: None,
+                    queue: 0,
                 });
 
         let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {

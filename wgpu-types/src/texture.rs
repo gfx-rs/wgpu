@@ -489,7 +489,7 @@ pub struct TextureViewDescriptor<L> {
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct TextureDescriptor<L, V, Q> {
+pub struct TextureDescriptor<L, V> {
     /// Debug label of the texture. This will show up in graphics debuggers for easy identification.
     pub label: L,
     /// Size of the texture. All components must be greater than zero. For a
@@ -512,17 +512,16 @@ pub struct TextureDescriptor<L, V, Q> {
     ///
     /// Note: currently, only the srgb-ness is allowed to change. (ex: `Rgba8Unorm` texture + `Rgba8UnormSrgb` view)
     pub view_formats: V,
-    /// The queue with ownership at resource creation time. None defaults to the first queue.
-    pub initial_queue: Q,
+    /// The queue with ownership at resource creation time. Default should be zero.
+    pub initial_queue: u32,
 }
 
-impl<L, V, Q: Clone> TextureDescriptor<L, V, Q> {
+impl<L, V> TextureDescriptor<L, V> {
     /// Takes a closure and maps the label of the texture descriptor into another.
     #[must_use]
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K, V, Q>
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K, V>
     where
         V: Clone,
-        Q: Clone,
     {
         TextureDescriptor {
             label: fun(&self.label),
@@ -533,18 +532,17 @@ impl<L, V, Q: Clone> TextureDescriptor<L, V, Q> {
             format: self.format,
             usage: self.usage,
             view_formats: self.view_formats.clone(),
-            initial_queue: self.initial_queue.clone(),
+            initial_queue: self.initial_queue,
         }
     }
 
     /// Maps the label and view formats of the texture descriptor into another.
     #[must_use]
-    pub fn map_label_and_view_formats_and_queue<K, M, NQ>(
+    pub fn map_label_and_view_formats<K, M>(
         &self,
         l_fun: impl FnOnce(&L) -> K,
         v_fun: impl FnOnce(V) -> M,
-        q_fun: impl FnOnce(&Q) -> NQ,
-    ) -> TextureDescriptor<K, M, NQ>
+    ) -> TextureDescriptor<K, M>
     where
         V: Clone,
     {
@@ -557,7 +555,7 @@ impl<L, V, Q: Clone> TextureDescriptor<L, V, Q> {
             format: self.format,
             usage: self.usage,
             view_formats: v_fun(self.view_formats.clone()),
-            initial_queue: q_fun(&self.initial_queue),
+            initial_queue: self.initial_queue,
         }
     }
 
@@ -570,7 +568,7 @@ impl<L, V, Q: Clone> TextureDescriptor<L, V, Q> {
     ///
     /// ```rust
     /// # use wgpu_types as wgpu;
-    /// # type TextureDescriptor<'a> = wgpu::TextureDescriptor<(), &'a [wgpu::TextureFormat], Option<()>>;
+    /// # type TextureDescriptor<'a> = wgpu::TextureDescriptor<(), &'a [wgpu::TextureFormat], u32>;
     /// let desc  = TextureDescriptor {
     ///   label: (),
     ///   size: wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 },
@@ -580,7 +578,7 @@ impl<L, V, Q: Clone> TextureDescriptor<L, V, Q> {
     ///   format: wgpu::TextureFormat::Rgba8Sint,
     ///   usage: wgpu::TextureUsages::empty(),
     ///   view_formats: &[],
-    ///   initial_queue: None,
+    ///   initial_queue: 0,
     /// };
     ///
     /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));

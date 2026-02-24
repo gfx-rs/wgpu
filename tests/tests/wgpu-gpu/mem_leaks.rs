@@ -62,7 +62,7 @@ async fn draw_test_with_reports(
     assert_eq!(report.bind_group_layouts.num_allocated, 1);
 
     let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 4 * expected.len() as u64,
         usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
@@ -153,7 +153,7 @@ async fn draw_test_with_reports(
     let texture = ctx.device.create_texture_with_data(
         &ctx.queue,
         &wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("dummy"),
             size: wgpu::Extent3d {
                 width: 1,

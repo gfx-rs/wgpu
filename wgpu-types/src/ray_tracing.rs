@@ -55,29 +55,25 @@ pub enum AccelerationStructureUpdateMode {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Descriptor for creating a bottom level acceleration structure.
-pub struct CreateBlasDescriptor<L, Q> {
+pub struct CreateBlasDescriptor<L> {
     /// Label for the bottom level acceleration structure.
     pub label: L,
     /// Flags for the bottom level acceleration structure.
     pub flags: AccelerationStructureFlags,
     /// Update mode for the bottom level acceleration structure.
     pub update_mode: AccelerationStructureUpdateMode,
-    /// The queue with ownership at resource creation time. None defaults to the first queue.The queue with ownership at resource creation time
-    pub initial_queue: Q,
+    /// The queue with ownership at resource creation time. Default should be zero. The queue with ownership at resource creation time
+    pub initial_queue: u32,
 }
 
-impl<L, Q> CreateBlasDescriptor<L, Q> {
+impl<L> CreateBlasDescriptor<L> {
     /// Takes a closure and maps the label of the blas descriptor into another.
-    pub fn map_label_and_queue<K, NQ>(
-        &self,
-        l_fun: impl FnOnce(&L) -> K,
-        q_fun: impl FnOnce(&Q) -> NQ,
-    ) -> CreateBlasDescriptor<K, NQ> {
+    pub fn map_label<K>(&self, l_fun: impl FnOnce(&L) -> K) -> CreateBlasDescriptor<K> {
         CreateBlasDescriptor {
             label: l_fun(&self.label),
             flags: self.flags,
             update_mode: self.update_mode,
-            initial_queue: q_fun(&self.initial_queue),
+            initial_queue: self.initial_queue,
         }
     }
 }
@@ -86,7 +82,7 @@ impl<L, Q> CreateBlasDescriptor<L, Q> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Descriptor for creating a top level acceleration structure.
-pub struct CreateTlasDescriptor<L, Q> {
+pub struct CreateTlasDescriptor<L> {
     /// Label for the top level acceleration structure.
     pub label: L,
     /// Number of instances that can be stored in the acceleration structure.
@@ -95,23 +91,19 @@ pub struct CreateTlasDescriptor<L, Q> {
     pub flags: AccelerationStructureFlags,
     /// Update mode for the bottom level acceleration structure.
     pub update_mode: AccelerationStructureUpdateMode,
-    /// The queue with ownership at resource creation time. None defaults to the first queue.
-    pub initial_queue: Q,
+    /// The queue with ownership at resource creation time. Default should be zero.
+    pub initial_queue: u32,
 }
 
-impl<L, Q> CreateTlasDescriptor<L, Q> {
+impl<L> CreateTlasDescriptor<L> {
     /// Takes a closure and maps the label of the blas descriptor into another.
-    pub fn map_label_and_queue<K, NQ>(
-        &self,
-        l_fun: impl FnOnce(&L) -> K,
-        q_fun: impl FnOnce(&Q) -> NQ,
-    ) -> CreateTlasDescriptor<K, NQ> {
+    pub fn map_label<K>(&self, l_fun: impl FnOnce(&L) -> K) -> CreateTlasDescriptor<K> {
         CreateTlasDescriptor {
             label: l_fun(&self.label),
             flags: self.flags,
             update_mode: self.update_mode,
             max_instances: self.max_instances,
-            initial_queue: q_fun(&self.initial_queue),
+            initial_queue: self.initial_queue,
         }
     }
 }

@@ -29,7 +29,7 @@ async fn set_array_stride_to_0(ctx: TestingContext) {
         1.0, 1.0, // Top right
     ];
     let position_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         contents: bytemuck::cast_slice::<f32, u8>(position_buffer_content),
         usage: wgpu::BufferUsages::VERTEX,
@@ -37,7 +37,7 @@ async fn set_array_stride_to_0(ctx: TestingContext) {
 
     let color_buffer_content: &[f32; 4] = &[1.0, 1.0, 1.0, 1.0];
     let color_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         contents: bytemuck::cast_slice::<f32, u8>(color_buffer_content),
         usage: wgpu::BufferUsages::VERTEX,
@@ -112,7 +112,7 @@ async fn set_array_stride_to_0(ctx: TestingContext) {
     let first_pipeline = ctx.device.create_render_pipeline(&first_pipeline_desc);
 
     let out_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: wgpu::Extent3d {
             width: 256,
@@ -129,7 +129,7 @@ async fn set_array_stride_to_0(ctx: TestingContext) {
     let out_texture_view = out_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 256 * 256,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,

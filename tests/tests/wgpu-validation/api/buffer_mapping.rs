@@ -10,7 +10,7 @@ fn full_immutable_binding() {
     let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
 
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 1024,
         usage: wgpu::BufferUsages::MAP_READ,
@@ -35,7 +35,7 @@ fn full_mut_binding() {
     let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
 
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 1024,
         usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
@@ -57,7 +57,7 @@ fn split_immutable_binding() {
     let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
 
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 1024,
         usage: wgpu::BufferUsages::MAP_READ,
@@ -85,7 +85,7 @@ fn split_mut_binding() {
     let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
 
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 1024,
         usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
@@ -110,7 +110,7 @@ fn overlapping_ref_binding() {
     let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
 
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 1024,
         usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
@@ -128,7 +128,7 @@ fn overlapping_mut_binding() {
     let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
 
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 1024,
         usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
@@ -147,7 +147,7 @@ fn not_mapped() {
     let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
 
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 1024,
         usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
@@ -167,7 +167,7 @@ fn partially_mapped() {
     let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
 
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 1024,
         usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
@@ -188,7 +188,7 @@ fn unmap_while_visible() {
     let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
 
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 1024,
         usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,

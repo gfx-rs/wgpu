@@ -16,7 +16,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         // Create depth texture
         let depth_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Depth texture"),
             size: wgpu::Extent3d {
                 width: 64,
@@ -107,7 +107,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
 
         // Resolve query set to buffer
         let query_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Query buffer"),
             size: size_of::<u64>() as u64 * 3,
             usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
@@ -116,7 +116,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
         encoder.resolve_query_set(&query_set, 0..3, &query_buffer, 0);
 
         let mapping_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Mapping buffer"),
             size: query_buffer.size(),
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,

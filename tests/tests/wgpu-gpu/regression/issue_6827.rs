@@ -40,7 +40,7 @@ async fn run_test(ctx: TestingContext, use_many_writes: bool) {
     };
     let texture = {
         device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             size,
             mip_level_count: 1,
             sample_count: 1,
@@ -156,7 +156,7 @@ pub fn many_writes(texture: &wgpu::Texture, device: &wgpu::Device, queue: &wgpu:
     let data: Vec<Texel> = compute_data(texture);
 
     let copy_buffer_2 = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: u64::try_from(data.len() * COMPONENTS).unwrap(),
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
@@ -242,7 +242,7 @@ impl TextureCopyParameters {
         let padded_bytes_per_row = self.padded_bytes_per_row();
 
         let temp_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("GPU-to-CPU image copy buffer"),
             size: u64::from(padded_bytes_per_row)
                 * u64::from(self.size.height)

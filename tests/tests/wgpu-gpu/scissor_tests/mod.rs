@@ -26,7 +26,7 @@ async fn scissor_test_impl(
     expected_data: [u8; BUFFER_SIZE],
 ) {
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("Offscreen texture"),
         size: wgpu::Extent3d {
             width: TEXTURE_WIDTH,
@@ -79,7 +79,7 @@ async fn scissor_test_impl(
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                queue: None,
+                queue: 0,
                 label: None,
             });
         {

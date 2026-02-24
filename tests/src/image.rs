@@ -323,7 +323,7 @@ fn copy_via_compute(
         size: buffer.size(),
         usage: BufferUsages::COPY_SRC | BufferUsages::STORAGE,
         mapped_at_creation: false,
-        initial_queue: None,
+        initial_queue: 0,
     });
 
     let bg = device.create_bind_group(&BindGroupDescriptor {
@@ -527,13 +527,13 @@ impl ReadbackBuffers {
                 label: Some("Texture Readback"),
                 usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
                 contents: &vec![255; buffer_size as usize],
-                initial_queue: None,
+                initial_queue: 0,
             });
             let buffer_stencil = device.create_buffer_init(&util::BufferInitDescriptor {
                 label: Some("Texture Stencil-Aspect Readback"),
                 usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
                 contents: &vec![255; buffer_stencil_size as usize],
-                initial_queue: None,
+                initial_queue: 0,
             });
             ReadbackBuffers {
                 texture_format: texture.format(),
@@ -555,7 +555,7 @@ impl ReadbackBuffers {
                 label: Some("Texture Readback"),
                 usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
                 contents: &vec![255; buffer_size as usize],
-                initial_queue: None,
+                initial_queue: 0,
             });
             ReadbackBuffers {
                 texture_format: texture.format(),

@@ -193,7 +193,7 @@ impl TestResources {
             });
 
         let in_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: 4,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
@@ -201,7 +201,7 @@ impl TestResources {
         });
 
         let out_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: 12 * 4,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
@@ -209,7 +209,7 @@ impl TestResources {
         });
 
         let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: 12 * 4,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -360,7 +360,7 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
         });
 
     let in_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 4,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
@@ -368,7 +368,7 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
     });
 
     let out_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 3 * 4,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
@@ -376,14 +376,14 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
     });
 
     let in_data_uniform_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 256 + 8 * 4,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
     let in_data_storage_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 256 + 8 * 4,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
@@ -391,7 +391,7 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
     });
 
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 3 * 4,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,

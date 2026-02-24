@@ -78,7 +78,7 @@ async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
     ];
 
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: Extent3d {
             width: 2,
@@ -147,7 +147,7 @@ async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
     ];
 
     let output_buffer = ctx.device.create_buffer(&BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 4 * 2,
         usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
@@ -233,7 +233,7 @@ async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
     let mut encoder = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: None,
         });
     {
@@ -247,7 +247,7 @@ async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
     }
 
     let readback_buffer = ctx.device.create_buffer(&BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 4 * 2,
         usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,

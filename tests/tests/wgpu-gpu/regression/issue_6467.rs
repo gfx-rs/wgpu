@@ -50,7 +50,7 @@ static ZERO_WORKGROUP_COUNT: GpuTestConfiguration = GpuTestConfiguration::new()
         let buffer = DeviceExt::create_buffer_init(
             &ctx.device,
             &wgpu::util::BufferInitDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: None,
                 contents: &[1, 1, 1, 1, 1, 1, 1, 1],
                 usage: wgpu::BufferUsages::STORAGE
@@ -61,7 +61,7 @@ static ZERO_WORKGROUP_COUNT: GpuTestConfiguration = GpuTestConfiguration::new()
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                queue: None,
+                queue: 0,
                 label: None,
             });
         {

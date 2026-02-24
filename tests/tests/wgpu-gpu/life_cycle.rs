@@ -15,7 +15,7 @@ static BUFFER_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
         let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("buffer"),
             size: 256,
             usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
@@ -51,7 +51,7 @@ static BUFFER_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
         buffer.destroy();
 
         let descriptor = wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: 256,
             usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
@@ -95,7 +95,7 @@ static TEXTURE_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: wgpu::Extent3d {
                 width: 128,
@@ -138,13 +138,13 @@ static BUFFER_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration
         let buffer_source = ctx
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: None,
                 contents: &[0u8; 4],
                 usage: wgpu::BufferUsages::COPY_SRC,
             });
         let buffer_dest = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: 4,
             usage: wgpu::BufferUsages::COPY_DST,
@@ -175,7 +175,7 @@ static TEXTURE_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguratio
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let descriptor = wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: wgpu::Extent3d {
                 width: 128,

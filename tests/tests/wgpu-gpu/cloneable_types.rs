@@ -13,7 +13,7 @@ static CLONEABLE_BUFFERS: GpuTestConfiguration = wgpu_test::GpuTestConfiguration
 // to access the buffer inside the callback as well as outside.
 fn cloneable_buffers(ctx: TestingContext) {
     let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 32,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,

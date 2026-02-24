@@ -107,7 +107,7 @@ impl RenderpassState {
                     format: wgpu::TextureFormat::Rgba8UnormSrgb,
                     usage: wgpu::TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
-                    initial_queue: None,
+                    initial_queue: 0,
                 });
             texture_views.push(texture.create_view(&wgpu::TextureViewDescriptor {
                 label: Some(&format!("Texture View {i}")),
@@ -162,7 +162,7 @@ impl RenderpassState {
                 size: 3 * 16,
                 usage: wgpu::BufferUsages::VERTEX,
                 mapped_at_creation: false,
-                initial_queue: None,
+                initial_queue: 0,
             }));
         }
         random.shuffle(&mut vertex_buffers);
@@ -174,7 +174,7 @@ impl RenderpassState {
                 size: 3 * 4,
                 usage: wgpu::BufferUsages::INDEX,
                 mapped_at_creation: false,
-                initial_queue: None,
+                initial_queue: 0,
             }));
         }
         random.shuffle(&mut index_buffers);
@@ -245,7 +245,7 @@ impl RenderpassState {
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
-                initial_queue: None,
+                initial_queue: 0,
             })
             .create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -359,7 +359,7 @@ impl RenderpassState {
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: None,
-                    queue: None,
+                    queue: 0,
                 });
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -411,7 +411,7 @@ impl RenderpassState {
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: None,
-                    queue: None,
+                    queue: 0,
                 });
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

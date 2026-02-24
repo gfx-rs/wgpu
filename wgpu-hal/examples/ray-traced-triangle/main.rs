@@ -566,7 +566,7 @@ impl<A: hal::Api> Example<A> {
         let instances_buffer = unsafe {
             let instances_buffer = device
                 .create_buffer(&hal::BufferDescriptor {
-                    initial_queue: None,
+                    initial_queue: Some(0),
                     label: Some("instances_buffer"),
                     size: instances_buffer_size as u64,
                     usage: wgpu_types::BufferUses::MAP_WRITE

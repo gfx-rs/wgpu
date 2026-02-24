@@ -150,7 +150,7 @@ fn test_compute_render_extent() {
             format,
             usage: wgpu::TextureUsages::empty(),
             view_formats: &[],
-            initial_queue: None,
+            initial_queue: 0,
         };
 
         if format.is_multi_planar_format() {
@@ -174,7 +174,7 @@ fn test_compute_render_extent() {
             format,
             usage: wgpu::TextureUsages::empty(),
             view_formats: &[],
-            initial_queue: None,
+            initial_queue: 0,
         };
 
         assert_eq!(

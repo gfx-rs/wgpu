@@ -56,14 +56,14 @@ async fn execute(
     let shaders_module = device.create_shader_module(wgpu::include_wgsl!("shaders.wgsl"));
 
     let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: size_of_val(local_patient_workgroup_results.as_slice()) as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     });
     let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: size_of_val(local_patient_workgroup_results.as_slice()) as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -117,7 +117,7 @@ async fn execute(
     //----------------------------------------------------------
 
     let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
     {
@@ -141,7 +141,7 @@ async fn execute(
     .await;
 
     let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
     {
@@ -178,7 +178,7 @@ async fn get_data<T: bytemuck::Pod>(
     queue: &wgpu::Queue,
 ) {
     let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
     command_encoder.copy_buffer_to_buffer(

@@ -4,7 +4,7 @@ use std::sync::Arc;
 /// Helper to create a small mappable buffer for READ tests.
 fn make_read_buffer(device: &wgpu::Device, size: u64) -> wgpu::Buffer {
     device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("read buffer"),
         size,
         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
@@ -23,7 +23,7 @@ fn encoder_map_buffer_on_submit_defers_until_submit() {
     let fired_cl = Arc::clone(&fired);
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: Some("encoder"),
     });
 
@@ -52,7 +52,7 @@ fn encoder_map_buffer_on_submit_empty_range_panics_immediately() {
     let buffer = make_read_buffer(&device, 16);
 
     let encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
 
@@ -69,7 +69,7 @@ fn encoder_map_buffer_on_submit_out_of_bounds_panics_on_submit() {
     let buffer = make_read_buffer(&device, 16);
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
     // 12..24 overflows the 16-byte buffer (size=12, end=24).
@@ -92,7 +92,7 @@ fn encoder_map_buffer_on_submit_panics_if_already_mapped_on_submit() {
     buffer.slice(0..4).map_async(wgpu::MapMode::Read, |_| {});
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
     // Deferred mapping of an already-mapped buffer will panic when executed on submit or be rejected by submit.
@@ -113,7 +113,7 @@ fn encoder_on_submitted_work_done_defers_until_submit() {
     let fired_cl = Arc::clone(&fired);
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
 
@@ -147,7 +147,7 @@ fn encoder_both_callbacks_fire_after_submit() {
     let queue_fired_cl = Arc::clone(&queue_fired);
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
     encoder.map_buffer_on_submit(&buffer, wgpu::MapMode::Read, 0..4, move |_| {
@@ -178,7 +178,7 @@ fn encoder_multiple_map_buffer_on_submit_callbacks_fire() {
     let c2 = Arc::clone(&counter);
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
     encoder.map_buffer_on_submit(&buffer1, wgpu::MapMode::Read, 0..4, move |_| {
@@ -202,7 +202,7 @@ fn encoder_map_buffer_on_submit_panics_if_usage_invalid_on_submit() {
     let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
     let queue = queues.into_iter().next().unwrap();
     let unmappable = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("unmappable buffer"),
         size: 16,
         usage: wgpu::BufferUsages::COPY_DST, // No MAP_READ or MAP_WRITE
@@ -210,7 +210,7 @@ fn encoder_map_buffer_on_submit_panics_if_usage_invalid_on_submit() {
     });
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
     encoder.map_buffer_on_submit(&unmappable, wgpu::MapMode::Read, 0..4, |_| {});
@@ -241,7 +241,7 @@ fn encoder_deferred_map_runs_before_on_submitted_work_done() {
     let o_queue = Arc::clone(&order);
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
     encoder.map_buffer_on_submit(&buffer, wgpu::MapMode::Read, 0..4, move |_| {
@@ -274,7 +274,7 @@ fn encoder_multiple_on_submitted_callbacks_fire() {
     let c2 = Arc::clone(&counter);
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
     encoder.on_submitted_work_done(move || {

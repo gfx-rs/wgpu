@@ -22,7 +22,7 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
     .run_async(|ctx| async move {
         // Create a mappable buffer
         let buffer = ctx.device.create_buffer(&BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("mappable buffer"),
             size: 4,
             usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
@@ -34,7 +34,7 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
         let mut encoder = ctx
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
-                queue: None,
+                queue: 0,
                 label: Some("encoder"),
             });
 

@@ -51,7 +51,7 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
         let target_tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: wgpu::Extent3d {
                 width: 100,
@@ -101,7 +101,7 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
     let buffer_source = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             contents: &[0u8; 4],
             usage: wgpu::BufferUsages::COPY_SRC,
@@ -109,14 +109,14 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
     let buffer_dest = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             contents: &[0u8; 4],
             usage: wgpu::BufferUsages::COPY_DST,
         });
 
     let texture_desc = wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: wgpu::Extent3d {
             width: 1,
@@ -132,7 +132,7 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
     };
     let texture_dst = ctx.device.create_texture(&texture_desc);
     let texture_src = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         usage: wgpu::TextureUsages::COPY_SRC,
         ..texture_desc
     });
@@ -143,7 +143,7 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
     });
 
     let target_desc = wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("target_tex"),
         size: wgpu::Extent3d {
             width: 4,

@@ -58,7 +58,7 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
     let buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("buffer"),
             contents: bytemuck::cast_slice(&input),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -126,7 +126,7 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
         });
 
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("texture"),
         size: wgpu::Extent3d {
             width: 2,
@@ -147,7 +147,7 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("encoder"),
         });
 

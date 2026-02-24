@@ -47,7 +47,7 @@ fn try_create(ctx: TestingContext, usages: &[(bool, &[wgpu::BufferUsages])]) {
             expect_validation_error,
             || {
                 let _buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                    initial_queue: None,
+                    initial_queue: 0,
                     label: None,
                     size: BUFFER_SIZE,
                     usage,
@@ -117,7 +117,7 @@ async fn map_test(
         buffer_creation_validation_error,
         || {
             buffer = Some(ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: None,
                 size,
                 usage,

@@ -116,7 +116,7 @@ async fn test_format(
         });
 
     let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         dimension: wgpu::TextureDimension::D2,
         size,
@@ -185,7 +185,7 @@ static IMAGE_ATOMICS_NOT_ENABLED: GpuTestConfiguration = GpuTestConfiguration::n
             &ctx.device,
             || {
                 let _ = ctx.device.create_texture(&wgpu::TextureDescriptor {
-initial_queue: None,
+initial_queue: 0,
                     label: None,
                     dimension: wgpu::TextureDimension::D2,
                     size,
@@ -214,7 +214,7 @@ static IMAGE_ATOMICS_NOT_SUPPORTED: GpuTestConfiguration = GpuTestConfiguration:
             &ctx.device,
             || {
                 let _ = ctx.device.create_texture(&wgpu::TextureDescriptor {
-initial_queue: None,
+initial_queue: 0,
                     label: None,
                     dimension: wgpu::TextureDimension::D2,
                     size,

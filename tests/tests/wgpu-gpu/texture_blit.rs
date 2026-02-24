@@ -12,7 +12,7 @@ static TEXTURE_BLIT_WITH_LINEAR_FILTER_TEST: GpuTestConfiguration = GpuTestConfi
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let source = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: wgpu::Extent3d {
                 width: 100,
@@ -28,7 +28,7 @@ static TEXTURE_BLIT_WITH_LINEAR_FILTER_TEST: GpuTestConfiguration = GpuTestConfi
         });
 
         let target = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: wgpu::Extent3d {
                 width: 100,
@@ -66,7 +66,7 @@ static TEXTURE_BLIT_WITH_NEAREST_FILTER_TEST: GpuTestConfiguration = GpuTestConf
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let source = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: wgpu::Extent3d {
                 width: 100,
@@ -82,7 +82,7 @@ static TEXTURE_BLIT_WITH_NEAREST_FILTER_TEST: GpuTestConfiguration = GpuTestConf
         });
 
         let target = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: wgpu::Extent3d {
                 width: 100,

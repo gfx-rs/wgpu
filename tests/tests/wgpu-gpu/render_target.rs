@@ -52,7 +52,7 @@ async fn run_test(
         1.0, 1.0, // Top right
     ];
     let vertex_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         contents: bytemuck::cast_slice(vertex_buffer_content),
         usage: wgpu::BufferUsages::VERTEX,
@@ -128,7 +128,7 @@ async fn run_test(
     }
 
     let out_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: wgpu::Extent3d {
             width: SIZE,
@@ -144,7 +144,7 @@ async fn run_test(
     });
 
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: size_for_mips(MIPS),
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -158,7 +158,7 @@ async fn run_test(
     for mip in 0..MIPS {
         let ms_texture_view = if multisample {
             let ms_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: None,
                 size: wgpu::Extent3d {
                     width: SIZE >> mip,
@@ -273,7 +273,7 @@ async fn run_test_3d(ctx: TestingContext) {
         1.0, 1.0, // Top right
     ];
     let vertex_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         contents: bytemuck::cast_slice(vertex_buffer_content),
         usage: wgpu::BufferUsages::VERTEX,
@@ -346,7 +346,7 @@ async fn run_test_3d(ctx: TestingContext) {
     }
 
     let out_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: wgpu::Extent3d {
             width: SIZE,
@@ -362,7 +362,7 @@ async fn run_test_3d(ctx: TestingContext) {
     });
 
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: size_for_mips(MIPS),
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,

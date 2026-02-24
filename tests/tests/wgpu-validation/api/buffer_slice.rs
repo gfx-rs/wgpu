@@ -1,7 +1,7 @@
 use std::num::NonZero;
 
 const ARBITRARY_DESC: &wgpu::BufferDescriptor = &wgpu::BufferDescriptor {
-    initial_queue: None,
+    initial_queue: 0,
     label: None,
     size: 100,
     usage: wgpu::BufferUsages::VERTEX,

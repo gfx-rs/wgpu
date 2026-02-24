@@ -46,7 +46,7 @@ async fn run(_path: Option<String>) {
     let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
     let storage_texture = device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: wgpu::Extent3d {
             width: TEXTURE_DIMS.0 as u32,
@@ -62,7 +62,7 @@ async fn run(_path: Option<String>) {
     });
     let storage_texture_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
     let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: size_of_val(&texture_data[..]) as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -109,7 +109,7 @@ async fn run(_path: Option<String>) {
     //----------------------------------------
 
     let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
     {

@@ -23,14 +23,14 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
     let (vertex_data, index_data) = mesh_gen::create_vertices();
 
     let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("Vertex Buffer"),
         contents: bytemuck::cast_slice(&vertex_data),
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::BLAS_INPUT,
     });
 
     let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("Index Buffer"),
         contents: bytemuck::cast_slice(&index_data),
         usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::BLAS_INPUT,
@@ -52,7 +52,7 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
             label: None,
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
             update_mode: wgpu::AccelerationStructureUpdateMode::Build,
-            initial_queue: None,
+            initial_queue: 0,
         },
         wgpu::BlasGeometrySizeDescriptors::Triangles {
             descriptors: vec![blas_geo_size_desc.clone()],
@@ -63,7 +63,7 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
         label: None,
         flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
         update_mode: wgpu::AccelerationStructureUpdateMode::Build,
-        initial_queue: None,
+        initial_queue: 0,
         max_instances,
     });
 
@@ -84,7 +84,7 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
     }
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
 

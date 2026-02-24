@@ -37,7 +37,7 @@ fn device_and_buffers() {
     // Demonstrate that creating and *writing* to a buffer succeeds.
     // This also involves creation of a staging buffer.
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("hello world"),
         size: 8,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,

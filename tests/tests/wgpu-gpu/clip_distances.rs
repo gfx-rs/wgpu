@@ -49,7 +49,7 @@ async fn clip_distances(ctx: TestingContext) {
 
     // Create render target
     let render_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("Render Texture"),
         size: wgpu::Extent3d {
             width: 256,
@@ -96,7 +96,7 @@ async fn clip_distances(ctx: TestingContext) {
 
     // Read texture data
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 256 * 256,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,

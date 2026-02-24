@@ -42,7 +42,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
         let device = &ctx.device;
 
         let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: THREAD_COUNT * size_of::<u64>() as u64,
             usage: wgpu::BufferUsages::STORAGE
@@ -92,7 +92,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
         });
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: None,
         });
         {

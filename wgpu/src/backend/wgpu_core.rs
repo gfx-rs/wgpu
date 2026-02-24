@@ -145,11 +145,7 @@ impl ContextWgpuCore {
         device: &CoreDevice,
         desc: &TextureDescriptor<'_>,
     ) -> CoreTexture {
-        let descriptor = desc.map_label_and_view_formats_and_queue(
-            |l| l.map(Borrowed),
-            |v| v.to_vec(),
-            |q| q.unwrap_or(0),
-        );
+        let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let (id, error) = unsafe {
             self.0
                 .create_texture_from_hal(Box::new(hal_texture), device.id, &descriptor, None)
@@ -185,7 +181,7 @@ impl ContextWgpuCore {
             self.0.create_buffer_from_hal::<A>(
                 hal_buffer,
                 device.id,
-                &desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.unwrap_or(0)),
+                &desc.map_label(|l| l.map(Borrowed)),
                 None,
             )
         };
@@ -1598,7 +1594,7 @@ impl dispatch::DeviceInterface for CoreDevice {
     fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> dispatch::DispatchBuffer {
         let (id, error) = self.context.0.device_create_buffer(
             self.id,
-            &desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.unwrap_or(0)),
+            &desc.map_label(|l| l.map(Borrowed)),
             None,
         );
         if let Some(cause) = error {
@@ -1615,11 +1611,7 @@ impl dispatch::DeviceInterface for CoreDevice {
     }
 
     fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> dispatch::DispatchTexture {
-        let wgt_desc = desc.map_label_and_view_formats_and_queue(
-            |l| l.map(Borrowed),
-            |v| v.to_vec(),
-            |q| q.unwrap_or(0),
-        );
+        let wgt_desc = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let (id, error) = self
             .context
             .0
@@ -1646,7 +1638,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         desc: &crate::ExternalTextureDescriptor<'_>,
         planes: &[&crate::TextureView],
     ) -> dispatch::DispatchExternalTexture {
-        let wgt_desc = desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.unwrap_or(0));
+        let wgt_desc = desc.map_label(|l| l.map(Borrowed));
         let planes = planes
             .iter()
             .map(|plane| plane.inner.as_core().id)
@@ -1677,12 +1669,8 @@ impl dispatch::DeviceInterface for CoreDevice {
         sizes: crate::BlasGeometrySizeDescriptors,
     ) -> (Option<u64>, dispatch::DispatchBlas) {
         let global = &self.context.0;
-        let (id, handle, error) = global.device_create_blas(
-            self.id,
-            &desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.unwrap_or(0)),
-            sizes,
-            None,
-        );
+        let (id, handle, error) =
+            global.device_create_blas(self.id, &desc.map_label(|l| l.map(Borrowed)), sizes, None);
         if let Some(cause) = error {
             self.context
                 .handle_error(&self.error_sink, cause, desc.label, "Device::create_blas");
@@ -1700,11 +1688,8 @@ impl dispatch::DeviceInterface for CoreDevice {
 
     fn create_tlas(&self, desc: &crate::CreateTlasDescriptor<'_>) -> dispatch::DispatchTlas {
         let global = &self.context.0;
-        let (id, error) = global.device_create_tlas(
-            self.id,
-            &desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.unwrap_or(0)),
-            None,
-        );
+        let (id, error) =
+            global.device_create_tlas(self.id, &desc.map_label(|l| l.map(Borrowed)), None);
         if let Some(cause) = error {
             self.context
                 .handle_error(&self.error_sink, cause, desc.label, "Device::create_tlas");
@@ -1775,7 +1760,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         &self,
         desc: &crate::CommandEncoderDescriptor<'_>,
     ) -> dispatch::DispatchCommandEncoder {
-        let new_desc = desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.unwrap_or(0));
+        let new_desc = desc.map_label(|l| l.map(Borrowed));
         let (id, error) = self.context.0.device_create_command_encoder(
             self.id,
             self.queue_ids[new_desc.queue as usize],
@@ -1810,7 +1795,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             sample_count: desc.sample_count,
             multiview: desc.multiview,
         };
-        let queue_index = desc.queue.unwrap_or(0);
+        let queue_index = desc.queue;
         let encoder = match wgc::command::RenderBundleEncoder::new(
             &descriptor,
             self.id,

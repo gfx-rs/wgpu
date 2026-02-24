@@ -175,7 +175,7 @@ fn upload_scene_components(
         .collect::<Vec<_>>();
 
     let vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("Vertices"),
         contents: bytemuck::cast_slice(&scene.vertices),
         usage: wgpu::BufferUsages::VERTEX
@@ -183,7 +183,7 @@ fn upload_scene_components(
             | wgpu::BufferUsages::BLAS_INPUT,
     });
     let indices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("Indices"),
         contents: bytemuck::cast_slice(&scene.indices),
         usage: wgpu::BufferUsages::INDEX
@@ -191,13 +191,13 @@ fn upload_scene_components(
             | wgpu::BufferUsages::BLAS_INPUT,
     });
     let geometries = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("Geometries"),
         contents: bytemuck::cast_slice(&geometry_buffer_content),
         usage: wgpu::BufferUsages::STORAGE,
     });
     let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("Instances"),
         contents: bytemuck::cast_slice(&instance_buffer_content),
         usage: wgpu::BufferUsages::STORAGE,
@@ -225,7 +225,7 @@ fn upload_scene_components(
                     label: None,
                     flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
                     update_mode: wgpu::AccelerationStructureUpdateMode::Build,
-                    initial_queue: None,
+                    initial_queue: 0,
                 },
                 wgpu::BlasGeometrySizeDescriptors::Triangles {
                     descriptors: size_desc.clone(),
@@ -264,7 +264,7 @@ fn upload_scene_components(
         .collect();
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
 
@@ -342,7 +342,7 @@ impl crate::framework::Example for Example {
         };
 
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Uniform Buffer"),
             contents: bytemuck::cast_slice(&[uniforms]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -353,7 +353,7 @@ impl crate::framework::Example for Example {
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
             update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             max_instances: side_count * side_count,
-            initial_queue: None,
+            initial_queue: 0,
         });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -501,7 +501,7 @@ impl crate::framework::Example for Example {
         }
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: None,
         });
 

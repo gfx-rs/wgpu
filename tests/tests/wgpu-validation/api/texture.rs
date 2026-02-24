@@ -15,7 +15,7 @@ fn destroyed_texture() {
         depth_or_array_layers: 1,
     };
     let texture_src = device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("src"),
         size,
         mip_level_count: 1,
@@ -26,7 +26,7 @@ fn destroyed_texture() {
         view_formats: &[],
     });
     let texture_dst = device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("dst"),
         size,
         mip_level_count: 1,
@@ -38,7 +38,7 @@ fn destroyed_texture() {
     });
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
     encoder.copy_texture_to_texture(
@@ -103,7 +103,7 @@ fn planar_texture_view_plane() {
         ),
     ] {
         let tex = device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             dimension: wgpu::TextureDimension::D2,
             size,
@@ -134,7 +134,7 @@ fn non_planar_texture_view_plane() {
         depth_or_array_layers: 1,
     };
     let tex = device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         dimension: wgpu::TextureDimension::D2,
         size,
@@ -187,7 +187,7 @@ fn planar_texture_view_plane_out_of_bounds() {
         ),
     ] {
         let tex = device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             dimension: wgpu::TextureDimension::D2,
             size,
@@ -238,7 +238,7 @@ fn planar_texture_bad_view_format() {
             &device,
             || {
                 let _ = device.create_texture(&wgpu::TextureDescriptor {
-                    initial_queue: None,
+                    initial_queue: 0,
                     label: None,
                     dimension: wgpu::TextureDimension::D2,
                     size,
@@ -278,7 +278,7 @@ fn planar_texture_bad_size() {
             &device,
             || {
                 let _ = device.create_texture(&wgpu::TextureDescriptor {
-                    initial_queue: None,
+                    initial_queue: 0,
                     label: None,
                     dimension: wgpu::TextureDimension::D2,
                     size,
@@ -327,7 +327,7 @@ fn planar_texture_render_attachment() {
     ] {
         valid(&device, || {
             let texture = device.create_texture(&wgpu::TextureDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: None,
                 dimension: wgpu::TextureDimension::D2,
                 size,
@@ -368,7 +368,7 @@ fn planar_texture_render_attachment_unsupported() {
         &device,
         || {
             let _ = device.create_texture(&wgpu::TextureDescriptor {
-initial_queue: None,
+initial_queue: 0,
                 label: None,
                 dimension: wgpu::TextureDimension::D2,
                 size,
@@ -398,7 +398,7 @@ fn encode_copy_texture_to_buffer(
     };
 
     let texture = device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size,
         mip_level_count: 1,
@@ -410,7 +410,7 @@ fn encode_copy_texture_to_buffer(
     });
 
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: (size.width * size.height * bytes_per_texel) as u64,
         usage: wgpu::BufferUsages::COPY_DST,
@@ -418,7 +418,7 @@ fn encode_copy_texture_to_buffer(
     });
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
 
@@ -501,7 +501,7 @@ fn encode_copy_buffer_to_texture(
     };
 
     let texture = device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size,
         mip_level_count: 1,
@@ -513,7 +513,7 @@ fn encode_copy_buffer_to_texture(
     });
 
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: (size.width * size.height * bytes_per_texel) as u64,
         usage: wgpu::BufferUsages::COPY_SRC,
@@ -521,7 +521,7 @@ fn encode_copy_buffer_to_texture(
     });
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
 
@@ -619,7 +619,7 @@ fn transient_invalid_usage() {
 
     for usage in invalid_usages {
         let invalid_texture_descriptor = wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size,
             mip_level_count: 1,
@@ -637,7 +637,7 @@ fn transient_invalid_usage() {
     }
 
     let invalid_texture_descriptor = wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size,
         mip_level_count: 1,
@@ -667,7 +667,7 @@ fn transient_invalid_storeop() {
     };
 
     let transient_texture = device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size,
         mip_level_count: 1,
@@ -682,7 +682,7 @@ fn transient_invalid_storeop() {
         &device,
         || {
             let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-queue: None, label: None });
+queue: 0, label: None });
 
             let invalid_render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,

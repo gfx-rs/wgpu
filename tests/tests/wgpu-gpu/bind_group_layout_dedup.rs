@@ -160,7 +160,7 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
         });
 
     let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 4,
         usage: wgpu::BufferUsages::UNIFORM,
@@ -221,7 +221,7 @@ static GET_DERIVED_BGL: GpuTestConfiguration = GpuTestConfiguration::new()
 
 fn get_derived_bgl(ctx: TestingContext) {
     let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 4,
         usage: wgpu::BufferUsages::UNIFORM,
@@ -300,7 +300,7 @@ static SEPARATE_PIPELINES_HAVE_INCOMPATIBLE_DERIVED_BGLS: GpuTestConfiguration =
 
 fn separate_pipelines_have_incompatible_derived_bgls(ctx: TestingContext) {
     let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 4,
         usage: wgpu::BufferUsages::UNIFORM,
@@ -369,7 +369,7 @@ static DERIVED_BGLS_INCOMPATIBLE_WITH_REGULAR_BGLS: GpuTestConfiguration =
 
 fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
     let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 4,
         usage: wgpu::BufferUsages::UNIFORM,
@@ -477,7 +477,7 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
     let bind_group_layout_1 = pipeline.get_bind_group_layout(1);
 
     let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: 16,
         usage: wgpu::BufferUsages::UNIFORM,
@@ -512,7 +512,7 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: None,
         });
 

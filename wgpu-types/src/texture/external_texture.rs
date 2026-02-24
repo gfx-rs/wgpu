@@ -65,7 +65,7 @@ impl Default for ExternalTextureTransferFunction {
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct ExternalTextureDescriptor<L, Q> {
+pub struct ExternalTextureDescriptor<L> {
     /// Debug label of the external texture. This will show up in graphics
     /// debuggers for easy identification.
     pub label: L,
@@ -136,18 +136,14 @@ pub struct ExternalTextureDescriptor<L, Q> {
     /// [`width`]: Self::width
     /// [`height`]: Self::height
     pub load_transform: [f32; 6],
-    /// The queue with ownership at resource creation time. None defaults to the first queue.
-    pub initial_queue: Q,
+    /// The queue with ownership at resource creation time. Default should be zero.
+    pub initial_queue: u32,
 }
 
-impl<L, Q> ExternalTextureDescriptor<L, Q> {
+impl<L> ExternalTextureDescriptor<L> {
     /// Takes a closure and maps the label of the external texture descriptor into another.
     #[must_use]
-    pub fn map_label_and_queue<K, NQ>(
-        &self,
-        l_fun: impl FnOnce(&L) -> K,
-        q_fun: impl FnOnce(&Q) -> NQ,
-    ) -> ExternalTextureDescriptor<K, NQ> {
+    pub fn map_label<K>(&self, l_fun: impl FnOnce(&L) -> K) -> ExternalTextureDescriptor<K> {
         ExternalTextureDescriptor {
             label: l_fun(&self.label),
             width: self.width,
@@ -159,7 +155,7 @@ impl<L, Q> ExternalTextureDescriptor<L, Q> {
             gamut_conversion_matrix: self.gamut_conversion_matrix,
             src_transfer_function: self.src_transfer_function,
             dst_transfer_function: self.dst_transfer_function,
-            initial_queue: q_fun(&self.initial_queue),
+            initial_queue: self.initial_queue,
         }
     }
 

@@ -11,7 +11,7 @@ fn create_external_texture() {
     });
 
     let texture_descriptor = TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: Extent3d {
             width: 512,
@@ -27,19 +27,19 @@ fn create_external_texture() {
     };
 
     let r_texture = device.create_texture(&TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         format: TextureFormat::R8Unorm,
         ..texture_descriptor
     });
     let r_view = r_texture.create_view(&TextureViewDescriptor::default());
     let rg_texture = device.create_texture(&TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         format: TextureFormat::Rg8Unorm,
         ..texture_descriptor
     });
     let rg_view = rg_texture.create_view(&TextureViewDescriptor::default());
     let rgba_texture = device.create_texture(&TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         format: TextureFormat::Rgba8Unorm,
         ..texture_descriptor
     });
@@ -48,7 +48,7 @@ fn create_external_texture() {
     let _ = valid(&device, || {
         device.create_external_texture(
             &ExternalTextureDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 format: ExternalTextureFormat::Rgba,
                 label: None,
                 width: r_texture.width(),
@@ -66,7 +66,7 @@ fn create_external_texture() {
     let _ = valid(&device, || {
         device.create_external_texture(
             &ExternalTextureDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 format: ExternalTextureFormat::Nv12,
                 label: None,
                 width: r_texture.width(),
@@ -84,7 +84,7 @@ fn create_external_texture() {
     let _ = valid(&device, || {
         device.create_external_texture(
             &ExternalTextureDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 format: ExternalTextureFormat::Yu12,
                 label: None,
                 width: r_texture.width(),
@@ -106,7 +106,7 @@ fn create_external_texture() {
         || {
             device.create_external_texture(
                 &ExternalTextureDescriptor {
-                    initial_queue: None,
+                    initial_queue: 0,
                     format: ExternalTextureFormat::Rgba,
                     label: None,
                     width: r_texture.width(),
@@ -128,7 +128,7 @@ fn create_external_texture() {
         || {
             device.create_external_texture(
                 &ExternalTextureDescriptor {
-                    initial_queue: None,
+                    initial_queue: 0,
                     format: ExternalTextureFormat::Nv12,
                     label: None,
                     width: r_texture.width(),
@@ -150,7 +150,7 @@ fn create_external_texture() {
         || {
             device.create_external_texture(
                 &ExternalTextureDescriptor {
-                    initial_queue: None,
+                    initial_queue: 0,
                     format: ExternalTextureFormat::Yu12,
                     label: None,
                     width: r_texture.width(),
@@ -174,7 +174,7 @@ fn create_external_texture() {
         || {
             device.create_external_texture(
                 &ExternalTextureDescriptor {
-initial_queue: None,
+initial_queue: 0,
                     format: ExternalTextureFormat::Rgba,
                     label: None,
                     width: r_texture.width(),
@@ -196,7 +196,7 @@ initial_queue: None,
         || {
             device.create_external_texture(
                 &ExternalTextureDescriptor {
-initial_queue: None,
+initial_queue: 0,
                     format: ExternalTextureFormat::Nv12,
                     label: None,
                     width: r_texture.width(),
@@ -218,7 +218,7 @@ initial_queue: None,
         || {
             device.create_external_texture(
                 &ExternalTextureDescriptor {
-initial_queue: None,
+initial_queue: 0,
                     format: ExternalTextureFormat::Yu12,
                     label: None,
                     width: r_texture.width(),
@@ -238,7 +238,7 @@ initial_queue: None,
 
     // Wrong sample type
     let uint_texture = device.create_texture(&TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         format: TextureFormat::Rgba8Uint,
         ..texture_descriptor
     });
@@ -248,7 +248,7 @@ initial_queue: None,
         || {
             device.create_external_texture(
                 &ExternalTextureDescriptor {
-initial_queue: None,
+initial_queue: 0,
                     format: ExternalTextureFormat::Rgba,
                     label: None,
                     width: uint_texture.width(),
@@ -268,7 +268,7 @@ initial_queue: None,
 
     // Wrong texture dimension
     let d3_texture = device.create_texture(&TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         dimension: TextureDimension::D3,
         ..texture_descriptor
     });
@@ -278,7 +278,7 @@ initial_queue: None,
         || {
             device.create_external_texture(
                 &ExternalTextureDescriptor {
-                    initial_queue: None,
+                    initial_queue: 0,
                     format: ExternalTextureFormat::Rgba,
                     label: None,
                     width: d3_texture.width(),
@@ -298,7 +298,7 @@ initial_queue: None,
 
     // Multisampled
     let multisampled_texture = device.create_texture(&TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         sample_count: 4,
         usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
         ..texture_descriptor
@@ -309,7 +309,7 @@ initial_queue: None,
         || {
             device.create_external_texture(
                 &ExternalTextureDescriptor {
-                    initial_queue: None,
+                    initial_queue: 0,
                     format: ExternalTextureFormat::Rgba,
                     label: None,
                     width: multisampled_texture.width(),
@@ -329,7 +329,7 @@ initial_queue: None,
 
     // Missing TEXTURE_BINDING
     let non_binding_texture = device.create_texture(&TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         usage: TextureUsages::STORAGE_BINDING,
         ..texture_descriptor
     });
@@ -339,7 +339,7 @@ initial_queue: None,
         || {
             device.create_external_texture(
                 &ExternalTextureDescriptor {
-initial_queue: None,
+initial_queue: 0,
                     format: ExternalTextureFormat::Rgba,
                     label: None,
                     width: non_binding_texture.width(),
@@ -380,7 +380,7 @@ fn external_texture_binding() {
     });
 
     let texture_descriptor = TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: Extent3d {
             width: 256,
@@ -395,7 +395,7 @@ fn external_texture_binding() {
         view_formats: &[],
     };
     let external_texture_descriptor = ExternalTextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         width: texture_descriptor.size.width,
         height: texture_descriptor.size.height,
@@ -445,7 +445,7 @@ fn external_texture_binding_texture_view() {
     });
 
     let texture_descriptor = TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: Extent3d {
             width: 256,
@@ -475,7 +475,7 @@ fn external_texture_binding_texture_view() {
 
     // Invalid usages (must include TEXTURE_BINDING)
     let texture = device.create_texture(&TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         usage: TextureUsages::STORAGE_BINDING,
         ..texture_descriptor
     });
@@ -497,7 +497,7 @@ fn external_texture_binding_texture_view() {
 
     // Invalid dimension (must be D2)
     let texture = device.create_texture(&TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         dimension: TextureDimension::D3,
         ..texture_descriptor
     });
@@ -519,7 +519,7 @@ fn external_texture_binding_texture_view() {
 
     // Invalid mip_level_count (must be 1)
     let texture = device.create_texture(&TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         mip_level_count: 2,
         ..texture_descriptor
     });
@@ -544,7 +544,7 @@ fn external_texture_binding_texture_view() {
 
     // Invalid format (must be Rgba8Unorm, Bgra8Unorm, or Rgba16float)
     let texture = device.create_texture(&TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         format: TextureFormat::Rgba8Uint,
         ..texture_descriptor
     });
@@ -569,7 +569,7 @@ fn external_texture_binding_texture_view() {
 
     // Invalid sample count (must be 1)
     let texture = device.create_texture(&TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         sample_count: 4,
         usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
         ..texture_descriptor
@@ -602,7 +602,7 @@ fn destroyed_external_texture_plane() {
     let queue = queues.into_iter().next().unwrap();
 
     let target_texture = device.create_texture(&TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: Extent3d {
             width: 512,
@@ -619,7 +619,7 @@ fn destroyed_external_texture_plane() {
     let target_view = target_texture.create_view(&TextureViewDescriptor::default());
 
     let plane_texture = device.create_texture(&TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("External texture plane"),
         size: Extent3d {
             width: 512,
@@ -637,7 +637,7 @@ fn destroyed_external_texture_plane() {
 
     let external_texture = device.create_external_texture(
         &ExternalTextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             format: ExternalTextureFormat::Rgba,
             label: None,
             width: plane_texture.width(),
@@ -699,7 +699,7 @@ var tex: texture_external;
     });
 
     let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
-        queue: None,
+        queue: 0,
         label: None,
     });
     let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {

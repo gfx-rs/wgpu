@@ -76,7 +76,7 @@ fn test_planar_texture_creation_sampling(
     });
 
     let target_tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: y_view.texture().size(),
         mip_level_count: 1,
@@ -234,7 +234,7 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
             depth_or_array_layers: 1,
         };
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             dimension: wgpu::TextureDimension::D2,
             size,
@@ -276,7 +276,7 @@ static P010_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
             depth_or_array_layers: 1,
         };
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             dimension: wgpu::TextureDimension::D2,
             size,
@@ -315,7 +315,7 @@ static NV12_TEXTURE_RENDERING: GpuTestConfiguration = GpuTestConfiguration::new(
             depth_or_array_layers: 1,
         };
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             dimension: wgpu::TextureDimension::D2,
             size,

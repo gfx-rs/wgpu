@@ -127,7 +127,7 @@ impl WgpuContext {
 
         // (2)
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: size_of::<AppState>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -303,7 +303,7 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                             );
                             let mut encoder = wgpu_context_ref.device.create_command_encoder(
                                 &wgpu::CommandEncoderDescriptor {
-                                    queue: None,
+                                    queue: 0,
                                     label: None,
                                 },
                             );

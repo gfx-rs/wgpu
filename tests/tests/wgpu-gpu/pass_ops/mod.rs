@@ -62,7 +62,7 @@ async fn run_test(ctx: TestingContext) {
     let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
 
     let out_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: wgpu::Extent3d {
             width: 1,

@@ -82,7 +82,7 @@ impl Example {
         });
         let mut encoder =
             device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
-                queue: None,
+                queue: 0,
                 label: None,
                 color_formats: &[Some(config.view_formats[0])],
                 depth_stencil: None,
@@ -108,7 +108,7 @@ impl Example {
             depth_or_array_layers: 1,
         };
         let multisampled_frame_descriptor = &wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             size: multisampled_texture_extent,
             mip_level_count: 1,
             sample_count,
@@ -186,7 +186,7 @@ impl crate::framework::Example for Example {
         }
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
@@ -277,7 +277,7 @@ impl crate::framework::Example for Example {
         }
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: None,
         });
         {

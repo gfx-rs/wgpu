@@ -355,33 +355,29 @@ impl PollStatus {
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct CommandEncoderDescriptor<L, Q> {
+pub struct CommandEncoderDescriptor<L> {
     /// Debug label for the command encoder. This will show up in graphics debuggers for easy identification.
     pub label: L,
-    /// The queue to which this will be submitted.
-    pub queue: Q,
+    /// The queue to which this will be submitted. Default should be zero.
+    pub queue: u32,
 }
 
-impl<L, Q> CommandEncoderDescriptor<L, Q> {
+impl<L> CommandEncoderDescriptor<L> {
     /// Takes a closure and maps the label of the command encoder descriptor into another.
     #[must_use]
-    pub fn map_label_and_queue<K, NQ>(
-        &self,
-        l_fun: impl FnOnce(&L) -> K,
-        q_fun: impl FnOnce(&Q) -> NQ,
-    ) -> CommandEncoderDescriptor<K, NQ> {
+    pub fn map_label<K>(&self, l_fun: impl FnOnce(&L) -> K) -> CommandEncoderDescriptor<K> {
         CommandEncoderDescriptor {
             label: l_fun(&self.label),
-            queue: q_fun(&self.queue),
+            queue: self.queue,
         }
     }
 }
 
-impl<T, Q: Default> Default for CommandEncoderDescriptor<Option<T>, Q> {
+impl<T> Default for CommandEncoderDescriptor<Option<T>> {
     fn default() -> Self {
         Self {
             label: None,
-            queue: Default::default(),
+            queue: 0,
         }
     }
 }

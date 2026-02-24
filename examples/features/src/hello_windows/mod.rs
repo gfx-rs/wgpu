@@ -113,7 +113,7 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Arc<Window>, wgpu::Color
                                 .create_view(&wgpu::TextureViewDescriptor::default());
                             let mut encoder =
                                 device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                                    queue: None,
+                                    queue: 0,
                                     label: None,
                                 });
                             {

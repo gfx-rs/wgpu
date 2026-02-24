@@ -339,7 +339,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
         });
 
     let input_image = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("input_image"),
         size: wgpu::Extent3d {
             width: 2,
@@ -477,7 +477,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
     }
 
     let output_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("output_buffer"),
         size: 48,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
@@ -485,7 +485,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
     });
 
     let transfer_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("transfer_buffer"),
         size: 48,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -523,7 +523,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("encoder"),
         });
 

@@ -34,14 +34,14 @@ impl crate::framework::Example for Example {
         let mask_vertices = [vertex(-0.5, 0.0), vertex(0.0, -1.0), vertex(0.5, 0.0)];
 
         let outer_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Outer Vertex Buffer"),
             contents: bytemuck::cast_slice(&outer_vertices),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
         let mask_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Mask Vertex Buffer"),
             contents: bytemuck::cast_slice(&mask_vertices),
             usage: wgpu::BufferUsages::VERTEX,
@@ -143,7 +143,7 @@ impl crate::framework::Example for Example {
         });
 
         let stencil_buffer = device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Stencil buffer"),
             size: wgpu::Extent3d {
                 width: config.width,
@@ -179,7 +179,7 @@ impl crate::framework::Example for Example {
         _queue: &wgpu::Queue,
     ) {
         self.stencil_buffer = device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Stencil buffer"),
             size: wgpu::Extent3d {
                 width: config.width,
@@ -197,7 +197,7 @@ impl crate::framework::Example for Example {
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: None,
         });
         {

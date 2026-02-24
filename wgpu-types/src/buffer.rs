@@ -11,7 +11,7 @@ use crate::{DownlevelFlags, COPY_BUFFER_ALIGNMENT};
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct BufferDescriptor<L, Q> {
+pub struct BufferDescriptor<L> {
     /// Debug label of a buffer. This will show up in graphics debuggers for easy identification.
     pub label: L,
     /// Size of a buffer, in bytes.
@@ -29,24 +29,20 @@ pub struct BufferDescriptor<L, Q> {
     /// If this is `true`, [`size`](#structfield.size) must be a multiple of
     /// [`COPY_BUFFER_ALIGNMENT`].
     pub mapped_at_creation: bool,
-    /// The queue with ownership at resource creation time. None defaults to the first queue.
-    pub initial_queue: Q,
+    /// The queue with ownership at resource creation time. Default should be zero.
+    pub initial_queue: u32,
 }
 
-impl<L, Q> BufferDescriptor<L, Q> {
+impl<L> BufferDescriptor<L> {
     /// Takes a closure and maps the label of the buffer descriptor into another.
     #[must_use]
-    pub fn map_label_and_queue<K, NQ>(
-        &self,
-        l_fun: impl FnOnce(&L) -> K,
-        q_fun: impl FnOnce(&Q) -> NQ,
-    ) -> BufferDescriptor<K, NQ> {
+    pub fn map_label<K>(&self, l_fun: impl FnOnce(&L) -> K) -> BufferDescriptor<K> {
         BufferDescriptor {
             label: l_fun(&self.label),
             size: self.size,
             usage: self.usage,
             mapped_at_creation: self.mapped_at_creation,
-            initial_queue: q_fun(&self.initial_queue),
+            initial_queue: self.initial_queue,
         }
     }
 }

@@ -100,7 +100,7 @@ const TEXTURE_SIZE: wgpu::Extent3d = wgpu::Extent3d {
 };
 
 const TEXTURE_DESCRIPTOR: wgpu::TextureDescriptor = wgpu::TextureDescriptor {
-    initial_queue: None,
+    initial_queue: 0,
     label: Some("CopyOrigin"),
     size: TEXTURE_SIZE,
     mip_level_count: 1,

@@ -185,7 +185,7 @@ impl Example {
         };
 
         let reflection_texture = device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Reflection Render Texture"),
             size: texture_extent,
             mip_level_count: 1,
@@ -199,7 +199,7 @@ impl Example {
         });
 
         let draw_depth_buffer = device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Depth Buffer"),
             size: texture_extent,
             mip_level_count: 1,
@@ -337,14 +337,14 @@ impl crate::framework::Example for Example {
 
         // Create the buffers on the GPU to hold the data.
         let water_vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Water vertices"),
             contents: bytemuck::cast_slice(&water_vertices),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
         let terrain_vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Terrain vertices"),
             contents: bytemuck::cast_slice(&terrain_vertices),
             usage: wgpu::BufferUsages::VERTEX,
@@ -443,7 +443,7 @@ impl crate::framework::Example for Example {
             });
 
         let water_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Water Uniforms"),
             size: size_of::<WaterUniforms>() as _,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -451,7 +451,7 @@ impl crate::framework::Example for Example {
         });
 
         let terrain_normal_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Normal Terrain Uniforms"),
             size: size_of::<TerrainUniforms>() as _,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -459,7 +459,7 @@ impl crate::framework::Example for Example {
         });
 
         let terrain_flipped_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Flipped Terrain Uniforms"),
             size: size_of::<TerrainUniforms>() as _,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -620,7 +620,7 @@ impl crate::framework::Example for Example {
         let terrain_bundle = {
             let mut encoder =
                 device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
-                    queue: None,
+                    queue: 0,
                     label: None,
                     color_formats: &[Some(config.view_formats[0])],
                     depth_stencil: Some(wgpu::RenderBundleDepthStencil {
@@ -730,7 +730,7 @@ impl crate::framework::Example for Example {
         // The encoder provides a way to turn our instructions here, into
         // a command buffer the GPU can understand.
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: Some("Main Command Encoder"),
         });
 

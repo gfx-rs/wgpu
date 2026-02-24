@@ -109,7 +109,7 @@ impl crate::framework::Example for Example {
         let uniforms = create_matrix(config);
 
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Uniform Buffer"),
             contents: bytemuck::cast_slice(&[uniforms]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -118,14 +118,14 @@ impl crate::framework::Example for Example {
         let (vertex_data, index_data) = create_vertices();
 
         let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertex_data),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::BLAS_INPUT,
         });
 
         let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(&index_data),
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::BLAS_INPUT,
@@ -144,7 +144,7 @@ impl crate::framework::Example for Example {
                 label: None,
                 flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
                 update_mode: wgpu::AccelerationStructureUpdateMode::Build,
-                initial_queue: None,
+                initial_queue: 0,
             },
             wgpu::BlasGeometrySizeDescriptors::Triangles {
                 descriptors: vec![blas_geo_size_desc.clone()],
@@ -156,7 +156,7 @@ impl crate::framework::Example for Example {
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
             update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             max_instances: 1,
-            initial_queue: None,
+            initial_queue: 0,
         });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -231,7 +231,7 @@ impl crate::framework::Example for Example {
         ));
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: None,
         });
 
@@ -308,7 +308,7 @@ impl crate::framework::Example for Example {
         let sin = (time * TIME_SCALE + INITIAL_TIME).sin() * LIGHT_DISTANCE;
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: None,
         });
 

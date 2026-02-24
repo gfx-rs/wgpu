@@ -18,7 +18,7 @@ async fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: 
     let rw = wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::MAP_WRITE;
     for usage in [r, rw] {
         let b0 = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some(label),
             size: buffer_size,
             usage,
@@ -82,7 +82,7 @@ async fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: 
     }
 
     let b1 = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some(label),
         size: buffer_size,
         usage: rw,
@@ -125,14 +125,14 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
         // the mapped offset.
 
         let write_buf = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: 256,
             usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
         let read_buf = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: 256,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
@@ -162,7 +162,7 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                queue: None,
+                queue: 0,
                 label: None,
             });
 
@@ -329,7 +329,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
             });
 
         let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-initial_queue: None,
+initial_queue: 0,
             label: None,
             size: 16, // too small for 32-byte var `a` in shader module
             usage: wgpu::BufferUsages::STORAGE,
@@ -373,7 +373,7 @@ static CLEAR_OFFSET_OUTSIDE_RESOURCE_BOUNDS: GpuTestConfiguration = GpuTestConfi
         let size = 16;
 
         let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size,
             usage: wgpu::BufferUsages::COPY_DST,
@@ -398,7 +398,7 @@ static CLEAR_OFFSET_PLUS_SIZE_OUTSIDE_U64_BOUNDS: GpuTestConfiguration =
         .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: None,
                 size: 16, // unimportant for this test
                 usage: wgpu::BufferUsages::COPY_DST,

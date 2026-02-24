@@ -250,7 +250,7 @@ impl crate::framework::Example for Example {
                 depth_or_array_layers: 1,
             };
             let texture = device.create_texture(&wgpu::TextureDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: None,
                 size,
                 mip_level_count: 1,
@@ -299,7 +299,7 @@ impl crate::framework::Example for Example {
         };
 
         let global_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("global"),
             contents: bytemuck::bytes_of(&globals),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
@@ -307,7 +307,7 @@ impl crate::framework::Example for Example {
         let uniform_alignment =
             device.limits().min_uniform_buffer_offset_alignment as wgpu::BufferAddress;
         let local_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("local"),
             size: (MAX_BUNNIES as wgpu::BufferAddress) * uniform_alignment,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
@@ -404,7 +404,7 @@ impl crate::framework::Example for Example {
         };
 
         let global_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("global"),
             contents: bytemuck::bytes_of(&globals),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,

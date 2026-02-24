@@ -114,14 +114,14 @@ impl crate::framework::Example for Example {
         let indices: [u32; 3] = [0, 1, 2];
 
         let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("vertex buffer"),
             contents: bytemuck::cast_slice(&vertices),
             usage: BufferUsages::BLAS_INPUT,
         });
 
         let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: Some("index buffer"),
             contents: bytemuck::cast_slice(&indices),
             usage: BufferUsages::BLAS_INPUT,
@@ -141,7 +141,7 @@ impl crate::framework::Example for Example {
                 label: None,
                 flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                 update_mode: AccelerationStructureUpdateMode::Build,
-                initial_queue: None,
+                initial_queue: 0,
             },
             BlasGeometrySizeDescriptors::Triangles {
                 descriptors: vec![blas_size_desc.clone()],
@@ -153,7 +153,7 @@ impl crate::framework::Example for Example {
             max_instances: 3,
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
             update_mode: AccelerationStructureUpdateMode::Build,
-            initial_queue: None,
+            initial_queue: 0,
         });
 
         tlas[0] = Some(TlasInstance::new(
@@ -212,7 +212,7 @@ impl crate::framework::Example for Example {
         };
 
         let uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             contents: bytemuck::cast_slice(&[uniforms]),
             usage: BufferUsages::UNIFORM,
@@ -241,7 +241,7 @@ impl crate::framework::Example for Example {
         queue.submit(Some(encoder.finish()));
 
         let storage_tex = device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: wgpu::Extent3d {
                 width: config.width,
@@ -387,7 +387,7 @@ impl crate::framework::Example for Example {
                 .unwrap();
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: None,
         });
 

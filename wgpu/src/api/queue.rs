@@ -35,6 +35,12 @@ impl Queue {
             index,
         }
     }
+
+    /// Returns the index of the queue in its owning device. Queues are returned in order
+    /// when requesting a device.
+    pub fn queue_index(&self) -> u32 {
+        self.index
+    }
 }
 
 /// Identifier for a particular call to [`Queue::submit`]. Can be used

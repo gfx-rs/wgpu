@@ -48,7 +48,7 @@ static TEXTURE_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let texture = ctx.device.create_texture(&TextureDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: None,
                 size: Extent3d {
                     width: 2048,
@@ -88,7 +88,7 @@ static BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let buffer = ctx.device.create_buffer(&BufferDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: None,
                 size: 256 * 1024 * 1024,
                 usage: BufferUsages::STORAGE,
@@ -120,7 +120,7 @@ static MAPPING_BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let buffer = ctx.device.create_buffer(&BufferDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: None,
                 size: 256 * 1024 * 1024,
                 usage: BufferUsages::COPY_SRC | BufferUsages::MAP_WRITE,
@@ -188,7 +188,7 @@ static BLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
                     label: None,
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                     update_mode: AccelerationStructureUpdateMode::Build,
-                    initial_queue: None,
+                    initial_queue: 0,
                 },
                 BlasGeometrySizeDescriptors::Triangles {
                     descriptors: vec![BlasTriangleGeometrySizeDescriptor {
@@ -231,7 +231,7 @@ static TLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
                 max_instances: 1024 * 1024,
                 flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                 update_mode: AccelerationStructureUpdateMode::Build,
-                initial_queue: None,
+                initial_queue: 0,
             });
             if let Some(err) = scope.pop().await {
                 match err {

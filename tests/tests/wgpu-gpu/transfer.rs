@@ -13,7 +13,7 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new()
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
         let t1 = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             dimension: wgpu::TextureDimension::D2,
             size: wgpu::Extent3d {
@@ -28,7 +28,7 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new()
             view_formats: &[],
         });
         let t2 = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             dimension: wgpu::TextureDimension::D2,
             size: wgpu::Extent3d {

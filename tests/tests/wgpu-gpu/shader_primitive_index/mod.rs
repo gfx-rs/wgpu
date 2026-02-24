@@ -104,7 +104,7 @@ async fn pulling_common(
     let vertex_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             contents: bytemuck::cast_slice(&two_triangles_xy),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
@@ -114,7 +114,7 @@ async fn pulling_common(
     let index_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             contents: bytemuck::cast_slice(&indices),
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
@@ -164,7 +164,7 @@ async fn pulling_common(
         depth_or_array_layers: 1,
     };
     let color_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: None,
         size: texture_size,
         mip_level_count: 1,

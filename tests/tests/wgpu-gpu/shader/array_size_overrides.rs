@@ -105,7 +105,7 @@ async fn array_size_overrides(
     let buffer = DeviceExt::create_buffer_init(
         &ctx.device,
         &wgpu::util::BufferInitDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             contents: bytemuck::cast_slice(init),
             usage: wgpu::BufferUsages::STORAGE
@@ -114,7 +114,7 @@ async fn array_size_overrides(
         },
     );
     let mapping_buffer = ctx.device.create_buffer(&BufferDescriptor {
-        initial_queue: None,
+        initial_queue: 0,
         label: Some("mapping buffer"),
         size: init_size,
         usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
@@ -123,7 +123,7 @@ async fn array_size_overrides(
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            queue: None,
+            queue: 0,
             label: None,
         });
     {

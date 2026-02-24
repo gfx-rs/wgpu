@@ -16,7 +16,7 @@ static QUEUE_WRITE_TEXTURE_THEN_DESTROY: GpuTestConfiguration = GpuTestConfigura
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: wgpu::Extent3d {
                 width: 64,
@@ -67,7 +67,7 @@ static QUEUE_WRITE_TEXTURE_OVERFLOW: GpuTestConfiguration = GpuTestConfiguration
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            initial_queue: None,
+            initial_queue: 0,
             label: None,
             size: wgpu::Extent3d {
                 width: 146,
@@ -119,7 +119,7 @@ static QUEUE_WRITE_TEXTURE_BUFFER_OOB: GpuTestConfiguration =
         // where offset + size overflows a u64, are rejected.
         for offset in [120, u64::MAX - 3] {
             let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-                initial_queue: None,
+                initial_queue: 0,
                 label: None,
                 size: wgpu::Extent3d {
                     width: 146,
