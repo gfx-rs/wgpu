@@ -60,7 +60,7 @@ fn trace_test(test_type: TestType) {
 
     let (encoder_id, error) = global.device_create_command_encoder(
         device_id,
-        queue_id,
+        0,
         &wgt::CommandEncoderDescriptor::default(),
         None,
     );

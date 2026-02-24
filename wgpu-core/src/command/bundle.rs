@@ -104,9 +104,7 @@ use crate::{
         bind::Binder, BasePass, BindGroupStateChange, ColorAttachmentError, DrawError,
         IdReferences, MapPassErr, PassErrorScope, RenderCommand, RenderCommandError, StateChange,
     },
-    device::{
-        queue::Queue, AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext,
-    },
+    device::{AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext},
     hub::Hub,
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
@@ -156,7 +154,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct RenderBundleEncoder {
     base: BasePass<RenderCommand<IdReferences>, Infallible>,
-    parent_id: id::DeviceId,
+    pub(crate) parent_id: id::DeviceId,
     pub(crate) context: RenderPassContext,
     pub(crate) is_depth_read_only: bool,
     pub(crate) is_stencil_read_only: bool,
@@ -166,14 +164,14 @@ pub struct RenderBundleEncoder {
     current_bind_groups: BindGroupStateChange,
     #[cfg_attr(feature = "serde", serde(skip))]
     current_pipeline: StateChange<id::RenderPipelineId>,
-    queue_id: id::QueueId,
+    pub(crate) queue_index: u32,
 }
 
 impl RenderBundleEncoder {
     pub fn new(
         desc: &RenderBundleEncoderDescriptor,
         parent_id: id::DeviceId,
-        queue_id: id::QueueId,
+        queue_index: u32,
     ) -> Result<Self, CreateRenderBundleError> {
         let (is_depth_read_only, is_stencil_read_only) = match desc.depth_stencil {
             Some(ds) => {
@@ -226,11 +224,11 @@ impl RenderBundleEncoder {
             is_stencil_read_only,
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
-            queue_id,
+            queue_index,
         })
     }
 
-    pub fn dummy(parent_id: id::DeviceId, queue_id: id::QueueId) -> Self {
+    pub fn dummy(parent_id: id::DeviceId, queue_index: u32) -> Self {
         Self {
             base: BasePass::new(&None),
             parent_id,
@@ -248,16 +246,8 @@ impl RenderBundleEncoder {
 
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
-            queue_id,
+            queue_index,
         }
-    }
-
-    pub fn parent(&self) -> id::DeviceId {
-        self.parent_id
-    }
-
-    pub fn queue(&self) -> id::QueueId {
-        self.queue_id
     }
 
     /// Convert this encoder's commands into a [`RenderBundle`].
@@ -274,7 +264,7 @@ impl RenderBundleEncoder {
         self,
         desc: &RenderBundleDescriptor,
         device: &Arc<Device>,
-        queue: &Arc<Queue>,
+        queue_index: u32,
         hub: &Hub,
     ) -> Result<Arc<RenderBundle>, RenderBundleError> {
         let scope = PassErrorScope::Bundle;
@@ -292,7 +282,7 @@ impl RenderBundleEncoder {
             index: None,
             flat_dynamic_offsets: Vec::new(),
             device: device.clone(),
-            queue: queue.clone(),
+            queue_index,
             commands: Vec::new(),
             buffer_memory_init_actions: Vec::new(),
             texture_memory_init_actions: Vec::new(),
@@ -496,7 +486,7 @@ impl RenderBundleEncoder {
             is_depth_read_only: self.is_depth_read_only,
             is_stencil_read_only: self.is_stencil_read_only,
             device: device.clone(),
-            queue_index: hub.queues.get(self.queue_id).index,
+            queue_index: self.queue_index,
             used: trackers,
             buffer_memory_init_actions,
             texture_memory_init_actions,
@@ -864,7 +854,12 @@ fn multi_draw_indirect(
     };
     let instance_limit = vertex_limits.instance_limit;
 
-    let buffer_uses = if state.queue.shared.indirect_validation.is_some() {
+    let buffer_uses = if state
+        .device
+        .get_queue_shared(state.queue_index)
+        .indirect_validation
+        .is_some()
+    {
         wgt::BufferUses::STORAGE_READ_ONLY
     } else {
         wgt::BufferUses::INDIRECT
@@ -1363,7 +1358,7 @@ struct State {
     flat_dynamic_offsets: Vec<wgt::DynamicOffset>,
 
     device: Arc<Device>,
-    queue: Arc<Queue>,
+    queue_index: u32,
     commands: Vec<ArcRenderCommand>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_init_actions: Vec<TextureInitTrackerAction>,

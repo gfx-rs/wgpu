@@ -46,7 +46,6 @@ pub(crate) const DEVICE_EXTERNAL_MEMORY_SIZE: i64 = 1 << 24; // 16 MB
 pub struct GPUDevice {
   pub instance: Instance,
   pub id: wgpu_core::id::DeviceId,
-  pub queue: wgpu_core::id::QueueId,
   pub adapter: wgpu_core::id::AdapterId,
 
   pub label: String,
@@ -606,7 +605,7 @@ impl GPUDevice {
 
     let (id, err) = self.instance.device_create_command_encoder(
       self.id,
-      self.queue,
+      0,
       &wgpu_descriptor,
       None,
     );
@@ -678,12 +677,12 @@ impl GPUDevice {
     let res = wgpu_core::command::RenderBundleEncoder::new(
       &wgpu_descriptor,
       self.id,
-      self.queue,
+      0,
     );
     let (encoder, err) = match res {
       Ok(encoder) => (encoder, None),
       Err(e) => (
-        wgpu_core::command::RenderBundleEncoder::dummy(self.id, self.queue),
+        wgpu_core::command::RenderBundleEncoder::dummy(self.id, 0),
         Some(e),
       ),
     };

@@ -44,6 +44,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         .await
         .expect("Failed to create device");
     let queue = queues.into_iter().next().unwrap();
+    drop(queue);
 
     // Load the shaders from disk
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -143,7 +144,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                             rpass.draw(0..3, 0..1);
                         }
 
-                        queue.submit(Some(encoder.finish()));
+                        //queue.submit(Some(encoder.finish()));
                         window.pre_present_notify();
                         frame.present();
                     }

@@ -28,13 +28,7 @@ mod timestamp_writes;
 mod transfer;
 mod transition_resources;
 
-use alloc::{
-    borrow::ToOwned as _,
-    boxed::Box,
-    string::String,
-    sync::{Arc, Weak},
-    vec::Vec,
-};
+use alloc::{borrow::ToOwned as _, boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::convert::Infallible;
 use core::mem::{self, ManuallyDrop};
 use core::{ops, panic};
@@ -528,7 +522,7 @@ impl<'a> ops::DerefMut for RecordingGuard<'a> {
 
 pub(crate) struct CommandEncoder {
     pub(crate) device: Arc<Device>,
-    pub(crate) queue: Arc<Queue>,
+    pub(crate) queue_index: u32,
 
     pub(crate) label: String,
 
@@ -619,7 +613,7 @@ pub(crate) struct InnerCommandEncoder {
 
     pub(crate) device: Arc<Device>,
 
-    pub(crate) queue: Weak<Queue>,
+    pub(crate) queue_index: u32,
 
     /// True if `raw` is in the "recording" state.
     ///
@@ -802,9 +796,10 @@ impl Drop for InnerCommandEncoder {
         }
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
         let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
-        if let Some(queue) = self.queue.upgrade() {
-            queue.shared.command_allocator.release_encoder(raw);
-        }
+        self.device
+            .get_queue_shared(self.queue_index)
+            .command_allocator
+            .release_encoder(raw);
     }
 }
 
@@ -890,12 +885,12 @@ impl CommandEncoder {
     pub(crate) fn new(
         encoder: Box<dyn hal::DynCommandEncoder>,
         device: &Arc<Device>,
-        queue: &Arc<Queue>,
+        queue_index: u32,
         label: &Label,
     ) -> Self {
         CommandEncoder {
             device: device.clone(),
-            queue: queue.clone(),
+            queue_index,
             label: label.to_string(),
             data: Mutex::new(
                 rank::COMMAND_BUFFER_DATA,
@@ -904,7 +899,7 @@ impl CommandEncoder {
                         raw: ManuallyDrop::new(encoder),
                         list: Vec::new(),
                         device: device.clone(),
-                        queue: Arc::downgrade(queue),
+                        queue_index,
                         is_open: false,
                         api: EncodingApi::Undecided,
                         label: label.to_string(),
@@ -915,7 +910,7 @@ impl CommandEncoder {
                     as_actions: Default::default(),
                     temp_resources: Default::default(),
                     indirect_draw_validation_resources:
-                        crate::indirect_validation::DrawResources::new(device.clone(), queue),
+                        crate::indirect_validation::DrawResources::new(device.clone(), queue_index),
                     commands: Vec::new(),
                     #[cfg(feature = "trace")]
                     trace_commands: if device.trace.lock().is_some() {
@@ -930,13 +925,13 @@ impl CommandEncoder {
 
     pub(crate) fn new_invalid(
         device: &Arc<Device>,
-        queue: &Arc<Queue>,
+        queue_index: u32,
         label: &Label,
         err: CommandEncoderError,
     ) -> Self {
         CommandEncoder {
             device: device.clone(),
-            queue: queue.clone(),
+            queue_index,
             label: label.to_string(),
             data: Mutex::new(rank::COMMAND_BUFFER_DATA, make_error_state(err)),
         }
@@ -1253,13 +1248,17 @@ impl CommandEncoder {
 
         let res = match cmd_enc_status.finish() {
             CommandEncoderStatus::Finished(mut cmd_buf_data) => {
-                match Self::encode_commands(&self.device, &self.queue, &mut cmd_buf_data) {
-                    Ok(()) => Ok(cmd_buf_data),
-                    Err(error) => Err(EncoderErrorState {
-                        error,
-                        #[cfg(feature = "trace")]
-                        trace_commands: mem::take(&mut cmd_buf_data.trace_commands),
-                    }),
+                if let Some(queue) = self.device.get_queue(self.queue_index) {
+                    match Self::encode_commands(&self.device, &queue, &mut cmd_buf_data) {
+                        Ok(()) => Ok(cmd_buf_data),
+                        Err(error) => Err(EncoderErrorState {
+                            error,
+                            #[cfg(feature = "trace")]
+                            trace_commands: mem::take(&mut cmd_buf_data.trace_commands),
+                        }),
+                    }
+                } else {
+                    Ok(cmd_buf_data)
                 }
             }
             CommandEncoderStatus::Error(error_state) => Err(error_state),
@@ -1302,7 +1301,7 @@ impl CommandEncoder {
             device: self.device.clone(),
             label: desc.label.to_string(),
             data: Mutex::new(rank::COMMAND_BUFFER_DATA, data),
-            queue_index: self.queue.index,
+            queue_index: self.queue_index,
         });
 
         (cmd_buf, error)

@@ -1144,7 +1144,7 @@ impl Global {
     pub fn device_create_command_encoder(
         &self,
         device_id: DeviceId,
-        queue_id: QueueId,
+        queue_index: u32,
         desc: &wgt::CommandEncoderDescriptor<Label>,
         id_in: Option<id::CommandEncoderId>,
     ) -> (
@@ -1157,10 +1157,9 @@ impl Global {
         let fid = hub.command_encoders.prepare(id_in);
 
         let device = self.hub.devices.get(device_id);
-        let queue = self.hub.queues.get(queue_id);
 
         let error = 'error: {
-            let cmd_enc = match device.create_command_encoder(&desc.label, queue.index) {
+            let cmd_enc = match device.create_command_encoder(&desc.label, queue_index) {
                 Ok(cmd_enc) => cmd_enc,
                 Err(e) => break 'error e,
             };
@@ -1172,7 +1171,7 @@ impl Global {
 
         let id = fid.assign(Arc::new(CommandEncoder::new_invalid(
             &device,
-            &queue,
+            queue_index,
             &desc.label,
             error.clone().into(),
         )));
@@ -1194,7 +1193,7 @@ impl Global {
     pub fn device_create_render_bundle_encoder(
         &self,
         device_id: DeviceId,
-        queue_id: QueueId,
+        queue_index: u32,
         desc: &command::RenderBundleEncoderDescriptor,
     ) -> (
         *mut command::RenderBundleEncoder,
@@ -1202,10 +1201,11 @@ impl Global {
     ) {
         profiling::scope!("Device::create_render_bundle_encoder");
         api_log!("Device::device_create_render_bundle_encoder");
-        let (encoder, error) = match command::RenderBundleEncoder::new(desc, device_id, queue_id) {
+        let (encoder, error) = match command::RenderBundleEncoder::new(desc, device_id, queue_index)
+        {
             Ok(encoder) => (encoder, None),
             Err(e) => (
-                command::RenderBundleEncoder::dummy(device_id, queue_id),
+                command::RenderBundleEncoder::dummy(device_id, queue_index),
                 Some(e),
             ),
         };
@@ -1225,8 +1225,7 @@ impl Global {
         let fid = hub.render_bundles.prepare(id_in);
 
         let error = 'error: {
-            let device = self.hub.devices.get(bundle_encoder.parent());
-            let queue = self.hub.queues.get(bundle_encoder.queue());
+            let device = self.hub.devices.get(bundle_encoder.parent_id);
 
             #[cfg(feature = "trace")]
             let trace_desc = trace::new_render_bundle_encoder_descriptor(
@@ -1236,7 +1235,9 @@ impl Global {
                 bundle_encoder.is_stencil_read_only,
             );
 
-            let render_bundle = match bundle_encoder.finish(desc, &device, &queue, hub) {
+            let queue_index = bundle_encoder.queue_index;
+
+            let render_bundle = match bundle_encoder.finish(desc, &device, queue_index, hub) {
                 Ok(bundle) => bundle,
                 Err(e) => break 'error e,
             };

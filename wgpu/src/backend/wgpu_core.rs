@@ -21,8 +21,8 @@ use hashbrown::HashMap;
 use arrayvec::ArrayVec;
 use smallvec::SmallVec;
 use wgc::{
-    command::bundle_ffi::*, error::ContextErrorSource, id::QueueId,
-    pipeline::CreateShaderModuleError, resource::BlasPrepareCompactResult,
+    command::bundle_ffi::*, error::ContextErrorSource, pipeline::CreateShaderModuleError,
+    resource::BlasPrepareCompactResult,
 };
 use wgt::{
     error::{ErrorType, WebGpuError},
@@ -125,14 +125,12 @@ impl ContextWgpuCore {
             id: device_id,
             error_sink: error_sink.clone(),
             features: desc.required_features,
-            queue_ids,
         };
-        let queues = device
-            .queue_ids
-            .iter()
+        let queues = queue_ids
+            .into_iter()
             .map(|qid| CoreQueue {
                 context: self.clone(),
-                id: *qid,
+                id: qid,
                 error_sink: error_sink.clone(),
             })
             .collect();
@@ -466,7 +464,6 @@ pub struct CoreDevice {
     id: wgc::id::DeviceId,
     error_sink: ErrorSink,
     features: Features,
-    queue_ids: Vec<QueueId>,
 }
 
 #[derive(Debug)]
@@ -953,13 +950,12 @@ impl dispatch::AdapterInterface for CoreAdapter {
             id: device_id,
             error_sink: error_sink.clone(),
             features: desc.required_features,
-            queue_ids,
         };
         let mut queues = Vec::new();
-        for queue_id in &device.queue_ids {
+        for queue_id in queue_ids {
             let queue = CoreQueue {
                 context: self.context.clone(),
-                id: *queue_id,
+                id: queue_id,
                 error_sink: error_sink.clone(),
             };
             queues.push(queue.into());
@@ -1761,12 +1757,10 @@ impl dispatch::DeviceInterface for CoreDevice {
         desc: &crate::CommandEncoderDescriptor<'_>,
     ) -> dispatch::DispatchCommandEncoder {
         let new_desc = desc.map_label(|l| l.map(Borrowed));
-        let (id, error) = self.context.0.device_create_command_encoder(
-            self.id,
-            self.queue_ids[new_desc.queue as usize],
-            &new_desc,
-            None,
-        );
+        let (id, error) =
+            self.context
+                .0
+                .device_create_command_encoder(self.id, new_desc.queue, &new_desc, None);
         if let Some(cause) = error {
             self.context.handle_error(
                 &self.error_sink,
@@ -1796,14 +1790,11 @@ impl dispatch::DeviceInterface for CoreDevice {
             multiview: desc.multiview,
         };
         let queue_index = desc.queue;
-        let encoder = match wgc::command::RenderBundleEncoder::new(
-            &descriptor,
-            self.id,
-            self.queue_ids[queue_index as usize],
-        ) {
-            Ok(encoder) => encoder,
-            Err(e) => panic!("Error in Device::create_render_bundle_encoder: {e}"),
-        };
+        let encoder =
+            match wgc::command::RenderBundleEncoder::new(&descriptor, self.id, queue_index) {
+                Ok(encoder) => encoder,
+                Err(e) => panic!("Error in Device::create_render_bundle_encoder: {e}"),
+            };
 
         CoreRenderBundleEncoder {
             context: self.context.clone(),

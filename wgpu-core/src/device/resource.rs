@@ -789,8 +789,8 @@ impl Device {
         self.queues[index as usize].get()?.upgrade()
     }
 
-    pub fn get_queue_shared(&self, index: u32) -> Arc<PerQueueData> {
-        self.per_queue_data[index as usize].get().unwrap().clone()
+    pub fn get_queue_shared(&self, index: u32) -> &Arc<PerQueueData> {
+        self.per_queue_data[index as usize].get().unwrap()
     }
 
     pub fn set_queue(&self, index: u32, queue: &Arc<Queue>, per_queue_data: Arc<PerQueueData>) {
@@ -958,9 +958,9 @@ impl Device {
         });
 
         for queue_i in 0..self.queues.len() as u32 {
-            let queue = self.get_queue(queue_i).unwrap();
+            let queue = self.get_queue_shared(queue_i);
 
-            let fence = queue.shared.fence.read();
+            let fence = queue.fence.read();
 
             // Get the currently finished submission index. This may be higher than the requested
             // wait, or it may be less than the requested wait if the wait failed.
@@ -977,13 +977,19 @@ impl Device {
             //
             // We don't use the result of the wait here, as we want to progress forward as far as possible
             // and the wait could have been for submissions that finished long ago.
-            let queue_result = queue.maintain(current_finished_submission, &snatch_guard);
-            let (mut submissions, mut mappings, mut blas_compact_ready, queue_empty) = queue_result;
-            user_closures.submissions.append(&mut submissions);
-            user_closures.mappings.append(&mut mappings);
-            user_closures
-                .blas_compact_ready
-                .append(&mut blas_compact_ready);
+            let queue_empty = if let Some(queue) = self.get_queue(queue_i) {
+                let queue_result = queue.maintain(current_finished_submission, &snatch_guard);
+                let (mut submissions, mut mappings, mut blas_compact_ready, queue_empty) =
+                    queue_result;
+                user_closures.submissions.append(&mut submissions);
+                user_closures.mappings.append(&mut mappings);
+                user_closures
+                    .blas_compact_ready
+                    .append(&mut blas_compact_ready);
+                queue_empty
+            } else {
+                true
+            };
 
             let wait_submission_index = wait_submission_indices.iter().find(|a| a.0 == queue_i);
 
@@ -2576,15 +2582,14 @@ impl Device {
             });
         }
 
-        let queue = self.get_queue(queue_idx).unwrap();
+        let queue = self.get_queue_shared(queue_idx);
 
         let encoder = queue
-            .shared
             .command_allocator
-            .acquire_encoder(self.raw(), queue.raw())
+            .acquire_encoder(self.raw(), &*queue.raw)
             .map_err(|e| self.handle_hal_error(e))?;
 
-        let cmd_enc = command::CommandEncoder::new(encoder, self, &queue, label);
+        let cmd_enc = command::CommandEncoder::new(encoder, self, queue_idx, label);
 
         let cmd_enc = Arc::new(cmd_enc);
 
