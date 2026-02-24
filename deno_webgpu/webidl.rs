@@ -392,10 +392,10 @@ pub enum GPUFeatureName {
   Rg11b10ufloatRenderable,
   #[webidl(rename = "bgra8unorm-storage")]
   Bgra8unormStorage,
-  #[webidl(rename = "float32-blendable")]
-  Float32Blendable,
   #[webidl(rename = "float32-filterable")]
   Float32Filterable,
+  #[webidl(rename = "float32-blendable")]
+  Float32Blendable,
   #[webidl(rename = "dual-source-blending")]
   DualSourceBlending,
   #[webidl(rename = "subgroups")]
@@ -490,8 +490,8 @@ pub fn feature_names_to_features(
       GPUFeatureName::TextureCompressionAstcSliced3d => Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
       GPUFeatureName::Rg11b10ufloatRenderable => Features::RG11B10UFLOAT_RENDERABLE,
       GPUFeatureName::Bgra8unormStorage => Features::BGRA8UNORM_STORAGE,
-      GPUFeatureName::Float32Blendable => Features::FLOAT32_BLENDABLE,
       GPUFeatureName::Float32Filterable => Features::FLOAT32_FILTERABLE,
+      GPUFeatureName::Float32Blendable => Features::FLOAT32_BLENDABLE,
       GPUFeatureName::DualSourceBlending => Features::DUAL_SOURCE_BLENDING,
       GPUFeatureName::Subgroups => Features::SUBGROUP,
       GPUFeatureName::ExternalTexture => Features::EXTERNAL_TEXTURE,
@@ -578,11 +578,11 @@ pub fn features_to_feature_names(
   if features.contains(wgpu_types::Features::BGRA8UNORM_STORAGE) {
     return_features.insert(Bgra8unormStorage);
   }
-  if features.contains(wgpu_types::Features::FLOAT32_BLENDABLE) {
-    return_features.insert(Float32Blendable);
-  }
   if features.contains(wgpu_types::Features::FLOAT32_FILTERABLE) {
     return_features.insert(Float32Filterable);
+  }
+  if features.contains(wgpu_types::Features::FLOAT32_BLENDABLE) {
+    return_features.insert(Float32Blendable);
   }
   if features.contains(wgpu_types::Features::DUAL_SOURCE_BLENDING) {
     return_features.insert(DualSourceBlending);
