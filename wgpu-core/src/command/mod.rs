@@ -877,6 +877,7 @@ pub struct CommandBuffer {
 
     /// The mutable state of this command buffer.
     pub(crate) data: Mutex<CommandEncoderStatus>,
+    pub(crate) queue_index: u32,
 }
 
 impl Drop for CommandBuffer {
@@ -914,10 +915,7 @@ impl CommandEncoder {
                     as_actions: Default::default(),
                     temp_resources: Default::default(),
                     indirect_draw_validation_resources:
-                        crate::indirect_validation::DrawResources::new(
-                            device.clone(),
-                            queue.clone(),
-                        ),
+                        crate::indirect_validation::DrawResources::new(device.clone(), queue),
                     commands: Vec::new(),
                     #[cfg(feature = "trace")]
                     trace_commands: if device.trace.lock().is_some() {
@@ -1304,6 +1302,7 @@ impl CommandEncoder {
             device: self.device.clone(),
             label: desc.label.to_string(),
             data: Mutex::new(rank::COMMAND_BUFFER_DATA, data),
+            queue_index: self.queue.index,
         });
 
         (cmd_buf, error)

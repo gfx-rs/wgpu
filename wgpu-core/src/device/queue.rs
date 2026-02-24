@@ -500,7 +500,7 @@ impl PendingWrites {
                 temp_resources: mem::take(&mut self.temp_resources),
                 _indirect_draw_validation_resources: crate::indirect_validation::DrawResources::new(
                     device.clone(),
-                    queue.clone(),
+                    queue,
                 ),
                 pending_buffers,
                 pending_textures,
@@ -586,6 +586,12 @@ pub enum QueueSubmitError {
     CommandEncoder(#[from] CommandEncoderError),
     #[error(transparent)]
     ValidateAsActionsError(#[from] crate::ray_tracing::ValidateAsActionsError),
+    #[error("Command buffer was submitted to the wrong queue: command buffer at index {command_buffer_index} in submission to queue {queue_index} was created with `queue: {command_buffer_queue_index}`")]
+    WrongQueue {
+        queue_index: u32,
+        command_buffer_queue_index: u32,
+        command_buffer_index: usize,
+    },
 }
 
 impl WebGpuError for QueueSubmitError {
@@ -596,7 +602,7 @@ impl WebGpuError for QueueSubmitError {
             Self::CommandEncoder(e) => e,
             Self::ValidateAsActionsError(e) => e,
             Self::InvalidResource(e) => e,
-            Self::DestroyedResource(_) | Self::BufferStillMapped(_) => {
+            Self::DestroyedResource(_) | Self::BufferStillMapped(_) | Self::WrongQueue { .. } => {
                 return ErrorType::Validation
             }
         };
@@ -1305,6 +1311,16 @@ impl Queue {
 
             if let Err(e) = self.device.check_is_valid() {
                 break 'error Err(e.into());
+            }
+
+            for (i, cb) in command_buffers.iter().enumerate() {
+                if cb.queue_index != self.index {
+                    break 'error Err(QueueSubmitError::WrongQueue {
+                        queue_index: self.index,
+                        command_buffer_queue_index: cb.queue_index,
+                        command_buffer_index: i,
+                    });
+                }
             }
 
             let mut active_executions = Vec::new();

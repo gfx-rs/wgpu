@@ -811,10 +811,10 @@ impl Drop for DrawResources {
 }
 
 impl DrawResources {
-    pub(crate) fn new(device: Arc<Device>, queue: Arc<Queue>) -> Self {
+    pub(crate) fn new(device: Arc<Device>, queue: &Arc<Queue>) -> Self {
         DrawResources {
             device,
-            queue: Arc::downgrade(&queue),
+            queue: Arc::downgrade(queue),
             dst_entries: Vec::new(),
             metadata_entries: Vec::new(),
         }

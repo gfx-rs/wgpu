@@ -1355,6 +1355,15 @@ impl Device {
         hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
     ) -> (Fallible<Buffer>, Option<resource::CreateBufferError>) {
+        if desc.initial_queue >= self.queues.len() as u32 {
+            let error = resource::CreateBufferError::InvalidQueue {
+                requested: desc.initial_queue,
+                highest: self.queues.len() as u32 - 1,
+            };
+
+            return (Fallible::Invalid(Arc::new(error.to_string())), Some(error));
+        }
+
         let mut timestamp_normalization_bind_groups = PerQueueArray::new();
         let mut indirect_validation_bind_groups = PerQueueArray::new();
         for _ in 0..self.queues.len() {
