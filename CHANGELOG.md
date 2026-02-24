@@ -80,7 +80,7 @@ By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
 
 #### Depth/stencil state changes
 
-BREAKING CHANGE: The `depth_write_enabled` and `depth_compare` members of `DepthStencilState` are now optional, and may be omitted when they do not apply, to match WebGPU.
+The `depth_write_enabled` and `depth_compare` members of `DepthStencilState` are now optional, and may be omitted when they do not apply, to match WebGPU.
 
 `depth_write_enabled` is applicable, and must be `Some`, if `format` has a depth aspect, i.e., is a depth or depth/stencil format. Otherwise, a value of `None` best reflects that it does not apply, although `Some(false)` is also accepted.
 
@@ -165,7 +165,7 @@ By @kpreid in [#9042](https://github.com/gfx-rs/wgpu/pull/9042).
 #### Other Breaking Changes
 
 - `Surface::get_current_texture` can now return `SurfaceError::Occluded`. By @emilk in [#9141](https://github.com/gfx-rs/wgpu/pull/9141).
-- Use clearer field names for `StageError::InvalidWorkgroupSize`. By @ErichDonGubler in [#????](https://github.com/gfx-rs/wgpu/pull/????).
+- Use clearer field names for `StageError::InvalidWorkgroupSize`. By @ErichDonGubler in [#9192](https://github.com/gfx-rs/wgpu/pull/9192).
 
 ### New Features
 
@@ -195,7 +195,7 @@ By @kpreid in [#9042](https://github.com/gfx-rs/wgpu/pull/9042).
 - BREAKING: WGSL shaders using `@builtin(primitive_index)` must now request it with `enable primitive_index;`. The `SHADER_PRIMITIVE_INDEX` feature has been renamed to `PRIMITIVE_INDEX` and moved from `FeaturesWGPU` to `FeaturesWebGPU`. By @inner-daemons in #8879 and @andyleiserson in [#9101](https://github.com/gfx-rs/wgpu/pull/9101).
 - Added `TextureFormat::channels` method to get some information about which color channels are covered by the texture format. By @TornaxO7 in [#9167](https://github.com/gfx-rs/wgpu/pull/9167)
 - BREAKING: Add `V6_8` variant to `DxcShaderModel` and `naga::back::hlsl::ShaderModel`. By @inner-daemons in [#8882](https://github.com/gfx-rs/wgpu/pull/8882) and @ErichDonGubler in [#9083](https://github.com/gfx-rs/wgpu/pull/9083).
-- BREAKING: Add `V6_9` variant to `DxcShaderModel` and `naga::back::hlsl::ShaderModel`. By @ErichDonGubler in [#????](https://github.com/gfx-rs/wgpu/pull/????).
+- BREAKING: Add `V6_9` variant to `DxcShaderModel` and `naga::back::hlsl::ShaderModel`. By @ErichDonGubler in [#9083](https://github.com/gfx-rs/wgpu/pull/9083).
 - `DisplayHandle` is now optional in surface creation if it was passed to `InstanceDescriptor::display`. By @MarijnS95 in [#8782](https://github.com/gfx-rs/wgpu/pull/8782)
 
 #### naga
@@ -224,7 +224,6 @@ By @kpreid in [#9042](https://github.com/gfx-rs/wgpu/pull/9042).
     - Split the `OutOfBoundsOverrun` variant into new `OutOfBoundsStartOffsetOverrun` and `OutOfBoundsEndOffsetOverrun` variants.
     - Removed the `NegativeRange` variant in favor of new `MapStartOffsetUnderrun` and `MapStartOffsetOverrun` variants.
   - Split the `TransferError::BufferOverrun` variant into new `BufferStartOffsetOverrun` and `BufferEndOffsetOverrun` variants.
-- The various "max resources per stage" limits are now capped at 100, so that their total remains below `max_bindings_per_bind_group`, as required by WebGPU. By @andyleiserson in [#9118](https://github.com/gfx-rs/wgpu/pull/9118).
 - The `max_uniform_buffer_binding_size` and `max_storage_buffer_binding_size` limits are now `u64` instead of `u32`, to match WebGPU. By @wingertge in [#9146](https://github.com/gfx-rs/wgpu/pull/9146).
 - The main 3 native backends now report their limits properly. By @teoxoy in [#9196](https://github.com/gfx-rs/wgpu/pull/9196).
 
