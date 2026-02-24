@@ -760,3 +760,47 @@ pub struct Writer<'a, W> {
     temp_access_chain: Vec<storage::SubAccess>,
     need_bake_expressions: back::NeedBakeExpressions,
 }
+
+pub fn supported_capabilities() -> crate::valid::Capabilities {
+    use crate::valid::Capabilities as Caps;
+    Caps::IMMEDIATES
+        | Caps::FLOAT64 // Unsupported by wgpu but supported by naga
+        | Caps::PRIMITIVE_INDEX
+        | Caps::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+        // No BUFFER_BINDING_ARRAY
+        | Caps::STORAGE_TEXTURE_BINDING_ARRAY
+        // No STORAGE_BUFFER_BINDING_ARRAY
+        // No CLIP_DISTANCE
+        // No CULL_DISTANCE
+        | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
+        | Caps::MULTIVIEW
+        // No EARLY_DEPTH_TEST
+        | Caps::MULTISAMPLED_SHADING
+        | Caps::RAY_QUERY
+        | Caps::DUAL_SOURCE_BLENDING
+        | Caps::CUBE_ARRAY_TEXTURES
+        | Caps::SHADER_INT64
+        | Caps::SUBGROUP
+        // No SUBGROUP_BARRIER
+        // No SUBGROUP_VERTEX_STAGE
+        | Caps::SHADER_INT64_ATOMIC_MIN_MAX
+        | Caps::SHADER_INT64_ATOMIC_ALL_OPS
+        // No SHADER_FLOAT32_ATOMIC
+        | Caps::TEXTURE_ATOMIC
+        | Caps::TEXTURE_INT64_ATOMIC
+        // No RAY_HIT_VERTEX_POSITION
+        | Caps::SHADER_FLOAT16
+        | Caps::TEXTURE_EXTERNAL
+        | Caps::SHADER_FLOAT16_IN_FLOAT32
+        | Caps::SHADER_BARYCENTRICS
+        // No MESH_SHADER
+        // No MESH_SHADER_POINT_TOPOLOGY
+        | Caps::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        // No BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        | Caps::STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        | Caps::STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+    // No COOPERATIVE_MATRIX
+    // No PER_VERTEX
+    // No RAY_TRACING_PIPELINE
+    // No DRAW_INDEX
+}

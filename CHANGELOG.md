@@ -107,6 +107,7 @@ By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
 #### naga
 
 - Added support for dual-source blending in SPIR-V shaders. By @andyleiserson in [#8865](https://github.com/gfx-rs/wgpu/pull/8865).
+- Added `supported_capabilities` to all backends. By @inner-daemons in [#9068](https://github.com/gfx-rs/wgpu/pull/9068).
 
 ### Bug Fixes
 
@@ -120,6 +121,7 @@ By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
 - Renamed `EXPERIMENTAL_PASSTHROUGH_SHADERS` to `PASSTHROUGH_SHADERS` and made this no longer an experimental feature. by @inner-daemons in [#9054](https://github.com/gfx-rs/wgpu/pull/9054).
 - BREAKING: End offsets in trace and `player` commands are now represented using `offset` + `size` instead. By @ErichDonGubler in [9073](https://github.com/gfx-rs/wgpu/pull/9073).
 - Validate some uncaught cases where buffer transfer operations could overflow when computing an end offset. By @ErichDonGubler in [9073](https://github.com/gfx-rs/wgpu/pull/9073).
+- Added internal labels to validation GPU objects and timestamp normalization code to improve clarity in graphics debuggers. By @szostid in [9094](https://github.com/gfx-rs/wgpu/pull/9094)
 
 #### naga
 
@@ -143,6 +145,7 @@ By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
 - Fix incorrect acceptance of some swizzle selectors that are not valid for their operand, e.g. `const v = vec2<i32>(); let r = v.xyz`. By @andyleiserson in [#8949](https://github.com/gfx-rs/wgpu/pull/8949).
 - Fixed calculation of the total number of bindings in a pipeline layout when validating against device limits. By @andyleiserson in [#8997](https://github.com/gfx-rs/wgpu/pull/8997).
 - Reject non-constructible types (runtime- and override-sized arrays, and structs containing non-constructible types) in more places where they should not be allowed. By @andyleiserson in [#8873](https://github.com/gfx-rs/wgpu/pull/8873).
+- The query set type for an occlusion query is now validated when opening the render pass, in addition to within the call to `beginOcclusionQuery`. By @andyleiserson in [#9086](https://github.com/gfx-rs/wgpu/pull/9086).
 
 #### Vulkan
 - Fixed a variety of mesh shader SPIR-V writer issues from the original implementation. By @inner-daemons in [#8756](https://github.com/gfx-rs/wgpu/pull/8756)
