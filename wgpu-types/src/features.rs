@@ -68,6 +68,9 @@ mod webgpu_impl {
 
     #[doc(hidden)]
     pub const WEBGPU_FEATURE_IMMEDIATES: u64 = 1 << 16;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_PRIMITIVE_INDEX: u64 = 1 << 17;
 }
 
 macro_rules! bitflags_array_impl {
@@ -988,20 +991,9 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const SHADER_I16 = 1 << 34;
-        /// Enables `builtin(primitive_index)` in fragment shaders.
-        ///
-        /// Note: enables geometry processing for pipelines using the builtin.
-        /// This may come with a significant performance impact on some hardware.
-        /// Other pipelines are not affected.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        /// - DX12
-        /// - Metal (some)
-        /// - OpenGL (some)
-        ///
-        /// This is a native only feature.
-        const SHADER_PRIMITIVE_INDEX = 1 << 35;
+
+        // Bit 35 (formerly SHADER_PRIMITIVE_INDEX) is available.
+
         /// Allows shaders to use the `early_depth_test` attribute.
         ///
         /// The attribute is applied to the fragment shader entry point. It can be used in two
@@ -1339,6 +1331,8 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const MEMORY_DECORATION_VOLATILE = 1 << 62;
+
+        // Adding a new feature? Bit 35 (formerly SHADER_PRIMITIVE_INDEX) is available.
     }
 
     /// Features that are not guaranteed to be supported.
@@ -1644,6 +1638,21 @@ bitflags_array! {
         #[doc = link_to_wgpu_docs!(["`RenderPass::set_immediates`"]: "struct.RenderPass.html#method.set_immediates")]
         /// [`Limits::max_immediate_size`]: super::Limits
         const IMMEDIATES = WEBGPU_FEATURE_IMMEDIATES;
+
+        /// Enables `builtin(primitive_index)` in fragment shaders.
+        ///
+        /// Note: enables geometry processing for pipelines using the builtin.
+        /// This may come with a significant performance impact on some hardware.
+        /// Other pipelines are not affected.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with geometryShader)
+        /// - DX12
+        /// - Metal (some)
+        /// - OpenGL (some)
+        ///
+        /// This is a web and native feature.
+        const PRIMITIVE_INDEX = WEBGPU_FEATURE_PRIMITIVE_INDEX;
     }
 }
 

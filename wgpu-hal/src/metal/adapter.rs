@@ -1088,10 +1088,7 @@ impl super::CapabilitiesQuery {
         features.set(F::TEXTURE_COMPRESSION_ETC2, self.format_eac_etc);
 
         features.set(F::DEPTH_CLIP_CONTROL, self.supports_depth_clip_control);
-        features.set(
-            F::SHADER_PRIMITIVE_INDEX,
-            self.supports_shader_primitive_index,
-        );
+        features.set(F::PRIMITIVE_INDEX, self.supports_shader_primitive_index);
 
         features.set(
             F::TEXTURE_BINDING_ARRAY

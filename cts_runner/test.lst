@@ -333,6 +333,15 @@ webgpu:shader,execution,flow_control,return:*
 // Many other vertex_buffer_access subtests also passing, but there are too many to enumerate.
 // Fails on Metal in CI only, not when running locally.
 fails-if(metal) webgpu:shader,execution,robust_access_vertex:vertex_buffer_access:indexed=true;indirect=false;drawCallTestParameter="baseVertex";type="float32x4";additionalBuffers=4;partialLastNumber=false;offsetVertexBuffer=true
+webgpu:shader,execution,shader_io,fragment_builtins:inputs,front_facing:*
+webgpu:shader,execution,shader_io,fragment_builtins:inputs,interStage,centroid:*
+fails-if(vulkan) webgpu:shader,execution,shader_io,fragment_builtins:inputs,interStage:*
+fails-if(dx12,vulkan) webgpu:shader,execution,shader_io,fragment_builtins:inputs,position:*
+webgpu:shader,execution,shader_io,fragment_builtins:inputs,sample_index:*
+fails-if(dx12,vulkan) webgpu:shader,execution,shader_io,fragment_builtins:inputs,sample_mask:*
+webgpu:shader,execution,shader_io,fragment_builtins:primitive_index,*
+webgpu:shader,execution,shader_io,fragment_builtins:subgroup_invocation_id:*
+webgpu:shader,execution,shader_io,fragment_builtins:subgroup_size:*
 webgpu:shader,execution,statement,compound:*
 
 webgpu:shader,validation,const_assert,const_assert:*

@@ -26,7 +26,7 @@ pub fn features_to_naga_capabilities(
     );
     caps.set(
         Caps::PRIMITIVE_INDEX,
-        features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX),
+        features.contains(wgt::Features::PRIMITIVE_INDEX),
     );
     caps.set(
         Caps::TEXTURE_AND_SAMPLER_BINDING_ARRAY,
