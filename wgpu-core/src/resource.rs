@@ -675,7 +675,7 @@ impl Buffer {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
         op: BufferMapOperation,
-    ) -> Result<PerQueueArray<SubmissionIndex>, (BufferMapOperation, BufferAccessError)> {
+    ) -> Result<SubmissionIndex, (BufferMapOperation, BufferAccessError)> {
         let range_size = if let Some(size) = size {
             size
         } else {
@@ -755,30 +755,26 @@ impl Buffer {
             };
         }
 
-        let mut indices = PerQueueArray::new();
-        for i in 0..self.device.queues.len() {
-            let submit_index = if let Some(queue) = self.device.get_queue(i as u32) {
-                // TODO: we are ignoring the transition here, I think we need to add a barrier
-                // at the end of the submission
-                queue
-                    .shared
-                    .trackers
-                    .lock()
-                    .buffers
-                    .set_single(self, internal_use);
-                queue.lock_life().map(self).unwrap_or(0) // '0' means no wait is necessary
-            } else {
-                // We can safely unwrap below since we just set the `map_state` to `BufferMapState::Waiting`.
-                let (mut operation, status) = self.map(&device.snatchable_lock.read()).unwrap();
-                if let Some(callback) = operation.callback.take() {
-                    callback(status);
-                }
-                0
-            };
-            indices.push((i as u32, submit_index));
-        }
+        let submit_index = if let Some(queue) = self.device.get_queue(self.current_queue) {
+            // TODO: we are ignoring the transition here, I think we need to add a barrier
+            // at the end of the submission
+            queue
+                .shared
+                .trackers
+                .lock()
+                .buffers
+                .set_single(self, internal_use);
+            queue.lock_life().map(self).unwrap_or(0) // '0' means no wait is necessary
+        } else {
+            // We can safely unwrap below since we just set the `map_state` to `BufferMapState::Waiting`.
+            let (mut operation, status) = self.map(&device.snatchable_lock.read()).unwrap();
+            if let Some(callback) = operation.callback.take() {
+                callback(status);
+            }
+            0
+        };
 
-        Ok(indices)
+        Ok((self.current_queue, submit_index))
     }
 
     pub fn get_mapped_range(
