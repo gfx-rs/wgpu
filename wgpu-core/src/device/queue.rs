@@ -1620,6 +1620,33 @@ impl Queue {
         Ok((self.index, submit_index))
     }
 
+    /// Track an `InnerCommandEncoder` that was submitted outside the normal
+    /// `Queue::submit` path (e.g. the present-transition encoder submitted by
+    /// `Surface::present`).  The encoder is freed asynchronously once the GPU
+    /// signals `submit_index` on the queue fence.
+    pub(crate) fn track_present_encoder(
+        &self,
+        inner: crate::command::InnerCommandEncoder,
+        submit_index: u64,
+    ) {
+        self.lock_life().track_submission(
+            submit_index,
+            vec![EncoderInFlight {
+                inner,
+                trackers: Tracker::new(),
+                temp_resources: Vec::new(),
+                _indirect_draw_validation_resources:
+                    crate::indirect_validation::DrawResources::new(
+                        self.device.clone(),
+                        self.index,
+                    ),
+                pending_buffers: FastHashMap::default(),
+                pending_textures: FastHashMap::default(),
+                pending_blas_s: FastHashMap::default(),
+            }],
+        );
+    }
+
     pub fn get_timestamp_period(&self) -> f32 {
         unsafe { self.raw().get_timestamp_period() }
     }

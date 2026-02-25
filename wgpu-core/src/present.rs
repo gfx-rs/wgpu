@@ -9,8 +9,9 @@ When this texture is presented, we remove it from the device tracker as well as
 extract it from the hub.
 !*/
 
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec, vec::Vec};
 use core::mem::ManuallyDrop;
+use core::sync::atomic::Ordering;
 
 #[cfg(feature = "trace")]
 use crate::device::trace::{Action, IntoTrace};
@@ -151,6 +152,109 @@ pub type ResolvedSurfaceOutput = SurfaceOutput<Arc<resource::Texture>>;
 pub struct SurfaceOutput<T = id::TextureId> {
     pub status: Status,
     pub texture: Option<T>,
+}
+
+/// Ensure a surface texture is in `TextureUses::PRESENT` state before
+/// presenting it.
+///
+/// If the texture was used in a normal submission, the submission machinery
+/// already transitioned it to `PRESENT`. This function is a no-op in that
+/// case.
+///
+/// If the texture was acquired but never used in any command buffer
+/// submission, it is still in `TextureUses::UNINITIALIZED`. This function
+/// detects that case and submits a command buffer with the layout transition.
+fn ensure_surface_texture_is_presentable(
+    device: &Arc<Device>,
+    queue: &crate::device::queue::PerQueueData,
+    texture: &Arc<resource::Texture>,
+    raw_surface_texture: &dyn hal::DynSurfaceTexture,
+) -> Result<(), DeviceError> {
+    let pending_transitions: Vec<crate::track::PendingTransition<wgt::TextureUses>> = {
+        let mut trackers = queue.trackers.lock();
+        trackers
+            .textures
+            .set_single(
+                texture,
+                texture.full_range.clone(),
+                wgt::TextureUses::PRESENT,
+            )
+            .collect()
+    };
+
+    if pending_transitions.is_empty() {
+        return Ok(());
+    }
+
+    let raw_tex: &dyn hal::DynTexture = raw_surface_texture.borrow();
+    let barriers: Vec<_> = pending_transitions
+        .into_iter()
+        .map(|t| t.into_hal(raw_tex))
+        .collect();
+
+    let mut encoder = queue
+        .command_allocator
+        .acquire_encoder(device.raw(), queue.raw.as_ref())
+        .map_err(|e| device.handle_hal_error(e))?;
+    unsafe {
+        encoder
+            .begin_encoding(hal_label(
+                Some("(wgpu internal) surface texture present transition"),
+                device.instance_flags,
+            ))
+            .map_err(|e| device.handle_hal_error(e))?;
+        encoder.transition_textures(&barriers);
+    }
+    let cmd_buf = unsafe { encoder.end_encoding() }.map_err(|e| device.handle_hal_error(e))?;
+
+    let submit_index = {
+        let mut fence = queue.fence.write();
+        let mut cmd_indices = queue.command_indices.write();
+        cmd_indices.active_submission_index += 1;
+        let submit_index = cmd_indices.active_submission_index;
+        drop(cmd_indices);
+
+        unsafe {
+            queue
+                .raw
+                .submit(&mut [hal::QueueSubmitInfo {
+                    command_buffers: &[cmd_buf.as_ref()],
+                    surface_textures: &[raw_surface_texture],
+                    signal_fences: &mut [(fence.as_mut(), submit_index)],
+                    wait_fences: &mut [],
+                }])
+                .map_err(|e| device.handle_hal_error(e))?;
+        }
+
+        queue
+            .last_successful_submission_index
+            .fetch_max(submit_index, Ordering::SeqCst);
+        submit_index
+    };
+
+    // Wrap the encoder so its Drop impl recycles it back to the allocator.
+    let inner_encoder = crate::command::InnerCommandEncoder {
+        raw: ManuallyDrop::new(encoder),
+        list: vec![cmd_buf],
+        device: device.clone(),
+        queue_index: SURFACE_QUEUE_ID,
+        is_open: false,
+        api: crate::command::EncodingApi::InternalUse,
+        label: "(wgpu internal) surface texture present transition".into(),
+    };
+
+    if let Some(queue_arc) = device.get_queue(SURFACE_QUEUE_ID) {
+        queue_arc.track_present_encoder(inner_encoder, submit_index);
+    } else {
+        // If the queue has been dropped then all work has already completed. The stall should be negligible.
+        let fence = queue.fence.read();
+        unsafe { device.raw().wait(fence.as_ref(), submit_index, None) }
+            .map_err(|e| device.handle_hal_error(e))?;
+        drop(fence);
+        drop(inner_encoder);
+    }
+
+    Ok(())
 }
 
 impl Surface {
@@ -305,8 +409,16 @@ impl Surface {
             None => return Err(SurfaceError::TextureDestroyed),
             Some(resource::TextureInner::Surface { raw }) => {
                 let raw_surface = self.raw(device.backend()).unwrap();
-                let raw_queue = &queue.raw;
-                unsafe { raw_queue.present(raw_surface, raw) }
+
+                // Transition the texture to PRESENT layout if it has not been
+                // used in any command buffer submission.  In the normal path
+                // this is a no-op because the submission machinery already
+                // performed the transition; it only does real work when the
+                // caller acquired the texture but never rendered to it.
+                ensure_surface_texture_is_presentable(device, queue, &texture, raw.as_ref())
+                    .map_err(SurfaceError::Device)?;
+
+                unsafe { queue.raw.present(raw_surface, raw) }
             }
             _ => unreachable!(),
         };

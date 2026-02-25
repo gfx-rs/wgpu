@@ -1,8 +1,7 @@
 use wgpu::util::DeviceExt;
 use wgpu::CommandEncoder;
 use wgpu_test::{
-    fail, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
-    TestingContext,
+    fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -27,11 +26,7 @@ static DROP_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new()
 #[gpu_test]
 static DROP_QUEUE_BEFORE_CREATING_COMMAND_ENCODER: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(
-            TestParameters::default()
-                .expect_fail(FailureCase::always())
-                .enable_noop(),
-        )
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             // Use the device after the queue is dropped. Currently this panics
             // but it probably shouldn't.
