@@ -98,7 +98,7 @@ async fn partial_update_test(ctx: TestingContext) {
         .device
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline_layout"),
-            bind_group_layouts: &[&bgl],
+            bind_group_layouts: &[Some(&bgl)],
             immediate_size: 32,
         });
 
@@ -268,7 +268,7 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
         .device
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 8 * size_of::<u32>() as u32,
         });
 

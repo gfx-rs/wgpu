@@ -35,7 +35,11 @@ fn test_hash(ctx: &TestingContext, name: &str) -> u64 {
 fn test_with_module(ctx: TestingContext, vertex: wgpu::ShaderModule, fragment: wgpu::ShaderModule) {
     let layout = ctx
         .device
-        .create_pipeline_layout(&PipelineLayoutDescriptor::empty());
+        .create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[],
+            immediate_size: 0,
+        });
     let _pipeline = ctx
         .device
         .create_render_pipeline(&RenderPipelineDescriptor {

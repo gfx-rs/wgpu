@@ -106,14 +106,18 @@ impl crate::framework::Example for Example {
         let compute_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compute"),
-                bind_group_layouts: &[&compute_bind_group_layout],
+                bind_group_layouts: &[Some(&compute_bind_group_layout)],
                 immediate_size: 0,
             });
 
         // create render pipeline with empty bind group layout
 
-        let render_pipeline_layout = device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor::empty_with_label("render"));
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("render"),
+                bind_group_layouts: &[],
+                immediate_size: 0,
+            });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,

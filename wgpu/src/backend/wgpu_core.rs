@@ -1269,7 +1269,7 @@ impl dispatch::DeviceInterface for CoreDevice {
 
     fn create_pipeline_layout(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<'_, Option<&'_ crate::BindGroupLayout>>,
+        desc: &crate::PipelineLayoutDescriptor<'_>,
     ) -> dispatch::DispatchPipelineLayout {
         // Limit is always less or equal to hal::MAX_BIND_GROUPS, so this is always right
         // Guards following ArrayVec

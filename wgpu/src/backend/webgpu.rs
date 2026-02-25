@@ -2127,7 +2127,7 @@ impl dispatch::DeviceInterface for WebDevice {
 
     fn create_pipeline_layout(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<'_, Option<&'_ crate::BindGroupLayout>>,
+        desc: &crate::PipelineLayoutDescriptor<'_>,
     ) -> dispatch::DispatchPipelineLayout {
         let null = wasm_bindgen::JsValue::NULL;
         let temp_layouts = desc

@@ -75,7 +75,11 @@ impl crate::framework::Example for Example {
         _queue: &wgpu::Queue,
     ) -> Self {
         let pipeline_layout_empty =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor::empty());
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[],
+                immediate_size: 0,
+            });
 
         let shader_triangle_and_lines =
             device.create_shader_module(wgpu::include_wgsl!("triangle_and_lines.wgsl"));
@@ -190,7 +194,7 @@ impl crate::framework::Example for Example {
 
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[&bind_group_layout],
+                bind_group_layouts: &[Some(&bind_group_layout)],
                 immediate_size: 0,
             });
             let shader = device.create_shader_module(wgpu::include_wgsl!("upscale.wgsl"));

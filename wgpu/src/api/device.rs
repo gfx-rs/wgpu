@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, string::String, sync::Arc, vec, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec};
 #[cfg(wgpu_core)]
 use core::ops::Deref;
 use core::{error, fmt, future::Future, marker::PhantomData};
@@ -246,25 +246,8 @@ impl Device {
 
     /// Creates a [`PipelineLayout`].
     #[must_use]
-    #[expect(private_bounds)]
-    pub fn create_pipeline_layout<BGL>(
-        &self,
-        desc: &PipelineLayoutDescriptor<'_, BGL>,
-    ) -> PipelineLayout
-    where
-        BGL: AsOptRef<BindGroupLayout>,
-    {
-        let bind_group_layouts = desc
-            .bind_group_layouts
-            .iter()
-            .map(|bgl| bgl.as_opt_ref())
-            .collect::<Vec<_>>();
-        let desc = PipelineLayoutDescriptor {
-            label: desc.label,
-            bind_group_layouts: bind_group_layouts.as_slice(),
-            immediate_size: desc.immediate_size,
-        };
-        let layout = self.inner.create_pipeline_layout(&desc);
+    pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor<'_>) -> PipelineLayout {
+        let layout = self.inner.create_pipeline_layout(desc);
         PipelineLayout { inner: layout }
     }
 

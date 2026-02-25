@@ -427,14 +427,14 @@ impl crate::framework::Example for Example {
         let water_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("water"),
-                bind_group_layouts: &[&water_bind_group_layout],
+                bind_group_layouts: &[Some(&water_bind_group_layout)],
                 immediate_size: 0,
             });
 
         let terrain_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("terrain"),
-                bind_group_layouts: &[&terrain_bind_group_layout],
+                bind_group_layouts: &[Some(&terrain_bind_group_layout)],
                 immediate_size: 0,
             });
 
