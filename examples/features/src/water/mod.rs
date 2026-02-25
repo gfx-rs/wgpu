@@ -562,13 +562,12 @@ impl crate::framework::Example for Example {
             // will work. Since this is water, we need to read from the
             // depth buffer both as a texture in the shader, and as an
             // input attachment to do depth-testing. We don't write, so
-            // depth_write_enabled is set to false. This is called
-            // RODS or read-only depth stencil.
+            // depth_write_enabled is set to false. This is called RODS,
+            // or read-only depth stencil. Here, we don't use stencil.
             depth_stencil: Some(wgpu::DepthStencilState {
-                // We don't use stencil.
                 format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::Less,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),
@@ -606,8 +605,8 @@ impl crate::framework::Example for Example {
             },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),

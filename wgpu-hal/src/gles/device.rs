@@ -1448,8 +1448,8 @@ impl crate::Device for super::Device {
             vertex_attributes,
             color_targets,
             depth: desc.depth_stencil.as_ref().map(|ds| super::DepthState {
-                function: conv::map_compare_func(ds.depth_compare),
-                mask: ds.depth_write_enabled,
+                function: conv::map_compare_func(ds.depth_compare.unwrap_or_default()),
+                mask: ds.depth_write_enabled.unwrap_or_default(),
             }),
             depth_bias: desc
                 .depth_stencil

@@ -547,8 +547,8 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: depth_stencil_format,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::LessEqual,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::LessEqual),
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),

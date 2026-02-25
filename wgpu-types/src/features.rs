@@ -647,12 +647,13 @@ bitflags_array! {
         /// Implies [`Features::TIMESTAMP_QUERY`] is supported.
         ///
         /// Additionally allows for timestamp writes on command encoders
-        /// using  [`CommandEncoder::write_timestamp`].
+        /// using [`CommandEncoder::write_timestamp`].
         ///
         /// Supported platforms:
         /// - Vulkan
         /// - DX12
         /// - Metal
+        /// - OpenGL (with GL_ARB_timer_query)
         ///
         /// This is a native only feature.
         ///
@@ -670,6 +671,7 @@ bitflags_array! {
         /// - Vulkan
         /// - DX12
         /// - Metal (AMD & Intel, not Apple GPUs)
+        /// - OpenGL (with GL_ARB_timer_query)
         ///
         /// This is generally not available on tile-based rasterization GPUs.
         ///
@@ -1459,6 +1461,7 @@ bitflags_array! {
         /// - Vulkan
         /// - DX12
         /// - Metal
+        /// - OpenGL (with GL_ARB_timer_query)
         /// - WebGPU
         ///
         /// This is a web and native feature.
