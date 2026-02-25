@@ -553,15 +553,18 @@ struct BindGroupLayoutInfo {
 
 #[derive(Debug)]
 pub struct PipelineLayout {
-    group_infos: Box<[BindGroupLayoutInfo]>,
+    group_infos: Box<[Option<BindGroupLayoutInfo>]>,
     naga_options: naga::back::glsl::Options,
 }
 
 impl crate::DynPipelineLayout for PipelineLayout {}
 
 impl PipelineLayout {
+    /// # Panics
+    /// If the pipeline layout does not contain a bind group layout used by
+    /// the resource binding.
     fn get_slot(&self, br: &naga::ResourceBinding) -> u8 {
-        let group_info = &self.group_infos[br.group as usize];
+        let group_info = self.group_infos[br.group as usize].as_ref().unwrap();
         group_info.binding_to_slot[br.binding as usize]
     }
 }
@@ -709,7 +712,7 @@ struct ProgramStage {
 #[derive(PartialEq, Eq, Hash)]
 struct ProgramCacheKey {
     stages: ArrayVec<ProgramStage, 3>,
-    group_to_binding_to_slot: Box<[Box<[u8]>]>,
+    group_to_binding_to_slot: Box<[Option<Box<[u8]>>]>,
 }
 
 type ProgramCache = FastHashMap<ProgramCacheKey, Result<Arc<PipelineInner>, crate::PipelineError>>;

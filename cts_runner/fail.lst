@@ -27,7 +27,7 @@ webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_
 webgpu:api,validation,createBindGroupLayout:visibility,VERTEX_shader_stage_buffer_type:* // 25%, writable storage buffers not allowed in VERTEX
 webgpu:api,validation,createBindGroupLayout:visibility,VERTEX_shader_stage_storage_texture_access:* // 25%, write-access storage textures not allowed in VERTEX
 webgpu:api,validation,createBindGroupLayout:visibility:* // 25%, missing per-stage storage limits
-webgpu:api,validation,createPipelineLayout:* // 33%, https://github.com/gfx-rs/wgpu/issues/4738, and at least 1 more issue
+webgpu:api,validation,createPipelineLayout:number_of_dynamic_buffers_exceeds_the_maximum_value:* // limits issue
 webgpu:api,validation,createView:texture_state:* // 0%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_ranges:* // ***, https://github.com/gfx-rs/wgpu/issues/8118
 webgpu:api,validation,encoding,cmds,debug:* // 92%, https://github.com/gfx-rs/wgpu/issues/8039
@@ -40,13 +40,8 @@ webgpu:api,validation,encoding,cmds,setBindGroup:u32array_start_and_length:* // 
 webgpu:api,validation,encoding,cmds,setImmediates:* // 0%, feature not implemented
 webgpu:api,validation,encoding,createRenderBundleEncoder:* // 26%, empty attachments, format compatibility
 webgpu:api,validation,encoding,encoder_open_state:* // https://github.com/gfx-rs/wgpu/issues/7857
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:default_bind_group_layouts_never_match,compute_pass:* // 75%, empty bind group layouts compatibility
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:default_bind_group_layouts_never_match,render_pass:* // 75%, empty bind group layouts compatibility
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:empty_bind_group_layouts_never_requires_empty_bind_groups,compute_pass:* // 17%, null bind groups, https://github.com/gfx-rs/wgpu/issues/4738
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:empty_bind_group_layouts_never_requires_empty_bind_groups,render_pass:* // 17%, null bind groups, https://github.com/gfx-rs/wgpu/issues/4738
 webgpu:api,validation,encoding,queries,resolveQuerySet:* // 93%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,render_bundle:* // 81%, readonly flag normalization mismatch
-webgpu:api,validation,getBindGroupLayout:* // 29%, rejects valid indices beyond defined layouts
 webgpu:api,validation,image_copy,buffer_texture_copies:* // https://github.com/gfx-rs/wgpu/issues/7946
 webgpu:api,validation,layout_shader_compat:pipeline_layout_shader_exact_match:* // 99%, storage texture read-write bindings not compatible with write-only shaders
 webgpu:api,validation,non_filterable_texture:non_filterable_texture_with_filtering_sampler:* // 80%, depth textures with filtering samplers

@@ -183,8 +183,8 @@ impl Dispatch {
             ),
             flags: hal::PipelineLayoutFlags::empty(),
             bind_group_layouts: &[
-                dst_bind_group_layout.as_ref(),
-                src_bind_group_layout.as_ref(),
+                Some(dst_bind_group_layout.as_ref()),
+                Some(src_bind_group_layout.as_ref()),
             ],
             immediate_size: 4,
         };

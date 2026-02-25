@@ -107,9 +107,9 @@ impl Draw {
             ),
             flags: hal::PipelineLayoutFlags::empty(),
             bind_group_layouts: &[
-                metadata_bind_group_layout.as_ref(),
-                src_bind_group_layout.as_ref(),
-                dst_bind_group_layout.as_ref(),
+                Some(metadata_bind_group_layout.as_ref()),
+                Some(src_bind_group_layout.as_ref()),
+                Some(dst_bind_group_layout.as_ref()),
             ],
             immediate_size: 8,
         };
@@ -422,7 +422,7 @@ impl Draw {
             let metadata_bind_group =
                 resources.get_metadata_bind_group(batch.metadata_resource_index);
             unsafe {
-                encoder.set_bind_group(pipeline_layout, 0, Some(metadata_bind_group), &[]);
+                encoder.set_bind_group(pipeline_layout, 0, metadata_bind_group, &[]);
             }
 
             // Make sure the indirect buffer is still valid.
@@ -439,14 +439,14 @@ impl Draw {
                 encoder.set_bind_group(
                     pipeline_layout,
                     1,
-                    Some(src_bind_group),
+                    src_bind_group,
                     &[batch.src_dynamic_offset as u32],
                 );
             }
 
             let dst_bind_group = resources.get_dst_bind_group(batch.dst_resource_index);
             unsafe {
-                encoder.set_bind_group(pipeline_layout, 2, Some(dst_bind_group), &[]);
+                encoder.set_bind_group(pipeline_layout, 2, dst_bind_group, &[]);
             }
 
             unsafe {

@@ -214,11 +214,11 @@ impl Player {
                     .expect("invalid bind group layout");
             }
             Action::CreatePipelineLayout(id, desc) => {
-                let bind_group_layouts: Vec<Arc<wgc::binding_model::BindGroupLayout>> = desc
+                let bind_group_layouts: Vec<_> = desc
                     .bind_group_layouts
                     .to_vec()
                     .into_iter()
-                    .map(|bgl_id| self.resolve_bind_group_layout_id(bgl_id))
+                    .map(|bgl_id| bgl_id.map(|bgl_id| self.resolve_bind_group_layout_id(bgl_id)))
                     .collect();
 
                 let resolved_desc = wgc::binding_model::ResolvedPipelineLayoutDescriptor {

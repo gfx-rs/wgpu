@@ -2514,6 +2514,12 @@ impl super::Adapter {
 
         let drop_guard = crate::DropGuard::from_option(drop_callback);
 
+        let empty_descriptor_set_layout = unsafe {
+            raw_device
+                .create_descriptor_set_layout(&vk::DescriptorSetLayoutCreateInfo::default(), None)
+                .map_err(super::map_host_device_oom_err)?
+        };
+
         let shared = Arc::new(super::DeviceShared {
             raw: raw_device,
             family_index,
@@ -2544,6 +2550,7 @@ impl super::Adapter {
 
             texture_identity_factory: super::ResourceIdentityFactory::new(),
             texture_view_identity_factory: super::ResourceIdentityFactory::new(),
+            empty_descriptor_set_layout,
         });
 
         let relay_semaphores = super::RelaySemaphores::new(&shared)?;

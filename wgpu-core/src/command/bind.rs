@@ -1,5 +1,3 @@
-use core::{iter::zip, ops::Range};
-
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
 use thiserror::Error;
@@ -16,9 +14,8 @@ mod compat {
         sync::{Arc, Weak},
         vec::Vec,
     };
-    use core::{num::NonZeroU32, ops::Range};
+    use core::num::NonZeroU32;
 
-    use arrayvec::ArrayVec;
     use thiserror::Error;
     use wgt::{BindingType, ShaderStages};
 
@@ -44,12 +41,13 @@ mod compat {
     }
 
     impl Entry {
-        fn empty() -> Self {
+        const fn empty() -> Self {
             Self {
                 assigned: None,
                 expected: None,
             }
         }
+
         fn is_active(&self) -> bool {
             self.assigned.is_some() && self.expected.is_some()
         }
@@ -62,12 +60,8 @@ mod compat {
                     false
                 }
             } else {
-                true
+                false
             }
-        }
-
-        fn is_incompatible(&self) -> bool {
-            self.expected.is_none() || !self.is_valid()
         }
 
         fn check(&self) -> Result<(), Error> {
@@ -191,64 +185,69 @@ mod compat {
         }
     }
 
-    #[derive(Debug, Default)]
+    #[derive(Debug)]
     pub(super) struct BoundBindGroupLayouts {
-        entries: ArrayVec<Entry, { hal::MAX_BIND_GROUPS }>,
+        entries: [Entry; hal::MAX_BIND_GROUPS],
         rebind_start: usize,
     }
 
     impl BoundBindGroupLayouts {
         pub fn new() -> Self {
             Self {
-                entries: (0..hal::MAX_BIND_GROUPS).map(|_| Entry::empty()).collect(),
+                entries: [const { Entry::empty() }; hal::MAX_BIND_GROUPS],
                 rebind_start: 0,
             }
         }
 
-        pub fn num_valid_entries(&self) -> usize {
-            // find first incompatible entry
-            self.entries
-                .iter()
-                .position(|e| e.is_incompatible())
-                .unwrap_or(self.entries.len())
-        }
-
-        /// Get the range of entries that needs to be rebound, and clears it.
-        pub fn take_rebind_range(&mut self) -> Range<usize> {
-            let end = self.num_valid_entries();
+        /// Takes the start index of the bind group range to be rebound, and clears it.
+        pub fn take_rebind_start_index(&mut self) -> usize {
             let start = self.rebind_start;
-            self.rebind_start = end;
-            start..end.max(start)
+            self.rebind_start = self.entries.len();
+            start
         }
 
-        pub fn update_start_index(&mut self, start_index: usize) {
+        pub fn update_rebind_start_index(&mut self, start_index: usize) {
             self.rebind_start = self.rebind_start.min(start_index);
         }
 
-        pub fn update_expectations(&mut self, expectations: &[Arc<BindGroupLayout>]) {
-            let start_index = self
+        pub fn update_expectations(&mut self, expectations: &[Option<Arc<BindGroupLayout>>]) {
+            let mut rebind_start_index = None;
+
+            for (i, (e, new_expected_bgl)) in self
                 .entries
-                .iter()
-                .zip(expectations)
-                .position(|(e, expect)| {
-                    e.expected.is_none() || !e.expected.as_ref().unwrap().is_equal(expect)
-                })
-                .unwrap_or(expectations.len());
-            for (e, expect) in self.entries[start_index..]
                 .iter_mut()
-                .zip(expectations[start_index..].iter())
+                .zip(expectations.iter().chain(core::iter::repeat(&None)))
+                .enumerate()
             {
-                e.expected = Some(expect.clone());
+                let (must_set, must_rebind) = match (&mut e.expected, new_expected_bgl) {
+                    (None, None) => (false, false),
+                    (None, Some(_)) => (true, true),
+                    (Some(_), None) => (true, false),
+                    (Some(old_expected_bgl), Some(new_expected_bgl)) => {
+                        let is_different = !old_expected_bgl.is_equal(new_expected_bgl);
+                        (is_different, is_different)
+                    }
+                };
+                if must_set {
+                    e.expected = new_expected_bgl.clone();
+                }
+                if must_rebind && rebind_start_index.is_none() {
+                    rebind_start_index = Some(i);
+                }
             }
-            for e in self.entries[expectations.len()..].iter_mut() {
-                e.expected = None;
+
+            if let Some(rebind_start_index) = rebind_start_index {
+                self.update_rebind_start_index(rebind_start_index);
             }
-            self.update_start_index(start_index);
         }
 
         pub fn assign(&mut self, index: usize, value: Arc<BindGroupLayout>) {
             self.entries[index].assigned = Some(value);
-            self.update_start_index(index);
+            self.update_rebind_start_index(index);
+        }
+
+        pub fn clear(&mut self, index: usize) {
+            self.entries[index].assigned = None;
         }
 
         pub fn list_active(&self) -> impl Iterator<Item = usize> + '_ {
@@ -256,6 +255,13 @@ mod compat {
                 .iter()
                 .enumerate()
                 .filter_map(|(i, e)| if e.is_active() { Some(i) } else { None })
+        }
+
+        pub fn list_valid(&self) -> impl Iterator<Item = usize> + '_ {
+            self.entries
+                .iter()
+                .enumerate()
+                .filter_map(|(i, e)| if e.is_valid() { Some(i) } else { None })
         }
 
         #[allow(clippy::result_large_err)]
@@ -295,13 +301,13 @@ struct LateBufferBinding {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct EntryPayload {
-    pub(super) group: Option<Arc<BindGroup>>,
-    pub(super) dynamic_offsets: Vec<wgt::DynamicOffset>,
+struct EntryPayload {
+    group: Option<Arc<BindGroup>>,
+    dynamic_offsets: Vec<wgt::DynamicOffset>,
     late_buffer_bindings: Vec<LateBufferBinding>,
     /// Since `LateBufferBinding` may contain information about the bindings
     /// not used by the pipeline, we need to know when to stop validating.
-    pub(super) late_bindings_effective_count: usize,
+    late_bindings_effective_count: usize,
 }
 
 impl EntryPayload {
@@ -313,7 +319,7 @@ impl EntryPayload {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(super) struct Binder {
     pub(super) pipeline_layout: Option<Arc<PipelineLayout>>,
     manager: compat::BoundBindGroupLayouts,
@@ -383,7 +389,7 @@ impl Binder {
         if let Some(old) = old {
             // root constants are the base compatibility property
             if old.immediate_size != new.immediate_size {
-                self.manager.update_start_index(0);
+                self.manager.update_rebind_start_index(0);
             }
         }
 
@@ -431,31 +437,44 @@ impl Binder {
         self.manager.assign(index, bind_group.layout.clone());
     }
 
-    /// Get the range of entries that needs to be rebound, and clears it.
-    pub(super) fn take_rebind_range(&mut self) -> Range<usize> {
-        self.manager.take_rebind_range()
+    pub(super) fn clear_group(&mut self, index: usize) {
+        self.payloads[index].reset();
+        self.manager.clear(index);
     }
 
-    pub(super) fn entries(
+    /// Takes the start index of the bind group range to be rebound, and clears it.
+    pub(super) fn take_rebind_start_index(&mut self) -> usize {
+        self.manager.take_rebind_start_index()
+    }
+
+    pub(super) fn list_valid_with_start(
         &self,
-        range: Range<usize>,
-    ) -> impl ExactSizeIterator<Item = (usize, &'_ EntryPayload)> + Clone + '_ {
-        let payloads = &self.payloads[range.clone()];
-        zip(range, payloads)
+        start: usize,
+    ) -> impl Iterator<Item = (usize, &Arc<BindGroup>, &[wgt::DynamicOffset])> + '_ {
+        let payloads = &self.payloads;
+        self.manager
+            .list_valid()
+            .filter(move |i| *i >= start)
+            .map(move |index| {
+                (
+                    index,
+                    payloads[index].group.as_ref().unwrap(),
+                    payloads[index].dynamic_offsets.as_slice(),
+                )
+            })
     }
 
-    pub(super) fn list_active<'a>(&'a self) -> impl Iterator<Item = &'a Arc<BindGroup>> + 'a {
+    pub(super) fn list_active(&self) -> impl Iterator<Item = &Arc<BindGroup>> + '_ {
         let payloads = &self.payloads;
         self.manager
             .list_active()
             .map(move |index| payloads[index].group.as_ref().unwrap())
     }
 
-    pub(super) fn list_valid<'a>(&'a self) -> impl Iterator<Item = (usize, &'a EntryPayload)> + 'a {
-        self.payloads
-            .iter()
-            .take(self.manager.num_valid_entries())
-            .enumerate()
+    pub(super) fn list_valid(
+        &self,
+    ) -> impl Iterator<Item = (usize, &Arc<BindGroup>, &[wgt::DynamicOffset])> + '_ {
+        self.list_valid_with_start(0)
     }
 
     pub(super) fn check_compatibility<T: Labeled>(

@@ -28,7 +28,7 @@ use crate::{
 /// Information about buffer bindings, which
 /// is validated against the shader (and pipeline)
 /// at draw time as opposed to initialization time.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct LateSizedBufferGroup {
     // The order has to match `BindGroup::late_buffer_binding_sizes`.
     pub(crate) shader_sizes: Vec<wgt::BufferAddress>,
@@ -312,11 +312,7 @@ impl ComputePipeline {
         self: &Arc<Self>,
         index: u32,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
-        self.layout
-            .bind_group_layouts
-            .get(index as usize)
-            .cloned()
-            .ok_or(GetBindGroupLayoutError::InvalidGroupIndex(index))
+        self.layout.get_bind_group_layout(index)
     }
 }
 
@@ -854,10 +850,6 @@ impl RenderPipeline {
         self: &Arc<Self>,
         index: u32,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
-        self.layout
-            .bind_group_layouts
-            .get(index as usize)
-            .cloned()
-            .ok_or(GetBindGroupLayoutError::InvalidGroupIndex(index))
+        self.layout.get_bind_group_layout(index)
     }
 }

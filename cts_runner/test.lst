@@ -107,6 +107,11 @@ webgpu:api,validation,createBindGroupLayout:maximum_binding_limit:*
 webgpu:api,validation,createBindGroupLayout:multisampled_validation:*
 webgpu:api,validation,createBindGroupLayout:storage_texture,formats:*
 webgpu:api,validation,createBindGroupLayout:storage_texture,layout_dimension:*
+webgpu:api,validation,createPipelineLayout:bind_group_layouts,create_pipeline_with_null_bind_group_layouts:*
+webgpu:api,validation,createPipelineLayout:bind_group_layouts,device_mismatch:*
+webgpu:api,validation,createPipelineLayout:bind_group_layouts,null_bind_group_layouts:*
+webgpu:api,validation,createPipelineLayout:bind_group_layouts,set_pipeline_with_null_bind_group_layouts:*
+webgpu:api,validation,createPipelineLayout:number_of_bind_group_layouts_exceeds_the_maximum_value:*
 webgpu:api,validation,createSampler:*
 webgpu:api,validation,createTexture:*
 webgpu:api,validation,createView:array_layers:*
@@ -169,15 +174,11 @@ webgpu:api,validation,encoding,encoder_open_state:non_pass_commands:*
 // https://github.com/gfx-rs/wgpu/issues/7857
 webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:*
 webgpu:api,validation,encoding,encoder_state:*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_binding_mismatch:*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_resource_type_mismatch:*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_visibility_mismatch:*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bind_groups_and_pipeline_layout_mismatch:*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:buffer_binding,render_pipeline:*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:sampler_binding,render_pipeline:*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:*
 webgpu:api,validation,encoding,queries,begin_end:occlusion_query,*
 webgpu:api,validation,encoding,queries,general:occlusion_query,*
 webgpu:api,validation,error_scope:*
+webgpu:api,validation,getBindGroupLayout:*
 webgpu:api,validation,image_copy,buffer_related:*
 // image_copy depth/stencil failures on dx12: https://github.com/gfx-rs/wgpu/issues/8133
 fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:depth_stencil_format,copy_buffer_offset:format="depth24plus-stencil8";aspect="stencil-only";copyType="CopyB2T"

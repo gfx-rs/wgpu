@@ -690,7 +690,7 @@ pub struct BindGroupLayoutDescriptor<'a> {
 /// Used by [`BindGroupLayout`]. It indicates whether the BGL must be
 /// used with a specific pipeline. This constraint only happens when
 /// the BGLs have been derived from a pipeline without a layout.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) enum ExclusivePipeline {
     None,
     Render(Weak<RenderPipeline>),
@@ -719,10 +719,17 @@ impl fmt::Display for ExclusivePipeline {
     }
 }
 
+#[derive(Debug)]
+pub enum RawBindGroupLayout {
+    Owning(ManuallyDrop<Box<dyn hal::DynBindGroupLayout>>),
+    /// The empty BGL was created by the device and will be destroyed by the device.
+    RefDeviceEmptyBGL,
+}
+
 /// Bind group layout.
 #[derive(Debug)]
 pub struct BindGroupLayout {
-    pub(crate) raw: ManuallyDrop<Box<dyn hal::DynBindGroupLayout>>,
+    pub(crate) raw: RawBindGroupLayout,
     pub(crate) device: Arc<Device>,
     pub(crate) entries: bgl::EntryMap,
     /// It is very important that we know if the bind group comes from the BGL pool.
@@ -744,10 +751,15 @@ impl Drop for BindGroupLayout {
         if matches!(self.origin, bgl::Origin::Pool) {
             self.device.bgl_pool.remove(&self.entries);
         }
-        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
-        unsafe {
-            self.device.raw().destroy_bind_group_layout(raw);
+        match self.raw {
+            RawBindGroupLayout::Owning(ref mut raw) => {
+                // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+                let raw = unsafe { ManuallyDrop::take(raw) };
+                unsafe {
+                    self.device.raw().destroy_bind_group_layout(raw);
+                }
+            }
+            RawBindGroupLayout::RefDeviceEmptyBGL => {}
         }
     }
 }
@@ -759,7 +771,24 @@ crate::impl_storage_item!(BindGroupLayout);
 
 impl BindGroupLayout {
     pub(crate) fn raw(&self) -> &dyn hal::DynBindGroupLayout {
-        self.raw.as_ref()
+        match &self.raw {
+            RawBindGroupLayout::Owning(raw) => raw.as_ref(),
+            RawBindGroupLayout::RefDeviceEmptyBGL => self.device.empty_bgl.as_ref(),
+        }
+    }
+
+    fn empty(device: &Arc<Device>) -> Arc<Self> {
+        let exclusive_pipeline = crate::OnceCellOrLock::new();
+        exclusive_pipeline.set(ExclusivePipeline::None).unwrap();
+        Arc::new(Self {
+            raw: RawBindGroupLayout::RefDeviceEmptyBGL,
+            device: device.clone(),
+            entries: bgl::EntryMap::default(),
+            origin: bgl::Origin::Derived,
+            exclusive_pipeline,
+            binding_count_validator: BindingTypeMaxCountValidator::default(),
+            label: String::new(),
+        })
     }
 }
 
@@ -785,6 +814,8 @@ pub enum CreatePipelineLayoutError {
     TooManyGroups { actual: usize, max: usize },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+    #[error("Bind group layout at index {index} has an exclusive pipeline: {pipeline}")]
+    BglHasExclusivePipeline { index: usize, pipeline: String },
 }
 
 impl WebGpuError for CreatePipelineLayoutError {
@@ -796,7 +827,8 @@ impl WebGpuError for CreatePipelineLayoutError {
             Self::TooManyBindings(e) => e,
             Self::MisalignedImmediateSize { .. }
             | Self::ImmediateRangeTooLarge { .. }
-            | Self::TooManyGroups { .. } => return ErrorType::Validation,
+            | Self::TooManyGroups { .. }
+            | Self::BglHasExclusivePipeline { .. } => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
@@ -832,8 +864,8 @@ impl WebGpuError for ImmediateUploadError {
 #[cfg_attr(feature = "serde", serde(bound = "BGL: Serialize"))]
 pub struct PipelineLayoutDescriptor<'a, BGL = BindGroupLayoutId>
 where
-    [BGL]: ToOwned,
-    <[BGL] as ToOwned>::Owned: fmt::Debug,
+    [Option<BGL>]: ToOwned,
+    <[Option<BGL>] as ToOwned>::Owned: fmt::Debug,
 {
     /// Debug label of the pipeline layout.
     ///
@@ -843,9 +875,9 @@ where
     /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
     #[cfg_attr(
         feature = "serde",
-        serde(bound(deserialize = "<[BGL] as ToOwned>::Owned: Deserialize<'de>"))
+        serde(bound(deserialize = "<[Option<BGL>] as ToOwned>::Owned: Deserialize<'de>"))
     )]
-    pub bind_group_layouts: Cow<'a, [BGL]>,
+    pub bind_group_layouts: Cow<'a, [Option<BGL>]>,
     /// The number of bytes of immediate data that are allocated for use
     /// in the shader. The `var<immediate>`s in the shader attached to
     /// this pipeline must be equal or smaller than this size.
@@ -864,7 +896,7 @@ pub struct PipelineLayout {
     pub(crate) device: Arc<Device>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
-    pub(crate) bind_group_layouts: ArrayVec<Arc<BindGroupLayout>, { hal::MAX_BIND_GROUPS }>,
+    pub(crate) bind_group_layouts: ArrayVec<Option<Arc<BindGroupLayout>>, { hal::MAX_BIND_GROUPS }>,
     pub(crate) immediate_size: u32,
 }
 
@@ -884,11 +916,33 @@ impl PipelineLayout {
         self.raw.as_ref()
     }
 
-    pub(crate) fn get_binding_maps(&self) -> ArrayVec<&bgl::EntryMap, { hal::MAX_BIND_GROUPS }> {
-        self.bind_group_layouts
-            .iter()
-            .map(|bgl| &bgl.entries)
-            .collect()
+    pub fn get_bind_group_layout(
+        self: &Arc<Self>,
+        index: u32,
+    ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
+        let max_bind_groups = self.device.limits.max_bind_groups;
+        if index >= max_bind_groups {
+            return Err(GetBindGroupLayoutError::IndexOutOfRange {
+                index,
+                max: max_bind_groups,
+            });
+        }
+        Ok(self
+            .bind_group_layouts
+            .get(index as usize)
+            .cloned()
+            .flatten()
+            .unwrap_or_else(|| BindGroupLayout::empty(&self.device)))
+    }
+
+    pub(crate) fn get_bgl_entry(
+        &self,
+        group: u32,
+        binding: u32,
+    ) -> Option<&wgt::BindGroupLayoutEntry> {
+        let bgl = self.bind_group_layouts.get(group as usize)?;
+        let bgl = bgl.as_ref()?;
+        bgl.entries.get(binding)
     }
 
     /// Validate immediates match up with expected ranges.
@@ -993,6 +1047,11 @@ pub type ResolvedBindingResource<'a> = BindingResource<
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum BindError {
+    #[error(
+        "Dynamic offsets not expected with null bind group at index {group}. However {actual} dynamic offset{s1} were provided.",
+        s1 = if *.actual >= 2 { "s" } else { "" },
+    )]
+    DynamicOffsetCountNotZero { group: u32, actual: usize },
     #[error(
         "{bind_group} {group} expects {expected} dynamic offset{s0}. However {actual} dynamic offset{s1} were provided.",
         s0 = if *.expected >= 2 { "s" } else { "" },
@@ -1201,8 +1260,8 @@ crate::impl_trackable!(BindGroup);
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum GetBindGroupLayoutError {
-    #[error("Invalid group index {0}")]
-    InvalidGroupIndex(u32),
+    #[error("Bind group layout index {index} is greater than the device's configured `max_bind_groups` limit {max}")]
+    IndexOutOfRange { index: u32, max: u32 },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
@@ -1210,7 +1269,7 @@ pub enum GetBindGroupLayoutError {
 impl WebGpuError for GetBindGroupLayoutError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
-            Self::InvalidGroupIndex(_) => ErrorType::Validation,
+            Self::IndexOutOfRange { .. } => ErrorType::Validation,
             Self::InvalidResource(e) => e.webgpu_error_type(),
         }
     }
