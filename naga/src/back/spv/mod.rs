@@ -1217,7 +1217,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
         | Caps::COOPERATIVE_MATRIX
         | Caps::PER_VERTEX
-        // No RAY_TRACING_PIPELINE
+        | Caps::RAY_TRACING_PIPELINE
         | Caps::DRAW_INDEX
         | Caps::MEMORY_DECORATION_COHERENT
         | Caps::MEMORY_DECORATION_VOLATILE
