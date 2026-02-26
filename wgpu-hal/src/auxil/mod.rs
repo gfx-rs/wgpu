@@ -1,3 +1,5 @@
+use core::cmp::min;
+
 #[cfg(dx12)]
 pub(super) mod dxgi;
 
@@ -150,6 +152,22 @@ pub(crate) fn apply_hal_limits(mut limits: wgt::Limits) -> wgt::Limits {
     limits.max_color_attachments = limits
         .max_color_attachments
         .min(crate::MAX_COLOR_ATTACHMENTS as u32);
+
+    // Vulkan and DX12 sometimes report large values for the "max resources per stage"
+    // limits. We clamp them at one less than `max_bindings_per_bind_group` (i.e., 999), for
+    // some CTS tests that ignore `max_bindings_per_bind_group` when calculating how to test
+    // the per-stage limits. Note that because we are clamping to the large, fixed default
+    // limit, this won't result in adjusting the per-stage limits when they are actually in
+    // the range that an application might reach them.
+    let max_bindings = wgt::Limits::default().max_bindings_per_bind_group - 1;
+    let clamp = |limit: &mut u32| *limit = min(*limit, max_bindings);
+    clamp(&mut limits.max_dynamic_uniform_buffers_per_pipeline_layout);
+    clamp(&mut limits.max_dynamic_storage_buffers_per_pipeline_layout);
+    clamp(&mut limits.max_sampled_textures_per_shader_stage);
+    clamp(&mut limits.max_samplers_per_shader_stage);
+    clamp(&mut limits.max_storage_buffers_per_shader_stage);
+    clamp(&mut limits.max_storage_textures_per_shader_stage);
+    clamp(&mut limits.max_uniform_buffers_per_shader_stage);
 
     // Round some limits down to the WebGPU alignment requirement, to avoid
     // suggesting values that won't work. (In particular, the CTS queries limits

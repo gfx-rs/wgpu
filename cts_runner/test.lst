@@ -94,24 +94,14 @@ webgpu:api,validation,createBindGroup:texture_binding_must_have_correct_usage:*
 webgpu:api,validation,createBindGroup:texture_must_have_correct_component_type:*
 webgpu:api,validation,createBindGroup:texture_must_have_correct_dimension:*
 webgpu:api,validation,createBindGroupLayout:duplicate_bindings:*
-fails-if(vulkan) webgpu:api,validation,createBindGroupLayout:max_dynamic_buffers:*
-fails-if(vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"sampler":{"type":"comparison"}}
-fails-if(vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"sampler":{"type":"filtering"}}
-fails-if(vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"sampler":{"type":"non-filtering"}}
-fails-if(dx12,vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"storageTexture":{"access":"read-only","format":"r32float"}}
-fails-if(dx12,vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"storageTexture":{"access":"read-write","format":"r32float"}}
-fails-if(dx12,vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"storageTexture":{"access":"write-only","format":"r32float"}}
-fails-if(dx12,vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"texture":{"multisampled":false,"sampleType":"unfilterable-float"}}
-fails-if(dx12,vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"texture":{"multisampled":true,"sampleType":"unfilterable-float"}}
+webgpu:api,validation,createBindGroupLayout:max_dynamic_buffers:*
+webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_bind_group_layout:*
+fails-if(metal) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:*
 webgpu:api,validation,createBindGroupLayout:maximum_binding_limit:*
 webgpu:api,validation,createBindGroupLayout:multisampled_validation:*
 webgpu:api,validation,createBindGroupLayout:storage_texture,formats:*
 webgpu:api,validation,createBindGroupLayout:storage_texture,layout_dimension:*
-webgpu:api,validation,createPipelineLayout:bind_group_layouts,create_pipeline_with_null_bind_group_layouts:*
-webgpu:api,validation,createPipelineLayout:bind_group_layouts,device_mismatch:*
-webgpu:api,validation,createPipelineLayout:bind_group_layouts,null_bind_group_layouts:*
-webgpu:api,validation,createPipelineLayout:bind_group_layouts,set_pipeline_with_null_bind_group_layouts:*
-webgpu:api,validation,createPipelineLayout:number_of_bind_group_layouts_exceeds_the_maximum_value:*
+webgpu:api,validation,createPipelineLayout:*
 webgpu:api,validation,createSampler:*
 webgpu:api,validation,createTexture:*
 webgpu:api,validation,createView:array_layers:*
