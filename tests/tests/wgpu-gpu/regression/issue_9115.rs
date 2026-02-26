@@ -21,9 +21,7 @@ static IMMEDIATES_WITH_UNIFORM_IN_SINGLE_MODULE: GpuTestConfiguration = GpuTestC
             .limits(wgpu::Limits {
                 max_immediate_size: 32,
                 ..Default::default()
-            })
-            //https://github.com/gfx-rs/wgpu/issues/9115
-            .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::GL).panic("Unsupported uniform datatype: Struct { members: [StructMember { name: Some(\"inv_screen_size\"), ty: [0], binding: None, offset: 0 }], span: 8 }")),
+            }),
     )
     .run_async(immediates_with_uniform_in_single_module);
 
