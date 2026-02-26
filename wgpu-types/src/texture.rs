@@ -568,7 +568,7 @@ impl<L, V> TextureDescriptor<L, V> {
     ///
     /// ```rust
     /// # use wgpu_types as wgpu;
-    /// # type TextureDescriptor<'a> = wgpu::TextureDescriptor<(), &'a [wgpu::TextureFormat], u32>;
+    /// # type TextureDescriptor<'a> = wgpu::TextureDescriptor<(), &'a [wgpu::TextureFormat]>;
     /// let desc  = TextureDescriptor {
     ///   label: (),
     ///   size: wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 },
