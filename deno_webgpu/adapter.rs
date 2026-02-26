@@ -337,7 +337,35 @@ impl GPUSupportedLimits {
   }
 
   #[getter]
+  fn maxStorageBuffersInVertexStage(&self) -> u32 {
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8748): InVertexStage limit
+    // not implemented; return the PerShaderStage limit.
+    self.0.max_storage_buffers_per_shader_stage
+  }
+
+  #[getter]
+  fn maxStorageBuffersInFragmentStage(&self) -> u32 {
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8748): InFragmentStage limit
+    // not implemented; return the PerShaderStage limit.
+    self.0.max_storage_buffers_per_shader_stage
+  }
+
+  #[getter]
   fn maxStorageTexturesPerShaderStage(&self) -> u32 {
+    self.0.max_storage_textures_per_shader_stage
+  }
+
+  #[getter]
+  fn maxStorageTexturesInVertexStage(&self) -> u32 {
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8748): InVertexStage limit
+    // not implemented; return the PerShaderStage limit.
+    self.0.max_storage_textures_per_shader_stage
+  }
+
+  #[getter]
+  fn maxStorageTexturesInFragmentStage(&self) -> u32 {
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8748): InFragmentStage limit
+    // not implemented; return the PerShaderStage limit.
     self.0.max_storage_textures_per_shader_stage
   }
 
