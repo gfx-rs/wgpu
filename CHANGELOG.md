@@ -146,6 +146,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
         - Split the `OutOfBoundsOverrun` variant into new `OutOfBoundsStartOffsetOverrun` and `OutOfBoundsEndOffsetOverrun` variants. 
         - Removed the `NegativeRange` variant in favor of new `MapStartOffsetUnderrun` and `MapStartOffsetOverrun` variants.
     - Split the `TransferError::BufferOverrun` variant into new `BufferStartOffsetOverrun` and `BufferEndOffsetOverrun` variants.
+- The various "max resources per stage" limits are now capped at 999 (one less than `wgt::Limits::default().max_bindings_per_bind_group`). By @andyleiserson in [#9118](https://github.com/gfx-rs/wgpu/pull/9118).
 
 #### Metal
 
