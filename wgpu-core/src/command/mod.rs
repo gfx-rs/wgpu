@@ -1104,12 +1104,7 @@ impl CommandEncoder {
                             "Begin encoding compute pass with '{}' label",
                             pass.label.as_deref().unwrap_or("")
                         );
-                        let res = compute::encode_compute_pass(
-                            &mut state,
-                            pass,
-                            timestamp_writes,
-                            &snatch_guard,
-                        );
+                        let res = compute::encode_compute_pass(&mut state, pass, timestamp_writes);
                         match res.as_ref() {
                             Err(err) => {
                                 api_log!("Finished encoding compute pass ({err:?})")
