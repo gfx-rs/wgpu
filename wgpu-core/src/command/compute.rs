@@ -32,7 +32,6 @@ use crate::{
         self, Buffer, DestroyedResourceError, InvalidResourceError, Labeled,
         MissingBufferUsageError, ParentDevice, RawResourceAccess, Trackable,
     },
-    snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker},
     Label,
 };
@@ -514,7 +513,6 @@ pub(super) fn encode_compute_pass(
     parent_state: &mut EncodingState<InnerCommandEncoder>,
     mut base: BasePass<ArcComputeCommand, Infallible>,
     mut timestamp_writes: Option<ArcPassTimestampWrites>,
-    snatch_guard: &SnatchGuard,
 ) -> Result<(), ComputePassError> {
     let pass_scope = PassErrorScope::Pass;
 
@@ -683,8 +681,7 @@ pub(super) fn encode_compute_pass(
             }
             ArcComputeCommand::DispatchIndirect { buffer, offset } => {
                 let scope = PassErrorScope::Dispatch { indirect: true };
-                dispatch_indirect(&mut state, device, buffer, offset, snatch_guard)
-                    .map_pass_err(scope)?;
+                dispatch_indirect(&mut state, device, buffer, offset).map_pass_err(scope)?;
             }
             ArcComputeCommand::PushDebugGroup { color: _, len } => {
                 pass::push_debug_group(&mut state.pass, &base.string_data, len);
@@ -872,7 +869,6 @@ fn dispatch_indirect(
     device: &Arc<Device>,
     buffer: Arc<Buffer>,
     offset: u64,
-    snatch_guard: &SnatchGuard,
 ) -> Result<(), ComputePassErrorInner> {
     api_log!("ComputePass::dispatch_indirect");
 
@@ -939,7 +935,7 @@ fn dispatch_indirect(
             state.pass.base.raw_encoder.set_bind_group(
                 params.pipeline_layout,
                 0,
-                Some(params.dst_bind_group),
+                params.dst_bind_group,
                 &[],
             );
         }
@@ -947,14 +943,12 @@ fn dispatch_indirect(
             state.pass.base.raw_encoder.set_bind_group(
                 params.pipeline_layout,
                 1,
-                Some(
-                    buffer
-                        .get_indirect_validation_bg(state.pass.base.queue, snatch_guard)
-                        .as_ref()
-                        .unwrap()
-                        .dispatch
-                        .as_ref(),
-                ),
+                buffer
+                    .get_indirect_validation_bg(state.pass.base.queue, state.pass.base.snatch_guard)
+                    .as_ref()
+                    .unwrap()
+                    .dispatch
+                    .as_ref(),
                 &[params.aligned_offset as u32],
             );
         }
@@ -1014,15 +1008,14 @@ fn dispatch_indirect(
                 }
             }
 
-            for (i, e) in state.pass.binder.list_valid() {
-                let group = e.group.as_ref().unwrap();
+            for (i, group, dynamic_offsets) in state.pass.binder.list_valid() {
                 let raw_bg = group.try_raw(state.pass.base.snatch_guard)?;
                 unsafe {
                     state.pass.base.raw_encoder.set_bind_group(
                         pipeline.layout.raw(),
                         i as u32,
-                        Some(raw_bg),
-                        &e.dynamic_offsets,
+                        raw_bg,
+                        dynamic_offsets,
                     );
                 }
             }

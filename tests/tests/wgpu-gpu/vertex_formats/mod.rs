@@ -253,7 +253,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
         .device
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&bgl],
+            bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
         });
 

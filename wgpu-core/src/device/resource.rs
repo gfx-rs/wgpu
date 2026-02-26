@@ -207,6 +207,7 @@ pub struct Device {
     pub(crate) queues: Vec<OnceCellOrLock<Weak<Queue>>>,
     pub(crate) per_queue_data: Vec<OnceCellOrLock<Arc<PerQueueData>>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
+    pub(crate) empty_bgl: ManuallyDrop<Box<dyn hal::DynBindGroupLayout>>,
     /// The `label` from the descriptor used to create the resource.
     label: String,
     pub(crate) snatchable_lock: SnatchLock,
@@ -273,14 +274,17 @@ impl Drop for Device {
 
         // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
         let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
+        // SAFETY: We are in the Drop impl and we don't use self.empty_bgl anymore after this point.
+        let empty_bgl = unsafe { ManuallyDrop::take(&mut self.empty_bgl) };
         // SAFETY: We are in the Drop impl and we don't use
         // self.default_external_texture_params_buffer anymore after this point.
         let default_external_texture_params_buffer =
             unsafe { ManuallyDrop::take(&mut self.default_external_texture_params_buffer) };
         unsafe {
+            self.raw.destroy_buffer(zero_buffer);
+            self.raw.destroy_bind_group_layout(empty_bgl);
             self.raw
                 .destroy_buffer(default_external_texture_params_buffer);
-            self.raw.destroy_buffer(zero_buffer);
         }
         for i in 0..self.queues.len() {
             // The per-queue data is only owned in 2 places: the device and the queue. The queue additionally
@@ -428,6 +432,15 @@ impl Device {
         let alignments = adapter.raw.capabilities.alignments.clone();
         let downlevel = adapter.raw.capabilities.downlevel.clone();
 
+        let empty_bgl = unsafe {
+            raw_device.create_bind_group_layout(&hal::BindGroupLayoutDescriptor {
+                label: None,
+                flags: hal::BindGroupLayoutFlags::empty(),
+                entries: &[],
+            })
+        }
+        .map_err(DeviceError::from_hal)?;
+
         let default_external_texture_params_buffer = unsafe {
             raw_device.create_buffer(&hal::BufferDescriptor {
                 label: hal_label(
@@ -475,6 +488,10 @@ impl Device {
             per_queue_data: vec![OnceCellOrLock::new(); num_queues as usize],
             zero_buffer: ManuallyDrop::new(zero_buffer),
             adapter: adapter.clone(),
+            empty_bgl: ManuallyDrop::new(empty_bgl),
+            default_external_texture_params_buffer: ManuallyDrop::new(
+                default_external_texture_params_buffer,
+            ),
             label: desc.label.to_string(),
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
@@ -490,9 +507,6 @@ impl Device {
             instance_flags,
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
-            default_external_texture_params_buffer: ManuallyDrop::new(
-                default_external_texture_params_buffer,
-            ),
             uses_indirect_validation,
         })
     }
@@ -2609,8 +2623,12 @@ impl Device {
             .bind_group_layouts
             .iter()
             .enumerate()
-            .map(|(group_index, bgl)| pipeline::LateSizedBufferGroup {
-                shader_sizes: bgl
+            .map(|(group_index, bgl)| {
+                let Some(bgl) = bgl else {
+                    return pipeline::LateSizedBufferGroup::default();
+                };
+
+                let shader_sizes = bgl
                     .entries
                     .values()
                     .filter_map(|entry| match entry.ty {
@@ -2628,7 +2646,8 @@ impl Device {
                         }
                         _ => None,
                     })
-                    .collect(),
+                    .collect();
+                pipeline::LateSizedBufferGroup { shader_sizes }
             })
             .collect()
     }
@@ -2656,9 +2675,7 @@ impl Device {
         }
     }
 
-    /// Internal function exposed for use by `player` crate only.
-    #[doc(hidden)]
-    pub fn create_bind_group_layout_internal(
+    fn create_bind_group_layout_internal(
         self: &Arc<Self>,
         label: &crate::Label,
         entry_map: bgl::EntryMap,
@@ -2913,7 +2930,7 @@ impl Device {
             .map_err(|e| self.handle_hal_error(e))?;
 
         let bgl = BindGroupLayout {
-            raw: ManuallyDrop::new(raw),
+            raw: binding_model::RawBindGroupLayout::Owning(ManuallyDrop::new(raw)),
             device: self.clone(),
             entries: entry_map,
             origin,
@@ -3684,6 +3701,14 @@ impl Device {
         self: &Arc<Self>,
         desc: &binding_model::ResolvedPipelineLayoutDescriptor,
     ) -> Result<Arc<binding_model::PipelineLayout>, binding_model::CreatePipelineLayoutError> {
+        self.create_pipeline_layout_impl(desc, false)
+    }
+
+    fn create_pipeline_layout_impl(
+        self: &Arc<Self>,
+        desc: &binding_model::ResolvedPipelineLayoutDescriptor,
+        ignore_exclusive_pipeline_check: bool,
+    ) -> Result<Arc<binding_model::PipelineLayout>, binding_model::CreatePipelineLayoutError> {
         use crate::binding_model::CreatePipelineLayoutError as Error;
 
         self.check_is_valid()?;
@@ -3717,8 +3742,23 @@ impl Device {
 
         let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
 
-        for bgl in desc.bind_group_layouts.iter() {
+        for (index, bgl) in desc.bind_group_layouts.iter().enumerate() {
+            let Some(bgl) = bgl else {
+                continue;
+            };
+
             bgl.same_device(self)?;
+
+            if !ignore_exclusive_pipeline_check {
+                let exclusive_pipeline = bgl.exclusive_pipeline.get().unwrap();
+                if !matches!(exclusive_pipeline, binding_model::ExclusivePipeline::None) {
+                    return Err(Error::BglHasExclusivePipeline {
+                        index,
+                        pipeline: alloc::format!("{exclusive_pipeline}"),
+                    });
+                }
+            }
+
             count_validator.merge(&bgl.binding_count_validator);
         }
 
@@ -3726,16 +3766,18 @@ impl Device {
             .validate(&self.limits)
             .map_err(Error::TooManyBindings)?;
 
-        let bind_group_layouts = desc
-            .bind_group_layouts
-            .iter()
-            .cloned()
+        let get_bgl_iter = || {
+            desc.bind_group_layouts
+                .iter()
+                .map(|bgl| bgl.as_ref().filter(|bgl| !bgl.entries.is_empty()))
+        };
+
+        let bind_group_layouts = get_bgl_iter()
+            .map(|bgl| bgl.cloned())
             .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
 
-        let raw_bind_group_layouts = desc
-            .bind_group_layouts
-            .iter()
-            .map(|bgl| bgl.raw())
+        let raw_bind_group_layouts = get_bgl_iter()
+            .map(|bgl| bgl.map(|bgl| bgl.raw()))
             .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
 
         let additional_flags = if self.uses_indirect_validation {
@@ -3771,7 +3813,7 @@ impl Device {
         Ok(layout)
     }
 
-    pub(crate) fn derive_pipeline_layout(
+    fn create_derived_pipeline_layout(
         self: &Arc<Self>,
         mut derived_group_layouts: Box<ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>>,
     ) -> Result<Arc<binding_model::PipelineLayout>, pipeline::ImplicitLayoutError> {
@@ -3787,9 +3829,13 @@ impl Device {
         let bind_group_layouts = derived_group_layouts
             .into_iter()
             .map(|mut bgl_entry_map| {
+                if bgl_entry_map.is_empty() {
+                    return Ok(None);
+                }
+
                 bgl_entry_map.sort();
                 match unique_bind_group_layouts.entry(bgl_entry_map) {
-                    hashbrown::hash_map::Entry::Occupied(v) => Ok(Arc::clone(v.get())),
+                    hashbrown::hash_map::Entry::Occupied(v) => Ok(Some(Arc::clone(v.get()))),
                     hashbrown::hash_map::Entry::Vacant(e) => {
                         match self.create_bind_group_layout_internal(
                             &None,
@@ -3798,7 +3844,7 @@ impl Device {
                         ) {
                             Ok(bgl) => {
                                 e.insert(bgl.clone());
-                                Ok(bgl)
+                                Ok(Some(bgl))
                             }
                             Err(e) => Err(e),
                         }
@@ -3813,7 +3859,7 @@ impl Device {
             immediate_size: 0, //TODO?
         };
 
-        let layout = self.create_pipeline_layout(&layout_desc)?;
+        let layout = self.create_pipeline_layout_impl(&layout_desc, true)?;
         Ok(layout)
     }
 
@@ -3841,9 +3887,7 @@ impl Device {
         };
 
         let mut binding_layout_source = match pipeline_layout {
-            Some(ref pipeline_layout) => {
-                validation::BindingLayoutSource::Provided(pipeline_layout.get_binding_maps())
-            }
+            Some(pipeline_layout) => validation::BindingLayoutSource::Provided(pipeline_layout),
             None => validation::BindingLayoutSource::new_derived(&self.limits),
         };
         let mut shader_binding_sizes = FastHashMap::default();
@@ -3871,12 +3915,9 @@ impl Device {
         }
 
         let pipeline_layout = match binding_layout_source {
-            validation::BindingLayoutSource::Provided(_) => {
-                drop(binding_layout_source);
-                pipeline_layout.unwrap()
-            }
+            validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
             validation::BindingLayoutSource::Derived(entries) => {
-                self.derive_pipeline_layout(entries)?
+                self.create_derived_pipeline_layout(entries)?
             }
         };
 
@@ -3937,6 +3978,10 @@ impl Device {
 
         if is_auto_layout {
             for bgl in pipeline.layout.bind_group_layouts.iter() {
+                let Some(bgl) = bgl else {
+                    continue;
+                };
+
                 // `bind_group_layouts` might contain duplicate entries, so we need to ignore the result.
                 let _ = bgl
                     .exclusive_pipeline
@@ -4202,20 +4247,32 @@ impl Device {
                     }
 
                     if let Some(blend_mode) = cs.blend {
-                        for factor in [
-                            blend_mode.color.src_factor,
-                            blend_mode.color.dst_factor,
-                            blend_mode.alpha.src_factor,
-                            blend_mode.alpha.dst_factor,
-                        ] {
-                            if factor.ref_second_blend_source() {
-                                self.require_features(wgt::Features::DUAL_SOURCE_BLENDING)?;
-                                if i == 0 {
-                                    dual_source_blending = true;
-                                    break;
-                                } else {
-                                    return Err(pipeline::CreateRenderPipelineError
-                                        ::BlendFactorOnUnsupportedTarget { factor, target: i as u32 });
+                        for component in [&blend_mode.color, &blend_mode.alpha] {
+                            for factor in [component.src_factor, component.dst_factor] {
+                                if factor.ref_second_blend_source() {
+                                    self.require_features(wgt::Features::DUAL_SOURCE_BLENDING)?;
+                                    if i == 0 {
+                                        dual_source_blending = true;
+                                    } else {
+                                        break 'error Some(
+                                            pipeline::ColorStateError::BlendFactorOnUnsupportedTarget {
+                                                factor,
+                                                target: i as u32,
+                                            }
+                                        );
+                                    }
+                                }
+
+                                if [wgt::BlendOperation::Min, wgt::BlendOperation::Max]
+                                    .contains(&component.operation)
+                                    && factor != wgt::BlendFactor::One
+                                {
+                                    break 'error Some(
+                                        pipeline::ColorStateError::InvalidMinMaxBlendFactor {
+                                            factor,
+                                            target: i as u32,
+                                        },
+                                    );
                                 }
                             }
                         }
@@ -4341,9 +4398,7 @@ impl Device {
         };
 
         let mut binding_layout_source = match pipeline_layout {
-            Some(ref pipeline_layout) => {
-                validation::BindingLayoutSource::Provided(pipeline_layout.get_binding_maps())
-            }
+            Some(pipeline_layout) => validation::BindingLayoutSource::Provided(pipeline_layout),
             None => validation::BindingLayoutSource::new_derived(&self.limits),
         };
 
@@ -4583,12 +4638,9 @@ impl Device {
         }
 
         let pipeline_layout = match binding_layout_source {
-            validation::BindingLayoutSource::Provided(_) => {
-                drop(binding_layout_source);
-                pipeline_layout.unwrap()
-            }
+            validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
             validation::BindingLayoutSource::Derived(entries) => {
-                self.derive_pipeline_layout(entries)?
+                self.create_derived_pipeline_layout(entries)?
             }
         };
 
@@ -4740,6 +4792,10 @@ impl Device {
 
         if is_auto_layout {
             for bgl in pipeline.layout.bind_group_layouts.iter() {
+                let Some(bgl) = bgl else {
+                    continue;
+                };
+
                 // `bind_group_layouts` might contain duplicate entries, so we need to ignore the result.
                 let _ = bgl
                     .exclusive_pipeline

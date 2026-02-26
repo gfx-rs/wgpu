@@ -92,9 +92,9 @@ static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
                                 cache: None,
                             });
 
-                    pipeline.get_bind_group_layout(0);
+                    pipeline.get_bind_group_layout(u32::MAX);
                 },
-                Some("Invalid group index 0"),
+                Some("Bind group layout index 4294967295 is greater than the device's configured `max_bind_groups` limit"),
             );
         });
 
@@ -178,9 +178,9 @@ static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
                                 cache: None,
                             });
 
-                    pipeline.get_bind_group_layout(0);
+                    pipeline.get_bind_group_layout(u32::MAX);
                 },
-                Some("Invalid group index 0"),
+                Some("Bind group layout index 4294967295 is greater than the device's configured `max_bind_groups` limit"),
             );
         });
 

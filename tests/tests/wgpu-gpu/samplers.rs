@@ -326,9 +326,9 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
             }],
         });
 
-    let mut bgl_references: Vec<_> = bind_group_layouts.iter().collect();
+    let mut bgl_references: Vec<_> = bind_group_layouts.iter().map(Some).collect();
 
-    bgl_references.push(&output_bgl);
+    bgl_references.push(Some(&output_bgl));
 
     let pipeline_layout = ctx
         .device

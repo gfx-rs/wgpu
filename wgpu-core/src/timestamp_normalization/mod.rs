@@ -195,7 +195,7 @@ impl TimestampNormalizer {
                         Some("(wgpu internal) Timestamp normalizer pipeline layout"),
                         device.instance_flags,
                     ),
-                    bind_group_layouts: &[temporary_bind_group_layout.as_ref()],
+                    bind_group_layouts: &[Some(temporary_bind_group_layout.as_ref())],
                     immediate_size: 8,
                     flags: hal::PipelineLayoutFlags::empty(),
                 })
@@ -347,7 +347,7 @@ impl TimestampNormalizer {
                 timestamp_writes: None,
             });
             encoder.set_compute_pipeline(&*state.pipeline);
-            encoder.set_bind_group(&*state.pipeline_layout, 0, Some(bind_group), &[]);
+            encoder.set_bind_group(&*state.pipeline_layout, 0, bind_group, &[]);
             encoder.set_immediates(
                 &*state.pipeline_layout,
                 0,

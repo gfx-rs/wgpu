@@ -151,7 +151,7 @@ impl RenderpassState {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: None,
-                    bind_group_layouts: &[&bind_group_layout],
+                    bind_group_layouts: &[Some(&bind_group_layout)],
                     immediate_size: 0,
                 });
 
@@ -290,7 +290,7 @@ impl RenderpassState {
                     .device
                     .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                         label: None,
-                        bind_group_layouts: &[&bindless_bind_group_layout],
+                        bind_group_layouts: &[Some(&bindless_bind_group_layout)],
                         immediate_size: 0,
                     });
 

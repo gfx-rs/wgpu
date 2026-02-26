@@ -44,6 +44,25 @@ Bottom level categories:
 
 ### Major Changes
 
+#### Bind group layouts now optional in `PipelineLayoutDescriptor`
+
+Allow gaps in bind group layouts and added full support for unbinding. As a result of this `PipelineLayoutDescriptor`'s `bind_group_layouts` field now has type of `&[Option<&BindGroupLayout>]`, making this a breaking change. To migrate wrap bind group layout references in `Some`:
+
+```diff
+  let pl_desc = wgpu::PipelineLayoutDescriptor {
+      label: None,
+      bind_group_layouts: &[
+-         &bind_group_layout
++         Some(&bind_group_layout)
+      ],
+      immediate_size: 0,
+  });
+```
+
+By @teoxoy in [#9034](https://github.com/gfx-rs/wgpu/pull/9034).
+
+#### MSRV update
+
 `wgpu` now has a new MSRV policy. This release has an MSRV of **1.87**. This is lower than v27's 1.88 and v28's 1.92. Going forward, we will only bump wgpu's MSRV if it has tangible benefits for the code, and we will never bump to an MSRV higher than `stable - 3`. So if stable is at 1.97 and 1.94 brought benefit to our code, we could bump it no higher than 1.94. As before, MSRV bumps will always be breaking changes. 
 
 By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
@@ -175,6 +194,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Fixed calculation of the total number of bindings in a pipeline layout when validating against device limits. By @andyleiserson in [#8997](https://github.com/gfx-rs/wgpu/pull/8997).
 - Reject non-constructible types (runtime- and override-sized arrays, and structs containing non-constructible types) in more places where they should not be allowed. By @andyleiserson in [#8873](https://github.com/gfx-rs/wgpu/pull/8873).
 - The query set type for an occlusion query is now validated when opening the render pass, in addition to within the call to `beginOcclusionQuery`. By @andyleiserson in [#9086](https://github.com/gfx-rs/wgpu/pull/9086).
+- Require that the blend factor is `One` when the blend operation is `Min` or `Max`. The `BlendFactorOnUnsupportedTarget` error is now reported within `ColorStateError` rather than directly in `CreateRenderPipelineError`. By @andyleiserson in [#9110](https://github.com/gfx-rs/wgpu/pull/9110).
 
 #### Vulkan
 - Fixed a variety of mesh shader SPIR-V writer issues from the original implementation. By @inner-daemons in [#8756](https://github.com/gfx-rs/wgpu/pull/8756)
