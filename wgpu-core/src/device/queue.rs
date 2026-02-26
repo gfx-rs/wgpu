@@ -1635,11 +1635,10 @@ impl Queue {
                 inner,
                 trackers: Tracker::new(),
                 temp_resources: Vec::new(),
-                _indirect_draw_validation_resources:
-                    crate::indirect_validation::DrawResources::new(
-                        self.device.clone(),
-                        self.index,
-                    ),
+                _indirect_draw_validation_resources: crate::indirect_validation::DrawResources::new(
+                    self.device.clone(),
+                    self.index,
+                ),
                 pending_buffers: FastHashMap::default(),
                 pending_textures: FastHashMap::default(),
                 pending_blas_s: FastHashMap::default(),
