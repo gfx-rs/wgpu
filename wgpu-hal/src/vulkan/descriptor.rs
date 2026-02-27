@@ -15,37 +15,25 @@ use hashbrown::HashMap;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct DescriptorTotalCount {
     pub sampler: u32,
-    pub combined_image_sampler: u32,
     pub sampled_image: u32,
     pub storage_image: u32,
-    pub uniform_texel_buffer: u32,
-    pub storage_texel_buffer: u32,
     pub uniform_buffer: u32,
     pub storage_buffer: u32,
     pub uniform_buffer_dynamic: u32,
     pub storage_buffer_dynamic: u32,
-    pub input_attachment: u32,
     pub acceleration_structure: u32,
-    pub inline_uniform_block_bytes: u32,
-    pub inline_uniform_block_bindings: u32,
 }
 
 impl DescriptorTotalCount {
     pub fn total(&self) -> u32 {
         self.sampler
-            + self.combined_image_sampler
             + self.sampled_image
             + self.storage_image
-            + self.uniform_texel_buffer
-            + self.storage_texel_buffer
             + self.uniform_buffer
             + self.storage_buffer
             + self.uniform_buffer_dynamic
             + self.storage_buffer_dynamic
-            + self.input_attachment
             + self.acceleration_structure
-            + self.inline_uniform_block_bytes
-            + self.inline_uniform_block_bindings
     }
 }
 
@@ -57,7 +45,6 @@ impl super::DeviceShared {
         max_sets: u32,
         flags: vk::DescriptorPoolCreateFlags,
     ) -> Result<vk::DescriptorPool, crate::DeviceError> {
-        //Note: ignoring other types, since they can't appear here
         let unfiltered_counts = [
             (vk::DescriptorType::SAMPLER, descriptor_count.sampler),
             (
@@ -217,35 +204,23 @@ impl DescriptorBucket {
         let mut max_sets = self.total.clamp(MIN_SETS, MAX_SETS).next_power_of_two();
 
         max_sets = (u32::MAX / self.size.sampler.max(1)).min(max_sets);
-        max_sets = (u32::MAX / self.size.combined_image_sampler.max(1)).min(max_sets);
         max_sets = (u32::MAX / self.size.sampled_image.max(1)).min(max_sets);
         max_sets = (u32::MAX / self.size.storage_image.max(1)).min(max_sets);
-        max_sets = (u32::MAX / self.size.uniform_texel_buffer.max(1)).min(max_sets);
-        max_sets = (u32::MAX / self.size.storage_texel_buffer.max(1)).min(max_sets);
         max_sets = (u32::MAX / self.size.uniform_buffer.max(1)).min(max_sets);
         max_sets = (u32::MAX / self.size.storage_buffer.max(1)).min(max_sets);
         max_sets = (u32::MAX / self.size.uniform_buffer_dynamic.max(1)).min(max_sets);
         max_sets = (u32::MAX / self.size.storage_buffer_dynamic.max(1)).min(max_sets);
-        max_sets = (u32::MAX / self.size.input_attachment.max(1)).min(max_sets);
         max_sets = (u32::MAX / self.size.acceleration_structure.max(1)).min(max_sets);
-        max_sets = (u32::MAX / self.size.inline_uniform_block_bytes.max(1)).min(max_sets);
-        max_sets = (u32::MAX / self.size.inline_uniform_block_bindings.max(1)).min(max_sets);
 
         let mut pool_size = DescriptorTotalCount {
             sampler: self.size.sampler * max_sets,
-            combined_image_sampler: self.size.combined_image_sampler * max_sets,
             sampled_image: self.size.sampled_image * max_sets,
             storage_image: self.size.storage_image * max_sets,
-            uniform_texel_buffer: self.size.uniform_texel_buffer * max_sets,
-            storage_texel_buffer: self.size.storage_texel_buffer * max_sets,
             uniform_buffer: self.size.uniform_buffer * max_sets,
             storage_buffer: self.size.storage_buffer * max_sets,
             uniform_buffer_dynamic: self.size.uniform_buffer_dynamic * max_sets,
             storage_buffer_dynamic: self.size.storage_buffer_dynamic * max_sets,
-            input_attachment: self.size.input_attachment * max_sets,
             acceleration_structure: self.size.acceleration_structure * max_sets,
-            inline_uniform_block_bytes: self.size.inline_uniform_block_bytes * max_sets,
-            inline_uniform_block_bindings: self.size.inline_uniform_block_bindings * max_sets,
         };
 
         if pool_size == Default::default() {
