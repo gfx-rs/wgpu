@@ -644,6 +644,9 @@ impl super::Device {
                 ref naga_shader,
                 runtime_checks,
             } => {
+                if !wgt::shader_compilation_enabled() {
+                    unreachable!("shader compilation not enabled");
+                }
                 let pipeline_options = naga::back::spv::PipelineOptions {
                     entry_point: stage.entry_point.to_owned(),
                     shader_stage: naga_stage,
@@ -1735,12 +1738,18 @@ impl crate::Device for super::Device {
                     .contains(super::Workarounds::SEPARATE_ENTRY_POINTS)
                     || !naga_shader.module.overrides.is_empty() =>
             {
+                if !wgt::shader_compilation_enabled() {
+                    unreachable!("shader compilation not enabled");
+                }
                 super::ShaderModule::Intermediate {
                     naga_shader,
                     runtime_checks: desc.runtime_checks,
                 }
             }
             crate::ShaderInput::Naga(naga_shader) => {
+                if !wgt::shader_compilation_enabled() {
+                    unreachable!("shader compilation not enabled");
+                }
                 let mut naga_options = self.naga_options.clone();
                 naga_options.debug_info =
                     naga_shader

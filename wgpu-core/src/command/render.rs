@@ -2308,6 +2308,9 @@ pub(super) fn encode_render_pass(
         );
 
         if let Some(ref indirect_validation) = device.indirect_validation {
+            if !wgt::shader_compilation_enabled() {
+                unreachable!("indirect validation is on, but shader compilation is disabled");
+            }
             indirect_validation
                 .draw
                 .inject_validation_pass(
@@ -2833,6 +2836,9 @@ fn multi_draw_indirect(
     }
 
     if state.pass.base.device.indirect_validation.is_some() {
+        if !wgt::shader_compilation_enabled() {
+            unreachable!("indirect validation is on, but shader compilation is disabled");
+        }
         state
             .pass
             .scope

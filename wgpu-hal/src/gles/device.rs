@@ -224,6 +224,9 @@ impl super::Device {
         context: CompilationContext,
         program: glow::Program,
     ) -> Result<glow::Shader, crate::PipelineError> {
+        if !wgt::shader_compilation_enabled() {
+            unreachable!("shader compilation not enabled");
+        }
         use naga::back::glsl;
         let pipeline_options = glsl::PipelineOptions {
             shader_stage: naga_stage,

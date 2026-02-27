@@ -382,6 +382,15 @@ impl Device {
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
     ) -> Result<Self, DeviceError> {
+        if !wgt::shader_compilation_enabled() {
+            let unsupported = instance_flags
+                & (wgt::InstanceFlags::VALIDATION_INDIRECT_CALL
+                    | wgt::InstanceFlags::AUTOMATIC_TIMESTAMP_NORMALIZATION);
+            if !unsupported.is_empty() {
+                return Err(DeviceError::UnsupportedInstanceFlags(unsupported));
+            }
+        }
+
         #[cfg(not(feature = "trace"))]
         match &desc.trace {
             wgt::Trace::Off => {}
@@ -492,6 +501,9 @@ impl Device {
             && limits.max_storage_buffers_per_shader_stage >= 2;
 
         let indirect_validation = if enable_indirect_validation {
+            if !wgt::shader_compilation_enabled() {
+                unreachable!("indirect validation is on, but shader compilation is disabled");
+            }
             Some(crate::indirect_validation::IndirectValidation::new(
                 raw_device.as_ref(),
                 &desc.required_limits,
@@ -2234,6 +2246,10 @@ impl Device {
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: pipeline::ShaderModuleSource<'a>,
     ) -> Result<Arc<pipeline::ShaderModule>, pipeline::CreateShaderModuleError> {
+        if !wgt::shader_compilation_enabled() {
+            return Err(pipeline::CreateShaderModuleError::ShaderCompilationDisabled);
+        }
+
         self.check_is_valid()?;
 
         let (module, source) = match source {

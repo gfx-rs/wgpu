@@ -109,6 +109,10 @@ impl TimestampNormalizer {
                 return Ok(Self { state: None });
             }
 
+            if !wgt::shader_compilation_enabled() {
+                unreachable!("timestamp validation is on, but shader compilation is disabled");
+            }
+
             let temporary_bind_group_layout = device
                 .raw()
                 .create_bind_group_layout(&hal::BindGroupLayoutDescriptor {

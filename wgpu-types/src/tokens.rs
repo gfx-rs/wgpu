@@ -1,4 +1,17 @@
+use core::sync::atomic::{AtomicBool, Ordering};
+
 use crate::link_to_wgpu_item;
+
+static SHADER_COMPILATION_ENABLED: AtomicBool = AtomicBool::new(false);
+
+/// Returns whether shader compilation has been enabled via
+/// [`ExperimentalFeatures::enabled()`].
+///
+/// When fat LTO is enabled and `ExperimentalFeatures::enabled()` is never called, LLVM can
+/// see that naga is unused and eliminate nearly all the naga code from the binary.
+pub fn shader_compilation_enabled() -> bool {
+    SHADER_COMPILATION_ENABLED.load(Ordering::Relaxed)
+}
 
 /// Token of the user agreeing to access experimental features.
 #[derive(Debug, Default, Copy, Clone)]
@@ -34,7 +47,8 @@ impl ExperimentalFeatures {
     ///
     #[doc = link_to_wgpu_item!(struct Features)]
     /// [`api-specs`]: https://github.com/gfx-rs/wgpu/tree/trunk/docs/api-specs
-    pub const unsafe fn enabled() -> Self {
+    pub unsafe fn enabled() -> Self {
+        SHADER_COMPILATION_ENABLED.store(true, Ordering::Relaxed);
         Self { enabled: true }
     }
 

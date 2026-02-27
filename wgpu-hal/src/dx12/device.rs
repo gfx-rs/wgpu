@@ -314,6 +314,9 @@ impl super::Device {
 
         let key = match &stage.module.source {
             super::ShaderModuleSource::Naga(naga_shader) => {
+                if !wgt::shader_compilation_enabled() {
+                    unreachable!("shader compilation not enabled");
+                }
                 use naga::back::hlsl;
 
                 let frag_ep = match fragment_stage {

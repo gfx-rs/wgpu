@@ -145,6 +145,9 @@ impl super::Device {
     ) -> Result<CompiledShader, crate::PipelineError> {
         match stage.module.source {
             ShaderModuleSource::Naga(ref naga_shader) => {
+                if !wgt::shader_compilation_enabled() {
+                    unreachable!("shader compilation not enabled");
+                }
                 let stage_bit = map_naga_stage(naga_stage);
                 let (module, module_info) = naga::back::pipeline_constants::process_overrides(
                     &naga_shader.module,

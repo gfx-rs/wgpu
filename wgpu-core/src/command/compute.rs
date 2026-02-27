@@ -907,6 +907,10 @@ fn dispatch_indirect(
     );
 
     if let Some(ref indirect_validation) = state.pass.base.device.indirect_validation {
+        if !wgt::shader_compilation_enabled() {
+            unreachable!("indirect validation is on, but shader compilation is disabled");
+        }
+
         let params = indirect_validation.dispatch.params(
             &state.pass.base.device.limits,
             offset,

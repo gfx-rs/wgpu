@@ -320,7 +320,7 @@ wgpu = { path = "./wgpu" }
 generator = { git = "https://github.com/Xudong-Huang/generator-rs", rev = "70b89fdabcc0e82fe84ca17f65cc52ff25e8e6de" }
 
 [profile.release]
-lto = "thin"
+lto = "fat"
 debug = true
 
 # Speed up image comparison even in debug builds

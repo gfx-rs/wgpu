@@ -332,6 +332,12 @@ pub enum DeviceError {
     OutOfMemory,
     #[error(transparent)]
     DeviceMismatch(#[from] Box<DeviceMismatch>),
+    #[error(
+        "{0:?} {verb} not supported when shader compilation is disabled",
+        verb = if .0.bits().count_ones() > 1 { "are" } else { "is" },
+    )]
+    #[cfg_attr(feature = "serde", serde(skip))]
+    UnsupportedInstanceFlags(wgt::InstanceFlags),
 }
 
 impl WebGpuError for DeviceError {
@@ -340,6 +346,7 @@ impl WebGpuError for DeviceError {
             Self::DeviceMismatch(e) => e.webgpu_error_type(),
             Self::Lost => ErrorType::DeviceLost,
             Self::OutOfMemory => ErrorType::OutOfMemory,
+            Self::UnsupportedInstanceFlags(_) => ErrorType::Validation,
         }
     }
 }
