@@ -55,14 +55,13 @@ pub enum SurfaceError {
 
 impl WebGpuError for SurfaceError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
             Self::Invalid
             | Self::NotConfigured
             | Self::AlreadyAcquired
-            | Self::TextureDestroyed => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::TextureDestroyed => ErrorType::Validation,
+        }
     }
 }
 
@@ -125,9 +124,9 @@ impl From<WaitIdleError> for ConfigureSurfaceError {
 
 impl WebGpuError for ConfigureSurfaceError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::MissingDownlevelFlags(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
             Self::InvalidSurface
             | Self::InvalidViewFormat(..)
             | Self::PreviousOutputExists
@@ -138,9 +137,8 @@ impl WebGpuError for ConfigureSurfaceError {
             | Self::UnsupportedFormat { .. }
             | Self::UnsupportedPresentMode { .. }
             | Self::UnsupportedAlphaMode { .. }
-            | Self::UnsupportedUsage { .. } => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::UnsupportedUsage { .. } => ErrorType::Validation,
+        }
     }
 }
 

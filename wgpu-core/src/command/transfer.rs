@@ -186,10 +186,10 @@ pub enum TransferError {
 
 impl WebGpuError for TransferError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::MissingBufferUsage(e) => e,
-            Self::MissingTextureUsage(e) => e,
-            Self::MemoryInitFailure(e) => e,
+        match self {
+            Self::MissingBufferUsage(e) => e.webgpu_error_type(),
+            Self::MissingTextureUsage(e) => e.webgpu_error_type(),
+            Self::MemoryInitFailure(e) => e.webgpu_error_type(),
 
             Self::BufferEndOffsetOverrun { .. }
             | Self::TextureOverrun { .. }
@@ -225,9 +225,8 @@ impl WebGpuError for TransferError {
             | Self::SampleCountNotEqual { .. }
             | Self::InvalidMipLevel { .. }
             | Self::SameSourceDestinationBuffer
-            | Self::BufferNotAvailable => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::BufferNotAvailable => ErrorType::Validation,
+        }
     }
 }
 

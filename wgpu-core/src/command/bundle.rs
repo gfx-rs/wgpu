@@ -1501,15 +1501,14 @@ pub struct RenderBundleError {
 impl WebGpuError for RenderBundleError {
     fn webgpu_error_type(&self) -> ErrorType {
         let Self { scope: _, inner } = self;
-        let e: &dyn WebGpuError = match inner {
-            RenderBundleErrorInner::Device(e) => e,
-            RenderBundleErrorInner::RenderCommand(e) => e,
-            RenderBundleErrorInner::Draw(e) => e,
-            RenderBundleErrorInner::MissingDownlevelFlags(e) => e,
-            RenderBundleErrorInner::Bind(e) => e,
-            RenderBundleErrorInner::InvalidResource(e) => e,
-        };
-        e.webgpu_error_type()
+        match inner {
+            RenderBundleErrorInner::Device(e) => e.webgpu_error_type(),
+            RenderBundleErrorInner::RenderCommand(e) => e.webgpu_error_type(),
+            RenderBundleErrorInner::Draw(e) => e.webgpu_error_type(),
+            RenderBundleErrorInner::MissingDownlevelFlags(e) => e.webgpu_error_type(),
+            RenderBundleErrorInner::Bind(e) => e.webgpu_error_type(),
+            RenderBundleErrorInner::InvalidResource(e) => e.webgpu_error_type(),
+        }
     }
 }
 
