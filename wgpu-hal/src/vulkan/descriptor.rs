@@ -320,28 +320,28 @@ impl DescriptorBucket {
 
         log::trace!("Freed {} from descriptor bucket", count);
 
-        while let Some(pool) = self.pools.pop_front() {
-            if self.pools.is_empty() || pool.allocated != 0 {
-                self.pools.push_front(pool);
+        while self.pools.len() > 1 {
+            if self.pools.front().unwrap().allocated != 0 {
                 break;
             }
 
             log::trace!("Destroying old descriptor pool");
 
+            let pool = self.pools.pop_front().unwrap();
             unsafe { device.raw.destroy_descriptor_pool(pool.raw, None) };
             self.offset += 1;
         }
     }
 
     unsafe fn cleanup(&mut self, device: &super::DeviceShared) {
-        while let Some(pool) = self.pools.pop_front() {
+        while let Some(pool) = self.pools.front() {
             if pool.allocated != 0 {
-                self.pools.push_front(pool);
                 break;
             }
 
             log::trace!("Destroying old descriptor pool");
 
+            let pool = self.pools.pop_front().unwrap();
             unsafe { device.raw.destroy_descriptor_pool(pool.raw, None) };
             self.offset += 1;
         }
