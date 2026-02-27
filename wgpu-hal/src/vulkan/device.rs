@@ -1350,19 +1350,10 @@ impl crate::Device for super::Device {
             super::AccelerationStructure,
         >,
     ) -> Result<super::BindGroup, crate::DeviceError> {
-        let desc_set_layout_flags = if desc.layout.contains_binding_arrays {
-            descriptor::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND
-        } else {
-            descriptor::DescriptorSetLayoutCreateFlags::empty()
-        };
-
         let mut vk_sets = unsafe {
-            self.desc_allocator.lock().allocate(
-                &self.shared,
-                &desc.layout.raw,
-                desc_set_layout_flags,
-                &desc.layout.desc_count,
-            )?
+            self.desc_allocator
+                .lock()
+                .allocate(&self.shared, desc.layout)?
         };
 
         let set = vk_sets.pop().unwrap();

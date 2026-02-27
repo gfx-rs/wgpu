@@ -9,20 +9,6 @@ use ash::vk;
 use core::convert::TryFrom as _;
 use hashbrown::HashMap;
 
-bitflags::bitflags! {
-    /// Flags to augment descriptor pool creation.
-    ///
-    /// Match corresponding bits in Vulkan.
-    #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-    pub struct DescriptorPoolCreateFlags: u32 {
-        /// Allows freeing individual sets.
-        const FREE_DESCRIPTOR_SET = 0x1;
-
-        /// Allows allocating sets with layout created with matching backend-specific flag.
-        const UPDATE_AFTER_BIND = 0x2;
-    }
-}
-
 /// Number of descriptors of each type.
 ///
 /// For `InlineUniformBlock` this value is number of bytes instead.
@@ -69,7 +55,7 @@ impl super::DeviceShared {
         &self,
         descriptor_count: &DescriptorTotalCount,
         max_sets: u32,
-        flags: DescriptorPoolCreateFlags,
+        flags: vk::DescriptorPoolCreateFlags,
     ) -> Result<vk::DescriptorPool, crate::DeviceError> {
         //Note: ignoring other types, since they can't appear here
         let unfiltered_counts = [
@@ -114,17 +100,9 @@ impl super::DeviceShared {
             })
             .collect::<ArrayVec<_, 8>>();
 
-        let mut vk_flags = if flags.contains(DescriptorPoolCreateFlags::UPDATE_AFTER_BIND) {
-            vk::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND
-        } else {
-            vk::DescriptorPoolCreateFlags::empty()
-        };
-        if flags.contains(DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET) {
-            vk_flags |= vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET;
-        }
         let vk_info = vk::DescriptorPoolCreateInfo::default()
             .max_sets(max_sets)
-            .flags(vk_flags)
+            .flags(flags)
             .pool_sizes(&filtered_counts);
 
         unsafe { self.raw.create_descriptor_pool(&vk_info, None) }
@@ -171,19 +149,6 @@ impl super::DeviceShared {
             Ok(()) => {}
             Err(err) => super::device::handle_unexpected(err),
         }
-    }
-}
-
-bitflags::bitflags! {
-    /// Flags to augment descriptor set allocation.
-    #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-    pub struct DescriptorSetLayoutCreateFlags: u32 {
-        /// Specified that descriptor set must be allocated from\
-        /// pool with `DescriptorPoolCreateFlags::UPDATE_AFTER_BIND`.
-        ///
-        /// This flag must be specified when and only when layout was created with matching backend-specific flag,
-        /// that allows layout to have UpdateAfterBind bindings.
-        const UPDATE_AFTER_BIND = 0x2;
     }
 }
 
@@ -326,10 +291,10 @@ impl DescriptorBucket {
             &pool_size,
             max_sets,
             if self.update_after_bind {
-                DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET
-                    | DescriptorPoolCreateFlags::UPDATE_AFTER_BIND
+                vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET
+                    | vk::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND
             } else {
-                DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET
+                vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET
             },
         )?;
 
@@ -454,15 +419,11 @@ impl DescriptorAllocator {
     pub unsafe fn allocate(
         &mut self,
         device: &super::DeviceShared,
-        layout: &vk::DescriptorSetLayout,
-        flags: DescriptorSetLayoutCreateFlags,
-        layout_descriptor_count: &DescriptorTotalCount,
+        layout: &super::BindGroupLayout,
     ) -> Result<Vec<DescriptorSet>, crate::DeviceError> {
-        let descriptor_count = layout_descriptor_count.total();
+        let descriptor_count = layout.desc_count.total();
 
-        let update_after_bind = flags.contains(DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND);
-
-        if update_after_bind
+        if layout.contains_binding_arrays
             && self.max_update_after_bind_descriptors_in_all_pools
                 - self.current_update_after_bind_descriptors_in_all_pools
                 < descriptor_count
@@ -472,18 +433,20 @@ impl DescriptorAllocator {
 
         log::trace!(
             "Allocating a set with layout {:?} @ {:?}",
-            layout,
-            layout_descriptor_count
+            layout.raw,
+            descriptor_count
         );
 
         let bucket = self
             .buckets
-            .entry((*layout_descriptor_count, update_after_bind))
-            .or_insert_with(|| DescriptorBucket::new(update_after_bind, *layout_descriptor_count));
-        match unsafe { bucket.allocate(device, layout, &mut self.sets_cache) } {
+            .entry((layout.desc_count, layout.contains_binding_arrays))
+            .or_insert_with(|| {
+                DescriptorBucket::new(layout.contains_binding_arrays, layout.desc_count)
+            });
+        match unsafe { bucket.allocate(device, &layout.raw, &mut self.sets_cache) } {
             Ok(()) => {
                 self.total += descriptor_count;
-                if update_after_bind {
+                if layout.contains_binding_arrays {
                     self.current_update_after_bind_descriptors_in_all_pools += descriptor_count;
                 }
 
