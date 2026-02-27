@@ -136,20 +136,16 @@ impl super::DeviceShared {
     /// # Safety
     ///
     /// Pool must be created from this device.
-    unsafe fn alloc_descriptor_sets<'a>(
+    unsafe fn alloc_descriptor_sets(
         &self,
         pool: &mut vk::DescriptorPool,
-        layouts: impl ExactSizeIterator<Item = &'a vk::DescriptorSetLayout>,
+        layout: &vk::DescriptorSetLayout,
     ) -> Result<Vec<vk::DescriptorSet>, crate::DeviceError> {
         unsafe {
             self.raw.allocate_descriptor_sets(
                 &vk::DescriptorSetAllocateInfo::default()
                     .descriptor_pool(*pool)
-                    .set_layouts(
-                        &smallvec::SmallVec::<[vk::DescriptorSetLayout; 32]>::from_iter(
-                            layouts.cloned(),
-                        ),
-                    ),
+                    .set_layouts(core::slice::from_ref(layout)),
             )
         }
         .map_err(super::map_host_device_oom_err)
@@ -252,12 +248,8 @@ impl DescriptorBucket {
         }
     }
 
-    fn new_pool_size(&self, minimal_set_count: u32) -> (DescriptorTotalCount, u32) {
-        let mut max_sets = MIN_SETS // at least MIN_SETS
-            .max(minimal_set_count) // at least enough for allocation
-            .max(self.total.min(MAX_SETS)) // at least as much as was allocated so far capped to MAX_SETS
-            .checked_next_power_of_two() // rounded up to nearest 2^N
-            .unwrap_or(i32::MAX as u32);
+    fn new_pool_size(&self) -> (DescriptorTotalCount, u32) {
+        let mut max_sets = self.total.clamp(MIN_SETS, MAX_SETS).next_power_of_two();
 
         max_sets = (u32::MAX / self.size.sampler.max(1)).min(max_sets);
         max_sets = (u32::MAX / self.size.combined_image_sampler.max(1)).min(max_sets);
@@ -302,27 +294,16 @@ impl DescriptorBucket {
         &mut self,
         device: &super::DeviceShared,
         layout: &vk::DescriptorSetLayout,
-        mut count: u32,
         allocated_sets: &mut Vec<DescriptorSet>,
     ) -> Result<(), crate::DeviceError> {
-        debug_assert!(usize::try_from(count).is_ok(), "Must be ensured by caller");
-
-        if count == 0 {
-            return Ok(());
-        }
-
         for (index, pool) in self.pools.iter_mut().enumerate().rev() {
             if pool.available == 0 {
                 continue;
             }
 
-            let allocate = pool.available.min(count);
+            log::trace!("Allocate a set from existing pool");
 
-            log::trace!("Allocate `{}` sets from existing pool", allocate);
-
-            let vk_sets = unsafe {
-                device.alloc_descriptor_sets(&mut pool.raw, (0..allocate).map(|_| layout))
-            }?;
+            let vk_sets = unsafe { device.alloc_descriptor_sets(&mut pool.raw, layout) }?;
             allocated_sets.extend(vk_sets.into_iter().map(|raw| DescriptorSet {
                 raw,
                 pool_id: index as u64 + self.offset,
@@ -330,65 +311,51 @@ impl DescriptorBucket {
                 size: self.size,
             }));
 
-            count -= allocate;
-            pool.available -= allocate;
-            pool.allocated += allocate;
-            self.total += allocate;
+            pool.available -= 1;
+            pool.allocated += 1;
+            self.total += 1;
 
-            if count == 0 {
-                return Ok(());
-            }
+            return Ok(());
         }
 
-        while count > 0 {
-            let (pool_size, max_sets) = self.new_pool_size(count);
+        let (pool_size, max_sets) = self.new_pool_size();
 
-            log::trace!(
-                "Create new pool with {} sets and {:?} descriptors",
-                max_sets,
-                pool_size,
-            );
+        log::trace!("Create new pool with {max_sets} sets and {pool_size:?} descriptors");
 
-            let mut raw = device.create_descriptor_pool(
-                &pool_size,
-                max_sets,
-                if self.update_after_bind {
-                    DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET
-                        | DescriptorPoolCreateFlags::UPDATE_AFTER_BIND
-                } else {
-                    DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET
-                },
-            )?;
+        let mut raw = device.create_descriptor_pool(
+            &pool_size,
+            max_sets,
+            if self.update_after_bind {
+                DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET
+                    | DescriptorPoolCreateFlags::UPDATE_AFTER_BIND
+            } else {
+                DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET
+            },
+        )?;
 
-            let pool_id = self.pools.len() as u64 + self.offset;
+        let pool_id = self.pools.len() as u64 + self.offset;
 
-            let allocate = max_sets.min(count);
-            let result =
-                unsafe { device.alloc_descriptor_sets(&mut raw, (0..allocate).map(|_| layout)) };
+        let result = unsafe { device.alloc_descriptor_sets(&mut raw, layout) };
 
-            match result {
-                Ok(vk_sets) => {
-                    allocated_sets.extend(vk_sets.into_iter().map(|raw| DescriptorSet {
-                        raw,
-                        pool_id,
-                        size: self.size,
-                        update_after_bind: self.update_after_bind,
-                    }))
-                }
-                Err(err) => {
-                    unsafe { device.raw.destroy_descriptor_pool(raw, None) };
-                    return Err(err);
-                }
-            }
-
-            count -= allocate;
-            self.pools.push_back(DescriptorPool {
+        match result {
+            Ok(vk_sets) => allocated_sets.extend(vk_sets.into_iter().map(|raw| DescriptorSet {
                 raw,
-                allocated: allocate,
-                available: max_sets - allocate,
-            });
-            self.total += allocate;
+                pool_id,
+                size: self.size,
+                update_after_bind: self.update_after_bind,
+            })),
+            Err(err) => {
+                unsafe { device.raw.destroy_descriptor_pool(raw, None) };
+                return Err(err);
+            }
         }
+
+        self.pools.push_back(DescriptorPool {
+            raw,
+            allocated: 1,
+            available: max_sets - 1,
+        });
+        self.total += 1;
 
         Ok(())
     }
@@ -490,13 +457,8 @@ impl DescriptorAllocator {
         layout: &vk::DescriptorSetLayout,
         flags: DescriptorSetLayoutCreateFlags,
         layout_descriptor_count: &DescriptorTotalCount,
-        count: u32,
     ) -> Result<Vec<DescriptorSet>, crate::DeviceError> {
-        if count == 0 {
-            return Ok(Vec::new());
-        }
-
-        let descriptor_count = count * layout_descriptor_count.total();
+        let descriptor_count = layout_descriptor_count.total();
 
         let update_after_bind = flags.contains(DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND);
 
@@ -509,8 +471,7 @@ impl DescriptorAllocator {
         }
 
         log::trace!(
-            "Allocating {} sets with layout {:?} @ {:?}",
-            count,
+            "Allocating a set with layout {:?} @ {:?}",
             layout,
             layout_descriptor_count
         );
@@ -519,7 +480,7 @@ impl DescriptorAllocator {
             .buckets
             .entry((*layout_descriptor_count, update_after_bind))
             .or_insert_with(|| DescriptorBucket::new(update_after_bind, *layout_descriptor_count));
-        match unsafe { bucket.allocate(device, layout, count, &mut self.sets_cache) } {
+        match unsafe { bucket.allocate(device, layout, &mut self.sets_cache) } {
             Ok(()) => {
                 self.total += descriptor_count;
                 if update_after_bind {

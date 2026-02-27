@@ -1362,7 +1362,6 @@ impl crate::Device for super::Device {
                 &desc.layout.raw,
                 desc_set_layout_flags,
                 &desc.layout.desc_count,
-                1,
             )?
         };
 
