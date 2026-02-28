@@ -28,7 +28,7 @@ use crate::{
 /// Information about buffer bindings, which
 /// is validated against the shader (and pipeline)
 /// at draw time as opposed to initialization time.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct LateSizedBufferGroup {
     // The order has to match `BindGroup::late_buffer_binding_sizes`.
     pub(crate) shader_sizes: Vec<wgt::BufferAddress>,
@@ -312,11 +312,7 @@ impl ComputePipeline {
         self: &Arc<Self>,
         index: u32,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
-        self.layout
-            .bind_group_layouts
-            .get(index as usize)
-            .cloned()
-            .ok_or(GetBindGroupLayoutError::InvalidGroupIndex(index))
+        self.layout.get_bind_group_layout(index)
     }
 }
 
@@ -627,6 +623,18 @@ pub enum ColorStateError {
     },
     #[error("Invalid write mask {0:?}")]
     InvalidWriteMask(wgt::ColorWrites),
+    #[error("Using the blend factor {factor:?} for render target {target} is not possible. Only the first render target may be used when dual-source blending.")]
+    BlendFactorOnUnsupportedTarget {
+        factor: wgt::BlendFactor,
+        target: u32,
+    },
+    #[error(
+        "Blend factor {factor:?} for render target {target} is not valid. Blend factor must be `one` when using min/max blend operations."
+    )]
+    InvalidMinMaxBlendFactor {
+        factor: wgt::BlendFactor,
+        target: u32,
+    },
 }
 
 #[derive(Clone, Debug, Error)]
@@ -644,6 +652,10 @@ pub enum DepthStencilStateError {
     InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
     #[error("Depth bias is not compatible with non-triangle topology {0:?}")]
     DepthBiasWithIncompatibleTopology(wgt::PrimitiveTopology),
+    #[error("Depth compare function must be specified for depth format {0:?}")]
+    MissingDepthCompare(wgt::TextureFormat),
+    #[error("Depth write enabled must be specified for depth format {0:?}")]
+    MissingDepthWriteEnabled(wgt::TextureFormat),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -716,11 +728,6 @@ pub enum CreateRenderPipelineError {
     },
     #[error("In the provided shader, the type given for group {group} binding {binding} has a size of {size}. As the device does not support `DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED`, the type must have a size that is a multiple of 16 bytes.")]
     UnalignedShader { group: u32, binding: u32, size: u64 },
-    #[error("Using the blend factor {factor:?} for render target {target} is not possible. Only the first render target may be used when dual-source blending.")]
-    BlendFactorOnUnsupportedTarget {
-        factor: wgt::BlendFactor,
-        target: u32,
-    },
     #[error("{}", concat!(
         "At least one color attachment or depth-stencil attachment was expected, ",
         "but no render target for the pipeline was specified."
@@ -756,7 +763,6 @@ impl WebGpuError for CreateRenderPipelineError {
             | Self::ConservativeRasterizationNonFillPolygonMode
             | Self::Stage { .. }
             | Self::UnalignedShader { .. }
-            | Self::BlendFactorOnUnsupportedTarget { .. }
             | Self::NoTargetSpecified
             | Self::PipelineConstants { .. }
             | Self::VertexAttributeStrideTooLarge { .. } => return ErrorType::Validation,
@@ -844,10 +850,6 @@ impl RenderPipeline {
         self: &Arc<Self>,
         index: u32,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
-        self.layout
-            .bind_group_layouts
-            .get(index as usize)
-            .cloned()
-            .ok_or(GetBindGroupLayoutError::InvalidGroupIndex(index))
+        self.layout.get_bind_group_layout(index)
     }
 }

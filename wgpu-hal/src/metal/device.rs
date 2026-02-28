@@ -67,8 +67,10 @@ fn create_depth_stencil_desc(
     state: &wgt::DepthStencilState,
 ) -> Retained<MTLDepthStencilDescriptor> {
     let desc = MTLDepthStencilDescriptor::new();
-    desc.setDepthCompareFunction(conv::map_compare_function(state.depth_compare));
-    desc.setDepthWriteEnabled(state.depth_write_enabled);
+    desc.setDepthCompareFunction(conv::map_compare_function(
+        state.depth_compare.unwrap_or_default(),
+    ));
+    desc.setDepthWriteEnabled(state.depth_write_enabled.unwrap_or_default());
     let s = &state.stencil;
     if s.is_enabled() {
         let front_desc = create_stencil_desc(&s.front, s.read_mask, s.write_mask);
@@ -726,7 +728,7 @@ impl crate::Device for super::Device {
             need_sizes_buffer: false,
             resources: Default::default(),
         });
-        let mut bind_group_infos = arrayvec::ArrayVec::new();
+        let mut bind_group_infos = [const { None }; crate::MAX_BIND_GROUPS];
 
         // First, place the immediates
         for info in stage_data.iter_mut() {
@@ -740,7 +742,11 @@ impl crate::Device for super::Device {
         }
 
         // Second, place the described resources
-        for (group_index, &bgl) in desc.bind_group_layouts.iter().enumerate() {
+        for (group_index, bgl) in desc.bind_group_layouts.iter().enumerate() {
+            let Some(bgl) = bgl else {
+                continue;
+            };
+
             // remember where the resources for this set start at each shader stage
             let base_resource_indices = stage_data.map_ref(|info| info.counters.clone());
 
@@ -825,7 +831,7 @@ impl crate::Device for super::Device {
                 }
             }
 
-            bind_group_infos.push(super::BindGroupLayoutInfo {
+            bind_group_infos[group_index] = Some(super::BindGroupLayoutInfo {
                 base_resource_indices,
             });
         }

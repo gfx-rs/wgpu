@@ -1025,7 +1025,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
         group: &super::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
-        let bg_info = &layout.bind_group_infos[group_index as usize];
+        let bg_info = layout.bind_group_infos[group_index as usize]
+            .as_ref()
+            .unwrap();
         let render_encoder = self.state.render.clone();
         let compute_encoder = self.state.compute.clone();
         if let Some(encoder) = render_encoder {

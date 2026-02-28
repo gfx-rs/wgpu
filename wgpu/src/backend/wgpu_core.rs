@@ -1283,7 +1283,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         let temp_layouts = desc
             .bind_group_layouts
             .iter()
-            .map(|bgl| bgl.inner.as_core().id)
+            .map(|bgl| bgl.map(|bgl| bgl.inner.as_core().id))
             .collect::<ArrayVec<_, { wgc::MAX_BIND_GROUPS }>>();
         let descriptor = wgc::binding_model::PipelineLayoutDescriptor {
             label: desc.label.map(Borrowed),

@@ -62,7 +62,7 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         &mut self,
         layout: &dyn DynPipelineLayout,
         index: u32,
-        group: Option<&dyn DynBindGroup>,
+        group: &dyn DynBindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
     );
 
@@ -317,15 +317,9 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
         &mut self,
         layout: &dyn DynPipelineLayout,
         index: u32,
-        group: Option<&dyn DynBindGroup>,
+        group: &dyn DynBindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
-        if group.is_none() {
-            // TODO: Handle group None correctly.
-            return;
-        }
-        let group = group.unwrap();
-
         let layout = layout.expect_downcast_ref();
         let group = group.expect_downcast_ref();
         unsafe { C::set_bind_group(self, layout, index, group, dynamic_offsets) };

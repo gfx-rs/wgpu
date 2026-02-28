@@ -33,7 +33,6 @@ use alloc::{
 };
 use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
 
-use arrayvec::ArrayVec;
 use bitflags::bitflags;
 use hashbrown::HashMap;
 use naga::FastHashMap;
@@ -734,7 +733,7 @@ struct ImmediateDataInfo {
 
 #[derive(Debug)]
 pub struct PipelineLayout {
-    bind_group_infos: ArrayVec<BindGroupLayoutInfo, { crate::MAX_BIND_GROUPS }>,
+    bind_group_infos: [Option<BindGroupLayoutInfo>; crate::MAX_BIND_GROUPS],
     immediates_infos: MultiStageData<Option<ImmediateDataInfo>>,
     total_counters: MultiStageResourceCounters,
     total_immediates: u32,

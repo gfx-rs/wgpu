@@ -1736,6 +1736,14 @@ impl Global {
                     let query_set = query_sets.get(occlusion_query_set).get()?;
                     query_set.same_device(device)?;
 
+                    if !matches!(query_set.desc.ty, wgt::QueryType::Occlusion) {
+                        return Err(QueryUseError::IncompatibleType {
+                            set_type: query_set.desc.ty.into(),
+                            query_type: super::SimplifiedQueryType::Occlusion,
+                        }
+                        .into());
+                    }
+
                     Some(query_set)
                 } else {
                     None

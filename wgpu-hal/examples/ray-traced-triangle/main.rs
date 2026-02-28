@@ -390,7 +390,7 @@ impl<A: hal::Api> Example<A> {
         let pipeline_layout_desc = hal::PipelineLayoutDescriptor {
             label: None,
             flags: hal::PipelineLayoutFlags::empty(),
-            bind_group_layouts: &[&bgl],
+            bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
         };
         let pipeline_layout = unsafe {

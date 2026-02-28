@@ -554,7 +554,7 @@ impl Default for StencilFaceState {
 /// Corresponds to [WebGPU `GPUCompareFunction`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpucomparefunction).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum CompareFunction {
@@ -577,6 +577,7 @@ pub enum CompareFunction {
     /// Function passes if new value is greater than or equal to existing value
     GreaterEqual = 7,
     /// Function always passes
+    #[default]
     Always = 8,
 }
 
@@ -807,10 +808,13 @@ pub struct DepthStencilState {
     ///
     #[doc = link_to_wgpu_docs!(["CEbrp"]: "struct.CommandEncoder.html#method.begin_render_pass")]
     pub format: crate::TextureFormat,
-    /// If disabled, depth will not be written to.
-    pub depth_write_enabled: bool,
+    /// If disabled, depth will not be written to. Must be `Some` if `format` is
+    /// a depth format.
+    pub depth_write_enabled: Option<bool>,
     /// Comparison function used to compare depth values in the depth test.
-    pub depth_compare: CompareFunction,
+    /// Must be `Some` if `depth_write_enabled` is `true` or either stencil face
+    /// `depth_fail_op` is not `Keep`.
+    pub depth_compare: Option<CompareFunction>,
     /// Stencil state.
     #[cfg_attr(feature = "serde", serde(default))]
     pub stencil: StencilState,
@@ -820,16 +824,34 @@ pub struct DepthStencilState {
 }
 
 impl DepthStencilState {
+    /// Construct `DepthStencilState` for a stencil operation with no depth operation.
+    ///
+    /// Panics if `format` does not have a stencil aspect.
+    pub fn stencil(format: crate::TextureFormat, stencil: StencilState) -> DepthStencilState {
+        assert!(
+            format.has_stencil_aspect(),
+            "{format:?} is not a stencil format"
+        );
+        DepthStencilState {
+            format,
+            depth_write_enabled: None,
+            depth_compare: None,
+            stencil,
+            bias: DepthBiasState::default(),
+        }
+    }
+
     /// Returns true if the depth testing is enabled.
     #[must_use]
     pub fn is_depth_enabled(&self) -> bool {
-        self.depth_compare != CompareFunction::Always || self.depth_write_enabled
+        self.depth_compare.unwrap_or_default() != CompareFunction::Always
+            || self.depth_write_enabled.unwrap_or_default()
     }
 
     /// Returns true if the state doesn't mutate the depth buffer.
     #[must_use]
     pub fn is_depth_read_only(&self) -> bool {
-        !self.depth_write_enabled
+        !self.depth_write_enabled.unwrap_or_default()
     }
 
     /// Returns true if the state doesn't mutate the stencil.
