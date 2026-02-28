@@ -18,11 +18,19 @@ use serde::Serialize;
 use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
-    Label, device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, bgl}, id::{BindGroupLayoutId, BufferId, ExternalTextureId, SamplerId, TextureViewId, TlasId}, init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction}, pipeline::{ComputePipeline, RayTracingPipeline, RenderPipeline}, resource::{
+    device::{bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
+    id::{BindGroupLayoutId, BufferId, ExternalTextureId, SamplerId, TextureViewId, TlasId},
+    init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
+    pipeline::{ComputePipeline, RayTracingPipeline, RenderPipeline},
+    resource::{
         Buffer, DestroyedResourceError, ExternalTexture, InvalidResourceError, Labeled,
         MissingBufferUsageError, MissingTextureUsageError, RawResourceAccess, ResourceErrorIdent,
         Sampler, TextureView, Tlas, TrackingData,
-    }, resource_log, snatch::{SnatchGuard, Snatchable}, track::{BindGroupStates, ResourceUsageCompatibilityError}
+    },
+    resource_log,
+    snatch::{SnatchGuard, Snatchable},
+    track::{BindGroupStates, ResourceUsageCompatibilityError},
+    Label,
 };
 
 #[derive(Clone, Debug, Error)]

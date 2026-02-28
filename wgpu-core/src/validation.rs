@@ -2019,8 +2019,12 @@ pub enum ShaderStageForValidation {
     Task,
     RayGeneration,
     Miss,
-    ClosestHit { triangle: bool, },
-    AnyHit { triangle: bool, },
+    ClosestHit {
+        triangle: bool,
+    },
+    AnyHit {
+        triangle: bool,
+    },
 }
 
 impl ShaderStageForValidation {

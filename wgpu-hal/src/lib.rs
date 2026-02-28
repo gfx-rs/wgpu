@@ -1076,7 +1076,11 @@ pub trait Device: WasmNotSendSync {
         >,
     ) -> Result<<Self::A as Api>::RayTracingPipeline, PipelineError>;
     unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: <Self::A as Api>::RayTracingPipeline);
-    unsafe fn get_raytracing_pipeline_group_data(&self, pipeline: <Self::A as Api>::RayTracingPipeline, groups: Range<u32>) -> Result<Vec<u8>, DeviceError>;
+    unsafe fn get_raytracing_pipeline_group_data(
+        &self,
+        pipeline: <Self::A as Api>::RayTracingPipeline,
+        groups: Range<u32>,
+    ) -> Result<Vec<u8>, DeviceError>;
 
     unsafe fn create_pipeline_cache(
         &self,

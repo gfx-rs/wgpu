@@ -121,7 +121,11 @@ pub trait DynDevice: DynResource {
         >,
     ) -> Result<Box<dyn DynRayTracingPipeline>, PipelineError>;
     unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: Box<dyn DynRayTracingPipeline>);
-    unsafe fn get_raytracing_pipeline_group_data(&self, pipeline: Box<dyn DynRayTracingPipeline>, groups: core::ops::Range<u32>) -> Result<Vec<u8>, DeviceError>;
+    unsafe fn get_raytracing_pipeline_group_data(
+        &self,
+        pipeline: Box<dyn DynRayTracingPipeline>,
+        groups: core::ops::Range<u32>,
+    ) -> Result<Vec<u8>, DeviceError>;
 
     unsafe fn create_pipeline_cache(
         &self,
@@ -492,8 +496,12 @@ impl<D: Device + DynResource> DynDevice for D {
             D::destroy_ray_tracing_pipeline(self, pipeline.unbox());
         };
     }
-    unsafe fn get_raytracing_pipeline_group_data(&self, pipeline: Box<dyn DynRayTracingPipeline>, groups: core::ops::Range<u32>) -> Result<Vec<u8>, DeviceError> {
-        unsafe{ D::get_raytracing_pipeline_group_data(self, pipeline.unbox(), groups) }
+    unsafe fn get_raytracing_pipeline_group_data(
+        &self,
+        pipeline: Box<dyn DynRayTracingPipeline>,
+        groups: core::ops::Range<u32>,
+    ) -> Result<Vec<u8>, DeviceError> {
+        unsafe { D::get_raytracing_pipeline_group_data(self, pipeline.unbox(), groups) }
     }
 
     unsafe fn create_pipeline_cache(

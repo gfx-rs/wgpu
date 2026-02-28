@@ -16,9 +16,9 @@ mod as_build;
 mod as_create;
 mod as_use_after_free;
 mod limits;
+mod pipelines;
 mod scene;
 mod shader;
-mod pipelines;
 
 pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
     as_aabb::all_tests(tests);

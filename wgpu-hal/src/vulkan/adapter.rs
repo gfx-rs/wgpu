@@ -1781,12 +1781,11 @@ impl PhysicalDeviceProperties {
                     acceleration_structure.min_acceleration_structure_scratch_offset_alignment
                 },
             ),
-            ray_tracing_pipeline_group_data_size: self.ray_tracing_pipeline.map_or(
-                0,
-                |ray_tracing_pipeline| {
+            ray_tracing_pipeline_group_data_size: self
+                .ray_tracing_pipeline
+                .map_or(0, |ray_tracing_pipeline| {
                     ray_tracing_pipeline.shader_group_handle_size
-                },
-            ),
+                }),
         }
     }
 }

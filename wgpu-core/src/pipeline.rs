@@ -915,10 +915,7 @@ pub enum CreateRayTracingPipelineError {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum RayTracingIntersectionDescriptor<
-    'a,
-    SM = ShaderModuleId,
-> {
+pub enum RayTracingIntersectionDescriptor<'a, SM = ShaderModuleId> {
     Triangles {
         closest_hit: ProgrammableStageDescriptor<'a, SM>,
         any_hit: Option<ProgrammableStageDescriptor<'a, SM>>,
@@ -956,7 +953,7 @@ pub type ResolvedRayTracingPipelineDescriptor<'a> =
 pub struct ShaderBindingData {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     pub(crate) device: Arc<Device>,
-} 
+}
 
 impl Drop for ShaderBindingData {
     fn drop(&mut self) {
@@ -967,7 +964,6 @@ impl Drop for ShaderBindingData {
         }
     }
 }
-
 
 #[derive(Debug)]
 pub struct RayTracingPipeline {
@@ -1007,10 +1003,6 @@ impl RayTracingPipeline {
         self: &Arc<Self>,
         index: u32,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
-        self.layout
-            .bind_group_layouts
-            .get(index as usize)
-            .cloned()
-            .ok_or(GetBindGroupLayoutError::InvalidGroupIndex(index))
+        self.layout.get_bind_group_layout(index)
     }
 }

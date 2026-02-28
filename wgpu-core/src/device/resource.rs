@@ -3806,7 +3806,7 @@ impl Device {
         Ok(layout)
     }
 
-    fn create_derived_pipeline_layout(
+    pub(super) fn create_derived_pipeline_layout(
         self: &Arc<Self>,
         mut derived_group_layouts: Box<ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>>,
         immediate_size: u32,

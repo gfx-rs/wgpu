@@ -1785,7 +1785,11 @@ impl crate::Device for super::Device {
         unimplemented!("Ray tracing pipelines are unsupported on Metal")
     }
 
-    unsafe fn get_raytracing_pipeline_group_data(&self, _pipeline: Resource, _groups: core::ops::Range<u32>) -> Result<Vec<u8>, crate::DeviceError> {
+    unsafe fn get_raytracing_pipeline_group_data(
+        &self,
+        _pipeline: Resource,
+        _groups: core::ops::Range<u32>,
+    ) -> Result<Vec<u8>, crate::DeviceError> {
         unimplemented!("Ray tracing pipelines are unsupported on Metal")
     }
 
