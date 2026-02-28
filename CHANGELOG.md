@@ -114,6 +114,35 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 )),
 ```
 
+#### D3D12 Agility SDK support
+
+Added support for loading a specific [DirectX 12 Agility SDK](https://devblogs.microsoft.com/directx/directx12agility/) runtime via the [Independent Devices API](https://devblogs.microsoft.com/directx/d3d12-independent-devices/). The Agility SDK lets applications ship a newer D3D12 runtime alongside their binary, unlocking the latest D3D12 features without waiting for an OS update.
+
+Configure it programmatically:
+
+```rust
+let options = wgpu::Dx12BackendOptions {
+    agility_sdk: Some(wgpu::Dx12AgilitySDK {
+        sdk_version: 619,
+        sdk_path: "path/to/sdk/bin/x64".into(),
+    }),
+    ..Default::default()
+};
+```
+
+Or via environment variables:
+
+```
+WGPU_DX12_AGILITY_SDK_PATH=path/to/sdk/bin/x64
+WGPU_DX12_AGILITY_SDK_VERSION=619
+```
+
+The `sdk_version` must match the version of the `D3D12Core.dll` in the provided path exactly, or loading will fail.
+
+If the Agility SDK fails to load (e.g. version mismatch, missing DLL, or unsupported OS), wgpu logs a warning and falls back to the system D3D12 runtime.
+
+By @cwfitzgerald in [#9130](https://github.com/gfx-rs/wgpu/pull/9130).
+
 #### `WriteOnly`
 
 To ensure memory safety when accessing mapped GPU memory, `MapMode::Write` buffer mappings (`BufferViewMut` and also `QueueWriteBufferView`) can no longer be dereferenced to Rust `&mut [u8]`. Instead, they must be used through the new pointer type `wgpu::WriteOnly<[u8]>`, which does not allow reading at all.
