@@ -12,7 +12,9 @@ use windows::{
 use super::SurfaceTarget;
 use crate::{
     auxil,
-    dx12::{shader_compilation::CompilerContainer, D3D12Lib, DCompLib},
+    dx12::{
+        device_creation::DeviceFactory, shader_compilation::CompilerContainer, D3D12Lib, DCompLib,
+    },
 };
 
 impl crate::Instance for super::Instance {
@@ -45,6 +47,11 @@ impl crate::Instance for super::Instance {
                 }
             }
         }
+
+        // Create DeviceFactory (must be after debug layer is enabled so it picks up debug settings)
+        let device_factory =
+            DeviceFactory::new(&lib_main, desc.backend_options.dx12.agility_sdk.as_ref())?;
+        device_factory.initialize_from_global_state();
 
         let (lib_dxgi, factory) = auxil::dxgi::factory::create_factory(desc.flags)?;
 
@@ -133,6 +140,7 @@ impl crate::Instance for super::Instance {
             factory,
             factory_media,
             library: Arc::new(lib_main),
+            device_factory: Arc::new(device_factory),
             dcomp_lib: Arc::new(DCompLib::new()),
             presentation_system: desc.backend_options.dx12.presentation_system,
             _lib_dxgi: lib_dxgi,
@@ -189,6 +197,7 @@ impl crate::Instance for super::Instance {
                 super::Adapter::expose(
                     raw,
                     &self.library,
+                    &self.device_factory,
                     &self.dcomp_lib,
                     self.flags,
                     self.memory_budget_thresholds,
