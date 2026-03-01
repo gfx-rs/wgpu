@@ -2442,6 +2442,18 @@ impl crate::Device for super::Device {
             .map_err(|(_, e)| super::map_pipeline_err(e))
         }?;
 
+        if let Some(raw_module) = compiled_ray_gen.temp_raw_module {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+
+        if let Some(raw_module) = compiled_miss.temp_raw_module {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+
+        for raw_module in compiled_stages.into_iter().flat_map(|stage| stage.temp_raw_module) {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+
         self.counters.ray_tracing_pipelines.add(1);
 
         Ok(super::RayTracingPipeline { raw: pipelines[0] })
