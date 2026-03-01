@@ -66,6 +66,7 @@ webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:crea
 webgpu:api,validation,compute_pipeline:basic:*
 webgpu:api,validation,compute_pipeline:limits,invocations_per_workgroup,each_component:*
 webgpu:api,validation,compute_pipeline:limits,invocations_per_workgroup:*
+webgpu:api,validation,compute_pipeline:overrides,identifier:*
 webgpu:api,validation,compute_pipeline:overrides,entry_point,validation_error:*
 webgpu:api,validation,compute_pipeline:overrides,uninitialized:*
 webgpu:api,validation,compute_pipeline:overrides,value,type_error:*
