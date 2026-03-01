@@ -641,6 +641,10 @@ jobs:
         with:
           target-dir: "target/llvm-cov-target/debug"
 
+      - name: (Windows) Install Agility SDK
+        if: matrix.os == 'windows-2022'
+        uses: ./.github/actions/install-agility-sdk
+
       - name: (Windows) Install Mesa
         if: matrix.os == 'windows-2022'
         uses: ./.github/actions/install-mesa

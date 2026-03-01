@@ -121,6 +121,10 @@ jobs:
         with:
           target-dir: "target/debug"
 
+      - name: (Windows) Install Agility SDK
+        if: matrix.os == 'windows-2022'
+        uses: ./.github/actions/install-agility-sdk
+
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'
         uses: ./.github/actions/install-mesa
