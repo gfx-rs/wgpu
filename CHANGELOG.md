@@ -43,6 +43,9 @@ Bottom level categories:
 
 ## v28.0.1 (2025-03-01)
 
+### General
+- Fixed crash on nvidia cards when presenting from another thread. By @inner-daemons in [#9036](https://github.com/gfx-rs/wgpu/pull/9036).
+
 ### Vulkan
 - Fixed crash on some Mali drivers on Android. By @beicause in [#8769](https://github.com/gfx-rs/wgpu/pull/8769).
 

@@ -302,6 +302,7 @@ impl Surface {
             Some(resource::TextureInner::Surface { raw }) => {
                 let raw_surface = self.raw(device.backend()).unwrap();
                 let raw_queue = queue.raw();
+                let _fence_lock = device.fence.write();
                 unsafe { raw_queue.present(raw_surface, raw) }
             }
             _ => unreachable!(),
