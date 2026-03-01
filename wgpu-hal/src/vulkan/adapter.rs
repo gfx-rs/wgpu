@@ -100,6 +100,9 @@ pub struct PhysicalDeviceFeatures {
     /// [`Instance::expose_adapter`]: super::Instance::expose_adapter
     ray_query: Option<vk::PhysicalDeviceRayQueryFeaturesKHR<'static>>,
 
+    /// Features provided by `VK_KHR_ray_tracing_pipeline`.
+    ray_tracing_pipeline: Option<vk::PhysicalDeviceRayTracingPipelineFeaturesKHR<'static>>,
+
     /// Features provided by `VK_KHR_zero_initialize_workgroup_memory`, promoted
     /// to Vulkan 1.3.
     zero_initialize_workgroup_memory:
@@ -190,6 +193,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.ray_query {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.ray_tracing_pipeline {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.shader_atomic_int64 {
@@ -471,6 +477,11 @@ impl PhysicalDeviceFeatures {
             },
             ray_query: if enabled_extensions.contains(&khr::ray_query::NAME) {
                 Some(vk::PhysicalDeviceRayQueryFeaturesKHR::default().ray_query(true))
+            } else {
+                None
+            },
+            ray_tracing_pipeline: if enabled_extensions.contains(&khr::ray_tracing_pipeline::NAME) {
+                Some(vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::default().ray_tracing_pipeline(true))
             } else {
                 None
             },
