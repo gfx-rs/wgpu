@@ -51,7 +51,8 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
             dx12: wgpu::Dx12BackendOptions {
                 shader_compiler: dx12_shader_compiler,
                 ..Default::default()
-            },
+            }
+            .with_env(),
             gl: wgpu::GlBackendOptions {
                 fence_behavior: if cfg!(target_family = "wasm") {
                     // On WebGL, you cannot call Poll(Wait) with any timeout. This is because the
