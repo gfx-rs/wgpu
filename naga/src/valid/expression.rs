@@ -93,6 +93,10 @@ pub enum ExpressionError {
     InvalidImageSampleSelector,
     #[error("Cannot textureLoad from a multisampled image without specifying a sample.")]
     MissingImageSampleSelector,
+    #[error("Cannot textureLoad with a specific mip level on a non-mipmapped image.")]
+    InvalidImageLevelSelector,
+    #[error("Cannot textureLoad from a mipmapped image without specifying a level.")]
+    MissingImageLevelSelector,
     #[error("Image array index type of {0:?} is not an integer scalar")]
     InvalidImageArrayIndexType(Handle<crate::Expression>),
     #[error("Image sample or level-of-detail index's type of {0:?} is not an integer scalar")]
@@ -820,8 +824,11 @@ impl super::Validator {
                         }) => {}
                         _ => return Err(ExpressionError::InvalidImageArrayIndexType(level)),
                     },
-                    e => {
-                        return Err(ExpressionError::InvalidImageOtherIndex);
+                    (Some(_), false) => {
+                        return Err(ExpressionError::InvalidImageLevelSelector);
+                    }
+                    (None, true) => {
+                        return Err(ExpressionError::MissingImageLevelSelector);
                     }
                 }
                 ShaderStages::all()
