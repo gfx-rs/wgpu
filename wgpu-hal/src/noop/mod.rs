@@ -292,7 +292,6 @@ impl crate::Adapter for Context {
         wgt::TextureUses::INCLUSIVE
             | wgt::TextureUses::COLOR_TARGET
             | wgt::TextureUses::DEPTH_STENCIL_WRITE
-            | wgt::TextureUses::STORAGE_READ_ONLY
     }
 }
 
