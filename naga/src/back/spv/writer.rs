@@ -3618,23 +3618,21 @@ impl Writer {
             }
         }
 
-        if has_ray_tracing {
-            for (index, ep) in ir_module.entry_points.iter().enumerate() {
-                if ep_index.is_some() && ep_index != Some(index) {
-                    continue;
-                }
+        for (index, ep) in ir_module.entry_points.iter().enumerate() {
+            if ep_index.is_some() && ep_index != Some(index) {
+                continue;
+            }
 
-                if matches!(
-                    ep.stage,
-                    crate::ShaderStage::RayGeneration
-                        | crate::ShaderStage::AnyHit
-                        | crate::ShaderStage::ClosestHit
-                        | crate::ShaderStage::Miss
-                ) {
-                    has_ray_tracing_pipeline = true;
-                } else {
-                    has_ray_query = true;
-                }
+            if matches!(
+                ep.stage,
+                crate::ShaderStage::RayGeneration
+                    | crate::ShaderStage::AnyHit
+                    | crate::ShaderStage::ClosestHit
+                    | crate::ShaderStage::Miss
+            ) {
+                has_ray_tracing_pipeline = true;
+            } else {
+                has_ray_query = has_ray_query || has_ray_tracing;
             }
         }
 
