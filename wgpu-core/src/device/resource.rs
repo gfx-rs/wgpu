@@ -2751,6 +2751,7 @@ impl Device {
                 }
                 Bt::AccelerationStructure { vertex_return } => {
                     self.require_features(wgt::Features::EXPERIMENTAL_RAY_QUERY)
+                        .or_else(|_| self.require_features(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES))
                         .map_err(|e| CreateBindGroupLayoutError::Entry {
                             binding: entry.binding,
                             error: e.into(),

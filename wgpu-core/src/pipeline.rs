@@ -911,12 +911,32 @@ pub enum CreateRayTracingPipelineError {
         stage: wgt::ShaderStages,
         error: String,
     },
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
+}
+
+impl WebGpuError for CreateRayTracingPipelineError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::InvalidResource(e) => e,
+            Self::MissingFeatures(e) => e,
+
+            Self::Internal { .. } => return ErrorType::Internal,
+
+            Self::Implicit(_)
+            | Self::Stage { .. }
+            | Self::UnalignedShader { .. }
+            | Self::PipelineConstants { .. } => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RayTracingIntersectionDescriptor<'a, SM = ShaderModuleId> {
-    Triangles {
+    Triangle {
         closest_hit: ProgrammableStageDescriptor<'a, SM>,
         any_hit: Option<ProgrammableStageDescriptor<'a, SM>>,
     },

@@ -176,6 +176,10 @@ pub trait DeviceInterface: CommonTraits {
         &self,
         desc: &crate::ComputePipelineDescriptor<'_>,
     ) -> DispatchComputePipeline;
+    fn create_ray_tracing_pipeline(
+        &self,
+        desc: &crate::RayTracingPipelineDescriptor<'_>,
+    ) -> DispatchRayTracingPipeline;
     unsafe fn create_pipeline_cache(
         &self,
         desc: &crate::PipelineCacheDescriptor<'_>,
@@ -307,6 +311,9 @@ pub trait RenderPipelineInterface: CommonTraits {
     fn get_bind_group_layout(&self, index: u32) -> DispatchBindGroupLayout;
 }
 pub trait ComputePipelineInterface: CommonTraits {
+    fn get_bind_group_layout(&self, index: u32) -> DispatchBindGroupLayout;
+}
+pub trait RayTracingPipelineInterface: CommonTraits {
     fn get_bind_group_layout(&self, index: u32) -> DispatchBindGroupLayout;
 }
 pub trait PipelineCacheInterface: CommonTraits {
@@ -983,6 +990,7 @@ dispatch_types! {ref type DispatchQuerySet: QuerySetInterface = CoreQuerySet, We
 dispatch_types! {ref type DispatchPipelineLayout: PipelineLayoutInterface = CorePipelineLayout, WebPipelineLayout, DynPipelineLayout}
 dispatch_types! {ref type DispatchRenderPipeline: RenderPipelineInterface = CoreRenderPipeline, WebRenderPipeline, DynRenderPipeline}
 dispatch_types! {ref type DispatchComputePipeline: ComputePipelineInterface = CoreComputePipeline, WebComputePipeline, DynComputePipeline}
+dispatch_types! {ref type DispatchRayTracingPipeline: RayTracingPipelineInterface = CoreRayTracingPipeline, WebRayTracingPipeline, DynRayTracingPipeline}
 dispatch_types! {ref type DispatchPipelineCache: PipelineCacheInterface = CorePipelineCache, WebPipelineCache, DynPipelineCache}
 dispatch_types! {mut type DispatchCommandEncoder: CommandEncoderInterface = CoreCommandEncoder, WebCommandEncoder, DynCommandEncoder}
 dispatch_types! {mut type DispatchComputePass: ComputePassInterface = CoreComputePass, WebComputePassEncoder, DynComputePass}

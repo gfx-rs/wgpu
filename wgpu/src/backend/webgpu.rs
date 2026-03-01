@@ -1393,6 +1393,9 @@ pub struct WebComputePipeline {
 }
 
 #[derive(Debug, Clone)]
+pub struct WebRayTracingPipeline {} // no ray tracing pipelines on web
+
+#[derive(Debug, Clone)]
 pub struct WebPipelineCache {
     /// Unique identifier for this PipelineCache.
     ident: crate::cmp::Identifier,

@@ -86,6 +86,7 @@ dyn_type!(pub ref struct DynQuerySet(dyn QuerySetInterface));
 dyn_type!(pub ref struct DynPipelineLayout(dyn PipelineLayoutInterface));
 dyn_type!(pub ref struct DynRenderPipeline(dyn RenderPipelineInterface));
 dyn_type!(pub ref struct DynComputePipeline(dyn ComputePipelineInterface));
+dyn_type!(pub ref struct DynRayTracingPipeline(dyn RayTracingPipelineInterface));
 dyn_type!(pub ref struct DynPipelineCache(dyn PipelineCacheInterface));
 dyn_type!(pub mut struct DynCommandEncoder(dyn CommandEncoderInterface));
 dyn_type!(pub mut struct DynComputePass(dyn ComputePassInterface));

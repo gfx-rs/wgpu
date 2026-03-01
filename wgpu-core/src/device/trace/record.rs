@@ -8,8 +8,8 @@ use crate::{
         BasePass, ColorAttachments, Command, ComputeCommand, PointerReferences, RenderCommand,
         RenderPassColorAttachment, ResolvedRenderPassDepthStencilAttachment,
     },
-    device::trace::{Data, DataKind},
-    id::{markers, PointerId},
+    device::trace::{Data, DataKind, TraceRayTracingPipelineDescriptor},
+    id::{PointerId, markers},
     storage::StorageItem,
 };
 
@@ -783,6 +783,27 @@ impl<'a> IntoTrace for crate::pipeline::ResolvedComputePipelineDescriptor<'a> {
     }
 }
 
+impl<'a> IntoTrace for crate::pipeline::ResolvedRayTracingPipelineDescriptor<'a> {
+    type Output = TraceRayTracingPipelineDescriptor<'a>;
+
+    fn into_trace(self) -> Self::Output {
+        TraceRayTracingPipelineDescriptor {
+            label: self.label,
+            layout: self.layout.into_trace(),
+            ray_generation: self.ray_generation.into_trace(),
+            miss: self.miss.into_trace(),
+            intersections: self.intersections.into_iter().map(|intersection| match intersection {
+                crate::pipeline::RayTracingIntersectionDescriptor::Triangle { closest_hit, any_hit } => crate::pipeline::RayTracingIntersectionDescriptor::Triangle{
+                    closest_hit: closest_hit.into_trace(),
+                    any_hit: any_hit.map(|a| a.into_trace()),
+                }
+            } ).collect(),
+            cache: self.cache.map(|c| c.into_trace()),
+            max_recursion_depth: self.max_recursion_depth,
+        }
+    }
+}
+
 impl<'a> IntoTrace for crate::pipeline::ResolvedProgrammableStageDescriptor<'a> {
     type Output =
         crate::pipeline::ProgrammableStageDescriptor<'a, PointerId<markers::ShaderModule>>;
@@ -924,11 +945,21 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
             pipeline,
             index,
         },
+        A::GetRayTracingPipelineBindGroupLayout {
+            id,
+            pipeline,
+            index,
+        } => A::GetRayTracingPipelineBindGroupLayout {
+            id,
+            pipeline,
+            index,
+        },
         A::DestroyPipelineLayout(layout) => A::DestroyPipelineLayout(layout),
         A::DestroyBindGroup(bind_group) => A::DestroyBindGroup(bind_group),
         A::DestroyShaderModule(shader_module) => A::DestroyShaderModule(shader_module),
         A::DestroyComputePipeline(pipeline) => A::DestroyComputePipeline(pipeline),
         A::DestroyRenderPipeline(pipeline) => A::DestroyRenderPipeline(pipeline),
+        A::DestroyRayTracingPipeline(pipeline) => A::DestroyRayTracingPipeline(pipeline),
         A::DestroyPipelineCache(cache) => A::DestroyPipelineCache(cache),
         A::DestroyRenderBundle(render_bundle) => A::DestroyRenderBundle(render_bundle),
         A::DestroyQuerySet(query_set) => A::DestroyQuerySet(query_set),
@@ -980,6 +1011,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         | A::CreateShaderModulePassthrough { .. }
         | A::CreateComputePipeline { .. }
         | A::CreateGeneralRenderPipeline { .. }
+        | A::CreateRayTracingPipeline { .. }
         | A::CreatePipelineCache { .. }
         | A::CreateRenderBundle { .. }
         | A::CreateQuerySet { .. }

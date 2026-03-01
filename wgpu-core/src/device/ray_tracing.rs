@@ -417,7 +417,7 @@ impl Device {
 
         for intersection in &desc.intersections {
             match intersection {
-                pipeline::RayTracingIntersectionDescriptor::Triangles {
+                pipeline::RayTracingIntersectionDescriptor::Triangle {
                     closest_hit,
                     any_hit,
                 } => {
@@ -467,7 +467,7 @@ impl Device {
             .zip(final_intersection_names.iter())
         {
             intersections.push(match intersection {
-                pipeline::RayTracingIntersectionDescriptor::Triangles {
+                pipeline::RayTracingIntersectionDescriptor::Triangle {
                     closest_hit,
                     any_hit,
                 } => {
@@ -618,7 +618,7 @@ impl Device {
             shader_modules.reserve(desc.intersections.len());
             for intersection in &desc.intersections {
                 match intersection {
-                    pipeline::RayTracingIntersectionDescriptor::Triangles {
+                    pipeline::RayTracingIntersectionDescriptor::Triangle {
                         closest_hit,
                         any_hit,
                     } => {
