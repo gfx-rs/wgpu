@@ -138,10 +138,12 @@ bitflags::bitflags! {
         const TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 13;
         /// A buffer used to store the compacted size of an acceleration structure
         const ACCELERATION_STRUCTURE_QUERY = 1 << 14;
+        /// Buffer used for storing opaque shader data
+        const RAY_TRACING_PIPELINE_SHADER_DATA = 1 << 15;
         /// The combination of states that a buffer may be in _at the same time_.
         const INCLUSIVE = Self::MAP_READ.bits() | Self::COPY_SRC.bits() |
             Self::INDEX.bits() | Self::VERTEX.bits() | Self::UNIFORM.bits() |
-            Self::STORAGE_READ_ONLY.bits() | Self::INDIRECT.bits() | Self::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits() | Self::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits();
+            Self::STORAGE_READ_ONLY.bits() | Self::INDIRECT.bits() | Self::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits() | Self::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits() | Self::RAY_TRACING_PIPELINE_SHADER_DATA.bits();
         /// The combination of states that a buffer must exclusively be in.
         const EXCLUSIVE = Self::MAP_WRITE.bits() | Self::COPY_DST.bits() | Self::STORAGE_READ_WRITE.bits() | Self::ACCELERATION_STRUCTURE_SCRATCH.bits();
     }

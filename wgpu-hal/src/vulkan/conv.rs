@@ -567,6 +567,9 @@ pub fn map_buffer_usage(usage: wgt::BufferUses) -> vk::BufferUsageFlags {
     if usage.intersects(wgt::BufferUses::ACCELERATION_STRUCTURE_QUERY) {
         flags |= vk::BufferUsageFlags::TRANSFER_DST;
     }
+    if usage.intersects(wgt::BufferUses::RAY_TRACING_PIPELINE_SHADER_DATA) {
+        flags |= vk::BufferUsageFlags::SHADER_BINDING_TABLE_KHR;
+    }
     flags
 }
 

@@ -632,12 +632,15 @@ impl Device {
             shader_modules
         };
 
+        let shader_binding_data = pipeline::ShaderBindingData::from_raw_pipeline(self.clone(), raw.as_ref(), desc.intersections.len())?;
+
         let pipeline = pipeline::RayTracingPipeline {
             raw: ManuallyDrop::new(raw),
             layout: pipeline_layout,
             device: self.clone(),
             _shader_modules: shader_modules,
             late_sized_buffer_groups,
+            shader_binding_data,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.ray_tracing_pipelines.clone()),
         };

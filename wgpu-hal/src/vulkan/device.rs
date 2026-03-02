@@ -2467,7 +2467,7 @@ impl crate::Device for super::Device {
 
     unsafe fn get_raytracing_pipeline_group_data(
         &self,
-        pipeline: super::RayTracingPipeline,
+        pipeline: &super::RayTracingPipeline,
         groups: core::ops::Range<u32>,
     ) -> Result<Vec<u8>, crate::DeviceError> {
         let fns = self

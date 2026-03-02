@@ -5,7 +5,8 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::{marker::PhantomData, mem::ManuallyDrop, num::NonZeroU32};
+use hal::BufferDescriptor;
+use core::{marker::PhantomData, mem::ManuallyDrop, num::{NonZeroU32, NonZeroU64}};
 
 use arrayvec::ArrayVec;
 use naga::error::ShaderError;
@@ -969,10 +970,50 @@ pub struct RayTracingPipelineDescriptor<
 pub type ResolvedRayTracingPipelineDescriptor<'a> =
     RayTracingPipelineDescriptor<'a, Arc<PipelineLayout>, Arc<ShaderModule>, Arc<PipelineCache>>;
 
+/// This is a semi-opaque structure because if metal gets ray tracing pipelines,
+/// this will need to turn into an enum so it shouldn't have other code
+/// tangled with it.
 #[derive(Debug)]
 pub struct ShaderBindingData {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     pub(crate) device: Arc<Device>,
+}
+
+impl ShaderBindingData {
+    pub(crate) fn from_raw_pipeline(device: Arc<Device>, pipeline: &dyn hal::DynRayTracingPipeline, num_intersection_groups: usize) -> Result<Self, CreateRayTracingPipelineError> {
+        let tot_num_groups = num_intersection_groups + 1 /* miss shader */ + 1 /* closest hit shader */;
+        let size = tot_num_groups as u64 * device.alignments.ray_tracing_pipeline_group_data_size as u64;
+
+        let buffer = unsafe { device.raw().create_buffer(&BufferDescriptor {
+            label: None,
+            size,
+            usage: wgt::BufferUses::RAY_TRACING_PIPELINE_SHADER_DATA | wgt::BufferUses::COPY_DST,
+            memory_flags: hal::MemoryFlags::PREFER_COHERENT,
+        }) }.map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
+
+        let data = unsafe { device.raw().get_raytracing_pipeline_group_data(pipeline, 0..tot_num_groups as _) }.map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
+
+        // If there is no queue anymore, the ray tracing pipeline can't be accessed, so we don't have to worry about UB from uninitialized values
+        if let Some(queue) = device.get_queue() {
+            let mut staging = crate::resource::StagingBuffer::new(&device, NonZeroU64::new(size).expect("The total number of groups is always greater than zero, and `ray_tracing_pipeline_group_data_size` must be too."))?;
+
+            staging.write(&data);
+
+            let staging_buf = staging.flush();
+
+            let mut writes = queue.pending_writes.lock();
+            let encoder = writes.activate();
+            unsafe {encoder.copy_buffer_to_buffer(staging_buf.raw(), buffer.as_ref(), &[hal::BufferCopy {
+                src_offset:0,
+                dst_offset: 0,
+                size: NonZeroU64::new(size).expect("Already checked size isn't zero."),
+            }])};
+
+            writes.consume(staging_buf);
+        }
+
+        Ok(Self { raw: ManuallyDrop::new(buffer), device })
+    }
 }
 
 impl Drop for ShaderBindingData {
@@ -992,6 +1033,7 @@ pub struct RayTracingPipeline {
     pub(crate) layout: Arc<PipelineLayout>,
     pub(crate) _shader_modules: Vec<Arc<ShaderModule>>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
+    pub(crate) shader_binding_data: ShaderBindingData,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
