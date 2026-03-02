@@ -32,12 +32,13 @@ impl DeviceFactory {
         agility_sdk: Option<&wgt::Dx12AgilitySDK>,
     ) -> Result<Self, crate::InstanceError> {
         let Some(agility_sdk) = agility_sdk else {
+            log::info!("No D3D12 Agility SDK configuration provided; using system D3D12 runtime");
             return Ok(Self::Legacy);
         };
 
         match Self::try_create_independent(lib, agility_sdk) {
             Ok(factory) => {
-                log::debug!(
+                log::info!(
                     "Using D3D12 Agility SDK v{} from '{}'",
                     agility_sdk.sdk_version,
                     agility_sdk.sdk_path
