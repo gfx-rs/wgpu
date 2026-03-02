@@ -63,7 +63,7 @@ By @teoxoy in [#9034](https://github.com/gfx-rs/wgpu/pull/9034).
 
 #### MSRV update
 
-`wgpu` now has a new MSRV policy. This release has an MSRV of **1.87**. This is lower than v27's 1.88 and v28's 1.92. Going forward, we will only bump wgpu's MSRV if it has tangible benefits for the code, and we will never bump to an MSRV higher than `stable - 3`. So if stable is at 1.97 and 1.94 brought benefit to our code, we could bump it no higher than 1.94. As before, MSRV bumps will always be breaking changes. 
+`wgpu` now has a new MSRV policy. This release has an MSRV of **1.87**. This is lower than v27's 1.88 and v28's 1.92. Going forward, we will only bump wgpu's MSRV if it has tangible benefits for the code, and we will never bump to an MSRV higher than `stable - 3`. So if stable is at 1.97 and 1.94 brought benefit to our code, we could bump it no higher than 1.94. As before, MSRV bumps will always be breaking changes.
 
 By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
 
@@ -143,7 +143,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 
 - Several error APIs were changed by @ErichDonGubler in [#9073](https://github.com/gfx-rs/wgpu/pull/9073):
     - `BufferAccessError`:
-        - Split the `OutOfBoundsOverrun` variant into new `OutOfBoundsStartOffsetOverrun` and `OutOfBoundsEndOffsetOverrun` variants. 
+        - Split the `OutOfBoundsOverrun` variant into new `OutOfBoundsStartOffsetOverrun` and `OutOfBoundsEndOffsetOverrun` variants.
         - Removed the `NegativeRange` variant in favor of new `MapStartOffsetUnderrun` and `MapStartOffsetOverrun` variants.
     - Split the `TransferError::BufferOverrun` variant into new `BufferStartOffsetOverrun` and `BufferEndOffsetOverrun` variants.
 
@@ -201,6 +201,9 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 #### Vulkan
 - Fixed a variety of mesh shader SPIR-V writer issues from the original implementation. By @inner-daemons in [#8756](https://github.com/gfx-rs/wgpu/pull/8756)
 
+#### Metal / macOS
+- Fix one-second delay when switching a wgpu app to the foreground. By [@emilk](https://github.com/emilk) in [#9141](https://github.com/gfx-rs/wgpu/pull/9141)
+
 #### GLES
 
 - `DisplayHandle` should now be passed to `InstanceDescriptor` for correct EGL initialization on Wayland. By @MarijnS95 in [#8012](https://github.com/gfx-rs/wgpu/pull/8012)
@@ -238,7 +241,7 @@ This has been a long time coming. See [the tracking issue](https://github.com/gf
 They are now fully supported on Vulkan, and supported on Metal and DX12 with passthrough shaders. WGSL parsing and rewriting
 is supported, meaning they can be used through WESL or naga_oil.
 
-Mesh shader pipelines replace the standard vertex shader pipelines and allow new ways to render meshes. 
+Mesh shader pipelines replace the standard vertex shader pipelines and allow new ways to render meshes.
 They are ideal for meshlet rendering, a form of rendering where small groups of triangles are handled together,
 for both culling and rendering.
 
@@ -285,7 +288,7 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
 
     mesh_output.vertices[2].position = positions[2];
     mesh_output.vertices[2].color = colors[2] * taskPayload.colorMask;
-    
+
     // Set the vertex indices for the only primitive
     mesh_output.primitives[0].indices = vec3<u32>(0, 1, 2);
     // Cull it if the data passed by the task shader says to
