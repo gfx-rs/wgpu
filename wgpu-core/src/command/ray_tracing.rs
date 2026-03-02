@@ -76,7 +76,7 @@ impl Global {
             |cmd_buf_data| -> Result<(), BuildAccelerationStructureError> {
                 let device = &cmd_enc.device;
                 device.check_is_valid()?;
-                device.require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
+                device.require_features(Features::EXPERIMENTAL_RAY_QUERY).or_else(|_| device.require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES))?;
 
                 let mut build_command = AsBuild::with_capacity(blas_ids.len(), tlas_ids.len());
 
@@ -198,7 +198,7 @@ pub(crate) fn build_acceleration_structures(
 ) -> Result<(), BuildAccelerationStructureError> {
     state
         .device
-        .require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
+        .require_features(Features::EXPERIMENTAL_RAY_QUERY).or_else(|_| state.device.require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES))?;
 
     let mut build_command = AsBuild::with_capacity(blas.len(), tlas.len());
     let mut input_barriers = Vec::<hal::BufferBarrier<dyn hal::DynBuffer>>::new();

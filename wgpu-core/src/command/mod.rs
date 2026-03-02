@@ -1040,7 +1040,7 @@ impl CommandEncoder {
         for command in commands {
             if matches!(
                 command,
-                ArcCommand::RunRenderPass { .. } | ArcCommand::RunComputePass { .. }
+                ArcCommand::RunRenderPass { .. } | ArcCommand::RunComputePass { .. } | ArcCommand::RunRayTracingPass { .. }
             ) {
                 // Compute passes and render passes can accept either an
                 // open or closed encoder. This state object holds an
@@ -1111,6 +1111,22 @@ impl CommandEncoder {
                         }
                         res?;
                     }
+                    ArcCommand::RunRayTracingPass { pass } => {
+                        api_log!(
+                            "Begin encoding ray tracing pass with '{}' label",
+                            pass.label.as_deref().unwrap_or("")
+                        );
+                        let res = ray_tracing_pass::encode_ray_tracing_pass(&mut state, pass);
+                        match res.as_ref() {
+                            Err(err) => {
+                                api_log!("Finished encoding ray tracing pass ({err:?})")
+                            }
+                            Ok(_) => {
+                                api_log!("Finished encoding ray tracing pass (success)")
+                            }
+                        }
+                        res?;
+                    } 
                     _ => unreachable!(),
                 }
             } else {

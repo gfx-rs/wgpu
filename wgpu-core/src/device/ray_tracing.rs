@@ -33,7 +33,7 @@ impl Device {
         sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> Result<Arc<resource::Blas>, CreateBlasError> {
         self.check_is_valid()?;
-        self.require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
+        self.require_features(Features::EXPERIMENTAL_RAY_QUERY).or_else(|_|self.require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES))?;
 
         if blas_desc
             .flags
@@ -216,7 +216,7 @@ impl Device {
         desc: &resource::TlasDescriptor,
     ) -> Result<Arc<resource::Tlas>, CreateTlasError> {
         self.check_is_valid()?;
-        self.require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
+        self.require_features(Features::EXPERIMENTAL_RAY_QUERY).or_else(|_|self.require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES))?;
 
         if desc.max_instances > self.limits.max_tlas_instance_count {
             return Err(CreateTlasError::TooManyInstances(

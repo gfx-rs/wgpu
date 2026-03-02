@@ -3913,26 +3913,6 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     }
 }
 
-impl dispatch::RayTracingPassInterface for CoreRayTracingPass {
-    fn set_pipeline(&mut self, pipeline: &dispatch::DispatchRayTracingPipeline) {
-        let pipeline = pipeline.as_core();
-
-        if let Err(cause) = self
-            .context
-            .0
-            .ray_tracing_pass_set_pipeline(&mut self.pass, pipeline.id)
-        {
-            self.context.handle_error(
-                &self.error_sink,
-                cause,
-                self.pass.label(),
-                "RayTracingPass::set_pipeline",
-            );
-        }
-        
-    }
-}
-
 impl Drop for CoreRenderPass {
     fn drop(&mut self) {
         if let Err(cause) = self.context.0.render_pass_end(&mut self.pass) {
@@ -3963,6 +3943,28 @@ impl dispatch::RayTracingPassInterface for CoreRayTracingPass {
             );
         }
         
+    }
+
+    fn set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group: Option<&dispatch::DispatchBindGroup>,
+        offsets: &[crate::DynamicOffset],
+    ) {
+        let bg = bind_group.map(|bg| bg.as_core().id);
+
+        if let Err(cause) =
+            self.context
+                .0
+                .ray_tracing_pass_set_bind_group(&mut self.pass, index, bg, offsets)
+        {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                self.pass.label(),
+                "RayTracingPass::set_bind_group",
+            );
+        }
     }
 }
 

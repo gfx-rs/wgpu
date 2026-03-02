@@ -540,12 +540,12 @@ pub trait RenderPassInterface: CommonTraits + Drop {
 }
 pub trait RayTracingPassInterface: CommonTraits + Drop {
     fn set_pipeline(&mut self, pipeline: &DispatchRayTracingPipeline);
-    // fn set_bind_group(
-    //     &mut self,
-    //     index: u32,
-    //     bind_group: Option<&DispatchBindGroup>,
-    //     offsets: &[crate::DynamicOffset],
-    // );
+    fn set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group: Option<&DispatchBindGroup>,
+        offsets: &[crate::DynamicOffset],
+    );
     // fn set_immediates(&mut self, offset: u32, data: &[u8]);
 
     // fn insert_debug_marker(&mut self, label: &str);

@@ -1,7 +1,8 @@
-use wgpu::{Features, Limits, RayTracingIntersectionDescriptor, RayTracingPassDescriptor, RayTracingPipelineDescriptor, RayTracingStage, ShaderModuleDescriptor};
+use wgpu::{BindGroupDescriptor, BindGroupEntry, CommandEncoderDescriptor, Features, Limits, RayTracingIntersectionDescriptor, RayTracingPassDescriptor, RayTracingPipelineDescriptor, RayTracingStage, ShaderModuleDescriptor};
 use wgpu_test::{
     gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
+use wgpu_types::AccelerationStructureFlags;
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.push(PIPELINE_CREATE_USE);
@@ -17,6 +18,17 @@ static PIPELINE_CREATE_USE: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_sync(pipeline_create_use);
 
 fn pipeline_create_use(ctx: TestingContext) {
+    let as_ctx = super::AsBuildContext::new(&ctx, AccelerationStructureFlags::empty(), AccelerationStructureFlags::empty());
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default());
+
+    // Build the BLAS to be compacted (so compaction is valid).
+    encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
+
+    ctx.queue.submit([encoder.finish()]);
+
     let ray_gen_source = "
         enable wgpu_ray_tracing_pipeline;
 
@@ -117,10 +129,23 @@ fn pipeline_create_use(ctx: TestingContext) {
         cache: None,
     });
 
+
+    let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+        label: Some("ray tracing pipeline bind group"),
+        layout: &pipeline.get_bind_group_layout(0),
+        entries: &[
+            BindGroupEntry {
+                binding: 0,
+                resource: as_ctx.tlas.as_binding(),
+            }
+        ],
+    });
+
     let mut encoder = ctx.device.create_command_encoder(&Default::default());
 
     {
         let mut pass = encoder.begin_ray_tracing_pass(&RayTracingPassDescriptor::default());
         pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
     }
 }

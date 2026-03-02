@@ -1,4 +1,6 @@
-use crate::{Label, RayTracingPipeline, api::SharedDeferredCommandBufferActions, dispatch};
+use wgt::DynamicOffset;
+
+use crate::{BindGroup, Label, RayTracingPipeline, api::SharedDeferredCommandBufferActions, dispatch};
 
 /// In-progress recording of a ray tracing pass.
 ///
@@ -45,6 +47,21 @@ impl RayTracingPass<'_> {
     /// Sets the active ray tracing pipeline.
     pub fn set_pipeline(&mut self, pipeline: &RayTracingPipeline) {
         self.inner.set_pipeline(&pipeline.inner);
+    }
+
+    /// Sets the active bind group for a given bind group index. The bind group layout
+    /// in the active pipeline when the `trace_rays()` function is called must match the layout of this bind group.
+    ///
+    /// If the bind group have dynamic offsets, provide them in the binding order.
+    /// These offsets have to be aligned to [`Limits::min_uniform_buffer_offset_alignment`]
+    /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
+    pub fn set_bind_group<'a, BG>(&mut self, index: u32, bind_group: BG, offsets: &[DynamicOffset])
+    where
+        Option<&'a BindGroup>: From<BG>,
+    {
+        let bg: Option<&BindGroup> = bind_group.into();
+        let bg = bg.map(|bg| &bg.inner);
+        self.inner.set_bind_group(index, bg, offsets);
     }
 }
 

@@ -1,11 +1,11 @@
-use core::fmt;
+use core::{convert::Infallible, fmt};
 
 use alloc::{boxed::Box, sync::Arc, vec::Vec, borrow::Cow};
 
 use thiserror::Error;
-use wgt::{BufferAddress, error::{ErrorType, WebGpuError}};
+use wgt::{BufferAddress, DynamicOffset, error::{ErrorType, WebGpuError}};
 
-use crate::{Label, binding_model::{BindError, ImmediateUploadError, LateMinBufferBindingSizeMismatch}, command::{ArcCommand, BasePass, BindGroupStateChange, CommandEncoder, CommandEncoderError, DebugGroupError, EncoderStateError, MapPassErr, PassErrorScope, PassStateError, StateChange, bind::BinderError, pass, pass_base, pass_try, ray_tracing_pass_commands::ArcRayTracingCommand}, device::{DeviceError, MissingDownlevelFlags, MissingFeatures}, global::Global, id, pipeline::RayTracingPipeline, resource::{DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError}, track::{ResourceUsageCompatibilityError, Tracker}};
+use crate::{Label, binding_model::{BindError, ImmediateUploadError, LateMinBufferBindingSizeMismatch}, command::{ArcCommand, BasePass, BindGroupStateChange, ColorAttachments, CommandEncoder, CommandEncoderError, DebugGroupError, EncoderStateError, EncodingState, InnerCommandEncoder, MapPassErr, PassErrorScope, PassStateError, ResolvedRenderPassDepthStencilAttachment, StateChange, bind::{Binder, BinderError}, memory_init::SurfacesInDiscardState, pass, pass_base, pass_try, ray_tracing_pass_commands::ArcRayTracingCommand}, device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures}, global::Global, hal_label, id, pipeline::RayTracingPipeline, resource::{DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError, ParentDevice, TextureView}, track::{ResourceUsageCompatibilityError, Tracker}};
 
 pub type RayTracingBasePass = BasePass<ArcRayTracingCommand, RayTracingPassError>;
 
@@ -315,6 +315,49 @@ impl Global {
         Ok(())
     }
 
+    
+    pub fn ray_tracing_pass_set_bind_group(
+        &self,
+        pass: &mut RayTracingPass,
+        index: u32,
+        bind_group_id: Option<id::BindGroupId>,
+        offsets: &[DynamicOffset],
+    ) -> Result<(), PassStateError> {
+        let scope = PassErrorScope::SetBindGroup;
+
+        // This statement will return an error if the pass is ended. It's
+        // important the error check comes before the early-out for
+        // `set_and_check_redundant`.
+        let base = pass_base!(pass, scope);
+
+        if pass.current_bind_groups.set_and_check_redundant(
+            bind_group_id,
+            index,
+            &mut base.dynamic_offsets,
+            offsets,
+        ) {
+            return Ok(());
+        }
+
+        let mut bind_group = None;
+        if let Some(bind_group_id) = bind_group_id {
+            let hub = &self.hub;
+            bind_group = Some(pass_try!(
+                base,
+                scope,
+                hub.bind_groups.get(bind_group_id).get(),
+            ));
+        }
+
+        base.commands.push(ArcRayTracingCommand::SetBindGroup {
+            index,
+            num_dynamic_offsets: offsets.len(),
+            bind_group,
+        });
+
+        Ok(())
+    }
+
     pub fn ray_tracing_pass_end(&self, pass: &mut RayTracingPass) -> Result<(), EncoderStateError> {
         profiling::scope!(
             "CommandEncoder::encode_ray_tracing_pass {}",
@@ -351,4 +394,142 @@ impl Global {
             })
         })
     }
+}
+
+
+pub(super) fn encode_ray_tracing_pass(
+    parent_state: &mut EncodingState<InnerCommandEncoder>,
+    mut base: BasePass<ArcRayTracingCommand, Infallible>,
+) -> Result<(), RayTracingPassError> {
+    let pass_scope = PassErrorScope::Pass;
+
+    let device = parent_state.device;
+
+    // We automatically keep extending command buffers over time, and because
+    // we want to insert a command buffer _before_ what we're about to record,
+    // we need to make sure to close the previous one.
+    parent_state
+        .raw_encoder
+        .close_if_open()
+        .map_pass_err(pass_scope)?;
+    let raw_encoder = parent_state
+        .raw_encoder
+        .open_pass(base.label.as_deref())
+        .map_pass_err(pass_scope)?;
+
+    let mut debug_scope_depth = 0;
+
+    let mut state = State {
+        pipeline: None,
+
+        pass: pass::PassState {
+            base: EncodingState {
+                device,
+                raw_encoder,
+                tracker: parent_state.tracker,
+                buffer_memory_init_actions: parent_state.buffer_memory_init_actions,
+                texture_memory_actions: parent_state.texture_memory_actions,
+                as_actions: parent_state.as_actions,
+                temp_resources: parent_state.temp_resources,
+                indirect_draw_validation_resources: parent_state.indirect_draw_validation_resources,
+                snatch_guard: parent_state.snatch_guard,
+                debug_scope_depth: &mut debug_scope_depth,
+            },
+            binder: Binder::new(),
+            temp_offsets: Vec::new(),
+            dynamic_offset_count: 0,
+            pending_discard_init_fixups: SurfacesInDiscardState::new(),
+            scope: device.new_usage_scope(),
+            string_offset: 0,
+        },
+
+        immediates: Vec::new(),
+
+        intermediate_trackers: Tracker::new(),
+    };
+
+    let indices = &device.tracker_indices;
+    state
+        .pass
+        .base
+        .tracker
+        .buffers
+        .set_size(indices.buffers.size());
+    state
+        .pass
+        .base
+        .tracker
+        .textures
+        .set_size(indices.textures.size());
+
+    let hal_desc = hal::RayTracingPassDescriptor {
+        label: hal_label(base.label.as_deref(), device.instance_flags),
+    };
+
+    unsafe {
+        state.pass.base.raw_encoder.begin_ray_tracing_pass(&hal_desc);
+    }
+
+    for command in base.commands.drain(..) {
+        match command {
+            ArcRayTracingCommand::SetBindGroup {
+                index,
+                num_dynamic_offsets,
+                bind_group,
+            } => {
+                let scope = PassErrorScope::SetBindGroup;
+                pass::set_bind_group::<RayTracingPassErrorInner>(
+                    &mut state.pass,
+                    device,
+                    &base.dynamic_offsets,
+                    index,
+                    num_dynamic_offsets,
+                    bind_group,
+                    false,
+                )
+                .map_pass_err(scope)?;
+            }
+            ArcRayTracingCommand::SetPipeline(pipeline) => {
+                let scope = PassErrorScope::SetPipelineCompute;
+                set_pipeline(&mut state, device, pipeline).map_pass_err(scope)?;
+            }
+            _ => todo!(),
+        }
+    }
+
+    Ok(())
+}
+
+fn set_pipeline(
+    state: &mut State,
+    device: &Arc<Device>,
+    pipeline: Arc<RayTracingPipeline>,
+) -> Result<(), RayTracingPassErrorInner> {
+    pipeline.same_device(device)?;
+
+    state.pipeline = Some(pipeline.clone());
+
+    let pipeline = state
+        .pass
+        .base
+        .tracker
+        .ray_tracing_pipelines
+        .insert_single(pipeline)
+        .clone();
+
+    unsafe {
+        state
+            .pass
+            .base
+            .raw_encoder
+            .set_ray_tracing_pipeline(pipeline.raw());
+    }
+
+    // Rebind resources
+    pass::change_pipeline_layout::<RayTracingPassErrorInner, _>(
+        &mut state.pass,
+        &pipeline.layout,
+        &pipeline.late_sized_buffer_groups,
+        || {},
+    )
 }
