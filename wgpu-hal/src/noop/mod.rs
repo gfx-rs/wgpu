@@ -401,7 +401,7 @@ impl crate::Device for Context {
     unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: Resource) {}
     unsafe fn get_raytracing_pipeline_group_data(
         &self,
-        pipeline: Resource,
+        pipeline: &Resource,
         groups: core::ops::Range<u32>,
     ) -> Result<Vec<u8>, crate::DeviceError> {
         Ok(vec![0; groups.count()])

@@ -123,7 +123,7 @@ pub trait DynDevice: DynResource {
     unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: Box<dyn DynRayTracingPipeline>);
     unsafe fn get_raytracing_pipeline_group_data(
         &self,
-        pipeline: Box<dyn DynRayTracingPipeline>,
+        pipeline: &dyn DynRayTracingPipeline,
         groups: core::ops::Range<u32>,
     ) -> Result<Vec<u8>, DeviceError>;
 
@@ -498,10 +498,12 @@ impl<D: Device + DynResource> DynDevice for D {
     }
     unsafe fn get_raytracing_pipeline_group_data(
         &self,
-        pipeline: Box<dyn DynRayTracingPipeline>,
+        pipeline: &dyn DynRayTracingPipeline,
         groups: core::ops::Range<u32>,
     ) -> Result<Vec<u8>, DeviceError> {
-        unsafe { D::get_raytracing_pipeline_group_data(self, pipeline.unbox(), groups) }
+        unsafe {
+            D::get_raytracing_pipeline_group_data(self, pipeline.expect_downcast_ref(), groups)
+        }
     }
 
     unsafe fn create_pipeline_cache(

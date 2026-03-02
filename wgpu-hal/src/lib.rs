@@ -1080,9 +1080,11 @@ pub trait Device: WasmNotSendSync {
         >,
     ) -> Result<<Self::A as Api>::RayTracingPipeline, PipelineError>;
     unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: <Self::A as Api>::RayTracingPipeline);
+    /// Obtain the opaque data from each group, behaves as if group 0 is the closest hit, group 1
+    /// is the miss shader, and group 2.. are the intersection groups.
     unsafe fn get_raytracing_pipeline_group_data(
         &self,
-        pipeline: <Self::A as Api>::RayTracingPipeline,
+        pipeline: &<Self::A as Api>::RayTracingPipeline,
         groups: Range<u32>,
     ) -> Result<Vec<u8>, DeviceError>;
 
@@ -1994,6 +1996,8 @@ pub struct Alignments {
 
     /// How large a single piece of group data is. That is, how large the vector returned
     /// from `device.get_raytracing_pipeline_group_data(&pipeline, n..(n+1))` is.
+    ///
+    /// If ray tracing pipelines are implemented, this must be a power of two (and non zero).
     pub ray_tracing_pipeline_group_data_size: u32,
 }
 
