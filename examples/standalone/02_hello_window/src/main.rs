@@ -78,11 +78,14 @@ impl State {
     }
 
     fn render(&mut self) {
-        // Create texture view
-        let surface_texture = self
-            .surface
-            .get_current_texture()
-            .expect("failed to acquire next swapchain texture");
+        // Create texture view.
+        // NOTE: We must handle Timeout because the surface may be unavailable
+        // (e.g., when the window is occluded on macOS).
+        let surface_texture = match self.surface.get_current_texture() {
+            Ok(texture) => texture,
+            Err(wgpu::SurfaceError::Timeout) => return,
+            Err(err) => panic!("failed to acquire next swapchain texture: {err}"),
+        };
         let texture_view = surface_texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor {
