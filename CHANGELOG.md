@@ -133,6 +133,8 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 
 - Added `GlDebugFns` option in `GlBackendOptions` to control OpenGL debug functions (`glPushDebugGroup`, `glPopDebugGroup`, `glObjectLabel`, etc.). Automatically disables them on Mali GPUs to work around a driver crash. By @Xavientois in [#8931](https://github.com/gfx-rs/wgpu/pull/8931).
 
+- Check EXT_sRGB_write_control before setting glEnable/glDisable(glow::FRAMEBUFFER_SRGB). By @richerfu in [#9120](https://github.com/gfx-rs/wgpu/pull/9120).
+
 #### WebGPU
 - Added support for `insert_debug_marker`, `push_debug_group` and `pop_debug_group`. By @evilpie in [#9017](https://github.com/gfx-rs/wgpu/pull/9017).
 - Added support for `begin_occlusion_query` and `end_occlusion_query`. By @evilpie in [#9039](https://github.com/gfx-rs/wgpu/pull/9039).

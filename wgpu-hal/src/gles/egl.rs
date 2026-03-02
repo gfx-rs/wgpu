@@ -1,6 +1,6 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::{ffi, mem::ManuallyDrop, ptr, time::Duration};
-use std::sync::LazyLock;
+use std::sync::{LazyLock, OnceLock};
 
 use glow::HasContext;
 use hashbrown::HashMap;
@@ -86,6 +86,21 @@ enum SrgbFrameBufferKind {
     Core,
     /// Using EGL_KHR_gl_colorspace
     Khr,
+}
+
+fn supports_framebuffer_srgb_toggle(gl: &glow::Context, srgb_kind: SrgbFrameBufferKind) -> bool {
+    if matches!(srgb_kind, SrgbFrameBufferKind::None) {
+        return false;
+    }
+
+    if gl.version().is_embedded {
+        let extensions = gl.supported_extensions();
+        // In OpenGL ES, GL_FRAMEBUFFER_SRGB is only a valid toggle when this extension exists.
+        extensions.contains("GL_EXT_sRGB_write_control")
+    } else {
+        // EGL OpenGL contexts created here are expected to support this control.
+        true
+    }
 }
 
 /// Choose GLES framebuffer configuration.
@@ -952,6 +967,7 @@ impl crate::Instance for Instance {
             raw_window_handle: window_handle,
             swapchain: RwLock::new(None),
             srgb_kind: inner.srgb_kind,
+            framebuffer_srgb_toggle_supported: OnceLock::new(),
         })
     }
 
@@ -974,7 +990,7 @@ impl crate::Instance for Instance {
 
         // In contrast to OpenGL ES, OpenGL requires explicitly enabling sRGB conversions,
         // as otherwise the user has to do the sRGB conversion.
-        if !matches!(inner.srgb_kind, SrgbFrameBufferKind::None) {
+        if supports_framebuffer_srgb_toggle(&gl, inner.srgb_kind) {
             unsafe { gl.enable(glow::FRAMEBUFFER_SRGB) };
         }
 
@@ -1072,6 +1088,7 @@ pub struct Surface {
     raw_window_handle: raw_window_handle::RawWindowHandle,
     swapchain: RwLock<Option<Swapchain>>,
     srgb_kind: SrgbFrameBufferKind,
+    framebuffer_srgb_toggle_supported: OnceLock<bool>,
 }
 
 unsafe impl Send for Surface {}
@@ -1108,7 +1125,11 @@ impl Surface {
         unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None) };
         unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(sc.framebuffer)) };
 
-        if !matches!(self.srgb_kind, SrgbFrameBufferKind::None) {
+        let framebuffer_srgb_toggle_supported = *self
+            .framebuffer_srgb_toggle_supported
+            .get_or_init(|| supports_framebuffer_srgb_toggle(&gl, self.srgb_kind));
+
+        if framebuffer_srgb_toggle_supported {
             // Disable sRGB conversions for `glBlitFramebuffer` as behavior does diverge between
             // drivers and formats otherwise and we want to ensure no sRGB conversions happen.
             unsafe { gl.disable(glow::FRAMEBUFFER_SRGB) };
@@ -1132,7 +1153,7 @@ impl Surface {
             )
         };
 
-        if !matches!(self.srgb_kind, SrgbFrameBufferKind::None) {
+        if framebuffer_srgb_toggle_supported {
             unsafe { gl.enable(glow::FRAMEBUFFER_SRGB) };
         }
 
