@@ -720,11 +720,18 @@ impl Device {
             shader_modules
         };
 
+        let shader_binding_data = pipeline::ShaderBindingData::from_raw_pipeline(
+            self.clone(),
+            raw.as_ref(),
+            desc.intersections.len(),
+        )?;
+
         let pipeline = pipeline::RayTracingPipeline {
             state: ResourceState::Valid(pipeline::RayTracingPipelineState {
                 raw: ManuallyDrop::new(raw),
                 layout: pipeline_layout.clone(),
                 _shader_modules: shader_modules,
+                shader_binding_data,
             }),
             device: self.clone(),
             late_sized_buffer_groups,
