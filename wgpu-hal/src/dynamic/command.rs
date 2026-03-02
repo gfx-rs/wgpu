@@ -4,8 +4,9 @@ use core::ops::Range;
 use crate::{
     AccelerationStructureBarrier, Api, Attachment, BufferBarrier, BufferBinding, BufferCopy,
     BufferTextureCopy, BuildAccelerationStructureDescriptor, ColorAttachment, CommandEncoder,
-    ComputePassDescriptor, DepthStencilAttachment, DeviceError, Label, MemoryRange,
-    PassTimestampWrites, Rect, RenderPassDescriptor, TextureBarrier, TextureCopy,
+    ComputePassDescriptor, DepthStencilAttachment, DeviceError, DynRayTracingPipeline, Label,
+    MemoryRange, PassTimestampWrites, RayTracingPassDescriptor, Rect, RenderPassDescriptor,
+    TextureBarrier, TextureCopy,
 };
 
 use super::{
@@ -189,6 +190,11 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         buffer: &dyn DynBuffer,
         offset: wgt::BufferAddress,
     );
+
+    unsafe fn begin_ray_tracing_pass(&mut self, desc: &RayTracingPassDescriptor);
+    unsafe fn end_ray_tracing_pass(&mut self);
+
+    unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &dyn DynRayTracingPipeline);
 
     unsafe fn build_acceleration_structures<'a>(
         &mut self,
@@ -644,6 +650,20 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
     ) {
         let binding = binding.expect_downcast();
         unsafe { self.set_vertex_buffer(index, binding) };
+    }
+
+    unsafe fn begin_ray_tracing_pass(&mut self, desc: &RayTracingPassDescriptor) {
+        let desc = RayTracingPassDescriptor { label: desc.label };
+        unsafe { C::begin_ray_tracing_pass(self, &desc) };
+    }
+
+    unsafe fn end_ray_tracing_pass(&mut self) {
+        unsafe { C::end_ray_tracing_pass(self) };
+    }
+
+    unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &dyn DynRayTracingPipeline) {
+        let pipeline = pipeline.expect_downcast_ref();
+        unsafe { C::set_ray_tracing_pipeline(self, pipeline) };
     }
 
     unsafe fn build_acceleration_structures<'a>(

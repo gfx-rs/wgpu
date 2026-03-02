@@ -1317,4 +1317,19 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) {
         unimplemented!()
     }
+
+    unsafe fn begin_ray_tracing_pass(&mut self, _desc: &crate::RayTracingPassDescriptor) {
+        unimplemented!()
+    }
+
+    unsafe fn end_ray_tracing_pass(&mut self) {
+        unimplemented!()
+    }
+
+    unsafe fn set_ray_tracing_pipeline(
+        &mut self,
+        _pipeline: &<Self::A as crate::Api>::RayTracingPipeline,
+    ) {
+        unimplemented!()
+    }
 }

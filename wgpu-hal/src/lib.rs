@@ -1605,10 +1605,15 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// - All prior calls to [`begin_compute_pass`] on this [`CommandEncoder`] must have been followed
     ///   by a call to [`end_compute_pass`].
     ///
+    /// - All prior calls to [`begin_ray_tracing_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_ray_tracing_pass`].
+    ///
     /// [`begin_render_pass`]: CommandEncoder::begin_render_pass
     /// [`begin_compute_pass`]: CommandEncoder::begin_compute_pass
+    /// [`begin_ray_tracing_pass`]: CommandEncoder::begin_ray_tracing_pass
     /// [`end_render_pass`]: CommandEncoder::end_render_pass
     /// [`end_compute_pass`]: CommandEncoder::end_compute_pass
+    /// [`end_ray_tracing_pass`]: CommandEncoder::end_ray_tracing_pass
     unsafe fn begin_render_pass(
         &mut self,
         desc: &RenderPassDescriptor<<Self::A as Api>::QuerySet, <Self::A as Api>::TextureView>,
@@ -1725,10 +1730,15 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// - All prior calls to [`begin_compute_pass`] on this [`CommandEncoder`] must have been followed
     ///   by a call to [`end_compute_pass`].
     ///
+    /// - All prior calls to [`begin_ray_tracing_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_ray_tracing_pass`].
+    ///
     /// [`begin_render_pass`]: CommandEncoder::begin_render_pass
     /// [`begin_compute_pass`]: CommandEncoder::begin_compute_pass
+    /// [`begin_ray_tracing_pass`]: CommandEncoder::begin_ray_tracing_pass
     /// [`end_render_pass`]: CommandEncoder::end_render_pass
     /// [`end_compute_pass`]: CommandEncoder::end_compute_pass
+    /// [`end_ray_tracing_pass`]: CommandEncoder::end_ray_tracing_pass
     unsafe fn begin_compute_pass(
         &mut self,
         desc: &ComputePassDescriptor<<Self::A as Api>::QuerySet>,
@@ -1753,6 +1763,50 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         buffer: &<Self::A as Api>::Buffer,
         offset: wgt::BufferAddress,
     );
+
+    /// Begin a new ray tracing pass, clearing all active bindings.
+    ///
+    /// This clears any bindings established by the following calls:
+    ///
+    /// - [`set_bind_group`](CommandEncoder::set_bind_group)
+    /// - [`set_immediates`](CommandEncoder::set_immediates)
+    /// - [`begin_query`](CommandEncoder::begin_query)
+    /// - [`set_ray_tracing_pipeline`](CommandEncoder::set_compute_pipeline)
+    ///
+    /// # Safety
+    ///
+    /// - All prior calls to [`begin_render_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_render_pass`].
+    ///
+    /// - All prior calls to [`begin_compute_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_compute_pass`].
+    ///
+    /// - All prior calls to [`begin_ray_tracing_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_ray_tracing_pass`].
+    ///
+    /// [`begin_render_pass`]: CommandEncoder::begin_render_pass
+    /// [`begin_compute_pass`]: CommandEncoder::begin_compute_pass
+    /// [`begin_ray_tracing_pass`]: CommandEncoder::begin_ray_tracing_pass
+    /// [`end_render_pass`]: CommandEncoder::end_render_pass
+    /// [`end_compute_pass`]: CommandEncoder::end_compute_pass
+    /// [`end_ray_tracing_pass`]: CommandEncoder::end_ray_tracing_pass
+    unsafe fn begin_ray_tracing_pass(&mut self, desc: &RayTracingPassDescriptor);
+
+    /// End the current compute pass.
+    ///
+    /// # Safety
+    ///
+    /// - There must have been a prior call to [`begin_ray_tracing_pass`] on this [`CommandEncoder`]
+    ///   that has not been followed by a call to [`end_ray_tracing_pass`].
+    ///
+    /// [`begin_ray_tracing_pass`]: CommandEncoder::begin_ray_tracing_pass
+    /// [`end_ray_tracing_pass`]: CommandEncoder::end_ray_tracing_pass
+    unsafe fn end_ray_tracing_pass(&mut self);
+
+    /// # Safety
+    ///
+    /// - Pipeline must not be destroyed
+    unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &<Self::A as Api>::RayTracingPipeline);
 
     /// To get the required sizes for the buffer allocations use `get_acceleration_structure_build_sizes` per descriptor
     /// All buffers must be synchronized externally
@@ -2758,6 +2812,11 @@ pub struct RenderPassDescriptor<'a, Q: DynQuerySet + ?Sized, T: DynTextureView +
 pub struct ComputePassDescriptor<'a, Q: DynQuerySet + ?Sized> {
     pub label: Label<'a>,
     pub timestamp_writes: Option<PassTimestampWrites<'a, Q>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RayTracingPassDescriptor<'a> {
+    pub label: Label<'a>,
 }
 
 #[test]

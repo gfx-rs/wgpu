@@ -1359,6 +1359,32 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
+    // ray tracing
+
+    unsafe fn begin_ray_tracing_pass(&mut self, desc: &crate::RayTracingPassDescriptor<'_>) {
+        self.bind_point = vk::PipelineBindPoint::RAY_TRACING_KHR;
+        if let Some(label) = desc.label {
+            unsafe { self.begin_debug_marker(label) };
+            self.rpass_debug_marker_active = true;
+        }
+    }
+    unsafe fn end_ray_tracing_pass(&mut self) {
+        if self.rpass_debug_marker_active {
+            unsafe { self.end_debug_marker() };
+            self.rpass_debug_marker_active = false
+        }
+    }
+
+    unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &super::RayTracingPipeline) {
+        unsafe {
+            self.device.raw.cmd_bind_pipeline(
+                self.active,
+                vk::PipelineBindPoint::RAY_TRACING_KHR,
+                pipeline.raw,
+            )
+        };
+    }
+
     unsafe fn copy_acceleration_structure_to_acceleration_structure(
         &mut self,
         src: &super::AccelerationStructure,
