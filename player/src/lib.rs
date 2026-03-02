@@ -1012,6 +1012,11 @@ impl Player {
                 occlusion_query_set: occlusion_query_set.map(|qs| self.resolve_query_set_id(qs)),
                 multiview_mask,
             },
+            Command::RunRayTracingPass {
+                pass
+            } => Command::RunRayTracingPass {
+                pass: self.resolve_ray_tracing_pass(pass),
+            },
             Command::BuildAccelerationStructures { blas, tlas } => {
                 Command::BuildAccelerationStructures {
                     blas: blas
@@ -1100,6 +1105,32 @@ impl Player {
             commands: commands
                 .into_iter()
                 .map(|cmd| self.resolve_render_command(cmd))
+                .collect(),
+            dynamic_offsets,
+            immediates_data,
+            string_data,
+        }
+    }
+
+    fn resolve_ray_tracing_pass(
+        &self,
+        pass: BasePass<wgc::command::RayTracingCommand<PointerReferences>, Infallible>,
+    ) -> BasePass<wgc::command::RayTracingCommand<ArcReferences>, Infallible> {
+        let BasePass {
+            label,
+            error,
+            commands,
+            dynamic_offsets,
+            immediates_data,
+            string_data,
+        } = pass;
+
+        BasePass {
+            label,
+            error,
+            commands: commands
+                .into_iter()
+                .map(|cmd| self.resolve_ray_tracing_command(cmd))
                 .collect(),
             dynamic_offsets,
             immediates_data,
@@ -1321,6 +1352,40 @@ impl Player {
             },
             C::EndPipelineStatisticsQuery => C::EndPipelineStatisticsQuery,
             C::ExecuteBundle(bundle) => C::ExecuteBundle(self.resolve_render_bundle_id(bundle)),
+        }
+    }
+
+    
+
+    fn resolve_ray_tracing_command(
+        &self,
+        command: wgc::command::RayTracingCommand<PointerReferences>,
+    ) -> wgc::command::RayTracingCommand<ArcReferences> {
+        use wgc::command::RayTracingCommand as C;
+        match command {
+            C::SetBindGroup {
+                index,
+                num_dynamic_offsets,
+                bind_group,
+            } => C::SetBindGroup {
+                index,
+                num_dynamic_offsets,
+                bind_group: bind_group.map(|bg| self.resolve_bind_group_id(bg)),
+            },
+            C::SetPipeline(id) => C::SetPipeline(self.resolve_ray_tracing_pipeline_id(id)),
+            C::SetImmediate {
+                offset,
+                size_bytes,
+                values_offset,
+            } => C::SetImmediate {
+                offset,
+                size_bytes,
+                values_offset,
+            },
+            C::TraceRays(groups) => C::TraceRays(groups),
+            C::PushDebugGroup { color, len } => C::PushDebugGroup { color, len },
+            C::PopDebugGroup => C::PopDebugGroup,
+            C::InsertDebugMarker { color, len } => C::InsertDebugMarker { color, len },
         }
     }
 

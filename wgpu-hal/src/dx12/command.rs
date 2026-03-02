@@ -1857,4 +1857,19 @@ impl crate::CommandEncoder for super::CommandEncoder {
         _dependencies: &[&super::AccelerationStructure],
     ) {
     }
+    
+    unsafe fn begin_ray_tracing_pass(
+        &mut self,
+        _desc: &crate::RayTracingPassDescriptor,
+    ) {
+        unreachable!("Ray tracing pipelines not supported")
+    }
+    
+    unsafe fn end_ray_tracing_pass(&mut self) {
+        unreachable!("Ray tracing pipelines not supported")
+    }
+    
+    unsafe fn set_ray_tracing_pipeline(&mut self, _pipeline: &<Self::A as crate::Api>::RayTracingPipeline) {
+        unreachable!("Ray tracing pipelines not supported")
+    }
 }

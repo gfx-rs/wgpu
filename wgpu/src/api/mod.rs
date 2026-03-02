@@ -52,6 +52,7 @@ mod surface_texture;
 mod texture;
 mod texture_view;
 mod tlas;
+mod ray_tracing_pass;
 
 pub use adapter::*;
 pub use bind_group::*;
@@ -83,6 +84,7 @@ pub use surface_texture::*;
 pub use texture::*;
 pub use texture_view::*;
 pub use tlas::*;
+pub use ray_tracing_pass::*;
 
 /// Object debugging label.
 pub type Label<'a> = Option<&'a str>;

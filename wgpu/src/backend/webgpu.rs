@@ -1422,6 +1422,10 @@ pub struct WebRenderPassEncoder {
     ident: crate::cmp::Identifier,
 }
 
+
+#[derive(Debug, Clone)]
+pub struct WebRayTracingPassEncoder {} // no ray tracing pipelines on web
+
 #[derive(Debug)]
 pub struct WebCommandBuffer {
     pub(crate) inner: webgpu_sys::GpuCommandBuffer,
@@ -1499,6 +1503,7 @@ impl_send_sync!(WebPipelineCache);
 impl_send_sync!(WebCommandEncoder);
 impl_send_sync!(WebComputePassEncoder);
 impl_send_sync!(WebRenderPassEncoder);
+impl_send_sync!(WebRayTracingPassEncoder);
 impl_send_sync!(WebCommandBuffer);
 impl_send_sync!(WebRenderBundleEncoder);
 impl_send_sync!(WebRenderBundle);

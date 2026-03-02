@@ -4,9 +4,7 @@ use std::io::Write as _;
 
 use crate::{
     command::{
-        ArcCommand, ArcComputeCommand, ArcPassTimestampWrites, ArcReferences, ArcRenderCommand,
-        BasePass, ColorAttachments, Command, ComputeCommand, PointerReferences, RenderCommand,
-        RenderPassColorAttachment, ResolvedRenderPassDepthStencilAttachment,
+        ArcCommand, ArcComputeCommand, ArcPassTimestampWrites, ArcRayTracingCommand, ArcReferences, ArcRenderCommand, BasePass, ColorAttachments, Command, ComputeCommand, PointerReferences, RayTracingCommand, RenderCommand, RenderPassColorAttachment, ResolvedRenderPassDepthStencilAttachment
     },
     device::trace::{Data, DataKind, TraceRayTracingPipelineDescriptor},
     id::{PointerId, markers},
@@ -263,6 +261,11 @@ impl IntoTrace for ArcCommand {
                 timestamp_writes: timestamp_writes.map(|tw| tw.into_trace()),
                 occlusion_query_set: occlusion_query_set.map(|q| q.to_trace()),
                 multiview_mask,
+            },
+            ArcCommand::RunRayTracingPass {
+                pass
+            } => Command::RunRayTracingPass {
+                pass: pass.into_trace(),
             },
             ArcCommand::BuildAccelerationStructures { blas, tlas } => {
                 Command::BuildAccelerationStructures {
@@ -658,6 +661,38 @@ impl IntoTrace for ArcRenderCommand {
             },
             C::EndPipelineStatisticsQuery => C::EndPipelineStatisticsQuery,
             C::ExecuteBundle(bundle) => C::ExecuteBundle(bundle.into_trace()),
+        }
+    }
+}
+
+impl IntoTrace for ArcRayTracingCommand {
+    type Output = RayTracingCommand<PointerReferences>;
+    fn into_trace(self) -> Self::Output {
+        use RayTracingCommand as C;
+        match self {
+            C::SetBindGroup {
+                index,
+                num_dynamic_offsets,
+                bind_group,
+            } => C::SetBindGroup {
+                index,
+                num_dynamic_offsets,
+                bind_group: bind_group.map(|bg| bg.into_trace()),
+            },
+            C::SetPipeline(id) => C::SetPipeline(id.into_trace()),
+            C::SetImmediate {
+                offset,
+                size_bytes,
+                values_offset,
+            } => C::SetImmediate {
+                offset,
+                size_bytes,
+                values_offset,
+            },
+            C::TraceRays(groups) => C::TraceRays(groups),
+            C::PushDebugGroup { color, len } => C::PushDebugGroup { color, len },
+            C::PopDebugGroup => C::PopDebugGroup,
+            C::InsertDebugMarker { color, len } => C::InsertDebugMarker { color, len },
         }
     }
 }

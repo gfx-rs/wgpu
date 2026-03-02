@@ -1,0 +1,61 @@
+use crate::{Label, RayTracingPipeline, api::SharedDeferredCommandBufferActions, dispatch};
+
+/// In-progress recording of a ray tracing pass.
+///
+/// It can be created with [`CommandEncoder::begin_ray_tracing_pass`].
+#[derive(Debug)]
+pub struct RayTracingPass<'encoder> {
+    pub(crate) inner: dispatch::DispatchRayTracingPass,
+
+    /// Shared with CommandEncoder to enqueue deferred actions from within a pass.
+    pub(crate) actions: SharedDeferredCommandBufferActions,
+
+    /// This lifetime is used to protect the [`CommandEncoder`] from being used
+    /// while the pass is alive. This needs to be PhantomDrop to prevent the lifetime
+    /// from being shortened.
+    pub(crate) _encoder_guard: crate::api::PhantomDrop<&'encoder ()>,
+}
+
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(RayTracingPass<'_>: Send, Sync);
+
+crate::cmp::impl_eq_ord_hash_proxy!(RayTracingPass<'_> => .inner);
+
+impl RayTracingPass<'_> {
+    /// Drops the lifetime relationship to the parent command encoder, making usage of
+    /// the encoder while this pass is recorded a run-time error instead.
+    ///
+    /// Attention: As long as the ray tracing pass has not been ended, any mutating operation on the parent
+    /// command encoder will cause a run-time error and invalidate it!
+    /// By default, the lifetime constraint prevents this, but it can be useful
+    /// to handle this at run time, such as when storing the pass and encoder in the same
+    /// data structure.
+    ///
+    /// This operation has no effect on pass recording.
+    /// It's a safe operation, since [`CommandEncoder`] is in a locked state as long as the pass is active
+    /// regardless of the lifetime constraint or its absence.
+    pub fn forget_lifetime(self) -> RayTracingPass<'static> {
+        RayTracingPass {
+            inner: self.inner,
+            actions: self.actions,
+            _encoder_guard: crate::api::PhantomDrop::default(),
+        }
+    }
+    
+    /// Sets the active ray tracing pipeline.
+    pub fn set_pipeline(&mut self, pipeline: &RayTracingPipeline) {
+        self.inner.set_pipeline(&pipeline.inner);
+    }
+}
+
+
+/// Describes the attachments of a ray tracing pass.
+///
+/// For use with [`CommandEncoder::begin_ray_tracing_pass`].
+#[derive(Clone, Default, Debug)]
+pub struct RayTracingPassDescriptor<'a> {
+    /// Debug label of the ray tracing pass. This will show up in graphics debuggers for easy identification.
+    pub label: Label<'a>,
+}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(RayTracingPassDescriptor<'_>: Send, Sync);

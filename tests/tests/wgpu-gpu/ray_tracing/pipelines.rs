@@ -1,4 +1,4 @@
-use wgpu::{Features, Limits, RayTracingIntersectionDescriptor, RayTracingPipelineDescriptor, RayTracingStage, ShaderModuleDescriptor};
+use wgpu::{Features, Limits, RayTracingIntersectionDescriptor, RayTracingPassDescriptor, RayTracingPipelineDescriptor, RayTracingStage, ShaderModuleDescriptor};
 use wgpu_test::{
     gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
@@ -86,7 +86,7 @@ fn pipeline_create_use(ctx: TestingContext) {
         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(ray_miss_source)),
     });
 
-    let _pipeline = ctx.device.create_ray_tracing_pipeline(&RayTracingPipelineDescriptor {
+    let pipeline = ctx.device.create_ray_tracing_pipeline(&RayTracingPipelineDescriptor {
         label: None,
         layout: None,
         ray_generation: RayTracingStage {
@@ -116,4 +116,11 @@ fn pipeline_create_use(ctx: TestingContext) {
         max_recersion_depth: 1,
         cache: None,
     });
+
+    let mut encoder = ctx.device.create_command_encoder(&Default::default());
+
+    {
+        let mut pass = encoder.begin_ray_tracing_pass(&RayTracingPassDescriptor::default());
+        pass.set_pipeline(&pipeline);
+    }
 }

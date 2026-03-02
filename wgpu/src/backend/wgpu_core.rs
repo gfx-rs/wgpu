@@ -597,6 +597,14 @@ pub struct CoreRenderPass {
 }
 
 #[derive(Debug)]
+pub struct CoreRayTracingPass {
+    pub(crate) context: ContextWgpuCore,
+    pass: wgc::command::RayTracingPass,
+    error_sink: ErrorSink,
+    id: crate::cmp::Identifier,
+}
+
+#[derive(Debug)]
 pub struct CoreCommandEncoder {
     pub(crate) context: ContextWgpuCore,
     id: wgc::id::CommandEncoderId,
@@ -771,6 +779,7 @@ crate::cmp::impl_eq_ord_hash_proxy!(CorePipelineCache => .id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreCommandEncoder => .id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreComputePass => .id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreRenderPass => .id);
+crate::cmp::impl_eq_ord_hash_proxy!(CoreRayTracingPass => .id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreCommandBuffer => .id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreRenderBundleEncoder => .id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreRenderBundle => .id);
@@ -2764,6 +2773,35 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         .into()
     }
 
+    fn begin_ray_tracing_pass(
+        &self,
+        desc: &crate::RayTracingPassDescriptor<'_>,
+    ) -> dispatch::DispatchRayTracingPass {
+        let (pass, err) = self.context.0.command_encoder_begin_ray_tracing_pass(
+            self.id,
+            &wgc::command::RayTracingPassDescriptor {
+                label: desc.label.map(Borrowed),
+            },
+        );
+
+        if let Some(cause) = err {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                desc.label,
+                "CommandEncoder::begin_ray_tracing_pass",
+            );
+        }
+
+        CoreRayTracingPass {
+            context: self.context.clone(),
+            pass,
+            error_sink: self.error_sink.clone(),
+            id: crate::cmp::Identifier::create(),
+        }
+        .into()
+    }
+
     fn finish(&mut self) -> dispatch::DispatchCommandBuffer {
         let descriptor = wgt::CommandBufferDescriptor::default();
         let (id, opt_label_and_error) =
@@ -3875,6 +3913,26 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     }
 }
 
+impl dispatch::RayTracingPassInterface for CoreRayTracingPass {
+    fn set_pipeline(&mut self, pipeline: &dispatch::DispatchRayTracingPipeline) {
+        let pipeline = pipeline.as_core();
+
+        if let Err(cause) = self
+            .context
+            .0
+            .ray_tracing_pass_set_pipeline(&mut self.pass, pipeline.id)
+        {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                self.pass.label(),
+                "RayTracingPass::set_pipeline",
+            );
+        }
+        
+    }
+}
+
 impl Drop for CoreRenderPass {
     fn drop(&mut self) {
         if let Err(cause) = self.context.0.render_pass_end(&mut self.pass) {
@@ -3883,6 +3941,39 @@ impl Drop for CoreRenderPass {
                 cause,
                 self.pass.label(),
                 "RenderPass::end",
+            );
+        }
+    }
+}
+
+impl dispatch::RayTracingPassInterface for CoreRayTracingPass {
+    fn set_pipeline(&mut self, pipeline: &dispatch::DispatchRayTracingPipeline) {
+        let pipeline = pipeline.as_core();
+
+        if let Err(cause) = self
+            .context
+            .0
+            .ray_tracing_pass_set_pipeline(&mut self.pass, pipeline.id)
+        {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                self.pass.label(),
+                "RayTracingPass::set_pipeline",
+            );
+        }
+        
+    }
+}
+
+impl Drop for CoreRayTracingPass {
+    fn drop(&mut self) {
+        if let Err(cause) = self.context.0.ray_tracing_pass_end(&mut self.pass) {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                self.pass.label(),
+                "RayTracingPass::end",
             );
         }
     }
