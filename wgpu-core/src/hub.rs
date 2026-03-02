@@ -122,7 +122,7 @@ use core::fmt::Debug;
 use crate::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::{CommandBuffer, CommandEncoder, RenderBundle},
-    device::{Device, queue::Queue},
+    device::{queue::Queue, Device},
     instance::Adapter,
     pipeline::{ComputePipeline, PipelineCache, RayTracingPipeline, RenderPipeline, ShaderModule},
     registry::{Registry, RegistryReport},

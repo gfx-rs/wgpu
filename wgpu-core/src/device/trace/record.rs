@@ -4,10 +4,13 @@ use std::io::Write as _;
 
 use crate::{
     command::{
-        ArcCommand, ArcComputeCommand, ArcPassTimestampWrites, ArcRayTracingCommand, ArcReferences, ArcRenderCommand, BasePass, ColorAttachments, Command, ComputeCommand, PointerReferences, RayTracingCommand, RenderCommand, RenderPassColorAttachment, ResolvedRenderPassDepthStencilAttachment
+        ArcCommand, ArcComputeCommand, ArcPassTimestampWrites, ArcRayTracingCommand, ArcReferences,
+        ArcRenderCommand, BasePass, ColorAttachments, Command, ComputeCommand, PointerReferences,
+        RayTracingCommand, RenderCommand, RenderPassColorAttachment,
+        ResolvedRenderPassDepthStencilAttachment,
     },
     device::trace::{Data, DataKind, TraceRayTracingPipelineDescriptor},
-    id::{PointerId, markers},
+    id::{markers, PointerId},
     storage::StorageItem,
 };
 
@@ -262,9 +265,7 @@ impl IntoTrace for ArcCommand {
                 occlusion_query_set: occlusion_query_set.map(|q| q.to_trace()),
                 multiview_mask,
             },
-            ArcCommand::RunRayTracingPass {
-                pass
-            } => Command::RunRayTracingPass {
+            ArcCommand::RunRayTracingPass { pass } => Command::RunRayTracingPass {
                 pass: pass.into_trace(),
             },
             ArcCommand::BuildAccelerationStructures { blas, tlas } => {
@@ -827,12 +828,19 @@ impl<'a> IntoTrace for crate::pipeline::ResolvedRayTracingPipelineDescriptor<'a>
             layout: self.layout.into_trace(),
             ray_generation: self.ray_generation.into_trace(),
             miss: self.miss.into_trace(),
-            intersections: self.intersections.into_iter().map(|intersection| match intersection {
-                crate::pipeline::RayTracingIntersectionDescriptor::Triangle { closest_hit, any_hit } => crate::pipeline::RayTracingIntersectionDescriptor::Triangle{
-                    closest_hit: closest_hit.into_trace(),
-                    any_hit: any_hit.map(|a| a.into_trace()),
-                }
-            } ).collect(),
+            intersections: self
+                .intersections
+                .into_iter()
+                .map(|intersection| match intersection {
+                    crate::pipeline::RayTracingIntersectionDescriptor::Triangle {
+                        closest_hit,
+                        any_hit,
+                    } => crate::pipeline::RayTracingIntersectionDescriptor::Triangle {
+                        closest_hit: closest_hit.into_trace(),
+                        any_hit: any_hit.map(|a| a.into_trace()),
+                    },
+                })
+                .collect(),
             cache: self.cache.map(|c| c.into_trace()),
             max_recursion_depth: self.max_recursion_depth,
         }

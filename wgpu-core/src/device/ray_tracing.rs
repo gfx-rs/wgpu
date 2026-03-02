@@ -33,7 +33,8 @@ impl Device {
         sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> Result<Arc<resource::Blas>, CreateBlasError> {
         self.check_is_valid()?;
-        self.require_features(Features::EXPERIMENTAL_RAY_QUERY).or_else(|_|self.require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES))?;
+        self.require_features(Features::EXPERIMENTAL_RAY_QUERY)
+            .or_else(|_| self.require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES))?;
 
         if blas_desc
             .flags
@@ -216,7 +217,8 @@ impl Device {
         desc: &resource::TlasDescriptor,
     ) -> Result<Arc<resource::Tlas>, CreateTlasError> {
         self.check_is_valid()?;
-        self.require_features(Features::EXPERIMENTAL_RAY_QUERY).or_else(|_|self.require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES))?;
+        self.require_features(Features::EXPERIMENTAL_RAY_QUERY)
+            .or_else(|_| self.require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES))?;
 
         if desc.max_instances > self.limits.max_tlas_instance_count {
             return Err(CreateTlasError::TooManyInstances(
@@ -632,7 +634,11 @@ impl Device {
             shader_modules
         };
 
-        let shader_binding_data = pipeline::ShaderBindingData::from_raw_pipeline(self.clone(), raw.as_ref(), desc.intersections.len())?;
+        let shader_binding_data = pipeline::ShaderBindingData::from_raw_pipeline(
+            self.clone(),
+            raw.as_ref(),
+            desc.intersections.len(),
+        )?;
 
         let pipeline = pipeline::RayTracingPipeline {
             raw: ManuallyDrop::new(raw),

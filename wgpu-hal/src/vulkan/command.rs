@@ -1361,10 +1361,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     // ray tracing
 
-    unsafe fn begin_ray_tracing_pass(
-        &mut self,
-        desc: &crate::RayTracingPassDescriptor<'_>,
-    ) {
+    unsafe fn begin_ray_tracing_pass(&mut self, desc: &crate::RayTracingPassDescriptor<'_>) {
         self.bind_point = vk::PipelineBindPoint::RAY_TRACING_KHR;
         if let Some(label) = desc.label {
             unsafe { self.begin_debug_marker(label) };

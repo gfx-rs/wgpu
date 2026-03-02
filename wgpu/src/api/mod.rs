@@ -40,6 +40,7 @@ mod pipeline_cache;
 mod pipeline_layout;
 mod query_set;
 mod queue;
+mod ray_tracing_pass;
 mod ray_tracing_pipeline;
 mod render_bundle;
 mod render_bundle_encoder;
@@ -52,7 +53,6 @@ mod surface_texture;
 mod texture;
 mod texture_view;
 mod tlas;
-mod ray_tracing_pass;
 
 pub use adapter::*;
 pub use bind_group::*;
@@ -72,6 +72,7 @@ pub use pipeline_cache::*;
 pub use pipeline_layout::*;
 pub use query_set::*;
 pub use queue::*;
+pub use ray_tracing_pass::*;
 pub use ray_tracing_pipeline::*;
 pub use render_bundle::*;
 pub use render_bundle_encoder::*;
@@ -84,7 +85,6 @@ pub use surface_texture::*;
 pub use texture::*;
 pub use texture_view::*;
 pub use tlas::*;
-pub use ray_tracing_pass::*;
 
 /// Object debugging label.
 pub type Label<'a> = Option<&'a str>;

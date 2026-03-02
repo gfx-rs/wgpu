@@ -4,15 +4,30 @@ use core::{ptr::NonNull, sync::atomic::Ordering};
 #[cfg(feature = "trace")]
 use crate::device::trace::{self, IntoTrace};
 use crate::{
-    Label, LabelHelpers, api_log, binding_model::{
+    api_log,
+    binding_model::{
         self, BindGroupEntry, BindingResource, BufferBinding, ResolvedBindGroupDescriptor,
         ResolvedBindGroupEntry, ResolvedBindingResource, ResolvedBufferBinding,
-    }, command::{self, CommandEncoder}, conv, device::{DeviceError, DeviceLostClosure, life::WaitIdleError}, global::Global, id::{self, AdapterId, DeviceId, QueueId, SurfaceId}, instance::{self, Adapter, Surface}, pipeline::{
-        self, RenderPipelineVertexProcessor, ResolvedComputePipelineDescriptor, ResolvedFragmentState, ResolvedGeneralRenderPipelineDescriptor, ResolvedMeshState, ResolvedProgrammableStageDescriptor, ResolvedRayTracingPipelineDescriptor, ResolvedTaskState, ResolvedVertexState
-    }, present, resource::{
+    },
+    command::{self, CommandEncoder},
+    conv,
+    device::{life::WaitIdleError, DeviceError, DeviceLostClosure},
+    global::Global,
+    id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
+    instance::{self, Adapter, Surface},
+    pipeline::{
+        self, RenderPipelineVertexProcessor, ResolvedComputePipelineDescriptor,
+        ResolvedFragmentState, ResolvedGeneralRenderPipelineDescriptor, ResolvedMeshState,
+        ResolvedProgrammableStageDescriptor, ResolvedRayTracingPipelineDescriptor,
+        ResolvedTaskState, ResolvedVertexState,
+    },
+    present,
+    resource::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
         Fallible,
-    }, storage::Storage
+    },
+    storage::Storage,
+    Label, LabelHelpers,
 };
 
 use wgt::{BufferAddress, TextureFormat};
@@ -1810,14 +1825,18 @@ impl Global {
                 };
                 if module.interface.is_none() && layout.is_none() {
                     break 'error pipeline::CreateRayTracingPipelineError::Implicit(
-                        pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::RAY_GENERATION),
+                        pipeline::ImplicitLayoutError::Passthrough(
+                            wgt::ShaderStages::RAY_GENERATION,
+                        ),
                     );
                 }
                 ResolvedProgrammableStageDescriptor {
                     module,
                     entry_point: desc.ray_generation.entry_point.clone(),
                     constants: desc.ray_generation.constants.clone(),
-                    zero_initialize_workgroup_memory: desc.ray_generation.zero_initialize_workgroup_memory,
+                    zero_initialize_workgroup_memory: desc
+                        .ray_generation
+                        .zero_initialize_workgroup_memory,
                 }
             };
 
@@ -1844,7 +1863,10 @@ impl Global {
 
             for intersection_desc in desc.intersections.iter() {
                 match intersection_desc {
-                    pipeline::RayTracingIntersectionDescriptor::Triangle { closest_hit, any_hit } => {
+                    pipeline::RayTracingIntersectionDescriptor::Triangle {
+                        closest_hit,
+                        any_hit,
+                    } => {
                         let closest_hit_stage = {
                             let module = hub.shader_modules.get(closest_hit.module).get();
                             let module = match module {
@@ -1853,14 +1875,17 @@ impl Global {
                             };
                             if module.interface.is_none() && layout.is_none() {
                                 break 'error pipeline::CreateRayTracingPipelineError::Implicit(
-                                    pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::CLOSEST_HIT),
+                                    pipeline::ImplicitLayoutError::Passthrough(
+                                        wgt::ShaderStages::CLOSEST_HIT,
+                                    ),
                                 );
                             }
                             ResolvedProgrammableStageDescriptor {
                                 module,
                                 entry_point: closest_hit.entry_point.clone(),
                                 constants: closest_hit.constants.clone(),
-                                zero_initialize_workgroup_memory: closest_hit.zero_initialize_workgroup_memory,
+                                zero_initialize_workgroup_memory: closest_hit
+                                    .zero_initialize_workgroup_memory,
                             }
                         };
 
@@ -1873,21 +1898,29 @@ impl Global {
                                 };
                                 if module.interface.is_none() && layout.is_none() {
                                     break 'error pipeline::CreateRayTracingPipelineError::Implicit(
-                                        pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::ANY_HIT),
+                                        pipeline::ImplicitLayoutError::Passthrough(
+                                            wgt::ShaderStages::ANY_HIT,
+                                        ),
                                     );
                                 }
                                 Some(ResolvedProgrammableStageDescriptor {
                                     module,
                                     entry_point: any_hit.entry_point.clone(),
                                     constants: any_hit.constants.clone(),
-                                    zero_initialize_workgroup_memory: any_hit.zero_initialize_workgroup_memory,
+                                    zero_initialize_workgroup_memory: any_hit
+                                        .zero_initialize_workgroup_memory,
                                 })
                             }
                             None => None,
                         };
 
-                        intersection_stages.push(pipeline::RayTracingIntersectionDescriptor::Triangle { closest_hit: closest_hit_stage, any_hit: any_hit_stage, });
-                    },
+                        intersection_stages.push(
+                            pipeline::RayTracingIntersectionDescriptor::Triangle {
+                                closest_hit: closest_hit_stage,
+                                any_hit: any_hit_stage,
+                            },
+                        );
+                    }
                 }
             }
 
@@ -1982,7 +2015,9 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(pipeline) = _pipeline.get() {
             if let Some(t) = pipeline.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyRayTracingPipeline(pipeline.to_trace()));
+                t.add(trace::Action::DestroyRayTracingPipeline(
+                    pipeline.to_trace(),
+                ));
             }
         }
     }

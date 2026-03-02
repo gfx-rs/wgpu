@@ -1855,7 +1855,8 @@ impl Features {
     #[must_use]
     pub fn allowed_vertex_formats_for_blas(&self) -> Vec<VertexFormat> {
         let mut formats = Vec::new();
-        if self.intersects(Self::EXPERIMENTAL_RAY_QUERY | Self::EXPERIMENTAL_RAY_TRACING_PIPELINES) {
+        if self.intersects(Self::EXPERIMENTAL_RAY_QUERY | Self::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+        {
             formats.push(VertexFormat::Float32x3);
         }
         if self.contains(Self::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS) {

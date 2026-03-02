@@ -300,17 +300,15 @@ impl crate::CommandEncoder for CommandBuffer {
         dependencies: &[&Resource],
     ) {
     }
-    
-    unsafe fn begin_ray_tracing_pass(
+
+    unsafe fn begin_ray_tracing_pass(&mut self, _desc: &crate::RayTracingPassDescriptor) {}
+
+    unsafe fn end_ray_tracing_pass(&mut self) {}
+
+    unsafe fn set_ray_tracing_pipeline(
         &mut self,
-        _desc: &crate::RayTracingPassDescriptor,
+        _pipeline: &<Self::A as crate::Api>::RayTracingPipeline,
     ) {
-    }
-    
-    unsafe fn end_ray_tracing_pass(&mut self) {
-    }
-    
-    unsafe fn set_ray_tracing_pipeline(&mut self, _pipeline: &<Self::A as crate::Api>::RayTracingPipeline) {
     }
 }
 

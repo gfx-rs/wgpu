@@ -5,8 +5,12 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
+use core::{
+    marker::PhantomData,
+    mem::ManuallyDrop,
+    num::{NonZeroU32, NonZeroU64},
+};
 use hal::BufferDescriptor;
-use core::{marker::PhantomData, mem::ManuallyDrop, num::{NonZeroU32, NonZeroU64}};
 
 use arrayvec::ArrayVec;
 use naga::error::ShaderError;
@@ -980,18 +984,32 @@ pub struct ShaderBindingData {
 }
 
 impl ShaderBindingData {
-    pub(crate) fn from_raw_pipeline(device: Arc<Device>, pipeline: &dyn hal::DynRayTracingPipeline, num_intersection_groups: usize) -> Result<Self, CreateRayTracingPipelineError> {
+    pub(crate) fn from_raw_pipeline(
+        device: Arc<Device>,
+        pipeline: &dyn hal::DynRayTracingPipeline,
+        num_intersection_groups: usize,
+    ) -> Result<Self, CreateRayTracingPipelineError> {
         let tot_num_groups = num_intersection_groups + 1 /* miss shader */ + 1 /* closest hit shader */;
-        let size = tot_num_groups as u64 * device.alignments.ray_tracing_pipeline_group_data_size as u64;
+        let size =
+            tot_num_groups as u64 * device.alignments.ray_tracing_pipeline_group_data_size as u64;
 
-        let buffer = unsafe { device.raw().create_buffer(&BufferDescriptor {
-            label: None,
-            size,
-            usage: wgt::BufferUses::RAY_TRACING_PIPELINE_SHADER_DATA | wgt::BufferUses::COPY_DST,
-            memory_flags: hal::MemoryFlags::PREFER_COHERENT,
-        }) }.map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
+        let buffer = unsafe {
+            device.raw().create_buffer(&BufferDescriptor {
+                label: None,
+                size,
+                usage: wgt::BufferUses::RAY_TRACING_PIPELINE_SHADER_DATA
+                    | wgt::BufferUses::COPY_DST,
+                memory_flags: hal::MemoryFlags::PREFER_COHERENT,
+            })
+        }
+        .map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
 
-        let data = unsafe { device.raw().get_raytracing_pipeline_group_data(pipeline, 0..tot_num_groups as _) }.map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
+        let data = unsafe {
+            device
+                .raw()
+                .get_raytracing_pipeline_group_data(pipeline, 0..tot_num_groups as _)
+        }
+        .map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
 
         // If there is no queue anymore, the ray tracing pipeline can't be accessed, so we don't have to worry about UB from uninitialized values
         if let Some(queue) = device.get_queue() {
@@ -1003,16 +1021,25 @@ impl ShaderBindingData {
 
             let mut writes = queue.pending_writes.lock();
             let encoder = writes.activate();
-            unsafe {encoder.copy_buffer_to_buffer(staging_buf.raw(), buffer.as_ref(), &[hal::BufferCopy {
-                src_offset:0,
-                dst_offset: 0,
-                size: NonZeroU64::new(size).expect("Already checked size isn't zero."),
-            }])};
+            unsafe {
+                encoder.copy_buffer_to_buffer(
+                    staging_buf.raw(),
+                    buffer.as_ref(),
+                    &[hal::BufferCopy {
+                        src_offset: 0,
+                        dst_offset: 0,
+                        size: NonZeroU64::new(size).expect("Already checked size isn't zero."),
+                    }],
+                )
+            };
 
             writes.consume(staging_buf);
         }
 
-        Ok(Self { raw: ManuallyDrop::new(buffer), device })
+        Ok(Self {
+            raw: ManuallyDrop::new(buffer),
+            device,
+        })
     }
 }
 

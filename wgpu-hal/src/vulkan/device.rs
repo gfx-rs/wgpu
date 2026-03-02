@@ -2450,7 +2450,10 @@ impl crate::Device for super::Device {
             unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
         }
 
-        for raw_module in compiled_stages.into_iter().flat_map(|stage| stage.temp_raw_module) {
+        for raw_module in compiled_stages
+            .into_iter()
+            .flat_map(|stage| stage.temp_raw_module)
+        {
             unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
         }
 

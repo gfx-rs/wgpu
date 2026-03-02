@@ -22,13 +22,13 @@ mod memory_init;
 mod pass;
 mod query;
 mod ray_tracing;
+mod ray_tracing_pass;
+mod ray_tracing_pass_commands;
 mod render;
 mod render_command;
 mod timestamp_writes;
 mod transfer;
 mod transition_resources;
-mod ray_tracing_pass;
-mod ray_tracing_pass_commands;
 
 use alloc::{borrow::ToOwned as _, boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::convert::Infallible;
@@ -55,14 +55,14 @@ pub use self::{
         ComputePassErrorInner, DispatchError,
     },
     compute_command::ArcComputeCommand,
+    draw::{DrawError, Rect, RenderCommandError},
+    encoder_command::{ArcCommand, ArcReferences, Command, IdReferences, ReferenceType},
+    query::{QueryError, QueryUseError, ResolveError, SimplifiedQueryType},
     ray_tracing_pass::{
         RayTracingBasePass, RayTracingPass, RayTracingPassDescriptor, RayTracingPassError,
         RayTracingPassErrorInner, TraceRayError,
     },
     ray_tracing_pass_commands::ArcRayTracingCommand,
-    draw::{DrawError, Rect, RenderCommandError},
-    encoder_command::{ArcCommand, ArcReferences, Command, IdReferences, ReferenceType},
-    query::{QueryError, QueryUseError, ResolveError, SimplifiedQueryType},
     render::{
         ArcRenderPassColorAttachment, AttachmentError, AttachmentErrorLocation,
         ColorAttachmentError, ColorAttachments, LoadOp, PassChannel, RenderBasePass, RenderPass,
@@ -88,7 +88,10 @@ pub(crate) use self::{
 pub(crate) use allocator::CommandAllocator;
 
 /// cbindgen:ignore
-pub use self::{compute_command::ComputeCommand, render_command::RenderCommand, ray_tracing_pass_commands::RayTracingCommand};
+pub use self::{
+    compute_command::ComputeCommand, ray_tracing_pass_commands::RayTracingCommand,
+    render_command::RenderCommand,
+};
 
 pub(crate) use timestamp_writes::ArcPassTimestampWrites;
 pub use timestamp_writes::PassTimestampWrites;
@@ -1040,7 +1043,9 @@ impl CommandEncoder {
         for command in commands {
             if matches!(
                 command,
-                ArcCommand::RunRenderPass { .. } | ArcCommand::RunComputePass { .. } | ArcCommand::RunRayTracingPass { .. }
+                ArcCommand::RunRenderPass { .. }
+                    | ArcCommand::RunComputePass { .. }
+                    | ArcCommand::RunRayTracingPass { .. }
             ) {
                 // Compute passes and render passes can accept either an
                 // open or closed encoder. This state object holds an
@@ -1126,7 +1131,7 @@ impl CommandEncoder {
                             }
                         }
                         res?;
-                    } 
+                    }
                     _ => unreachable!(),
                 }
             } else {
@@ -1223,7 +1228,9 @@ impl CommandEncoder {
                             texture_transitions,
                         )?;
                     }
-                    ArcCommand::RunComputePass { .. } | ArcCommand::RunRenderPass { .. } | ArcCommand::RunRayTracingPass { .. } => {
+                    ArcCommand::RunComputePass { .. }
+                    | ArcCommand::RunRenderPass { .. }
+                    | ArcCommand::RunRayTracingPass { .. } => {
                         unreachable!()
                     }
                 }

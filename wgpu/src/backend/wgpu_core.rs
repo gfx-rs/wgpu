@@ -3942,7 +3942,6 @@ impl dispatch::RayTracingPassInterface for CoreRayTracingPass {
                 "RayTracingPass::set_pipeline",
             );
         }
-        
     }
 
     fn set_bind_group(

@@ -349,7 +349,10 @@ pub trait CommandEncoderInterface: CommonTraits {
 
     fn begin_compute_pass(&self, desc: &crate::ComputePassDescriptor<'_>) -> DispatchComputePass;
     fn begin_render_pass(&self, desc: &crate::RenderPassDescriptor<'_>) -> DispatchRenderPass;
-    fn begin_ray_tracing_pass(&self, desc: &crate::RayTracingPassDescriptor<'_>) -> DispatchRayTracingPass;
+    fn begin_ray_tracing_pass(
+        &self,
+        desc: &crate::RayTracingPassDescriptor<'_>,
+    ) -> DispatchRayTracingPass;
     fn finish(&mut self) -> DispatchCommandBuffer;
 
     fn clear_texture(

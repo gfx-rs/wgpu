@@ -1857,7 +1857,12 @@ impl Global {
         // TODO: Tracing
 
         let error = 'error: {
-            match device.require_features(wgpu_types::Features::EXPERIMENTAL_RAY_QUERY).or_else(|_| device.require_features(wgpu_types::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)) {
+            match device
+                .require_features(wgpu_types::Features::EXPERIMENTAL_RAY_QUERY)
+                .or_else(|_| {
+                    device
+                        .require_features(wgpu_types::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+                }) {
                 Ok(_) => {}
                 Err(err) => break 'error err.into(),
             }

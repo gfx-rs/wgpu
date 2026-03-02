@@ -1422,7 +1422,6 @@ pub struct WebRenderPassEncoder {
     ident: crate::cmp::Identifier,
 }
 
-
 #[derive(Debug, Clone)]
 pub struct WebRayTracingPassEncoder {} // no ray tracing pipelines on web
 

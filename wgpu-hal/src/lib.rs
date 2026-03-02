@@ -1786,10 +1786,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// [`end_render_pass`]: CommandEncoder::end_render_pass
     /// [`end_compute_pass`]: CommandEncoder::end_compute_pass
     /// [`end_ray_tracing_pass`]: CommandEncoder::end_ray_tracing_pass
-    unsafe fn begin_ray_tracing_pass(
-        &mut self,
-        desc: &RayTracingPassDescriptor,
-    );
+    unsafe fn begin_ray_tracing_pass(&mut self, desc: &RayTracingPassDescriptor);
 
     /// End the current compute pass.
     ///
@@ -1803,7 +1800,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     unsafe fn end_ray_tracing_pass(&mut self);
 
     /// # Safety
-    /// 
+    ///
     /// - Pipeline must not be destroyed
     unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &<Self::A as Api>::RayTracingPipeline);
 
@@ -2049,7 +2046,7 @@ pub struct Alignments {
 
     /// How large a single piece of group data is. That is, how large the vector returned
     /// from `device.get_raytracing_pipeline_group_data(&pipeline, n..(n+1))` is.
-    /// 
+    ///
     /// If ray tracing pipelines are implemented, this must be a power of two (and non zero).
     pub ray_tracing_pipeline_group_data_size: u32,
 }

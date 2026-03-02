@@ -1,11 +1,36 @@
 use core::{convert::Infallible, fmt};
 
-use alloc::{boxed::Box, sync::Arc, vec::Vec, borrow::Cow};
+use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 
 use thiserror::Error;
-use wgt::{BufferAddress, DynamicOffset, error::{ErrorType, WebGpuError}};
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    BufferAddress, DynamicOffset,
+};
 
-use crate::{Label, binding_model::{BindError, ImmediateUploadError, LateMinBufferBindingSizeMismatch}, command::{ArcCommand, BasePass, BindGroupStateChange, ColorAttachments, CommandEncoder, CommandEncoderError, DebugGroupError, EncoderStateError, EncodingState, InnerCommandEncoder, MapPassErr, PassErrorScope, PassStateError, ResolvedRenderPassDepthStencilAttachment, StateChange, bind::{Binder, BinderError}, memory_init::SurfacesInDiscardState, pass, pass_base, pass_try, ray_tracing_pass_commands::ArcRayTracingCommand}, device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures}, global::Global, hal_label, id, pipeline::RayTracingPipeline, resource::{DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError, ParentDevice, TextureView}, track::{ResourceUsageCompatibilityError, Tracker}};
+use crate::{
+    binding_model::{BindError, ImmediateUploadError, LateMinBufferBindingSizeMismatch},
+    command::{
+        bind::{Binder, BinderError},
+        memory_init::SurfacesInDiscardState,
+        pass, pass_base, pass_try,
+        ray_tracing_pass_commands::ArcRayTracingCommand,
+        ArcCommand, BasePass, BindGroupStateChange, ColorAttachments, CommandEncoder,
+        CommandEncoderError, DebugGroupError, EncoderStateError, EncodingState,
+        InnerCommandEncoder, MapPassErr, PassErrorScope, PassStateError,
+        ResolvedRenderPassDepthStencilAttachment, StateChange,
+    },
+    device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
+    global::Global,
+    hal_label, id,
+    pipeline::RayTracingPipeline,
+    resource::{
+        DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
+        ParentDevice, TextureView,
+    },
+    track::{ResourceUsageCompatibilityError, Tracker},
+    Label,
+};
 
 pub type RayTracingBasePass = BasePass<ArcRayTracingCommand, RayTracingPassError>;
 
@@ -26,7 +51,9 @@ pub struct RayTracingPass {
 impl fmt::Debug for RayTracingPass {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.parent {
-            Some(ref cmd_enc) => write!(f, "RayTracingPass {{ parent: {} }}", cmd_enc.error_ident()),
+            Some(ref cmd_enc) => {
+                write!(f, "RayTracingPass {{ parent: {} }}", cmd_enc.error_ident())
+            }
             None => write!(f, "RayTracingPass {{ parent: None }}"),
         }
     }
@@ -35,9 +62,7 @@ impl fmt::Debug for RayTracingPass {
 impl RayTracingPass {
     /// If the parent command encoder is invalid, the returned pass will be invalid.
     fn new(parent: Arc<CommandEncoder>, desc: RayTracingPassDescriptor) -> Self {
-        let RayTracingPassDescriptor {
-            label
-        } = desc;
+        let RayTracingPassDescriptor { label } = desc;
 
         Self {
             base: BasePass::new(&label),
@@ -75,9 +100,7 @@ pub enum TraceRayError {
     MissingPipeline(pass::MissingPipeline),
     #[error(transparent)]
     IncompatibleBindGroup(#[from] Box<BinderError>),
-    #[error(
-        "Trace ray size ({current:?}) must be less or equal to {limit}"
-    )]
+    #[error("Trace ray size ({current:?}) must be less or equal to {limit}")]
     InvalidGroupSize { current: [u32; 3], limit: u32 },
     #[error(transparent)]
     BindingSizeTooSmall(#[from] LateMinBufferBindingSizeMismatch),
@@ -248,7 +271,10 @@ impl Global {
                     );
                 }
 
-                (RayTracingPass::new(cmd_enc, RayTracingPassDescriptor { label }), None)
+                (
+                    RayTracingPass::new(cmd_enc, RayTracingPassDescriptor { label }),
+                    None,
+                )
             }
             Err(err @ SErr::Locked) => {
                 // Attempting to open a new pass while the encoder is locked
@@ -288,8 +314,6 @@ impl Global {
         }
     }
 
-    
-
     pub fn ray_tracing_pass_set_pipeline(
         &self,
         pass: &mut RayTracingPass,
@@ -308,14 +332,18 @@ impl Global {
         }
 
         let hub = &self.hub;
-        let pipeline = pass_try!(base, scope, hub.ray_tracing_pipelines.get(pipeline_id).get());
+        let pipeline = pass_try!(
+            base,
+            scope,
+            hub.ray_tracing_pipelines.get(pipeline_id).get()
+        );
 
-        base.commands.push(ArcRayTracingCommand::SetPipeline(pipeline));
+        base.commands
+            .push(ArcRayTracingCommand::SetPipeline(pipeline));
 
         Ok(())
     }
 
-    
     pub fn ray_tracing_pass_set_bind_group(
         &self,
         pass: &mut RayTracingPass,
@@ -389,13 +417,10 @@ impl Global {
         }
 
         cmd_buf_data.push_with(|| -> Result<_, RayTracingPassError> {
-            Ok(ArcCommand::RunRayTracingPass {
-                pass: base?,
-            })
+            Ok(ArcCommand::RunRayTracingPass { pass: base? })
         })
     }
 }
-
 
 pub(super) fn encode_ray_tracing_pass(
     parent_state: &mut EncodingState<InnerCommandEncoder>,
@@ -467,7 +492,11 @@ pub(super) fn encode_ray_tracing_pass(
     };
 
     unsafe {
-        state.pass.base.raw_encoder.begin_ray_tracing_pass(&hal_desc);
+        state
+            .pass
+            .base
+            .raw_encoder
+            .begin_ray_tracing_pass(&hal_desc);
     }
 
     for command in base.commands.drain(..) {

@@ -235,13 +235,17 @@ impl Player {
                     .expect("invalid compute pipeline");
                 self.bind_group_layouts.insert(id, bgl);
             }
-            Action::GetRayTracingPipelineBindGroupLayout { id, pipeline, index } => {
+            Action::GetRayTracingPipelineBindGroupLayout {
+                id,
+                pipeline,
+                index,
+            } => {
                 let pipeline = self.resolve_ray_tracing_pipeline_id(pipeline);
                 let bgl = pipeline
                     .get_bind_group_layout(index)
                     .expect("invalid ray tracing pipeline");
                 self.bind_group_layouts.insert(id, bgl);
-            },
+            }
             Action::DestroyBindGroupLayout(id) => {
                 self.bind_group_layouts
                     .remove(&id)
@@ -495,12 +499,16 @@ impl Player {
             }
             Action::CreateRayTracingPipeline { id, desc } => {
                 let descriptor = self.resolve_ray_tracing_pipeline_descriptor(desc);
-                let rt_pipeline = device.create_ray_tracing_pipeline(descriptor).expect("create_ray_tracing_pipeline error");
+                let rt_pipeline = device
+                    .create_ray_tracing_pipeline(descriptor)
+                    .expect("create_ray_tracing_pipeline error");
                 self.ray_tracing_pipelines.insert(id, rt_pipeline);
-            },
+            }
             Action::DestroyRayTracingPipeline(id) => {
-                self.ray_tracing_pipelines.remove(&id).expect("invalid ray tracing pipeline");
-            },
+                self.ray_tracing_pipelines
+                    .remove(&id)
+                    .expect("invalid ray tracing pipeline");
+            }
         }
     }
 
@@ -788,34 +796,43 @@ impl Player {
                 module: self.resolve_shader_module_id(desc.ray_generation.module),
                 entry_point: desc.ray_generation.entry_point,
                 constants: desc.ray_generation.constants,
-                zero_initialize_workgroup_memory: desc.ray_generation
+                zero_initialize_workgroup_memory: desc
+                    .ray_generation
                     .zero_initialize_workgroup_memory,
             },
             miss: wgc::pipeline::ResolvedProgrammableStageDescriptor {
                 module: self.resolve_shader_module_id(desc.miss.module),
                 entry_point: desc.miss.entry_point,
                 constants: desc.miss.constants,
-                zero_initialize_workgroup_memory: desc.miss
-                    .zero_initialize_workgroup_memory,
+                zero_initialize_workgroup_memory: desc.miss.zero_initialize_workgroup_memory,
             },
-            intersections: desc.intersections.into_iter().map(|intersections| match intersections {
-                wgc::pipeline::RayTracingIntersectionDescriptor::Triangle { closest_hit, any_hit } => wgc::pipeline::RayTracingIntersectionDescriptor::Triangle {
-                    closest_hit: wgc::pipeline::ResolvedProgrammableStageDescriptor {
-                        module: self.resolve_shader_module_id(closest_hit.module),
-                        entry_point: closest_hit.entry_point,
-                        constants: closest_hit.constants,
-                        zero_initialize_workgroup_memory: closest_hit
-                            .zero_initialize_workgroup_memory,
+            intersections: desc
+                .intersections
+                .into_iter()
+                .map(|intersections| match intersections {
+                    wgc::pipeline::RayTracingIntersectionDescriptor::Triangle {
+                        closest_hit,
+                        any_hit,
+                    } => wgc::pipeline::RayTracingIntersectionDescriptor::Triangle {
+                        closest_hit: wgc::pipeline::ResolvedProgrammableStageDescriptor {
+                            module: self.resolve_shader_module_id(closest_hit.module),
+                            entry_point: closest_hit.entry_point,
+                            constants: closest_hit.constants,
+                            zero_initialize_workgroup_memory: closest_hit
+                                .zero_initialize_workgroup_memory,
+                        },
+                        any_hit: any_hit.map(|any_hit| {
+                            wgc::pipeline::ResolvedProgrammableStageDescriptor {
+                                module: self.resolve_shader_module_id(any_hit.module),
+                                entry_point: any_hit.entry_point,
+                                constants: any_hit.constants,
+                                zero_initialize_workgroup_memory: any_hit
+                                    .zero_initialize_workgroup_memory,
+                            }
+                        }),
                     },
-                    any_hit: any_hit.map(|any_hit| wgc::pipeline::ResolvedProgrammableStageDescriptor {
-                        module: self.resolve_shader_module_id(any_hit.module),
-                        entry_point: any_hit.entry_point,
-                        constants: any_hit.constants,
-                        zero_initialize_workgroup_memory: any_hit
-                            .zero_initialize_workgroup_memory,
-                    })
-                }
-            }).collect(),
+                })
+                .collect(),
             max_recursion_depth: desc.max_recursion_depth,
         }
     }
@@ -1012,9 +1029,7 @@ impl Player {
                 occlusion_query_set: occlusion_query_set.map(|qs| self.resolve_query_set_id(qs)),
                 multiview_mask,
             },
-            Command::RunRayTracingPass {
-                pass
-            } => Command::RunRayTracingPass {
+            Command::RunRayTracingPass { pass } => Command::RunRayTracingPass {
                 pass: self.resolve_ray_tracing_pass(pass),
             },
             Command::BuildAccelerationStructures { blas, tlas } => {
@@ -1354,8 +1369,6 @@ impl Player {
             C::ExecuteBundle(bundle) => C::ExecuteBundle(self.resolve_render_bundle_id(bundle)),
         }
     }
-
-    
 
     fn resolve_ray_tracing_command(
         &self,

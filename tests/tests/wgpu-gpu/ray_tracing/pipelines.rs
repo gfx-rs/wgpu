@@ -1,4 +1,8 @@
-use wgpu::{BindGroupDescriptor, BindGroupEntry, CommandEncoderDescriptor, Features, Limits, RayTracingIntersectionDescriptor, RayTracingPassDescriptor, RayTracingPipelineDescriptor, RayTracingStage, ShaderModuleDescriptor};
+use wgpu::{
+    BindGroupDescriptor, BindGroupEntry, CommandEncoderDescriptor, Features, Limits,
+    RayTracingIntersectionDescriptor, RayTracingPassDescriptor, RayTracingPipelineDescriptor,
+    RayTracingStage, ShaderModuleDescriptor,
+};
 use wgpu_test::{
     gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
@@ -18,7 +22,11 @@ static PIPELINE_CREATE_USE: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_sync(pipeline_create_use);
 
 fn pipeline_create_use(ctx: TestingContext) {
-    let as_ctx = super::AsBuildContext::new(&ctx, AccelerationStructureFlags::empty(), AccelerationStructureFlags::empty());
+    let as_ctx = super::AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::empty(),
+        AccelerationStructureFlags::empty(),
+    );
 
     let mut encoder = ctx
         .device
@@ -98,21 +106,22 @@ fn pipeline_create_use(ctx: TestingContext) {
         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(ray_miss_source)),
     });
 
-    let pipeline = ctx.device.create_ray_tracing_pipeline(&RayTracingPipelineDescriptor {
-        label: None,
-        layout: None,
-        ray_generation: RayTracingStage {
-            module: &ray_gen,
-            entry_point: None,
-            compilation_options: Default::default(),
-        },
-        miss: RayTracingStage {
-            module: &ray_miss,
-            entry_point: None,
-            compilation_options: Default::default(),
-        },
-        intersection_descs: &[
-            RayTracingIntersectionDescriptor::Triangle {
+    let pipeline = ctx
+        .device
+        .create_ray_tracing_pipeline(&RayTracingPipelineDescriptor {
+            label: None,
+            layout: None,
+            ray_generation: RayTracingStage {
+                module: &ray_gen,
+                entry_point: None,
+                compilation_options: Default::default(),
+            },
+            miss: RayTracingStage {
+                module: &ray_miss,
+                entry_point: None,
+                compilation_options: Default::default(),
+            },
+            intersection_descs: &[RayTracingIntersectionDescriptor::Triangle {
                 closest_hit: RayTracingStage {
                     module: &ray_closest,
                     entry_point: None,
@@ -122,23 +131,19 @@ fn pipeline_create_use(ctx: TestingContext) {
                     module: &ray_any,
                     entry_point: None,
                     compilation_options: Default::default(),
-                })
-            }
-        ],
-        max_recersion_depth: 1,
-        cache: None,
-    });
-
+                }),
+            }],
+            max_recersion_depth: 1,
+            cache: None,
+        });
 
     let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
         label: Some("ray tracing pipeline bind group"),
         layout: &pipeline.get_bind_group_layout(0),
-        entries: &[
-            BindGroupEntry {
-                binding: 0,
-                resource: as_ctx.tlas.as_binding(),
-            }
-        ],
+        entries: &[BindGroupEntry {
+            binding: 0,
+            resource: as_ctx.tlas.as_binding(),
+        }],
     });
 
     let mut encoder = ctx.device.create_command_encoder(&Default::default());

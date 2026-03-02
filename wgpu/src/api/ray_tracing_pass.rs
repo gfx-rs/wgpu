@@ -1,6 +1,8 @@
 use wgt::DynamicOffset;
 
-use crate::{BindGroup, Label, RayTracingPipeline, api::SharedDeferredCommandBufferActions, dispatch};
+use crate::{
+    api::SharedDeferredCommandBufferActions, dispatch, BindGroup, Label, RayTracingPipeline,
+};
 
 /// In-progress recording of a ray tracing pass.
 ///
@@ -43,7 +45,7 @@ impl RayTracingPass<'_> {
             _encoder_guard: crate::api::PhantomDrop::default(),
         }
     }
-    
+
     /// Sets the active ray tracing pipeline.
     pub fn set_pipeline(&mut self, pipeline: &RayTracingPipeline) {
         self.inner.set_pipeline(&pipeline.inner);
@@ -64,7 +66,6 @@ impl RayTracingPass<'_> {
         self.inner.set_bind_group(index, bg, offsets);
     }
 }
-
 
 /// Describes the attachments of a ray tracing pass.
 ///

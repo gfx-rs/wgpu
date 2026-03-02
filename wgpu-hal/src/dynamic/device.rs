@@ -501,7 +501,9 @@ impl<D: Device + DynResource> DynDevice for D {
         pipeline: &dyn DynRayTracingPipeline,
         groups: core::ops::Range<u32>,
     ) -> Result<Vec<u8>, DeviceError> {
-        unsafe { D::get_raytracing_pipeline_group_data(self, pipeline.expect_downcast_ref(), groups) }
+        unsafe {
+            D::get_raytracing_pipeline_group_data(self, pipeline.expect_downcast_ref(), groups)
+        }
     }
 
     unsafe fn create_pipeline_cache(

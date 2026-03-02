@@ -2,7 +2,11 @@ use alloc::{boxed::Box, vec::Vec};
 use core::ops::Range;
 
 use crate::{
-    AccelerationStructureBarrier, Api, Attachment, BufferBarrier, BufferBinding, BufferCopy, BufferTextureCopy, BuildAccelerationStructureDescriptor, ColorAttachment, CommandEncoder, ComputePassDescriptor, DepthStencilAttachment, DeviceError, DynRayTracingPipeline, Label, MemoryRange, PassTimestampWrites, RayTracingPassDescriptor, Rect, RenderPassDescriptor, TextureBarrier, TextureCopy
+    AccelerationStructureBarrier, Api, Attachment, BufferBarrier, BufferBinding, BufferCopy,
+    BufferTextureCopy, BuildAccelerationStructureDescriptor, ColorAttachment, CommandEncoder,
+    ComputePassDescriptor, DepthStencilAttachment, DeviceError, DynRayTracingPipeline, Label,
+    MemoryRange, PassTimestampWrites, RayTracingPassDescriptor, Rect, RenderPassDescriptor,
+    TextureBarrier, TextureCopy,
 };
 
 use super::{
@@ -649,9 +653,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
     }
 
     unsafe fn begin_ray_tracing_pass(&mut self, desc: &RayTracingPassDescriptor) {
-        let desc = RayTracingPassDescriptor {
-            label: desc.label,
-        };
+        let desc = RayTracingPassDescriptor { label: desc.label };
         unsafe { C::begin_ray_tracing_pass(self, &desc) };
     }
 
