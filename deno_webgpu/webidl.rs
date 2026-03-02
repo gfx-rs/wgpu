@@ -1,8 +1,6 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
 use std::borrow::Cow;
-#[allow(clippy::disallowed_types)]
-use std::collections::HashSet;
 
 use deno_core::cppgc::Ptr;
 use deno_core::v8;
@@ -365,332 +363,42 @@ impl<'a> WebIdlConverter<'a> for GPUPipelineLayoutOrGPUAutoLayoutMode {
   }
 }
 
-#[derive(WebIDL, Clone, Hash, Eq, PartialEq)]
-#[webidl(enum)]
-pub enum GPUFeatureName {
-  #[webidl(rename = "depth-clip-control")]
-  DepthClipControl,
-  #[webidl(rename = "timestamp-query")]
-  TimestampQuery,
-  #[webidl(rename = "indirect-first-instance")]
-  IndirectFirstInstance,
-  #[webidl(rename = "shader-f16")]
-  ShaderF16,
-  #[webidl(rename = "depth32float-stencil8")]
-  Depth32floatStencil8,
-  #[webidl(rename = "texture-compression-bc")]
-  TextureCompressionBc,
-  #[webidl(rename = "texture-compression-bc-sliced-3d")]
-  TextureCompressionBcSliced3d,
-  #[webidl(rename = "texture-compression-etc2")]
-  TextureCompressionEtc2,
-  #[webidl(rename = "texture-compression-astc")]
-  TextureCompressionAstc,
-  #[webidl(rename = "texture-compression-astc-sliced-3d")]
-  TextureCompressionAstcSliced3d,
-  #[webidl(rename = "rg11b10ufloat-renderable")]
-  Rg11b10ufloatRenderable,
-  #[webidl(rename = "bgra8unorm-storage")]
-  Bgra8unormStorage,
-  #[webidl(rename = "float32-filterable")]
-  Float32Filterable,
-  #[webidl(rename = "float32-blendable")]
-  Float32Blendable,
-  #[webidl(rename = "dual-source-blending")]
-  DualSourceBlending,
-  #[webidl(rename = "subgroups")]
-  Subgroups,
-  #[webidl(rename = "primitive-index")]
-  PrimitiveIndex,
+impl<'a> WebIdlConverter<'a> for GPUFeatureName {
+  type Options = ();
 
-  // standard feature, but not default yet in wgpu due to incomplete support
-  // (and even if enabled in wgpu, doing so may not be appropriate in Deno)
-  #[webidl(rename = "external-texture")]
-  ExternalTexture,
-
-  // extended from spec
-  #[webidl(rename = "texture-format-16-bit-norm")]
-  TextureFormat16BitNorm,
-  #[webidl(rename = "texture-compression-astc-hdr")]
-  TextureCompressionAstcHdr,
-  #[webidl(rename = "texture-adapter-specific-format-features")]
-  TextureAdapterSpecificFormatFeatures,
-  #[webidl(rename = "pipeline-statistics-query")]
-  PipelineStatisticsQuery,
-  #[webidl(rename = "timestamp-query-inside-passes")]
-  TimestampQueryInsidePasses,
-  #[webidl(rename = "mappable-primary-buffers")]
-  MappablePrimaryBuffers,
-  #[webidl(rename = "texture-binding-array")]
-  TextureBindingArray,
-  #[webidl(rename = "buffer-binding-array")]
-  BufferBindingArray,
-  #[webidl(rename = "storage-resource-binding-array")]
-  StorageResourceBindingArray,
-  #[webidl(
-    rename = "sampled-texture-and-storage-buffer-array-non-uniform-indexing"
-  )]
-  SampledTextureAndStorageBufferArrayNonUniformIndexing,
-  #[webidl(rename = "storage-texture-array-non-uniform-indexing")]
-  StorageTextureArrayNonUniformIndexing,
-  #[webidl(rename = "uniform-buffer-binding-arrays")]
-  UniformBufferBindingArrays,
-  #[webidl(rename = "partially-bound-binding-array")]
-  PartiallyBoundBindingArray,
-  #[webidl(rename = "multi-draw-indirect-count")]
-  MultiDrawIndirectCount,
-  #[webidl(rename = "immediate-data")]
-  ImmediateData,
-  #[webidl(rename = "address-mode-clamp-to-zero")]
-  AddressModeClampToZero,
-  #[webidl(rename = "address-mode-clamp-to-border")]
-  AddressModeClampToBorder,
-  #[webidl(rename = "polygon-mode-line")]
-  PolygonModeLine,
-  #[webidl(rename = "polygon-mode-point")]
-  PolygonModePoint,
-  #[webidl(rename = "conservative-rasterization")]
-  ConservativeRasterization,
-  #[webidl(rename = "vertex-writable-storage")]
-  VertexWritableStorage,
-  #[webidl(rename = "clear-texture")]
-  ClearTexture,
-  #[webidl(rename = "multiview")]
-  Multiview,
-  #[webidl(rename = "vertex-attribute-64-bit")]
-  VertexAttribute64Bit,
-  #[webidl(rename = "shader-f64")]
-  ShaderF64,
-  #[webidl(rename = "shader-i16")]
-  ShaderI16,
-  #[webidl(rename = "shader-early-depth-test")]
-  ShaderEarlyDepthTest,
-  #[webidl(rename = "passthrough-shaders")]
-  PassthroughShaders,
+  fn convert<'b>(
+    scope: &mut v8::HandleScope<'a>,
+    value: v8::Local<'a, v8::Value>,
+    prefix: Cow<'static, str>,
+    context: ContextFn<'b>,
+    _options: &Self::Options,
+  ) -> Result<Self, WebIdlError> {
+    let s = value.to_rust_string_lossy(scope);
+    s.parse().map(Self).map_err(|()| {
+      WebIdlError::new(
+        prefix,
+        context,
+        WebIdlErrorKind::InvalidEnumVariant {
+          converter: "GPUFeatureName",
+          variant: s,
+        },
+      )
+    })
+  }
 }
 
-pub fn feature_names_to_features(
-  names: Vec<GPUFeatureName>,
-) -> wgpu_types::Features {
-  use wgpu_types::Features;
-  let mut features = Features::empty();
+/// A WebGPU optional feature.
+///
+/// Named after the WebIDL enum, which represents features as strings, but we store the
+/// feature as bitflag, which must always have exactly one bit set (across both the WebGPU
+/// and wgpu native features).
+#[derive(Clone, Copy, Hash, Eq, PartialEq)]
+pub struct GPUFeatureName(wgpu_types::Features);
 
-  for name in names {
-    #[rustfmt::skip]
-    let feature = match name {
-      GPUFeatureName::DepthClipControl => Features::DEPTH_CLIP_CONTROL,
-      GPUFeatureName::TimestampQuery => Features::TIMESTAMP_QUERY,
-      GPUFeatureName::IndirectFirstInstance => Features::INDIRECT_FIRST_INSTANCE,
-      GPUFeatureName::ShaderF16 => Features::SHADER_F16,
-      GPUFeatureName::Depth32floatStencil8 => Features::DEPTH32FLOAT_STENCIL8,
-      GPUFeatureName::TextureCompressionBc => Features::TEXTURE_COMPRESSION_BC,
-      GPUFeatureName::TextureCompressionBcSliced3d => Features::TEXTURE_COMPRESSION_BC_SLICED_3D,
-      GPUFeatureName::TextureCompressionEtc2 => Features::TEXTURE_COMPRESSION_ETC2,
-      GPUFeatureName::TextureCompressionAstc => Features::TEXTURE_COMPRESSION_ASTC,
-      GPUFeatureName::TextureCompressionAstcSliced3d => Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
-      GPUFeatureName::Rg11b10ufloatRenderable => Features::RG11B10UFLOAT_RENDERABLE,
-      GPUFeatureName::Bgra8unormStorage => Features::BGRA8UNORM_STORAGE,
-      GPUFeatureName::Float32Filterable => Features::FLOAT32_FILTERABLE,
-      GPUFeatureName::Float32Blendable => Features::FLOAT32_BLENDABLE,
-      GPUFeatureName::DualSourceBlending => Features::DUAL_SOURCE_BLENDING,
-      GPUFeatureName::Subgroups => Features::SUBGROUP,
-      GPUFeatureName::ExternalTexture => Features::EXTERNAL_TEXTURE,
-      GPUFeatureName::TextureFormat16BitNorm => Features::TEXTURE_FORMAT_16BIT_NORM,
-      GPUFeatureName::TextureCompressionAstcHdr => Features::TEXTURE_COMPRESSION_ASTC_HDR,
-      GPUFeatureName::TextureAdapterSpecificFormatFeatures => Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-      GPUFeatureName::PipelineStatisticsQuery => Features::PIPELINE_STATISTICS_QUERY,
-      GPUFeatureName::TimestampQueryInsidePasses => Features::TIMESTAMP_QUERY_INSIDE_PASSES,
-      GPUFeatureName::MappablePrimaryBuffers => Features::MAPPABLE_PRIMARY_BUFFERS,
-      GPUFeatureName::TextureBindingArray => Features::TEXTURE_BINDING_ARRAY,
-      GPUFeatureName::BufferBindingArray => Features::BUFFER_BINDING_ARRAY,
-      GPUFeatureName::StorageResourceBindingArray => Features::STORAGE_RESOURCE_BINDING_ARRAY,
-      GPUFeatureName::SampledTextureAndStorageBufferArrayNonUniformIndexing => Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-      GPUFeatureName::StorageTextureArrayNonUniformIndexing => Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-      GPUFeatureName::UniformBufferBindingArrays => Features::UNIFORM_BUFFER_BINDING_ARRAYS,
-      GPUFeatureName::PartiallyBoundBindingArray => Features::PARTIALLY_BOUND_BINDING_ARRAY,
-      GPUFeatureName::MultiDrawIndirectCount => Features::MULTI_DRAW_INDIRECT_COUNT,
-      GPUFeatureName::ImmediateData => Features::IMMEDIATES,
-      GPUFeatureName::AddressModeClampToZero => Features::ADDRESS_MODE_CLAMP_TO_ZERO,
-      GPUFeatureName::AddressModeClampToBorder => Features::ADDRESS_MODE_CLAMP_TO_BORDER,
-      GPUFeatureName::PolygonModeLine => Features::POLYGON_MODE_LINE,
-      GPUFeatureName::PolygonModePoint => Features::POLYGON_MODE_POINT,
-      GPUFeatureName::ConservativeRasterization => Features::CONSERVATIVE_RASTERIZATION,
-      GPUFeatureName::VertexWritableStorage => Features::VERTEX_WRITABLE_STORAGE,
-      GPUFeatureName::ClearTexture => Features::CLEAR_TEXTURE,
-      GPUFeatureName::Multiview => Features::MULTIVIEW,
-      GPUFeatureName::VertexAttribute64Bit => Features::VERTEX_ATTRIBUTE_64BIT,
-      GPUFeatureName::ShaderF64 => Features::SHADER_F64,
-      GPUFeatureName::ShaderI16 => Features::SHADER_I16,
-      GPUFeatureName::PrimitiveIndex => Features::PRIMITIVE_INDEX,
-      GPUFeatureName::ShaderEarlyDepthTest => Features::SHADER_EARLY_DEPTH_TEST,
-      GPUFeatureName::PassthroughShaders => Features::PASSTHROUGH_SHADERS,
-    };
-    features.set(feature, true);
+impl From<GPUFeatureName> for wgpu_types::Features {
+  fn from(value: GPUFeatureName) -> wgpu_types::Features {
+    value.0
   }
-
-  features
-}
-
-#[allow(clippy::disallowed_types)]
-pub fn features_to_feature_names(
-  features: wgpu_types::Features,
-) -> HashSet<GPUFeatureName> {
-  use GPUFeatureName::*;
-  let mut return_features = HashSet::new();
-
-  // api
-  if features.contains(wgpu_types::Features::DEPTH_CLIP_CONTROL) {
-    return_features.insert(DepthClipControl);
-  }
-  if features.contains(wgpu_types::Features::TIMESTAMP_QUERY) {
-    return_features.insert(TimestampQuery);
-  }
-  if features.contains(wgpu_types::Features::INDIRECT_FIRST_INSTANCE) {
-    return_features.insert(IndirectFirstInstance);
-  }
-  // shader
-  if features.contains(wgpu_types::Features::SHADER_F16) {
-    return_features.insert(ShaderF16);
-  }
-  // texture formats
-  if features.contains(wgpu_types::Features::DEPTH32FLOAT_STENCIL8) {
-    return_features.insert(Depth32floatStencil8);
-  }
-  if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_BC) {
-    return_features.insert(TextureCompressionBc);
-  }
-  if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_BC_SLICED_3D) {
-    return_features.insert(TextureCompressionBcSliced3d);
-  }
-  if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ETC2) {
-    return_features.insert(TextureCompressionEtc2);
-  }
-  if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC) {
-    return_features.insert(TextureCompressionAstc);
-  }
-  if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D)
-  {
-    return_features.insert(TextureCompressionAstcSliced3d);
-  }
-  if features.contains(wgpu_types::Features::RG11B10UFLOAT_RENDERABLE) {
-    return_features.insert(Rg11b10ufloatRenderable);
-  }
-  if features.contains(wgpu_types::Features::BGRA8UNORM_STORAGE) {
-    return_features.insert(Bgra8unormStorage);
-  }
-  if features.contains(wgpu_types::Features::FLOAT32_FILTERABLE) {
-    return_features.insert(Float32Filterable);
-  }
-  if features.contains(wgpu_types::Features::FLOAT32_BLENDABLE) {
-    return_features.insert(Float32Blendable);
-  }
-  if features.contains(wgpu_types::Features::DUAL_SOURCE_BLENDING) {
-    return_features.insert(DualSourceBlending);
-  }
-  if features.contains(wgpu_types::Features::SUBGROUP) {
-    return_features.insert(Subgroups);
-  }
-
-  // extended from spec
-
-  // texture formats
-  if features.contains(wgpu_types::Features::TEXTURE_FORMAT_16BIT_NORM) {
-    return_features.insert(TextureFormat16BitNorm);
-  }
-  if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC_HDR) {
-    return_features.insert(TextureCompressionAstcHdr);
-  }
-  if features
-    .contains(wgpu_types::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
-  {
-    return_features.insert(TextureAdapterSpecificFormatFeatures);
-  }
-  // api
-  if features.contains(wgpu_types::Features::PIPELINE_STATISTICS_QUERY) {
-    return_features.insert(PipelineStatisticsQuery);
-  }
-  if features.contains(wgpu_types::Features::TIMESTAMP_QUERY_INSIDE_PASSES) {
-    return_features.insert(TimestampQueryInsidePasses);
-  }
-  if features.contains(wgpu_types::Features::MAPPABLE_PRIMARY_BUFFERS) {
-    return_features.insert(MappablePrimaryBuffers);
-  }
-  if features.contains(wgpu_types::Features::TEXTURE_BINDING_ARRAY) {
-    return_features.insert(TextureBindingArray);
-  }
-  if features.contains(wgpu_types::Features::BUFFER_BINDING_ARRAY) {
-    return_features.insert(BufferBindingArray);
-  }
-  if features.contains(wgpu_types::Features::STORAGE_RESOURCE_BINDING_ARRAY) {
-    return_features.insert(StorageResourceBindingArray);
-  }
-  if features.contains(
-        wgpu_types::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-    ) {
-        return_features.insert(SampledTextureAndStorageBufferArrayNonUniformIndexing);
-    }
-  if features
-    .contains(wgpu_types::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING)
-  {
-    return_features.insert(StorageTextureArrayNonUniformIndexing);
-  }
-  if features.contains(wgpu_types::Features::UNIFORM_BUFFER_BINDING_ARRAYS) {
-    return_features.insert(UniformBufferBindingArrays);
-  }
-  if features.contains(wgpu_types::Features::PARTIALLY_BOUND_BINDING_ARRAY) {
-    return_features.insert(PartiallyBoundBindingArray);
-  }
-  if features.contains(wgpu_types::Features::MULTI_DRAW_INDIRECT_COUNT) {
-    return_features.insert(MultiDrawIndirectCount);
-  }
-  if features.contains(wgpu_types::Features::IMMEDIATES) {
-    return_features.insert(ImmediateData);
-  }
-  if features.contains(wgpu_types::Features::ADDRESS_MODE_CLAMP_TO_ZERO) {
-    return_features.insert(AddressModeClampToZero);
-  }
-  if features.contains(wgpu_types::Features::ADDRESS_MODE_CLAMP_TO_BORDER) {
-    return_features.insert(AddressModeClampToBorder);
-  }
-  if features.contains(wgpu_types::Features::POLYGON_MODE_LINE) {
-    return_features.insert(PolygonModeLine);
-  }
-  if features.contains(wgpu_types::Features::POLYGON_MODE_POINT) {
-    return_features.insert(PolygonModePoint);
-  }
-  if features.contains(wgpu_types::Features::CONSERVATIVE_RASTERIZATION) {
-    return_features.insert(ConservativeRasterization);
-  }
-  if features.contains(wgpu_types::Features::VERTEX_WRITABLE_STORAGE) {
-    return_features.insert(VertexWritableStorage);
-  }
-  if features.contains(wgpu_types::Features::CLEAR_TEXTURE) {
-    return_features.insert(ClearTexture);
-  }
-  if features.contains(wgpu_types::Features::MULTIVIEW) {
-    return_features.insert(Multiview);
-  }
-  if features.contains(wgpu_types::Features::VERTEX_ATTRIBUTE_64BIT) {
-    return_features.insert(VertexAttribute64Bit);
-  }
-  // shader
-  if features.contains(wgpu_types::Features::SHADER_F64) {
-    return_features.insert(ShaderF64);
-  }
-  if features.contains(wgpu_types::Features::SHADER_I16) {
-    return_features.insert(ShaderI16);
-  }
-  if features.contains(wgpu_types::Features::PRIMITIVE_INDEX) {
-    return_features.insert(PrimitiveIndex);
-  }
-  if features.contains(wgpu_types::Features::SHADER_EARLY_DEPTH_TEST) {
-    return_features.insert(ShaderEarlyDepthTest);
-  }
-  if features.contains(wgpu_types::Features::PASSTHROUGH_SHADERS) {
-    return_features.insert(PassthroughShaders);
-  }
-
-  return_features
 }
 
 #[derive(Clone, Copy)]

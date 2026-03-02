@@ -9,6 +9,7 @@ use bitflags::Bits;
 use bitflags::Flags;
 #[cfg(feature = "serde")]
 use core::mem::size_of;
+use core::str::FromStr;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -1705,11 +1706,256 @@ impl Features {
         }
         formats
     }
+
+    /// If the argument is a single [`Features`] flag, returns the corresponding
+    /// feature name, otherwise `None`.
+    #[must_use]
+    pub fn as_str(&self) -> Option<&'static str> {
+        Some(match *self {
+            // WebGPU features
+            Features::DEPTH_CLIP_CONTROL => "depth-clip-control",
+            Features::DEPTH32FLOAT_STENCIL8 => "depth32float-stencil8",
+            Features::TEXTURE_COMPRESSION_BC => "texture-compression-bc",
+            Features::TEXTURE_COMPRESSION_BC_SLICED_3D => "texture-compression-bc-sliced-3d",
+            Features::TEXTURE_COMPRESSION_ETC2 => "texture-compression-etc2",
+            Features::TEXTURE_COMPRESSION_ASTC => "texture-compression-astc",
+            Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D => "texture-compression-astc-sliced-3d",
+            Features::TIMESTAMP_QUERY => "timestamp-query",
+            Features::INDIRECT_FIRST_INSTANCE => "indirect-first-instance",
+            Features::SHADER_F16 => "shader-f16",
+            Features::RG11B10UFLOAT_RENDERABLE => "rg11b10ufloat-renderable",
+            Features::BGRA8UNORM_STORAGE => "bgra8unorm-storage",
+            Features::FLOAT32_FILTERABLE => "float32-filterable",
+            Features::FLOAT32_BLENDABLE => "float32-blendable",
+            Features::DUAL_SOURCE_BLENDING => "dual-source-blending",
+            Features::CLIP_DISTANCES => "clip-distances",
+            Features::IMMEDIATES => "immediates",
+            Features::PRIMITIVE_INDEX => "primitive-index",
+            // Note: The `subgroup` standard-track feature is in the native-only section below.
+
+            // Core WebGPU functionality, but still under a feature in wgpu due to incomplete support
+            Features::EXTERNAL_TEXTURE => "wgpu-external-texture",
+
+            // wgpu native-only features
+            Features::SHADER_FLOAT32_ATOMIC => "wgpu-shader-float32-atomic",
+            Features::TEXTURE_FORMAT_16BIT_NORM => "wgpu-texture-format-16-bit-norm",
+            Features::TEXTURE_COMPRESSION_ASTC_HDR => "wgpu-texture-compression-astc-hdr",
+            Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES => {
+                "wgpu-texture-adapter-specific-format-features"
+            }
+            Features::PIPELINE_STATISTICS_QUERY => "wgpu-pipeline-statistics-query",
+            Features::TIMESTAMP_QUERY_INSIDE_ENCODERS => "wgpu-timestamp-query-inside-encoders",
+            Features::TIMESTAMP_QUERY_INSIDE_PASSES => "wgpu-timestamp-query-inside-passes",
+            Features::MAPPABLE_PRIMARY_BUFFERS => "wgpu-mappable-primary-buffers",
+            Features::TEXTURE_BINDING_ARRAY => "wgpu-texture-binding-array",
+            Features::BUFFER_BINDING_ARRAY => "wgpu-buffer-binding-array",
+            Features::STORAGE_RESOURCE_BINDING_ARRAY => "wgpu-storage-resource-binding-array",
+            Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING => {
+                "wgpu-sampled-texture-and-storage-buffer-array-non-uniform-indexing"
+            }
+            Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING => {
+                "wgpu-storage-texture-array-non-uniform-indexing"
+            }
+            Features::PARTIALLY_BOUND_BINDING_ARRAY => "wgpu-partially-bound-binding-array",
+            Features::MULTI_DRAW_INDIRECT_COUNT => "wgpu-multi-draw-indirect-count",
+            Features::ADDRESS_MODE_CLAMP_TO_ZERO => "wgpu-address-mode-clamp-to-zero",
+            Features::ADDRESS_MODE_CLAMP_TO_BORDER => "wgpu-address-mode-clamp-to-border",
+            Features::POLYGON_MODE_LINE => "wgpu-polygon-mode-line",
+            Features::POLYGON_MODE_POINT => "wgpu-polygon-mode-point",
+            Features::CONSERVATIVE_RASTERIZATION => "wgpu-conservative-rasterization",
+            Features::VERTEX_WRITABLE_STORAGE => "wgpu-vertex-writable-storage",
+            Features::CLEAR_TEXTURE => "wgpu-clear-texture",
+            Features::MULTIVIEW => "wgpu-multiview",
+            Features::VERTEX_ATTRIBUTE_64BIT => "wgpu-vertex-attribute-64-bit",
+            Features::TEXTURE_ATOMIC => "wgpu-texture-atomic",
+            Features::TEXTURE_FORMAT_NV12 => "wgpu-texture-format-nv12",
+            Features::TEXTURE_FORMAT_P010 => "wgpu-texture-format-p010",
+            // External texture appears above
+            Features::EXPERIMENTAL_RAY_QUERY => "wgpu-ray-query",
+            Features::SHADER_F64 => "wgpu-shader-f64",
+            Features::SHADER_I16 => "wgpu-shader-i16",
+            Features::SHADER_EARLY_DEPTH_TEST => "wgpu-shader-early-depth-test",
+            Features::SHADER_INT64 => "wgpu-shader-int64",
+            Features::SUBGROUP => "subgroups", // standard-track feature
+            Features::SUBGROUP_VERTEX => "wgpu-subgroup-vertex",
+            Features::SUBGROUP_BARRIER => "wgpu-subgroup-barrier",
+            Features::PIPELINE_CACHE => "wgpu-pipeline-cache",
+            Features::SHADER_INT64_ATOMIC_MIN_MAX => "wgpu-shader-int64-atomic-min-max",
+            Features::SHADER_INT64_ATOMIC_ALL_OPS => "wgpu-shader-int64-atomic-all-ops",
+            Features::VULKAN_GOOGLE_DISPLAY_TIMING => "wgpu-vulkan-google-display-timing",
+            Features::VULKAN_EXTERNAL_MEMORY_WIN32 => "wgpu-vulkan-external-memory-win32",
+            Features::TEXTURE_INT64_ATOMIC => "wgpu-texture-int64-atomic",
+            Features::UNIFORM_BUFFER_BINDING_ARRAYS => "wgpu-uniform-buffer-binding-arrays",
+            Features::EXPERIMENTAL_MESH_SHADER => "wgpu-mesh-shader",
+            Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN => "wgpu-ray-hit-vertex-return",
+            Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW => "wgpu-mesh-shader-multiview",
+            Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS => {
+                "wgpu-extended-acceleration-structure-vertex-formats"
+            }
+            Features::PASSTHROUGH_SHADERS => "wgpu-passthrough-shaders",
+            Features::SHADER_BARYCENTRICS => "wgpu-shader-barycentrics",
+            Features::SELECTIVE_MULTIVIEW => "wgpu-selective-multiview",
+            Features::EXPERIMENTAL_MESH_SHADER_POINTS => "wgpu-mesh-shader-points",
+            Features::MULTISAMPLE_ARRAY => "wgpu-multisample-array",
+            Features::EXPERIMENTAL_COOPERATIVE_MATRIX => "wgpu-cooperative-matrix",
+            Features::SHADER_PER_VERTEX => "wgpu-shader-per-vertex",
+            Features::SHADER_DRAW_INDEX => "wgpu-shader-draw-index",
+            Features::ACCELERATION_STRUCTURE_BINDING_ARRAY => {
+                "wgpu-acceleration-structure-binding-array"
+            }
+            Features::MEMORY_DECORATION_COHERENT => "wgpu-memory-decoration-coherent",
+            Features::MEMORY_DECORATION_VOLATILE => "wgpu-memory-decoration-volatile",
+            _ => return None,
+        })
+    }
+}
+
+impl FromStr for Features {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            // WebGPU features
+            "depth-clip-control" => Features::DEPTH_CLIP_CONTROL,
+            "depth32float-stencil8" => Features::DEPTH32FLOAT_STENCIL8,
+            "texture-compression-bc" => Features::TEXTURE_COMPRESSION_BC,
+            "texture-compression-bc-sliced-3d" => Features::TEXTURE_COMPRESSION_BC_SLICED_3D,
+            "texture-compression-etc2" => Features::TEXTURE_COMPRESSION_ETC2,
+            "texture-compression-astc" => Features::TEXTURE_COMPRESSION_ASTC,
+            "texture-compression-astc-sliced-3d" => Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
+            "timestamp-query" => Features::TIMESTAMP_QUERY,
+            "indirect-first-instance" => Features::INDIRECT_FIRST_INSTANCE,
+            "shader-f16" => Features::SHADER_F16,
+            "rg11b10ufloat-renderable" => Features::RG11B10UFLOAT_RENDERABLE,
+            "bgra8unorm-storage" => Features::BGRA8UNORM_STORAGE,
+            "float32-filterable" => Features::FLOAT32_FILTERABLE,
+            "float32-blendable" => Features::FLOAT32_BLENDABLE,
+            "dual-source-blending" => Features::DUAL_SOURCE_BLENDING,
+            "clip-distances" => Features::CLIP_DISTANCES,
+            "immediates" => Features::IMMEDIATES,
+            // backcompat for previous wgpu extension name (only applies to Deno, probably will never matter)
+            "primitive-index" | "shader-primitive-index" => Features::PRIMITIVE_INDEX,
+            // Note: The `subgroup` standard-track feature is in the native-only section below.
+
+            // Core WebGPU functionality, but still under a feature in wgpu due to incomplete support
+            "wgpu-external-texture" | "external-texture" => Features::EXTERNAL_TEXTURE,
+
+            // wgpu native-only features
+            // Some of these were previously exposed in Deno with the non-wgpu-prefixed
+            // names, so we accept those for backwards compatibility.
+            "wgpu-shader-float32-atomic" => Features::SHADER_FLOAT32_ATOMIC,
+            "wgpu-texture-format-16-bit-norm" | "texture-format-16-bit-norm" => {
+                Features::TEXTURE_FORMAT_16BIT_NORM
+            }
+            "wgpu-texture-compression-astc-hdr" | "texture-compression-astc-hdr" => {
+                Features::TEXTURE_COMPRESSION_ASTC_HDR
+            }
+            "wgpu-texture-adapter-specific-format-features"
+            | "texture-adapter-specific-format-features" => {
+                Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            }
+            "wgpu-pipeline-statistics-query" | "pipeline-statistics-query" => {
+                Features::PIPELINE_STATISTICS_QUERY
+            }
+            "wgpu-timestamp-query-inside-encoders" => Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
+            "wgpu-timestamp-query-inside-passes" | "timestamp-query-inside-passes" => {
+                Features::TIMESTAMP_QUERY_INSIDE_PASSES
+            }
+            "wgpu-mappable-primary-buffers" | "mappable-primary-buffers" => {
+                Features::MAPPABLE_PRIMARY_BUFFERS
+            }
+            "wgpu-texture-binding-array" | "texture-binding-array" => {
+                Features::TEXTURE_BINDING_ARRAY
+            }
+            "wgpu-buffer-binding-array" | "buffer-binding-array" => Features::BUFFER_BINDING_ARRAY,
+            "wgpu-storage-resource-binding-array" | "storage-resource-binding-array" => {
+                Features::STORAGE_RESOURCE_BINDING_ARRAY
+            }
+            "wgpu-sampled-texture-and-storage-buffer-array-non-uniform-indexing"
+            | "sampled-texture-and-storage-buffer-array-non-uniform-indexing" => {
+                Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+            }
+            "wgpu-storage-texture-array-non-uniform-indexing"
+            | "storage-texture-array-non-uniform-indexing" => {
+                Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+            }
+            "wgpu-partially-bound-binding-array" | "partially-bound-binding-array" => {
+                Features::PARTIALLY_BOUND_BINDING_ARRAY
+            }
+            "wgpu-multi-draw-indirect-count" | "multi-draw-indirect-count" => {
+                Features::MULTI_DRAW_INDIRECT_COUNT
+            }
+            "wgpu-address-mode-clamp-to-zero" | "address-mode-clamp-to-zero" => {
+                Features::ADDRESS_MODE_CLAMP_TO_ZERO
+            }
+            "wgpu-address-mode-clamp-to-border" | "address-mode-clamp-to-border" => {
+                Features::ADDRESS_MODE_CLAMP_TO_BORDER
+            }
+            "wgpu-polygon-mode-line" | "polygon-mode-line" => Features::POLYGON_MODE_LINE,
+            "wgpu-polygon-mode-point" | "polygon-mode-point" => Features::POLYGON_MODE_POINT,
+            "wgpu-conservative-rasterization" | "conservative-rasterization" => {
+                Features::CONSERVATIVE_RASTERIZATION
+            }
+            "wgpu-vertex-writable-storage" | "vertex-writable-storage" => {
+                Features::VERTEX_WRITABLE_STORAGE
+            }
+            "wgpu-clear-texture" | "clear-texture" => Features::CLEAR_TEXTURE,
+            "wgpu-multiview" | "multiview" => Features::MULTIVIEW,
+            "wgpu-vertex-attribute-64-bit" | "vertex-attribute-64-bit" => {
+                Features::VERTEX_ATTRIBUTE_64BIT
+            }
+            "wgpu-texture-atomic" => Features::TEXTURE_ATOMIC,
+            "wgpu-texture-format-nv12" => Features::TEXTURE_FORMAT_NV12,
+            "wgpu-texture-format-p010" => Features::TEXTURE_FORMAT_P010,
+            // external-texture appears above
+            "wgpu-ray-query" => Features::EXPERIMENTAL_RAY_QUERY,
+            "wgpu-shader-f64" | "shader-f64" => Features::SHADER_F64,
+            "wgpu-shader-i16" | "shader-i16" => Features::SHADER_I16,
+            "wgpu-shader-early-depth-test" | "shader-early-depth-test" => {
+                Features::SHADER_EARLY_DEPTH_TEST
+            }
+            "wgpu-shader-int64" => Features::SHADER_INT64,
+            "subgroups" => Features::SUBGROUP, // standard-track feature
+            "wgpu-subgroup-vertex" => Features::SUBGROUP_VERTEX,
+            "wgpu-subgroup-barrier" => Features::SUBGROUP_BARRIER,
+            "wgpu-pipeline-cache" => Features::PIPELINE_CACHE,
+            "wgpu-shader-int64-atomic-min-max" => Features::SHADER_INT64_ATOMIC_MIN_MAX,
+            "wgpu-shader-int64-atomic-all-ops" => Features::SHADER_INT64_ATOMIC_ALL_OPS,
+            "wgpu-vulkan-google-display-timing" => Features::VULKAN_GOOGLE_DISPLAY_TIMING,
+            "wgpu-vulkan-external-memory-win32" => Features::VULKAN_EXTERNAL_MEMORY_WIN32,
+            "wgpu-texture-int64-atomic" => Features::TEXTURE_INT64_ATOMIC,
+            "wgpu-uniform-buffer-binding-arrays" | "uniform-buffer-binding-arrays" => {
+                Features::UNIFORM_BUFFER_BINDING_ARRAYS
+            }
+            "wgpu-mesh-shader" => Features::EXPERIMENTAL_MESH_SHADER,
+            "wgpu-ray-hit-vertex-return" => Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN,
+            "wgpu-mesh-shader-multiview" => Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
+            "wgpu-extended-acceleration-structure-vertex-formats" => {
+                Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS
+            }
+            "wgpu-passthrough-shaders" | "passthrough-shaders" => Features::PASSTHROUGH_SHADERS,
+            "wgpu-shader-barycentrics" => Features::SHADER_BARYCENTRICS,
+            "wgpu-selective-multiview" => Features::SELECTIVE_MULTIVIEW,
+            "wgpu-mesh-shader-points" => Features::EXPERIMENTAL_MESH_SHADER_POINTS,
+            "wgpu-multisample-array" => Features::MULTISAMPLE_ARRAY,
+            "wgpu-cooperative-matrix" => Features::EXPERIMENTAL_COOPERATIVE_MATRIX,
+            "wgpu-shader-per-vertex" => Features::SHADER_PER_VERTEX,
+            "wgpu-shader-draw-index" => Features::SHADER_DRAW_INDEX,
+            "wgpu-acceleration-structure-binding-array" => {
+                Features::ACCELERATION_STRUCTURE_BINDING_ARRAY
+            }
+            "wgpu-memory-decoration-coherent" => Features::MEMORY_DECORATION_COHERENT,
+            "wgpu-memory-decoration-volatile" => Features::MEMORY_DECORATION_VOLATILE,
+
+            _ => return Err(()),
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{Features, FeaturesWGPU, FeaturesWebGPU};
+    use bitflags::{Flag, Flags};
 
     #[cfg(feature = "serde")]
     #[test]
@@ -1770,26 +2016,97 @@ mod tests {
             assert_eq!(Features::from_bits_retain(bits), *feature.value());
         }
 
-        let bits = Features::all().bits();
-        assert_eq!(Features::from_bits_truncate(bits), Features::all());
+        let bits = FeaturesWebGPU::all().bits();
+        assert_eq!(
+            FeaturesWebGPU::from_bits_truncate(bits),
+            FeaturesWebGPU::all()
+        );
 
-        let bits = Features::empty().bits();
-        assert_eq!(Features::from_bits_truncate(bits), Features::empty());
+        let bits = FeaturesWebGPU::empty().bits();
+        assert_eq!(
+            FeaturesWebGPU::from_bits_truncate(bits),
+            FeaturesWebGPU::empty()
+        );
 
-        for feature in Features::FLAGS {
+        for feature in FeaturesWebGPU::FLAGS {
             let bits = feature.value().bits();
-            assert_eq!(Features::from_bits_truncate(bits), *feature.value());
+            assert_eq!(FeaturesWebGPU::from_bits_truncate(bits), *feature.value());
         }
 
-        let bits = Features::all().bits();
-        assert_eq!(Features::from_bits(bits).unwrap(), Features::all());
+        let bits = FeaturesWGPU::all().bits();
+        assert_eq!(FeaturesWGPU::from_bits(bits).unwrap(), FeaturesWGPU::all());
 
-        let bits = Features::empty().bits();
-        assert_eq!(Features::from_bits(bits).unwrap(), Features::empty());
+        let bits = FeaturesWGPU::empty().bits();
+        assert_eq!(
+            FeaturesWGPU::from_bits(bits).unwrap(),
+            FeaturesWGPU::empty()
+        );
 
-        for feature in Features::FLAGS {
+        for feature in FeaturesWGPU::FLAGS {
             let bits = feature.value().bits();
-            assert_eq!(Features::from_bits(bits).unwrap(), *feature.value());
+            assert_eq!(FeaturesWGPU::from_bits(bits).unwrap(), *feature.value());
+        }
+    }
+
+    #[test]
+    fn features_names() {
+        for feature in Features::FLAGS.iter().map(Flag::value).copied() {
+            let Some(name) = feature.as_str() else {
+                panic!("`.as_str()` for {feature:?} returned `None`");
+            };
+            assert_eq!(name.parse(), Ok(feature));
+
+            // Native-only features that are accepted without `wgpu-` prefix for backwards compatibility
+            let prefix_backcompat_features = [
+                Features::EXTERNAL_TEXTURE,
+                Features::TEXTURE_FORMAT_16BIT_NORM,
+                Features::TEXTURE_COMPRESSION_ASTC_HDR,
+                Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                Features::PIPELINE_STATISTICS_QUERY,
+                Features::TIMESTAMP_QUERY_INSIDE_PASSES,
+                Features::MAPPABLE_PRIMARY_BUFFERS,
+                Features::TEXTURE_BINDING_ARRAY,
+                Features::BUFFER_BINDING_ARRAY,
+                Features::STORAGE_RESOURCE_BINDING_ARRAY,
+                Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+                Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+                Features::UNIFORM_BUFFER_BINDING_ARRAYS,
+                Features::PARTIALLY_BOUND_BINDING_ARRAY,
+                Features::MULTI_DRAW_INDIRECT_COUNT,
+                Features::ADDRESS_MODE_CLAMP_TO_ZERO,
+                Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+                Features::POLYGON_MODE_LINE,
+                Features::POLYGON_MODE_POINT,
+                Features::CONSERVATIVE_RASTERIZATION,
+                Features::VERTEX_WRITABLE_STORAGE,
+                Features::CLEAR_TEXTURE,
+                Features::MULTIVIEW,
+                Features::VERTEX_ATTRIBUTE_64BIT,
+                Features::SHADER_F64,
+                Features::SHADER_I16,
+                Features::SHADER_EARLY_DEPTH_TEST,
+                Features::PASSTHROUGH_SHADERS,
+            ];
+
+            if feature == Features::SUBGROUP {
+                // Standard-track feature that does not have `wgpu-` prefix
+                assert_eq!(name.parse(), Ok(feature));
+            } else if feature & Features::all_native_mask() != Features::empty() {
+                let stripped_name = name.strip_prefix("wgpu-").unwrap_or_else(|| {
+                    panic!("Native feature `{name}` should have `wgpu-` prefix")
+                });
+                let expected = if prefix_backcompat_features.contains(&feature) {
+                    Ok(feature)
+                } else {
+                    Err(())
+                };
+                assert_eq!(stripped_name.parse(), expected);
+            }
+
+            // Special backcompat case
+            if feature == Features::PRIMITIVE_INDEX {
+                assert_eq!("shader-primitive-index".parse(), Ok(feature));
+            }
         }
     }
 
