@@ -716,6 +716,10 @@ pub trait Surface: WasmNotSendSync {
     /// Some backends can't support a timeout when acquiring a texture. On these
     /// backends, `timeout` is ignored.
     ///
+    /// On macOS, this returns `Ok(None)` when the window is not visible (minimized,
+    /// fully occluded, or on another virtual desktop) to avoid blocking in
+    /// `CAMetalLayer.nextDrawable()`.
+    ///
     /// # Safety
     ///
     /// - The surface `self` must currently be configured on some [`Device`].

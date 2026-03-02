@@ -114,6 +114,10 @@ impl Surface<'_> {
     ///
     /// If a SurfaceTexture referencing this surface is alive when the swapchain is recreated,
     /// recreating the swapchain will panic.
+    ///
+    /// This may return [`SurfaceError::Timeout`] if the surface is not visible
+    /// (e.g., the window is minimized, fully occluded, or on another virtual desktop).
+    /// Applications should handle this by skipping the current frame.
     pub fn get_current_texture(&self) -> Result<SurfaceTexture, SurfaceError> {
         let (texture, status, detail) = self.inner.get_current_texture();
 
