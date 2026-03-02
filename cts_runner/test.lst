@@ -298,6 +298,15 @@ webgpu:api,validation,texture,rg11b10ufloat_renderable:*
 
 webgpu:shader,execution,expression,call,builtin,atan2:f16:*
 webgpu:shader,execution,expression,call,builtin,atan2:f32:*
+webgpu:shader,execution,expression,call,builtin,dot:abstract_int_vec2:*
+webgpu:shader,execution,expression,call,builtin,dot:abstract_int_vec3:*
+webgpu:shader,execution,expression,call,builtin,dot:abstract_int_vec4:*
+webgpu:shader,execution,expression,call,builtin,dot:i32_vec2:*
+webgpu:shader,execution,expression,call,builtin,dot:i32_vec3:*
+webgpu:shader,execution,expression,call,builtin,dot:i32_vec4:*
+webgpu:shader,execution,expression,call,builtin,dot:u32_vec2:*
+webgpu:shader,execution,expression,call,builtin,dot:u32_vec3:*
+webgpu:shader,execution,expression,call,builtin,dot:u32_vec4:*
 //FAIL: webgpu:shader,execution,expression,call,builtin,select:*
 // - Fails with `const`/abstract int cases on all platforms because of <https://github.com/gfx-rs/wgpu/issues/4507>.
 // - Fails with `vec3` & `f16` cases on macOS because of <https://github.com/gfx-rs/wgpu/issues/5262>.

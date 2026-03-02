@@ -1763,7 +1763,7 @@ impl<'a> ConstantEvaluator<'a> {
                     return Err(ConstantEvaluatorError::InvalidMathArg);
                 }
 
-                fn int_dot<P>(a: &[P], b: &[P]) -> Result<P, ConstantEvaluatorError>
+                fn int_dot_checked<P>(a: &[P], b: &[P]) -> Result<P, ConstantEvaluatorError>
                 where
                     P: num_traits::PrimInt + num_traits::CheckedAdd + num_traits::CheckedMul,
                 {
@@ -1782,9 +1782,21 @@ impl<'a> ConstantEvaluator<'a> {
                         ))
                 }
 
+                fn int_dot_wrapping<P>(a: &[P], b: &[P]) -> P
+                where
+                    P: num_traits::PrimInt + num_traits::WrappingAdd + num_traits::WrappingMul,
+                {
+                    a.iter()
+                        .zip(b.iter())
+                        .map(|(&aa, bb)| aa.wrapping_mul(bb))
+                        .fold(P::zero(), |acc, x| acc.wrapping_add(&x))
+                }
+
                 let result = match_literal_vector!(match (e1, e2) => Literal {
                     Float => |e1, e2| { e1.iter().zip(e2.iter()).map(|(&aa, &bb)| aa * bb).sum() },
-                    Integer => |e1, e2| { int_dot(e1, e2)? },
+                    AbstractInt => |e1, e2 | { int_dot_checked(e1, e2)? },
+                    I32 => |e1, e2| { int_dot_wrapping(e1, e2) },
+                    U32 => |e1, e2| { int_dot_wrapping(e1, e2) },
                 })?;
                 self.register_evaluated_expr(Expression::Literal(result), span)
             }
