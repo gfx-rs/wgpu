@@ -1490,6 +1490,12 @@ pub struct WebRenderPassEncoder {
     ident: crate::cmp::Identifier,
 }
 
+#[derive(Debug, Clone)]
+pub struct WebRayTracingPassEncoder {
+    /// Unique identifier for this RayTracingPassEncoder.
+    ident: crate::cmp::Identifier,
+} // no ray tracing pipelines on web
+
 #[derive(Debug)]
 pub struct WebCommandBuffer {
     pub(crate) inner: webgpu_sys::GpuCommandBuffer,
@@ -1577,6 +1583,7 @@ impl_send_sync!(WebPipelineCache);
 impl_send_sync!(WebCommandEncoder);
 impl_send_sync!(WebComputePassEncoder);
 impl_send_sync!(WebRenderPassEncoder);
+impl_send_sync!(WebRayTracingPassEncoder);
 impl_send_sync!(WebCommandBuffer);
 impl_send_sync!(WebRenderBundleEncoder);
 impl_send_sync!(WebRenderBundle);
@@ -1609,6 +1616,7 @@ crate::cmp::impl_eq_ord_hash_proxy!(WebCommandEncoder => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebComputePassEncoder => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebRenderPassEncoder => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebCommandBuffer => .ident);
+crate::cmp::impl_eq_ord_hash_proxy!(WebRayTracingPassEncoder => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebRenderBundleEncoder => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebRenderBundle => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebSurface => .ident);
@@ -3444,6 +3452,13 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         .into()
     }
 
+    fn begin_ray_tracing_pass(
+        &self,
+        _desc: &crate::RayTracingPassDescriptor<'_>,
+    ) -> dispatch::DispatchRayTracingPass {
+        unreachable!("ray tracing is not web.")
+    }
+
     fn finish(&mut self) -> dispatch::DispatchCommandBuffer {
         let label = self.inner.label();
         let buffer = if label.is_empty() {
@@ -3949,6 +3964,26 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
 impl Drop for WebRenderPassEncoder {
     fn drop(&mut self) {
         self.inner.end();
+    }
+}
+
+impl dispatch::RayTracingPassInterface for WebRayTracingPassEncoder {
+    fn set_pipeline(&mut self, _pipeline: &dispatch::DispatchRayTracingPipeline) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+    fn set_bind_group(
+        &mut self,
+        _index: u32,
+        _bind_group: Option<&dispatch::DispatchBindGroup>,
+        _offsets: &[crate::DynamicOffset],
+    ) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+}
+
+impl Drop for WebRayTracingPassEncoder {
+    fn drop(&mut self) {
+        // no-op
     }
 }
 

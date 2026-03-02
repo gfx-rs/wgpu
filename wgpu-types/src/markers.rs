@@ -56,6 +56,7 @@ ids! {
     pub type CommandBuffer;
     pub type RenderPassEncoder;
     pub type ComputePassEncoder;
+    pub type RayTracingPassEncoder;
     pub type RenderBundleEncoder;
     pub type RenderBundle;
     pub type QuerySet;

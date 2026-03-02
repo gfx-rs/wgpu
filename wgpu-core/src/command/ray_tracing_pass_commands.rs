@@ -1,0 +1,53 @@
+#[cfg(feature = "serde")]
+use crate::command::serde_object_reference_struct;
+use crate::command::{ArcReferences, ReferenceType};
+
+#[cfg(feature = "serde")]
+use macro_rules_attribute::apply;
+
+/// cbindgen:ignore
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
+pub enum RayTracingCommand<R: ReferenceType> {
+    SetBindGroup {
+        index: u32,
+        num_dynamic_offsets: usize,
+        bind_group: Option<R::BindGroup>,
+    },
+
+    SetPipeline(R::RayTracingPipeline),
+
+    /// Set a range of immediates to values stored in `immediates_data`.
+    SetImmediate {
+        /// The byte offset within the immediate data storage to write to. This
+        /// must be a multiple of four.
+        offset: u32,
+
+        /// The number of bytes to write. This must be a multiple of four.
+        size_bytes: u32,
+
+        /// Index in `immediates_data` of the start of the data
+        /// to be written.
+        ///
+        /// Note: this is not a byte offset like `offset`. Rather, it is the
+        /// index of the first `u32` element in `immediates_data` to read.
+        values_offset: u32,
+    },
+
+    TraceRays([u32; 3]),
+
+    PushDebugGroup {
+        color: u32,
+        len: usize,
+    },
+
+    PopDebugGroup,
+
+    InsertDebugMarker {
+        color: u32,
+        len: usize,
+    },
+}
+
+/// cbindgen:ignore
+pub type ArcRayTracingCommand = RayTracingCommand<ArcReferences>;

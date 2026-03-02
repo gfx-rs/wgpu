@@ -21,6 +21,7 @@ pub trait ReferenceType {
     type RenderPipeline: Clone + core::fmt::Debug;
     type RenderBundle: Clone + core::fmt::Debug;
     type ComputePipeline: Clone + core::fmt::Debug;
+    type RayTracingPipeline: Clone + core::fmt::Debug;
     type Blas: Clone + core::fmt::Debug;
     type Tlas: Clone + core::fmt::Debug;
 }
@@ -51,6 +52,7 @@ impl ReferenceType for PointerReferences {
     type RenderPipeline = crate::id::PointerId<crate::id::markers::RenderPipeline>;
     type RenderBundle = crate::id::PointerId<crate::id::markers::RenderBundle>;
     type ComputePipeline = crate::id::PointerId<crate::id::markers::ComputePipeline>;
+    type RayTracingPipeline = crate::id::PointerId<crate::id::markers::RayTracingPipeline>;
     type Blas = crate::id::PointerId<crate::id::markers::Blas>;
     type Tlas = crate::id::PointerId<crate::id::markers::Tlas>;
 }
@@ -66,6 +68,7 @@ impl ReferenceType for ArcReferences {
     type RenderPipeline = Arc<crate::pipeline::RenderPipeline>;
     type RenderBundle = Arc<crate::command::RenderBundle>;
     type ComputePipeline = Arc<crate::pipeline::ComputePipeline>;
+    type RayTracingPipeline = Arc<crate::pipeline::RayTracingPipeline>;
     type Blas = Arc<crate::resource::Blas>;
     type Tlas = Arc<crate::resource::Tlas>;
 }
@@ -85,6 +88,7 @@ attribute_alias! {
           R::RenderPipeline: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           R::RenderBundle: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           R::ComputePipeline: serde::Serialize + for<'d> serde::Deserialize<'d>,\
+          R::RayTracingPipeline: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           R::Blas: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           R::Tlas: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           wgt::BufferTransition<R::Buffer>: serde::Serialize + for<'d> serde::Deserialize<'d>,\
@@ -143,6 +147,9 @@ pub enum Command<R: ReferenceType> {
     RunComputePass {
         pass: crate::command::BasePass<crate::command::ComputeCommand<R>, Infallible>,
         timestamp_writes: Option<crate::command::PassTimestampWrites<R::QuerySet>>,
+    },
+    RunRayTracingPass {
+        pass: crate::command::BasePass<crate::command::RayTracingCommand<R>, Infallible>,
     },
     RunRenderPass {
         pass: crate::command::BasePass<crate::command::RenderCommand<R>, Infallible>,

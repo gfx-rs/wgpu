@@ -1202,7 +1202,10 @@ impl Device {
             .usage
             .intersects(wgt::BufferUsages::BLAS_INPUT | wgt::BufferUsages::TLAS_INPUT)
         {
-            self.require_features(wgt::Features::EXPERIMENTAL_RAY_QUERY)?;
+            self.require_features(wgt::Features::EXPERIMENTAL_RAY_QUERY)
+                .or_else(|_| {
+                    self.require_features(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+                })?;
         }
 
         if desc.usage.contains(wgt::BufferUsages::INDEX)

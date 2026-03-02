@@ -4,9 +4,10 @@ use std::io::Write as _;
 
 use crate::{
     command::{
-        ArcCommand, ArcComputeCommand, ArcReferences, ArcRenderCommand, BasePass, ColorAttachments,
-        Command, ComputeCommand, PassTimestampWrites, PointerReferences, RenderCommand,
-        RenderPassColorAttachment, ResolvedRenderPassDepthStencilAttachment,
+        ArcCommand, ArcComputeCommand, ArcRayTracingCommand, ArcReferences, ArcRenderCommand,
+        BasePass, ColorAttachments, Command, ComputeCommand, PassTimestampWrites,
+        PointerReferences, RayTracingCommand, RenderCommand, RenderPassColorAttachment,
+        ResolvedRenderPassDepthStencilAttachment,
     },
     device::trace::{Data, DataKind, TraceRayTracingPipelineDescriptor},
     id::{markers, PointerId},
@@ -272,6 +273,9 @@ impl IntoTrace for ArcCommand {
                 timestamp_writes: timestamp_writes.map(|tw| tw.into_trace()),
                 occlusion_query_set: occlusion_query_set.map(|q| q.to_trace()),
                 multiview_mask,
+            },
+            ArcCommand::RunRayTracingPass { pass } => Command::RunRayTracingPass {
+                pass: pass.into_trace(),
             },
             ArcCommand::BuildAccelerationStructures { blas, tlas } => {
                 Command::BuildAccelerationStructures {
@@ -654,6 +658,38 @@ impl IntoTrace for ArcRenderCommand {
     }
 }
 
+impl IntoTrace for ArcRayTracingCommand {
+    type Output = RayTracingCommand<PointerReferences>;
+    fn into_trace(self) -> Self::Output {
+        use RayTracingCommand as C;
+        match self {
+            C::SetBindGroup {
+                index,
+                num_dynamic_offsets,
+                bind_group,
+            } => C::SetBindGroup {
+                index,
+                num_dynamic_offsets,
+                bind_group: bind_group.map(|bg| bg.into_trace()),
+            },
+            C::SetPipeline(id) => C::SetPipeline(id.into_trace()),
+            C::SetImmediate {
+                offset,
+                size_bytes,
+                values_offset,
+            } => C::SetImmediate {
+                offset,
+                size_bytes,
+                values_offset,
+            },
+            C::TraceRays(groups) => C::TraceRays(groups),
+            C::PushDebugGroup { color, len } => C::PushDebugGroup { color, len },
+            C::PopDebugGroup => C::PopDebugGroup,
+            C::InsertDebugMarker { color, len } => C::InsertDebugMarker { color, len },
+        }
+    }
+}
+
 impl IntoTrace for crate::binding_model::PipelineLayoutDescriptor<'_> {
     type Output = crate::binding_model::PipelineLayoutDescriptor<
         'static,
@@ -786,10 +822,10 @@ impl<'a> IntoTrace for crate::pipeline::RayTracingPipelineDescriptor<'a> {
                 .intersections
                 .into_iter()
                 .map(|intersection| match intersection {
-                    crate::pipeline::RayTracingIntersectionDescriptor::Triangles {
+                    crate::pipeline::RayTracingIntersectionDescriptor::Triangle {
                         closest_hit,
                         any_hit,
-                    } => crate::pipeline::RayTracingIntersectionDescriptor::Triangles {
+                    } => crate::pipeline::RayTracingIntersectionDescriptor::Triangle {
                         closest_hit: closest_hit.into_trace(),
                         any_hit: any_hit.map(|a| a.into_trace()),
                     },
@@ -1173,10 +1209,10 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
                     .intersections
                     .into_iter()
                     .map(|i| match i {
-                        crate::pipeline::RayTracingIntersectionDescriptor::Triangles {
+                        crate::pipeline::RayTracingIntersectionDescriptor::Triangle {
                             closest_hit,
                             any_hit,
-                        } => crate::pipeline::RayTracingIntersectionDescriptor::Triangles {
+                        } => crate::pipeline::RayTracingIntersectionDescriptor::Triangle {
                             closest_hit: owned_stage(closest_hit),
                             any_hit: any_hit.map(owned_stage),
                         },

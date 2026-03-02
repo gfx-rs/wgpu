@@ -651,6 +651,7 @@ pub(crate) struct Tracker {
 
     pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline>,
     pub render_pipelines: StatelessTracker<pipeline::RenderPipeline>,
+    pub ray_tracing_pipelines: StatelessTracker<pipeline::RayTracingPipeline>,
     pub bundles: StatelessTracker<command::RenderBundle>,
     pub query_sets: QuerySetTracker,
 }
@@ -669,6 +670,7 @@ impl Tracker {
             bind_groups: StatelessTracker::new(),
             compute_pipelines: StatelessTracker::new(),
             render_pipelines: StatelessTracker::new(),
+            ray_tracing_pipelines: StatelessTracker::new(),
             bundles: StatelessTracker::new(),
             query_sets: QuerySetTracker::new(),
         }

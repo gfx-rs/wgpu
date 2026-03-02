@@ -472,6 +472,13 @@ pub struct CoreRenderPass {
     id: crate::cmp::Identifier,
 }
 
+#[derive(Debug)]
+pub struct CoreRayTracingPass {
+    pass: wgc::command::RayTracingPass,
+
+    id: crate::cmp::Identifier,
+}
+
 pub struct CoreCommandEncoder {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_command_encoder: Arc<wgc::command::CommandEncoder>,
@@ -592,6 +599,7 @@ crate::cmp::impl_eq_ord_hash_arc_address!(CorePipelineCache => .wgpu_pipeline_ca
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreCommandEncoder => .wgpu_command_encoder);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreComputePass => .id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreRenderPass => .id);
+crate::cmp::impl_eq_ord_hash_proxy!(CoreRayTracingPass => .id);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreCommandBuffer => .wgpu_command_buffer);
 crate::cmp::impl_eq_ord_hash_box_address!(CoreRenderBundleEncoder => .encoder);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreRenderBundle => .wgpu_render_bundle);
@@ -1389,7 +1397,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     crate::RayTracingIntersectionDescriptor::Triangle {
                         closest_hit,
                         any_hit,
-                    } => pipe::RayTracingIntersectionDescriptor::Triangles {
+                    } => pipe::RayTracingIntersectionDescriptor::Triangle {
                         closest_hit: downcast_rt_stage(closest_hit),
                         any_hit: any_hit.as_ref().map(|stage| downcast_rt_stage(stage)),
                     },
@@ -2250,6 +2258,23 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         .into()
     }
 
+    fn begin_ray_tracing_pass(
+        &self,
+        desc: &crate::RayTracingPassDescriptor<'_>,
+    ) -> dispatch::DispatchRayTracingPass {
+        let pass = self.wgpu_command_encoder.begin_ray_tracing_pass(
+            &wgc::command::RayTracingPassDescriptor {
+                label: desc.label.map(Borrowed),
+            },
+        );
+
+        CoreRayTracingPass {
+            pass,
+            id: crate::cmp::Identifier::create(),
+        }
+        .into()
+    }
+
     fn finish(&mut self) -> dispatch::DispatchCommandBuffer {
         let descriptor = wgt::CommandBufferDescriptor::default();
         let wgpu_command_buffer = self.wgpu_command_encoder.finish(&descriptor);
@@ -2819,6 +2844,32 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
 }
 
 impl Drop for CoreRenderPass {
+    fn drop(&mut self) {
+        self.pass.end()
+    }
+}
+
+impl dispatch::RayTracingPassInterface for CoreRayTracingPass {
+    fn set_pipeline(&mut self, pipeline: &dispatch::DispatchRayTracingPipeline) {
+        let pipeline = pipeline.as_core();
+
+        self.pass
+            .set_pipeline(pipeline.wgpu_ray_tracing_pipeline.clone())
+    }
+
+    fn set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group: Option<&dispatch::DispatchBindGroup>,
+        offsets: &[crate::DynamicOffset],
+    ) {
+        let bg = bind_group.map(|bg| bg.as_core().wgpu_bind_group.clone());
+
+        self.pass.set_bind_group(index, bg, offsets)
+    }
+}
+
+impl Drop for CoreRayTracingPass {
     fn drop(&mut self) {
         self.pass.end()
     }

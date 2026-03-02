@@ -1207,7 +1207,7 @@ impl WebGpuError for CreateRayTracingPipelineError {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RayTracingIntersectionDescriptor<'a, SM = Arc<ShaderModule>> {
-    Triangles {
+    Triangle {
         closest_hit: ProgrammableStageDescriptor<'a, SM>,
         any_hit: Option<ProgrammableStageDescriptor<'a, SM>>,
     },
@@ -1320,16 +1320,15 @@ impl Drop for ShaderBindingData {
 pub(crate) struct RayTracingPipelineState {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynRayTracingPipeline>>,
     pub(crate) layout: Arc<PipelineLayout>,
-    pub(crate) _shader_modules: Vec<Arc<ShaderModule>>,
     #[expect(unused)]
     pub(crate) shader_binding_data: ShaderBindingData,
+    pub(crate) _shader_modules: Vec<Arc<ShaderModule>>,
 }
 
 #[derive(Debug)]
 pub struct RayTracingPipeline {
     pub(crate) state: ResourceState<RayTracingPipelineState>,
     pub(crate) device: Arc<Device>,
-    #[expect(unused)]
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -1369,7 +1368,6 @@ crate::impl_storage_item!(RayTracingPipeline);
 crate::impl_trackable!(RayTracingPipeline);
 
 impl RayTracingPipeline {
-    #[expect(unused)]
     pub(crate) fn raw(&self) -> Result<&dyn hal::DynRayTracingPipeline, InvalidResourceError> {
         let ResourceState::Valid(state) = &self.state else {
             return Err(InvalidResourceError(self.error_ident()));
@@ -1385,6 +1383,13 @@ impl RayTracingPipeline {
             late_sized_buffer_groups: ArrayVec::new(),
             label,
         })
+    }
+
+    pub(crate) fn check_valid(&self) -> Result<(), InvalidResourceError> {
+        let ResourceState::Valid(_) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        Ok(())
     }
 
     pub(crate) fn layout(&self) -> Result<&Arc<PipelineLayout>, InvalidResourceError> {

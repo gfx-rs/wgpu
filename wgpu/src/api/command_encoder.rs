@@ -107,6 +107,28 @@ impl CommandEncoder {
         }
     }
 
+    /// Begins recording of a ray tracing pass.
+    ///
+    /// This function returns a [`RayTracingPass`] object which records a single compute pass.
+    ///
+    /// As long as the returned  [`RayTracingPass`] has not ended,
+    /// any mutating operation on this command encoder causes an error and invalidates it.
+    /// Note that the `'encoder` lifetime relationship protects against this,
+    /// but it is possible to opt out of it by calling [`RayTracingPass::forget_lifetime`].
+    /// This can be useful for runtime handling of the encoder->pass
+    /// dependency e.g. when pass and encoder are stored in the same data structure.
+    pub fn begin_ray_tracing_pass<'encoder>(
+        &'encoder mut self,
+        desc: &RayTracingPassDescriptor<'_>,
+    ) -> RayTracingPass<'encoder> {
+        let rtpass = self.inner.begin_ray_tracing_pass(desc);
+        RayTracingPass {
+            inner: rtpass,
+            actions: Arc::clone(&self.actions),
+            _encoder_guard: api::PhantomDrop::default(),
+        }
+    }
+
     /// Copy data from one buffer to another.
     ///
     /// # Panics
