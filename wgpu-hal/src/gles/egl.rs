@@ -572,9 +572,14 @@ impl Inner {
                         break result;
                     }
 
-                    // BadAttribute could mean that context creation is not supported at the requested robustness level
-                    // We try the next robustness level.
-                    (Err(khronos_egl::Error::BadAttribute), Some(r)) => {
+                    // EGL 1.5 specification:
+                    // "An EGL_BAD_MATCH error is generated if an OpenGL or OpenGL ES context is
+                    // requested with robust buffer access, and the implementation does not
+                    // support the corresponding OpenGL or OpenGL ES extension."
+                    (
+                        Err(khronos_egl::Error::BadMatch | khronos_egl::Error::BadAttribute),
+                        Some(r),
+                    ) => {
                         // Trying EXT robustness if Core robustness is not working
                         // and EXT robustness is supported.
                         robustness = if matches!(r, Robustness::Core)
