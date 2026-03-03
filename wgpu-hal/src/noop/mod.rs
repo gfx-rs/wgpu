@@ -181,6 +181,7 @@ pub const CAPABILITIES: crate::Capabilities = {
             raw_tlas_instance_size: 0,
             ray_tracing_scratch_buffer_alignment: 1,
             ray_tracing_pipeline_group_data_size: 1,
+            ray_tracing_pipeline_group_data_alignment: 1,
         },
         downlevel: wgt::DownlevelCapabilities {
             flags: wgt::DownlevelFlags::all(),

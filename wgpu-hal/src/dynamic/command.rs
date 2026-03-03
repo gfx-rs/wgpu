@@ -194,6 +194,14 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
     unsafe fn begin_ray_tracing_pass(&mut self, desc: &RayTracingPassDescriptor);
     unsafe fn end_ray_tracing_pass(&mut self);
 
+    unsafe fn trace_rays(
+        &mut self,
+        count: [u32; 3],
+        ray_generation_group_data: crate::PipelineGroupData<dyn DynBuffer>,
+        miss_group_data: crate::PipelineGroupData<dyn DynBuffer>,
+        intersection_group_data: crate::PipelineGroupData<dyn DynBuffer>,
+    );
+
     unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &dyn DynRayTracingPipeline);
 
     unsafe fn build_acceleration_structures<'a>(
@@ -664,6 +672,32 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
     unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &dyn DynRayTracingPipeline) {
         let pipeline = pipeline.expect_downcast_ref();
         unsafe { C::set_ray_tracing_pipeline(self, pipeline) };
+    }
+
+    unsafe fn trace_rays<'a>(
+        &mut self,
+        count: [u32; 3],
+        ray_generation_group_data: crate::PipelineGroupData<'a, dyn DynBuffer>,
+        miss_group_data: crate::PipelineGroupData<'a, dyn DynBuffer>,
+        intersection_group_data: crate::PipelineGroupData<'a, dyn DynBuffer>,
+    ) {
+        let downcast_group_data =
+            |data: crate::PipelineGroupData<'a, dyn DynBuffer>| crate::PipelineGroupData {
+                buffer: data.buffer.expect_downcast_ref(),
+                offset: data.offset,
+                stride: data.stride,
+                size: data.size,
+            };
+
+        unsafe {
+            C::trace_rays(
+                self,
+                count,
+                downcast_group_data(ray_generation_group_data),
+                downcast_group_data(miss_group_data),
+                downcast_group_data(intersection_group_data),
+            );
+        }
     }
 
     unsafe fn build_acceleration_structures<'a>(

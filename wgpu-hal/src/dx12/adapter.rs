@@ -1037,6 +1037,7 @@ impl super::Adapter {
                         Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT,
                     // Not yet implemented
                     ray_tracing_pipeline_group_data_size: 0,
+                    ray_tracing_pipeline_group_data_alignment: 0,
                 },
                 downlevel,
                 cooperative_matrix_properties: Vec::new(),

@@ -1375,6 +1375,68 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
+    unsafe fn trace_rays(
+        &mut self,
+        count: [u32; 3],
+        ray_generation_group_data: crate::PipelineGroupData<super::Buffer>,
+        miss_group_data: crate::PipelineGroupData<super::Buffer>,
+        intersection_group_data: crate::PipelineGroupData<super::Buffer>,
+    ) {
+        let ray_tracing_functions = self
+            .device
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
+
+        let ray_tracing_pipeline_functions = self
+            .device
+            .extension_fns
+            .ray_tracing_pipelines
+            .as_ref()
+            .expect("Feature `RAY_TRACING_PIPELINES` not enabled");
+
+        let get_device_address = |buffer: &super::Buffer| unsafe {
+            ray_tracing_functions
+                .buffer_device_address
+                .get_buffer_device_address(
+                    &vk::BufferDeviceAddressInfo::default().buffer(buffer.raw),
+                )
+        };
+
+        unsafe {
+            ray_tracing_pipeline_functions.cmd_trace_rays(
+                self.raw_handle(),
+                &vk::StridedDeviceAddressRegionKHR {
+                    device_address: get_device_address(ray_generation_group_data.buffer)
+                        + ray_generation_group_data.offset,
+                    stride: ray_generation_group_data.stride,
+                    size: ray_generation_group_data.size,
+                },
+                &vk::StridedDeviceAddressRegionKHR {
+                    device_address: get_device_address(miss_group_data.buffer)
+                        + miss_group_data.offset,
+                    stride: miss_group_data.stride,
+                    size: miss_group_data.size,
+                },
+                &vk::StridedDeviceAddressRegionKHR {
+                    device_address: get_device_address(intersection_group_data.buffer)
+                        + intersection_group_data.offset,
+                    stride: intersection_group_data.stride,
+                    size: intersection_group_data.size,
+                },
+                &vk::StridedDeviceAddressRegionKHR {
+                    device_address: 0,
+                    stride: 0,
+                    size: 0,
+                },
+                count[0],
+                count[1],
+                count[2],
+            )
+        };
+    }
+
     unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &super::RayTracingPipeline) {
         unsafe {
             self.device.raw.cmd_bind_pipeline(

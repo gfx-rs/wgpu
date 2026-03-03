@@ -1810,6 +1810,11 @@ impl PhysicalDeviceProperties {
                 .map_or(0, |ray_tracing_pipeline| {
                     ray_tracing_pipeline.shader_group_handle_size
                 }),
+            ray_tracing_pipeline_group_data_alignment: self
+                .ray_tracing_pipeline
+                .map_or(0, |ray_tracing_pipeline| {
+                    ray_tracing_pipeline.shader_group_handle_alignment
+                }),
         }
     }
 }
