@@ -251,6 +251,7 @@ webgpu:api,validation,render_pipeline,fragment_state:targets_blend:*
 webgpu:api,validation,render_pipeline,fragment_state:targets_format_filterable:*
 webgpu:api,validation,render_pipeline,fragment_state:targets_format_is_color_format:*
 webgpu:api,validation,render_pipeline,fragment_state:targets_format_renderable:*
+webgpu:api,validation,render_pipeline,fragment_state:targets_write_mask:*
 webgpu:api,validation,render_pipeline,inter_stage:location,*
 webgpu:api,validation,render_pipeline,inter_stage:max_shader_variable_location:*
 webgpu:api,validation,render_pipeline,inter_stage:max_variables_count,*

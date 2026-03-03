@@ -55,7 +55,6 @@ webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,color_
 webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,use_blend_src:* // 62%, https://github.com/gfx-rs/wgpu/pull/8856
 webgpu:api,validation,render_pipeline,fragment_state:pipeline_output_targets,blend:* // 95%, blend factors reading source alpha require vec4
 webgpu:api,validation,render_pipeline,fragment_state:pipeline_output_targets:* // 3%, color target without shader output requires writeMask=0
-webgpu:api,validation,render_pipeline,fragment_state:targets_write_mask:* // 50%, TypeError instead of validation error
 webgpu:api,validation,render_pipeline,inter_stage:* // 15%, inter-stage type validation gaps and interpolation default handling
 webgpu:api,validation,render_pipeline,misc:external_texture:* // 0%, no external texture in deno
 webgpu:api,validation,render_pipeline,misc:storage_texture,format:* // 8%, similar to compute pipeline issue
