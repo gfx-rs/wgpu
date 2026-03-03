@@ -549,11 +549,11 @@ pub trait RayTracingPassInterface: CommonTraits + Drop {
         bind_group: Option<&DispatchBindGroup>,
         offsets: &[crate::DynamicOffset],
     );
-    // fn set_immediates(&mut self, offset: u32, data: &[u8]);
+    fn set_immediates(&mut self, offset: u32, data: &[u8]);
 
-    // fn insert_debug_marker(&mut self, label: &str);
-    // fn push_debug_group(&mut self, group_label: &str);
-    // fn pop_debug_group(&mut self);
+    fn insert_debug_marker(&mut self, label: &str);
+    fn push_debug_group(&mut self, group_label: &str);
+    fn pop_debug_group(&mut self);
 
     // fn trace_rays(&mut self, x: u32, y: u32, z: u32);
 }

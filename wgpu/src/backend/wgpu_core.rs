@@ -3965,6 +3965,66 @@ impl dispatch::RayTracingPassInterface for CoreRayTracingPass {
             );
         }
     }
+
+    fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        if let Err(cause) =
+            self.context
+                .0
+                .ray_tracing_pass_set_immediates(&mut self.pass, offset, data)
+        {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                self.pass.label(),
+                "RayTracingPass::set_immediates",
+            );
+        }
+    }
+
+    fn insert_debug_marker(&mut self, label: &str) {
+        if let Err(cause) =
+            self.context
+                .0
+                .ray_tracing_pass_insert_debug_marker(&mut self.pass, label, 0)
+        {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                self.pass.label(),
+                "RayTracingPass::insert_debug_marker",
+            );
+        }
+    }
+
+    fn push_debug_group(&mut self, group_label: &str) {
+        if let Err(cause) =
+            self.context
+                .0
+                .ray_tracing_pass_push_debug_group(&mut self.pass, group_label, 0)
+        {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                self.pass.label(),
+                "RayTracingPass::push_debug_group",
+            );
+        }
+    }
+
+    fn pop_debug_group(&mut self) {
+        if let Err(cause) =
+            self.context
+                .0
+                .ray_tracing_pass_pop_debug_group(&mut self.pass)
+        {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                self.pass.label(),
+                "RayTracingPass::pop_debug_group",
+            );
+        }
+    }
 }
 
 impl Drop for CoreRayTracingPass {

@@ -65,6 +65,36 @@ impl RayTracingPass<'_> {
         let bg = bg.map(|bg| &bg.inner);
         self.inner.set_bind_group(index, bg, offsets);
     }
+
+    /// Inserts debug marker.
+    pub fn insert_debug_marker(&mut self, label: &str) {
+        self.inner.insert_debug_marker(label);
+    }
+
+    /// Start record commands and group it into debug marker group.
+    pub fn push_debug_group(&mut self, label: &str) {
+        self.inner.push_debug_group(label);
+    }
+
+    /// Stops command recording and creates debug group.
+    pub fn pop_debug_group(&mut self) {
+        self.inner.pop_debug_group();
+    }
+}
+
+/// [`Features::IMMEDIATES`] must be enabled on the device in order to call these functions.
+impl RayTracingPass<'_> {
+    /// Set immediate data for subsequent dispatch calls.
+    ///
+    /// Write the bytes in `data` at offset `offset` within immediate data
+    /// storage.  Both `offset` and the length of `data` must be
+    /// multiples of [`crate::IMMEDIATE_DATA_ALIGNMENT`], which is always 4.
+    ///
+    /// For example, if `offset` is `4` and `data` is eight bytes long, this
+    /// call will write `data` to bytes `4..12` of immediate data storage.
+    pub fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        self.inner.set_immediates(offset, data);
+    }
 }
 
 /// Describes the attachments of a ray tracing pass.

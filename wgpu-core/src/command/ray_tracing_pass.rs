@@ -228,8 +228,6 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
 
     pass: pass::PassState<'scope, 'snatch_guard, 'cmd_enc>,
 
-    immediates: Vec<u32>,
-
     intermediate_trackers: Tracker,
 }
 
@@ -386,6 +384,99 @@ impl Global {
         Ok(())
     }
 
+    pub fn ray_tracing_pass_set_immediates(
+        &self,
+        pass: &mut RayTracingPass,
+        offset: u32,
+        data: &[u8],
+    ) -> Result<(), PassStateError> {
+        let scope = PassErrorScope::SetImmediate;
+        let base = pass_base!(pass, scope);
+
+        if offset & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1) != 0 {
+            pass_try!(
+                base,
+                scope,
+                Err(RayTracingPassErrorInner::ImmediateOffsetAlignment)
+            );
+        }
+        if data.len() as u32 & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1) != 0 {
+            pass_try!(
+                base,
+                scope,
+                Err(RayTracingPassErrorInner::ImmediateDataizeAlignment)
+            );
+        }
+
+        let value_offset = pass_try!(
+            base,
+            scope,
+            base.immediates_data
+                .len()
+                .try_into()
+                .map_err(|_| RayTracingPassErrorInner::ImmediateOutOfMemory),
+        );
+
+        base.immediates_data.extend(
+            data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
+                .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
+        );
+
+        base.commands.push(ArcRayTracingCommand::SetImmediate {
+            offset,
+            size_bytes: data.len() as u32,
+            values_offset: value_offset,
+        });
+
+        Ok(())
+    }
+    
+    pub fn ray_tracing_pass_push_debug_group(
+        &self,
+        pass: &mut RayTracingPass,
+        label: &str,
+        color: u32,
+    ) -> Result<(), PassStateError> {
+        let base = pass_base!(pass, PassErrorScope::PushDebugGroup);
+
+        let bytes = label.as_bytes();
+        base.string_data.extend_from_slice(bytes);
+
+        base.commands.push(ArcRayTracingCommand::PushDebugGroup {
+            color,
+            len: bytes.len(),
+        });
+
+        Ok(())
+    }
+
+    pub fn ray_tracing_pass_pop_debug_group(&self, pass: &mut RayTracingPass) -> Result<(), PassStateError> {
+        let base = pass_base!(pass, PassErrorScope::PopDebugGroup);
+
+        base.commands.push(ArcRayTracingCommand::PopDebugGroup);
+
+        Ok(())
+    }
+
+    pub fn ray_tracing_pass_insert_debug_marker(
+        &self,
+        pass: &mut RayTracingPass,
+        label: &str,
+        color: u32,
+    ) -> Result<(), PassStateError> {
+        let base = pass_base!(pass, PassErrorScope::InsertDebugMarker);
+
+        let bytes = label.as_bytes();
+        base.string_data.extend_from_slice(bytes);
+
+        base.commands.push(ArcRayTracingCommand::InsertDebugMarker {
+            color,
+            len: bytes.len(),
+        });
+
+        Ok(())
+    }
+
     pub fn ray_tracing_pass_end(&self, pass: &mut RayTracingPass) -> Result<(), EncoderStateError> {
         profiling::scope!(
             "CommandEncoder::encode_ray_tracing_pass {}",
@@ -468,8 +559,6 @@ pub(super) fn encode_ray_tracing_pass(
             string_offset: 0,
         },
 
-        immediates: Vec::new(),
-
         intermediate_trackers: Tracker::new(),
     };
 
@@ -522,7 +611,31 @@ pub(super) fn encode_ray_tracing_pass(
                 let scope = PassErrorScope::SetPipelineCompute;
                 set_pipeline(&mut state, device, pipeline).map_pass_err(scope)?;
             }
-            _ => todo!(),
+            ArcRayTracingCommand::SetImmediate { offset, size_bytes, values_offset } => {
+                let scope = PassErrorScope::SetImmediate;
+
+                pass::set_immediates::<RayTracingPassErrorInner, _>(
+                    &mut state.pass,
+                    &base.immediates_data,
+                    offset,
+                    size_bytes,
+                    Some(values_offset),
+                    |_| {},
+                )
+                .map_pass_err(scope)?;
+            }
+            ArcRayTracingCommand::PushDebugGroup { color: _, len } => {
+                pass::push_debug_group(&mut state.pass, &base.string_data, len);
+            }
+            ArcRayTracingCommand::PopDebugGroup => {
+                let scope = PassErrorScope::PopDebugGroup;
+                pass::pop_debug_group::<RayTracingPassErrorInner>(&mut state.pass)
+                    .map_pass_err(scope)?;
+            }
+            ArcRayTracingCommand::InsertDebugMarker { color: _, len } => {
+                pass::insert_debug_marker(&mut state.pass, &base.string_data, len);
+            }
+            ArcRayTracingCommand::TraceRays(_) => todo!(),
         }
     }
 
