@@ -15,7 +15,6 @@ webgpu:api,validation,buffer,mapping:* // crash
 webgpu:api,validation,capability_checks,features,* // 21%, TypeError not thrown for missing features (needs deno_webgpu fix)
 webgpu:api,validation,capability_checks,limits,* // 60%, workgroup storage size validation unimplemented; interstage vars counting; bind group timing on dx12
 webgpu:api,validation,compute_pipeline:limits,workgroup_storage_size:* // 0%
-webgpu:api,validation,compute_pipeline:overrides,identifier:* // 46%
 webgpu:api,validation,compute_pipeline:overrides,workgroup_size,limits,workgroup_storage_size:* // 0%, missing workgroup storage size validation
 webgpu:api,validation,compute_pipeline:overrides,workgroup_size,limits:* // 0%
 webgpu:api,validation,createBindGroup:buffer,resource_state:* // 0%, https://github.com/gfx-rs/wgpu/issues/7881
@@ -55,7 +54,6 @@ webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,color_
 webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,use_blend_src:* // 62%, https://github.com/gfx-rs/wgpu/pull/8856
 webgpu:api,validation,render_pipeline,fragment_state:pipeline_output_targets,blend:* // 95%, blend factors reading source alpha require vec4
 webgpu:api,validation,render_pipeline,fragment_state:pipeline_output_targets:* // 3%, color target without shader output requires writeMask=0
-webgpu:api,validation,render_pipeline,fragment_state:targets_write_mask:* // 50%, TypeError instead of validation error
 webgpu:api,validation,render_pipeline,inter_stage:* // 15%, inter-stage type validation gaps and interpolation default handling
 webgpu:api,validation,render_pipeline,misc:external_texture:* // 0%, no external texture in deno
 webgpu:api,validation,render_pipeline,misc:storage_texture,format:* // 8%, similar to compute pipeline issue

@@ -186,6 +186,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Fixed constant evaluation for `sign()` builtin to return zero when the argument is zero. By @mandryskowski in [#8942](https://github.com/gfx-rs/wgpu/pull/8942).
 - Allow array generation to compile with the macOS 10.12 Metal compiler. By @madsmtm in [#8953](https://github.com/gfx-rs/wgpu/pull/8953)
 - Naga now detects bitwise shifts by a constant exceeding the operand bit width at compile time, and disallows scalar-by-vector and vector-by-scalar shifts in constant evaluation. By @andyleiserson in [#8907](https://github.com/gfx-rs/wgpu/pull/8907).
+- Naga uses wrapping arithmetic when evaluating dot products on concrete integer types (`u32` and `i32`). By @BKDaugherty in [#9142](https://github.com/gfx-rs/wgpu/pull/9142).
 
 #### Validation
 

@@ -1913,10 +1913,6 @@ impl WebGpuError for CreateTextureViewError {
     }
 }
 
-#[derive(Clone, Debug, Error)]
-#[non_exhaustive]
-pub enum TextureViewDestroyError {}
-
 crate::impl_resource_type!(TextureView);
 crate::impl_labeled!(TextureView);
 crate::impl_parent_device!(TextureView);
