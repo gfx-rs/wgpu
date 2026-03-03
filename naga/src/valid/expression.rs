@@ -1182,18 +1182,13 @@ impl super::Validator {
                 ShaderStages::all()
             }
             E::Derivative { expr, .. } => {
-                match resolver[expr] {
-                    Ti::Scalar(Sc {
-                        kind: Sk::Float, ..
-                    })
-                    | Ti::Vector {
-                        scalar:
-                            Sc {
-                                kind: Sk::Float, ..
-                            },
-                        ..
-                    } => {}
-                    _ => return Err(ExpressionError::InvalidDerivative),
+                let Some((_, scalar)) = resolver[expr].vector_size_and_scalar() else {
+                    return Err(ExpressionError::InvalidDerivative);
+                };
+                if scalar.kind != Sk::Float || scalar.width < 4 {
+                    // Derivatives are not supported for `f16`, although support may be added
+                    // in the future, see https://github.com/gpuweb/gpuweb/issues/5482.
+                    return Err(ExpressionError::InvalidDerivative);
                 }
                 ShaderStages::FRAGMENT
             }

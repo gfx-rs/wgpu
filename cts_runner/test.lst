@@ -383,6 +383,7 @@ webgpu:shader,validation,expression,call,builtin,ceil:*
 webgpu:shader,validation,expression,call,builtin,cos:*
 webgpu:shader,validation,expression,call,builtin,cosh:*
 webgpu:shader,validation,expression,call,builtin,degrees:*
+webgpu:shader,validation,expression,call,builtin,derivatives:*
 webgpu:shader,validation,expression,call,builtin,distance:values:stage="constant";type="f32"
 webgpu:shader,validation,expression,call,builtin,dot:*
 webgpu:shader,validation,expression,call,builtin,exp:*

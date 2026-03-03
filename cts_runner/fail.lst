@@ -86,7 +86,6 @@ webgpu:shader,validation,expression,call,builtin,countLeadingZeros:* // 98%, ato
 webgpu:shader,validation,expression,call,builtin,countOneBits:* // 98%, atomic type validation gap, https://github.com/gfx-rs/wgpu/issues/5474
 webgpu:shader,validation,expression,call,builtin,countTrailingZeros:* // 98%, atomic type validation gap, https://github.com/gfx-rs/wgpu/issues/5474
 webgpu:shader,validation,expression,call,builtin,cross:* // 86%, abstract int/float overflow issues in const eval
-webgpu:shader,validation,expression,call,builtin,derivatives:* // 83%, f16 support not properly validated
 webgpu:shader,validation,expression,call,builtin,determinant:* // 71%, abstract int/float const eval issues
 webgpu:shader,validation,expression,call,builtin,distance:* // 66%, scalar distance uses wrong formula (sqrt instead of abs)
 webgpu:shader,validation,expression,call,builtin,dot4I8Packed:* // 91%, missing const eval (#4507)
