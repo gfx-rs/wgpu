@@ -181,8 +181,8 @@ pub enum CreateBindGroupError {
     )]
     BufferRangeTooLarge {
         binding: u32,
-        given: u32,
-        limit: u32,
+        given: u64,
+        limit: u64,
     },
     #[error("Binding {binding} has a different type ({actual:?}) than the one in the layout ({expected:?})")]
     WrongBindingType {

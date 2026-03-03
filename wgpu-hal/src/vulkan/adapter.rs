@@ -1457,10 +1457,12 @@ impl PhysicalDeviceProperties {
             max_binding_array_sampler_elements_per_shader_stage: max_sampler_binding_array_elements,
             max_uniform_buffer_binding_size: limits
                 .max_uniform_buffer_range
-                .min(crate::auxil::MAX_I32_BINDING_SIZE),
+                .min(crate::auxil::MAX_I32_BINDING_SIZE)
+                as u64,
             max_storage_buffer_binding_size: limits
                 .max_storage_buffer_range
-                .min(crate::auxil::MAX_I32_BINDING_SIZE),
+                .min(crate::auxil::MAX_I32_BINDING_SIZE)
+                as u64,
             max_vertex_buffers: limits.max_vertex_input_bindings,
             max_vertex_attributes: limits.max_vertex_input_attributes,
             max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,

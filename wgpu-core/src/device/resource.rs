@@ -2895,10 +2895,10 @@ impl Device {
 
         let bind_end = bb.offset + bind_size;
 
-        if bind_size > range_limit as u64 {
+        if bind_size > range_limit {
             return Err(Error::BufferRangeTooLarge {
                 binding,
-                given: bind_size as u32,
+                given: bind_size,
                 limit: range_limit,
             });
         }

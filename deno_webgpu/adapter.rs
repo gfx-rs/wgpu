@@ -375,12 +375,14 @@ impl GPUSupportedLimits {
   }
 
   #[getter]
-  fn maxUniformBufferBindingSize(&self) -> u32 {
+  #[number]
+  fn maxUniformBufferBindingSize(&self) -> u64 {
     self.0.max_uniform_buffer_binding_size
   }
 
   #[getter]
-  fn maxStorageBufferBindingSize(&self) -> u32 {
+  #[number]
+  fn maxStorageBufferBindingSize(&self) -> u64 {
     self.0.max_storage_buffer_binding_size
   }
 
