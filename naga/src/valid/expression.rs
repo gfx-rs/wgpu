@@ -864,15 +864,14 @@ impl super::Validator {
             }
             E::Unary { op, expr } => {
                 use crate::UnaryOperator as Uo;
-                let inner = &resolver[expr];
-                match (op, inner.scalar_kind()) {
-                    (Uo::Negate, Some(Sk::Float | Sk::Sint))
-                    | (Uo::LogicalNot, Some(Sk::Bool))
-                    | (Uo::BitwiseNot, Some(Sk::Sint | Sk::Uint)) => {}
-                    other => {
-                        log::debug!("Op {op:?} kind {other:?}");
-                        return Err(ExpressionError::InvalidUnaryOperandType(op, expr));
-                    }
+                let Some((_, scalar)) = resolver[expr].vector_size_and_scalar() else {
+                    return Err(ExpressionError::InvalidUnaryOperandType(op, expr));
+                };
+                match (op, scalar.kind) {
+                    (Uo::Negate, Sk::Float | Sk::Sint) => {}
+                    (Uo::LogicalNot, Sk::Bool) => {}
+                    (Uo::BitwiseNot, Sk::Sint | Sk::Uint) => {}
+                    _ => return Err(ExpressionError::InvalidUnaryOperandType(op, expr)),
                 }
                 ShaderStages::all()
             }
