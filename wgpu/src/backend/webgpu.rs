@@ -3979,6 +3979,23 @@ impl dispatch::RayTracingPassInterface for WebRayTracingPassEncoder {
     ) {
         unreachable!("Ray tracing pipelines are unavailable on the web.")
     }
+    fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+
+    fn insert_debug_marker(&mut self, _label: &str) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+    fn push_debug_group(&mut self, _group_label: &str) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+    fn pop_debug_group(&mut self) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+
+    fn trace_rays(&mut self, _x: u32, _y: u32, _z: u32) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
 }
 
 impl Drop for WebRayTracingPassEncoder {

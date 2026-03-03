@@ -1,6 +1,7 @@
 #[cfg(feature = "serde")]
 use crate::command::serde_object_reference_struct;
 use crate::command::{ArcReferences, ReferenceType};
+use alloc::vec::Vec;
 
 #[cfg(feature = "serde")]
 use macro_rules_attribute::apply;
@@ -19,19 +20,12 @@ pub enum RayTracingCommand<R: ReferenceType> {
 
     /// Set a range of immediates to values stored in `immediates_data`.
     SetImmediate {
-        /// The byte offset within the immediate data storage to write to. This
+        /// The byte offset within the immediate data storage to write to.  This
         /// must be a multiple of four.
         offset: u32,
 
-        /// The number of bytes to write. This must be a multiple of four.
-        size_bytes: u32,
-
-        /// Index in `immediates_data` of the start of the data
-        /// to be written.
-        ///
-        /// Note: this is not a byte offset like `offset`. Rather, it is the
-        /// index of the first `u32` element in `immediates_data` to read.
-        values_offset: u32,
+        /// The immediate data to be written.
+        data: Vec<u32>,
     },
 
     TraceRays([u32; 3]),

@@ -673,15 +673,7 @@ impl IntoTrace for ArcRayTracingCommand {
                 bind_group: bind_group.map(|bg| bg.into_trace()),
             },
             C::SetPipeline(id) => C::SetPipeline(id.into_trace()),
-            C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            } => C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            },
+            C::SetImmediate { offset, data } => C::SetImmediate { offset, data },
             C::TraceRays(groups) => C::TraceRays(groups),
             C::PushDebugGroup { color, len } => C::PushDebugGroup { color, len },
             C::PopDebugGroup => C::PopDebugGroup,

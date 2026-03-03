@@ -2867,6 +2867,26 @@ impl dispatch::RayTracingPassInterface for CoreRayTracingPass {
 
         self.pass.set_bind_group(index, bg, offsets)
     }
+
+    fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        self.pass.set_immediates(offset, data)
+    }
+
+    fn insert_debug_marker(&mut self, label: &str) {
+        self.pass.insert_debug_marker(label, 0)
+    }
+
+    fn push_debug_group(&mut self, group_label: &str) {
+        self.pass.push_debug_group(group_label, 0)
+    }
+
+    fn pop_debug_group(&mut self) {
+        self.pass.pop_debug_group()
+    }
+
+    fn trace_rays(&mut self, x: u32, y: u32, z: u32) {
+        self.pass.trace_rays(x, y, z)
+    }
 }
 
 impl Drop for CoreRayTracingPass {

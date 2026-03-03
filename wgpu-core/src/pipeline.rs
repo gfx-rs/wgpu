@@ -1244,6 +1244,7 @@ pub struct RayTracingPipelineDescriptor<
 pub struct ShaderBindingData {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     pub(crate) device: Arc<Device>,
+    pub(crate) num_intersection_groups: u64,
 }
 
 impl ShaderBindingData {
@@ -1302,6 +1303,7 @@ impl ShaderBindingData {
         Ok(Self {
             raw: ManuallyDrop::new(buffer),
             device,
+            num_intersection_groups: num_intersection_groups as _,
         })
     }
 }
@@ -1320,7 +1322,6 @@ impl Drop for ShaderBindingData {
 pub(crate) struct RayTracingPipelineState {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynRayTracingPipeline>>,
     pub(crate) layout: Arc<PipelineLayout>,
-    #[expect(unused)]
     pub(crate) shader_binding_data: ShaderBindingData,
     pub(crate) _shader_modules: Vec<Arc<ShaderModule>>,
 }
@@ -1397,6 +1398,13 @@ impl RayTracingPipeline {
             return Err(InvalidResourceError(self.error_ident()));
         };
         Ok(&state.layout)
+    }
+
+    pub(crate) fn shader_binding_data(&self) -> Result<&ShaderBindingData, InvalidResourceError> {
+        let ResourceState::Valid(state) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        Ok(&state.shader_binding_data)
     }
 
     pub fn get_bind_group_layout_inner(

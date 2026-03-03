@@ -2051,6 +2051,8 @@ pub enum PassErrorScope {
     SetPipelineRender,
     #[error("In a set_pipeline command")]
     SetPipelineCompute,
+    #[error("In a set_pipeline command")]
+    SetPipelineRayTracing,
     #[error("In a set_immediates command")]
     SetImmediate,
     #[error("In a set_vertex_buffer command")]
@@ -2092,6 +2094,8 @@ pub enum PassErrorScope {
     PopDebugGroup,
     #[error("In a insert_debug_marker command")]
     InsertDebugMarker,
+    #[error("In a trace rays command")]
+    TraceRays,
 }
 
 /// Variant of `EncoderStateError` that includes the pass scope.

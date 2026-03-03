@@ -1312,15 +1312,7 @@ impl Player {
                 bind_group: bind_group.map(|bg| self.resolve_bind_group_id(bg)),
             },
             C::SetPipeline(id) => C::SetPipeline(self.resolve_ray_tracing_pipeline_id(id)),
-            C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            } => C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            },
+            C::SetImmediate { offset, data } => C::SetImmediate { offset, data },
             C::TraceRays(groups) => C::TraceRays(groups),
             C::PushDebugGroup { color, len } => C::PushDebugGroup { color, len },
             C::PopDebugGroup => C::PopDebugGroup,
