@@ -555,7 +555,7 @@ pub trait RayTracingPassInterface: CommonTraits + Drop {
     fn push_debug_group(&mut self, group_label: &str);
     fn pop_debug_group(&mut self);
 
-    // fn trace_rays(&mut self, x: u32, y: u32, z: u32);
+    fn trace_rays(&mut self, x: u32, y: u32, z: u32);
 }
 
 pub trait RenderBundleEncoderInterface: CommonTraits {

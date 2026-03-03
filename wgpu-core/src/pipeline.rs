@@ -981,6 +981,7 @@ pub type ResolvedRayTracingPipelineDescriptor<'a> =
 pub struct ShaderBindingData {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     pub(crate) device: Arc<Device>,
+    pub(crate) num_intersection_groups: u64,
 }
 
 impl ShaderBindingData {
@@ -1039,6 +1040,7 @@ impl ShaderBindingData {
         Ok(Self {
             raw: ManuallyDrop::new(buffer),
             device,
+            num_intersection_groups: num_intersection_groups as _,
         })
     }
 }

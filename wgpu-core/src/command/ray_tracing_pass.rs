@@ -9,16 +9,17 @@ use wgt::{
 };
 
 use crate::{
+    api_log,
     binding_model::{BindError, ImmediateUploadError, LateMinBufferBindingSizeMismatch},
     command::{
         bind::{Binder, BinderError},
         memory_init::SurfacesInDiscardState,
-        pass, pass_base, pass_try,
+        pass::{self, flush_bindings_helper},
+        pass_base, pass_try,
         ray_tracing_pass_commands::ArcRayTracingCommand,
-        ArcCommand, BasePass, BindGroupStateChange, ColorAttachments, CommandEncoder,
-        CommandEncoderError, DebugGroupError, EncoderStateError, EncodingState,
-        InnerCommandEncoder, MapPassErr, PassErrorScope, PassStateError,
-        ResolvedRenderPassDepthStencilAttachment, StateChange,
+        ArcCommand, BasePass, BindGroupStateChange, CommandEncoder, CommandEncoderError,
+        DebugGroupError, EncoderStateError, EncodingState, InnerCommandEncoder, MapPassErr,
+        PassErrorScope, PassStateError, StateChange,
     },
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
     global::Global,
@@ -26,7 +27,7 @@ use crate::{
     pipeline::RayTracingPipeline,
     resource::{
         DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
-        ParentDevice, TextureView,
+        ParentDevice,
     },
     track::{ResourceUsageCompatibilityError, Tracker},
     Label,
@@ -231,6 +232,62 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
     intermediate_trackers: Tracker,
 }
 
+impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
+    fn is_ready(&self) -> Result<(), TraceRayError> {
+        if let Some(pipeline) = self.pipeline.as_ref() {
+            self.pass.binder.check_compatibility(pipeline.as_ref())?;
+            self.pass.binder.check_late_buffer_bindings()?;
+            Ok(())
+        } else {
+            Err(TraceRayError::MissingPipeline(pass::MissingPipeline))
+        }
+    }
+
+    /// Flush binding state in preparation for a trace rays call.
+    ///
+    /// # Differences between render and compute (from which ray tracing passes inherit functionality) passes
+    ///
+    /// There are differences between the `flush_bindings` implementations for
+    /// render and compute passes, because render passes have a single usage
+    /// scope for the entire pass, and compute passes have a separate usage
+    /// scope for each dispatch.
+    ///
+    /// For compute passes, bind groups are merged into a fresh usage scope
+    /// here, not into the pass usage scope within calls to `set_bind_group`. As
+    /// specified by WebGPU, for compute passes, we merge only the bind groups
+    /// that are actually used by the pipeline, unlike render passes, which
+    /// merge every bind group that is ever set, even if it is not ultimately
+    /// used by the pipeline.
+    ///
+    /// For compute passes, we call `drain_barriers` here, because barriers may
+    /// be needed before each dispatch if a previous dispatch had a conflicting
+    /// usage. For render passes, barriers are emitted once at the start of the
+    /// render pass.
+    fn flush_bindings(&mut self) -> Result<(), RayTracingPassErrorInner> {
+        for bind_group in self.pass.binder.list_active() {
+            unsafe { self.pass.scope.merge_bind_group(&bind_group.used)? };
+        }
+        // For compute, usage scopes are associated with each dispatch and not
+        // with the pass as a whole. However, because the cost of creating and
+        // dropping `UsageScope`s is significant (even with the pool), we
+        // add and then remove usage from a single usage scope.
+
+        for bind_group in self.pass.binder.list_active() {
+            self.intermediate_trackers
+                .set_and_remove_from_usage_scope_sparse(&mut self.pass.scope, &bind_group.used);
+        }
+
+        flush_bindings_helper(&mut self.pass)?;
+
+        CommandEncoder::drain_barriers(
+            self.pass.base.raw_encoder,
+            &mut self.intermediate_trackers,
+            self.pass.base.snatch_guard,
+        );
+        Ok(())
+    }
+}
+
 // Ray tracing pass commands
 
 impl Global {
@@ -430,7 +487,7 @@ impl Global {
 
         Ok(())
     }
-    
+
     pub fn ray_tracing_pass_push_debug_group(
         &self,
         pass: &mut RayTracingPass,
@@ -450,7 +507,10 @@ impl Global {
         Ok(())
     }
 
-    pub fn ray_tracing_pass_pop_debug_group(&self, pass: &mut RayTracingPass) -> Result<(), PassStateError> {
+    pub fn ray_tracing_pass_pop_debug_group(
+        &self,
+        pass: &mut RayTracingPass,
+    ) -> Result<(), PassStateError> {
         let base = pass_base!(pass, PassErrorScope::PopDebugGroup);
 
         base.commands.push(ArcRayTracingCommand::PopDebugGroup);
@@ -473,6 +533,22 @@ impl Global {
             color,
             len: bytes.len(),
         });
+
+        Ok(())
+    }
+
+    pub fn ray_tracing_pass_trace_rays(
+        &self,
+        pass: &mut RayTracingPass,
+        count_x: u32,
+        count_y: u32,
+        count_z: u32,
+    ) -> Result<(), PassStateError> {
+        let scope = PassErrorScope::TraceRays;
+
+        pass_base!(pass, scope)
+            .commands
+            .push(ArcRayTracingCommand::TraceRays([count_x, count_y, count_z]));
 
         Ok(())
     }
@@ -611,7 +687,11 @@ pub(super) fn encode_ray_tracing_pass(
                 let scope = PassErrorScope::SetPipelineCompute;
                 set_pipeline(&mut state, device, pipeline).map_pass_err(scope)?;
             }
-            ArcRayTracingCommand::SetImmediate { offset, size_bytes, values_offset } => {
+            ArcRayTracingCommand::SetImmediate {
+                offset,
+                size_bytes,
+                values_offset,
+            } => {
                 let scope = PassErrorScope::SetImmediate;
 
                 pass::set_immediates::<RayTracingPassErrorInner, _>(
@@ -635,7 +715,10 @@ pub(super) fn encode_ray_tracing_pass(
             ArcRayTracingCommand::InsertDebugMarker { color: _, len } => {
                 pass::insert_debug_marker(&mut state.pass, &base.string_data, len);
             }
-            ArcRayTracingCommand::TraceRays(_) => todo!(),
+            ArcRayTracingCommand::TraceRays(groups) => {
+                let scope = PassErrorScope::TraceRays;
+                trace_rays(&mut state, groups, device).map_pass_err(scope)?;
+            }
         }
     }
 
@@ -674,4 +757,59 @@ fn set_pipeline(
         &pipeline.late_sized_buffer_groups,
         || {},
     )
+}
+
+fn trace_rays(
+    state: &mut State,
+    groups: [u32; 3],
+    device: &Device,
+) -> Result<(), RayTracingPassErrorInner> {
+    api_log!("RayTracingPass::trace_rays {groups:?}");
+
+    state.is_ready()?;
+
+    state.flush_bindings()?;
+
+    // todo
+    let groups_size_limit = u32::MAX;
+
+    if groups[0] > groups_size_limit
+        || groups[1] > groups_size_limit
+        || groups[2] > groups_size_limit
+    {
+        return Err(RayTracingPassErrorInner::TraceRay(
+            TraceRayError::InvalidGroupSize {
+                current: groups,
+                limit: groups_size_limit,
+            },
+        ));
+    }
+
+    let current_pipeline = state.pipeline.as_ref().unwrap();
+
+    unsafe {
+        state.pass.base.raw_encoder.trace_rays(
+            groups,
+            hal::PipelineGroupData {
+                buffer: current_pipeline.shader_binding_data.raw.as_ref(),
+                offset: 0,
+                stride: device.alignments.ray_tracing_pipeline_group_data_alignment as _,
+                size: device.alignments.ray_tracing_pipeline_group_data_size as u64,
+            },
+            hal::PipelineGroupData {
+                buffer: current_pipeline.shader_binding_data.raw.as_ref(),
+                offset: device.alignments.ray_tracing_pipeline_group_data_size as u64,
+                stride: device.alignments.ray_tracing_pipeline_group_data_alignment as _,
+                size: device.alignments.ray_tracing_pipeline_group_data_size as u64,
+            },
+            hal::PipelineGroupData {
+                buffer: current_pipeline.shader_binding_data.raw.as_ref(),
+                offset: 2 * device.alignments.ray_tracing_pipeline_group_data_size as u64,
+                stride: device.alignments.ray_tracing_pipeline_group_data_alignment as _,
+                size: device.alignments.ray_tracing_pipeline_group_data_size as u64
+                    * current_pipeline.shader_binding_data.num_intersection_groups,
+            },
+        );
+    }
+    Ok(())
 }

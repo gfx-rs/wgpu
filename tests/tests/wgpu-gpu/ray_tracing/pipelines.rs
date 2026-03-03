@@ -152,5 +152,8 @@ fn pipeline_create_use(ctx: TestingContext) {
         let mut pass = encoder.begin_ray_tracing_pass(&RayTracingPassDescriptor::default());
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
+        pass.trace_rays(1, 1, 2);
     }
+
+    ctx.queue.submit([encoder.finish()]);
 }

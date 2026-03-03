@@ -921,6 +921,7 @@ impl super::Adapter {
                     raw_tlas_instance_size: 0,
                     ray_tracing_scratch_buffer_alignment: 0,
                     ray_tracing_pipeline_group_data_size: 0,
+                    ray_tracing_pipeline_group_data_alignment: 0,
                 },
                 cooperative_matrix_properties: Vec::new(),
             },

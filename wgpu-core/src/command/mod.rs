@@ -2092,6 +2092,8 @@ pub enum PassErrorScope {
     PopDebugGroup,
     #[error("In a insert_debug_marker command")]
     InsertDebugMarker,
+    #[error("In a trace rays command")]
+    TraceRays,
 }
 
 /// Variant of `EncoderStateError` that includes the pass scope.

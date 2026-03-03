@@ -1804,6 +1804,14 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// - Pipeline must not be destroyed
     unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &<Self::A as Api>::RayTracingPipeline);
 
+    unsafe fn trace_rays<'a>(
+        &mut self,
+        count: [u32; 3],
+        ray_generation_group_data: PipelineGroupData<'a, <Self::A as Api>::Buffer>,
+        miss_group_data: PipelineGroupData<'a, <Self::A as Api>::Buffer>,
+        intersection_group_data: PipelineGroupData<'a, <Self::A as Api>::Buffer>,
+    );
+
     /// To get the required sizes for the buffer allocations use `get_acceleration_structure_build_sizes` per descriptor
     /// All buffers must be synchronized externally
     /// All buffer regions, which are written to may only be passed once per function call,
@@ -2047,8 +2055,11 @@ pub struct Alignments {
     /// How large a single piece of group data is. That is, how large the vector returned
     /// from `device.get_raytracing_pipeline_group_data(&pipeline, n..(n+1))` is.
     ///
-    /// If ray tracing pipelines are implemented, this must be a power of two (and non zero).
+    /// If ray tracing pipelines are implemented, this must be non zero.
     pub ray_tracing_pipeline_group_data_size: u32,
+
+    /// If ray tracing pipelines are implemented, this must be a power of two (and non zero).
+    pub ray_tracing_pipeline_group_data_alignment: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -2994,4 +3005,11 @@ pub struct Telemetry {
         driver_version: Result<[u16; 4], windows_core::HRESULT>,
         result: D3D12ExposeAdapterResult,
     ),
+}
+
+pub struct PipelineGroupData<'a, B: DynBuffer + ?Sized> {
+    pub buffer: &'a B,
+    pub offset: wgt::BufferAddress,
+    pub stride: u64,
+    pub size: u64,
 }

@@ -80,6 +80,11 @@ impl RayTracingPass<'_> {
     pub fn pop_debug_group(&mut self) {
         self.inner.pop_debug_group();
     }
+
+    /// Dispatches rays in the current ray tracing pipeline.
+    pub fn trace_rays(&mut self, x: u32, y: u32, z: u32) {
+        self.inner.trace_rays(x, y, z);
+    }
 }
 
 /// [`Features::IMMEDIATES`] must be enabled on the device in order to call these functions.

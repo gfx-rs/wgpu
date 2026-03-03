@@ -4012,16 +4012,31 @@ impl dispatch::RayTracingPassInterface for CoreRayTracingPass {
     }
 
     fn pop_debug_group(&mut self) {
-        if let Err(cause) =
-            self.context
-                .0
-                .ray_tracing_pass_pop_debug_group(&mut self.pass)
+        if let Err(cause) = self
+            .context
+            .0
+            .ray_tracing_pass_pop_debug_group(&mut self.pass)
         {
             self.context.handle_error(
                 &self.error_sink,
                 cause,
                 self.pass.label(),
                 "RayTracingPass::pop_debug_group",
+            );
+        }
+    }
+
+    fn trace_rays(&mut self, x: u32, y: u32, z: u32) {
+        if let Err(cause) = self
+            .context
+            .0
+            .ray_tracing_pass_trace_rays(&mut self.pass, x, y, z)
+        {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                self.pass.label(),
+                "RayTracingPass::trace_rays",
             );
         }
     }
