@@ -2570,45 +2570,19 @@ impl<'a> ConstantEvaluator<'a> {
 
         let expr = match (&self.expressions[left], &self.expressions[right]) {
             (&Expression::Literal(left_value), &Expression::Literal(right_value)) => {
-                use core::mem::discriminant;
+                if !matches!(op, BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight)
+                    && core::mem::discriminant(&left_value) != core::mem::discriminant(&right_value)
+                {
+                    return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
+                }
 
                 let literal = match op {
-                    BinaryOperator::Equal => {
-                        if discriminant(&left_value) != discriminant(&right_value) {
-                            return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
-                        }
-                        Literal::Bool(left_value == right_value)
-                    }
-                    BinaryOperator::NotEqual => {
-                        if discriminant(&left_value) != discriminant(&right_value) {
-                            return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
-                        }
-                        Literal::Bool(left_value != right_value)
-                    }
-                    BinaryOperator::Less => {
-                        if discriminant(&left_value) != discriminant(&right_value) {
-                            return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
-                        }
-                        Literal::Bool(left_value < right_value)
-                    }
-                    BinaryOperator::LessEqual => {
-                        if discriminant(&left_value) != discriminant(&right_value) {
-                            return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
-                        }
-                        Literal::Bool(left_value <= right_value)
-                    }
-                    BinaryOperator::Greater => {
-                        if discriminant(&left_value) != discriminant(&right_value) {
-                            return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
-                        }
-                        Literal::Bool(left_value > right_value)
-                    }
-                    BinaryOperator::GreaterEqual => {
-                        if discriminant(&left_value) != discriminant(&right_value) {
-                            return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
-                        }
-                        Literal::Bool(left_value >= right_value)
-                    }
+                    BinaryOperator::Equal => Literal::Bool(left_value == right_value),
+                    BinaryOperator::NotEqual => Literal::Bool(left_value != right_value),
+                    BinaryOperator::Less => Literal::Bool(left_value < right_value),
+                    BinaryOperator::LessEqual => Literal::Bool(left_value <= right_value),
+                    BinaryOperator::Greater => Literal::Bool(left_value > right_value),
+                    BinaryOperator::GreaterEqual => Literal::Bool(left_value >= right_value),
 
                     _ => match (left_value, right_value) {
                         (Literal::I32(a), Literal::I32(b)) => Literal::I32(match op {
