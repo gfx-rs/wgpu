@@ -425,6 +425,12 @@ webgpu:shader,validation,shader_io,entry_point:*
 // Uses external texture bindings
 fails-if(vulkan) webgpu:shader,validation,shader_io,group_and_binding:*
 webgpu:shader,validation,shader_io,invariant:*
+webgpu:shader,validation,shader_io,locations:duplicates:*
+webgpu:shader,validation,shader_io,locations:location_fp16:*
+webgpu:shader,validation,shader_io,locations:nesting:*
+webgpu:shader,validation,shader_io,locations:out_of_order:*
+webgpu:shader,validation,shader_io,locations:type:*
+webgpu:shader,validation,shader_io,locations:validation:*
 webgpu:shader,validation,statement,break_if:*
 webgpu:shader,validation,statement,break:*
 webgpu:shader,validation,statement,compound:*

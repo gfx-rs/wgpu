@@ -179,7 +179,7 @@ webgpu:shader,validation,shader_io,group:* // 95%, https://github.com/gfx-rs/wgp
 webgpu:shader,validation,shader_io,id:* // 94%, https://github.com/gfx-rs/wgpu/issues/8892, @id on const
 webgpu:shader,validation,shader_io,interpolate:* // 91%, https://github.com/gfx-rs/wgpu/issues/8892
 webgpu:shader,validation,shader_io,layout_constraints:* // 99%, struct alignment not inferred from @align on members
-webgpu:shader,validation,shader_io,locations:* // 98%, https://github.com/gfx-rs/wgpu/issues/8892
+webgpu:shader,validation,shader_io,locations:stage_inout:* // 66%, invalid usage @location in compute shaders
 webgpu:shader,validation,shader_io,pipeline_stage:* // 92%, stage attributes incorrectly accepted on var<private> and var<storage>
 webgpu:shader,validation,shader_io,size:* // 92%, https://github.com/gfx-rs/wgpu/issues/8892, large size validation, runtime-sized array
 webgpu:shader,validation,shader_io,workgroup_size:* // 83%, https://github.com/gfx-rs/wgpu/issues/8892, type mixing, attribute placement
