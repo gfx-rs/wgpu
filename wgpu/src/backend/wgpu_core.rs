@@ -904,6 +904,10 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                     ImplementedLanguageExtension::PointerCompositeAccess => {
                         crate::WgslLanguageFeatures::PointerCompositeAccess
                     }
+                    ImplementedLanguageExtension::ImmediateAddressSpace => {
+                        // TODO: Why is this even a language feature? That's not standard…
+                        crate::WgslLanguageFeatures::empty()
+                    }
                 }
             },
         )
