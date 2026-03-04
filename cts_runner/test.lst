@@ -166,6 +166,7 @@ webgpu:api,validation,encoding,encoder_open_state:non_pass_commands:*
 webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:*
 webgpu:api,validation,encoding,encoder_state:*
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:*
+webgpu:api,validation,encoding,queries,begin_end:nesting:*
 webgpu:api,validation,encoding,queries,begin_end:occlusion_query,*
 webgpu:api,validation,encoding,queries,general:occlusion_query,*
 webgpu:api,validation,error_scope:*
@@ -204,6 +205,7 @@ webgpu:api,validation,image_copy,layout_related:offset_alignment:*
 webgpu:api,validation,image_copy,layout_related:required_bytes_in_copy:*
 webgpu:api,validation,image_copy,layout_related:rows_per_image_alignment:*
 webgpu:api,validation,image_copy,texture_related:*
+webgpu:api,validation,layout_shader_compat:pipeline_layout_shader_exact_match:*
 webgpu:api,validation,query_set,destroy:*
 webgpu:api,validation,queue,buffer_mapped:copyBufferToBuffer:*
 webgpu:api,validation,queue,buffer_mapped:copyBufferToTexture:*
@@ -216,8 +218,7 @@ webgpu:api,validation,queue,writeBuffer:buffer_state:*
 webgpu:api,validation,queue,writeBuffer:buffer,device_mismatch:*
 webgpu:api,validation,queue,writeBuffer:usages:*
 webgpu:api,validation,queue,writeTexture:*
-webgpu:api,validation,render_pass,attachment_compatibility:render_pass_and_bundle,color_sparse:*
-webgpu:api,validation,render_pass,attachment_compatibility:render_pass_and_bundle,depth_format:*
+webgpu:api,validation,render_pass,attachment_compatibility:render_pass_and_bundle,*
 webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,color_count:*
 webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,color_format:*
 webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,color_sparse:*

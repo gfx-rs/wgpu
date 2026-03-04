@@ -39,7 +39,6 @@ webgpu:api,validation,encoding,encoder_open_state:* // https://github.com/gfx-rs
 webgpu:api,validation,encoding,queries,resolveQuerySet:* // 93%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,render_bundle:* // 81%, readonly flag normalization mismatch
 webgpu:api,validation,image_copy,buffer_texture_copies:* // https://github.com/gfx-rs/wgpu/issues/7946
-webgpu:api,validation,layout_shader_compat:pipeline_layout_shader_exact_match:* // 99%, storage texture read-write bindings not compatible with write-only shaders
 webgpu:api,validation,non_filterable_texture:non_filterable_texture_with_filtering_sampler:* // 80%, depth textures with filtering samplers
 webgpu:api,validation,query_set,create:count:* // 0%, wgpu incorrectly rejects zero-count query sets
 webgpu:api,validation,queue,buffer_mapped:* // ***, vulkan
@@ -47,8 +46,7 @@ webgpu:api,validation,queue,destroyed,* // 71%, writeBuffer/writeTexture return 
 webgpu:api,validation,queue,writeBuffer:ranges:* // 0%, missing OperationError for invalid ranges
 webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,depth_stencil_read_only_write_state:* // fails on dx12
 webgpu:api,validation,render_pass,render_pass_descriptor:depth_stencil_attachment,loadOp_storeOp_match_depthReadOnly_stencilReadOnly:* // 33%, missing validation: depth/stencil load/store ops provided for missing texture format aspects
-webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,color_target_count:* // https://github.com/gfx-rs/wgpu/pull/8856
-webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,use_blend_src:* // 62%, https://github.com/gfx-rs/wgpu/pull/8856
+webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,color_target_count:*
 webgpu:api,validation,render_pipeline,fragment_state:pipeline_output_targets,blend:* // 95%, blend factors reading source alpha require vec4
 webgpu:api,validation,render_pipeline,fragment_state:pipeline_output_targets:* // 3%, color target without shader output requires writeMask=0
 webgpu:api,validation,render_pipeline,inter_stage:* // 15%, inter-stage type validation gaps and interpolation default handling
