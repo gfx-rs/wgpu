@@ -486,6 +486,7 @@ impl crate::framework::Example for Example {
                         transform,
                         blas_index as u32,
                         0xff,
+                        wgpu::IntersectionShaderIndex::QueryData(0),
                     ));
                 }
             }

@@ -26,6 +26,7 @@ fn pipeline_create_use(ctx: TestingContext) {
         &ctx,
         AccelerationStructureFlags::empty(),
         AccelerationStructureFlags::empty(),
+        true,
     );
 
     let mut encoder = ctx

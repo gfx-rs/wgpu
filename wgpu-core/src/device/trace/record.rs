@@ -426,6 +426,7 @@ impl IntoTrace for crate::ray_tracing::OwnedTlasInstance<ArcReferences> {
             transform: self.transform,
             custom_data: self.custom_data,
             mask: self.mask,
+            intersection_index: self.intersection_index,
         }
     }
 }

@@ -324,6 +324,7 @@ pub struct TlasInstance<'a> {
     pub transform: &'a [f32; 12],
     pub custom_data: u32,
     pub mask: u8,
+    pub intersection_index: wgt::IntersectionShaderIndex,
 }
 
 pub struct TlasPackage<'a> {
@@ -415,6 +416,7 @@ pub struct OwnedTlasInstance<R: ReferenceType> {
     pub transform: [f32; 12],
     pub custom_data: u32,
     pub mask: u8,
+    pub intersection_index: wgt::IntersectionShaderIndex,
 }
 
 pub type ArcTlasInstance = OwnedTlasInstance<ArcReferences>;

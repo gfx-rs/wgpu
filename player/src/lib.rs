@@ -1534,6 +1534,7 @@ impl Player {
             transform: instance.transform,
             custom_data: instance.custom_data,
             mask: instance.mask,
+            intersection_index: instance.intersection_index,
         }
     }
 
