@@ -196,15 +196,15 @@ fn arithmetic() {
         let rem4_1 = (vec2(2f) % vec2(1f));
         let rem5_1 = (vec2(2f) % vec2(1f));
     }
-    let add = (mat3x3<f32>() + mat3x3<f32>());
-    let sub = (mat3x3<f32>() - mat3x3<f32>());
+    let add = mat3x3<f32>(vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f));
+    let sub = mat3x3<f32>(vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f));
     let mul_scalar0_ = (mat3x3<f32>() * 1f);
     let mul_scalar1_ = (2f * mat3x3<f32>());
     let mul_vector0_ = (mat4x3<f32>() * vec4(1f));
     let mul_vector1_ = (vec3(2f) * mat4x3<f32>());
-    let mul = (mat4x3<f32>() * mat3x4<f32>());
-    let _e175 = prevent_const_eval;
-    wgpu_7437_ = (_e175 + i32(-2147483648));
+    let mul = mat3x3<f32>(vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f));
+    let _e205 = prevent_const_eval;
+    wgpu_7437_ = (_e205 + i32(-2147483648));
     return;
 }
 

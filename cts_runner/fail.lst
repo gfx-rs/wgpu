@@ -154,7 +154,7 @@ webgpu:shader,validation,expression,call,builtin,unpack4xI8:* // 75%, missing co
 webgpu:shader,validation,expression,call,builtin,unpack4xU8:* // 75%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,value_constructor:* // 92%, value constructors lack must-use validation + abstract-float matrix validation issues
 webgpu:shader,validation,expression,early_evaluation:* // 67%, mixed override/runtime composite evaluation
-webgpu:shader,validation,expression,matrix,* // 83%, #5474, #8790, #8868
+webgpu:shader,validation,expression,matrix,* // 92%, #5474, #8868, overflow/underflow/atomic
 webgpu:shader,validation,expression,precedence:* // 76%, https://github.com/gfx-rs/wgpu/issues/4536
 webgpu:shader,validation,expression,unary,* // 99%, atomics #5474
 webgpu:shader,validation,extension,dual_source_blending:blend_src_usage:* // 61%, @blend_src validation gaps

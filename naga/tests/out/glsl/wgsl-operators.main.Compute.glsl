@@ -201,15 +201,15 @@ void arithmetic() {
         vec2 rem4_1 = (vec2(2.0) - vec2(1.0) * trunc(vec2(2.0) / vec2(1.0)));
         vec2 rem5_1 = (vec2(2.0) - vec2(1.0) * trunc(vec2(2.0) / vec2(1.0)));
     }
-    mat3x3 add = (mat3x3(0.0) + mat3x3(0.0));
-    mat3x3 sub = (mat3x3(0.0) - mat3x3(0.0));
+    mat3x3 add = mat3x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0));
+    mat3x3 sub = mat3x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0));
     mat3x3 mul_scalar0_ = (mat3x3(0.0) * 1.0);
     mat3x3 mul_scalar1_ = (2.0 * mat3x3(0.0));
     vec3 mul_vector0_ = (mat4x3(0.0) * vec4(1.0));
     vec4 mul_vector1_ = (vec3(2.0) * mat4x3(0.0));
-    mat3x3 mul = (mat4x3(0.0) * mat3x4(0.0));
-    int _e175 = prevent_const_eval;
-    wgpu_7437_ = (_e175 + -2147483648);
+    mat3x3 mul = mat3x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0));
+    int _e205 = prevent_const_eval;
+    wgpu_7437_ = (_e205 + -2147483648);
     return;
 }
 
