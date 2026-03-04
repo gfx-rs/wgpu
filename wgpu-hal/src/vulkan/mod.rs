@@ -27,6 +27,7 @@ Otherwise, we manage a pool of `VkFence` objects behind each `hal::Fence`.
 mod adapter;
 mod command;
 pub mod conv;
+mod descriptor;
 mod device;
 mod drm;
 mod instance;
@@ -521,8 +522,7 @@ impl Drop for DeviceShared {
 
 pub struct Device {
     mem_allocator: Mutex<gpu_allocator::vulkan::Allocator>,
-    desc_allocator:
-        Mutex<gpu_descriptor::DescriptorAllocator<vk::DescriptorPool, vk::DescriptorSet>>,
+    desc_allocator: Mutex<descriptor::DescriptorAllocator>,
     valid_ash_memory_types: u32,
     naga_options: naga::back::spv::Options<'static>,
     #[cfg(feature = "renderdoc")]
@@ -534,9 +534,7 @@ pub struct Device {
 }
 
 impl Drop for Device {
-    fn drop(&mut self) {
-        unsafe { self.desc_allocator.lock().cleanup(&*self.shared) };
-    }
+    fn drop(&mut self) {}
 }
 
 /// Semaphores for forcing queue submissions to run in order.
@@ -807,7 +805,7 @@ struct BindingInfo {
 #[derive(Debug)]
 pub struct BindGroupLayout {
     raw: vk::DescriptorSetLayout,
-    desc_count: gpu_descriptor::DescriptorTotalCount,
+    desc_count: descriptor::DescriptorCounts,
     /// Sorted list of entries.
     entries: Box<[wgt::BindGroupLayoutEntry]>,
     /// Map of original binding index to remapped binding index and optional
@@ -828,7 +826,7 @@ impl crate::DynPipelineLayout for PipelineLayout {}
 
 #[derive(Debug)]
 pub struct BindGroup {
-    set: gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
+    set: descriptor::DescriptorSet,
 }
 
 impl crate::DynBindGroup for BindGroup {}
@@ -1416,6 +1414,18 @@ fn map_host_device_oom_err(err: vk::Result) -> crate::DeviceError {
 fn map_host_device_oom_and_lost_err(err: vk::Result) -> crate::DeviceError {
     match err {
         vk::Result::ERROR_DEVICE_LOST => get_lost_err(),
+        other => map_host_device_oom_err(other),
+    }
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+/// - VK_ERROR_OUT_OF_DEVICE_MEMORY
+/// - VK_ERROR_FRAGMENTATION
+fn map_host_device_oom_and_fragmentation_err(err: vk::Result) -> crate::DeviceError {
+    match err {
+        vk::Result::ERROR_FRAGMENTATION => get_oom_err(err),
         other => map_host_device_oom_err(other),
     }
 }

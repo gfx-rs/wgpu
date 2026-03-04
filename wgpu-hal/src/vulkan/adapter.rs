@@ -2819,7 +2819,7 @@ impl super::Adapter {
                 allocation_sizes,
             })?;
 
-        let desc_allocator = gpu_descriptor::DescriptorAllocator::new(
+        let desc_allocator = super::descriptor::DescriptorAllocator::new(
             if let Some(di) = self.phd_capabilities.descriptor_indexing {
                 di.max_update_after_bind_descriptors_in_all_pools
             } else {
