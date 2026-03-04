@@ -176,10 +176,12 @@ pub enum BuildAccelerationStructureError {
     #[error("Blas {0:?} build sizes require index buffer but none was provided")]
     MissingIndexBuffer(ResourceErrorIdent),
 
+    #[error("Tlas {0:?} instance {1} contains an invalid custom data (more than 24bits)")]
+    TlasInvalidCustomData(ResourceErrorIdent, usize),
     #[error(
-        "Tlas {0:?} an associated instances contains an invalid custom index (more than 24bits)"
+        "Tlas {0:?} instance {1} contains an invalid query data in the `intersection_index` field (more than 24bits)"
     )]
-    TlasInvalidCustomIndex(ResourceErrorIdent),
+    TlasInvalidIntersectionIndex(ResourceErrorIdent, usize),
 
     #[error(
         "Tlas {0:?} has {1} active instances but only {2} are allowed as specified by the descriptor at creation"
@@ -209,6 +211,8 @@ pub enum BuildAccelerationStructureError {
 
     #[error("Blas {0:?} AABB stride is invalid (must be >= {1} and a multiple of 8)")]
     InvalidAabbStride(ResourceErrorIdent, BufferAddress),
+    #[error("Tlas {0:?} instance {1} has a different Intersection")]
+    TlasInstancesIntersectionIndicesDiffer(ResourceErrorIdent, usize),
 }
 
 impl WebGpuError for BuildAccelerationStructureError {
@@ -237,11 +241,13 @@ impl WebGpuError for BuildAccelerationStructureError {
             | Self::DifferentBlasIndexFormats(..)
             | Self::CompactedBlas(..)
             | Self::MissingIndexBuffer(..)
-            | Self::TlasInvalidCustomIndex(..)
+            | Self::TlasInvalidCustomData(..)
             | Self::TlasInstanceCountExceeded(..)
             | Self::TransformMissing(..)
             | Self::UseTransformMissing(..)
             | Self::TlasDependentMissingVertexReturn(..)
+            | Self::TlasInstancesIntersectionIndicesDiffer(..)
+            | Self::TlasInvalidIntersectionIndex(..)
             | Self::BlasGeometryKindMismatch(..)
             | Self::IncompatibleBlasAabbPrimitiveCount(..)
             | Self::UnalignedAabbPrimitiveOffset(..)
