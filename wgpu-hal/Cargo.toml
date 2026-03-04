@@ -78,7 +78,6 @@ metal = [
     "dep:bytemuck",
     "dep:hashbrown",
     "dep:libc",
-    "dep:log",
     "dep:objc2",
     "dep:objc2-core-foundation",
     "dep:objc2-foundation",
@@ -99,7 +98,6 @@ vulkan = [
     "dep:hashbrown",
     "dep:libc",
     "dep:libloading",
-    "dep:log",
     "dep:ordered-float",
     "dep:parking_lot",
     "dep:profiling",
@@ -120,7 +118,6 @@ gles = [
     "dep:khronos-egl",
     "dep:wayland-sys",
     "dep:libloading",
-    "dep:log",
     "dep:ndk-sys",
     "dep:objc2",
     "dep:parking_lot",
@@ -141,7 +138,6 @@ dx12 = [
     "dep:bytemuck",
     "dep:hashbrown",
     "dep:libloading",
-    "dep:log",
     "dep:ordered-float",
     "dep:once_cell",
     "dep:parking_lot",
@@ -170,7 +166,7 @@ dx12 = [
 ###########################
 
 static-dxc = ["dep:mach-dxcompiler-rs"]
-renderdoc = ["dep:libloading", "dep:renderdoc-sys", "dep:log"]
+renderdoc = ["dep:libloading", "dep:renderdoc-sys"]
 fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
@@ -209,15 +205,15 @@ wgpu-types = { workspace = true, default-features = false }
 # Dependencies in the lib and empty backend
 bitflags.workspace = true
 cfg-if.workspace = true
-raw-window-handle.workspace = true
+log = { workspace = true }
 parking_lot = { workspace = true, optional = true }
+raw-window-handle.workspace = true
 thiserror.workspace = true
 
 # Target agnostic dependencies used only in backends.
 arrayvec = { workspace = true, optional = true }
 bytemuck = { workspace = true, optional = true, features = ["derive"] }
 hashbrown = { workspace = true, optional = true }
-log = { workspace = true, optional = true }
 ordered-float = { workspace = true, optional = true }
 profiling = { workspace = true, optional = true, default-features = false }
 
@@ -345,7 +341,6 @@ cfg_aliases.workspace = true
 [dev-dependencies]
 env_logger.workspace = true
 glam.workspace = true                                            # for ray-traced-triangle example
-log.workspace = true
 naga = { workspace = true, features = ["wgsl-in", "termcolor"] }
 winit.workspace = true                                           # for "halmark" example
 

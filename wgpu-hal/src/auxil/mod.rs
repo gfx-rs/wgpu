@@ -183,7 +183,7 @@ pub(crate) fn apply_hal_limits(mut limits: wgt::Limits) -> wgt::Limits {
     {
         // This is the "adjusted limits that are in a range where an application might reach
         // them" case. (In reality, even something quite a bit less than the default
-        // `max_bindings_per_bind_group` of 1000 ought to be sufficent.)
+        // `max_bindings_per_bind_group` of 1000 ought to be sufficient.)
         log::warn!(
             "Unexpected adjustment of per-stage resource limits to fit within max_bindings_per_bind_group."
         );
