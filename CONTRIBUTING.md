@@ -6,6 +6,19 @@ First of all, welcome to the wgpu community! 👋 We're glad you want to
 contribute. If you are unfamiliar with the wgpu project, we recommend you read
 [`GOVERNANCE.md`] for an overview of its goals, and how it's governed.
 
+## Table of Contents
+- [Documentation Overview](#documentation-overview)
+- [Talking to other humans in the wgpu project](#talking-to-other-humans-in-the-wgpu-project)
+- ["What can I work on?" as a new contributor](#what-can-i-work-on-as-a-new-contributor)
+- [Setting up a wgpu development environment](#setting-up-a-wgpu-development-environment)
+- [What to expect when you file an issue](#what-to-expect-when-you-file-an-issue)
+- [Pull requests](#pull-requests)
+  - [Change Ownership](#change-ownership)
+  - [LLMs (AI)](#llms-ai)
+  - [Designing new features](#designing-new-features)
+  - [Undue Burden](#undue-burden)
+  - [Large pull requests are risky](#large-pull-requests-are-risky)
+
 ## Documentation Overview:
 
 - [`GOVERNANCE.md`]: An overview of the wgpu project's goals and governance.
@@ -78,12 +91,6 @@ The wgpu project has multiple official platforms for community engagement:
 [Meeting Link]: https://meet.google.com/ubo-ztcw-gwf
 [`CODE_OF_CONDUCT.md`]: ./CODE_OF_CONDUCT.md
 
-## Contributing to wgpu
-
-Community response to contributions are, in general, prioritized based on their
-relevance to wgpu's mission and decision-making groups' interest (see
-[`GOVERNANCE.md`]).
-
 ### "What can I work on?" as a new contributor
 
 TODO
@@ -151,14 +158,28 @@ TODO
 You can see some common things that PR reviewers are going to look for in
 [`docs/review-checklist.md`].
 
-A draft pull request is taken to be not yet ready for review. Marking
-drafts as such helps the maintainers triage review work.
+A draft pull request is taken to be not yet ready for review and as such
+is not included in our weekly triage meetings. If you need a review before
+being taken out of draft, please let one of us know.
 
 The `Assigned` field on a pull request indicates who has taken
 responsibility for shepherding it through the review process, not who
 is responsible for authoring it. The assignee is usually the reviewer,
 but they can also delegate the review to someone else. The intent of
 assignment is simply to ensure that pull requests don't get neglected.
+
+#### Change Ownership
+
+PR authors must be able to understand, justify, and explain all proposed
+changes. After a PR is accepted, both the reviewer and author must
+understand it as a positive change to the codebase.
+
+#### LLMs (AI)
+
+Using LLMs and AIs to generate code that is part of a contribution is allowed.
+However, the author submitting the PR must fully adhere to [Change Ownership](#change-ownership) rules.
+The author is responsible for the code, regardless of how it was created. 
+Do not use "LLM generated" as a justification for low quality code.
 
 #### Designing new features
 
@@ -174,6 +195,12 @@ maintainership before you invest yourself too heavily. Try to build a
 consensus on the approach, including API changes, shader language
 extensions, implementation architecture, error handling, testing
 plans, benchmarking, and so on.
+
+#### Undue Burden
+
+We reserve the right to close any PRs that cause an undue burden on
+the maintainership. This could include, but is not limited to, [massive PRs](#large-pull-requests-are-risky),
+[LLM slop](#llms-ai), or contributions not in good faith.
 
 #### Large pull requests are risky
 

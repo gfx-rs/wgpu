@@ -82,6 +82,7 @@ impl<'a, W: Write> Writer<'a, W> {
         namer.reset(
             module,
             &keywords::RESERVED_KEYWORD_SET,
+            proc::KeywordSet::empty(),
             proc::CaseInsensitiveKeywordSet::empty(),
             &[
                 "gl_",                  // all GL built-in variables
@@ -532,7 +533,8 @@ impl<'a, W: Write> Writer<'a, W> {
             | TypeInner::Sampler { .. }
             | TypeInner::AccelerationStructure { .. }
             | TypeInner::RayQuery { .. }
-            | TypeInner::BindingArray { .. } => {
+            | TypeInner::BindingArray { .. }
+            | TypeInner::CooperativeMatrix { .. } => {
                 return Err(Error::Custom(format!("Unable to write type {inner:?}")))
             }
         }
@@ -727,6 +729,10 @@ impl<'a, W: Write> Writer<'a, W> {
             crate::AddressSpace::Function => unreachable!(),
             // Textures and samplers are handled directly in `Writer::write`.
             crate::AddressSpace::Handle => unreachable!(),
+            // ray tracing pipelines unsupported
+            crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload => {
+                unreachable!()
+            }
         }
 
         Ok(())
@@ -1093,7 +1099,12 @@ impl<'a, W: Write> Writer<'a, W> {
             ShaderStage::Vertex => output,
             ShaderStage::Fragment => !output,
             ShaderStage::Compute => false,
-            ShaderStage::Task | ShaderStage::Mesh => unreachable!(),
+            ShaderStage::Task
+            | ShaderStage::Mesh
+            | ShaderStage::RayGeneration
+            | ShaderStage::AnyHit
+            | ShaderStage::ClosestHit
+            | ShaderStage::Miss => unreachable!(),
         };
 
         // Write the I/O locations, if allowed
@@ -2228,6 +2239,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
                 writeln!(self.out, ");")?;
             }
+            Statement::CooperativeStore { .. } => unimplemented!(),
+            Statement::RayPipelineFunction(_) => unimplemented!(),
         }
 
         Ok(())
@@ -3764,7 +3777,9 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             // not supported yet
             Expression::RayQueryGetIntersection { .. }
-            | Expression::RayQueryVertexPositions { .. } => unreachable!(),
+            | Expression::RayQueryVertexPositions { .. }
+            | Expression::CooperativeLoad { .. }
+            | Expression::CooperativeMultiplyAdd { .. } => unreachable!(),
         }
 
         Ok(())

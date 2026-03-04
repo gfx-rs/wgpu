@@ -1,6 +1,7 @@
 use alloc::{
     borrow::Cow,
     string::{String, ToString},
+    vec::Vec,
 };
 use core::mem;
 
@@ -18,7 +19,8 @@ use crate::{
     Span, Statement, TypeInner, WithSpan,
 };
 
-#[cfg(no_std)]
+// Possibly unused if not compiled with no_std
+#[allow(unused_imports)]
 use num_traits::float::FloatCore as _;
 
 #[derive(Error, Debug, Clone)]
@@ -26,6 +28,8 @@ use num_traits::float::FloatCore as _;
 pub enum PipelineConstantError {
     #[error("Missing value for pipeline-overridable constant with identifier string: '{0}'")]
     MissingValue(String),
+    #[error("pipeline-overridable constant '{0}' not found in the shader")]
+    NotFound(String),
     #[error(
         "Source f64 value needs to be finite ({}) for number destinations",
         "NaNs and Inifinites are not allowed"
@@ -45,6 +49,10 @@ pub enum PipelineConstantError {
 
 /// Compact `module` and replace all overrides with constants.
 ///
+/// `module` must be valid. Both compaction and constant evaluation may produce
+/// invalid results (e.g. replace an invalid expression with a constant) for
+/// invalid modules.
+///
 /// If no changes are needed, this just returns `Cow::Borrowed` references to
 /// `module` and `module_info`. Otherwise, it clones `module`, retains only the
 /// selected entry point, compacts the module, edits its [`global_expressions`]
@@ -61,6 +69,27 @@ pub fn process_overrides<'a>(
     entry_point: Option<(ir::ShaderStage, &str)>,
     pipeline_constants: &PipelineConstants,
 ) -> Result<(Cow<'a, Module>, Cow<'a, ModuleInfo>), PipelineConstantError> {
+    let mut handles = module
+        .overrides
+        .iter()
+        .map(|(handle, _)| handle)
+        .collect::<Vec<_>>();
+    for c in pipeline_constants.keys() {
+        let c_id = c.parse().ok();
+        if let Some((i, _)) = handles.iter().enumerate().find(|&(_, handle)| {
+            let o = &module.overrides[*handle];
+            if o.id.is_some() {
+                o.id == c_id
+            } else {
+                o.name.as_deref() == Some(c.as_str())
+            }
+        }) {
+            handles.swap_remove(i);
+        } else {
+            return Err(PipelineConstantError::NotFound(c.clone()));
+        }
+    }
+
     if (entry_point.is_none() || module.entry_points.len() <= 1) && module.overrides.is_empty() {
         // We skip compacting the module here mostly to reduce the risk of
         // hitting corner cases like https://github.com/gfx-rs/wgpu/issues/7793.
@@ -279,7 +308,7 @@ fn process_workgroup_size_override(
                         Some(h) => {
                             ep.workgroup_size[i] = module
                                 .to_ctx()
-                                .eval_expr_to_u32(adjusted_global_expressions[h])
+                                .get_const_val(adjusted_global_expressions[h])
                                 .map(|n| {
                                     if n == 0 {
                                         Err(PipelineConstantError::NegativeWorkgroupSize)
@@ -308,13 +337,13 @@ fn process_mesh_shader_overrides(
         if let Some(r#override) = mesh_info.max_vertices_override {
             mesh_info.max_vertices = module
                 .to_ctx()
-                .eval_expr_to_u32(adjusted_global_expressions[r#override])
+                .get_const_val(adjusted_global_expressions[r#override])
                 .map_err(|_| PipelineConstantError::NegativeMeshOutputMax)?;
         }
         if let Some(r#override) = mesh_info.max_primitives_override {
             mesh_info.max_primitives = module
                 .to_ctx()
-                .eval_expr_to_u32(adjusted_global_expressions[r#override])
+                .get_const_val(adjusted_global_expressions[r#override])
                 .map_err(|_| PipelineConstantError::NegativeMeshOutputMax)?;
         }
     }
@@ -658,6 +687,19 @@ fn adjust_expr(new_pos: &HandleVec<Expression, Handle<Expression>>, expr: &mut E
         } => {
             adjust(query);
         }
+        Expression::CooperativeLoad { ref mut data, .. } => {
+            adjust(&mut data.pointer);
+            adjust(&mut data.stride);
+        }
+        Expression::CooperativeMultiplyAdd {
+            ref mut a,
+            ref mut b,
+            ref mut c,
+        } => {
+            adjust(a);
+            adjust(b);
+            adjust(c);
+        }
     }
 }
 
@@ -860,6 +902,25 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 crate::RayQueryFunction::Terminate => {}
             }
         }
+        Statement::CooperativeStore {
+            ref mut target,
+            ref mut data,
+        } => {
+            adjust(target);
+            adjust(&mut data.pointer);
+            adjust(&mut data.stride);
+        }
+        Statement::RayPipelineFunction(ref mut func) => match *func {
+            crate::RayPipelineFunction::TraceRay {
+                ref mut acceleration_structure,
+                ref mut descriptor,
+                ref mut payload,
+            } => {
+                adjust(acceleration_structure);
+                adjust(descriptor);
+                adjust(payload);
+            }
+        },
         Statement::Break
         | Statement::Continue
         | Statement::Kill

@@ -227,8 +227,10 @@ pub enum Error {
     UnsupportedArrayOf(String),
     #[error("array of type '{0:?}' is not supported")]
     UnsupportedArrayOfType(Handle<crate::Type>),
-    #[error("ray tracing is not supported prior to MSL 2.3")]
+    #[error("ray tracing is not supported prior to MSL 2.4")]
     UnsupportedRayTracing,
+    #[error("cooperative matrix is not supported prior to MSL 2.3")]
+    UnsupportedCooperativeMatrix,
     #[error("overrides should not be present at this stage")]
     Override,
     #[error("bitcasting to {0:?} is not supported")]
@@ -538,7 +540,7 @@ impl Options {
                     }
                     // macOS: Since Metal 2.2
                     // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/wgpu/issues/4414)
-                    crate::BuiltIn::Barycentric if self.lang_version < (2, 3) => {
+                    crate::BuiltIn::Barycentric { .. } if self.lang_version < (2, 3) => {
                         return Err(Error::UnsupportedAttribute("barycentric_coord".to_string()));
                     }
                     _ => {}
@@ -693,7 +695,10 @@ impl ResolvedBinding {
                     Bi::PointCoord => "point_coord",
                     Bi::FrontFacing => "front_facing",
                     Bi::PrimitiveIndex => "primitive_id",
-                    Bi::Barycentric => "barycentric_coord",
+                    Bi::Barycentric { perspective: true } => "barycentric_coord",
+                    Bi::Barycentric { perspective: false } => {
+                        "barycentric_coord, center_no_perspective"
+                    }
                     Bi::SampleIndex => "sample_id",
                     Bi::SampleMask => "sample_mask",
                     // compute
@@ -708,7 +713,7 @@ impl ResolvedBinding {
                     Bi::SubgroupId => "simdgroup_index_in_threadgroup",
                     Bi::SubgroupSize => "threads_per_simdgroup",
                     Bi::SubgroupInvocationId => "thread_index_in_simdgroup",
-                    Bi::CullDistance | Bi::DrawID => {
+                    Bi::CullDistance | Bi::DrawIndex => {
                         return Err(Error::UnsupportedBuiltIn(built_in))
                     }
                     Bi::CullPrimitive => "primitive_culled",
@@ -718,7 +723,20 @@ impl ResolvedBinding {
                     | Bi::VertexCount
                     | Bi::PrimitiveCount
                     | Bi::Vertices
-                    | Bi::Primitives => unreachable!(),
+                    | Bi::Primitives
+                    | Bi::RayInvocationId
+                    | Bi::NumRayInvocations
+                    | Bi::InstanceCustomData
+                    | Bi::GeometryIndex
+                    | Bi::WorldRayOrigin
+                    | Bi::WorldRayDirection
+                    | Bi::ObjectRayOrigin
+                    | Bi::ObjectRayDirection
+                    | Bi::RayTmin
+                    | Bi::RayTCurrentMax
+                    | Bi::ObjectToWorld
+                    | Bi::WorldToObject
+                    | Bi::HitKind => unreachable!(),
                 };
                 write!(out, "{name}")?;
             }
@@ -812,6 +830,50 @@ pub fn write_string(
     let mut w = Writer::new(String::new());
     let info = w.write(module, info, options, pipeline_options)?;
     Ok((w.finish(), info))
+}
+
+pub fn supported_capabilities() -> crate::valid::Capabilities {
+    use crate::valid::Capabilities as Caps;
+    Caps::IMMEDIATES
+        // No FLOAT64
+        | Caps::PRIMITIVE_INDEX
+        | Caps::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+        // No BUFFER_BINDING_ARRAY
+        | Caps::STORAGE_TEXTURE_BINDING_ARRAY
+        | Caps::STORAGE_BUFFER_BINDING_ARRAY
+        | Caps::CLIP_DISTANCE // CLIP_DISTANCE isn't supported by metal backend? But is supported by MSL writer
+        // No CULL_DISTANCE
+        | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
+        | Caps::MULTIVIEW
+        // No EARLY_DEPTH_TEST
+        | Caps::MULTISAMPLED_SHADING
+        | Caps::RAY_QUERY
+        | Caps::DUAL_SOURCE_BLENDING
+        | Caps::CUBE_ARRAY_TEXTURES
+        | Caps::SHADER_INT64
+        | Caps::SUBGROUP
+        | Caps::SUBGROUP_BARRIER
+        // No SUBGROUP_VERTEX_STAGE
+        | Caps::SHADER_INT64_ATOMIC_MIN_MAX
+        // No SHADER_INT64_ATOMIC_ALL_OPS
+        | Caps::SHADER_FLOAT32_ATOMIC
+        | Caps::TEXTURE_ATOMIC
+        | Caps::TEXTURE_INT64_ATOMIC
+        // No RAY_HIT_VERTEX_POSITION
+        | Caps::SHADER_FLOAT16
+        | Caps::TEXTURE_EXTERNAL
+        | Caps::SHADER_FLOAT16_IN_FLOAT32
+        | Caps::SHADER_BARYCENTRICS
+        // No MESH_SHADER
+        // No MESH_SHADER_POINT_TOPOLOGY
+        | Caps::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        // No BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        | Caps::STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        | Caps::STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        | Caps::COOPERATIVE_MATRIX
+    // No PER_VERTEX
+    // No RAY_TRACING_PIPELINE
+    // No DRAW_INDEX
 }
 
 #[test]

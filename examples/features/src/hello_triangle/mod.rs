@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
@@ -6,11 +6,16 @@ use winit::{
 };
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
+    let window = Arc::new(window);
     let mut size = window.inner_size();
     size.width = size.width.max(1);
     size.height = size.height.max(1);
 
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::from_env_or_default());
+    let instance = wgpu::Instance::new(
+        wgpu::InstanceDescriptor::from_env_or_default()
+            // TODO: Use event_loop.owned_display_handle() with winit 0.30
+            .with_display_handle(Box::new(window.clone())),
+    );
 
     let surface = instance.create_surface(&window).unwrap();
     let adapter = instance

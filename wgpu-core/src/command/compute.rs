@@ -9,39 +9,31 @@ use core::{convert::Infallible, fmt, str};
 
 use crate::{
     api_log,
-    binding_model::BindError,
-    command::pass::flush_bindings_helper,
-    resource::{RawResourceAccess, Trackable},
-};
-use crate::{
-    binding_model::{ImmediateUploadError, LateMinBufferBindingSizeMismatch},
+    binding_model::{BindError, ImmediateUploadError, LateMinBufferBindingSizeMismatch},
     command::{
         bind::{Binder, BinderError},
         compute_command::ArcComputeCommand,
-        end_pipeline_statistics_query,
+        encoder::EncodingState,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
-        pass_base, pass_try, validate_and_begin_pipeline_statistics_query, ArcPassTimestampWrites,
-        BasePass, BindGroupStateChange, CommandEncoderError, MapPassErr, PassErrorScope,
-        PassTimestampWrites, QueryUseError, StateChange,
+        pass::{self, flush_bindings_helper},
+        pass_base, pass_try,
+        query::{end_pipeline_statistics_query, validate_and_begin_pipeline_statistics_query},
+        ArcCommand, ArcPassTimestampWrites, BasePass, BindGroupStateChange, CommandEncoder,
+        CommandEncoderError, DebugGroupError, EncoderStateError, InnerCommandEncoder, MapPassErr,
+        PassErrorScope, PassStateError, PassTimestampWrites, QueryUseError, StateChange,
+        TimestampWritesError,
     },
-    device::{DeviceError, MissingDownlevelFlags, MissingFeatures},
+    device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
     global::Global,
     hal_label, id,
     init_tracker::MemoryInitKind,
     pipeline::ComputePipeline,
     resource::{
-        self, Buffer, InvalidResourceError, Labeled, MissingBufferUsageError, ParentDevice,
+        self, Buffer, DestroyedResourceError, InvalidResourceError, Labeled,
+        MissingBufferUsageError, ParentDevice, RawResourceAccess, Trackable,
     },
     track::{ResourceUsageCompatibilityError, Tracker},
     Label,
-};
-use crate::{command::InnerCommandEncoder, resource::DestroyedResourceError};
-use crate::{
-    command::{
-        encoder::EncodingState, pass, ArcCommand, CommandEncoder, DebugGroupError,
-        EncoderStateError, PassStateError, TimestampWritesError,
-    },
-    device::Device,
 };
 
 pub type ComputeBasePass = BasePass<ArcComputeCommand, ComputePassError>;
@@ -890,7 +882,7 @@ fn dispatch_indirect(
 
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
 
-    if offset % 4 != 0 {
+    if !offset.is_multiple_of(4) {
         return Err(ComputePassErrorInner::UnalignedIndirectBufferOffset(offset));
     }
 
@@ -941,7 +933,7 @@ fn dispatch_indirect(
             state.pass.base.raw_encoder.set_bind_group(
                 params.pipeline_layout,
                 0,
-                Some(params.dst_bind_group),
+                params.dst_bind_group,
                 &[],
             );
         }
@@ -949,14 +941,12 @@ fn dispatch_indirect(
             state.pass.base.raw_encoder.set_bind_group(
                 params.pipeline_layout,
                 1,
-                Some(
-                    buffer
-                        .indirect_validation_bind_groups
-                        .get(state.pass.base.snatch_guard)
-                        .unwrap()
-                        .dispatch
-                        .as_ref(),
-                ),
+                buffer
+                    .indirect_validation_bind_groups
+                    .get(state.pass.base.snatch_guard)
+                    .unwrap()
+                    .dispatch
+                    .as_ref(),
                 &[params.aligned_offset as u32],
             );
         }
@@ -1015,15 +1005,14 @@ fn dispatch_indirect(
                 }
             }
 
-            for (i, e) in state.pass.binder.list_valid() {
-                let group = e.group.as_ref().unwrap();
+            for (i, group, dynamic_offsets) in state.pass.binder.list_valid() {
                 let raw_bg = group.try_raw(state.pass.base.snatch_guard)?;
                 unsafe {
                     state.pass.base.raw_encoder.set_bind_group(
                         pipeline.layout.raw(),
                         i as u32,
-                        Some(raw_bg),
-                        &e.dynamic_offsets,
+                        raw_bg,
+                        dynamic_offsets,
                     );
                 }
             }

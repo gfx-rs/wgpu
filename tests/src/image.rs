@@ -346,7 +346,7 @@ fn copy_via_compute(
 
     let pll = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: None,
-        bind_group_layouts: &[&bgl],
+        bind_group_layouts: &[Some(&bgl)],
         immediate_size: 0,
     });
 

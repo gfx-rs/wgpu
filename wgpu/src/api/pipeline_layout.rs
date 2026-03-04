@@ -35,7 +35,7 @@ pub struct PipelineLayoutDescriptor<'a> {
     pub label: Label<'a>,
     /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
     /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
-    pub bind_group_layouts: &'a [&'a BindGroupLayout],
+    pub bind_group_layouts: &'a [Option<&'a BindGroupLayout>],
     /// The number of bytes of immediate data that are allocated for use
     /// in the shader. The `var<immediate>`s in the shader attached to
     /// this pipeline must be equal or smaller than this size.

@@ -223,6 +223,7 @@ pub struct SymbolTable<Name, Var> {
     ///
     /// [`scopes`]: Self::scopes
     cursor: usize,
+    lookup_cursor_is_one_behind: bool,
 }
 
 impl<Name, Var> SymbolTable<Name, Var> {
@@ -232,8 +233,13 @@ impl<Name, Var> SymbolTable<Name, Var> {
     /// until another scope is pushed or [`pop_scope`] is called, causing this
     /// scope to be removed along with all variables added to it.
     ///
+    /// # PANICS
+    /// - If the current lookup scope doesn't match the current scope
+    ///
     /// [`pop_scope`]: Self::pop_scope
     pub fn push_scope(&mut self) {
+        self.check_lookup_scope_matches_current_scope();
+
         // If the cursor is equal to the scope's stack length then we need to
         // push another empty scope. Otherwise we can reuse the already existing
         // scope.
@@ -250,6 +256,7 @@ impl<Name, Var> SymbolTable<Name, Var> {
     ///
     /// # PANICS
     /// - If the current lexical scope is the root scope
+    /// - If the current lookup scope doesn't match the current scope
     pub fn pop_scope(&mut self) {
         // Despite the method title, the variables are only deleted when the
         // scope is reused. This is because while a clear is inevitable if the
@@ -257,8 +264,37 @@ impl<Name, Var> SymbolTable<Name, Var> {
         // popped and not reused, i.e. if another scope with the same nesting
         // level is never pushed again.
         assert!(self.cursor != 1, "Tried to pop the root scope");
+        self.check_lookup_scope_matches_current_scope();
 
         self.cursor -= 1;
+    }
+
+    /// Reduces the lookup scope by one level.
+    ///
+    /// # PANICS
+    /// - If the current lookup scope doesn't match the current scope
+    pub fn reduce_lookup_scope(&mut self) {
+        self.check_lookup_scope_matches_current_scope();
+        self.lookup_cursor_is_one_behind = true;
+    }
+
+    /// Resets the lookup scope to the current scope.
+    ///
+    /// # PANICS
+    /// - If the current lookup scope already matches the current scope
+    pub fn reset_lookup_scope(&mut self) {
+        assert!(
+            self.lookup_cursor_is_one_behind,
+            "current lookup scope already matches the current scope"
+        );
+        self.lookup_cursor_is_one_behind = false;
+    }
+
+    fn check_lookup_scope_matches_current_scope(&self) {
+        assert!(
+            !self.lookup_cursor_is_one_behind,
+            "current lookup scope doesn't match the current scope"
+        );
     }
 }
 
@@ -277,8 +313,11 @@ where
         Name: core::borrow::Borrow<Q>,
         Q: core::hash::Hash + Eq + ?Sized,
     {
+        let cursor = self
+            .cursor
+            .saturating_sub(self.lookup_cursor_is_one_behind.into());
         // Iterate backwards through the scopes and try to find the variable
-        for scope in self.scopes[..self.cursor].iter().rev() {
+        for scope in self.scopes[..cursor].iter().rev() {
             if let Some(var) = scope.get(name) {
                 return Some(var);
             }
@@ -316,6 +355,7 @@ impl<Name, Var> Default for SymbolTable<Name, Var> {
         Self {
             scopes: vec![FastHashMap::default()],
             cursor: 1,
+            lookup_cursor_is_one_behind: false,
         }
     }
 }

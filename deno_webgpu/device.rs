@@ -21,7 +21,6 @@ use super::bind_group_layout::GPUBindGroupLayout;
 use super::buffer::GPUBuffer;
 use super::compute_pipeline::GPUComputePipeline;
 use super::pipeline_layout::GPUPipelineLayout;
-use super::queue::GPUQueue;
 use super::sampler::GPUSampler;
 use super::shader::GPUShaderModule;
 use super::texture::GPUTexture;
@@ -29,7 +28,8 @@ use crate::adapter::GPUAdapterInfo;
 use crate::adapter::GPUSupportedFeatures;
 use crate::adapter::GPUSupportedLimits;
 use crate::command_encoder::GPUCommandEncoder;
-use crate::error::{GPUError, GPUGenericError};
+use crate::error::{fmt_err, make_pipeline_error};
+use crate::error::{GPUError, GPUGenericError, GPUPipelineErrorReason};
 use crate::query_set::GPUQuerySet;
 use crate::render_bundle::GPURenderBundleEncoder;
 use crate::render_pipeline::GPURenderPipeline;
@@ -37,11 +37,16 @@ use crate::shader::GPUCompilationInfo;
 use crate::webidl::features_to_feature_names;
 use crate::Instance;
 
+/// External memory associated with device and queue, to encourage V8 to garbage
+/// collect devices promptly. This seems to be particularly important when
+/// running CTS tests under `webgpu:api,validation,capability_checks,limits,*`
+/// on DX12 in wgpu CI, where any smaller power of two results in OOM errors.
+pub(crate) const DEVICE_EXTERNAL_MEMORY_SIZE: i64 = 1 << 24; // 16 MB
+
 pub struct GPUDevice {
   pub instance: Instance,
   pub id: wgpu_core::id::DeviceId,
   pub adapter: wgpu_core::id::AdapterId,
-  pub queue: wgpu_core::id::QueueId,
 
   pub label: String,
 
@@ -49,10 +54,13 @@ pub struct GPUDevice {
   pub limits: SameObject<GPUSupportedLimits>,
   pub adapter_info: Rc<SameObject<GPUAdapterInfo>>,
 
-  pub queue_obj: SameObject<GPUQueue>,
+  pub queue_obj: v8::Global<v8::Object>,
 
   pub error_handler: super::error::ErrorHandler,
   pub lost_promise: v8::Global<v8::Promise>,
+
+  // Weak reference to the JS object so we can attach a finalizer.
+  pub(crate) weak: std::sync::OnceLock<v8::Weak<v8::Object>>,
 }
 
 impl Drop for GPUDevice {
@@ -125,14 +133,8 @@ impl GPUDevice {
 
   #[getter]
   #[global]
-  fn queue(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
-    self.queue_obj.get(scope, |_| GPUQueue {
-      id: self.queue,
-      device: self.id,
-      error_handler: self.error_handler.clone(),
-      instance: self.instance.clone(),
-      label: self.label.clone(),
-    })
+  fn queue(&self) -> v8::Global<v8::Object> {
+    self.queue_obj.clone()
   }
 
   #[fast]
@@ -221,8 +223,7 @@ impl GPUDevice {
       sample_count: descriptor.sample_count,
       dimension: descriptor.dimension.clone().into(),
       format: descriptor.format.clone().into(),
-      usage: wgpu_types::TextureUsages::from_bits(descriptor.usage)
-        .ok_or_else(|| JsErrorBox::type_error("usage is not valid"))?,
+      usage: descriptor.usage.into(),
       view_formats: descriptor
         .view_formats
         .into_iter()
@@ -303,6 +304,7 @@ impl GPUDevice {
         entry.sampler.is_some(),
         entry.texture.is_some(),
         entry.storage_texture.is_some(),
+        entry.external_texture.is_some(),
       ]
       .into_iter()
       .filter(|t| *t)
@@ -334,14 +336,15 @@ impl GPUDevice {
           format: storage_texture.format.into(),
           view_dimension: storage_texture.view_dimension.into(),
         }
+      } else if entry.external_texture.is_some() {
+        BindingType::ExternalTexture
       } else {
         unreachable!()
       };
 
       entries.push(wgpu_types::BindGroupLayoutEntry {
         binding: entry.binding,
-        visibility: wgpu_types::ShaderStages::from_bits(entry.visibility)
-          .ok_or_else(|| JsErrorBox::type_error("usage is not valid"))?,
+        visibility: entry.visibility.into(),
         ty,
         count: None, // native-only
       });
@@ -376,7 +379,11 @@ impl GPUDevice {
     let bind_group_layouts = descriptor
       .bind_group_layouts
       .into_iter()
-      .map(|bind_group_layout| bind_group_layout.id)
+      .map(|bind_group_layout| {
+        bind_group_layout
+          .into_option()
+          .map(|bind_group_layout| bind_group_layout.id)
+      })
       .collect();
 
     let wgpu_descriptor = wgpu_core::binding_model::PipelineLayoutDescriptor {
@@ -434,6 +441,9 @@ impl GPUDevice {
               offset: buffer_binding.offset,
               size: buffer_binding.size,
             })
+          }
+          GPUBindingResource::ExternalTexture(external_texture) => {
+            BindingResource::ExternalTexture(external_texture.id)
           }
         },
       })
@@ -500,7 +510,9 @@ impl GPUDevice {
     &self,
     #[webidl] descriptor: super::compute_pipeline::GPUComputePipelineDescriptor,
   ) -> GPUComputePipeline {
-    self.new_compute_pipeline(descriptor)
+    let (pipeline, err) = self.new_compute_pipeline(descriptor);
+    self.error_handler.push_error(err);
+    pipeline
   }
 
   #[required(1)]
@@ -508,28 +520,64 @@ impl GPUDevice {
   fn create_render_pipeline(
     &self,
     #[webidl] descriptor: super::render_pipeline::GPURenderPipelineDescriptor,
-  ) -> Result<GPURenderPipeline, JsErrorBox> {
-    self.new_render_pipeline(descriptor)
+  ) -> GPURenderPipeline {
+    let (pipeline, err) = self.new_render_pipeline(descriptor);
+    self.error_handler.push_error(err);
+    pipeline
   }
 
-  #[async_method]
+  #[async_method(fake)]
   #[required(1)]
   #[cppgc]
-  async fn create_compute_pipeline_async(
+  #[global]
+  fn create_compute_pipeline_async(
     &self,
+    scope: &mut v8::HandleScope,
     #[webidl] descriptor: super::compute_pipeline::GPUComputePipelineDescriptor,
-  ) -> GPUComputePipeline {
-    self.new_compute_pipeline(descriptor)
+  ) -> v8::Global<v8::Promise> {
+    let resolver = v8::PromiseResolver::new(scope).unwrap();
+    let promise = resolver.get_promise(scope);
+
+    let (pipeline, err) = self.new_compute_pipeline(descriptor);
+    if let Some(err) = err {
+      let err = make_pipeline_error(
+        scope,
+        GPUPipelineErrorReason::Validation,
+        &fmt_err(&err),
+      );
+      resolver.reject(scope, err.into());
+    } else {
+      let val = make_cppgc_object(scope, pipeline).into();
+      resolver.resolve(scope, val);
+    }
+    v8::Global::new(scope, promise)
   }
 
-  #[async_method]
+  #[async_method(fake)]
   #[required(1)]
   #[cppgc]
-  async fn create_render_pipeline_async(
+  #[global]
+  fn create_render_pipeline_async(
     &self,
+    scope: &mut v8::HandleScope,
     #[webidl] descriptor: super::render_pipeline::GPURenderPipelineDescriptor,
-  ) -> Result<GPURenderPipeline, JsErrorBox> {
-    self.new_render_pipeline(descriptor)
+  ) -> v8::Global<v8::Promise> {
+    let resolver = v8::PromiseResolver::new(scope).unwrap();
+    let promise = resolver.get_promise(scope);
+
+    let (pipeline, err) = self.new_render_pipeline(descriptor);
+    if let Some(err) = err {
+      let err = make_pipeline_error(
+        scope,
+        GPUPipelineErrorReason::Validation,
+        &fmt_err(&err),
+      );
+      resolver.reject(scope, err.into());
+    } else {
+      let val = make_cppgc_object(scope, pipeline).into();
+      resolver.resolve(scope, val);
+    }
+    v8::Global::new(scope, promise)
   }
 
   fn create_command_encoder<'a>(
@@ -688,7 +736,7 @@ impl GPUDevice {
       .scopes
       .lock()
       .unwrap()
-      .push((filter, vec![]));
+      .push((filter, None));
   }
 
   #[async_method(fake)]
@@ -702,7 +750,7 @@ impl GPUDevice {
       return Ok(v8::Global::new(scope, val));
     }
 
-    let Some((_, errors)) = self.error_handler.scopes.lock().unwrap().pop()
+    let Some((_, error)) = self.error_handler.scopes.lock().unwrap().pop()
     else {
       return Err(JsErrorBox::new(
         "DOMExceptionOperationError",
@@ -710,7 +758,7 @@ impl GPUDevice {
       ));
     };
 
-    let val = if let Some(err) = errors.into_iter().next() {
+    let val = if let Some(err) = error {
       deno_core::error::to_v8_error(scope, &err)
     } else {
       v8::null(scope).into()
@@ -741,7 +789,10 @@ impl GPUDevice {
   fn new_compute_pipeline(
     &self,
     descriptor: super::compute_pipeline::GPUComputePipelineDescriptor,
-  ) -> GPUComputePipeline {
+  ) -> (
+    GPUComputePipeline,
+    Option<wgpu_core::pipeline::CreateComputePipelineError>,
+  ) {
     let wgpu_descriptor = wgpu_core::pipeline::ComputePipelineDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
       layout: descriptor.layout.into(),
@@ -760,20 +811,24 @@ impl GPUDevice {
       None,
     );
 
-    self.error_handler.push_error(err);
-
-    GPUComputePipeline {
-      instance: self.instance.clone(),
-      error_handler: self.error_handler.clone(),
-      id,
-      label: descriptor.label.clone(),
-    }
+    (
+      GPUComputePipeline {
+        instance: self.instance.clone(),
+        error_handler: self.error_handler.clone(),
+        id,
+        label: descriptor.label.clone(),
+      },
+      err,
+    )
   }
 
   fn new_render_pipeline(
     &self,
     descriptor: super::render_pipeline::GPURenderPipelineDescriptor,
-  ) -> Result<GPURenderPipeline, JsErrorBox> {
+  ) -> (
+    GPURenderPipeline,
+    Option<wgpu_core::pipeline::CreateRenderPipelineError>,
+  ) {
     let vertex = wgpu_core::pipeline::VertexState {
       stage: ProgrammableStageDescriptor {
         module: descriptor.vertex.module.id,
@@ -839,13 +894,8 @@ impl GPUDevice {
 
       wgpu_types::DepthStencilState {
         format: depth_stencil.format.into(),
-        depth_write_enabled: depth_stencil
-          .depth_write_enabled
-          .unwrap_or_default(),
-        depth_compare: depth_stencil
-          .depth_compare
-          .map(Into::into)
-          .unwrap_or(wgpu_types::CompareFunction::Never), // TODO(wgpu): should be optional here
+        depth_write_enabled: depth_stencil.depth_write_enabled,
+        depth_compare: depth_stencil.depth_compare.map(Into::into),
         stencil: wgpu_types::StencilState {
           front,
           back,
@@ -868,10 +918,10 @@ impl GPUDevice {
         .alpha_to_coverage_enabled,
     };
 
-    let fragment = descriptor
-      .fragment
-      .map(|fragment| {
-        Ok::<_, JsErrorBox>(wgpu_core::pipeline::FragmentState {
+    let fragment =
+      descriptor
+        .fragment
+        .map(|fragment| wgpu_core::pipeline::FragmentState {
           stage: ProgrammableStageDescriptor {
             module: fragment.module.id,
             entry_point: fragment.entry_point.map(Into::into),
@@ -883,38 +933,28 @@ impl GPUDevice {
               .targets
               .into_iter()
               .map(|target| {
-                target
-                  .into_option()
-                  .map(|target| {
-                    Ok(wgpu_types::ColorTargetState {
-                      format: target.format.into(),
-                      blend: target.blend.map(|blend| wgpu_types::BlendState {
-                        color: wgpu_types::BlendComponent {
-                          src_factor: blend.color.src_factor.into(),
-                          dst_factor: blend.color.dst_factor.into(),
-                          operation: blend.color.operation.into(),
-                        },
-                        alpha: wgpu_types::BlendComponent {
-                          src_factor: blend.alpha.src_factor.into(),
-                          dst_factor: blend.alpha.dst_factor.into(),
-                          operation: blend.alpha.operation.into(),
-                        },
-                      }),
-                      write_mask: wgpu_types::ColorWrites::from_bits(
-                        target.write_mask,
-                      )
-                      .ok_or_else(|| {
-                        JsErrorBox::type_error("usage is not valid")
-                      })?,
-                    })
-                  })
-                  .transpose()
+                target.into_option().map(|target| {
+                  wgpu_types::ColorTargetState {
+                    format: target.format.into(),
+                    blend: target.blend.map(|blend| wgpu_types::BlendState {
+                      color: wgpu_types::BlendComponent {
+                        src_factor: blend.color.src_factor.into(),
+                        dst_factor: blend.color.dst_factor.into(),
+                        operation: blend.color.operation.into(),
+                      },
+                      alpha: wgpu_types::BlendComponent {
+                        src_factor: blend.alpha.src_factor.into(),
+                        dst_factor: blend.alpha.dst_factor.into(),
+                        operation: blend.alpha.operation.into(),
+                      },
+                    }),
+                    write_mask: target.write_mask.into(),
+                  }
+                })
               })
-              .collect::<Result<_, JsErrorBox>>()?,
+              .collect(),
           ),
-        })
-      })
-      .transpose()?;
+        });
 
     let wgpu_descriptor = wgpu_core::pipeline::RenderPipelineDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
@@ -934,14 +974,15 @@ impl GPUDevice {
       None,
     );
 
-    self.error_handler.push_error(err);
-
-    Ok(GPURenderPipeline {
-      instance: self.instance.clone(),
-      error_handler: self.error_handler.clone(),
-      id,
-      label: descriptor.label,
-    })
+    (
+      GPURenderPipeline {
+        instance: self.instance.clone(),
+        error_handler: self.error_handler.clone(),
+        id,
+        label: descriptor.label,
+      },
+      err,
+    )
   }
 }
 

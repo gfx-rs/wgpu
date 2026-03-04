@@ -971,8 +971,11 @@ impl Texture {
 
     fn calc_subresource_for_copy(&self, base: &crate::TextureCopyBase) -> u32 {
         let plane = match base.aspect {
-            crate::FormatAspects::COLOR | crate::FormatAspects::DEPTH => 0,
-            crate::FormatAspects::STENCIL => 1,
+            crate::FormatAspects::COLOR
+            | crate::FormatAspects::DEPTH
+            | crate::FormatAspects::PLANE_0 => 0,
+            crate::FormatAspects::STENCIL | crate::FormatAspects::PLANE_1 => 1,
+            crate::FormatAspects::PLANE_2 => 2,
             _ => unreachable!(),
         };
         self.calc_subresource(base.mip_level, base.array_layer, plane)
@@ -1124,7 +1127,7 @@ pub struct PipelineLayout {
     shared: PipelineLayoutShared,
     // Storing for each associated bind group, which tables we created
     // in the root signature. This is required for binding descriptor sets.
-    bind_group_infos: ArrayVec<BindGroupInfo, { crate::MAX_BIND_GROUPS }>,
+    bind_group_infos: [Option<BindGroupInfo>; crate::MAX_BIND_GROUPS],
     naga_options: naga::back::hlsl::Options,
 }
 
@@ -1627,14 +1630,12 @@ impl crate::Queue for Queue {
 #[derive(Debug)]
 pub struct DxilPassthroughShader {
     pub shader: Vec<u8>,
-    pub entry_point: String,
     pub num_workgroups: (u32, u32, u32),
 }
 
 #[derive(Debug)]
 pub struct HlslPassthroughShader {
     pub shader: String,
-    pub entry_point: String,
     pub num_workgroups: (u32, u32, u32),
 }
 

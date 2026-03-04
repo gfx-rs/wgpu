@@ -291,14 +291,22 @@ impl super::Device {
             != layout.naga_options.zero_initialize_workgroup_memory
             || stage.module.runtime_checks.bounds_checks != layout.naga_options.restrict_indexing
             || stage.module.runtime_checks.force_loop_bounding
-                != layout.naga_options.force_loop_bounding;
-        // Note: ray query initialization tracking not yet implemented
+                != layout.naga_options.force_loop_bounding
+            || stage
+                .module
+                .runtime_checks
+                .ray_query_initialization_tracking
+                != layout.naga_options.ray_query_initialization_tracking;
         let mut temp_options;
         let naga_options = if needs_temp_options {
             temp_options = layout.naga_options.clone();
             temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
             temp_options.restrict_indexing = stage.module.runtime_checks.bounds_checks;
             temp_options.force_loop_bounding = stage.module.runtime_checks.force_loop_bounding;
+            temp_options.ray_query_initialization_tracking = stage
+                .module
+                .runtime_checks
+                .ray_query_initialization_tracking;
             &temp_options
         } else {
             &layout.naga_options
@@ -375,11 +383,10 @@ impl super::Device {
             }
             super::ShaderModuleSource::HlslPassthrough(passthrough) => ShaderCacheKey {
                 source: passthrough.shader.clone(),
-                entry_point: passthrough.entry_point.clone(),
+                entry_point: stage.entry_point.to_string(),
                 stage: naga_stage,
                 shader_model: naga_options.shader_model,
             },
-
             super::ShaderModuleSource::DxilPassthrough(passthrough) => {
                 return Ok(super::CompiledShader::Precompiled(
                     passthrough.shader.clone(),
@@ -748,9 +755,7 @@ impl crate::Device for super::Device {
             MipLODBias: 0f32,
             MaxAnisotropy: desc.anisotropy_clamp as u32,
 
-            ComparisonFunc: conv::map_comparison(
-                desc.compare.unwrap_or(wgt::CompareFunction::Always),
-            ),
+            ComparisonFunc: conv::map_comparison(desc.compare.unwrap_or_default()),
             BorderColor: border_color,
             MinLOD: desc.lod_clamp.start,
             MaxLOD: desc.lod_clamp.end,
@@ -945,6 +950,10 @@ impl crate::Device for super::Device {
         let mut total_non_dynamic_entries = 0_usize;
         let mut sampler_in_any_bind_group = false;
         for bgl in desc.bind_group_layouts {
+            let Some(bgl) = bgl else {
+                continue;
+            };
+
             let mut sampler_in_bind_group = false;
 
             for entry in &bgl.entries {
@@ -975,9 +984,12 @@ impl crate::Device for super::Device {
 
         let mut ranges = Vec::with_capacity(total_non_dynamic_entries);
 
-        let mut bind_group_infos =
-            ArrayVec::<super::BindGroupInfo, { crate::MAX_BIND_GROUPS }>::default();
+        let mut bind_group_infos = [const { None }; crate::MAX_BIND_GROUPS];
         for (index, bgl) in desc.bind_group_layouts.iter().enumerate() {
+            let Some(bgl) = bgl else {
+                continue;
+            };
+
             let mut info = super::BindGroupInfo {
                 tables: super::TableTypes::empty(),
                 base_root_index: parameters.len() as u32,
@@ -1242,7 +1254,7 @@ impl crate::Device for super::Device {
                 total_dynamic_storage_buffers += dynamic_storage_buffers;
             }
 
-            bind_group_infos.push(info);
+            bind_group_infos[index] = Some(info);
         }
 
         let sampler_heap_target = hlsl::SamplerHeapBindTargets {
@@ -1328,7 +1340,7 @@ impl crate::Device for super::Device {
             // This is the last time we use this, but lets increment
             // it so if we add more later, the value behaves correctly.
 
-            // This is an allow as it doesn't trigger on 1.82, hal's MSRV.
+            // This is an allow as it doesn't trigger on 1.90, hal's MSRV.
             #[allow(unused_assignments)]
             {
                 bind_cbv.register += 1;
@@ -1488,6 +1500,7 @@ impl crate::Device for super::Device {
                 sampler_buffer_binding_map,
                 external_texture_binding_map,
                 force_loop_bounding: true,
+                ray_query_initialization_tracking: true,
             },
         })
     }
@@ -1822,12 +1835,10 @@ impl crate::Device for super::Device {
             }),
             crate::ShaderInput::Dxil {
                 shader,
-                entry_point,
                 num_workgroups,
             } => Ok(super::ShaderModule {
                 source: super::ShaderModuleSource::DxilPassthrough(super::DxilPassthroughShader {
                     shader: shader.to_vec(),
-                    entry_point,
                     num_workgroups,
                 }),
                 raw_name,
@@ -1835,18 +1846,17 @@ impl crate::Device for super::Device {
             }),
             crate::ShaderInput::Hlsl {
                 shader,
-                entry_point,
                 num_workgroups,
             } => Ok(super::ShaderModule {
                 source: super::ShaderModuleSource::HlslPassthrough(super::HlslPassthroughShader {
                     shader: shader.to_owned(),
-                    entry_point,
                     num_workgroups,
                 }),
                 raw_name,
                 runtime_checks: desc.runtime_checks,
             }),
             crate::ShaderInput::SpirV(_)
+            | crate::ShaderInput::MetalLib { .. }
             | crate::ShaderInput::Msl { .. }
             | crate::ShaderInput::Glsl { .. } => {
                 unreachable!()

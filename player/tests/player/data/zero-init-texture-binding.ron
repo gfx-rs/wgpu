@@ -115,7 +115,7 @@
         CreatePipelineLayout(PointerId(0x10), (
             label: None,
             bind_group_layouts: [
-                PointerId(0x10),
+                Some(PointerId(0x10)),
             ],
             immediate_size: 0,
         )),
@@ -125,7 +125,7 @@
                 label: None,
                 flags: (bits: 3),
             ),
-            data: "zero-init-texture-binding.wgsl",
+            data: File("zero-init-texture-binding.wgsl"),
         ),
         CreateComputePipeline(
             id: PointerId(0x10),

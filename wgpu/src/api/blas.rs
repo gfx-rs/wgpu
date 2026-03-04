@@ -166,10 +166,10 @@ impl Blas {
     ///
     /// The returned type depends on the backend:
     ///
-    #[doc = crate::hal_type_vulkan!("AccelerationStructure")]
-    #[doc = crate::hal_type_metal!("AccelerationStructure")]
-    #[doc = crate::hal_type_dx12!("AccelerationStructure")]
-    #[doc = crate::hal_type_gles!("AccelerationStructure")]
+    #[doc = crate::macros::hal_type_vulkan!("AccelerationStructure")]
+    #[doc = crate::macros::hal_type_metal!("AccelerationStructure")]
+    #[doc = crate::macros::hal_type_dx12!("AccelerationStructure")]
+    #[doc = crate::macros::hal_type_gles!("AccelerationStructure")]
     ///
     /// # Deadlocks
     ///

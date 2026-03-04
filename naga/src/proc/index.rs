@@ -483,7 +483,7 @@ impl GuardedIndex {
         expressions: &crate::Arena<crate::Expression>,
         module: &crate::Module,
     ) -> Self {
-        match module.to_ctx().eval_expr_to_u32_from(expr, expressions) {
+        match module.to_ctx().get_const_val_from(expr, expressions) {
             Ok(value) => Self::Known(value),
             Err(_) => Self::Expression(expr),
         }

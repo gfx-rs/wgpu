@@ -143,6 +143,17 @@ impl Clone for TypeResolution {
                     columns,
                     scalar,
                 },
+                Ti::CooperativeMatrix {
+                    columns,
+                    rows,
+                    scalar,
+                    role,
+                } => Ti::CooperativeMatrix {
+                    columns,
+                    rows,
+                    scalar,
+                    role,
+                },
                 Ti::Pointer { base, space } => Ti::Pointer { base, space },
                 Ti::ValuePointer {
                     size,
@@ -476,7 +487,7 @@ impl<'a> ResolveContext<'a> {
                     None => Ti::Scalar(scalar),
                 }),
                 ref other => {
-                    log::error!("Pointer type {other:?}");
+                    log::error!("Pointer {pointer:?} type {other:?}");
                     return Err(ResolveError::InvalidPointer(pointer));
                 }
             },
@@ -587,6 +598,20 @@ impl<'a> ResolveContext<'a> {
                         (&Ti::Scalar { .. }, _) => res_right.clone(),
                         (_, &Ti::Scalar { .. }) => res_left.clone(),
                         (&Ti::Vector { .. }, &Ti::Vector { .. }) => res_left.clone(),
+                        (
+                            &Ti::CooperativeMatrix {
+                                columns: _,
+                                rows,
+                                scalar,
+                                role,
+                            },
+                            &Ti::CooperativeMatrix { columns, .. },
+                        ) => TypeResolution::Value(Ti::CooperativeMatrix {
+                            columns,
+                            rows,
+                            scalar,
+                            role,
+                        }),
                         (tl, tr) => {
                             return Err(ResolveError::IncompatibleOperands(format!(
                                 "{tl:?} * {tr:?}"
@@ -776,6 +801,25 @@ impl<'a> ResolveContext<'a> {
                 scalar: crate::Scalar::U32,
                 size: crate::VectorSize::Quad,
             }),
+            crate::Expression::CooperativeLoad {
+                columns,
+                rows,
+                role,
+                ref data,
+            } => {
+                let scalar = past(data.pointer)?
+                    .inner_with(types)
+                    .pointer_base_type()
+                    .and_then(|tr| tr.inner_with(types).scalar())
+                    .ok_or(ResolveError::InvalidPointer(data.pointer))?;
+                TypeResolution::Value(Ti::CooperativeMatrix {
+                    columns,
+                    rows,
+                    scalar,
+                    role,
+                })
+            }
+            crate::Expression::CooperativeMultiplyAdd { a: _, b: _, c } => past(c)?.clone(),
         })
     }
 }

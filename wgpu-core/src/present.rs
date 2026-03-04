@@ -302,6 +302,7 @@ impl Surface {
             Some(resource::TextureInner::Surface { raw }) => {
                 let raw_surface = self.raw(device.backend()).unwrap();
                 let raw_queue = queue.raw();
+                let _fence_lock = device.fence.write();
                 unsafe { raw_queue.present(raw_surface, raw) }
             }
             _ => unreachable!(),
@@ -368,6 +369,8 @@ impl Global {
 
         let fid = self.hub.textures.prepare(texture_id_in);
 
+        let output = surface.get_current_texture()?;
+
         #[cfg(feature = "trace")]
         if let Some(present) = surface.presentation.lock().as_ref() {
             if let Some(ref mut trace) = *present.device.trace.lock() {
@@ -379,8 +382,6 @@ impl Global {
                 }
             }
         }
-
-        let output = surface.get_current_texture()?;
 
         let status = output.status;
         let texture_id = output

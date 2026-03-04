@@ -99,7 +99,12 @@ impl CompilationContext<'_> {
                     unsafe { gl.bind_frag_data_location(program, location.location, &name) }
                 }
                 naga::ShaderStage::Compute => {}
-                naga::ShaderStage::Task | naga::ShaderStage::Mesh => unreachable!(),
+                naga::ShaderStage::Task
+                | naga::ShaderStage::Mesh
+                | naga::ShaderStage::RayGeneration
+                | naga::ShaderStage::AnyHit
+                | naga::ShaderStage::ClosestHit
+                | naga::ShaderStage::Miss => unreachable!(),
             }
         }
 
@@ -175,7 +180,12 @@ impl super::Device {
             naga::ShaderStage::Vertex => glow::VERTEX_SHADER,
             naga::ShaderStage::Fragment => glow::FRAGMENT_SHADER,
             naga::ShaderStage::Compute => glow::COMPUTE_SHADER,
-            naga::ShaderStage::Task | naga::ShaderStage::Mesh => unreachable!(),
+            naga::ShaderStage::Task
+            | naga::ShaderStage::Mesh
+            | naga::ShaderStage::RayGeneration
+            | naga::ShaderStage::AnyHit
+            | naga::ShaderStage::ClosestHit
+            | naga::ShaderStage::Miss => unreachable!(),
         };
 
         let raw = unsafe { gl.create_shader(target) }.unwrap();
@@ -311,16 +321,18 @@ impl super::Device {
         multiview_mask: Option<NonZeroU32>,
     ) -> Result<Arc<super::PipelineInner>, crate::PipelineError> {
         let mut program_stages = ArrayVec::new();
-        let mut group_to_binding_to_slot = Vec::with_capacity(layout.group_infos.len());
-        for group in &*layout.group_infos {
-            group_to_binding_to_slot.push(group.binding_to_slot.clone());
-        }
+        let group_to_binding_to_slot = layout
+            .group_infos
+            .iter()
+            .map(|group| group.as_ref().map(|group| group.binding_to_slot.clone()))
+            .collect::<Vec<_>>();
         for &(naga_stage, stage) in &shaders {
             program_stages.push(super::ProgramStage {
                 naga_stage: naga_stage.to_owned(),
                 shader_id: stage.module.id,
                 entry_point: stage.entry_point.to_owned(),
                 zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
+                constant_hash: Self::create_constant_hash(stage),
             });
         }
         let mut guard = self
@@ -350,6 +362,17 @@ impl super::Device {
         drop(guard);
 
         Ok(program)
+    }
+
+    fn create_constant_hash(stage: &crate::ProgrammableStage<super::ShaderModule>) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::new();
+
+        for (key, value) in stage.constants.iter() {
+            buf.extend_from_slice(key.as_bytes());
+            buf.extend_from_slice(&value.to_ne_bytes());
+        }
+
+        buf
     }
 
     unsafe fn create_program<'a>(
@@ -1176,6 +1199,11 @@ impl crate::Device for super::Device {
         let mut binding_map = glsl::BindingMap::default();
 
         for (group_index, bg_layout) in desc.bind_group_layouts.iter().enumerate() {
+            let Some(bg_layout) = bg_layout else {
+                group_infos.push(None);
+                continue;
+            };
+
             // create a vector with the size enough to hold all the bindings, filled with `!0`
             let mut binding_to_slot = vec![
                 !0;
@@ -1214,10 +1242,10 @@ impl crate::Device for super::Device {
                 *counter += entry.count.map_or(1, |c| c.get() as u8);
             }
 
-            group_infos.push(super::BindGroupLayoutInfo {
+            group_infos.push(Some(super::BindGroupLayoutInfo {
                 entries: Arc::clone(&bg_layout.entries),
                 binding_to_slot,
-            });
+            }));
         }
 
         self.counters.pipeline_layouts.add(1);
@@ -1342,6 +1370,7 @@ impl crate::Device for super::Device {
                 // The backend doesn't yet expose this feature so it should be fine
                 crate::ShaderInput::Glsl { .. } => unimplemented!(),
                 crate::ShaderInput::SpirV(_)
+                | crate::ShaderInput::MetalLib { .. }
                 | crate::ShaderInput::Msl { .. }
                 | crate::ShaderInput::Dxil { .. }
                 | crate::ShaderInput::Hlsl { .. } => {
@@ -1425,8 +1454,8 @@ impl crate::Device for super::Device {
             vertex_attributes,
             color_targets,
             depth: desc.depth_stencil.as_ref().map(|ds| super::DepthState {
-                function: conv::map_compare_func(ds.depth_compare),
-                mask: ds.depth_write_enabled,
+                function: conv::map_compare_func(ds.depth_compare.unwrap_or_default()),
+                mask: ds.depth_write_enabled.unwrap_or_default(),
             }),
             depth_bias: desc
                 .depth_stencil

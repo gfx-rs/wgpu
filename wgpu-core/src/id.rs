@@ -128,7 +128,7 @@ impl TryFrom<SerialId> for RawId {
 
 /// Identify an object by the pointer returned by `Arc::as_ptr`.
 ///
-/// This is used for tracing.
+/// This is used for tracing. See [IDs and tracing](crate::hub#ids-and-tracing).
 #[allow(dead_code)]
 #[cfg(feature = "serde")]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

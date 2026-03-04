@@ -1,19 +1,26 @@
 use alloc::{
     boxed::Box,
     string::{String, ToString as _},
+    sync::Arc,
     vec::Vec,
 };
 use core::fmt;
 
 use arrayvec::ArrayVec;
 use hashbrown::hash_map::Entry;
+use shader_io_deductions::{display_deductions_as_optional_list, MaxVertexShaderOutputDeduction};
 use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
     BindGroupLayoutEntry, BindingType,
 };
 
-use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
+use crate::{
+    device::bgl, resource::InvalidResourceError,
+    validation::shader_io_deductions::MaxFragmentShaderInputDeduction, FastHashMap, FastHashSet,
+};
+
+pub mod shader_io_deductions;
 
 #[derive(Debug)]
 enum ResourceType {
@@ -79,7 +86,7 @@ struct Resource {
     class: naga::AddressSpace,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum NumericDimension {
     Scalar,
     Vector(naga::VectorSize),
@@ -96,17 +103,7 @@ impl fmt::Display for NumericDimension {
     }
 }
 
-impl NumericDimension {
-    fn num_components(&self) -> u32 {
-        match *self {
-            Self::Scalar => 1,
-            Self::Vector(size) => size as u32,
-            Self::Matrix(w, h) => w as u32 * h as u32,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NumericType {
     dim: NumericDimension,
     scalar: naga::Scalar,
@@ -124,7 +121,7 @@ impl fmt::Display for NumericType {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InterfaceVar {
     pub ty: NumericType,
     interpolation: Option<naga::Interpolation>,
@@ -153,7 +150,7 @@ impl fmt::Display for InterfaceVar {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 enum Varying {
     Local { location: u32, iv: InterfaceVar },
     BuiltIn(naga::BuiltIn),
@@ -296,8 +293,6 @@ pub enum StageError {
         per_dimension_limit: &'static str,
         total_limit: &'static str,
     },
-    #[error("Shader uses {used} inter-stage components above the limit of {limit}")]
-    TooManyVaryings { used: u32, limit: u32 },
     #[error("Unable to find entry point '{0}'")]
     MissingEntryPoint(String),
     #[error("Shader global {0:?} is not available in the pipeline layout")]
@@ -329,6 +324,55 @@ pub enum StageError {
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(
+        "vertex shader output location Location[{location}] ({var}) exceeds the \
+        `max_inter_stage_shader_variables` limit ({}, 0-based){}",
+        // NOTE: Remember: the limit is 0-based for indices.
+        limit - 1,
+        display_deductions_as_optional_list(deductions, |d| d.for_location())
+    )]
+    VertexOutputLocationTooLarge {
+        location: u32,
+        var: InterfaceVar,
+        limit: u32,
+        deductions: Vec<MaxVertexShaderOutputDeduction>,
+    },
+    #[error(
+        "found {num_found} user-defined vertex shader output variables, which exceeds the \
+        `max_inter_stage_shader_variables` limit ({limit}){}",
+        display_deductions_as_optional_list(deductions, |d| d.for_variables())
+    )]
+    TooManyUserDefinedVertexOutputs {
+        num_found: u32,
+        limit: u32,
+        deductions: Vec<MaxVertexShaderOutputDeduction>,
+    },
+    #[error(
+        "fragment shader input location Location[{location}] ({var}) exceeds the \
+        `max_inter_stage_shader_variables` limit ({}, 0-based){}",
+        // NOTE: Remember: the limit is 0-based for indices.
+        limit - 1,
+        // NOTE: WebGPU spec. validation for fragment inputs is expressed in terms of variables
+        // (unlike vertex outputs), so we use `MaxFragmentShaderInputDeduction::for_variables` here
+        // (and not a non-existent `for_locations`).
+        display_deductions_as_optional_list(deductions, |d| d.for_variables())
+    )]
+    FragmentInputLocationTooLarge {
+        location: u32,
+        var: InterfaceVar,
+        limit: u32,
+        deductions: Vec<MaxFragmentShaderInputDeduction>,
+    },
+    #[error(
+        "found {num_found} user-defined fragment shader input variables, which exceeds the \
+        `max_inter_stage_shader_variables` limit ({limit}){}",
+        display_deductions_as_optional_list(deductions, |d| d.for_variables())
+    )]
+    TooManyUserDefinedFragmentInputs {
+        num_found: u32,
+        limit: u32,
+        deductions: Vec<MaxFragmentShaderInputDeduction>,
+    },
+    #[error(
         "Location[{location}] {var}'s index exceeds the `max_color_attachments` limit ({limit})"
     )]
     ColorAttachmentLocationTooLarge {
@@ -353,6 +397,10 @@ pub enum StageError {
     MissingPrimitiveIndex,
     #[error("DrawId cannot be used in the same pipeline as a task shader")]
     DrawIdError,
+    #[error("Pipeline uses dual-source blending, but the shader does not support it")]
+    InvalidDualSourceBlending,
+    #[error("Fragment shader writes depth, but pipeline does not have a depth attachment")]
+    MissingFragDepthAttachment,
 }
 
 impl WebGpuError for StageError {
@@ -371,10 +419,13 @@ impl WebGpuError for StageError {
                 error,
             } => error,
             Self::InvalidWorkgroupSize { .. }
-            | Self::TooManyVaryings { .. }
             | Self::MissingEntryPoint(..)
             | Self::NoEntryPointFound
             | Self::MultipleEntryPointsFound
+            | Self::VertexOutputLocationTooLarge { .. }
+            | Self::TooManyUserDefinedVertexOutputs { .. }
+            | Self::FragmentInputLocationTooLarge { .. }
+            | Self::TooManyUserDefinedFragmentInputs { .. }
             | Self::ColorAttachmentLocationTooLarge { .. }
             | Self::TooManyMeshVertices { .. }
             | Self::TooManyMeshPrimitives { .. }
@@ -382,7 +433,9 @@ impl WebGpuError for StageError {
             | Self::TaskPayloadMustMatch { .. }
             | Self::InvalidPrimitiveIndex
             | Self::MissingPrimitiveIndex
-            | Self::DrawIdError => return ErrorType::Validation,
+            | Self::DrawIdError
+            | Self::InvalidDualSourceBlending
+            | Self::MissingFragDepthAttachment => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
@@ -561,7 +614,7 @@ impl Resource {
             ResourceType::Texture {
                 dim,
                 arrayed,
-                class,
+                class: shader_class,
             } => {
                 let view_dimension = match entry.ty {
                     BindingType::Texture { view_dimension, .. }
@@ -602,64 +655,88 @@ impl Resource {
                         }
                     }
                 }
-                let expected_class = match entry.ty {
+                match entry.ty {
                     BindingType::Texture {
                         sample_type,
                         view_dimension: _,
                         multisampled: multi,
-                    } => match sample_type {
-                        wgt::TextureSampleType::Float { .. } => naga::ImageClass::Sampled {
-                            kind: naga::ScalarKind::Float,
-                            multi,
-                        },
-                        wgt::TextureSampleType::Sint => naga::ImageClass::Sampled {
-                            kind: naga::ScalarKind::Sint,
-                            multi,
-                        },
-                        wgt::TextureSampleType::Uint => naga::ImageClass::Sampled {
-                            kind: naga::ScalarKind::Uint,
-                            multi,
-                        },
-                        wgt::TextureSampleType::Depth => naga::ImageClass::Depth { multi },
-                    },
-                    BindingType::StorageTexture {
-                        access,
-                        format,
-                        view_dimension: _,
                     } => {
-                        let naga_format = map_storage_format_to_naga(format)
-                            .ok_or(BindingError::BadStorageFormat(format))?;
-                        let naga_access = match access {
-                            wgt::StorageTextureAccess::ReadOnly => naga::StorageAccess::LOAD,
-                            wgt::StorageTextureAccess::WriteOnly => naga::StorageAccess::STORE,
-                            wgt::StorageTextureAccess::ReadWrite => {
-                                naga::StorageAccess::LOAD | naga::StorageAccess::STORE
-                            }
-                            wgt::StorageTextureAccess::Atomic => {
-                                naga::StorageAccess::ATOMIC
-                                    | naga::StorageAccess::LOAD
-                                    | naga::StorageAccess::STORE
-                            }
+                        let binding_class = match sample_type {
+                            wgt::TextureSampleType::Float { .. } => naga::ImageClass::Sampled {
+                                kind: naga::ScalarKind::Float,
+                                multi,
+                            },
+                            wgt::TextureSampleType::Sint => naga::ImageClass::Sampled {
+                                kind: naga::ScalarKind::Sint,
+                                multi,
+                            },
+                            wgt::TextureSampleType::Uint => naga::ImageClass::Sampled {
+                                kind: naga::ScalarKind::Uint,
+                                multi,
+                            },
+                            wgt::TextureSampleType::Depth => naga::ImageClass::Depth { multi },
                         };
-                        naga::ImageClass::Storage {
-                            format: naga_format,
-                            access: naga_access,
+                        if shader_class == binding_class {
+                            Ok(())
+                        } else {
+                            Err(binding_class)
                         }
                     }
-                    BindingType::ExternalTexture => naga::ImageClass::External,
+                    BindingType::StorageTexture {
+                        access: wgt_binding_access,
+                        format: wgt_binding_format,
+                        view_dimension: _,
+                    } => {
+                        const LOAD_STORE: naga::StorageAccess =
+                            naga::StorageAccess::LOAD.union(naga::StorageAccess::STORE);
+                        let binding_format = map_storage_format_to_naga(wgt_binding_format)
+                            .ok_or(BindingError::BadStorageFormat(wgt_binding_format))?;
+                        let binding_access = match wgt_binding_access {
+                            wgt::StorageTextureAccess::ReadOnly => naga::StorageAccess::LOAD,
+                            wgt::StorageTextureAccess::WriteOnly => naga::StorageAccess::STORE,
+                            wgt::StorageTextureAccess::ReadWrite => LOAD_STORE,
+                            wgt::StorageTextureAccess::Atomic => {
+                                naga::StorageAccess::ATOMIC | LOAD_STORE
+                            }
+                        };
+                        match shader_class {
+                            // Formats must match exactly. A write-only shader (but not a
+                            // read-only shader) is compatible with a read-write binding.
+                            naga::ImageClass::Storage {
+                                format: shader_format,
+                                access: shader_access,
+                            } if shader_format == binding_format
+                                && (shader_access == binding_access
+                                    || shader_access == naga::StorageAccess::STORE
+                                        && binding_access == LOAD_STORE) =>
+                            {
+                                Ok(())
+                            }
+                            _ => Err(naga::ImageClass::Storage {
+                                format: binding_format,
+                                access: binding_access,
+                            }),
+                        }
+                    }
+                    BindingType::ExternalTexture => {
+                        let binding_class = naga::ImageClass::External;
+                        if shader_class == binding_class {
+                            Ok(())
+                        } else {
+                            Err(binding_class)
+                        }
+                    }
                     _ => {
                         return Err(BindingError::WrongType {
                             binding: (&entry.ty).into(),
                             shader: (&self.ty).into(),
                         })
                     }
-                };
-                if class != expected_class {
-                    return Err(BindingError::WrongTextureClass {
-                        binding: expected_class,
-                        shader: class,
-                    });
                 }
+                .map_err(|binding_class| BindingError::WrongTextureClass {
+                    binding: binding_class,
+                    shader: shader_class,
+                })?;
             }
             ResourceType::AccelerationStructure { vertex_return } => match entry.ty {
                 BindingType::AccelerationStructure {
@@ -934,7 +1011,7 @@ pub fn check_texture_format(
     }
 }
 
-pub enum BindingLayoutSource<'a> {
+pub enum BindingLayoutSource {
     /// The binding layout is derived from the pipeline layout.
     ///
     /// This will be filled in by the shader binding validation, as it iterates the shader's interfaces.
@@ -942,10 +1019,10 @@ pub enum BindingLayoutSource<'a> {
     /// The binding layout is provided by the user in BGLs.
     ///
     /// This will be validated against the shader's interfaces.
-    Provided(ArrayVec<&'a bgl::EntryMap, { hal::MAX_BIND_GROUPS }>),
+    Provided(Arc<crate::binding_model::PipelineLayout>),
 }
 
-impl<'a> BindingLayoutSource<'a> {
+impl BindingLayoutSource {
     pub fn new_derived(limits: &wgt::Limits) -> Self {
         let mut array = ArrayVec::new();
         for _ in 0..limits.max_bind_groups {
@@ -1148,10 +1225,9 @@ impl Interface {
 
     pub fn finalize_entry_point_name(
         &self,
-        stage_bit: wgt::ShaderStages,
+        stage: naga::ShaderStage,
         entry_point_name: Option<&str>,
     ) -> Result<String, StageError> {
-        let stage = Self::shader_stage_from_stage_bit(stage_bit);
         entry_point_name
             .map(|ep| ep.to_string())
             .map(Ok)
@@ -1168,42 +1244,33 @@ impl Interface {
             })
     }
 
-    pub(crate) fn shader_stage_from_stage_bit(stage_bit: wgt::ShaderStages) -> naga::ShaderStage {
-        match stage_bit {
-            wgt::ShaderStages::VERTEX => naga::ShaderStage::Vertex,
-            wgt::ShaderStages::FRAGMENT => naga::ShaderStage::Fragment,
-            wgt::ShaderStages::COMPUTE => naga::ShaderStage::Compute,
-            wgt::ShaderStages::MESH => naga::ShaderStage::Mesh,
-            wgt::ShaderStages::TASK => naga::ShaderStage::Task,
-            _ => unreachable!(),
-        }
-    }
-
+    /// Among other things, this implements some validation logic defined by the WebGPU spec. at
+    /// <https://www.w3.org/TR/webgpu/#abstract-opdef-validating-inter-stage-interfaces>.
     pub fn check_stage(
         &self,
-        layouts: &mut BindingLayoutSource<'_>,
+        layouts: &mut BindingLayoutSource,
         shader_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         entry_point_name: &str,
-        stage_bit: wgt::ShaderStages,
+        shader_stage: ShaderStageForValidation,
         inputs: StageIo,
-        compare_function: Option<wgt::CompareFunction>,
     ) -> Result<StageIo, StageError> {
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
-        let shader_stage = Self::shader_stage_from_stage_bit(stage_bit);
-        let pair = (shader_stage, entry_point_name.to_string());
+        let pair = (shader_stage.to_naga(), entry_point_name.to_string());
         let entry_point = match self.entry_points.get(&pair) {
             Some(some) => some,
             None => return Err(StageError::MissingEntryPoint(pair.1)),
         };
         let (_, entry_point_name) = pair;
 
+        let stage_bit = shader_stage.to_wgt_bit();
+
         // check resources visibility
         for &handle in entry_point.resources.iter() {
             let res = &self.resources[handle];
             let result = 'err: {
                 match layouts {
-                    BindingLayoutSource::Provided(layouts) => {
+                    BindingLayoutSource::Provided(pipeline_layout) => {
                         // update the required binding size for this buffer
                         if let ResourceType::Buffer { size } = res.ty {
                             match shader_binding_sizes.entry(res.bind) {
@@ -1216,11 +1283,9 @@ impl Interface {
                             }
                         }
 
-                        let Some(map) = layouts.get(res.bind.group as usize) else {
-                            break 'err Err(BindingError::Missing);
-                        };
-
-                        let Some(entry) = map.get(res.bind.binding) else {
+                        let Some(entry) =
+                            pipeline_layout.get_bgl_entry(res.bind.group, res.bind.binding)
+                        else {
                             break 'err Err(BindingError::Missing);
                         };
 
@@ -1274,15 +1339,15 @@ impl Interface {
         //
         // We only need to do this if the binding layout is provided by the user, as derived
         // layouts will inherently be correctly tagged.
-        if let BindingLayoutSource::Provided(layouts) = layouts {
+        if let BindingLayoutSource::Provided(pipeline_layout) = layouts {
             for &(texture_handle, sampler_handle) in entry_point.sampling_pairs.iter() {
                 let texture_bind = &self.resources[texture_handle].bind;
                 let sampler_bind = &self.resources[sampler_handle].bind;
-                let texture_layout = layouts[texture_bind.group as usize]
-                    .get(texture_bind.binding)
+                let texture_layout = pipeline_layout
+                    .get_bgl_entry(texture_bind.group, texture_bind.binding)
                     .unwrap();
-                let sampler_layout = layouts[sampler_bind.group as usize]
-                    .get(sampler_bind.binding)
+                let sampler_layout = pipeline_layout
+                    .get_bgl_entry(sampler_bind.group, sampler_bind.binding)
                     .unwrap();
                 assert!(texture_layout.visibility.contains(stage_bit));
                 assert!(sampler_layout.visibility.contains(stage_bit));
@@ -1319,13 +1384,13 @@ impl Interface {
         }
 
         // check workgroup size limits
-        if shader_stage.compute_like() {
+        if shader_stage.to_naga().compute_like() {
             let (
                 max_workgroup_size_limits,
                 max_workgroup_size_total,
                 per_dimension_limit,
                 total_limit,
-            ) = match shader_stage {
+            ) = match shader_stage.to_naga() {
                 naga::ShaderStage::Compute => (
                     [
                         self.limits.max_compute_workgroup_size_x,
@@ -1377,7 +1442,6 @@ impl Interface {
             }
         }
 
-        let mut inter_stage_components = 0;
         let mut this_stage_primitive_index = false;
         let mut has_draw_id = false;
 
@@ -1390,38 +1454,42 @@ impl Interface {
                         .get(&location)
                         .ok_or(InputError::Missing)
                         .and_then(|provided| {
-                            let (compatible, num_components, per_primitive_correct) =
-                                match shader_stage {
-                                    // For vertex attributes, there are defaults filled out
-                                    // by the driver if data is not provided.
-                                    naga::ShaderStage::Vertex => {
-                                        let is_compatible =
-                                            iv.ty.scalar.kind == provided.ty.scalar.kind;
-                                        // vertex inputs don't count towards inter-stage
-                                        (is_compatible, 0, !iv.per_primitive)
+                            let (compatible, per_primitive_correct) = match shader_stage.to_naga() {
+                                // For vertex attributes, there are defaults filled out
+                                // by the driver if data is not provided.
+                                naga::ShaderStage::Vertex => {
+                                    let is_compatible =
+                                        iv.ty.scalar.kind == provided.ty.scalar.kind;
+                                    // vertex inputs don't count towards inter-stage
+                                    (is_compatible, !iv.per_primitive)
+                                }
+                                naga::ShaderStage::Fragment => {
+                                    if iv.interpolation != provided.interpolation {
+                                        return Err(InputError::InterpolationMismatch(
+                                            provided.interpolation,
+                                        ));
                                     }
-                                    naga::ShaderStage::Fragment => {
-                                        if iv.interpolation != provided.interpolation {
-                                            return Err(InputError::InterpolationMismatch(
-                                                provided.interpolation,
-                                            ));
-                                        }
-                                        if iv.sampling != provided.sampling {
-                                            return Err(InputError::SamplingMismatch(
-                                                provided.sampling,
-                                            ));
-                                        }
-                                        (
-                                            iv.ty.is_subtype_of(&provided.ty),
-                                            iv.ty.dim.num_components(),
-                                            iv.per_primitive == provided.per_primitive,
-                                        )
+                                    if iv.sampling != provided.sampling {
+                                        return Err(InputError::SamplingMismatch(
+                                            provided.sampling,
+                                        ));
                                     }
-                                    // These can't have varying inputs
-                                    naga::ShaderStage::Compute
-                                    | naga::ShaderStage::Task
-                                    | naga::ShaderStage::Mesh => (false, 0, false),
-                                };
+                                    (
+                                        iv.ty.is_subtype_of(&provided.ty),
+                                        iv.per_primitive == provided.per_primitive,
+                                    )
+                                }
+                                // These can't have varying inputs
+                                naga::ShaderStage::Compute
+                                | naga::ShaderStage::Task
+                                | naga::ShaderStage::Mesh => (false, false),
+                                naga::ShaderStage::RayGeneration
+                                | naga::ShaderStage::AnyHit
+                                | naga::ShaderStage::ClosestHit
+                                | naga::ShaderStage::Miss => {
+                                    unreachable!()
+                                }
+                            };
                             if !compatible {
                                 return Err(InputError::WrongType(provided.ty));
                             } else if !per_primitive_correct {
@@ -1430,25 +1498,21 @@ impl Interface {
                                     shader: iv.per_primitive,
                                 });
                             }
-                            Ok(num_components)
+                            Ok(())
                         });
-                    match result {
-                        Ok(num_components) => {
-                            inter_stage_components += num_components;
-                        }
-                        Err(error) => {
-                            return Err(StageError::Input {
-                                location,
-                                var: iv.clone(),
-                                error,
-                            })
-                        }
+
+                    if let Err(error) = result {
+                        return Err(StageError::Input {
+                            location,
+                            var: iv.clone(),
+                            error,
+                        });
                     }
                 }
                 Varying::BuiltIn(naga::BuiltIn::PrimitiveIndex) => {
                     this_stage_primitive_index = true;
                 }
-                Varying::BuiltIn(naga::BuiltIn::DrawID) => {
+                Varying::BuiltIn(naga::BuiltIn::DrawIndex) => {
                     has_draw_id = true;
                 }
                 Varying::BuiltIn(_) => {}
@@ -1456,12 +1520,49 @@ impl Interface {
         }
 
         match shader_stage {
-            naga::ShaderStage::Vertex => {
+            ShaderStageForValidation::Vertex {
+                topology,
+                compare_function,
+            } => {
+                let mut max_vertex_shader_output_variables =
+                    self.limits.max_inter_stage_shader_variables;
+                let mut max_vertex_shader_output_location = max_vertex_shader_output_variables - 1;
+
+                let point_list_deduction = if topology == wgt::PrimitiveTopology::PointList {
+                    Some(MaxVertexShaderOutputDeduction::PointListPrimitiveTopology)
+                } else {
+                    None
+                };
+
+                let deductions = point_list_deduction.into_iter();
+
+                for deduction in deductions.clone() {
+                    // NOTE: Deductions, in the current version of the spec. we implement, do not
+                    // ever exceed the minimum variables available.
+                    max_vertex_shader_output_variables = max_vertex_shader_output_variables
+                        .checked_sub(deduction.for_variables())
+                        .unwrap();
+                    max_vertex_shader_output_location = max_vertex_shader_output_location
+                        .checked_sub(deduction.for_location())
+                        .unwrap();
+                }
+
+                let mut num_user_defined_outputs = 0;
+
                 for output in entry_point.outputs.iter() {
-                    //TODO: count builtins towards the limit?
-                    inter_stage_components += match *output {
-                        Varying::Local { ref iv, .. } => iv.ty.dim.num_components(),
-                        Varying::BuiltIn(_) => 0,
+                    match *output {
+                        Varying::Local { ref iv, location } => {
+                            if location > max_vertex_shader_output_location {
+                                return Err(StageError::VertexOutputLocationTooLarge {
+                                    location,
+                                    var: iv.clone(),
+                                    limit: self.limits.max_inter_stage_shader_variables,
+                                    deductions: deductions.collect(),
+                                });
+                            }
+                            num_user_defined_outputs += 1;
+                        }
+                        Varying::BuiltIn(_) => {}
                     };
 
                     if let Some(
@@ -1488,8 +1589,74 @@ impl Interface {
                         }
                     }
                 }
+
+                if num_user_defined_outputs > max_vertex_shader_output_variables {
+                    return Err(StageError::TooManyUserDefinedVertexOutputs {
+                        num_found: num_user_defined_outputs,
+                        limit: self.limits.max_inter_stage_shader_variables,
+                        deductions: deductions.collect(),
+                    });
+                }
             }
-            naga::ShaderStage::Fragment => {
+            ShaderStageForValidation::Fragment {
+                dual_source_blending,
+                has_depth_attachment,
+            } => {
+                let mut max_fragment_shader_input_variables =
+                    self.limits.max_inter_stage_shader_variables;
+
+                let deductions = entry_point.inputs.iter().filter_map(|output| match output {
+                    Varying::Local { .. } => None,
+                    Varying::BuiltIn(builtin) => {
+                        MaxFragmentShaderInputDeduction::from_inter_stage_builtin(*builtin).or_else(
+                            || {
+                                unreachable!(
+                                    concat!(
+                                        "unexpected built-in provided; ",
+                                        "{:?} is not used for fragment stage input",
+                                    ),
+                                    builtin
+                                )
+                            },
+                        )
+                    }
+                });
+
+                for deduction in deductions.clone() {
+                    // NOTE: Deductions, in the current version of the spec. we implement, do not
+                    // ever exceed the minimum variables available.
+                    max_fragment_shader_input_variables = max_fragment_shader_input_variables
+                        .checked_sub(deduction.for_variables())
+                        .unwrap();
+                }
+
+                let mut num_user_defined_inputs = 0;
+
+                for output in entry_point.inputs.iter() {
+                    match *output {
+                        Varying::Local { ref iv, location } => {
+                            if location >= self.limits.max_inter_stage_shader_variables {
+                                return Err(StageError::FragmentInputLocationTooLarge {
+                                    location,
+                                    var: iv.clone(),
+                                    limit: self.limits.max_inter_stage_shader_variables,
+                                    deductions: deductions.collect(),
+                                });
+                            }
+                            num_user_defined_inputs += 1;
+                        }
+                        Varying::BuiltIn(_) => {}
+                    };
+                }
+
+                if num_user_defined_inputs > max_fragment_shader_input_variables {
+                    return Err(StageError::TooManyUserDefinedFragmentInputs {
+                        num_found: num_user_defined_inputs,
+                        limit: self.limits.max_inter_stage_shader_variables,
+                        deductions: deductions.collect(),
+                    });
+                }
+
                 for output in &entry_point.outputs {
                     let &Varying::Local { location, ref iv } = output else {
                         continue;
@@ -1502,15 +1669,31 @@ impl Interface {
                         });
                     }
                 }
+
+                // If the pipeline uses dual-source blending, then the shader
+                // must configure appropriate I/O, but it is not an error to
+                // use a shader that defines the I/O in a pipeline that only
+                // uses one blend source.
+                if dual_source_blending && !entry_point.dual_source_blending {
+                    return Err(StageError::InvalidDualSourceBlending);
+                }
+
+                if entry_point
+                    .outputs
+                    .contains(&Varying::BuiltIn(naga::BuiltIn::FragDepth))
+                    && !has_depth_attachment
+                {
+                    return Err(StageError::MissingFragDepthAttachment);
+                }
+            }
+            ShaderStageForValidation::Mesh => {
+                for output in &entry_point.outputs {
+                    if matches!(output, Varying::BuiltIn(naga::BuiltIn::PrimitiveIndex)) {
+                        this_stage_primitive_index = true;
+                    }
+                }
             }
             _ => (),
-        }
-
-        if inter_stage_components > self.limits.max_inter_stage_shader_components {
-            return Err(StageError::TooManyVaryings {
-                used: inter_stage_components,
-                limit: self.limits.max_inter_stage_shader_components,
-            });
         }
 
         if let Some(ref mesh_info) = entry_point.mesh_info {
@@ -1535,7 +1718,7 @@ impl Interface {
                 });
             }
         }
-        if shader_stage == naga::ShaderStage::Mesh
+        if shader_stage.to_naga() == naga::ShaderStage::Mesh
             && entry_point.task_payload_size != inputs.task_payload_size
         {
             return Err(StageError::TaskPayloadMustMatch {
@@ -1545,18 +1728,18 @@ impl Interface {
         }
 
         // Fragment shader primitive index is treated like a varying
-        if shader_stage == naga::ShaderStage::Fragment
+        if shader_stage.to_naga() == naga::ShaderStage::Fragment
             && this_stage_primitive_index
             && inputs.primitive_index == Some(false)
         {
             return Err(StageError::InvalidPrimitiveIndex);
-        } else if shader_stage == naga::ShaderStage::Fragment
+        } else if shader_stage.to_naga() == naga::ShaderStage::Fragment
             && !this_stage_primitive_index
             && inputs.primitive_index == Some(true)
         {
             return Err(StageError::MissingPrimitiveIndex);
         }
-        if shader_stage == naga::ShaderStage::Mesh
+        if shader_stage.to_naga() == naga::ShaderStage::Mesh
             && inputs.task_payload_size.is_some()
             && has_draw_id
         {
@@ -1575,7 +1758,7 @@ impl Interface {
         Ok(StageIo {
             task_payload_size: entry_point.task_payload_size,
             varyings: outputs,
-            primitive_index: if shader_stage == naga::ShaderStage::Mesh {
+            primitive_index: if shader_stage.to_naga() == naga::ShaderStage::Mesh {
                 Some(this_stage_primitive_index)
             } else {
                 None
@@ -1623,4 +1806,40 @@ pub fn validate_color_attachment_bytes_per_sample(
     }
 
     Ok(())
+}
+
+pub enum ShaderStageForValidation {
+    Vertex {
+        topology: wgt::PrimitiveTopology,
+        compare_function: Option<wgt::CompareFunction>,
+    },
+    Mesh,
+    Fragment {
+        dual_source_blending: bool,
+        has_depth_attachment: bool,
+    },
+    Compute,
+    Task,
+}
+
+impl ShaderStageForValidation {
+    pub fn to_naga(&self) -> naga::ShaderStage {
+        match self {
+            Self::Vertex { .. } => naga::ShaderStage::Vertex,
+            Self::Mesh => naga::ShaderStage::Mesh,
+            Self::Fragment { .. } => naga::ShaderStage::Fragment,
+            Self::Compute => naga::ShaderStage::Compute,
+            Self::Task => naga::ShaderStage::Task,
+        }
+    }
+
+    pub fn to_wgt_bit(&self) -> wgt::ShaderStages {
+        match self {
+            Self::Vertex { .. } => wgt::ShaderStages::VERTEX,
+            Self::Mesh => wgt::ShaderStages::MESH,
+            Self::Fragment { .. } => wgt::ShaderStages::FRAGMENT,
+            Self::Compute => wgt::ShaderStages::COMPUTE,
+            Self::Task => wgt::ShaderStages::TASK,
+        }
+    }
 }

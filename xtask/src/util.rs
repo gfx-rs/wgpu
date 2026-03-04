@@ -2,6 +2,7 @@ use std::{ffi::OsString, io, process::Command};
 
 use anyhow::Context;
 use pico_args::Arguments;
+use serde_json::{json, Value};
 use xshell::Shell;
 
 pub(crate) struct Program {
@@ -126,6 +127,21 @@ fn parse_git_version_output(output: &str) -> anyhow::Result<GitVersion> {
     log::debug!("detected Git version {raw_version}");
 
     Ok(parsed)
+}
+
+pub(crate) fn parse_binary_from_cargo_json(jsonl: &str) -> Option<String> {
+    jsonl
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter(|json| {
+            json.get("reason") == Some(&json!("compiler-artifact"))
+                && json.get("target").and_then(|obj| obj.get("kind")) == Some(&json!(["bin"]))
+        })
+        .find_map(|json| {
+            json.get("executable")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+        })
 }
 
 #[test]

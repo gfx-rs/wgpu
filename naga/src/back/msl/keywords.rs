@@ -359,6 +359,8 @@ const RESERVED: &[&str] = &[
     super::writer::IMAGE_SIZE_EXTERNAL_FUNCTION,
     super::writer::ARGUMENT_BUFFER_WRAPPER_STRUCT,
     super::writer::EXTERNAL_TEXTURE_WRAPPER_STRUCT,
+    super::writer::COOPERATIVE_LOAD_FUNCTION,
+    super::writer::COOPERATIVE_MULTIPLY_ADD_FUNCTION,
 ];
 
 // The set of concrete integer dot product function variants.

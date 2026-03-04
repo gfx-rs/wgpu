@@ -10,26 +10,24 @@ use wgt::{
     TextureUsages, TextureViewDimension, VertexStepMode,
 };
 
-use crate::command::{
-    encoder::EncodingState,
-    pass::{self, flush_bindings_helper},
-    pass_base, pass_try, validate_and_begin_occlusion_query,
-    validate_and_begin_pipeline_statistics_query, ArcCommand, DebugGroupError, EncoderStateError,
-    InnerCommandEncoder, PassStateError, TimestampWritesError,
-};
-use crate::pipeline::{RenderPipeline, VertexStep};
-use crate::resource::RawResourceAccess;
-use crate::resource::{InvalidResourceError, ResourceErrorIdent};
-use crate::snatch::SnatchGuard;
 use crate::{
     api_log,
+    binding_model::{BindError, ImmediateUploadError},
     command::{
         bind::Binder,
-        end_occlusion_query, end_pipeline_statistics_query,
-        memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
-        ArcPassTimestampWrites, BasePass, BindGroupStateChange, CommandEncoderError, DrawError,
-        ExecutionError, MapPassErr, PassErrorScope, PassTimestampWrites, QueryUseError,
-        RenderCommandError, StateChange,
+        memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState, TextureSurfaceDiscard},
+        pass::{self, flush_bindings_helper},
+        pass_base, pass_try,
+        query::{
+            end_occlusion_query, end_pipeline_statistics_query, validate_and_begin_occlusion_query,
+            validate_and_begin_pipeline_statistics_query, QueryResetMap,
+        },
+        render_command::ArcRenderCommand,
+        ArcCommand, ArcPassTimestampWrites, BasePass, BindGroupStateChange,
+        CommandBufferTextureMemoryActions, CommandEncoder, CommandEncoderError, DebugGroupError,
+        DrawCommandFamily, DrawError, DrawKind, EncoderStateError, EncodingState, ExecutionError,
+        InnerCommandEncoder, MapPassErr, PassErrorScope, PassStateError, PassTimestampWrites,
+        QueryUseError, Rect, RenderCommandError, StateChange, TimestampWritesError,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
@@ -38,11 +36,13 @@ use crate::{
     global::Global,
     hal_label, id,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
-    pipeline::PipelineFlags,
+    pipeline::{PipelineFlags, RenderPipeline, VertexStep},
     resource::{
-        DestroyedResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,
-        ParentDevice, QuerySet, Texture, TextureView, TextureViewNotRenderableReason,
+        DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
+        MissingTextureUsageError, ParentDevice, QuerySet, RawResourceAccess, ResourceErrorIdent,
+        Texture, TextureView, TextureViewNotRenderableReason,
     },
+    snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker, UsageScope},
     validation, Label,
 };
@@ -52,14 +52,6 @@ use serde::Deserialize;
 #[cfg(feature = "serde")]
 use serde::Serialize;
 
-use super::render_command::ArcRenderCommand;
-use super::{
-    memory_init::TextureSurfaceDiscard, CommandBufferTextureMemoryActions, CommandEncoder,
-    QueryResetMap,
-};
-use super::{DrawCommandFamily, DrawKind, Rect};
-
-use crate::binding_model::{BindError, ImmediateUploadError};
 pub use wgt::{LoadOp, StoreOp};
 
 fn load_hal_ops<V>(load: LoadOp<V>) -> hal::AttachmentOps {
@@ -567,21 +559,20 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
 
             if family == DrawCommandFamily::DrawIndexed {
                 // Pipeline expects an index buffer
-                if let Some(pipeline_index_format) = pipeline.strip_index_format {
-                    // We have a buffer bound
-                    let buffer_index_format = self
-                        .index
-                        .buffer_format
-                        .ok_or(DrawError::MissingIndexBuffer)?;
+                // We have a buffer bound
+                let buffer_index_format = self
+                    .index
+                    .buffer_format
+                    .ok_or(DrawError::MissingIndexBuffer)?;
 
-                    // The buffers are different formats
-                    if pipeline_index_format != buffer_index_format {
-                        return Err(DrawError::UnmatchedIndexFormats {
-                            pipeline: pipeline.error_ident(),
-                            pipeline_format: pipeline_index_format,
-                            buffer_format: buffer_index_format,
-                        });
-                    }
+                if pipeline.topology.is_strip()
+                    && pipeline.strip_index_format != Some(buffer_index_format)
+                {
+                    return Err(DrawError::UnmatchedStripIndexFormat {
+                        pipeline: pipeline.error_ident(),
+                        strip_index_format: pipeline.strip_index_format,
+                        buffer_format: buffer_index_format,
+                    });
                 }
             }
             if (family == DrawCommandFamily::DrawMeshTasks) != pipeline.is_mesh {
@@ -1745,6 +1736,14 @@ impl Global {
                     let query_set = query_sets.get(occlusion_query_set).get()?;
                     query_set.same_device(device)?;
 
+                    if !matches!(query_set.desc.ty, wgt::QueryType::Occlusion) {
+                        return Err(QueryUseError::IncompatibleType {
+                            set_type: query_set.desc.ty.into(),
+                            query_type: super::SimplifiedQueryType::Occlusion,
+                        }
+                        .into());
+                    }
+
                     Some(query_set)
                 } else {
                     None
@@ -2418,7 +2417,7 @@ fn set_index_buffer(
 
     buffer.check_usage(BufferUsages::INDEX)?;
 
-    if offset % u64::try_from(index_format.byte_size()).unwrap() != 0 {
+    if !offset.is_multiple_of(u64::try_from(index_format.byte_size()).unwrap()) {
         return Err(RenderCommandError::UnalignedIndexBuffer {
             offset,
             alignment: index_format.byte_size(),
@@ -2482,7 +2481,7 @@ fn set_vertex_buffer(
 
     buffer.check_usage(BufferUsages::VERTEX)?;
 
-    if offset % wgt::VERTEX_ALIGNMENT != 0 {
+    if !offset.is_multiple_of(wgt::VERTEX_ALIGNMENT) {
         return Err(RenderCommandError::UnalignedVertexBuffer { slot, offset }.into());
     }
     let (binding, buffer_size) = buffer
@@ -2789,7 +2788,7 @@ fn multi_draw_indirect(
     indirect_buffer.check_usage(BufferUsages::INDIRECT)?;
     indirect_buffer.check_destroyed(state.pass.base.snatch_guard)?;
 
-    if offset % 4 != 0 {
+    if !offset.is_multiple_of(4) {
         return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
     }
 
@@ -2999,7 +2998,7 @@ fn multi_draw_indirect_count(
     count_buffer.check_usage(BufferUsages::INDIRECT)?;
     let count_raw = count_buffer.try_raw(state.pass.base.snatch_guard)?;
 
-    if offset % 4 != 0 {
+    if !offset.is_multiple_of(4) {
         return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
     }
 

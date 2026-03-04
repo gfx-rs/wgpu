@@ -427,7 +427,7 @@ pub(super) fn resolve_query_set(
     dst_buffer: Arc<Buffer>,
     destination_offset: BufferAddress,
 ) -> Result<(), QueryError> {
-    if destination_offset % wgt::QUERY_RESOLVE_BUFFER_ALIGNMENT != 0 {
+    if !destination_offset.is_multiple_of(wgt::QUERY_RESOLVE_BUFFER_ALIGNMENT) {
         return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));
     }
 

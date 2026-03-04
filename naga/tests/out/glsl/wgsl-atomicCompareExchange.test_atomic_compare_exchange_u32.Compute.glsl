@@ -15,7 +15,7 @@ struct _atomic_compare_exchange_result_Uint_4_ {
 };
 const uint SIZE = 128u;
 
-layout(std430) buffer type_4_block_0Compute { uint _group_0_binding_1_cs[128]; };
+layout(std430) buffer type_5_block_0Compute { uint _group_0_binding_1_cs[128]; };
 
 
 void main() {

@@ -7,7 +7,7 @@ var<private> global: vec3<u32>;
 var<storage, read_write> global_1: type_3;
 var<workgroup> global_2: u32;
 
-fn function() {
+fn function_() {
     let _e6 = global;
     let _e8 = (_e6.x == 0u);
     if _e8 {
@@ -26,5 +26,5 @@ fn function() {
 @compute @workgroup_size(2, 1, 1) 
 fn barrier_reorder_bug(@builtin(local_invocation_id) param: vec3<u32>) {
     global = param;
-    function();
+    function_();
 }

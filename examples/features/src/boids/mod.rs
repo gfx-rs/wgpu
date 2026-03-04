@@ -106,7 +106,7 @@ impl crate::framework::Example for Example {
         let compute_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compute"),
-                bind_group_layouts: &[&compute_bind_group_layout],
+                bind_group_layouts: &[Some(&compute_bind_group_layout)],
                 immediate_size: 0,
             });
 

@@ -109,7 +109,7 @@ impl DiagnosticBuffer {
         Self { inner }
     }
 
-    pub fn inner_mut(&mut self) -> &mut DiagnosticBufferInner {
+    pub const fn inner_mut(&mut self) -> &mut DiagnosticBufferInner {
         &mut self.inner
     }
 

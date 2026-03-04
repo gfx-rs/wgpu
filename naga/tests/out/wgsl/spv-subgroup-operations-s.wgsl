@@ -3,7 +3,7 @@ var<private> global_1: u32;
 var<private> global_2: u32;
 var<private> global_3: u32;
 
-fn function() {
+fn function_() {
     let _e5 = global_2;
     let _e6 = global_3;
     let _e9 = subgroupBallot(((_e6 & 1u) == 1u));
@@ -36,5 +36,5 @@ fn main(@builtin(num_subgroups) param: u32, @builtin(subgroup_id) param_1: u32, 
     global_1 = param_1;
     global_2 = param_2;
     global_3 = param_3;
-    function();
+    function_();
 }

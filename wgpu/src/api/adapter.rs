@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use core::future::Future;
 #[cfg(wgpu_core)]
 use core::ops::Deref;
@@ -107,10 +108,10 @@ impl Adapter {
     ///
     /// The returned type depends on the backend:
     ///
-    #[doc = crate::hal_type_vulkan!("Adapter")]
-    #[doc = crate::hal_type_metal!("Adapter")]
-    #[doc = crate::hal_type_dx12!("Adapter")]
-    #[doc = crate::hal_type_gles!("Adapter")]
+    #[doc = crate::macros::hal_type_vulkan!("Adapter")]
+    #[doc = crate::macros::hal_type_metal!("Adapter")]
+    #[doc = crate::macros::hal_type_dx12!("Adapter")]
+    #[doc = crate::macros::hal_type_gles!("Adapter")]
     ///
     /// # Errors
     ///
@@ -205,5 +206,17 @@ impl Adapter {
     /// [Instant]: std::time::Instant
     pub fn get_presentation_timestamp(&self) -> PresentationTimestamp {
         self.inner.get_presentation_timestamp()
+    }
+
+    /// Returns the supported cooperative matrix configurations for this adapter.
+    ///
+    /// Cooperative matrices enable hardware-accelerated matrix multiply-accumulate
+    /// operations where threads in a subgroup collectively process matrix tiles.
+    ///
+    /// Returns an empty vector if cooperative matrices are not supported.
+    ///
+    /// Requires [`Features::EXPERIMENTAL_COOPERATIVE_MATRIX`] to be meaningful.
+    pub fn cooperative_matrix_properties(&self) -> Vec<CooperativeMatrixProperties> {
+        self.inner.cooperative_matrix_properties()
     }
 }
