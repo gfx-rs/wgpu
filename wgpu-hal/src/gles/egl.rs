@@ -442,10 +442,10 @@ impl Inner {
 
         let (config, supports_native_window) = choose_config(&egl, display, srgb_kind)?;
 
-        #[cfg(all(windows, target_vendor = "uwp"))]
+        #[cfg(all(windows, any(__WINRT__, target_vendor = "uwp")))]
         let supports_opengl = false;
 
-        #[cfg(not(all(windows, target_vendor = "uwp")))]
+        #[cfg(not(all(windows, any(__WINRT__, target_vendor = "uwp"))))]
         let supports_opengl = if version >= (1, 4) {
             let client_apis = egl
                 .query_string(Some(display), khronos_egl::CLIENT_APIS)
