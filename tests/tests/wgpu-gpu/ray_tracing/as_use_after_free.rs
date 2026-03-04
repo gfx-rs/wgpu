@@ -64,6 +64,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
         [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
         0,
         0xFF,
+        wgpu_types::IntersectionShaderIndex::QueryData(0),
     ));
 
     // Actually build the BLAS.

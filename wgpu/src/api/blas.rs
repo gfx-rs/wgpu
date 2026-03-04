@@ -8,6 +8,8 @@ use wgt::{WasmNotSend, WasmNotSendSync};
 use crate::dispatch;
 use crate::{Buffer, Label};
 
+pub use wgpu_types::IntersectionShaderIndex;
+
 /// Descriptor for the size defining attributes of a triangle geometry, for a bottom level acceleration structure.
 pub type BlasTriangleGeometrySizeDescriptor = wgt::BlasTriangleGeometrySizeDescriptor;
 static_assertions::assert_impl_all!(BlasTriangleGeometrySizeDescriptor: Send, Sync);
@@ -65,6 +67,9 @@ pub struct TlasInstance {
     /// Mask for the instance used inside the shader to filter instances.
     /// Reports hit only if `(shader_cull_mask & tlas_instance.mask) != 0u`.
     pub mask: u8,
+    /// Intersection group index into a ray tracing pipeline. Must be [`wgt::IntersectionShaderIndex::IntersectionIndex`] if used in a ray tracing pipeline trace,
+    /// and [`wgt::IntersectionShaderIndex::QueryData`] if used for ray queries. (Note: this means all of these must be the same in any TLAs.)
+    pub intersection_index: wgt::IntersectionShaderIndex,
 }
 
 impl TlasInstance {
@@ -73,18 +78,26 @@ impl TlasInstance {
     /// - transform: Transform buffer offset in bytes (optional, required if transform buffer is present)
     /// - custom_data: Custom index for the instance used inside the shader (max 24 bits)
     /// - mask: Mask for the instance used inside the shader to filter instances
+    /// - intersection_index: Either a index into an intersection group in a ray tracing pipeline or data for ray queries
     ///
     /// Note: while one of these contains a reference to a BLAS that BLAS will not be dropped,
     /// but it can still be destroyed. Destroying a BLAS that is referenced by one or more
     /// TlasInstance(s) will immediately make them invalid. If one or more of those invalid
     /// TlasInstances is inside a TlasPackage that is attempted to be built, the build will
     /// generate a validation error.
-    pub fn new(blas: &Blas, transform: [f32; 12], custom_data: u32, mask: u8) -> Self {
+    pub fn new(
+        blas: &Blas,
+        transform: [f32; 12],
+        custom_data: u32,
+        mask: u8,
+        intersection_index: wgt::IntersectionShaderIndex,
+    ) -> Self {
         Self {
             blas: blas.inner.clone(),
             transform,
             custom_data,
             mask,
+            intersection_index,
         }
     }
 

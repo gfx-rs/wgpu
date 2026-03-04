@@ -48,6 +48,7 @@ impl AsBuildContext {
         ctx: &TestingContext,
         additional_blas_flags: AccelerationStructureFlags,
         additional_tlas_flags: AccelerationStructureFlags,
+        for_ray_tracing_pipeline: bool,
     ) -> Self {
         let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
             label: None,
@@ -86,6 +87,11 @@ impl AsBuildContext {
             [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
             0,
             0xFF,
+            if for_ray_tracing_pipeline {
+                wgpu_types::IntersectionShaderIndex::IntersectionIndex(0)
+            } else {
+                wgpu_types::IntersectionShaderIndex::QueryData(0)
+            },
         ));
 
         Self {

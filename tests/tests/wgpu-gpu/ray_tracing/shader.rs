@@ -41,6 +41,7 @@ fn access_all_struct_members(ctx: TestingContext) {
         &ctx,
         AccelerationStructureFlags::empty(),
         AccelerationStructureFlags::empty(),
+        false,
     );
 
     let mut encoder_build = ctx
@@ -136,6 +137,7 @@ fn prevent_invalid_ray_query_calls(ctx: TestingContext) {
         &ctx,
         AccelerationStructureFlags::empty(),
         AccelerationStructureFlags::empty(),
+        false,
     );
 
     let mut encoder_build = ctx
