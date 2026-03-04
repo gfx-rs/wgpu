@@ -2985,6 +2985,7 @@ pub struct TlasInstance {
     pub custom_data: u32,
     pub mask: u8,
     pub blas_address: u64,
+    pub pipeline_intersection_data_offset: u32,
 }
 
 #[cfg(dx12)]
