@@ -242,14 +242,37 @@ pub(crate) fn build_acceleration_structures(
         let mut dependencies = Vec::new();
 
         let mut instance_count = 0;
-        for instance in package.instances.iter().flatten() {
+
+        let mut tlas_for_rt_pipelines = None;
+        for (instance_idx, instance) in package.instances.iter().flatten().enumerate() {
+            let instance_for_rt_pipelines = matches!(instance.intersection_index, wgt::IntersectionShaderIndex::IntersectionIndex(_));
+            if *tlas_for_rt_pipelines.get_or_insert(instance_for_rt_pipelines) != instance_for_rt_pipelines {
+                return Err(BuildAccelerationStructureError::TlasInstancesIntersectionIndicesDiffer(
+                    tlas.error_ident(), instance_idx,
+                ));
+            }
+
             if instance.custom_data >= (1u32 << 24u32) {
-                return Err(BuildAccelerationStructureError::TlasInvalidCustomIndex(
+                return Err(BuildAccelerationStructureError::TlasInvalidCustomData(
                     tlas.error_ident(),
+                    instance_idx,
                 ));
             }
             let blas = &instance.blas;
             state.tracker.blas_s.insert_single(blas.clone());
+
+            let intersection_data_offset = match instance.intersection_index {
+                wgt::IntersectionShaderIndex::IntersectionIndex(v) => v * state.device.alignments.ray_tracing_pipeline_group_data_size,
+                wgt::IntersectionShaderIndex::QueryData(v) => {
+                    if v >= (1u32 << 24u32) {
+                        return Err(BuildAccelerationStructureError::TlasInvalidIntersectionIndex(
+                            tlas.error_ident(),
+                            instance_idx,
+                        ));
+                    }
+                    v
+                }
+            };
 
             instance_buffer_staging_source.extend(state.device.raw().tlas_instance_to_bytes(
                 hal::TlasInstance {
@@ -257,7 +280,7 @@ pub(crate) fn build_acceleration_structures(
                     custom_data: instance.custom_data,
                     mask: instance.mask,
                     blas_address: blas.handle,
-                    pipeline_intersection_data_offset: 0,
+                    pipeline_intersection_data_offset: intersection_data_offset,
                 },
             ));
 
