@@ -2156,8 +2156,7 @@ impl dispatch::TextureViewInterface for CoreTextureView {}
 
 impl Drop for CoreTextureView {
     fn drop(&mut self) {
-        // TODO: We don't use this error at all?
-        let _ = self.context.0.texture_view_drop(self.id);
+        self.context.0.texture_view_drop(self.id);
     }
 }
 

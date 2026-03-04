@@ -2641,15 +2641,31 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         let inner = crate::TypeInner::Image {
             class: if is_depth == 1 {
+                if is_sampled == 2 {
+                    return Err(Error::InvalidImageDepthStorage);
+                }
+
                 crate::ImageClass::Depth { multi: is_msaa }
-            } else if format != 0 {
+            }
+            // If we have an unknown format and storage texture, this is
+            // StorageRead/WriteWithoutFormat. We don't currently support
+            // this.
+            else if is_sampled == 2 && format == 0 {
+                return Err(Error::InvalidStorageImageWithoutFormat);
+            }
+            // If we have explicit class information (is_sampled = 2 = Storage), use it.
+            //
+            // If we have unknown class information (is_sampled = 0 = Unknown), infer the
+            // class from the presence of an explicit format.
+            else if format != 0 && (is_sampled == 0 || is_sampled == 2) {
                 crate::ImageClass::Storage {
                     format: map_image_format(format)?,
                     access: crate::StorageAccess::default(),
                 }
-            } else if is_sampled == 2 {
-                return Err(Error::InvalidImageWriteType);
-            } else {
+            }
+            // We will hit this case either when sampled is 1, or if we have unknown
+            // sampling information or when sampled is 0 and we have no explicit format.
+            else {
                 crate::ImageClass::Sampled {
                     kind,
                     multi: is_msaa,

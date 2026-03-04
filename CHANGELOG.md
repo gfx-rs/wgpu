@@ -161,6 +161,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 
 #### General
 
+- Fixed crash on nvidia cards when presenting from another thread. By @inner-daemons in [#9036](https://github.com/gfx-rs/wgpu/pull/9036).
 - BREAKING: Migrated from the `maxInterStageShaderComponents` limit to `maxInterStageShaderVariables`, which changes validation in a way that should not affect most programs. This follows the latest changes of the WebGPU spec. By @ErichDonGubler in [#8652](https://github.com/gfx-rs/wgpu/pull/8652), [#8792](https://github.com/gfx-rs/wgpu/pull/8792).
 - Tracing support has been restored. By @andyleiserson in [#8429](https://github.com/gfx-rs/wgpu/pull/8429).
 - Pipelines using passthrough shaders now correctly require explicit pipeline layout. By @inner-daemons in #8881.
@@ -170,6 +171,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - BREAKING: End offsets in trace and `player` commands are now represented using `offset` + `size` instead. By @ErichDonGubler in [9073](https://github.com/gfx-rs/wgpu/pull/9073).
 - Validate some uncaught cases where buffer transfer operations could overflow when computing an end offset. By @ErichDonGubler in [9073](https://github.com/gfx-rs/wgpu/pull/9073).
 - Added internal labels to validation GPU objects and timestamp normalization code to improve clarity in graphics debuggers. By @szostid in [9094](https://github.com/gfx-rs/wgpu/pull/9094)
+- Fix multi-planar texture copying. By @noituri [#9069](https://github.com/gfx-rs/wgpu/pull/9069)
 
 #### naga
 
@@ -184,6 +186,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Fixed constant evaluation for `sign()` builtin to return zero when the argument is zero. By @mandryskowski in [#8942](https://github.com/gfx-rs/wgpu/pull/8942).
 - Allow array generation to compile with the macOS 10.12 Metal compiler. By @madsmtm in [#8953](https://github.com/gfx-rs/wgpu/pull/8953)
 - Naga now detects bitwise shifts by a constant exceeding the operand bit width at compile time, and disallows scalar-by-vector and vector-by-scalar shifts in constant evaluation. By @andyleiserson in [#8907](https://github.com/gfx-rs/wgpu/pull/8907).
+- Naga uses wrapping arithmetic when evaluating dot products on concrete integer types (`u32` and `i32`). By @BKDaugherty in [#9142](https://github.com/gfx-rs/wgpu/pull/9142).
 
 #### Validation
 

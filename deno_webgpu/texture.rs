@@ -84,7 +84,7 @@ impl GPUTexture {
 impl Drop for GPUTexture {
   fn drop(&mut self) {
     if let Some(id) = self.default_view_id.take() {
-      self.instance.texture_view_drop(id).unwrap();
+      self.instance.texture_view_drop(id);
     }
     self.instance.texture_drop(self.id);
   }
@@ -273,7 +273,7 @@ pub struct GPUTextureView {
 
 impl Drop for GPUTextureView {
   fn drop(&mut self) {
-    let _ = self.instance.texture_view_drop(self.id);
+    self.instance.texture_view_drop(self.id);
   }
 }
 
