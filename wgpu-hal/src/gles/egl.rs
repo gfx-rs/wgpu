@@ -572,12 +572,14 @@ impl Inner {
                         break result;
                     }
 
-                    // EGL 1.5 specification:
-                    // "An EGL_BAD_MATCH error is generated if an OpenGL or OpenGL ES context is
-                    // requested with robust buffer access, and the implementation does not
-                    // support the corresponding OpenGL or OpenGL ES extension."
+                    // Robust access context creation can fail with different
+                    // error codes depending on the EGL path.
                     (
-                        Err(khronos_egl::Error::BadMatch | khronos_egl::Error::BadAttribute),
+                        Err(
+                            khronos_egl::Error::BadAttribute
+                            | khronos_egl::Error::BadMatch
+                            | khronos_egl::Error::BadConfig,
+                        ),
                         Some(r),
                     ) => {
                         // Trying EXT robustness if Core robustness is not working
