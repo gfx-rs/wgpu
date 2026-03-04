@@ -247,6 +247,7 @@ pub(crate) fn build_acceleration_structures(
                     custom_data: instance.custom_data,
                     mask: instance.mask,
                     blas_address: blas.handle,
+                    pipeline_intersection_data_offset: 0,
                 },
             ));
 

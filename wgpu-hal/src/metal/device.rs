@@ -2061,7 +2061,7 @@ impl crate::Device for super::Device {
             },
             options: MTLAccelerationStructureInstanceOptions::None,
             mask: instance.mask as u32,
-            intersectionFunctionTableOffset: 0,
+            intersectionFunctionTableOffset: instance.pipeline_intersection_data_offset,
             userID: instance.custom_data,
             accelerationStructureID: unsafe { MTLResourceID::from_raw(instance.blas_address) },
         };
