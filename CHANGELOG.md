@@ -162,7 +162,6 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 
 #### General
 
-- Fixed crash on nvidia cards when presenting from another thread. By @inner-daemons in [#9036](https://github.com/gfx-rs/wgpu/pull/9036).
 - BREAKING: Migrated from the `maxInterStageShaderComponents` limit to `maxInterStageShaderVariables`, which changes validation in a way that should not affect most programs. This follows the latest changes of the WebGPU spec. By @ErichDonGubler in [#8652](https://github.com/gfx-rs/wgpu/pull/8652), [#8792](https://github.com/gfx-rs/wgpu/pull/8792).
 - Tracing support has been restored. By @andyleiserson in [#8429](https://github.com/gfx-rs/wgpu/pull/8429).
 - Pipelines using passthrough shaders now correctly require explicit pipeline layout. By @inner-daemons in #8881.
@@ -230,6 +229,17 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 ### deno\_webgpu
 
 - Expose the `GPU.wgslLanguageFeatures` property. By @andyleiserson in [#8884](https://github.com/gfx-rs/wgpu/pull/8884).
+
+## v28.0.1 (2025-03-01)
+
+### General
+- Fixed crash on nvidia cards when presenting from another thread. By @inner-daemons in [#9036](https://github.com/gfx-rs/wgpu/pull/9036).
+
+### Vulkan
+- Fixed crash on some Mali drivers on Android. By @beicause in [#8769](https://github.com/gfx-rs/wgpu/pull/8769).
+
+### Metal
+- Re-added support for TRANSIENT textures on Apple A7 chips. By @Opstic in [#8725](https://github.com/gfx-rs/wgpu/pull/8725).
 
 ## v28.0.0 (2025-12-17)
 
