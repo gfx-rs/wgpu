@@ -31,9 +31,9 @@ use crate::{
     init_tracker::MemoryInitKind,
     pipeline::ComputePipeline,
     resource::{
-        Buffer, DestroyedResourceError, InvalidOrDestroyedResourceError, InvalidResourceError,
-        Labeled, MissingBufferUsageError, ParentDevice, QuerySet, RawResourceAccess, TextureView,
-        Trackable,
+        self, Buffer, DestroyedResourceError, InvalidOrDestroyedResourceError,
+        InvalidResourceError, Labeled, MissingBufferUsageError, ParentDevice, QuerySet,
+        RawResourceAccess, TextureView, Trackable,
     },
     track::{ResourceUsageCompatibilityError, TextureViewBindGroupState, Tracker},
     Label,
@@ -394,7 +394,7 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
                 .remove_usage(buffer, wgt::BufferUses::INDIRECT);
         }
 
-        flush_bindings_helper(&mut self.pass)?;
+        flush_bindings_helper(&mut self.pass, resource::MaxIntersectionIndex::Query)?;
 
         CommandEncoder::drain_barriers(
             self.pass.base.raw_encoder,

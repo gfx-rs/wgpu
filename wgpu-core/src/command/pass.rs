@@ -9,7 +9,8 @@ use crate::command::{
 use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::pipeline::LateSizedBufferGroup;
 use crate::resource::{
-    DestroyedResourceError, InvalidOrDestroyedResourceError, Labeled, ParentDevice, QuerySet,
+    DestroyedResourceError, InvalidOrDestroyedResourceError, Labeled, MaxIntersectionIndex,
+    ParentDevice, QuerySet,
 };
 use crate::track::{ResourceUsageCompatibilityError, UsageScope};
 use crate::{api_log, binding_model};
@@ -206,8 +207,11 @@ where
 ///
 /// See the compute pass version of `State::flush_bindings` for an explanation
 /// of some differences in handling the two types of passes.
+///
+/// `tlas_max_allowed` should be either [MaxIntersectionIndex::Query] or [MaxIntersectionIndex::Intersection]
 pub(super) fn flush_bindings_helper(
     state: &mut PassState,
+    tlas_max_allowed: MaxIntersectionIndex,
 ) -> Result<(), InvalidOrDestroyedResourceError> {
     let start = state.binder.take_rebind_start_index();
     let entries = state.binder.list_valid_with_start(start);
@@ -236,7 +240,7 @@ pub(super) fn flush_bindings_helper(
             .used
             .acceleration_structures
             .into_iter()
-            .map(|tlas| crate::ray_tracing::AsAction::UseTlas(tlas.clone()));
+            .map(|tlas| crate::ray_tracing::AsAction::UseTlas(tlas.clone(), tlas_max_allowed));
 
         state.base.as_actions.extend(used_resource);
 

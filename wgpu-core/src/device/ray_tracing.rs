@@ -342,6 +342,10 @@ impl Device {
             label: desc.label.to_string(),
             max_instance_count: desc.max_instances,
             tracking_data: TrackingData::new(self.tracker_indices.tlas_s.clone()),
+            max_intersection_index: RwLock::new(
+                rank::TLAS_MAX_INTERSECTION_IDX,
+                resource::MaxIntersectionIndex::Unused,
+            ),
         }))
     }
 
