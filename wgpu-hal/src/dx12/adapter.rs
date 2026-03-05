@@ -808,9 +808,10 @@ impl super::Adapter {
                     max_uniform_buffers_per_shader_stage: full_heap_count,
                     max_binding_array_elements_per_shader_stage: full_heap_count,
                     max_binding_array_sampler_elements_per_shader_stage: full_heap_count,
-                    max_uniform_buffer_binding_size:
-                        Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT as u64 * 16,
-                    max_storage_buffer_binding_size: auxil::MAX_I32_BINDING_SIZE as u64,
+                    max_uniform_buffer_binding_size: u64::from(
+                        Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT,
+                    ) * 16,
+                    max_storage_buffer_binding_size: u64::from(auxil::MAX_I32_BINDING_SIZE),
                     max_vertex_buffers: Direct3D12::D3D12_VS_INPUT_REGISTER_COUNT,
                     max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
                     max_vertex_buffer_array_stride: Direct3D12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,

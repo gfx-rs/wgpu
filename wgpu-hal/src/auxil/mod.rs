@@ -192,7 +192,7 @@ pub(crate) fn apply_hal_limits(mut limits: wgt::Limits) -> wgt::Limits {
     // Round some limits down to the WebGPU alignment requirement, to avoid
     // suggesting values that won't work. (In particular, the CTS queries limits
     // and then tests the exact limit value.)
-    limits.max_storage_buffer_binding_size &= !(wgt::STORAGE_BINDING_SIZE_ALIGNMENT - 1) as u64;
+    limits.max_storage_buffer_binding_size &= u64::from(!(wgt::STORAGE_BINDING_SIZE_ALIGNMENT - 1));
     limits.max_vertex_buffer_array_stride &= !(wgt::VERTEX_ALIGNMENT as u32 - 1);
 
     limits
