@@ -928,10 +928,10 @@ pub enum CreateRayTracingPipelineError {
 
 impl WebGpuError for CreateRayTracingPipelineError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::InvalidResource(e) => e,
-            Self::MissingFeatures(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
 
             Self::Internal { .. } => return ErrorType::Internal,
 
@@ -941,8 +941,7 @@ impl WebGpuError for CreateRayTracingPipelineError {
             | Self::PipelineConstants { .. }
             | Self::TooManyIntersectionGroups(..)
             | Self::TooHighRayRecursionDepth(..) => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+        }
     }
 }
 

@@ -198,20 +198,20 @@ where
 impl WebGpuError for RayTracingPassError {
     fn webgpu_error_type(&self) -> ErrorType {
         let Self { scope: _, inner } = self;
-        let e: &dyn WebGpuError = match inner {
-            RayTracingPassErrorInner::Device(e) => e,
-            RayTracingPassErrorInner::EncoderState(e) => e,
-            RayTracingPassErrorInner::DebugGroupError(e) => e,
-            RayTracingPassErrorInner::DestroyedResource(e) => e,
-            RayTracingPassErrorInner::ResourceUsageCompatibility(e) => e,
-            RayTracingPassErrorInner::MissingBufferUsage(e) => e,
-            RayTracingPassErrorInner::TraceRay(e) => e,
-            RayTracingPassErrorInner::Bind(e) => e,
-            RayTracingPassErrorInner::ImmediateData(e) => e,
-            RayTracingPassErrorInner::MissingFeatures(e) => e,
-            RayTracingPassErrorInner::MissingDownlevelFlags(e) => e,
-            RayTracingPassErrorInner::InvalidResource(e) => e,
-            RayTracingPassErrorInner::InvalidValuesOffset(e) => e,
+        match inner {
+            RayTracingPassErrorInner::Device(e) => e.webgpu_error_type(),
+            RayTracingPassErrorInner::EncoderState(e) => e.webgpu_error_type(),
+            RayTracingPassErrorInner::DebugGroupError(e) => e.webgpu_error_type(),
+            RayTracingPassErrorInner::DestroyedResource(e) => e.webgpu_error_type(),
+            RayTracingPassErrorInner::ResourceUsageCompatibility(e) => e.webgpu_error_type(),
+            RayTracingPassErrorInner::MissingBufferUsage(e) => e.webgpu_error_type(),
+            RayTracingPassErrorInner::TraceRay(e) => e.webgpu_error_type(),
+            RayTracingPassErrorInner::Bind(e) => e.webgpu_error_type(),
+            RayTracingPassErrorInner::ImmediateData(e) => e.webgpu_error_type(),
+            RayTracingPassErrorInner::MissingFeatures(e) => e.webgpu_error_type(),
+            RayTracingPassErrorInner::MissingDownlevelFlags(e) => e.webgpu_error_type(),
+            RayTracingPassErrorInner::InvalidResource(e) => e.webgpu_error_type(),
+            RayTracingPassErrorInner::InvalidValuesOffset(e) => e.webgpu_error_type(),
 
             RayTracingPassErrorInner::InvalidParentEncoder
             | RayTracingPassErrorInner::BindGroupIndexOutOfRange { .. }
@@ -221,8 +221,7 @@ impl WebGpuError for RayTracingPassError {
             | RayTracingPassErrorInner::ImmediateDataizeAlignment
             | RayTracingPassErrorInner::ImmediateOutOfMemory
             | RayTracingPassErrorInner::PassEnded => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+        }
     }
 }
 
