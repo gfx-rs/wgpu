@@ -187,8 +187,10 @@ pub enum TraceRayError {
     MissingPipeline(pass::MissingPipeline),
     #[error(transparent)]
     IncompatibleBindGroup(#[from] Box<BinderError>),
-    #[error("Trace ray size ({current:?}) must be less or equal to {limit}")]
-    InvalidGroupSize { current: [u32; 3], limit: u32 },
+    #[error("Trace ray size ({current:?}) must be less or equal to {limit:?}")]
+    InvalidDimensionSize { current: [u32; 3], limit: [u32; 3] },
+    #[error("The total count of rays invocations ({current:?}) must be less or equal to {limit}")]
+    TooManyTotal { current: u32, limit: u32 },
     #[error(transparent)]
     BindingSizeTooSmall(#[from] LateMinBufferBindingSizeMismatch),
 }
@@ -793,26 +795,57 @@ fn set_pipeline(
 
 fn trace_rays(
     state: &mut State,
-    groups: [u32; 3],
+    dims: [u32; 3],
     device: &Device,
 ) -> Result<(), RayTracingPassErrorInner> {
-    api_log!("RayTracingPass::trace_rays {groups:?}");
+    api_log!("RayTracingPass::trace_rays {dims:?}");
 
     state.is_ready()?;
 
     state.flush_bindings()?;
 
-    // todo
-    let groups_size_limit = u32::MAX;
+    let limits = &state.pass.base.device.limits;
 
-    if groups[0] > groups_size_limit
-        || groups[1] > groups_size_limit
-        || groups[2] > groups_size_limit
-    {
+    let dim_size_limit = [
+        limits.max_compute_workgroup_size_x * limits.max_compute_workgroups_per_dimension,
+        limits.max_compute_workgroup_size_y * limits.max_compute_workgroups_per_dimension,
+        limits.max_compute_workgroup_size_z * limits.max_compute_workgroups_per_dimension,
+    ];
+
+    if dims[0] > dim_size_limit[0] {
         return Err(RayTracingPassErrorInner::TraceRay(
-            TraceRayError::InvalidGroupSize {
-                current: groups,
-                limit: groups_size_limit,
+            TraceRayError::InvalidDimensionSize {
+                current: dims,
+                limit: dim_size_limit,
+            },
+        ));
+    }
+
+    if dims[1] > dim_size_limit[1] {
+        return Err(RayTracingPassErrorInner::TraceRay(
+            TraceRayError::InvalidDimensionSize {
+                current: dims,
+                limit: dim_size_limit,
+            },
+        ));
+    }
+
+    if dims[2] > dim_size_limit[2] {
+        return Err(RayTracingPassErrorInner::TraceRay(
+            TraceRayError::InvalidDimensionSize {
+                current: dims,
+                limit: dim_size_limit,
+            },
+        ));
+    }
+
+    let tot_rays = dims[0] * dims[1] * dims[2];
+
+    if tot_rays > limits.max_ray_dispatch_count {
+        return Err(RayTracingPassErrorInner::TraceRay(
+            TraceRayError::TooManyTotal {
+                current: tot_rays,
+                limit: limits.max_ray_dispatch_count,
             },
         ));
     }
@@ -822,7 +855,7 @@ fn trace_rays(
 
     unsafe {
         state.pass.base.raw_encoder.trace_rays(
-            groups,
+            dims,
             hal::PipelineGroupData {
                 buffer: shader_binding_data.raw.as_ref(),
                 offset: 0,

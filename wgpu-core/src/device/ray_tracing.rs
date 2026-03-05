@@ -493,6 +493,15 @@ impl Device {
             }
         };
 
+        if desc.max_recursion_depth > self.limits.max_ray_recursion_depth {
+            return Err(
+                pipeline::CreateRayTracingPipelineError::TooHighRayRecursionDepth(
+                    desc.max_recursion_depth,
+                    self.limits.max_ray_recursion_depth,
+                ),
+            );
+        }
+
         let mut intersections = Vec::with_capacity(desc.intersections.len());
         let mut final_intersection_names = Vec::with_capacity(desc.intersections.len());
 

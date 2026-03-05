@@ -298,17 +298,13 @@ pub(crate) fn build_acceleration_structures(
             }
 
             let intersection_data_offset = match instance.intersection_index {
-                wgt::IntersectionShaderIndex::IntersectionIndex(v) => {
-                    v * state.device.alignments.ray_tracing_pipeline_group_data_size
-                }
+                wgt::IntersectionShaderIndex::IntersectionIndex(v) => v,
                 wgt::IntersectionShaderIndex::QueryData(v) => {
                     if v >= (1u32 << 24u32) {
-                        return Err(
-                            BuildAccelerationStructureError::TlasInvalidIntersectionIndex(
-                                tlas.error_ident(),
-                                instance_idx,
-                            ),
-                        );
+                        return Err(BuildAccelerationStructureError::TlasInvalidQueryData(
+                            tlas.error_ident(),
+                            instance_idx,
+                        ));
                     }
                     v
                 }

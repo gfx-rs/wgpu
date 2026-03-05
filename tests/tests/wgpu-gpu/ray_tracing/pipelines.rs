@@ -17,7 +17,11 @@ static PIPELINE_CREATE_USE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
-            .limits(Limits::defaults().using_minimum_supported_acceleration_structure_values()),
+            .limits(
+                Limits::defaults()
+                    .using_minimum_supported_acceleration_structure_values()
+                    .using_minimum_supported_ray_tracing_pipeline_values(),
+            ),
     )
     .run_sync(pipeline_create_use);
 
