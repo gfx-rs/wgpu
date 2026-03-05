@@ -1015,6 +1015,8 @@ impl super::Adapter {
 
                     // not yet implemented
                     max_intersection_group_count: 0,
+                    max_ray_dispatch_count: 0,
+                    max_ray_recursion_depth: 0,
                 }),
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(

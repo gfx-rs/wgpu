@@ -1654,9 +1654,13 @@ impl PhysicalDeviceProperties {
             max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
         let mut max_intersection_group_count = 0;
+        let mut max_ray_dispatch_count = 0;
+        let mut max_ray_recursion_depth = 0;
 
         if let Some(properties) = self.ray_tracing_pipeline {
             max_intersection_group_count = (1 << 24) / properties.max_ray_hit_attribute_size;
+            max_ray_dispatch_count = properties.max_ray_dispatch_invocation_count;
+            max_ray_recursion_depth = properties.max_ray_recursion_depth;
         }
 
         let max_multiview_view_count = self
@@ -1759,7 +1763,10 @@ impl PhysicalDeviceProperties {
             max_acceleration_structures_per_shader_stage,
 
             max_multiview_view_count,
+
             max_intersection_group_count,
+            max_ray_dispatch_count,
+            max_ray_recursion_depth,
         })
     }
 
