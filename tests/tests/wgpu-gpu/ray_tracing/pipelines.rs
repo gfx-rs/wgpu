@@ -26,7 +26,7 @@ static PIPELINE_CREATE_USE: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_sync(pipeline_create_use);
 
 fn pipeline_create_use(ctx: TestingContext) {
-    let as_ctx = super::AsBuildContext::new(
+    let mut as_ctx = super::AsBuildContext::new(
         &ctx,
         AccelerationStructureFlags::empty(),
         AccelerationStructureFlags::empty(),
@@ -37,7 +37,7 @@ fn pipeline_create_use(ctx: TestingContext) {
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default());
 
-    // Build the BLAS to be compacted (so compaction is valid).
+    // Build the BLAS and the TLAS.
     encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
 
     ctx.queue.submit([encoder.finish()]);
@@ -51,7 +51,7 @@ fn pipeline_create_use(ctx: TestingContext) {
 
         @ray_generation
         fn gen() {
-            traceRay(acc_struct, RayDesc(), &payload);
+            traceRay(acc_struct, RayDesc(0u, 0xFFu, 0.001, 100.0, vec3f(0.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0)), &payload);
         }
     ";
 
@@ -153,6 +153,21 @@ fn pipeline_create_use(ctx: TestingContext) {
 
     let mut encoder = ctx.device.create_command_encoder(&Default::default());
 
+    {
+        let mut pass = encoder.begin_ray_tracing_pass(&RayTracingPassDescriptor::default());
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.trace_rays(1, 1, 2);
+    }
+
+    // Change the intersection index to the other valid one
+    as_ctx.tlas[0].as_mut().unwrap().intersection_index =
+        wgpu::IntersectionShaderIndex::IntersectionIndex(1);
+
+    // Build the TLAS with the other index.
+    encoder.build_acceleration_structures([], [&as_ctx.tlas]);
+
+    // Rerun with the new intersection index.
     {
         let mut pass = encoder.begin_ray_tracing_pass(&RayTracingPassDescriptor::default());
         pass.set_pipeline(&pipeline);
