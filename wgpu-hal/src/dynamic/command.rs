@@ -194,7 +194,7 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
     unsafe fn begin_ray_tracing_pass(&mut self, desc: &RayTracingPassDescriptor);
     unsafe fn end_ray_tracing_pass(&mut self);
 
-    unsafe fn trace_rays<'a>(
+    unsafe fn trace_rays(
         &mut self,
         count: [u32; 3],
         ray_generation_group_data: crate::PipelineGroupData<dyn DynBuffer>,
