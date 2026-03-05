@@ -85,7 +85,13 @@ impl TlasInstance {
     /// TlasInstance(s) will immediately make them invalid. If one or more of those invalid
     /// TlasInstances is inside a TlasPackage that is attempted to be built, the build will
     /// generate a validation error.
-    pub fn new(blas: &Blas, transform: [f32; 12], custom_data: u32, mask: u8, intersection_index: wgt::IntersectionShaderIndex) -> Self {
+    pub fn new(
+        blas: &Blas,
+        transform: [f32; 12],
+        custom_data: u32,
+        mask: u8,
+        intersection_index: wgt::IntersectionShaderIndex,
+    ) -> Self {
         Self {
             blas: blas.inner.clone(),
             transform,

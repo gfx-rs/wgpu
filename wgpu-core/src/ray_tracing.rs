@@ -180,9 +180,7 @@ pub enum BuildAccelerationStructureError {
     #[error("Blas {0:?} build sizes require index buffer but none was provided")]
     MissingIndexBuffer(ResourceErrorIdent),
 
-    #[error(
-        "Tlas {0:?} instance {1} contains an invalid custom data (more than 24bits)"
-    )]
+    #[error("Tlas {0:?} instance {1} contains an invalid custom data (more than 24bits)")]
     TlasInvalidCustomData(ResourceErrorIdent, usize),
     #[error(
         "Tlas {0:?} instance {1} contains an invalid query data in the `intersection_index` field (more than 24bits)"
@@ -217,11 +215,9 @@ pub enum BuildAccelerationStructureError {
 
     #[error("Blas {0:?} AABB stride is invalid (must be >= {1} and a multiple of 8)")]
     InvalidAabbStride(ResourceErrorIdent, BufferAddress),
-    #[error(
-        "Tlas {0:?} instance {1} has a different Intersection"
-    )]
+    #[error("Tlas {0:?} instance {1} has a different Intersection")]
     TlasInstancesIntersectionIndicesDiffer(ResourceErrorIdent, usize),
-        #[error(
+    #[error(
         "Tlas {0:?} instance {1} contains an intersection index {2} which is greater than `Limits::max_intersection_group_count` {3}"
     )]
     TlasInvalidIntersectionIndex(ResourceErrorIdent, usize, u32, u32),

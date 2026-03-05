@@ -245,11 +245,19 @@ pub(crate) fn build_acceleration_structures(
 
         let mut tlas_for_rt_pipelines = None;
         for (instance_idx, instance) in package.instances.iter().flatten().enumerate() {
-            let instance_for_rt_pipelines = matches!(instance.intersection_index, wgt::IntersectionShaderIndex::IntersectionIndex(_));
-            if *tlas_for_rt_pipelines.get_or_insert(instance_for_rt_pipelines) != instance_for_rt_pipelines {
-                return Err(BuildAccelerationStructureError::TlasInstancesIntersectionIndicesDiffer(
-                    tlas.error_ident(), instance_idx,
-                ));
+            let instance_for_rt_pipelines = matches!(
+                instance.intersection_index,
+                wgt::IntersectionShaderIndex::IntersectionIndex(_)
+            );
+            if *tlas_for_rt_pipelines.get_or_insert(instance_for_rt_pipelines)
+                != instance_for_rt_pipelines
+            {
+                return Err(
+                    BuildAccelerationStructureError::TlasInstancesIntersectionIndicesDiffer(
+                        tlas.error_ident(),
+                        instance_idx,
+                    ),
+                );
             }
 
             if instance.custom_data >= (1u32 << 24u32) {
@@ -264,15 +272,17 @@ pub(crate) fn build_acceleration_structures(
             let intersection_data_offset = match instance.intersection_index {
                 wgt::IntersectionShaderIndex::IntersectionIndex(v) => {
                     if v >= state.device.limits.max_intersection_group_count {
-                        return Err(BuildAccelerationStructureError::TlasInvalidIntersectionIndex(
-                            tlas.error_ident(),
-                            instance_idx,
-                            v, 
-                            state.device.limits.max_intersection_group_count,
-                        ));
+                        return Err(
+                            BuildAccelerationStructureError::TlasInvalidIntersectionIndex(
+                                tlas.error_ident(),
+                                instance_idx,
+                                v,
+                                state.device.limits.max_intersection_group_count,
+                            ),
+                        );
                     }
                     v * state.device.alignments.ray_tracing_pipeline_group_data_size
-                },
+                }
                 wgt::IntersectionShaderIndex::QueryData(v) => {
                     if v >= (1u32 << 24u32) {
                         return Err(BuildAccelerationStructureError::TlasInvalidQueryData(
