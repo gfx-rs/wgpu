@@ -25,8 +25,7 @@ use crate::{
     device::{DeviceError, MissingFeatures},
     id::{BlasId, BufferId, TlasId},
     resource::{
-        Blas, BlasCompactCallback, BlasPrepareCompactResult, DestroyedResourceError,
-        InvalidResourceError, MissingBufferUsageError, ResourceErrorIdent, Tlas,
+        Blas, BlasCompactCallback, BlasPrepareCompactResult, DestroyedResourceError, InvalidResourceError, MaxIntersectionIndex, MissingBufferUsageError, ResourceErrorIdent, Tlas
     },
 };
 
@@ -278,13 +277,16 @@ pub enum ValidateAsActionsError {
 
     #[error("Blas {0:?} is newer than the containing Tlas {1:?}")]
     BlasNewerThenTlas(ResourceErrorIdent, ResourceErrorIdent),
+
+    #[error("Tlas {0:?} has an intersection index {1:?}  greater or different from {2:?}")]
+    TlasIntersectionInvalid(ResourceErrorIdent, MaxIntersectionIndex, MaxIntersectionIndex),
 }
 
 impl WebGpuError for ValidateAsActionsError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
             Self::DestroyedResource(e) => e.webgpu_error_type(),
-            Self::UsedUnbuiltTlas(..) | Self::UsedUnbuiltBlas(..) | Self::BlasNewerThenTlas(..) => {
+            Self::UsedUnbuiltTlas(..) | Self::UsedUnbuiltBlas(..) | Self::BlasNewerThenTlas(..) | Self::TlasIntersectionInvalid(..) => {
                 ErrorType::Validation
             }
         }
@@ -348,6 +350,7 @@ pub struct TlasPackage<'a> {
 pub(crate) struct TlasBuild {
     pub tlas: Arc<Tlas>,
     pub dependencies: Vec<Arc<Blas>>,
+    pub max_intersection_idx: MaxIntersectionIndex,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -368,7 +371,7 @@ impl AsBuild {
 #[derive(Debug, Clone)]
 pub(crate) enum AsAction {
     Build(AsBuild),
-    UseTlas(Arc<Tlas>),
+    UseTlas(Arc<Tlas>, MaxIntersectionIndex),
 }
 
 /// Like [`BlasTriangleGeometry`], but with owned data.

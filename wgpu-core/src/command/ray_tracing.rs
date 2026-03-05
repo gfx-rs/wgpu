@@ -10,7 +10,7 @@ use wgt::{math::align_to, BufferUsages, BufferUses, Features};
 use crate::{
     command::encoder::EncodingState,
     ray_tracing::{AsAction, AsBuild, TlasBuild, ValidateAsActionsError},
-    resource::InvalidResourceError,
+    resource::{InvalidResourceError, MaxIntersectionIndex},
 };
 use crate::{command::EncoderStateError, device::resource::CommandIndices};
 use crate::{
@@ -94,6 +94,7 @@ impl Global {
                     build_command.tlas_s_built.push(TlasBuild {
                         tlas,
                         dependencies: Vec::new(),
+                        max_intersection_idx: MaxIntersectionIndex::Unused,
                     });
                 }
 
@@ -243,22 +244,16 @@ pub(crate) fn build_acceleration_structures(
 
         let mut instance_count = 0;
 
-        let mut tlas_for_rt_pipelines = None;
+        let mut max_intersection_idx = MaxIntersectionIndex::Unused;
         for (instance_idx, instance) in package.instances.iter().flatten().enumerate() {
-            let instance_for_rt_pipelines = matches!(
-                instance.intersection_index,
-                wgt::IntersectionShaderIndex::IntersectionIndex(_)
-            );
-            if *tlas_for_rt_pipelines.get_or_insert(instance_for_rt_pipelines)
-                != instance_for_rt_pipelines
-            {
+            let Some(()) = max_intersection_idx.set_intersection_index(instance.intersection_index) else {
                 return Err(
                     BuildAccelerationStructureError::TlasInstancesIntersectionIndicesDiffer(
                         tlas.error_ident(),
                         instance_idx,
                     ),
                 );
-            }
+            };
 
             if instance.custom_data >= (1u32 << 24u32) {
                 return Err(BuildAccelerationStructureError::TlasInvalidCustomData(
@@ -327,6 +322,7 @@ pub(crate) fn build_acceleration_structures(
         build_command.tlas_s_built.push(TlasBuild {
             tlas: tlas.clone(),
             dependencies,
+            max_intersection_idx,
         });
 
         if instance_count > tlas.max_instance_count {
@@ -562,10 +558,11 @@ impl CommandBufferMutable {
                             .tlas
                             .dependencies
                             .write()
-                            .clone_from(&tlas_build.dependencies)
+                            .clone_from(&tlas_build.dependencies);
+                        *tlas_build.tlas.max_intersection_index.write() = tlas_build.max_intersection_idx;
                     }
                 }
-                AsAction::UseTlas(tlas) => {
+                AsAction::UseTlas(tlas, max_intersection_idx) => {
                     let tlas_build_index = tlas.built_index.read();
                     let dependencies = tlas.dependencies.read();
 
@@ -588,6 +585,16 @@ impl CommandBufferMutable {
                         }
                         blas.try_raw(snatch_guard)?;
                     }
+
+                    let current_max = tlas.max_intersection_index.read();
+
+                    if !current_max.at_most(*max_intersection_idx) {
+                        return Err(ValidateAsActionsError::TlasIntersectionInvalid(
+                            tlas.error_ident(),
+                            *current_max,
+                            *max_intersection_idx,
+                        ));
+                    }
                 }
             }
         }
@@ -600,7 +607,7 @@ impl CommandBufferMutable {
             .as_actions
             .iter()
             .filter_map(|action| {
-                if let AsAction::UseTlas(tlas) = action {
+                if let AsAction::UseTlas(tlas, _) = action {
                     Some(tlas.dependencies.read())
                 } else {
                     None
@@ -620,7 +627,7 @@ impl CommandBufferMutable {
                         }
                     }
                 }
-                AsAction::UseTlas(_tlas) => {
+                AsAction::UseTlas(_tlas, _) => {
                     let tlas_dependencies = tlas_dependencies_lock_iter.next().unwrap(); // _tlas.dependencies.read();
                     for dependency in tlas_dependencies.iter() {
                         if let Some(dependency) = dependency.raw(snatch_guard) {
