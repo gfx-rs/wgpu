@@ -106,7 +106,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Added support for obtaining `AdapterInfo` from `Device`. By @sagudev in [#8807](https://github.com/gfx-rs/wgpu/pull/8807).
 - Added `Limits::or_worse_values_from`. By @atlv24 in [#8870](https://github.com/gfx-rs/wgpu/pull/8870).
 - Added `Features::FLOAT32_BLENDABLE` on Vulkan and Metal. By @timokoesters in [#8963](https://github.com/gfx-rs/wgpu/pull/8963) and @andyleiserson in [#9032](https://github.com/gfx-rs/wgpu/pull/9032).
-- Made the following available in `const` contexts:
+- Made the following available in `const` contexts; by @ErichDonGubler in [#8943](https://github.com/gfx-rs/wgpu/pull/8943):
   - `naga`
     - `Arena::len`
     - `Arena::is_empty`
