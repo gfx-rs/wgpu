@@ -63,7 +63,7 @@ By @teoxoy in [#9034](https://github.com/gfx-rs/wgpu/pull/9034).
 
 #### MSRV update
 
-`wgpu` now has a new MSRV policy. This release has an MSRV of **1.87**. This is lower than v27's 1.88 and v28's 1.92. Going forward, we will only bump wgpu's MSRV if it has tangible benefits for the code, and we will never bump to an MSRV higher than `stable - 3`. So if stable is at 1.97 and 1.94 brought benefit to our code, we could bump it no higher than 1.94. As before, MSRV bumps will always be breaking changes. 
+`wgpu` now has a new MSRV policy. This release has an MSRV of **1.87**. This is lower than v27's 1.88 and v28's 1.92. Going forward, we will only bump wgpu's MSRV if it has tangible benefits for the code, and we will never bump to an MSRV higher than `stable - 3`. So if stable is at 1.97 and 1.94 brought benefit to our code, we could bump it no higher than 1.94. As before, MSRV bumps will always be breaking changes.
 
 By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
 
@@ -107,13 +107,13 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Added `Limits::or_worse_values_from`. By @atlv24 in [#8870](https://github.com/gfx-rs/wgpu/pull/8870).
 - Added `Features::FLOAT32_BLENDABLE` on Vulkan and Metal. By @timokoesters in [#8963](https://github.com/gfx-rs/wgpu/pull/8963) and @andyleiserson in [#9032](https://github.com/gfx-rs/wgpu/pull/9032).
 - Made the following available in `const` contexts:
-    - `naga`
-        - `Arena::len`
-        - `Arena::is_empty`
-        - `Range::first_and_last`
-        - `front::wgsl::Frontend::set_options`
-        - `ir::Block::is_empty`
-        - `ir::Block::len`
+  - `naga`
+    - `Arena::len`
+    - `Arena::is_empty`
+    - `Range::first_and_last`
+    - `front::wgsl::Frontend::set_options`
+    - `ir::Block::is_empty`
+    - `ir::Block::len`
 - Added `Dx12BackendOptions::force_shader_model` to allow using advanced features in passthrough shaders without bundling DXC. By @inner-daemons in [#8984](https://github.com/gfx-rs/wgpu/pull/8984).
 - Changed passthrough shaders to not require an entry point parameter, so that the same shader module may be used in multiple entry points. Also added support for metallib passthrough. By @inner-daemons in #8886.
 - Added `Dx12Compiler::Auto` to automatically use static or dynamic DXC if available, before falling back to FXC. By @inner-daemons in [#8882](https://github.com/gfx-rs/wgpu/pull/8882).
@@ -134,6 +134,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Added `GlDebugFns` option in `GlBackendOptions` to control OpenGL debug functions (`glPushDebugGroup`, `glPopDebugGroup`, `glObjectLabel`, etc.). Automatically disables them on Mali GPUs to work around a driver crash. By @Xavientois in [#8931](https://github.com/gfx-rs/wgpu/pull/8931).
 
 #### WebGPU
+
 - Added support for `insert_debug_marker`, `push_debug_group` and `pop_debug_group`. By @evilpie in [#9017](https://github.com/gfx-rs/wgpu/pull/9017).
 - Added support for `begin_occlusion_query` and `end_occlusion_query`. By @evilpie in [#9039](https://github.com/gfx-rs/wgpu/pull/9039).
 
@@ -142,10 +143,10 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 #### General
 
 - Several error APIs were changed by @ErichDonGubler in [#9073](https://github.com/gfx-rs/wgpu/pull/9073):
-    - `BufferAccessError`:
-        - Split the `OutOfBoundsOverrun` variant into new `OutOfBoundsStartOffsetOverrun` and `OutOfBoundsEndOffsetOverrun` variants. 
-        - Removed the `NegativeRange` variant in favor of new `MapStartOffsetUnderrun` and `MapStartOffsetOverrun` variants.
-    - Split the `TransferError::BufferOverrun` variant into new `BufferStartOffsetOverrun` and `BufferEndOffsetOverrun` variants.
+  - `BufferAccessError`:
+    - Split the `OutOfBoundsOverrun` variant into new `OutOfBoundsStartOffsetOverrun` and `OutOfBoundsEndOffsetOverrun` variants.
+    - Removed the `NegativeRange` variant in favor of new `MapStartOffsetUnderrun` and `MapStartOffsetOverrun` variants.
+  - Split the `TransferError::BufferOverrun` variant into new `BufferStartOffsetOverrun` and `BufferEndOffsetOverrun` variants.
 - The various "max resources per stage" limits are now capped at 100, so that their total remains below `max_bindings_per_bind_group`, as required by WebGPU. By @andyleiserson in [#9118](https://github.com/gfx-rs/wgpu/pull/9118).
 
 #### Metal
@@ -201,6 +202,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Require that the blend factor is `One` when the blend operation is `Min` or `Max`. The `BlendFactorOnUnsupportedTarget` error is now reported within `ColorStateError` rather than directly in `CreateRenderPipelineError`. By @andyleiserson in [#9110](https://github.com/gfx-rs/wgpu/pull/9110).
 
 #### Vulkan
+
 - Fixed a variety of mesh shader SPIR-V writer issues from the original implementation. By @inner-daemons in [#8756](https://github.com/gfx-rs/wgpu/pull/8756)
 
 #### GLES
@@ -226,19 +228,22 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Naga and `wgpu` now reject shaders with an `enable` directive for functionality that is not available, even if that functionality is not used by the shader. By @andyleiserson in [#8913](https://github.com/gfx-rs/wgpu/pull/8913).
 - Prevent UB from incorrectly using ray queries on HLSL. By @Vecvec in [#8763](https://github.com/gfx-rs/wgpu/pull/8763).
 
-### deno\_webgpu
+### deno_webgpu
 
 - Expose the `GPU.wgslLanguageFeatures` property. By @andyleiserson in [#8884](https://github.com/gfx-rs/wgpu/pull/8884).
 
 ## v28.0.1 (2025-03-01)
 
 ### General
+
 - Fixed crash on nvidia cards when presenting from another thread. By @inner-daemons in [#9036](https://github.com/gfx-rs/wgpu/pull/9036).
 
 ### Vulkan
+
 - Fixed crash on some Mali drivers on Android. By @beicause in [#8769](https://github.com/gfx-rs/wgpu/pull/8769).
 
 ### Metal
+
 - Re-added support for TRANSIENT textures on Apple A7 chips. By @Opstic in [#8725](https://github.com/gfx-rs/wgpu/pull/8725).
 
 ## v28.0.0 (2025-12-17)
@@ -251,7 +256,7 @@ This has been a long time coming. See [the tracking issue](https://github.com/gf
 They are now fully supported on Vulkan, and supported on Metal and DX12 with passthrough shaders. WGSL parsing and rewriting
 is supported, meaning they can be used through WESL or naga_oil.
 
-Mesh shader pipelines replace the standard vertex shader pipelines and allow new ways to render meshes. 
+Mesh shader pipelines replace the standard vertex shader pipelines and allow new ways to render meshes.
 They are ideal for meshlet rendering, a form of rendering where small groups of triangles are handled together,
 for both culling and rendering.
 
@@ -298,7 +303,7 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
 
     mesh_output.vertices[2].position = positions[2];
     mesh_output.vertices[2].color = colors[2] * taskPayload.colorMask;
-    
+
     // Set the vertex indices for the only primitive
     mesh_output.primitives[0].indices = vec3<u32>(0, 1, 2);
     // Cull it if the data passed by the task shader says to
@@ -314,11 +319,13 @@ This was a monumental effort from many different people, but it was championed b
 Thank you @cwfitzgerald for doing the bulk of the code review. Finally thank you @ColinTimBarndt for coordinating the testing effort.
 
 Reviewers:
+
 - @cwfitzgerald
 - @jimblandy
 - @ErichDonGubler
 
 `wgpu` Contributions:
+
 - Metal implementation in wgpu-hal. By @inner-daemons in [#8139](https://github.com/gfx-rs/wgpu/pull/8139).
 - DX12 implementation in wgpu-hal. By @inner-daemons in [#8110](https://github.com/gfx-rs/wgpu/pull/8110).
 - Vulkan implementation in wgpu-hal. By @inner-daemons in [#7089](https://github.com/gfx-rs/wgpu/pull/7089).
@@ -326,6 +333,7 @@ Reviewers:
 - New mesh shader limits and validation. By @inner-daemons in [#8507](https://github.com/gfx-rs/wgpu/pull/8507).
 
 `naga` Contributions:
+
 - Naga IR implementation. By @inner-daemons in [#8104](https://github.com/gfx-rs/wgpu/pull/8104).
 - `wgsl-in` implementation in naga. By @inner-daemons in [#8370](https://github.com/gfx-rs/wgpu/pull/8370).
 - `spv-out` implementation in naga. By @inner-daemons in [#8456](https://github.com/gfx-rs/wgpu/pull/8456).
@@ -333,6 +341,7 @@ Reviewers:
 - Allow barriers in mesh/task shaders. By @inner-daemons in [#8749](https://github.com/gfx-rs/wgpu/pull/8749)
 
 Testing Assistance:
+
 - @ColinTimBarndt
 - @AdamK2003
 - @Mhowser
@@ -593,6 +602,7 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 - Fixed a validation error regarding atomic memory semantics. By @atlv24 in [#8391](https://github.com/gfx-rs/wgpu/pull/8391).
 
 #### Metal
+
 - Fixed a variety of feature detection related bugs. By @inner-daemons in [#8439](https://github.com/gfx-rs/wgpu/pull/8439).
 
 #### WebGPU
