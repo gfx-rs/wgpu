@@ -848,6 +848,8 @@ impl super::Adapter {
             max_multiview_view_count: 0,
 
             max_intersection_group_count: 0,
+            max_ray_dispatch_count: 0,
+            max_ray_recursion_depth: 0,
         });
 
         let mut workarounds = super::Workarounds::empty();
