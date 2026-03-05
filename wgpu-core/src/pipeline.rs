@@ -918,6 +918,8 @@ pub enum CreateRayTracingPipelineError {
     },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+    #[error("The number of intersection shaders in {0} is greater than the limit Limits::max_intersection_group_count {1}")]
+    TooManyIntersectionGroups(usize, u32),
 }
 
 impl WebGpuError for CreateRayTracingPipelineError {
@@ -932,7 +934,8 @@ impl WebGpuError for CreateRayTracingPipelineError {
             Self::Implicit(_)
             | Self::Stage { .. }
             | Self::UnalignedShader { .. }
-            | Self::PipelineConstants { .. } => return ErrorType::Validation,
+            | Self::PipelineConstants { .. }
+            | Self::TooManyIntersectionGroups(..) => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }

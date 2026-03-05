@@ -187,7 +187,7 @@ pub enum BuildAccelerationStructureError {
     #[error(
         "Tlas {0:?} instance {1} contains an invalid query data in the `intersection_index` field (more than 24bits)"
     )]
-    TlasInvalidIntersectionIndex(ResourceErrorIdent, usize),
+    TlasInvalidQueryData(ResourceErrorIdent, usize),
 
     #[error(
         "Tlas {0:?} has {1} active instances but only {2} are allowed as specified by the descriptor at creation"
@@ -221,6 +221,10 @@ pub enum BuildAccelerationStructureError {
         "Tlas {0:?} instance {1} has a different Intersection"
     )]
     TlasInstancesIntersectionIndicesDiffer(ResourceErrorIdent, usize),
+        #[error(
+        "Tlas {0:?} instance {1} contains an intersection index {2} which is greater than `Limits::max_intersection_group_count` {3}"
+    )]
+    TlasInvalidIntersectionIndex(ResourceErrorIdent, usize, u32, u32),
 }
 
 impl WebGpuError for BuildAccelerationStructureError {
@@ -255,6 +259,7 @@ impl WebGpuError for BuildAccelerationStructureError {
             | Self::UseTransformMissing(..)
             | Self::TlasDependentMissingVertexReturn(..)
             | Self::TlasInstancesIntersectionIndicesDiffer(..)
+            | Self::TlasInvalidQueryData(..)
             | Self::TlasInvalidIntersectionIndex(..)
             | Self::BlasGeometryKindMismatch(..)
             | Self::IncompatibleBlasAabbPrimitiveCount(..)

@@ -414,6 +414,10 @@ impl Device {
             }
         };
 
+        if desc.intersections.len() > self.limits.max_intersection_group_count as usize {
+            return Err(pipeline::CreateRayTracingPipelineError::TooManyIntersectionGroups(desc.intersections.len(), self.limits.max_intersection_group_count))
+        }
+
         let mut intersections = Vec::with_capacity(desc.intersections.len());
         let mut final_intersection_names = Vec::with_capacity(desc.intersections.len());
 

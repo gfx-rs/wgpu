@@ -203,6 +203,8 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_acceleration_structures_per_shader_stage,
 
         max_multiview_view_count,
+
+        max_intersection_group_count,
     } = limits;
     writeln!(output, "\t\t                           Max Texture Dimension 1d: {max_texture_dimension_1d}")?;
     writeln!(output, "\t\t                           Max Texture Dimension 2d: {max_texture_dimension_2d}")?;
@@ -261,6 +263,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t       Max Acceleration Structures Per Shader Stage: {max_acceleration_structures_per_shader_stage}")?;
 
     writeln!(output, "\t\t                           Max Multiview View Count: {max_multiview_view_count}")?;
+    writeln!(output, "\t\t                       Max Intersection Group Count: {max_intersection_group_count}")?;
     // This one reflects more of a wgpu implementation limitations than a hardware limit
     // so don't show it here.
     let _ = max_non_sampler_bindings;
