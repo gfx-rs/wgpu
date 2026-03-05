@@ -1016,6 +1016,9 @@ impl super::Adapter {
                     max_binding_array_acceleration_structure_elements_per_shader_stage:
                         max_acceleration_structures_per_shader_stage,
                     max_multiview_view_count,
+
+                    // not yet implemented
+                    max_intersection_group_count: 0,
                 }),
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(

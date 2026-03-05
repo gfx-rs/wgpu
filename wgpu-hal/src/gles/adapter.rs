@@ -846,6 +846,8 @@ impl super::Adapter {
             max_acceleration_structures_per_shader_stage: 0,
 
             max_multiview_view_count: 0,
+
+            max_intersection_group_count: 0,
         });
 
         let mut workarounds = super::Workarounds::empty();

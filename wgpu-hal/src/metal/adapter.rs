@@ -1406,6 +1406,8 @@ impl super::CapabilitiesQuery {
             max_mesh_output_primitives: 256,
             max_mesh_output_layers: self.max_texture_layers as u32,
             max_mesh_multiview_view_count: 0,
+            // unimplemented
+            max_intersection_group_count: 0,
         });
 
         crate::Capabilities {

@@ -1663,6 +1663,12 @@ impl PhysicalDeviceProperties {
         let max_color_attachment_bytes_per_sample =
             max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
+        let mut max_intersection_group_count = 0;
+
+        if let Some(properties) = self.ray_tracing_pipeline {
+            max_intersection_group_count = (1 << 24) / properties.max_ray_hit_attribute_size;
+        }
+
         let max_multiview_view_count = self
             .multiview
             .map(|a| a.max_multiview_view_count.min(32))
@@ -1763,6 +1769,7 @@ impl PhysicalDeviceProperties {
             max_acceleration_structures_per_shader_stage,
 
             max_multiview_view_count,
+            max_intersection_group_count,
         })
     }
 

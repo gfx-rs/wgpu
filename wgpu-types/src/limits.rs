@@ -89,6 +89,8 @@ macro_rules! with_limits {
         $macro_name!(max_acceleration_structures_per_shader_stage, Ordering::Less);
 
         $macro_name!(max_multiview_view_count, Ordering::Less);
+
+        $macro_name!(max_intersection_group_count, Ordering::Less);
     };
 }
 
@@ -316,6 +318,10 @@ pub struct Limits {
 
     /// The maximum number of views that can be used in multiview rendering
     pub max_multiview_view_count: u32,
+
+    /// The maximum number of intersection groups in a ray tracing pipeline.
+    /// Currently only affects wgpu-hal
+    pub max_intersection_group_count: u32,
 }
 
 impl Default for Limits {
@@ -386,6 +392,7 @@ impl Limits {
     ///     max_tlas_instance_count: 0,
     ///     max_acceleration_structures_per_shader_stage: 0,
     ///     max_multiview_view_count: 0,
+    ///     max_intersection_group_count: 0,
     /// });
     /// ```
     ///
@@ -451,6 +458,8 @@ impl Limits {
             max_acceleration_structures_per_shader_stage: 0,
 
             max_multiview_view_count: 0,
+
+            max_intersection_group_count: 0,
         }
     }
 
@@ -517,6 +526,8 @@ impl Limits {
     ///     max_acceleration_structures_per_shader_stage: 0,
     ///
     ///     max_multiview_view_count: 0,
+    ///
+    ///     max_intersection_group_count: 0,
     /// });
     /// ```
     #[must_use]
@@ -599,6 +610,8 @@ impl Limits {
     ///     max_acceleration_structures_per_shader_stage: 0,
     ///
     ///     max_multiview_view_count: 0,
+    ///
+    ///     max_intersection_group_count: 0,
     /// });
     /// ```
     #[must_use]
@@ -697,6 +710,7 @@ impl Limits {
             max_acceleration_structures_per_shader_stage: ALLOC_MAX_U32,
 
             max_multiview_view_count: ALLOC_MAX_U32,
+            max_intersection_group_count: ALLOC_MAX_U32,
         }
     }
 
@@ -750,6 +764,15 @@ impl Limits {
             max_blas_primitive_count: other.max_blas_primitive_count,
             max_acceleration_structures_per_shader_stage: other
                 .max_acceleration_structures_per_shader_stage,
+            ..self
+        }
+    }
+
+    /// The minimum guaranteed limits for acceleration structures if you enable [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`]
+    #[must_use]
+    pub const fn using_minimum_supported_ray_tracing_pipeline_values(self) -> Self {
+        Self {
+            max_intersection_group_count: 524288, // Vulkan has an exact size of each intersection group being 32, (2 ^ 24 - intersection bytes) / 32 = 524288
             ..self
         }
     }
