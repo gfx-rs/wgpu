@@ -226,7 +226,7 @@ impl Version {
     }
 
     fn supports_std430_layout(&self) -> bool {
-        *self >= Version::Desktop(430) || *self >= Version::new_gles(310)
+        *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
     }
 
     fn supports_fma_function(&self) -> bool {
