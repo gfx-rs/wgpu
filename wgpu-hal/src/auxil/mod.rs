@@ -197,3 +197,43 @@ pub(crate) fn apply_hal_limits(mut limits: wgt::Limits) -> wgt::Limits {
 
     limits
 }
+
+/// Evenly allocates space to each limit,
+/// capping them only if strictly necessary.
+pub fn cap_limits_to_be_under_the_sum_limit<const N: usize>(
+    mut limits: [&mut u32; N],
+    sum_limit: u32,
+) {
+    limits.sort();
+
+    let mut rem_limit = sum_limit;
+    let mut divisor = limits.len() as u32;
+    for limit_to_adjust in limits {
+        let limit = rem_limit / divisor;
+        *limit_to_adjust = (*limit_to_adjust).min(limit);
+        rem_limit -= *limit_to_adjust;
+        divisor -= 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cap_limits_to_be_under_the_sum_limit() {
+        test([3, 3, 3], 3, [1, 1, 1]);
+        test([3, 2, 1], 3, [1, 1, 1]);
+        test([1, 2, 3], 6, [1, 2, 3]);
+        test([1, 2, 3], 3, [1, 1, 1]);
+        test([1, 8, 100], 6, [1, 2, 3]);
+        test([2, 80, 80], 6, [2, 2, 2]);
+        test([2, 80, 80], 12, [2, 5, 5]);
+
+        #[track_caller]
+        fn test<const N: usize>(mut input: [u32; N], limit: u32, output: [u32; N]) {
+            cap_limits_to_be_under_the_sum_limit(input.each_mut(), limit);
+            assert_eq!(input, output);
+        }
+    }
+}

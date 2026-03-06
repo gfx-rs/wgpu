@@ -1478,30 +1478,42 @@ impl PhysicalDeviceProperties {
         ]
         .contains(&self.properties.vendor_id);
 
-        if !ignore_max_fragment_combined_output_resources
-            && max_storage_textures_per_shader_stage
-                + max_storage_buffers_per_shader_stage
-                + max_color_attachments
-                > limits.max_fragment_combined_output_resources
-        {
-            // Divide the limit equally between the 3 limits while allowing
-            // unused limit capacity to be used by some limits that
-            // can make use of it.
-            let mut rem_limit = limits.max_fragment_combined_output_resources;
-            let limit = rem_limit / 3;
-            let diff = limit.saturating_sub(max_storage_textures_per_shader_stage);
-            max_storage_textures_per_shader_stage =
-                max_storage_textures_per_shader_stage.min(limit);
-
-            rem_limit -= limit + diff;
-            let limit = rem_limit / 2;
-            let diff = limit.saturating_sub(max_storage_buffers_per_shader_stage);
-            max_storage_buffers_per_shader_stage = max_storage_buffers_per_shader_stage.min(limit);
-
-            rem_limit -= limit + diff;
-            let limit = rem_limit;
-            max_color_attachments = max_color_attachments.min(limit);
+        if !ignore_max_fragment_combined_output_resources {
+            crate::auxil::cap_limits_to_be_under_the_sum_limit(
+                [
+                    &mut max_storage_textures_per_shader_stage,
+                    &mut max_storage_buffers_per_shader_stage,
+                    &mut max_color_attachments,
+                ],
+                limits.max_fragment_combined_output_resources,
+            );
         }
+
+        // When summed, the 5 limits below must be under Vulkan's maxPerStageResources.
+        //
+        // - maxUniformBuffersPerShaderStage, WebGPU default: 12
+        // - maxSampledTexturesPerShaderStage, WebGPU default: 16
+        // - maxStorageTexturesPerShaderStage, WebGPU default: 4
+        // - maxStorageBuffersPerShaderStage, WebGPU default: 8
+        // - maxColorAttachments, WebGPU default: 8
+        //
+        // Note: Vulkan's texel buffers and input attachments also count towards
+        // maxPerStageResources but we don't make use of them.
+        let mut max_sampled_textures_per_shader_stage =
+            limits.max_per_stage_descriptor_sampled_images;
+        let mut max_uniform_buffers_per_shader_stage =
+            limits.max_per_stage_descriptor_uniform_buffers;
+
+        crate::auxil::cap_limits_to_be_under_the_sum_limit(
+            [
+                &mut max_sampled_textures_per_shader_stage,
+                &mut max_uniform_buffers_per_shader_stage,
+                &mut max_storage_textures_per_shader_stage,
+                &mut max_storage_buffers_per_shader_stage,
+                &mut max_color_attachments,
+            ],
+            limits.max_per_stage_resources,
+        );
 
         // TODO: programmatically determine this, if possible. It's unclear whether we can
         // as of https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447.
@@ -1552,10 +1564,10 @@ impl PhysicalDeviceProperties {
             max_dynamic_storage_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_storage_buffers_dynamic,
             max_samplers_per_shader_stage: limits.max_per_stage_descriptor_samplers,
-            max_sampled_textures_per_shader_stage: limits.max_per_stage_descriptor_sampled_images,
+            max_sampled_textures_per_shader_stage,
             max_storage_textures_per_shader_stage,
             max_storage_buffers_per_shader_stage,
-            max_uniform_buffers_per_shader_stage: limits.max_per_stage_descriptor_uniform_buffers,
+            max_uniform_buffers_per_shader_stage,
             max_vertex_buffers: limits.max_vertex_input_bindings,
             max_buffer_size,
             max_uniform_buffer_binding_size: limits
