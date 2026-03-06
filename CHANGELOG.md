@@ -219,6 +219,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Naga uses wrapping arithmetic when evaluating dot products on concrete integer types (`u32` and `i32`). By @BKDaugherty in [#9142](https://github.com/gfx-rs/wgpu/pull/9142).
 - Disallow negation of a matrix in WGSL. By @andyleiserson in [#9157](https://github.com/gfx-rs/wgpu/pull/9157).
 - Fix evaluation order of compound assignment (e.g. `+=`) LHS and RHS. By @andyleiserson in [#9181](https://github.com/gfx-rs/wgpu/pull/9181).
+- Fixed invalid MSL when `float16`-format vertex input data was accessed via an `f16`-type variable in a vertex shader. By @andyleiserson in [#9166](https://github.com/gfx-rs/wgpu/pull/9166).
 
 #### Validation
 
