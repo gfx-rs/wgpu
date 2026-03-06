@@ -118,7 +118,7 @@ pub struct PhysicalDeviceFeatures {
     /// Features provided by `VK_EXT_subgroup_size_control`, promoted to Vulkan 1.3.
     subgroup_size_control: Option<vk::PhysicalDeviceSubgroupSizeControlFeatures<'static>>,
 
-    /// Features proved by `VK_KHR_maintenance4`, needed for mesh shaders
+    /// Features provided by `VK_KHR_maintenance4`, promoted to Vulkan 1.3.
     maintenance4: Option<vk::PhysicalDeviceMaintenance4FeaturesKHR<'static>>,
 
     /// Features proved by `VK_EXT_mesh_shader`
@@ -553,9 +553,11 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            maintenance4: if enabled_extensions.contains(&khr::maintenance4::NAME) {
+            maintenance4: if device_api_version >= vk::API_VERSION_1_3
+                || enabled_extensions.contains(&khr::maintenance4::NAME)
+            {
                 let needed = requested_features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER);
-                Some(vk::PhysicalDeviceMaintenance4FeaturesKHR::default().maintenance4(needed))
+                Some(vk::PhysicalDeviceMaintenance4Features::default().maintenance4(needed))
             } else {
                 None
             },
@@ -1090,6 +1092,10 @@ pub struct PhysicalDeviceProperties {
     maintenance_3: Option<vk::PhysicalDeviceMaintenance3Properties<'static>>,
 
     /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_KHR_maintenance4` extension, promoted to Vulkan 1.3.
+    maintenance_4: Option<vk::PhysicalDeviceMaintenance4Properties<'static>>,
+
+    /// Additional `vk::PhysicalDevice` properties from the
     /// `VK_EXT_descriptor_indexing` extension, promoted to Vulkan 1.2.
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT<'static>>,
 
@@ -1237,6 +1243,11 @@ impl PhysicalDeviceProperties {
         }
 
         if self.device_api_version < vk::API_VERSION_1_3 {
+            // Optional `VK_KHR_maintenance4`
+            if self.supports_extension(khr::maintenance4::NAME) {
+                extensions.push(khr::maintenance4::NAME);
+            }
+
             // Optional `VK_EXT_image_robustness`
             if self.supports_extension(ext::image_robustness::NAME) {
                 extensions.push(ext::image_robustness::NAME);
@@ -1245,10 +1256,6 @@ impl PhysicalDeviceProperties {
             // Require `VK_EXT_subgroup_size_control` if the associated feature was requested
             if requested_features.contains(wgt::Features::SUBGROUP) {
                 extensions.push(ext::subgroup_size_control::NAME);
-            }
-
-            if requested_features.intersects(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
-                extensions.push(khr::maintenance4::NAME);
             }
 
             // Optional `VK_KHR_shader_integer_dot_product`
@@ -1403,15 +1410,27 @@ impl PhysicalDeviceProperties {
             max_mesh_multiview_view_count = m.max_mesh_multiview_view_count;
         }
 
+        let max_memory_allocation_size = self
+            .maintenance_3
+            .map(|maintenance_3| maintenance_3.max_memory_allocation_size)
+            .unwrap_or(u64::MAX);
+        let max_buffer_size = self
+            .maintenance_4
+            .map(|maintenance_4| maintenance_4.max_buffer_size)
+            .unwrap_or(u64::MAX);
+        let max_buffer_size = max_buffer_size.min(max_memory_allocation_size);
+
         // Prevent very large buffers on mesa and most android devices, and in all cases
         // don't risk confusing JS by exceeding the range of a double.
         let is_nvidia = self.properties.vendor_id == crate::auxil::db::nvidia::VENDOR;
-        let max_buffer_size =
+        let max_buffer_size_cap =
             if (cfg!(target_os = "linux") || cfg!(target_os = "android")) && !is_nvidia {
                 i32::MAX as u64
             } else {
                 1u64 << 52
             };
+
+        let max_buffer_size = max_buffer_size.min(max_buffer_size_cap);
 
         let mut max_binding_array_elements = 0;
         let mut max_sampler_binding_array_elements = 0;
@@ -1668,6 +1687,8 @@ impl super::InstanceShared {
                 // Get these now to avoid borrowing conflicts later
                 let supports_maintenance3 = capabilities.device_api_version >= vk::API_VERSION_1_1
                     || capabilities.supports_extension(khr::maintenance3::NAME);
+                let supports_maintenance4 = capabilities.device_api_version >= vk::API_VERSION_1_3
+                    || capabilities.supports_extension(khr::maintenance4::NAME);
                 let supports_descriptor_indexing = capabilities.device_api_version
                     >= vk::API_VERSION_1_2
                     || capabilities.supports_extension(ext::descriptor_indexing::NAME);
@@ -1691,6 +1712,13 @@ impl super::InstanceShared {
                     let next = capabilities
                         .maintenance_3
                         .insert(vk::PhysicalDeviceMaintenance3Properties::default());
+                    properties2 = properties2.push_next(next);
+                }
+
+                if supports_maintenance4 {
+                    let next = capabilities
+                        .maintenance_4
+                        .insert(vk::PhysicalDeviceMaintenance4Properties::default());
                     properties2 = properties2.push_next(next);
                 }
 
@@ -1893,6 +1921,16 @@ impl super::InstanceShared {
                 let next = features
                     .position_fetch
                     .insert(vk::PhysicalDeviceRayTracingPositionFetchFeaturesKHR::default());
+                features2 = features2.push_next(next);
+            }
+
+            // `VK_KHR_maintenance4` is promoted to 1.3
+            if capabilities.device_api_version >= vk::API_VERSION_1_3
+                || capabilities.supports_extension(khr::maintenance4::NAME)
+            {
+                let next = features
+                    .maintenance4
+                    .insert(vk::PhysicalDeviceMaintenance4Features::default());
                 features2 = features2.push_next(next);
             }
 
