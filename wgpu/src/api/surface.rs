@@ -125,6 +125,7 @@ impl Surface<'_> {
             SurfaceStatus::Good => false,
             SurfaceStatus::Suboptimal => true,
             SurfaceStatus::Timeout => return Err(SurfaceError::Timeout),
+            SurfaceStatus::Occluded => return Err(SurfaceError::Occluded),
             SurfaceStatus::Outdated => return Err(SurfaceError::Outdated),
             SurfaceStatus::Lost => return Err(SurfaceError::Lost),
             SurfaceStatus::Unknown => return Err(SurfaceError::Other),

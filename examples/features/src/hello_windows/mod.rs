@@ -1,6 +1,7 @@
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 use std::{collections::HashMap, sync::Arc};
+use wgpu::SurfaceError;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
@@ -45,11 +46,9 @@ impl Viewport {
         self.config.height = size.height;
         self.desc.surface.configure(device, &self.config);
     }
-    fn get_current_texture(&mut self) -> wgpu::SurfaceTexture {
-        self.desc
-            .surface
-            .get_current_texture()
-            .expect("Failed to acquire next swap chain texture")
+
+    fn get_current_texture(&mut self) -> Result<wgpu::SurfaceTexture, SurfaceError> {
+        self.desc.surface.get_current_texture()
     }
 }
 
@@ -105,41 +104,51 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Arc<Window>, wgpu::Color
                     }
                     WindowEvent::RedrawRequested => {
                         if let Some(viewport) = viewports.get_mut(&window_id) {
-                            let frame = viewport.get_current_texture();
-                            let view = frame
-                                .texture
-                                .create_view(&wgpu::TextureViewDescriptor::default());
-                            let mut encoder =
-                                device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                                    label: None,
-                                });
-                            {
-                                let _rpass =
-                                    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                        label: None,
-                                        color_attachments: &[Some(
-                                            wgpu::RenderPassColorAttachment {
-                                                view: &view,
-                                                depth_slice: None,
-                                                resolve_target: None,
-                                                ops: wgpu::Operations {
-                                                    load: wgpu::LoadOp::Clear(
-                                                        viewport.desc.background,
-                                                    ),
-                                                    store: wgpu::StoreOp::Store,
-                                                },
+                            match viewport.get_current_texture() {
+                                Ok(frame) => {
+                                    let view = frame
+                                        .texture
+                                        .create_view(&wgpu::TextureViewDescriptor::default());
+                                    let mut encoder = device.create_command_encoder(
+                                        &wgpu::CommandEncoderDescriptor { label: None },
+                                    );
+                                    {
+                                        let _rpass = encoder.begin_render_pass(
+                                            &wgpu::RenderPassDescriptor {
+                                                label: None,
+                                                color_attachments: &[Some(
+                                                    wgpu::RenderPassColorAttachment {
+                                                        view: &view,
+                                                        depth_slice: None,
+                                                        resolve_target: None,
+                                                        ops: wgpu::Operations {
+                                                            load: wgpu::LoadOp::Clear(
+                                                                viewport.desc.background,
+                                                            ),
+                                                            store: wgpu::StoreOp::Store,
+                                                        },
+                                                    },
+                                                )],
+                                                depth_stencil_attachment: None,
+                                                timestamp_writes: None,
+                                                occlusion_query_set: None,
+                                                multiview_mask: None,
                                             },
-                                        )],
-                                        depth_stencil_attachment: None,
-                                        timestamp_writes: None,
-                                        occlusion_query_set: None,
-                                        multiview_mask: None,
-                                    });
-                            }
+                                        );
+                                    }
 
-                            queue.submit(Some(encoder.finish()));
-                            viewport.desc.window.pre_present_notify();
-                            frame.present();
+                                    queue.submit(Some(encoder.finish()));
+                                    viewport.desc.window.pre_present_notify();
+                                    frame.present();
+                                }
+                                Err(SurfaceError::Timeout | SurfaceError::Occluded) => {
+                                    viewport.desc.window.request_redraw(); // Try again later
+                                }
+                                Err(err) => {
+                                    // TODO: reconfigure the surface instead
+                                    panic!("get_current_texture: {err}");
+                                }
+                            }
                         }
                     }
                     WindowEvent::CloseRequested => {

@@ -20,6 +20,7 @@ use std::sync::Arc;
 // We won't bring StorageBuffer into scope as that might be too easy to confuse
 // with actual GPU-allocated wgpu storage buffers.
 use encase::ShaderType;
+use wgpu::SurfaceError;
 use winit::{
     event::{Event, KeyEvent, WindowEvent},
     event_loop::EventLoop,
@@ -284,55 +285,68 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                         WindowEvent::RedrawRequested => {
                             let wgpu_context_ref = wgpu_context.as_ref().unwrap();
                             let state_ref = state.as_ref().unwrap();
-                            let frame = wgpu_context_ref.surface.get_current_texture().unwrap();
-                            let view = frame
-                                .texture
-                                .create_view(&wgpu::TextureViewDescriptor::default());
+                            match wgpu_context_ref.surface.get_current_texture() {
+                                Ok(frame) => {
+                                    let view = frame
+                                        .texture
+                                        .create_view(&wgpu::TextureViewDescriptor::default());
 
-                            // (8)
-                            wgpu_context_ref.queue.write_buffer(
-                                &wgpu_context_ref.uniform_buffer,
-                                0,
-                                &state_ref.as_wgsl_bytes().expect(
-                                    "Error in encase translating AppState \
-                    struct to WGSL bytes.",
-                                ),
-                            );
-                            let mut encoder = wgpu_context_ref.device.create_command_encoder(
-                                &wgpu::CommandEncoderDescriptor { label: None },
-                            );
-                            {
-                                let mut render_pass =
-                                    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                        label: None,
-                                        color_attachments: &[Some(
-                                            wgpu::RenderPassColorAttachment {
-                                                view: &view,
-                                                depth_slice: None,
-                                                resolve_target: None,
-                                                ops: wgpu::Operations {
-                                                    load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                                                    store: wgpu::StoreOp::Store,
-                                                },
+                                    // (8)
+                                    wgpu_context_ref.queue.write_buffer(
+                                        &wgpu_context_ref.uniform_buffer,
+                                        0,
+                                        &state_ref.as_wgsl_bytes().expect(
+                                            "Error in encase translating AppState struct to WGSL bytes."
+                                        ),
+                                    );
+                                    let mut encoder =
+                                        wgpu_context_ref.device.create_command_encoder(
+                                            &wgpu::CommandEncoderDescriptor { label: None },
+                                        );
+                                    {
+                                        let mut render_pass = encoder.begin_render_pass(
+                                            &wgpu::RenderPassDescriptor {
+                                                label: None,
+                                                color_attachments: &[Some(
+                                                    wgpu::RenderPassColorAttachment {
+                                                        view: &view,
+                                                        depth_slice: None,
+                                                        resolve_target: None,
+                                                        ops: wgpu::Operations {
+                                                            load: wgpu::LoadOp::Clear(
+                                                                wgpu::Color::GREEN,
+                                                            ),
+                                                            store: wgpu::StoreOp::Store,
+                                                        },
+                                                    },
+                                                )],
+                                                depth_stencil_attachment: None,
+                                                occlusion_query_set: None,
+                                                timestamp_writes: None,
+                                                multiview_mask: None,
                                             },
-                                        )],
-                                        depth_stencil_attachment: None,
-                                        occlusion_query_set: None,
-                                        timestamp_writes: None,
-                                        multiview_mask: None,
-                                    });
-                                render_pass.set_pipeline(&wgpu_context_ref.pipeline);
-                                // (9)
-                                render_pass.set_bind_group(
-                                    0,
-                                    Some(&wgpu_context_ref.bind_group),
-                                    &[],
-                                );
-                                render_pass.draw(0..3, 0..1);
+                                        );
+                                        render_pass.set_pipeline(&wgpu_context_ref.pipeline);
+                                        // (9)
+                                        render_pass.set_bind_group(
+                                            0,
+                                            Some(&wgpu_context_ref.bind_group),
+                                            &[],
+                                        );
+                                        render_pass.draw(0..3, 0..1);
+                                    }
+                                    wgpu_context_ref.queue.submit(Some(encoder.finish()));
+                                    window.pre_present_notify();
+                                    frame.present();
+                                }
+                                Err(SurfaceError::Timeout | SurfaceError::Occluded) => {
+                                    window.request_redraw(); // try again later
+                                }
+                                Err(err) => {
+                                    // TODO: reconfigure the surface instead
+                                    panic!("get_current_texture: {err}");
+                                }
                             }
-                            wgpu_context_ref.queue.submit(Some(encoder.finish()));
-                            window.pre_present_notify();
-                            frame.present();
                         }
                         _ => {}
                     }

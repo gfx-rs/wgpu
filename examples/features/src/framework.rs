@@ -205,15 +205,15 @@ impl SurfaceWrapper {
     }
 
     /// Acquire the next surface texture.
-    fn acquire(&mut self, context: &ExampleContext) -> wgpu::SurfaceTexture {
+    ///
+    /// Returns `None` on failure.
+    fn acquire(&mut self, context: &ExampleContext) -> Option<wgpu::SurfaceTexture> {
         let surface = self.surface.as_ref().unwrap();
 
         match surface.get_current_texture() {
-            Ok(frame) => frame,
-            // If we timed out, just try again
-            Err(wgpu::SurfaceError::Timeout) => surface
-                .get_current_texture()
-                .expect("Failed to acquire next surface texture!"),
+            Ok(frame) => Some(frame),
+            // If we timed out or the window is occluded, skip this frame:
+            Err(wgpu::SurfaceError::Timeout | wgpu::SurfaceError::Occluded) => None,
             Err(
                 // If the surface is outdated, or was lost, reconfigure it.
                 wgpu::SurfaceError::Outdated
@@ -223,9 +223,9 @@ impl SurfaceWrapper {
                 | wgpu::SurfaceError::OutOfMemory,
             ) => {
                 surface.configure(&context.device, self.config());
-                surface
+                Some(surface
                     .get_current_texture()
-                    .expect("Failed to acquire next surface texture!")
+                    .expect("Failed to acquire next surface texture!"))
             }
         }
     }
@@ -427,19 +427,21 @@ async fn start<E: Example>(title: &str) {
 
                         frame_counter.update();
 
-                        let frame = surface.acquire(&context);
-                        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
-                            format: Some(surface.config().view_formats[0]),
-                            ..wgpu::TextureViewDescriptor::default()
-                        });
+                        if let Some(frame) = surface.acquire(&context) {
+                            let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
+                                format: Some(surface.config().view_formats[0]),
+                                ..wgpu::TextureViewDescriptor::default()
+                            });
 
-                        example
-                            .as_mut()
-                            .unwrap()
-                            .render(&view, &context.device, &context.queue);
+                            example.as_mut().unwrap().render(
+                                &view,
+                                &context.device,
+                                &context.queue,
+                            );
 
-                        window_loop.window.pre_present_notify();
-                        frame.present();
+                            window_loop.window.pre_present_notify();
+                            frame.present();
+                        }
 
                         window_loop.window.request_redraw();
                     }

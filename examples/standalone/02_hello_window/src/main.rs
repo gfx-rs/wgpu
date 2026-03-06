@@ -83,7 +83,7 @@ impl State {
         // (e.g., when the window is occluded on macOS).
         let surface_texture = match self.surface.get_current_texture() {
             Ok(texture) => texture,
-            Err(wgpu::SurfaceError::Timeout) => return,
+            Err(wgpu::SurfaceError::Occluded) => return, // Can't render right now. Try again later.
             Err(err) => panic!("failed to acquire next swapchain texture: {err}"),
         };
         let texture_view = surface_texture

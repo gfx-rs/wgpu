@@ -148,8 +148,7 @@ impl crate::Surface for super::Surface {
                         let is_visible = (occlusion_state & NS_WINDOW_OCCLUSION_STATE_VISIBLE) != 0;
 
                         if !is_visible {
-                            // Window is occluded. Skipping frame to avoid drawable stall
-                            return Err(crate::SurfaceError::Timeout);
+                            return Err(crate::SurfaceError::Occluded);
                         }
                     }
                     break;
