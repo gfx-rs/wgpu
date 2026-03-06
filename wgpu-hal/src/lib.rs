@@ -529,7 +529,7 @@ pub enum SurfaceError {
     Outdated,
     #[error("Timed out waiting for a surface texture")]
     Timeout,
-    #[error("The window is occluded (e.g. minimized or behind another window)")]
+    #[error("The window is occluded (e.g. minimized or behind another window). Try again once the window is no longer occluded.")]
     Occluded,
     #[error(transparent)]
     Device(#[from] DeviceError),

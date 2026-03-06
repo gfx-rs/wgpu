@@ -96,6 +96,9 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 )),
 ```
 
+#### Other breaking changes
+- ⚠️ `get_current_texture` can now return `SurfaceError::Occluded` [#9141](https://github.com/gfx-rs/wgpu/pull/9141)
+
 ### New Features
 
 #### General
