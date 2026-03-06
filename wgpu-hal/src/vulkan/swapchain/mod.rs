@@ -53,12 +53,12 @@ pub(super) trait Swapchain: Send + Sync + 'static {
     /// `timeout` specifies the maximum time to wait for an image to become available.
     /// If `None` is specified, this function will wait indefinitely.
     ///
-    /// Returns `Ok(None)` if the timeout elapsed before an image became available.
+    /// Returns `Err(SurfaceError::Timeout)` if the timeout elapsed before an image became available.
     unsafe fn acquire(
         &mut self,
         timeout: Option<Duration>,
         fence: &super::Fence,
-    ) -> Result<Option<crate::AcquiredSurfaceTexture<crate::api::Vulkan>>, crate::SurfaceError>;
+    ) -> Result<crate::AcquiredSurfaceTexture<crate::api::Vulkan>, crate::SurfaceError>;
 
     /// Tries to discard the acquired texture without presenting it.
     ///

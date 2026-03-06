@@ -870,7 +870,6 @@ impl<A: hal::Api> Example<A> {
             self.surface
                 .acquire_texture(None, &ctx.fence)
                 .unwrap()
-                .unwrap()
                 .texture
         };
 

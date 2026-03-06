@@ -527,6 +527,8 @@ pub enum SurfaceError {
     Lost,
     #[error("Surface is outdated, needs to be re-created")]
     Outdated,
+    #[error("Timed out waiting for a surface texture")]
+    Timeout,
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error("Other reason: {0}")]
@@ -691,8 +693,8 @@ pub trait Surface: WasmNotSendSync {
     /// `self`.
     ///
     /// If `timeout` elapses before `self` has a texture ready to be acquired,
-    /// return `Ok(None)`. If `timeout` is `None`, wait indefinitely, with no
-    /// timeout.
+    /// return `Err(SurfaceError::Timeout)`. If `timeout` is `None`, wait
+    /// indefinitely, with no timeout.
     ///
     /// # Using an [`AcquiredSurfaceTexture`]
     ///
@@ -716,9 +718,9 @@ pub trait Surface: WasmNotSendSync {
     /// Some backends can't support a timeout when acquiring a texture. On these
     /// backends, `timeout` is ignored.
     ///
-    /// On macOS, this returns `Ok(None)` when the window is not visible (minimized,
-    /// fully occluded, or on another virtual desktop) to avoid blocking in
-    /// `CAMetalLayer.nextDrawable()`.
+    /// On macOS, this returns `Err(SurfaceError::Timeout)` when the window is
+    /// not visible (minimized, fully occluded, or on another virtual desktop)
+    /// to avoid blocking in `CAMetalLayer.nextDrawable()`.
     ///
     /// # Safety
     ///
@@ -728,7 +730,7 @@ pub trait Surface: WasmNotSendSync {
     ///   [`Queue::submit`] that used [`Texture`]s acquired from this surface.
     ///
     /// - You may only have one texture acquired from `self` at a time. When
-    ///   `acquire_texture` returns `Ok(Some(ast))`, you must pass the returned
+    ///   `acquire_texture` returns `Ok(ast)`, you must pass the returned
     ///   [`SurfaceTexture`] `ast.texture` to either [`Queue::present`] or
     ///   [`Surface::discard_texture`] before calling `acquire_texture` again.
     ///
@@ -742,7 +744,7 @@ pub trait Surface: WasmNotSendSync {
         &self,
         timeout: Option<core::time::Duration>,
         fence: &<Self::A as Api>::Fence,
-    ) -> Result<Option<AcquiredSurfaceTexture<Self::A>>, SurfaceError>;
+    ) -> Result<AcquiredSurfaceTexture<Self::A>, SurfaceError>;
 
     /// Relinquish an acquired texture without presenting it.
     ///

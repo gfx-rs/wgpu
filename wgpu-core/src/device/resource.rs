@@ -5121,9 +5121,9 @@ impl Device {
                     Ok(()) => (),
                     Err(error) => {
                         break 'error match error {
-                            hal::SurfaceError::Outdated | hal::SurfaceError::Lost => {
-                                E::InvalidSurface
-                            }
+                            hal::SurfaceError::Outdated
+                            | hal::SurfaceError::Lost
+                            | hal::SurfaceError::Timeout => E::InvalidSurface,
                             hal::SurfaceError::Device(error) => {
                                 E::Device(self.handle_hal_error(error))
                             }

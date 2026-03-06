@@ -873,7 +873,7 @@ impl crate::Surface for Surface {
         &self,
         _timeout_ms: Option<Duration>,
         _fence: &super::Fence,
-    ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
+    ) -> Result<crate::AcquiredSurfaceTexture<super::Api>, crate::SurfaceError> {
         let swapchain = self.swapchain.read();
         let sc = swapchain.as_ref().unwrap();
         let texture = super::Texture {
@@ -891,10 +891,10 @@ impl crate::Surface for Surface {
                 depth: 1,
             },
         };
-        Ok(Some(crate::AcquiredSurfaceTexture {
+        Ok(crate::AcquiredSurfaceTexture {
             texture,
             suboptimal: false,
-        }))
+        })
     }
     unsafe fn discard_texture(&self, _texture: super::Texture) {}
 }

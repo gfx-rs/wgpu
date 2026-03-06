@@ -247,10 +247,10 @@ impl crate::Surface for Context {
 
     unsafe fn acquire_texture(
         &self,
-        timeout: Option<Duration>,
-        fence: &Fence,
-    ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
-        Ok(None)
+        _timeout: Option<Duration>,
+        _fence: &Fence,
+    ) -> Result<crate::AcquiredSurfaceTexture<Api>, crate::SurfaceError> {
+        Err(crate::SurfaceError::Timeout)
     }
     unsafe fn discard_texture(&self, texture: Resource) {}
 }

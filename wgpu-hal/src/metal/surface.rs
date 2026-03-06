@@ -117,7 +117,7 @@ impl crate::Surface for super::Surface {
         &self,
         _timeout: Option<core::time::Duration>, // TODO
         _fence: &super::Fence,
-    ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
+    ) -> Result<crate::AcquiredSurfaceTexture<super::Api>, crate::SurfaceError> {
         let render_layer = self.render_layer.lock();
 
         #[cfg(target_os = "macos")]
@@ -149,7 +149,7 @@ impl crate::Surface for super::Surface {
 
                         if !is_visible {
                             // Window is occluded. Skipping frame to avoid drawable stall
-                            return Ok(None);
+                            return Err(crate::SurfaceError::Timeout);
                         }
                     }
                     break;
@@ -164,7 +164,7 @@ impl crate::Surface for super::Surface {
                 .map(|drawable| (drawable.to_owned(), drawable.texture().to_owned()))
         }) {
             Some(pair) => pair,
-            None => return Ok(None),
+            None => return Err(crate::SurfaceError::Timeout),
         };
 
         let swapchain_format = self.swapchain_format.read().unwrap();
@@ -186,10 +186,10 @@ impl crate::Surface for super::Surface {
             present_with_transaction: render_layer.presentsWithTransaction(),
         };
 
-        Ok(Some(crate::AcquiredSurfaceTexture {
+        Ok(crate::AcquiredSurfaceTexture {
             texture: suf_texture,
             suboptimal: false,
-        }))
+        })
     }
 
     unsafe fn discard_texture(&self, _texture: super::SurfaceTexture) {}
