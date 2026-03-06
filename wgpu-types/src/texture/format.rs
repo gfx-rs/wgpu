@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use crate::{Features, TextureAspect, TextureSampleType, TextureUsages};
+use crate::{ColorWrites, Features, TextureAspect, TextureSampleType, TextureUsages};
 
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
@@ -517,6 +517,127 @@ impl TextureFormat {
                 None => unreachable!("the plane must be specified for multi-planar formats"),
             },
             _ => (1, 1),
+        }
+    }
+
+    /// Returns a [ColorWrites] struct with the bits set where the texture format contains
+    /// the color channels.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use wgpu_types::{TextureFormat, ColorWrites};
+    ///
+    /// assert!(
+    ///     TextureFormat::Rgba8Unorm.channels().contains(ColorWrites::all()),
+    ///     "`Rgba` has all four channels."
+    /// );
+    ///
+    /// assert!(
+    ///     !TextureFormat::Rg8Unorm.channels().contains(ColorWrites::ALPHA),
+    ///     "`Rg` hasn't got an alpha channel..."
+    /// );
+    /// assert!(
+    ///     TextureFormat::Rg8Unorm.channels().contains(ColorWrites::RED),
+    ///     "... but it has a red channel ..."
+    /// );
+    /// assert!(
+    ///     TextureFormat::Rg8Unorm.channels().contains(ColorWrites::GREEN),
+    ///     "... but also a green channel :)"
+    /// );
+    ///
+    /// assert!(
+    ///     TextureFormat::Stencil8.channels().is_empty(),
+    ///     "A stencil texture format doesn't have any channels..."
+    /// );
+    /// assert!(
+    ///     !TextureFormat::Stencil8.channels().contains(ColorWrites::RED),
+    ///     "... so this should return `false`"
+    /// );
+    /// ```
+    #[must_use]
+    pub fn channels(&self) -> ColorWrites {
+        match self {
+            Self::R8Unorm
+            | Self::R8Snorm
+            | Self::R8Uint
+            | Self::R8Sint
+            | Self::R16Uint
+            | Self::R16Sint
+            | Self::R16Unorm
+            | Self::R16Snorm
+            | Self::R32Uint
+            | Self::R32Sint
+            | Self::R32Float
+            | Self::R16Float
+            | Self::R64Uint
+            | Self::Bc4RUnorm
+            | Self::Bc4RSnorm
+            | Self::EacR11Unorm
+            | Self::EacR11Snorm => ColorWrites::RED,
+
+            Self::Rg8Unorm
+            | Self::Rg8Snorm
+            | Self::Rg8Uint
+            | Self::Rg8Sint
+            | Self::Rg16Uint
+            | Self::Rg16Sint
+            | Self::Rg16Unorm
+            | Self::Rg16Snorm
+            | Self::Rg16Float
+            | Self::Rg32Uint
+            | Self::Rg32Sint
+            | Self::Rg32Float
+            | Self::Bc5RgUnorm
+            | Self::Bc5RgSnorm
+            | Self::EacRg11Unorm
+            | Self::EacRg11Snorm => ColorWrites::RED | ColorWrites::GREEN,
+
+            Self::Rgb9e5Ufloat
+            | Self::Rg11b10Ufloat
+            | Self::Bc6hRgbUfloat
+            | Self::Bc6hRgbFloat
+            | Self::Etc2Rgb8Unorm
+            | Self::Etc2Rgb8UnormSrgb => ColorWrites::RED | ColorWrites::GREEN | ColorWrites::BLUE,
+
+            Self::Rgba8Unorm
+            | Self::Rgba8UnormSrgb
+            | Self::Rgba8Snorm
+            | Self::Rgba8Uint
+            | Self::Rgba8Sint
+            | Self::Bgra8Unorm
+            | Self::Bgra8UnormSrgb
+            | Self::Rgb10a2Uint
+            | Self::Rgb10a2Unorm
+            | Self::Rgba16Uint
+            | Self::Rgba16Sint
+            | Self::Rgba16Unorm
+            | Self::Rgba16Snorm
+            | Self::Rgba16Float
+            | Self::Rgba32Uint
+            | Self::Rgba32Sint
+            | Self::Rgba32Float
+            | Self::Bc1RgbaUnorm
+            | Self::Bc1RgbaUnormSrgb
+            | Self::Bc2RgbaUnorm
+            | Self::Bc2RgbaUnormSrgb
+            | Self::Bc3RgbaUnorm
+            | Self::Bc3RgbaUnormSrgb
+            | Self::Bc7RgbaUnorm
+            | Self::Bc7RgbaUnormSrgb
+            | Self::Etc2Rgb8A1Unorm
+            | Self::Etc2Rgb8A1UnormSrgb
+            | Self::Etc2Rgba8Unorm
+            | Self::Etc2Rgba8UnormSrgb
+            | Self::Astc { .. } => ColorWrites::all(),
+
+            Self::Stencil8
+            | Self::Depth16Unorm
+            | Self::Depth24Plus
+            | Self::Depth24PlusStencil8
+            | Self::Depth32Float
+            | Self::Depth32FloatStencil8
+            | Self::NV12
+            | Self::P010 => ColorWrites::empty(),
         }
     }
 
