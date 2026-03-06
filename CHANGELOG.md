@@ -120,6 +120,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Added support for `insert_debug_marker`, `push_debug_group` and `pop_debug_group` on WebGPU. By @evilpie in [#9017](https://github.com/gfx-rs/wgpu/pull/9017).
 - Added support for `@builtin(draw_index)` to the vulkan backend. By @inner-daemons in #8883.
 - Added support for `enable primitive_index` and `@builtin(primitive_index)` with support on all platforms. By @inner-daemons in #8879.
+- Added `TextureFormat::channels` method to get some information about which color channels are covered by the texture format. By @TornaxO7 in [#9167](https://github.com/gfx-rs/wgpu/pull/9167)
 - BREAKING: Add `V6_8` variant to `DxcShaderModel` and `naga::back::hlsl::ShaderModel`. By @inner-daemons in [#8882](https://github.com/gfx-rs/wgpu/pull/8882) and @ErichDonGubler in [#9083](https://github.com/gfx-rs/wgpu/pull/9083).
 - BREAKING: Add `V6_9` variant to `DxcShaderModel` and `naga::back::hlsl::ShaderModel`. By @ErichDonGubler in [#????](https://github.com/gfx-rs/wgpu/pull/????).
 
