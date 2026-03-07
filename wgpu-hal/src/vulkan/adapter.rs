@@ -1515,16 +1515,7 @@ impl PhysicalDeviceProperties {
             limits.max_per_stage_resources,
         );
 
-        // TODO: programmatically determine this, if possible. It's unclear whether we can
-        // as of https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447.
-        //
-        // In theory some tilers may not support this much. We can't tell however, and
-        // the driver will throw a DEVICE_REMOVED if it goes too high in usage. This is fine.
-        //
-        // 16 bytes per sample is the maximum size for a color attachment.
-        let max_color_attachment_bytes_per_sample =
-            max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
-
+        // Acceleration structure limits
         let mut max_blas_geometry_count = 0;
         let mut max_blas_primitive_count = 0;
         let mut max_tlas_instance_count = 0;
@@ -1536,6 +1527,48 @@ impl PhysicalDeviceProperties {
             max_acceleration_structures_per_shader_stage =
                 properties.max_per_stage_descriptor_acceleration_structures;
         }
+
+        // When summed, the 6 limits below must be under Vulkan's maxPerSetDescriptors / 2.
+        //
+        // - maxUniformBuffersPerShaderStage, WebGPU default: 12
+        // - maxSampledTexturesPerShaderStage, WebGPU default: 16
+        // - maxStorageTexturesPerShaderStage, WebGPU default: 4
+        // - maxStorageBuffersPerShaderStage, WebGPU default: 8
+        // - maxSamplersPerShaderStage, WebGPU default: 16
+        // - maxAccelerationStructuresPerShaderStage, Native only
+        //
+        // Note: All Vulkan's descriptor types count towards maxPerSetDescriptors but
+        // we don't use all of them.
+        // See https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#interfaces-resources-limits
+        let max_per_set_descriptors = self
+            .maintenance_3
+            .map(|maintenance_3| maintenance_3.max_per_set_descriptors)
+            // The lowest value seen in reports is 312, use 256 as a safe default.
+            // https://vulkan.gpuinfo.org/displayextensionproperty.php?extensionname=VK_KHR_maintenance3&extensionproperty=maxPerSetDescriptors&platform=all
+            // https://vulkan.gpuinfo.org/displaycoreproperty.php?core=1.1&name=maxPerSetDescriptors&platform=all
+            .unwrap_or(256);
+
+        let mut max_samplers_per_shader_stage = limits.max_per_stage_descriptor_samplers;
+
+        crate::auxil::cap_limits_to_be_under_the_sum_limit(
+            [
+                &mut max_sampled_textures_per_shader_stage,
+                &mut max_uniform_buffers_per_shader_stage,
+                &mut max_storage_textures_per_shader_stage,
+                &mut max_storage_buffers_per_shader_stage,
+                &mut max_samplers_per_shader_stage,
+                &mut max_acceleration_structures_per_shader_stage,
+            ],
+            max_per_set_descriptors / 2,
+        );
+
+        // TODO: programmatically determine this, if possible. It's unclear whether we can
+        // as of https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447.
+        //
+        // In theory some tilers may not support this much. We can't tell however, and
+        // the driver will throw a DEVICE_REMOVED if it goes too high in usage. This is fine.
+        let max_color_attachment_bytes_per_sample =
+            max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
         let max_multiview_view_count = self
             .multiview
@@ -1563,7 +1596,7 @@ impl PhysicalDeviceProperties {
                 .max_descriptor_set_uniform_buffers_dynamic,
             max_dynamic_storage_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_storage_buffers_dynamic,
-            max_samplers_per_shader_stage: limits.max_per_stage_descriptor_samplers,
+            max_samplers_per_shader_stage,
             max_sampled_textures_per_shader_stage,
             max_storage_textures_per_shader_stage,
             max_storage_buffers_per_shader_stage,
