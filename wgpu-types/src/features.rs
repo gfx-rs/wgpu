@@ -1846,7 +1846,8 @@ impl Features {
                 | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_POINTS.bits()
                 | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
                 | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
-                | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits(),
+                | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits()
+                | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_PIPELINES.bits(),
             FeaturesWebGPU::empty().bits(),
         ]))
     }
