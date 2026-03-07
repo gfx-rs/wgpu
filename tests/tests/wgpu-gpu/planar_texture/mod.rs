@@ -368,6 +368,7 @@ static NV12_TEXTURE_COPYING: GpuTestConfiguration = GpuTestConfiguration::new()
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            initial_queue: 0,
         });
         let output_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -378,6 +379,7 @@ static NV12_TEXTURE_COPYING: GpuTestConfiguration = GpuTestConfiguration::new()
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            initial_queue: 0,
         });
 
         let mut command_encoder = ctx
@@ -416,6 +418,7 @@ static P010_TEXTURE_COPYING: GpuTestConfiguration = GpuTestConfiguration::new()
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            initial_queue: 0,
         });
         let output_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -426,6 +429,7 @@ static P010_TEXTURE_COPYING: GpuTestConfiguration = GpuTestConfiguration::new()
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            initial_queue: 0,
         });
 
         let mut command_encoder = ctx

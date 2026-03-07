@@ -1708,11 +1708,10 @@ pub enum CreateCommandEncoderError {
 
 impl WebGpuError for CreateCommandEncoderError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::InvalidQueue { .. } => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::InvalidQueue { .. } => ErrorType::Validation,
+        }
     }
 }
 

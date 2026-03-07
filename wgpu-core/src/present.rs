@@ -407,8 +407,8 @@ impl Surface {
             None => return Err(SurfaceError::TextureDestroyed),
             Some(resource::TextureInner::Surface { raw }) => {
                 let raw_surface = self.raw(device.backend()).unwrap();
-                let raw_queue = queue.raw();
-                let _fence_lock = device.fence.write();
+                let raw_queue = &queue.raw;
+                let _fence_lock = queue.fence.write();
 
                 // Transition the texture to PRESENT layout if it has not been
                 // used in any command buffer submission.  In the normal path

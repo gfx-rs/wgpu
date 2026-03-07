@@ -145,14 +145,15 @@ impl WebGpuError for CreateShaderModuleError {
 
             Self::Generation => ErrorType::Internal,
 
-            Self::Validation(..) | Self::InvalidGroupIndex { .. } => ErrorType::Validation,
+            Self::Validation(..) | Self::InvalidGroupIndex { .. } | Self::NotCompiledForBackend => {
+                ErrorType::Validation
+            }
             #[cfg(feature = "wgsl")]
             Self::Parsing(..) => ErrorType::Validation,
             #[cfg(feature = "glsl")]
             Self::ParsingGlsl(..) => ErrorType::Validation,
             #[cfg(feature = "spirv")]
             Self::ParsingSpirV(..) => ErrorType::Validation,
-            Self::NotCompiledForBackend => ErrorType::Validation,
         }
     }
 }
@@ -208,10 +209,9 @@ pub enum ImplicitLayoutError {
 impl WebGpuError for ImplicitLayoutError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
-            Self::ReflectionError(_) => ErrorType::Validation,
+            Self::ReflectionError(_) | Self::Passthrough(_) => ErrorType::Validation,
             Self::BindGroup(e) => e.webgpu_error_type(),
             Self::Pipeline(e) => e.webgpu_error_type(),
-            Self::Passthrough(_) => ErrorType::Validation,
         }
     }
 }
