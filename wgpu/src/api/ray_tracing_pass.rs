@@ -1,7 +1,8 @@
 use wgt::DynamicOffset;
 
 use crate::{
-    api::SharedDeferredCommandBufferActions, dispatch, BindGroup, Label, RayTracingPipeline,
+    api::SharedDeferredCommandBufferActions,
+    *,
 };
 
 /// In-progress recording of a ray tracing pass.
