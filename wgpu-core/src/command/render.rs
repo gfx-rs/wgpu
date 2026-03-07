@@ -870,23 +870,23 @@ impl<E: Into<RenderPassErrorInner>> MapPassErr<RenderPassError> for E {
 impl WebGpuError for RenderPassError {
     fn webgpu_error_type(&self) -> ErrorType {
         let Self { scope: _, inner } = self;
-        let e: &dyn WebGpuError = match inner {
-            RenderPassErrorInner::Device(e) => e,
-            RenderPassErrorInner::ColorAttachment(e) => e,
-            RenderPassErrorInner::EncoderState(e) => e,
-            RenderPassErrorInner::DebugGroupError(e) => e,
-            RenderPassErrorInner::MissingFeatures(e) => e,
-            RenderPassErrorInner::MissingDownlevelFlags(e) => e,
-            RenderPassErrorInner::RenderCommand(e) => e,
-            RenderPassErrorInner::Draw(e) => e,
-            RenderPassErrorInner::Bind(e) => e,
-            RenderPassErrorInner::QueryUse(e) => e,
-            RenderPassErrorInner::DestroyedResource(e) => e,
-            RenderPassErrorInner::InvalidResource(e) => e,
-            RenderPassErrorInner::IncompatibleBundleTargets(e) => e,
-            RenderPassErrorInner::InvalidAttachment(e) => e,
-            RenderPassErrorInner::TimestampWrites(e) => e,
-            RenderPassErrorInner::InvalidValuesOffset(e) => e,
+        match inner {
+            RenderPassErrorInner::Device(e) => e.webgpu_error_type(),
+            RenderPassErrorInner::ColorAttachment(e) => e.webgpu_error_type(),
+            RenderPassErrorInner::EncoderState(e) => e.webgpu_error_type(),
+            RenderPassErrorInner::DebugGroupError(e) => e.webgpu_error_type(),
+            RenderPassErrorInner::MissingFeatures(e) => e.webgpu_error_type(),
+            RenderPassErrorInner::MissingDownlevelFlags(e) => e.webgpu_error_type(),
+            RenderPassErrorInner::RenderCommand(e) => e.webgpu_error_type(),
+            RenderPassErrorInner::Draw(e) => e.webgpu_error_type(),
+            RenderPassErrorInner::Bind(e) => e.webgpu_error_type(),
+            RenderPassErrorInner::QueryUse(e) => e.webgpu_error_type(),
+            RenderPassErrorInner::DestroyedResource(e) => e.webgpu_error_type(),
+            RenderPassErrorInner::InvalidResource(e) => e.webgpu_error_type(),
+            RenderPassErrorInner::IncompatibleBundleTargets(e) => e.webgpu_error_type(),
+            RenderPassErrorInner::InvalidAttachment(e) => e.webgpu_error_type(),
+            RenderPassErrorInner::TimestampWrites(e) => e.webgpu_error_type(),
+            RenderPassErrorInner::InvalidValuesOffset(e) => e.webgpu_error_type(),
 
             RenderPassErrorInner::InvalidParentEncoder
             | RenderPassErrorInner::UnsupportedResolveTargetFormat { .. }
@@ -910,9 +910,8 @@ impl WebGpuError for RenderPassError {
             | RenderPassErrorInner::MultiViewDimensionMismatch
             | RenderPassErrorInner::TooManyMultiviewViews
             | RenderPassErrorInner::MissingOcclusionQuerySet
-            | RenderPassErrorInner::PassEnded => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | RenderPassErrorInner::PassEnded => ErrorType::Validation,
+        }
     }
 }
 

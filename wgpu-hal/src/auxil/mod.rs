@@ -151,6 +151,44 @@ pub(crate) fn apply_hal_limits(mut limits: wgt::Limits) -> wgt::Limits {
         .max_color_attachments
         .min(crate::MAX_COLOR_ATTACHMENTS as u32);
 
+    // Vulkan and DX12 sometimes report large values for the "max resources per stage"
+    // limits. WebGPU requires that consuming the maximum number of resources of every type
+    // in every stage cannot exceed `max_bindings_per_bind_group`. To ensure this, we clamp
+    // per-stage limit at an equal division of `max_bindings_per_bind_group`.
+    //
+    // It is not expected that this clamping adjusts limits that are in a range where an
+    // application might reach them. (The main dilemma here being how WebGPU will eventually
+    // apply these or other limits to bindless. wgpu has separate `binding_array` limits for
+    // its native-only extension; those are not touched here.)
+    //
+    // See <https://gpuweb.github.io/gpuweb/#adapter-capability-guarantees>.
+    const BINDING_TYPE_AND_STAGE_COUNT: u32 = 10;
+    let max_bindings = limits.max_bindings_per_bind_group / BINDING_TYPE_AND_STAGE_COUNT;
+    let mut did_clamp = false;
+    let mut clamp = |limit: &mut u32| {
+        if *limit > max_bindings {
+            *limit = max_bindings;
+            did_clamp = true;
+        }
+    };
+    clamp(&mut limits.max_dynamic_uniform_buffers_per_pipeline_layout);
+    clamp(&mut limits.max_dynamic_storage_buffers_per_pipeline_layout);
+    clamp(&mut limits.max_sampled_textures_per_shader_stage);
+    clamp(&mut limits.max_samplers_per_shader_stage);
+    clamp(&mut limits.max_storage_buffers_per_shader_stage);
+    clamp(&mut limits.max_storage_textures_per_shader_stage);
+    clamp(&mut limits.max_uniform_buffers_per_shader_stage);
+    if did_clamp
+        && limits.max_bindings_per_bind_group < wgt::Limits::defaults().max_bindings_per_bind_group
+    {
+        // This is the "adjusted limits that are in a range where an application might reach
+        // them" case. (In reality, even something quite a bit less than the default
+        // `max_bindings_per_bind_group` of 1000 ought to be sufficient.)
+        log::warn!(
+            "Unexpected adjustment of per-stage resource limits to fit within max_bindings_per_bind_group."
+        );
+    }
+
     // Round some limits down to the WebGPU alignment requirement, to avoid
     // suggesting values that won't work. (In particular, the CTS queries limits
     // and then tests the exact limit value.)

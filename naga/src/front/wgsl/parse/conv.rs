@@ -151,17 +151,11 @@ pub fn map_built_in(
         crate::BuiltIn::ClipDistance => {
             enable_extensions.require(ImplementedEnableExtension::ClipDistances, span)?
         }
-
         crate::BuiltIn::PrimitiveIndex => {
             enable_extensions.require(ImplementedEnableExtension::PrimitiveIndex, span)?
         }
         crate::BuiltIn::DrawIndex => {
-            if !enable_extensions.contains(ImplementedEnableExtension::DrawIndex) {
-                return Err(Box::new(Error::EnableExtensionNotEnabled {
-                    span,
-                    kind: ImplementedEnableExtension::DrawIndex.into(),
-                }));
-            }
+            enable_extensions.require(ImplementedEnableExtension::DrawIndex, span)?
         }
         crate::BuiltIn::CullPrimitive
         | crate::BuiltIn::PointIndex

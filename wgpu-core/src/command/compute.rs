@@ -224,22 +224,22 @@ where
 impl WebGpuError for ComputePassError {
     fn webgpu_error_type(&self) -> ErrorType {
         let Self { scope: _, inner } = self;
-        let e: &dyn WebGpuError = match inner {
-            ComputePassErrorInner::Device(e) => e,
-            ComputePassErrorInner::EncoderState(e) => e,
-            ComputePassErrorInner::DebugGroupError(e) => e,
-            ComputePassErrorInner::DestroyedResource(e) => e,
-            ComputePassErrorInner::ResourceUsageCompatibility(e) => e,
-            ComputePassErrorInner::MissingBufferUsage(e) => e,
-            ComputePassErrorInner::Dispatch(e) => e,
-            ComputePassErrorInner::Bind(e) => e,
-            ComputePassErrorInner::ImmediateData(e) => e,
-            ComputePassErrorInner::QueryUse(e) => e,
-            ComputePassErrorInner::MissingFeatures(e) => e,
-            ComputePassErrorInner::MissingDownlevelFlags(e) => e,
-            ComputePassErrorInner::InvalidResource(e) => e,
-            ComputePassErrorInner::TimestampWrites(e) => e,
-            ComputePassErrorInner::InvalidValuesOffset(e) => e,
+        match inner {
+            ComputePassErrorInner::Device(e) => e.webgpu_error_type(),
+            ComputePassErrorInner::EncoderState(e) => e.webgpu_error_type(),
+            ComputePassErrorInner::DebugGroupError(e) => e.webgpu_error_type(),
+            ComputePassErrorInner::DestroyedResource(e) => e.webgpu_error_type(),
+            ComputePassErrorInner::ResourceUsageCompatibility(e) => e.webgpu_error_type(),
+            ComputePassErrorInner::MissingBufferUsage(e) => e.webgpu_error_type(),
+            ComputePassErrorInner::Dispatch(e) => e.webgpu_error_type(),
+            ComputePassErrorInner::Bind(e) => e.webgpu_error_type(),
+            ComputePassErrorInner::ImmediateData(e) => e.webgpu_error_type(),
+            ComputePassErrorInner::QueryUse(e) => e.webgpu_error_type(),
+            ComputePassErrorInner::MissingFeatures(e) => e.webgpu_error_type(),
+            ComputePassErrorInner::MissingDownlevelFlags(e) => e.webgpu_error_type(),
+            ComputePassErrorInner::InvalidResource(e) => e.webgpu_error_type(),
+            ComputePassErrorInner::TimestampWrites(e) => e.webgpu_error_type(),
+            ComputePassErrorInner::InvalidValuesOffset(e) => e.webgpu_error_type(),
 
             ComputePassErrorInner::InvalidParentEncoder
             | ComputePassErrorInner::BindGroupIndexOutOfRange { .. }
@@ -248,9 +248,8 @@ impl WebGpuError for ComputePassError {
             | ComputePassErrorInner::ImmediateOffsetAlignment
             | ComputePassErrorInner::ImmediateDataizeAlignment
             | ComputePassErrorInner::ImmediateOutOfMemory
-            | ComputePassErrorInner::PassEnded => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | ComputePassErrorInner::PassEnded => ErrorType::Validation,
+        }
     }
 }
 

@@ -405,19 +405,19 @@ pub enum StageError {
 
 impl WebGpuError for StageError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Binding(_, e) => e,
-            Self::InvalidResource(e) => e,
+        match self {
+            Self::Binding(_, e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
             Self::Filtering {
                 texture: _,
                 sampler: _,
                 error,
-            } => error,
+            } => error.webgpu_error_type(),
             Self::Input {
                 location: _,
                 var: _,
                 error,
-            } => error,
+            } => error.webgpu_error_type(),
             Self::InvalidWorkgroupSize { .. }
             | Self::MissingEntryPoint(..)
             | Self::NoEntryPointFound
@@ -435,9 +435,8 @@ impl WebGpuError for StageError {
             | Self::MissingPrimitiveIndex
             | Self::DrawIdError
             | Self::InvalidDualSourceBlending
-            | Self::MissingFragDepthAttachment => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::MissingFragDepthAttachment => ErrorType::Validation,
+        }
     }
 }
 

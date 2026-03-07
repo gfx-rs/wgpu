@@ -809,16 +809,11 @@ impl<'a> WebIdlConverter<'a> for GPUColorWriteFlags {
       },
     )?;
 
-    let flags =
-      wgpu_types::ColorWrites::from_bits(flags_value).ok_or_else(|| {
-        WebIdlError::other(
-          prefix,
-          context,
-          JsErrorBox::type_error("color write flags are not valid"),
-        )
-      })?;
-
-    Ok(GPUColorWriteFlags(flags))
+    // WebGPU specifies a validation error for invalid color write mask values.
+    // We propagate invalid bits here; wgpu_core will validate it.
+    Ok(GPUColorWriteFlags(
+      wgpu_types::ColorWrites::from_bits_retain(flags_value),
+    ))
   }
 }
 

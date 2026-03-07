@@ -257,14 +257,14 @@ pub enum CreateBindGroupError {
 
 impl WebGpuError for CreateBindGroupError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::DestroyedResource(e) => e,
-            Self::BindingError(e) => e,
-            Self::MissingBufferUsage(e) => e,
-            Self::MissingTextureUsage(e) => e,
-            Self::ResourceUsageCompatibility(e) => e,
-            Self::InvalidResource(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
+            Self::BindingError(e) => e.webgpu_error_type(),
+            Self::MissingBufferUsage(e) => e.webgpu_error_type(),
+            Self::MissingTextureUsage(e) => e.webgpu_error_type(),
+            Self::ResourceUsageCompatibility(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
             Self::BindingArrayPartialLengthMismatch { .. }
             | Self::BindingArrayLengthMismatch { .. }
             | Self::BindingArrayZeroLength
@@ -288,9 +288,8 @@ impl WebGpuError for CreateBindGroupError {
             | Self::DepthStencilAspect
             | Self::MissingTLASVertexReturn { .. }
             | Self::InvalidExternalTextureMipLevelCount { .. }
-            | Self::InvalidExternalTextureFormat { .. } => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::InvalidExternalTextureFormat { .. } => ErrorType::Validation,
+        }
     }
 }
 
@@ -820,17 +819,16 @@ pub enum CreatePipelineLayoutError {
 
 impl WebGpuError for CreatePipelineLayoutError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::MissingFeatures(e) => e,
-            Self::InvalidResource(e) => e,
-            Self::TooManyBindings(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::TooManyBindings(e) => e.webgpu_error_type(),
             Self::MisalignedImmediateSize { .. }
             | Self::ImmediateRangeTooLarge { .. }
             | Self::TooManyGroups { .. }
-            | Self::BglHasExclusivePipeline { .. } => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::BglHasExclusivePipeline { .. } => ErrorType::Validation,
+        }
     }
 }
 

@@ -327,10 +327,10 @@ pub enum BufferAccessError {
 
 impl WebGpuError for BufferAccessError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::InvalidResource(e) => e,
-            Self::DestroyedResource(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
 
             Self::Failed
             | Self::AlreadyMapped
@@ -345,9 +345,8 @@ impl WebGpuError for BufferAccessError {
             | Self::OutOfBoundsEndOffsetOverrun { .. }
             | Self::MapAborted
             | Self::MapStartOffsetOverrun { .. }
-            | Self::MapEndOffsetOverrun { .. } => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::MapEndOffsetOverrun { .. } => ErrorType::Validation,
+        }
     }
 }
 
@@ -1115,20 +1114,19 @@ crate::impl_trackable!(Buffer);
 
 impl WebGpuError for CreateBufferError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::AccessError(e) => e,
-            Self::MissingDownlevelFlags(e) => e,
-            Self::IndirectValidationBindGroup(e) => e,
-            Self::MissingFeatures(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::AccessError(e) => e.webgpu_error_type(),
+            Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
+            Self::IndirectValidationBindGroup(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
 
             Self::UnalignedSize
             | Self::InvalidUsage(_)
             | Self::UsageMismatch(_)
             | Self::MaxBufferSize { .. }
-            | Self::InvalidQueue { .. } => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::InvalidQueue { .. } => ErrorType::Validation,
+        }
     }
 }
 
@@ -1778,12 +1776,12 @@ impl Borrow<TextureSelector> for Texture {
 
 impl WebGpuError for CreateTextureError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::CreateTextureView(e) => e,
-            Self::InvalidDimension(e) => e,
-            Self::MissingFeatures(_, e) => e,
-            Self::MissingDownlevelFlags(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::CreateTextureView(e) => e.webgpu_error_type(),
+            Self::InvalidDimension(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(_, e) => e.webgpu_error_type(),
+            Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
 
             Self::InvalidUsage(_)
             | Self::IncompatibleUsage(_, _)
@@ -1797,9 +1795,8 @@ impl WebGpuError for CreateTextureError {
             | Self::InvalidMultisampledFormat(_)
             | Self::InvalidSampleCount(..)
             | Self::MultisampledNotRenderAttachment
-            | Self::InvalidQueue { .. } => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::InvalidQueue { .. } => ErrorType::Validation,
+        }
     }
 }
 
@@ -2033,10 +2030,6 @@ impl WebGpuError for CreateTextureViewError {
     }
 }
 
-#[derive(Clone, Debug, Error)]
-#[non_exhaustive]
-pub enum TextureViewDestroyError {}
-
 crate::impl_resource_type!(TextureView);
 crate::impl_labeled!(TextureView);
 crate::impl_parent_device!(TextureView);
@@ -2113,21 +2106,20 @@ pub enum CreateExternalTextureError {
 
 impl WebGpuError for CreateExternalTextureError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            CreateExternalTextureError::Device(e) => e,
-            CreateExternalTextureError::MissingFeatures(e) => e,
-            CreateExternalTextureError::InvalidResource(e) => e,
-            CreateExternalTextureError::CreateBuffer(e) => e,
-            CreateExternalTextureError::QueueWrite(e) => e,
-            CreateExternalTextureError::MissingTextureUsage(e) => e,
+        match self {
+            CreateExternalTextureError::Device(e) => e.webgpu_error_type(),
+            CreateExternalTextureError::MissingFeatures(e) => e.webgpu_error_type(),
+            CreateExternalTextureError::InvalidResource(e) => e.webgpu_error_type(),
+            CreateExternalTextureError::CreateBuffer(e) => e.webgpu_error_type(),
+            CreateExternalTextureError::QueueWrite(e) => e.webgpu_error_type(),
+            CreateExternalTextureError::MissingTextureUsage(e) => e.webgpu_error_type(),
             CreateExternalTextureError::IncorrectPlaneCount { .. }
             | CreateExternalTextureError::InvalidPlaneMultisample(_)
             | CreateExternalTextureError::InvalidPlaneSampleType { .. }
             | CreateExternalTextureError::InvalidPlaneDimension(_)
             | CreateExternalTextureError::InvalidPlaneFormat { .. }
-            | CreateExternalTextureError::InvalidQueue { .. } => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::InvalidQueue { .. } => ErrorType::Validation,
+        }
     }
 }
 
@@ -2251,17 +2243,16 @@ crate::impl_trackable!(Sampler);
 
 impl WebGpuError for CreateSamplerError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::MissingFeatures(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
 
             Self::InvalidLodMinClamp(_)
             | Self::InvalidLodMaxClamp { .. }
             | Self::InvalidAnisotropy(_)
             | Self::InvalidFilterModeWithAnisotropy { .. }
-            | Self::InvalidMipmapFilterModeWithAnisotropy { .. } => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::InvalidMipmapFilterModeWithAnisotropy { .. } => ErrorType::Validation,
+        }
     }
 }
 
@@ -2280,13 +2271,12 @@ pub enum CreateQuerySetError {
 
 impl WebGpuError for CreateQuerySetError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::MissingFeatures(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
 
-            Self::TooManyQueries { .. } | Self::ZeroCount => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            Self::TooManyQueries { .. } | Self::ZeroCount => ErrorType::Validation,
+        }
     }
 }
 

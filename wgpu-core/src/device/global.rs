@@ -481,10 +481,7 @@ impl Global {
         (id, Some(error))
     }
 
-    pub fn texture_view_drop(
-        &self,
-        texture_view_id: id::TextureViewId,
-    ) -> Result<(), resource::TextureViewDestroyError> {
+    pub fn texture_view_drop(&self, texture_view_id: id::TextureViewId) {
         profiling::scope!("TextureView::drop");
         api_log!("TextureView::drop {texture_view_id:?}");
 
@@ -498,7 +495,6 @@ impl Global {
                 t.add(trace::Action::DestroyTextureView(view.to_trace()));
             }
         }
-        Ok(())
     }
 
     pub fn device_create_external_texture(

@@ -54,16 +54,15 @@ pub enum CreateBlasError {
 
 impl WebGpuError for CreateBlasError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::MissingFeatures(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
             Self::MissingIndexData
             | Self::InvalidVertexFormat(..)
             | Self::TooManyGeometries(..)
             | Self::TooManyPrimitives(..)
-            | Self::InvalidQueue { .. } => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::InvalidQueue { .. } => ErrorType::Validation,
+        }
     }
 }
 
@@ -83,14 +82,13 @@ pub enum CreateTlasError {
 
 impl WebGpuError for CreateTlasError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::MissingFeatures(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
             Self::DisallowedFlag(..) | Self::TooManyInstances(..) | Self::InvalidQueue { .. } => {
-                return ErrorType::Validation
+                ErrorType::Validation
             }
-        };
-        e.webgpu_error_type()
+        }
     }
 }
 
@@ -194,13 +192,13 @@ pub enum BuildAccelerationStructureError {
 
 impl WebGpuError for BuildAccelerationStructureError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::EncoderState(e) => e,
-            Self::Device(e) => e,
-            Self::InvalidResource(e) => e,
-            Self::DestroyedResource(e) => e,
-            Self::MissingBufferUsage(e) => e,
-            Self::MissingFeatures(e) => e,
+        match self {
+            Self::EncoderState(e) => e.webgpu_error_type(),
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
+            Self::MissingBufferUsage(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
             Self::InsufficientBufferSize(..)
             | Self::UnalignedIndexBufferOffset(..)
             | Self::UnalignedTransformBufferOffset(..)
@@ -221,9 +219,8 @@ impl WebGpuError for BuildAccelerationStructureError {
             | Self::TlasInstanceCountExceeded(..)
             | Self::TransformMissing(..)
             | Self::UseTransformMissing(..)
-            | Self::TlasDependentMissingVertexReturn(..) => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::TlasDependentMissingVertexReturn(..) => ErrorType::Validation,
+        }
     }
 }
 
@@ -244,13 +241,12 @@ pub enum ValidateAsActionsError {
 
 impl WebGpuError for ValidateAsActionsError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::DestroyedResource(e) => e,
+        match self {
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
             Self::UsedUnbuiltTlas(..) | Self::UsedUnbuiltBlas(..) | Self::BlasNewerThenTlas(..) => {
-                return ErrorType::Validation
+                ErrorType::Validation
             }
-        };
-        e.webgpu_error_type()
+        }
     }
 }
 
@@ -411,15 +407,14 @@ pub enum BlasPrepareCompactError {
 
 impl WebGpuError for BlasPrepareCompactError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::InvalidResource(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
             Self::CompactionPreparingAlready
             | Self::DoubleCompaction
             | Self::NotBuilt
-            | Self::CompactionUnsupported => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::CompactionUnsupported => ErrorType::Validation,
+        }
     }
 }
 
@@ -446,15 +441,14 @@ pub enum CompactBlasError {
 
 impl WebGpuError for CompactBlasError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Encoder(e) => e,
-            Self::Device(e) => e,
-            Self::InvalidResource(e) => e,
-            Self::DestroyedResource(e) => e,
-            Self::MissingFeatures(e) => e,
-            Self::BlasNotReady => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+        match self {
+            Self::Encoder(e) => e.webgpu_error_type(),
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
+            Self::BlasNotReady => ErrorType::Validation,
+        }
     }
 }
 
