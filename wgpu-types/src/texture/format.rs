@@ -505,15 +505,7 @@ impl TextureFormat {
     /// see <https://gpuweb.github.io/gpuweb/#depth-formats>
     #[must_use]
     pub fn is_depth_stencil_format(&self) -> bool {
-        match *self {
-            Self::Stencil8
-            | Self::Depth16Unorm
-            | Self::Depth24Plus
-            | Self::Depth24PlusStencil8
-            | Self::Depth32Float
-            | Self::Depth32FloatStencil8 => true,
-            _ => false,
-        }
+        TextureFormatChannel::DEPTH_STENCIL.intersects(self.channels())
     }
 
     /// Returns `true` if the format is a combined depth-stencil format
@@ -521,10 +513,8 @@ impl TextureFormat {
     /// see <https://gpuweb.github.io/gpuweb/#combined-depth-stencil-format>
     #[must_use]
     pub fn is_combined_depth_stencil_format(&self) -> bool {
-        match *self {
-            Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => true,
-            _ => false,
-        }
+        TextureFormatChannel::DEPTH_STENCIL.intersection(self.channels())
+            == TextureFormatChannel::DEPTH_STENCIL
     }
 
     /// Returns `true` if the format is a multi-planar format
@@ -683,29 +673,19 @@ impl TextureFormat {
     /// Returns `true` if the format has a color aspect
     #[must_use]
     pub fn has_color_aspect(&self) -> bool {
-        !self.is_depth_stencil_format()
+        TextureFormatChannel::RGBA.intersects(self.channels())
     }
 
     /// Returns `true` if the format has a depth aspect
     #[must_use]
     pub fn has_depth_aspect(&self) -> bool {
-        match *self {
-            Self::Depth16Unorm
-            | Self::Depth24Plus
-            | Self::Depth24PlusStencil8
-            | Self::Depth32Float
-            | Self::Depth32FloatStencil8 => true,
-            _ => false,
-        }
+        TextureFormatChannel::DEPTH.intersects(self.channels())
     }
 
     /// Returns `true` if the format has a stencil aspect
     #[must_use]
     pub fn has_stencil_aspect(&self) -> bool {
-        match *self {
-            Self::Stencil8 | Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => true,
-            _ => false,
-        }
+        TextureFormatChannel::STENCIL.intersects(self.channels())
     }
 
     /// Returns the size multiple requirement for a texture using this format.
@@ -2636,5 +2616,134 @@ mod tests {
             serde_json::from_str::<TextureFormat>("\"eac-rg11snorm\"").unwrap(),
             TextureFormat::EacRg11Snorm
         );
+    }
+
+    /// test if `TextureFormat::is_depth_stencil_format` is behaving correctly
+    #[test]
+    fn is_depth_stencil_format() {
+        let depth_stencil_formats = [
+            TextureFormat::Stencil8,
+            TextureFormat::Depth16Unorm,
+            TextureFormat::Depth24Plus,
+            TextureFormat::Depth24PlusStencil8,
+            TextureFormat::Depth32Float,
+            TextureFormat::Depth32FloatStencil8,
+        ];
+
+        for format in depth_stencil_formats {
+            assert!(format.is_depth_stencil_format());
+        }
+
+        // some non-depth-stencil-formats shouldn't be accepted
+        let non_depth_stencil_formats = [
+            TextureFormat::R8Unorm,
+            TextureFormat::Rgba8Unorm,
+            TextureFormat::Rg16Uint,
+            TextureFormat::NV12,
+        ];
+
+        for format in non_depth_stencil_formats {
+            assert!(!format.is_depth_stencil_format());
+        }
+    }
+
+    /// test if `TextureFormat::is_combined_depth_stencil_format` is behaving correctly
+    #[test]
+    fn is_combined_depth_stencil_format() {
+        let valid_formats = [
+            TextureFormat::Depth24PlusStencil8,
+            TextureFormat::Depth32FloatStencil8,
+        ];
+
+        for format in valid_formats {
+            assert!(format.is_combined_depth_stencil_format());
+        }
+
+        let some_invalid_formats = [
+            TextureFormat::Depth16Unorm,
+            TextureFormat::Depth24Plus,
+            TextureFormat::Stencil8,
+            TextureFormat::Rgba8UnormSrgb,
+            TextureFormat::Rgba8Unorm,
+        ];
+
+        for format in some_invalid_formats {
+            assert!(!format.is_combined_depth_stencil_format());
+        }
+    }
+
+    /// test if `TextureFormat::has_color_aspect` is behaving correctly
+    #[test]
+    fn has_color_aspect() {
+        let some_valid_formats = [
+            TextureFormat::R8Unorm,
+            TextureFormat::Rg8Unorm,
+            TextureFormat::Bc7RgbaUnorm,
+            TextureFormat::Rgba8Unorm,
+        ];
+
+        for format in some_valid_formats {
+            assert!(format.has_color_aspect());
+        }
+
+        let some_invalid_formats = [
+            TextureFormat::NV12,
+            TextureFormat::Stencil8,
+            TextureFormat::Depth24PlusStencil8,
+        ];
+
+        for format in some_invalid_formats {
+            assert!(!format.has_color_aspect());
+        }
+    }
+
+    /// test if `TextureFormat::has_depth_aspect` is behaving correctly
+    #[test]
+    fn has_depth_aspect() {
+        let valid_formats = [
+            TextureFormat::Depth16Unorm,
+            TextureFormat::Depth24Plus,
+            TextureFormat::Depth24PlusStencil8,
+            TextureFormat::Depth32Float,
+            TextureFormat::Depth32FloatStencil8,
+        ];
+
+        for format in valid_formats {
+            assert!(format.has_depth_aspect());
+        }
+
+        let some_invalid_formats = [
+            TextureFormat::Rgba8Unorm,
+            TextureFormat::Bc7RgbaUnorm,
+            TextureFormat::Stencil8,
+        ];
+
+        for format in some_invalid_formats {
+            assert!(!format.has_depth_aspect());
+        }
+    }
+
+    /// test if `TextureFormat::has_stencil_aspect` is behaving correctly
+    #[test]
+    fn has_stencil_aspect() {
+        let valid_formats = [
+            TextureFormat::Stencil8,
+            TextureFormat::Depth24PlusStencil8,
+            TextureFormat::Depth32FloatStencil8,
+        ];
+
+        for format in valid_formats {
+            assert!(format.has_stencil_aspect());
+        }
+
+        let some_invalid_formats = [
+            TextureFormat::R8Unorm,
+            TextureFormat::Depth16Unorm,
+            TextureFormat::NV12,
+        ];
+
+        for format in some_invalid_formats {
+            assert!(!format.has_stencil_aspect());
+        }
     }
 }
