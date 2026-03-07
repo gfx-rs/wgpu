@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use crate::{ColorWrites, Features, TextureAspect, TextureSampleType, TextureUsages};
+use crate::{Features, TextureAspect, TextureSampleType, TextureUsages};
 
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
@@ -57,6 +57,43 @@ pub enum AstcChannel {
     ///
     /// [`Features::TEXTURE_COMPRESSION_ASTC_HDR`] must be enabled to use this channel.
     Hdr,
+}
+
+bitflags::bitflags! {
+    /// Represents the different format channels of a texture format.
+    #[repr(transparent)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct TextureFormatChannel: u8 {
+        /// Texture format contains a `red` channel.
+        const RED = 1 << 0;
+        /// Texture format contains a `green` channel.
+        const GREEN = 1 << 1;
+        /// Texture format contains a `blue` channel.
+        const BLUE = 1 << 2;
+        /// Texture format contains an `alpha` channel.
+        const ALPHA = 1 << 3;
+        /// Texture format contains a `stencil` channel.
+        const STENCIL = 1 << 4;
+        /// Texture format contains a `depth` channel.
+        const DEPTH = 1 << 5;
+        /// Texture format contains a `luminance` channel.
+        const LUMINANCE = 1 << 6;
+        /// Texture format contains a `chrominance` channel.
+        const CHROMINANCE = 1 << 7;
+
+        /// Texture format contains channels for `red` and `green`.
+        const RG = Self::RED.bits() | Self::GREEN.bits();
+        /// Texture format contains channels for `red`, `green` and `blue`.
+        const RGB = Self::RG.bits() | Self::BLUE.bits();
+        /// Texture format contains channels for `red`, `green`, `blue` and `alpha`.
+        const RGBA = Self::RGB.bits() | Self::ALPHA.bits();
+        /// Texture format contains channels for `depth` and `stencil`.
+        const DEPTH_STENCIL =  Self::DEPTH.bits() | Self::STENCIL.bits();
+        /// Texture format contains a `luminance` and `chrominance` channel.
+        const CHROMA = Self::LUMINANCE.bits() | Self::CHROMINANCE.bits();
+    }
 }
 
 /// Format in which a texture’s texels are stored in GPU memory.
@@ -525,37 +562,37 @@ impl TextureFormat {
     ///
     /// # Example
     /// ```rust
-    /// # use wgpu_types::{TextureFormat, ColorWrites};
+    /// # use wgpu_types::{TextureFormat, TextureFormatChannel};
     ///
     /// assert!(
-    ///     TextureFormat::Rgba8Unorm.channels().contains(ColorWrites::all()),
-    ///     "`Rgba` has all four channels."
+    ///     TextureFormat::Rgba8Unorm.channels().contains(TextureFormatChannel::RGBA),
+    ///     "`Rgba` has a `red`, `green`, `blue` and `alpha` channel!"
     /// );
     ///
     /// assert!(
-    ///     !TextureFormat::Rg8Unorm.channels().contains(ColorWrites::ALPHA),
+    ///     !TextureFormat::Rg8Unorm.channels().contains(TextureFormatChannel::ALPHA),
     ///     "`Rg` hasn't got an alpha channel..."
     /// );
     /// assert!(
-    ///     TextureFormat::Rg8Unorm.channels().contains(ColorWrites::RED),
+    ///     TextureFormat::Rg8Unorm.channels().contains(TextureFormatChannel::RED),
     ///     "... but it has a red channel ..."
     /// );
     /// assert!(
-    ///     TextureFormat::Rg8Unorm.channels().contains(ColorWrites::GREEN),
-    ///     "... but also a green channel :)"
+    ///     TextureFormat::Rg8Unorm.channels().contains(TextureFormatChannel::GREEN),
+    ///     "... and also a green channel (yay!)"
     /// );
     ///
     /// assert!(
-    ///     TextureFormat::Stencil8.channels().is_empty(),
-    ///     "A stencil texture format doesn't have any channels..."
+    ///     TextureFormat::Stencil8.channels().contains(TextureFormatChannel::STENCIL),
+    ///     "A stencil texture has a stencil channel _duh_"
     /// );
     /// assert!(
-    ///     !TextureFormat::Stencil8.channels().contains(ColorWrites::RED),
-    ///     "... so this should return `false`"
+    ///     TextureFormat::NV12.channels().contains(TextureFormatChannel::CHROMA),
+    ///     "And the `NV12` format should have a `luminance` and `chrominance` channel."
     /// );
     /// ```
     #[must_use]
-    pub fn channels(&self) -> ColorWrites {
+    pub fn channels(&self) -> TextureFormatChannel {
         match self {
             Self::R8Unorm
             | Self::R8Snorm
@@ -573,7 +610,7 @@ impl TextureFormat {
             | Self::Bc4RUnorm
             | Self::Bc4RSnorm
             | Self::EacR11Unorm
-            | Self::EacR11Snorm => ColorWrites::RED,
+            | Self::EacR11Snorm => TextureFormatChannel::RED,
 
             Self::Rg8Unorm
             | Self::Rg8Snorm
@@ -590,14 +627,14 @@ impl TextureFormat {
             | Self::Bc5RgUnorm
             | Self::Bc5RgSnorm
             | Self::EacRg11Unorm
-            | Self::EacRg11Snorm => ColorWrites::RED | ColorWrites::GREEN,
+            | Self::EacRg11Snorm => TextureFormatChannel::RG,
 
             Self::Rgb9e5Ufloat
             | Self::Rg11b10Ufloat
             | Self::Bc6hRgbUfloat
             | Self::Bc6hRgbFloat
             | Self::Etc2Rgb8Unorm
-            | Self::Etc2Rgb8UnormSrgb => ColorWrites::RED | ColorWrites::GREEN | ColorWrites::BLUE,
+            | Self::Etc2Rgb8UnormSrgb => TextureFormatChannel::RGB,
 
             Self::Rgba8Unorm
             | Self::Rgba8UnormSrgb
@@ -628,16 +665,18 @@ impl TextureFormat {
             | Self::Etc2Rgb8A1UnormSrgb
             | Self::Etc2Rgba8Unorm
             | Self::Etc2Rgba8UnormSrgb
-            | Self::Astc { .. } => ColorWrites::all(),
+            | Self::Astc { .. } => TextureFormatChannel::RGBA,
 
-            Self::Stencil8
-            | Self::Depth16Unorm
-            | Self::Depth24Plus
-            | Self::Depth24PlusStencil8
-            | Self::Depth32Float
-            | Self::Depth32FloatStencil8
-            | Self::NV12
-            | Self::P010 => ColorWrites::empty(),
+            Self::Stencil8 => TextureFormatChannel::STENCIL,
+            Self::Depth16Unorm | Self::Depth24Plus | Self::Depth32Float => {
+                TextureFormatChannel::DEPTH
+            }
+
+            Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => {
+                TextureFormatChannel::DEPTH_STENCIL
+            }
+
+            Self::NV12 | Self::P010 => TextureFormatChannel::CHROMA,
         }
     }
 
