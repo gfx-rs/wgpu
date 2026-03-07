@@ -4,7 +4,7 @@ use wgpu::{
     RayTracingStage, ShaderModuleDescriptor,
 };
 use wgpu_test::{
-    GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext, fail, gpu_test
+    fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 use wgpu_types::AccelerationStructureFlags;
 
@@ -161,7 +161,8 @@ fn pipeline_create_use(ctx: TestingContext) {
     }
 
     // Change the intersection index to the other valid one
-    as_ctx.tlas[0].as_mut().unwrap().intersection_index = wgpu::IntersectionShaderIndex::IntersectionIndex(1);
+    as_ctx.tlas[0].as_mut().unwrap().intersection_index =
+        wgpu::IntersectionShaderIndex::IntersectionIndex(1);
 
     // Build the TLAS with the other index.
     encoder.build_acceleration_structures([], [&as_ctx.tlas]);
@@ -179,7 +180,8 @@ fn pipeline_create_use(ctx: TestingContext) {
     let mut encoder = ctx.device.create_command_encoder(&Default::default());
 
     // Change the intersection index to be invalid.
-    as_ctx.tlas[0].as_mut().unwrap().intersection_index = wgpu::IntersectionShaderIndex::IntersectionIndex(2);
+    as_ctx.tlas[0].as_mut().unwrap().intersection_index =
+        wgpu::IntersectionShaderIndex::IntersectionIndex(2);
 
     // Build the TLAS with the invalid index.
     encoder.build_acceleration_structures([], [&as_ctx.tlas]);
@@ -192,5 +194,11 @@ fn pipeline_create_use(ctx: TestingContext) {
         pass.trace_rays(1, 1, 2);
     }
 
-    fail(&ctx.device, || {ctx.queue.submit([encoder.finish()]);}, None);
+    fail(
+        &ctx.device,
+        || {
+            ctx.queue.submit([encoder.finish()]);
+        },
+        None,
+    );
 }

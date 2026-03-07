@@ -278,7 +278,16 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
                 .set_and_remove_from_usage_scope_sparse(&mut self.pass.scope, &bind_group.used);
         }
 
-        flush_bindings_helper(&mut self.pass, crate::resource::MaxIntersectionIndex::Intersection(self.pipeline.as_ref().unwrap().shader_binding_data.num_intersection_groups as _))?;
+        flush_bindings_helper(
+            &mut self.pass,
+            crate::resource::MaxIntersectionIndex::Intersection(
+                self.pipeline
+                    .as_ref()
+                    .unwrap()
+                    .shader_binding_data
+                    .num_intersection_groups as _,
+            ),
+        )?;
 
         CommandEncoder::drain_barriers(
             self.pass.base.raw_encoder,

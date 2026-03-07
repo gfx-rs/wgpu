@@ -2393,7 +2393,10 @@ pub enum MaxIntersectionIndex {
 
 impl MaxIntersectionIndex {
     /// Attempt to set the max intersection index, returning None if new does not match
-    pub(crate) fn set_intersection_index(&mut self, new: wgt::IntersectionShaderIndex) -> Option<()> {
+    pub(crate) fn set_intersection_index(
+        &mut self,
+        new: wgt::IntersectionShaderIndex,
+    ) -> Option<()> {
         match self {
             Self::Unused => {
                 *self = match new {
@@ -2401,15 +2404,15 @@ impl MaxIntersectionIndex {
                     wgt::IntersectionShaderIndex::QueryData(_) => Self::Query,
                 };
             }
-            Self::Query  => {
+            Self::Query => {
                 let wgt::IntersectionShaderIndex::QueryData(_) = new else {
-                    return None
+                    return None;
                 };
                 // dont need to assign
             }
             Self::Intersection(ref mut idx) => {
                 let wgt::IntersectionShaderIndex::IntersectionIndex(new_idx) = new else {
-                    return None
+                    return None;
                 };
                 *idx = (*idx).max(new_idx)
             }

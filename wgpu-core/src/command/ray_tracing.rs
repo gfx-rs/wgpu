@@ -246,7 +246,8 @@ pub(crate) fn build_acceleration_structures(
 
         let mut max_intersection_idx = MaxIntersectionIndex::Unused;
         for (instance_idx, instance) in package.instances.iter().flatten().enumerate() {
-            let Some(()) = max_intersection_idx.set_intersection_index(instance.intersection_index) else {
+            let Some(()) = max_intersection_idx.set_intersection_index(instance.intersection_index)
+            else {
                 return Err(
                     BuildAccelerationStructureError::TlasInstancesIntersectionIndicesDiffer(
                         tlas.error_ident(),
@@ -559,7 +560,8 @@ impl CommandBufferMutable {
                             .dependencies
                             .write()
                             .clone_from(&tlas_build.dependencies);
-                        *tlas_build.tlas.max_intersection_index.write() = tlas_build.max_intersection_idx;
+                        *tlas_build.tlas.max_intersection_index.write() =
+                            tlas_build.max_intersection_idx;
                     }
                 }
                 AsAction::UseTlas(tlas, max_intersection_idx) => {

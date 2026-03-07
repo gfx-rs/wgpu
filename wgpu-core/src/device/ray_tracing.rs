@@ -293,7 +293,10 @@ impl Device {
             update_mode: desc.update_mode,
             built_index: RwLock::new(rank::TLAS_BUILT_INDEX, None),
             dependencies: RwLock::new(rank::TLAS_DEPENDENCIES, Vec::new()),
-            max_intersection_index: RwLock::new(rank::TLAS_MAX_INTERSECTION_IDX, resource::MaxIntersectionIndex::Unused),
+            max_intersection_index: RwLock::new(
+                rank::TLAS_MAX_INTERSECTION_IDX,
+                resource::MaxIntersectionIndex::Unused,
+            ),
             instance_buffer: ManuallyDrop::new(instance_buffer),
             label: desc.label.to_string(),
             max_instance_count: desc.max_instances,

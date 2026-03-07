@@ -25,7 +25,9 @@ use crate::{
     device::{DeviceError, MissingFeatures},
     id::{BlasId, BufferId, TlasId},
     resource::{
-        Blas, BlasCompactCallback, BlasPrepareCompactResult, DestroyedResourceError, InvalidResourceError, MaxIntersectionIndex, MissingBufferUsageError, ResourceErrorIdent, Tlas
+        Blas, BlasCompactCallback, BlasPrepareCompactResult, DestroyedResourceError,
+        InvalidResourceError, MaxIntersectionIndex, MissingBufferUsageError, ResourceErrorIdent,
+        Tlas,
     },
 };
 
@@ -279,16 +281,21 @@ pub enum ValidateAsActionsError {
     BlasNewerThenTlas(ResourceErrorIdent, ResourceErrorIdent),
 
     #[error("Tlas {0:?} has an intersection index {1:?}  greater or different from {2:?}")]
-    TlasIntersectionInvalid(ResourceErrorIdent, MaxIntersectionIndex, MaxIntersectionIndex),
+    TlasIntersectionInvalid(
+        ResourceErrorIdent,
+        MaxIntersectionIndex,
+        MaxIntersectionIndex,
+    ),
 }
 
 impl WebGpuError for ValidateAsActionsError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
             Self::DestroyedResource(e) => e.webgpu_error_type(),
-            Self::UsedUnbuiltTlas(..) | Self::UsedUnbuiltBlas(..) | Self::BlasNewerThenTlas(..) | Self::TlasIntersectionInvalid(..) => {
-                ErrorType::Validation
-            }
+            Self::UsedUnbuiltTlas(..)
+            | Self::UsedUnbuiltBlas(..)
+            | Self::BlasNewerThenTlas(..)
+            | Self::TlasIntersectionInvalid(..) => ErrorType::Validation,
         }
     }
 }
