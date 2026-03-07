@@ -1450,6 +1450,8 @@ impl PhysicalDeviceProperties {
                 .min(descriptor_indexing.max_per_stage_descriptor_update_after_bind_samplers);
         }
 
+        const MAX_SHADER_STAGES_PER_PIPELINE: u32 = 2;
+
         // When summed, the 3 limits below must be under Vulkan's maxFragmentCombinedOutputResources.
         // https://gpuweb.github.io/gpuweb/correspondence/#vulkan-maxFragmentCombinedOutputResources
         //
@@ -1462,10 +1464,12 @@ impl PhysicalDeviceProperties {
         //
         // https://github.com/gpuweb/gpuweb/issues/3631#issuecomment-1498747606
         // https://github.com/gpuweb/gpuweb/issues/4018
-        let mut max_storage_textures_per_shader_stage =
-            limits.max_per_stage_descriptor_storage_images;
-        let mut max_storage_buffers_per_shader_stage =
-            limits.max_per_stage_descriptor_storage_buffers;
+        let mut max_storage_textures_per_shader_stage = limits
+            .max_per_stage_descriptor_storage_images
+            .min(limits.max_descriptor_set_storage_images / MAX_SHADER_STAGES_PER_PIPELINE);
+        let mut max_storage_buffers_per_shader_stage = limits
+            .max_per_stage_descriptor_storage_buffers
+            .min(limits.max_descriptor_set_storage_buffers / MAX_SHADER_STAGES_PER_PIPELINE);
         let mut max_color_attachments = limits
             .max_color_attachments
             .min(limits.max_fragment_output_attachments);
@@ -1499,10 +1503,12 @@ impl PhysicalDeviceProperties {
         //
         // Note: Vulkan's texel buffers and input attachments also count towards
         // maxPerStageResources but we don't make use of them.
-        let mut max_sampled_textures_per_shader_stage =
-            limits.max_per_stage_descriptor_sampled_images;
-        let mut max_uniform_buffers_per_shader_stage =
-            limits.max_per_stage_descriptor_uniform_buffers;
+        let mut max_sampled_textures_per_shader_stage = limits
+            .max_per_stage_descriptor_sampled_images
+            .min(limits.max_descriptor_set_sampled_images / MAX_SHADER_STAGES_PER_PIPELINE);
+        let mut max_uniform_buffers_per_shader_stage = limits
+            .max_per_stage_descriptor_uniform_buffers
+            .min(limits.max_descriptor_set_uniform_buffers / MAX_SHADER_STAGES_PER_PIPELINE);
 
         crate::auxil::cap_limits_to_be_under_the_sum_limit(
             [
@@ -1524,11 +1530,16 @@ impl PhysicalDeviceProperties {
             max_blas_geometry_count = properties.max_geometry_count as u32;
             max_blas_primitive_count = properties.max_primitive_count as u32;
             max_tlas_instance_count = properties.max_instance_count as u32;
-            max_acceleration_structures_per_shader_stage =
-                properties.max_per_stage_descriptor_acceleration_structures;
+            max_acceleration_structures_per_shader_stage = properties
+                .max_per_stage_descriptor_acceleration_structures
+                .min(
+                    properties.max_descriptor_set_acceleration_structures
+                        / MAX_SHADER_STAGES_PER_PIPELINE,
+                );
         }
 
-        // When summed, the 6 limits below must be under Vulkan's maxPerSetDescriptors / 2.
+        // When summed, the 6 limits below must be under Vulkan's
+        // maxPerSetDescriptors / MAX_SHADER_STAGES_PER_PIPELINE.
         //
         // - maxUniformBuffersPerShaderStage, WebGPU default: 12
         // - maxSampledTexturesPerShaderStage, WebGPU default: 16
@@ -1548,7 +1559,9 @@ impl PhysicalDeviceProperties {
             // https://vulkan.gpuinfo.org/displaycoreproperty.php?core=1.1&name=maxPerSetDescriptors&platform=all
             .unwrap_or(256);
 
-        let mut max_samplers_per_shader_stage = limits.max_per_stage_descriptor_samplers;
+        let mut max_samplers_per_shader_stage = limits
+            .max_per_stage_descriptor_samplers
+            .min(limits.max_descriptor_set_samplers / MAX_SHADER_STAGES_PER_PIPELINE);
 
         crate::auxil::cap_limits_to_be_under_the_sum_limit(
             [
@@ -1559,7 +1572,7 @@ impl PhysicalDeviceProperties {
                 &mut max_samplers_per_shader_stage,
                 &mut max_acceleration_structures_per_shader_stage,
             ],
-            max_per_set_descriptors / 2,
+            max_per_set_descriptors / MAX_SHADER_STAGES_PER_PIPELINE,
         );
 
         // Use max(default, maxPerSetDescriptors) since the spec requires this
