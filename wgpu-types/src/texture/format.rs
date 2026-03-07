@@ -547,8 +547,8 @@ impl TextureFormat {
         }
     }
 
-    /// Returns a [ColorWrites] struct with the bits set where the texture format contains
-    /// the color channels.
+    /// Returns a [TextureFormatChannel] with the bits set where the texture format contains
+    /// the respective channels.
     ///
     /// # Example
     /// ```rust
