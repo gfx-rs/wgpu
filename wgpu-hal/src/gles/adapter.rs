@@ -712,7 +712,8 @@ impl super::Adapter {
                 gl.get_parameter_i32(glow::MAX_ARRAY_TEXTURE_LAYERS)
             } as u32,
             max_bind_groups: crate::MAX_BIND_GROUPS as u32,
-            max_bindings_per_bind_group: 65535,
+            // No real limit.
+            max_bindings_per_bind_group: u32::MAX,
             max_dynamic_uniform_buffers_per_pipeline_layout: max_uniform_buffers_per_shader_stage,
             max_dynamic_storage_buffers_per_pipeline_layout: max_storage_buffers_per_shader_stage,
             max_sampled_textures_per_shader_stage: super::MAX_TEXTURE_SLOTS as u32,

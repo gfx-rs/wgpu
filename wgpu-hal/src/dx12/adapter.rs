@@ -803,7 +803,7 @@ impl super::Adapter {
                     // 2048
                     max_texture_array_layers: Direct3D12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION,
                     // No real limit.
-                    max_bindings_per_bind_group: 65535,
+                    max_bindings_per_bind_group: u32::MAX,
                     max_sampled_textures_per_shader_stage,
                     // 16 or 2048
                     max_samplers_per_shader_stage: match options.ResourceBindingTier {

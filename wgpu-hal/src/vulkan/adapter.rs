@@ -1562,6 +1562,12 @@ impl PhysicalDeviceProperties {
             max_per_set_descriptors / 2,
         );
 
+        // Use max(default, maxPerSetDescriptors) since the spec requires this
+        // limit to be at least 1000. This is ok because we already lowered
+        // all the other relevant per stage limits so their sum is lower
+        // than maxPerSetDescriptors.
+        let max_bindings_per_bind_group = 1000.max(max_per_set_descriptors);
+
         // TODO: programmatically determine this, if possible. It's unclear whether we can
         // as of https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447.
         //
@@ -1589,9 +1595,7 @@ impl PhysicalDeviceProperties {
             max_texture_dimension_3d: limits.max_image_dimension3_d,
             max_texture_array_layers: limits.max_image_array_layers,
             max_bind_groups: limits.max_bound_descriptor_sets,
-            // No real limit but use the default to avoid driver issues.
-            // https://github.com/gpuweb/gpuweb/issues/3279
-            max_bindings_per_bind_group: 1000,
+            max_bindings_per_bind_group,
             max_dynamic_uniform_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_uniform_buffers_dynamic,
             max_dynamic_storage_buffers_per_pipeline_layout: limits

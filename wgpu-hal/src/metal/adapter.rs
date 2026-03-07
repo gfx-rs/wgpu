@@ -1226,7 +1226,7 @@ impl super::PrivateCapabilities {
             // No real limit.
             max_bind_groups: 8,
             // No real limit.
-            max_bindings_per_bind_group: 65535,
+            max_bindings_per_bind_group: u32::MAX,
             // No limit, use maxUniformBuffersPerShaderStage.
             max_dynamic_uniform_buffers_per_pipeline_layout: MAX_UNIFORM_BUFFERS_PER_SHADER_STAGE,
             // No limit, use maxStorageBuffersPerShaderStage.
