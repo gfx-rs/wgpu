@@ -1795,8 +1795,8 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// - There must have been a prior call to [`begin_ray_tracing_pass`] on this [`CommandEncoder`]
     ///   that has not been followed by a call to [`end_ray_tracing_pass`].
     ///
-    /// [`begin_compute_pass`]: CommandEncoder::begin_compute_pass
-    /// [`end_compute_pass`]: CommandEncoder::end_compute_pass
+    /// [`begin_ray_tracing_pass`]: CommandEncoder::begin_ray_tracing_pass
+    /// [`end_ray_tracing_pass`]: CommandEncoder::end_ray_tracing_pass
     unsafe fn end_ray_tracing_pass(&mut self);
 
     /// # Safety
