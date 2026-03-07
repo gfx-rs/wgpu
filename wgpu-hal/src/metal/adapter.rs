@@ -1017,7 +1017,8 @@ impl super::PrivateCapabilities {
             | F::DEPTH32FLOAT_STENCIL8
             | F::BGRA8UNORM_STORAGE
             | F::PASSTHROUGH_SHADERS
-            | F::EXTERNAL_TEXTURE;
+            | F::EXTERNAL_TEXTURE
+            | F::MEMORY_DECORATION_COHERENT;
 
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
         features.set(F::FLOAT32_BLENDABLE, true);

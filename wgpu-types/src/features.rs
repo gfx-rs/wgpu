@@ -1319,6 +1319,26 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const ACCELERATION_STRUCTURE_BINDING_ARRAY = 1 << 60;
+
+        /// Enables the `@coherent` memory decoration on storage buffer variables.
+        ///
+        /// Backend mapping:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        /// - GLES (ES 3.1+ / GL 4.3+)
+        ///
+        /// This is a native only feature.
+        const MEMORY_DECORATION_COHERENT = 1 << 61;
+
+        /// Enables the `@volatile` memory decoration on storage buffer variables.
+        ///
+        /// Backend mapping:
+        /// - Vulkan
+        /// - GLES (ES 3.1+ / GL 4.3+)
+        ///
+        /// This is a native only feature.
+        const MEMORY_DECORATION_VOLATILE = 1 << 62;
     }
 
     /// Features that are not guaranteed to be supported.

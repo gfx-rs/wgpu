@@ -62,6 +62,7 @@ impl Frontend {
                 binding: None,
                 ty,
                 init: None,
+                memory_decorations: crate::MemoryDecorations::empty(),
             },
             meta,
         );
@@ -448,6 +449,7 @@ impl Frontend {
                         binding: None,
                         ty,
                         init,
+                        memory_decorations: crate::MemoryDecorations::empty(),
                     },
                     meta,
                 );
@@ -636,6 +638,7 @@ impl Frontend {
                         binding,
                         ty,
                         init,
+                        memory_decorations: crate::MemoryDecorations::empty(),
                     },
                     meta,
                 );

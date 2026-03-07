@@ -1348,6 +1348,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             binding,
                             ty,
                             init: initializer,
+                            memory_decorations: v.memory_decorations,
                         },
                         span,
                     );

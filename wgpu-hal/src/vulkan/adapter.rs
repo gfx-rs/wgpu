@@ -652,7 +652,9 @@ impl PhysicalDeviceFeatures {
             | F::PIPELINE_CACHE
             | F::SHADER_EARLY_DEPTH_TEST
             | F::TEXTURE_ATOMIC
-            | F::PASSTHROUGH_SHADERS;
+            | F::PASSTHROUGH_SHADERS
+            | F::MEMORY_DECORATION_COHERENT
+            | F::MEMORY_DECORATION_VOLATILE;
 
         let mut dl_flags = Df::COMPUTE_SHADERS
             | Df::BASE_VERTEX

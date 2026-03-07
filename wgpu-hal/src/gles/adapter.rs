@@ -664,6 +664,13 @@ impl super::Adapter {
             features.set(wgt::Features::INDIRECT_FIRST_INSTANCE, supported);
         }
 
+        // GLSL ES 3.10+ / GLSL 4.30+ natively support coherent/volatile qualifiers
+        // on storage buffers. These were introduced alongside storage buffer support.
+        if supports_storage {
+            features |= wgt::Features::MEMORY_DECORATION_COHERENT
+                | wgt::Features::MEMORY_DECORATION_VOLATILE;
+        }
+
         let max_texture_size = unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) } as u32;
         let max_texture_3d_size = unsafe { gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) } as u32;
 

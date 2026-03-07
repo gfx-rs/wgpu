@@ -154,6 +154,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Initial wgsl-in ray tracing pipelines. By @Vecvec in [#8570](https://github.com/gfx-rs/wgpu/pull/8570).
 - wgsl-out ray tracing pipelines. By @Vecvec in [#8970](https://github.com/gfx-rs/wgpu/pull/8970).
 - Allow parsing shaders which make use of `SPV_KHR_non_semantic_info` for debug info. Also removes `naga::front::spv::SUPPORTED_EXT_SETS`. By @inner-daemons in #8827.
+- Added memory decorations for storage buffers: `coherent`, supported on all native backends, and `volatile`, only on Vulkan and GL. By @atlv24 in [#9168](https://github.com/gfx-rs/wgpu/pull/9168).
 
 #### GLES
 

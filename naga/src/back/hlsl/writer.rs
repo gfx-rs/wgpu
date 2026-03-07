@@ -990,6 +990,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 "b"
             }
             crate::AddressSpace::Storage { access } => {
+                if global
+                    .memory_decorations
+                    .contains(crate::MemoryDecorations::COHERENT)
+                {
+                    write!(self.out, "globallycoherent ")?;
+                }
                 let (prefix, register) = if access.contains(crate::StorageAccess::STORE) {
                     ("RW", "u")
                 } else {

@@ -47,6 +47,12 @@ pub enum GlobalVariableError {
     InvalidImmediateType(#[source] ImmediateError),
     #[error("Task payload must not be zero-sized")]
     ZeroSizedTaskPayload,
+    #[error("Memory decorations (`@coherent`, `@volatile`) are only valid for variables in the `storage` address space")]
+    InvalidMemoryDecorationsAddressSpace,
+    #[error("`@coherent` requires the MEMORY_DECORATION_COHERENT capability")]
+    CoherentNotSupported,
+    #[error("`@volatile` requires the MEMORY_DECORATION_VOLATILE capability")]
+    VolatileNotSupported,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -1125,6 +1131,30 @@ impl super::Validator {
             if ty.try_size(gctx) == Some(0) {
                 return Err(GlobalVariableError::ZeroSizedTaskPayload);
             }
+        }
+
+        if !var.memory_decorations.is_empty()
+            && !matches!(var.space, crate::AddressSpace::Storage { .. })
+        {
+            return Err(GlobalVariableError::InvalidMemoryDecorationsAddressSpace);
+        }
+        if var
+            .memory_decorations
+            .contains(crate::MemoryDecorations::COHERENT)
+            && !self
+                .capabilities
+                .contains(Capabilities::MEMORY_DECORATION_COHERENT)
+        {
+            return Err(GlobalVariableError::CoherentNotSupported);
+        }
+        if var
+            .memory_decorations
+            .contains(crate::MemoryDecorations::VOLATILE)
+            && !self
+                .capabilities
+                .contains(Capabilities::MEMORY_DECORATION_VOLATILE)
+        {
+            return Err(GlobalVariableError::VolatileNotSupported);
         }
 
         if let Some(init) = var.init {

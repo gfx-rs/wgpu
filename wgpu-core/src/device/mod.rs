@@ -546,6 +546,14 @@ pub fn features_to_naga_capabilities(
         Caps::DRAW_INDEX,
         features.intersects(wgt::Features::SHADER_DRAW_INDEX),
     );
+    caps.set(
+        Caps::MEMORY_DECORATION_COHERENT,
+        features.contains(wgt::Features::MEMORY_DECORATION_COHERENT),
+    );
+    caps.set(
+        Caps::MEMORY_DECORATION_VOLATILE,
+        features.contains(wgt::Features::MEMORY_DECORATION_VOLATILE),
+    );
 
     caps
 }
