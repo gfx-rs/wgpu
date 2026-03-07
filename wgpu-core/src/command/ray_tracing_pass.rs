@@ -220,7 +220,7 @@ impl WebGpuError for RayTracingPassError {
             | RayTracingPassErrorInner::ImmediateOffsetAlignment
             | RayTracingPassErrorInner::ImmediateDataizeAlignment
             | RayTracingPassErrorInner::ImmediateOutOfMemory
-            | RayTracingPassErrorInner::PassEnded => return ErrorType::Validation,
+            | RayTracingPassErrorInner::PassEnded => ErrorType::Validation,
         }
     }
 }

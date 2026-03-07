@@ -933,14 +933,14 @@ impl WebGpuError for CreateRayTracingPipelineError {
             Self::InvalidResource(e) => e.webgpu_error_type(),
             Self::MissingFeatures(e) => e.webgpu_error_type(),
 
-            Self::Internal { .. } => return ErrorType::Internal,
+            Self::Internal { .. } => ErrorType::Internal,
 
             Self::Implicit(_)
             | Self::Stage { .. }
             | Self::UnalignedShader { .. }
             | Self::PipelineConstants { .. }
             | Self::TooManyIntersectionGroups(..)
-            | Self::TooHighRayRecursionDepth(..) => return ErrorType::Validation,
+            | Self::TooHighRayRecursionDepth(..) => ErrorType::Validation,
         }
     }
 }
