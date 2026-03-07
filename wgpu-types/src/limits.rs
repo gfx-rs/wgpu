@@ -778,7 +778,7 @@ impl Limits {
         }
     }
 
-    /// The minimum guaranteed limits for acceleration structures if you enable [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINE`]
+    /// The minimum guaranteed limits for acceleration structures if you enable [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`]
     /// These may change in the future (including downwards).
     #[must_use]
     pub const fn using_minimum_supported_ray_tracing_pipeline_values(self) -> Self {
