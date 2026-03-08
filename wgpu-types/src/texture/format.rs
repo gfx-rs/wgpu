@@ -505,7 +505,8 @@ impl TextureFormat {
     /// see <https://gpuweb.github.io/gpuweb/#depth-formats>
     #[must_use]
     pub fn is_depth_stencil_format(&self) -> bool {
-        self.channels().intersects(TextureFormatChannel::DEPTH_STENCIL)
+        self.channels()
+            .intersects(TextureFormatChannel::DEPTH_STENCIL)
     }
 
     /// Returns `true` if the format is a combined depth-stencil format
@@ -513,8 +514,8 @@ impl TextureFormat {
     /// see <https://gpuweb.github.io/gpuweb/#combined-depth-stencil-format>
     #[must_use]
     pub fn is_combined_depth_stencil_format(&self) -> bool {
-        self.channels().contains(TextureFormatChannel::DEPTH_STENCIL)
-            == TextureFormatChannel::DEPTH_STENCIL
+        self.channels()
+            .contains(TextureFormatChannel::DEPTH_STENCIL)
     }
 
     /// Returns `true` if the format is a multi-planar format
@@ -554,32 +555,20 @@ impl TextureFormat {
     /// ```rust
     /// # use wgpu_types::{TextureFormat, TextureFormatChannel};
     ///
-    /// assert!(
-    ///     TextureFormat::Rgba8Unorm.channels().contains(TextureFormatChannel::RGBA),
-    ///     "`Rgba` has a `red`, `green`, `blue` and `alpha` channel!"
-    /// );
+    /// // `Rgba` has a `red`, `green`, `blue` and `alpha` channel!
+    /// assert!(TextureFormat::Rgba8Unorm.channels().contains(TextureFormatChannel::RGBA));
     ///
-    /// assert!(
-    ///     !TextureFormat::Rg8Unorm.channels().contains(TextureFormatChannel::ALPHA),
-    ///     "`Rg` hasn't got an alpha channel..."
-    /// );
-    /// assert!(
-    ///     TextureFormat::Rg8Unorm.channels().contains(TextureFormatChannel::RED),
-    ///     "... but it has a red channel ..."
-    /// );
-    /// assert!(
-    ///     TextureFormat::Rg8Unorm.channels().contains(TextureFormatChannel::GREEN),
-    ///     "... and also a green channel (yay!)"
-    /// );
+    /// // `Rg` hasn't got an alpha channel...
+    /// assert!(!TextureFormat::Rg8Unorm.channels().contains(TextureFormatChannel::ALPHA));
+    /// // ... but it has a red channel ...
+    /// assert!(TextureFormat::Rg8Unorm.channels().contains(TextureFormatChannel::RED));
+    /// // ... and also a green channel (yay!)
+    /// assert!(TextureFormat::Rg8Unorm.channels().contains(TextureFormatChannel::GREEN));
     ///
-    /// assert!(
-    ///     TextureFormat::Stencil8.channels().contains(TextureFormatChannel::STENCIL),
-    ///     "A stencil texture has a stencil channel _duh_"
-    /// );
-    /// assert!(
-    ///     TextureFormat::NV12.channels().contains(TextureFormatChannel::CHROMA),
-    ///     "And the `NV12` format should have a `luminance` and `chrominance` channel."
-    /// );
+    /// // A stencil texture has a... stencil channel
+    /// assert!(TextureFormat::Stencil8.channels().contains(TextureFormatChannel::STENCIL));
+    /// // And the `NV12` format should have a `luminance` and `chrominance` channel.
+    /// assert!(TextureFormat::NV12.channels().contains(TextureFormatChannel::CHROMA));
     /// ```
     #[must_use]
     pub fn channels(&self) -> TextureFormatChannel {
