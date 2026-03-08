@@ -513,7 +513,7 @@ impl TextureFormat {
     /// see <https://gpuweb.github.io/gpuweb/#combined-depth-stencil-format>
     #[must_use]
     pub fn is_combined_depth_stencil_format(&self) -> bool {
-        TextureFormatChannel::DEPTH_STENCIL.intersection(self.channels())
+        self.channels().contains(TextureFormatChannel::DEPTH_STENCIL)
             == TextureFormatChannel::DEPTH_STENCIL
     }
 
