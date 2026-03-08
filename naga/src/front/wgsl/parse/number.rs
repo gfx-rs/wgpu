@@ -430,6 +430,7 @@ const F64: HexFloatFormat = HexFloatFormat {
     min_norm_exp: -1022,
 };
 
+// derived from hexf-parse module: https://github.com/lifthrasiir/hexf (0BSD)
 // parses a hexadecimal floating-point string into its sign, mantissa, and exponent
 // input format: 0[xX] ( [0-9a-fA-F]+\.[0-9a-fA-F]* | [0-9a-fA-F]*\.[0-9a-fA-F]+ ) [pP][+-]?[0-9]+
 fn parse_hex_float_parts(s: &[u8]) -> Result<(bool, u64, i32), NumberError> {
