@@ -226,6 +226,7 @@ impl Version {
     }
 
     fn supports_std430_layout(&self) -> bool {
+        // std430 is available from 400 via GL_ARB_shader_storage_buffer_object.
         *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
     }
 
