@@ -664,19 +664,19 @@ impl TextureFormat {
     /// Returns `true` if the format has a color aspect
     #[must_use]
     pub fn has_color_aspect(&self) -> bool {
-        TextureFormatChannel::RGBA.intersects(self.channels())
+        self.channels().intersects(TextureFormatChannel::RGBA)
     }
 
     /// Returns `true` if the format has a depth aspect
     #[must_use]
     pub fn has_depth_aspect(&self) -> bool {
-        TextureFormatChannel::DEPTH.intersects(self.channels())
+        self.channels().intersects(TextureFormatChannel::DEPTH)
     }
 
     /// Returns `true` if the format has a stencil aspect
     #[must_use]
     pub fn has_stencil_aspect(&self) -> bool {
-        TextureFormatChannel::STENCIL.intersects(self.channels())
+        self.channels().intersects(TextureFormatChannel::STENCIL)
     }
 
     /// Returns the size multiple requirement for a texture using this format.
