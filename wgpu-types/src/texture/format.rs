@@ -65,7 +65,7 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    pub struct TextureFormatChannel: u16 {
+    pub struct TextureChannel: u16 {
         /// Texture format contains a `red` channel.
         const RED = 1 << 0;
         /// Texture format contains a `green` channel.
@@ -507,8 +507,7 @@ impl TextureFormat {
     /// see <https://gpuweb.github.io/gpuweb/#depth-formats>
     #[must_use]
     pub fn is_depth_stencil_format(&self) -> bool {
-        self.channels()
-            .intersects(TextureFormatChannel::DEPTH_STENCIL)
+        self.channels().intersects(TextureChannel::DEPTH_STENCIL)
     }
 
     /// Returns `true` if the format is a combined depth-stencil format
@@ -516,8 +515,7 @@ impl TextureFormat {
     /// see <https://gpuweb.github.io/gpuweb/#combined-depth-stencil-format>
     #[must_use]
     pub fn is_combined_depth_stencil_format(&self) -> bool {
-        self.channels()
-            .contains(TextureFormatChannel::DEPTH_STENCIL)
+        self.channels().contains(TextureChannel::DEPTH_STENCIL)
     }
 
     /// Returns `true` if the format is a multi-planar format
@@ -550,30 +548,30 @@ impl TextureFormat {
         }
     }
 
-    /// Returns a [TextureFormatChannel] with the bits set where the texture format contains
+    /// Returns a [TextureChannel] with the bits set where the texture format contains
     /// the respective channels.
     ///
     /// # Example
     /// ```rust
-    /// # use wgpu_types::{TextureFormat, TextureFormatChannel};
+    /// # use wgpu_types::{TextureFormat, TextureChannel};
     ///
     /// // `Rgba` has a `red`, `green`, `blue` and `alpha` channel!
-    /// assert!(TextureFormat::Rgba8Unorm.channels().contains(TextureFormatChannel::RGBA));
+    /// assert!(TextureFormat::Rgba8Unorm.channels().contains(TextureChannel::RGBA));
     ///
     /// // `Rg` hasn't got an alpha channel...
-    /// assert!(!TextureFormat::Rg8Unorm.channels().contains(TextureFormatChannel::ALPHA));
+    /// assert!(!TextureFormat::Rg8Unorm.channels().contains(TextureChannel::ALPHA));
     /// // ... but it has a red channel ...
-    /// assert!(TextureFormat::Rg8Unorm.channels().contains(TextureFormatChannel::RED));
+    /// assert!(TextureFormat::Rg8Unorm.channels().contains(TextureChannel::RED));
     /// // ... and also a green channel (yay!)
-    /// assert!(TextureFormat::Rg8Unorm.channels().contains(TextureFormatChannel::GREEN));
+    /// assert!(TextureFormat::Rg8Unorm.channels().contains(TextureChannel::GREEN));
     ///
     /// // A stencil texture has a... stencil channel
-    /// assert!(TextureFormat::Stencil8.channels().contains(TextureFormatChannel::STENCIL));
+    /// assert!(TextureFormat::Stencil8.channels().contains(TextureChannel::STENCIL));
     /// // And the `NV12` format should have a `luminance`, `blue-difference` and `red-difference` channel.
-    /// assert!(TextureFormat::NV12.channels().contains(TextureFormatChannel::LUMINANCE_CHROMINANCE));
+    /// assert!(TextureFormat::NV12.channels().contains(TextureChannel::LUMINANCE_CHROMINANCE));
     /// ```
     #[must_use]
-    pub fn channels(&self) -> TextureFormatChannel {
+    pub fn channels(&self) -> TextureChannel {
         match self {
             Self::R8Unorm
             | Self::R8Snorm
@@ -591,7 +589,7 @@ impl TextureFormat {
             | Self::Bc4RUnorm
             | Self::Bc4RSnorm
             | Self::EacR11Unorm
-            | Self::EacR11Snorm => TextureFormatChannel::RED,
+            | Self::EacR11Snorm => TextureChannel::RED,
 
             Self::Rg8Unorm
             | Self::Rg8Snorm
@@ -608,14 +606,14 @@ impl TextureFormat {
             | Self::Bc5RgUnorm
             | Self::Bc5RgSnorm
             | Self::EacRg11Unorm
-            | Self::EacRg11Snorm => TextureFormatChannel::RG,
+            | Self::EacRg11Snorm => TextureChannel::RG,
 
             Self::Rgb9e5Ufloat
             | Self::Rg11b10Ufloat
             | Self::Bc6hRgbUfloat
             | Self::Bc6hRgbFloat
             | Self::Etc2Rgb8Unorm
-            | Self::Etc2Rgb8UnormSrgb => TextureFormatChannel::RGB,
+            | Self::Etc2Rgb8UnormSrgb => TextureChannel::RGB,
 
             Self::Rgba8Unorm
             | Self::Rgba8UnormSrgb
@@ -646,37 +644,33 @@ impl TextureFormat {
             | Self::Etc2Rgb8A1UnormSrgb
             | Self::Etc2Rgba8Unorm
             | Self::Etc2Rgba8UnormSrgb
-            | Self::Astc { .. } => TextureFormatChannel::RGBA,
+            | Self::Astc { .. } => TextureChannel::RGBA,
 
-            Self::Stencil8 => TextureFormatChannel::STENCIL,
-            Self::Depth16Unorm | Self::Depth24Plus | Self::Depth32Float => {
-                TextureFormatChannel::DEPTH
-            }
+            Self::Stencil8 => TextureChannel::STENCIL,
+            Self::Depth16Unorm | Self::Depth24Plus | Self::Depth32Float => TextureChannel::DEPTH,
 
-            Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => {
-                TextureFormatChannel::DEPTH_STENCIL
-            }
+            Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => TextureChannel::DEPTH_STENCIL,
 
-            Self::NV12 | Self::P010 => TextureFormatChannel::LUMINANCE_CHROMINANCE,
+            Self::NV12 | Self::P010 => TextureChannel::LUMINANCE_CHROMINANCE,
         }
     }
 
     /// Returns `true` if the format has a color aspect
     #[must_use]
     pub fn has_color_aspect(&self) -> bool {
-        self.channels().intersects(TextureFormatChannel::RGBA)
+        self.channels().intersects(TextureChannel::RGBA)
     }
 
     /// Returns `true` if the format has a depth aspect
     #[must_use]
     pub fn has_depth_aspect(&self) -> bool {
-        self.channels().intersects(TextureFormatChannel::DEPTH)
+        self.channels().intersects(TextureChannel::DEPTH)
     }
 
     /// Returns `true` if the format has a stencil aspect
     #[must_use]
     pub fn has_stencil_aspect(&self) -> bool {
-        self.channels().intersects(TextureFormatChannel::STENCIL)
+        self.channels().intersects(TextureChannel::STENCIL)
     }
 
     /// Returns the size multiple requirement for a texture using this format.
