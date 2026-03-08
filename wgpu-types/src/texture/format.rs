@@ -65,7 +65,7 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    pub struct TextureFormatChannel: u8 {
+    pub struct TextureFormatChannel: u16 {
         /// Texture format contains a `red` channel.
         const RED = 1 << 0;
         /// Texture format contains a `green` channel.
@@ -80,8 +80,10 @@ bitflags::bitflags! {
         const DEPTH = 1 << 5;
         /// Texture format contains a `luminance` channel.
         const LUMINANCE = 1 << 6;
-        /// Texture format contains a `chrominance` channel.
-        const CHROMINANCE = 1 << 7;
+        /// Texture format contains a `blue-difference` channel.
+        const CHROMINANCE_BLUE = 1 << 7;
+        /// Texture format contains a `red-difference` channel.
+        const CHROMINANCE_RED = 1 << 8;
 
         /// Texture format contains channels for `red` and `green`.
         const RG = Self::RED.bits() | Self::GREEN.bits();
@@ -91,8 +93,8 @@ bitflags::bitflags! {
         const RGBA = Self::RGB.bits() | Self::ALPHA.bits();
         /// Texture format contains channels for `depth` and `stencil`.
         const DEPTH_STENCIL =  Self::DEPTH.bits() | Self::STENCIL.bits();
-        /// Texture format contains a `luminance` and `chrominance` channel.
-        const CHROMA = Self::LUMINANCE.bits() | Self::CHROMINANCE.bits();
+        /// Texture format contains a `luminance` (`Y`), `blue-difference` (`Cb`) and `red-difference` (`Cr`) channel.
+        const LUMINANCE_CHROMINANCE = Self::LUMINANCE.bits() | Self::CHROMINANCE_BLUE.bits() | Self::CHROMINANCE_RED.bits();
     }
 }
 
@@ -567,8 +569,8 @@ impl TextureFormat {
     ///
     /// // A stencil texture has a... stencil channel
     /// assert!(TextureFormat::Stencil8.channels().contains(TextureFormatChannel::STENCIL));
-    /// // And the `NV12` format should have a `luminance` and `chrominance` channel.
-    /// assert!(TextureFormat::NV12.channels().contains(TextureFormatChannel::CHROMA));
+    /// // And the `NV12` format should have a `luminance`, `blue-difference` and `red-difference` channel.
+    /// assert!(TextureFormat::NV12.channels().contains(TextureFormatChannel::LUMINANCE_CHROMINANCE));
     /// ```
     #[must_use]
     pub fn channels(&self) -> TextureFormatChannel {
@@ -655,7 +657,7 @@ impl TextureFormat {
                 TextureFormatChannel::DEPTH_STENCIL
             }
 
-            Self::NV12 | Self::P010 => TextureFormatChannel::CHROMA,
+            Self::NV12 | Self::P010 => TextureFormatChannel::LUMINANCE_CHROMINANCE,
         }
     }
 
