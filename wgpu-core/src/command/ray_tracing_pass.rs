@@ -836,20 +836,19 @@ fn trace_rays(
                 buffer: current_pipeline.shader_binding_data.raw.as_ref(),
                 offset: 0,
                 stride: device.alignments.ray_tracing_pipeline_group_data_alignment as _,
-                size: device.alignments.ray_tracing_pipeline_group_data_size as u64,
+                count: 1,
             },
             hal::PipelineGroupData {
                 buffer: current_pipeline.shader_binding_data.raw.as_ref(),
-                offset: device.alignments.ray_tracing_pipeline_group_data_size as u64,
+                offset: device.alignments.ray_tracing_pipeline_group_data_alignment as u64,
                 stride: device.alignments.ray_tracing_pipeline_group_data_alignment as _,
-                size: device.alignments.ray_tracing_pipeline_group_data_size as u64,
+                count: 1,
             },
             hal::PipelineGroupData {
                 buffer: current_pipeline.shader_binding_data.raw.as_ref(),
-                offset: 2 * device.alignments.ray_tracing_pipeline_group_data_size as u64,
+                offset: 2 * device.alignments.ray_tracing_pipeline_group_data_alignment as u64,
                 stride: device.alignments.ray_tracing_pipeline_group_data_alignment as _,
-                size: device.alignments.ray_tracing_pipeline_group_data_size as u64
-                    * current_pipeline.shader_binding_data.num_intersection_groups,
+                count: current_pipeline.shader_binding_data.num_intersection_groups,
             },
         );
     }

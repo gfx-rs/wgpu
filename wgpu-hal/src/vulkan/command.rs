@@ -1411,19 +1411,19 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     device_address: get_device_address(ray_generation_group_data.buffer)
                         + ray_generation_group_data.offset,
                     stride: ray_generation_group_data.stride,
-                    size: ray_generation_group_data.size,
+                    size: ray_generation_group_data.stride /* no need for multiplying by count, vulkan requires the to be just one group */,
                 },
                 &vk::StridedDeviceAddressRegionKHR {
                     device_address: get_device_address(miss_group_data.buffer)
                         + miss_group_data.offset,
                     stride: miss_group_data.stride,
-                    size: miss_group_data.size,
+                    size: miss_group_data.stride * miss_group_data.count,
                 },
                 &vk::StridedDeviceAddressRegionKHR {
                     device_address: get_device_address(intersection_group_data.buffer)
                         + intersection_group_data.offset,
                     stride: intersection_group_data.stride,
-                    size: intersection_group_data.size,
+                    size: intersection_group_data.stride * intersection_group_data.count,
                 },
                 &vk::StridedDeviceAddressRegionKHR {
                     device_address: 0,

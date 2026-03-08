@@ -686,7 +686,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
                 buffer: data.buffer.expect_downcast_ref(),
                 offset: data.offset,
                 stride: data.stride,
-                size: data.size,
+                count: data.count,
             };
 
         unsafe {
