@@ -1341,6 +1341,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5692dd7b5a1978a5aeb0ce83b7655c58ca8efdcb79d21036ea249da95afec2c6"
 
 [[package]]
+name = "exhaust"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30b727ccdc10d28c68e775e7167048866fadcc1c39a31d489922cf9dc496becc"
+dependencies = [
+ "exhaust-macros",
+ "itertools 0.14.0",
+ "mutants",
+]
+
+[[package]]
+name = "exhaust-macros"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d9bba791cce787703541f40494aa1e0627394c6382b980850bb521a76ab1b80"
+dependencies = [
+ "itertools 0.14.0",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2381,6 +2404,12 @@ dependencies = [
  "num-traits",
  "pxfm",
 ]
+
+[[package]]
+name = "mutants"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc0287524726960e07b119cebd01678f852f147742ae0d925e6a520dca956126"
 
 [[package]]
 name = "naga"
@@ -5059,6 +5088,7 @@ version = "28.0.0"
 dependencies = [
  "bitflags 2.11.0",
  "bytemuck",
+ "exhaust",
  "js-sys",
  "log",
  "raw-window-handle 0.6.2",
