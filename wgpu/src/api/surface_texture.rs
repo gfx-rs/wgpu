@@ -57,10 +57,6 @@ impl Drop for SurfaceTexture {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum SurfaceError {
     /// A timeout was encountered while trying to acquire the next frame.
-    ///
-    /// This can happen when the window is not visible (e.g., minimized, occluded,
-    /// or on another virtual desktop) on some platforms, particularly macOS.
-    /// Applications should handle this gracefully by skipping the frame.
     Timeout,
     /// The window is occluded (e.g. minimized or behind another window).
     ///
