@@ -3016,5 +3016,5 @@ pub struct PipelineGroupData<'a, B: DynBuffer + ?Sized> {
     pub buffer: &'a B,
     pub offset: wgt::BufferAddress,
     pub stride: u64,
-    pub size: u64,
+    pub count: u64,
 }
