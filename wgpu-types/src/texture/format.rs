@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(test, derive(exhaust::Exhaust))]
+#[cfg_attr(any(test, feature = "exhaust"), derive(exhaust::Exhaust))]
 pub enum AstcBlock {
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px).
     B4x4,
@@ -45,7 +45,7 @@ pub enum AstcBlock {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(test, derive(exhaust::Exhaust))]
+#[cfg_attr(any(test, feature = "exhaust"), derive(exhaust::Exhaust))]
 pub enum AstcChannel {
     /// 8 bit integer RGBA, [0, 255] converted to/from linear-color float [0, 1] in shader.
     ///
@@ -124,7 +124,7 @@ bitflags::bitflags! {
 /// [sRGB transfer function]: https://en.wikipedia.org/wiki/SRGB#Transfer_function_(%22gamma%22)
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(test, derive(exhaust::Exhaust))]
+#[cfg_attr(any(test, feature = "exhaust"), derive(exhaust::Exhaust))]
 pub enum TextureFormat {
     // Normal 8 bit formats
     /// Red channel only. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
