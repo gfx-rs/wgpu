@@ -278,7 +278,7 @@ gpu-allocator = { version = "0.28", default-features = false, features = [
 
 # Gles dependencies
 khronos-egl = "6"
-glow = "0.16"
+glow = "0.17"
 glutin = { version = "0.31", default-features = false }
 glutin-winit = { version = "0.4", default-features = false }
 glutin_wgl_sys = "0.6"
