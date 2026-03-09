@@ -44,6 +44,8 @@ mod webidl;
 
 pub const UNSTABLE_FEATURE_NAME: &str = "webgpu";
 
+pub const DX12_COMPILER_ENV_VAR: &str = "DENO_WEBGPU_DX12_COMPILER";
+
 #[allow(clippy::print_stdout)]
 pub fn print_linker_flags(name: &str) {
   if cfg!(windows) {
@@ -171,7 +173,7 @@ impl GPU {
   ) -> Option<adapter::GPUAdapter> {
     let mut state = state.borrow_mut();
 
-    let dx12_compiler = std::env::var("DENO_WEBGPU_DX12_COMPILER")
+    let dx12_compiler = std::env::var(DX12_COMPILER_ENV_VAR)
       .ok()
       .and_then(|s| s.parse().ok());
     let backends = std::env::var("DENO_WEBGPU_BACKEND").map_or_else(

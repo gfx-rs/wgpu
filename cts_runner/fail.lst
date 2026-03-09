@@ -64,6 +64,8 @@ webgpu:api,validation,resource_usages,texture,in_render_common:subresources,dept
 webgpu:api,validation,state,device_lost,destroy:* // crash
 webgpu:api,validation,texture,destroy:submit_a_destroyed_texture_as_attachment:* // 44%, https://github.com/gfx-rs/wgpu/issues/8714
 
+webgpu:shader,execution,expression,call,builtin,atan2:f16:* // dx12, fails with dxc, passes with fxc, https://github.com/gfx-rs/wgpu/issues/9179
+
 webgpu:shader,validation,decl,context_dependent_resolution:* // 92%, f16 as reserved keyword when enabled
 webgpu:shader,validation,decl,let:* // texture/sampler let
 webgpu:shader,validation,decl,override:* // 93%, unrestricted_pointer_parameters not implemented, https://github.com/gfx-rs/wgpu/issues/5158

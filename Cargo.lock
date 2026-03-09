@@ -892,6 +892,7 @@ dependencies = [
  "deno_webgpu",
  "deno_webidl",
  "env_logger",
+ "log",
  "pico-args",
  "tempfile",
  "termcolor",
