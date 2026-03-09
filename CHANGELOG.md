@@ -193,6 +193,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Naga now detects bitwise shifts by a constant exceeding the operand bit width at compile time, and disallows scalar-by-vector and vector-by-scalar shifts in constant evaluation. By @andyleiserson in [#8907](https://github.com/gfx-rs/wgpu/pull/8907).
 - Naga uses wrapping arithmetic when evaluating dot products on concrete integer types (`u32` and `i32`). By @BKDaugherty in [#9142](https://github.com/gfx-rs/wgpu/pull/9142).
 - Disallow negation of a matrix in WGSL. By @andyleiserson in [#9157](https://github.com/gfx-rs/wgpu/pull/9157).
+- Fix evaluation order of compound assignment (e.g. `+=`) LHS and RHS. By @andyleiserson in [#9181](https://github.com/gfx-rs/wgpu/pull/9181).
 
 #### Validation
 

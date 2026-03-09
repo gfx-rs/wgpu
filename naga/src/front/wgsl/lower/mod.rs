@@ -2153,6 +2153,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .pointer_automatically_convertible_scalar(&ectx.module.types),
                 };
 
+                // Need to emit the LHS _before_ the RHS so that it is evaluated first.
+                let op_assign = if let Some(op) = op {
+                    Some((op, ectx.apply_load_rule(target)?))
+                } else {
+                    None
+                };
+
                 let value = self.expression_for_abstract(value, &mut ectx)?;
                 let mut value = match target_scalar {
                     Some(target_scalar) => ectx.try_automatic_conversion_for_leaf_scalar(
@@ -2163,9 +2170,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     None => value,
                 };
 
-                let value = match op {
-                    Some(op) => {
-                        let mut left = ectx.apply_load_rule(target)?;
+                let value = match op_assign {
+                    Some((op, mut left)) => {
                         ectx.binary_op_splat(op, &mut left, &mut value)?;
                         ectx.append_expression(
                             ir::Expression::Binary {
