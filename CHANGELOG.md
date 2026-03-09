@@ -69,12 +69,15 @@ By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
 
 #### Depth/stencil state changes
 
-BREAKING CHANGE: The `depth_write_enabled` and `depth_compare` members of `DepthStencilState` are now optional, to match WebGPU.
+BREAKING CHANGE: The `depth_write_enabled` and `depth_compare` members of `DepthStencilState` are now optional, and may be omitted when they do not apply, to match WebGPU.
 
-The `depth_write_enabled` member must be `Some` if `format` has a depth aspect.
+`depth_write_enabled` is applicable, and must be `Some`, if `format` has a depth aspect, i.e., is a depth or depth/stencil format. Otherwise, a value of `None` best reflects that it does not apply, although `Some(false)` is also accepted.
 
-The `depth_compare_required` member must be `Some` if `depth_write_enabled` is `Some(true)`, or if `depth_fail_op` for either stencil face is not `Keep`.
+`depth_compare` is applicable, and must be `Some`, if `depth_write_enabled` is `Some(true)`, or if `depth_fail_op` for either stencil face is not `Keep`. Otherwise, a value of `None` best reflects that it does not apply, although `Some(CompareFunction::Always)` is also accepted.
 
+There is also a new constructor `DepthStencilState::stencil` which may be used instead of a struct literal for stencil operations.
+
+Example 1: A configuration that does a depth test and writes updated values:
 ```diff
  depth_stencil: Some(wgpu::DepthStencilState {
      format: wgpu::TextureFormat::Depth32Float,
@@ -87,12 +90,24 @@ The `depth_compare_required` member must be `Some` if `depth_write_enabled` is `
  }),
 ```
 
-There is also a new constructor `DepthStencilState::stencil` which may be used instead of a struct literal for stencil operations.
-
+Example 2: A configuration with only stencil:
+```diff
+ depth_stencil: Some(wgpu::DepthStencilState {
+     format: wgpu::TextureFormat::Stencil8,
+-    depth_write_enabled: false,
+-    depth_compare: wgpu::CompareFunction::Always,
++    depth_write_enabled: None,
++    depth_compare: None,
+     stencil: wgpu::StencilState::default(),
+     bias: wgpu::DepthBiasState::default(),
+ }),
 ```
+
+Example 3: The previous example written using the new `stencil()` constructor:
+```rust
 depth_stencil: Some(wgpu::DepthStencilState::stencil(
     wgpu::TextureFormat::Stencil8,
-    wgpu::StencilState { .. },
+    wgpu::StencilState::default(),
 )),
 ```
 
