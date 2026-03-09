@@ -179,6 +179,10 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Added support for dual-source blending in SPIR-V shaders. By @andyleiserson in [#8865](https://github.com/gfx-rs/wgpu/pull/8865).
 - Added `supported_capabilities` to all backends. By @inner-daemons in [#9068](https://github.com/gfx-rs/wgpu/pull/9068).
 
+#### Vulkan
+
+- Add support for RawWindowHandle::Drm on unix. By @rectalogic in []().
+
 ### Bug Fixes
 
 #### General

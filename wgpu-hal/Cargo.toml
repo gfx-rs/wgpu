@@ -94,6 +94,7 @@ vulkan = [
     "dep:arrayvec",
     "dep:ash",
     "dep:bytemuck",
+    "dep:drm",
     "dep:gpu-descriptor",
     "dep:hashbrown",
     "dep:libc",
@@ -243,6 +244,7 @@ renderdoc-sys = { workspace = true, optional = true }
 [target.'cfg(unix)'.dependencies]
 # Backend: Vulkan
 libc = { workspace = true, optional = true }
+drm = { version = "0.14.2", optional = true }
 # backend: GLES
 wayland-sys = { version = "0.31.3", features = [
     "client",

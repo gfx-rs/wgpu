@@ -1,9 +1,24 @@
 #![cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
 
 use alloc::{string::ToString, vec::Vec};
-use core::mem::MaybeUninit;
+use core::{mem::MaybeUninit, num::NonZeroU32};
+use std::os::fd::{AsFd, BorrowedFd};
 
 use ash::{ext, khr, vk};
+
+use drm::{
+    self,
+    control::{self, connector, Device as _},
+};
+
+struct Card(i32);
+impl AsFd for Card {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        unsafe { BorrowedFd::borrow_raw(self.0) }
+    }
+}
+impl control::Device for Card {}
+impl drm::Device for Card {}
 
 macro_rules! to_u64 {
     ($expr:expr) => {{
@@ -15,6 +30,77 @@ macro_rules! to_u64 {
 }
 
 impl super::Instance {
+    /// Creates a new surface from the given drm fd and plane, deriving the connector and mode.
+    ///
+    /// # Safety
+    ///
+    /// - All parameters must point to valid DRM values.
+    pub fn create_surface_from_drm_plane(
+        &self,
+        fd: i32,
+        plane: u32,
+    ) -> Result<super::Surface, crate::InstanceError> {
+        let card = Card(fd);
+        let plane_info = card
+            .get_plane(
+                NonZeroU32::new(plane)
+                    .ok_or(crate::InstanceError::new("Invalid drm plane".to_string()))?
+                    .into(),
+            )
+            .map_err(|e| crate::InstanceError::with_source("drm plane not found".to_string(), e))?;
+        let crtc_handle = plane_info.crtc().ok_or(crate::InstanceError::new(
+            "No CRTC for drm plane".to_string(),
+        ))?;
+        let crtc_info = card
+            .get_crtc(crtc_handle)
+            .map_err(|e| crate::InstanceError::with_source("drm CRTC not found".to_string(), e))?;
+        let mode = crtc_info.mode().ok_or(crate::InstanceError::new(
+            "No mode for drm CRTC".to_string(),
+        ))?;
+
+        let mut connector_and_mode = None;
+        let resources = card.resource_handles().map_err(|e| {
+            crate::InstanceError::with_source("No drm resource handles found".to_string(), e)
+        })?;
+        for connector_handle in resources.connectors() {
+            let Ok(connector_info) = card.get_connector(*connector_handle, false) else {
+                continue;
+            };
+            if connector_info.state() != connector::State::Connected {
+                continue;
+            }
+
+            if let Some(encoder_handle) = connector_info.current_encoder() {
+                if let Ok(encoder_info) = card.get_encoder(encoder_handle) {
+                    if encoder_info.crtc() == Some(crtc_handle) {
+                        connector_and_mode = Some((*connector_handle, mode));
+                        break;
+                    }
+                }
+            }
+        }
+
+        let (connector_handle, mode) = connector_and_mode.ok_or(crate::InstanceError::new(
+            "Failed to derive drm connector and mode for plane".to_string(),
+        ))?;
+        let (width, height) = mode.size();
+        // Rate in millihertz
+        let refresh_rate = (((mode.clock() as f64 * 1000.0)
+            / (mode.hsync().2 as f64 * mode.vsync().2 as f64))
+            * 1000.0)
+            .round() as u32;
+        unsafe {
+            self.create_surface_from_drm(
+                fd,
+                plane,
+                connector_handle.into(),
+                width as u32,
+                height as u32,
+                refresh_rate,
+            )
+        }
+    }
+
     /// Creates a new surface from the given drm configuration.
     ///
     /// # Safety
