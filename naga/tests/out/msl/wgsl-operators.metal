@@ -45,12 +45,12 @@ metal::float4 splat(
 metal::float2 splat_assignment(
 ) {
     metal::float2 a = metal::float2(2.0);
-    metal::float2 _e4 = a;
-    a = _e4 + metal::float2(1.0);
-    metal::float2 _e8 = a;
-    a = _e8 - metal::float2(3.0);
-    metal::float2 _e12 = a;
-    a = _e12 / metal::float2(4.0);
+    metal::float2 _e3 = a;
+    a = _e3 + metal::float2(1.0);
+    metal::float2 _e7 = a;
+    a = _e7 - metal::float2(3.0);
+    metal::float2 _e11 = a;
+    a = _e11 / metal::float2(4.0);
     metal::float2 _e15 = a;
     return _e15;
 }
@@ -356,10 +356,10 @@ void assignment(
     a_1 = as_type<int>(as_type<uint>(_e7) - as_type<uint>(1));
     int _e9 = a_1;
     int _e10 = a_1;
-    a_1 = as_type<int>(as_type<uint>(_e10) * as_type<uint>(_e9));
+    a_1 = as_type<int>(as_type<uint>(_e9) * as_type<uint>(_e10));
     int _e12 = a_1;
     int _e13 = a_1;
-    a_1 = naga_div(_e13, _e12);
+    a_1 = naga_div(_e12, _e13);
     int _e15 = a_1;
     a_1 = naga_mod(_e15, 1);
     int _e17 = a_1;

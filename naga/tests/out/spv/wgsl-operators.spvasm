@@ -616,11 +616,11 @@ OpStore %486 %492
 OpStore %486 %494
 %495 = OpLoad  %5  %486
 %496 = OpLoad  %5  %486
-%497 = OpIMul  %5  %496 %495
+%497 = OpIMul  %5  %495 %496
 OpStore %486 %497
 %498 = OpLoad  %5  %486
 %499 = OpLoad  %5  %486
-%500 = OpFunctionCall  %5  %200 %499 %498
+%500 = OpFunctionCall  %5  %200 %498 %499
 OpStore %486 %500
 %501 = OpLoad  %5  %486
 %502 = OpFunctionCall  %5  %249 %501 %22
