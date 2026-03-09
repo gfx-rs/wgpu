@@ -14,10 +14,12 @@ on:
   merge_group:
 
 env:
+  REPO_MSRV: "1.93"
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
-  REPO_MSRV: "1.93"
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
 
 # Every time a PR is pushed to, cancel any previous jobs. This
 # makes us behave nicer to github and get faster turnaround times
