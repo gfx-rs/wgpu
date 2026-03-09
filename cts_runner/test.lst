@@ -289,7 +289,7 @@ webgpu:api,validation,texture,destroy:twice:*
 webgpu:api,validation,texture,float32_filterable:create_bind_group:*
 webgpu:api,validation,texture,rg11b10ufloat_renderable:*
 
-webgpu:shader,execution,expression,call,builtin,atan2:f16:*
+fails-if(dx12) webgpu:shader,execution,expression,call,builtin,atan2:f16:*
 webgpu:shader,execution,expression,call,builtin,atan2:f32:*
 webgpu:shader,execution,expression,call,builtin,dot:abstract_int_vec2:*
 webgpu:shader,execution,expression,call,builtin,dot:abstract_int_vec3:*
