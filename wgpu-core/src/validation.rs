@@ -282,7 +282,7 @@ impl WebGpuError for InputError {
 #[non_exhaustive]
 pub enum StageError {
     #[error(
-        "Shader entry point's workgroup size {current:?} ({current_total} total invocations) must be less or equal to the per-dimension
+        "Shader entry point's workgroup size {current:?} ({current_total} total invocations) must be less or equal to the per-dimension \
         limit `Limits::{per_dimension_limit}` of {limit:?} and the total invocation limit `Limits::{total_limit}` of {total}"
     )]
     InvalidWorkgroupSize {
