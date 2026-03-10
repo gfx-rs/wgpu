@@ -181,7 +181,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 
 #### Vulkan
 
-- Add support for RawWindowHandle::Drm on unix. By @rectalogic in []().
+- Add support for RawWindowHandle::Drm on unix. By @rectalogic in [#9182](https://github.com/gfx-rs/wgpu/pull/9182).
 
 ### Bug Fixes
 
