@@ -7,7 +7,7 @@ use alloc::{
 use core::fmt;
 
 use arrayvec::ArrayVec;
-use hashbrown::hash_map::Entry;
+use hashbrown::{hash_map::Entry, HashSet};
 use shader_io_deductions::{display_deductions_as_optional_list, MaxVertexShaderOutputDeduction};
 use thiserror::Error;
 use wgt::{
@@ -188,6 +188,26 @@ pub struct Interface {
     limits: wgt::Limits,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
+}
+
+#[derive(Debug)]
+pub struct PassthroughInterface {
+    pub entry_point_names: HashSet<String>,
+}
+
+#[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
+pub enum ShaderMetaData {
+    Interface(Interface),
+    Passthrough(PassthroughInterface),
+}
+impl ShaderMetaData {
+    pub fn interface(&self) -> Option<&Interface> {
+        match self {
+            Self::Interface(i) => Some(i),
+            Self::Passthrough(_) => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Error)]

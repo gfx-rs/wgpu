@@ -1,4 +1,4 @@
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::borrow::Cow;
 
 use wgpu::util::DeviceExt;
 use wgpu_test::{
@@ -22,134 +22,50 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-// Same as in mesh shader example
-fn compile_wgsl(device: &wgpu::Device) -> wgpu::ShaderModule {
-    device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
-    })
-}
-
-fn compile_hlsl(
-    device: &wgpu::Device,
-    entry: &str,
-    stage_str: &str,
-    test_name: &str,
-) -> wgpu::ShaderModule {
-    // Each test needs its own files
-    let out_path = format!(
-        "{}/tests/wgpu-gpu/mesh_shader/{test_name}.{stage_str}.cso",
-        env!("CARGO_MANIFEST_DIR")
-    );
-    let cmd = std::process::Command::new("dxc")
-        .args([
-            "-T",
-            &format!("{stage_str}_6_5"),
-            "-E",
-            entry,
-            &format!(
-                "{}/tests/wgpu-gpu/mesh_shader/basic.hlsl",
-                env!("CARGO_MANIFEST_DIR")
-            ),
-            "-Fo",
-            &out_path,
-        ])
-        .output()
-        .unwrap();
-    if !cmd.status.success() {
-        panic!("DXC failed:\n{}", String::from_utf8(cmd.stderr).unwrap());
-    }
-    let file = std::fs::read(&out_path).unwrap();
-    std::fs::remove_file(out_path).unwrap();
-    unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-            label: None,
-            num_workgroups: (1, 1, 1),
-            dxil: Some(std::borrow::Cow::Owned(file)),
-            ..Default::default()
-        })
-    }
-}
-
-fn compile_msl(device: &wgpu::Device) -> wgpu::ShaderModule {
-    unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-            label: None,
-            msl: Some(std::borrow::Cow::Borrowed(include_str!("shader.metal"))),
-            num_workgroups: (1, 1, 1),
-            ..Default::default()
-        })
-    }
-}
-struct Shaders {
-    ts: Option<wgpu::ShaderModule>,
-    ms: wgpu::ShaderModule,
-    fs: Option<wgpu::ShaderModule>,
-    ts_name: &'static str,
-    ms_name: &'static str,
-    fs_name: &'static str,
-}
-fn get_shaders(
-    device: &wgpu::Device,
-    backend: wgpu::Backend,
-    test_name: &str,
-    info: &MeshPipelineTestInfo,
-) -> Shaders {
-    if info.divergent && info.use_task {
-        unreachable!();
-    }
-    // In the case that the platform does support mesh shaders, the dummy
-    // shader is used to avoid requiring PASSTHROUGH_SHADERS.
+fn get_shader(device: &wgpu::Device, backend: wgpu::Backend) -> wgpu::ShaderModule {
     match backend {
         wgpu::Backend::Vulkan => {
-            let compiled = compile_wgsl(device);
-            Shaders {
-                ts: info.use_task.then_some(compiled.clone()),
-                ms: compiled.clone(),
-                fs: info.use_frag.then_some(compiled),
-                ts_name: "ts_main",
-                ms_name: if info.divergent {
-                    "ms_divergent"
-                } else if info.use_task {
-                    "ms_main"
-                } else {
-                    "ms_no_ts"
-                },
-                fs_name: "fs_main",
+            // Workgroup memory zero initialization can be expensive for mesh shaders
+            unsafe {
+                device.create_shader_module_trusted(
+                    wgpu::ShaderModuleDescriptor {
+                        label: None,
+                        source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+                    },
+                    wgpu::ShaderRuntimeChecks::unchecked(),
+                )
             }
         }
-        wgpu::Backend::Dx12 => Shaders {
-            ts: info
-                .use_task
-                .then(|| compile_hlsl(device, "Task", "as", test_name)),
-            ms: compile_hlsl(
-                device,
-                if info.use_task { "Mesh" } else { "MeshNoTask" },
-                "ms",
-                test_name,
-            ),
-            fs: info
-                .use_frag
-                .then(|| compile_hlsl(device, "Frag", "ps", test_name)),
-            ts_name: "main",
-            ms_name: "main",
-            fs_name: "main",
+        wgpu::Backend::Dx12 | wgpu::Backend::Metal => unsafe {
+            device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
+                label: None,
+                entry_points: Cow::Borrowed(&[
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: "ts_main".into(),
+                        workgroup_size: (1, 1, 1),
+                    },
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: "ms_main".into(),
+                        workgroup_size: (1, 1, 1),
+                    },
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: "ms_no_ts".into(),
+                        workgroup_size: (1, 1, 1),
+                    },
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: "fs_main".into(),
+                        workgroup_size: (0, 0, 0),
+                    },
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: "ms_divergent".into(),
+                        workgroup_size: (1, 1, 1),
+                    },
+                ]),
+                hlsl: Some(Cow::Borrowed(include_str!("shader.hlsl"))),
+                msl: Some(Cow::Borrowed(include_str!("shader.metal"))),
+                ..Default::default()
+            })
         },
-        wgpu::Backend::Metal => {
-            let compiled = compile_msl(device);
-            Shaders {
-                ts: info.use_task.then_some(compiled.clone()),
-                ms: compiled.clone(),
-                fs: info.use_frag.then_some(compiled),
-                ts_name: "taskShader",
-                ms_name: if info.use_task {
-                    "meshShader"
-                } else {
-                    "meshNoTaskShader"
-                },
-                fs_name: "fragShader",
-            }
-        }
         _ => unreachable!(),
     }
 }
@@ -190,26 +106,12 @@ struct MeshPipelineTestInfo {
     divergent: bool,
 }
 
-fn hash_testing_context(ctx: &TestingContext) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    ctx.hash(&mut hasher);
-    hasher.finish()
-}
-
 fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
     let backend = ctx.adapter.get_info().backend;
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
 
-    let test_hash = hash_testing_context(ctx).to_string();
-    let Shaders {
-        ts,
-        ms,
-        fs,
-        ts_name,
-        ms_name,
-        fs_name,
-    } = get_shaders(device, backend, &test_hash, &info);
+    let shader = get_shader(device, backend);
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
@@ -218,19 +120,25 @@ fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
     let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
         label: None,
         layout: Some(&layout),
-        task: ts.as_ref().map(|task| wgpu::TaskState {
-            module: task,
-            entry_point: Some(ts_name),
-            compilation_options: Default::default(),
+        task: info.use_task.then_some(wgpu::TaskState {
+            module: &shader,
+            entry_point: Some("ts_main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),
         mesh: wgpu::MeshState {
-            module: &ms,
-            entry_point: Some(ms_name),
+            module: &shader,
+            entry_point: Some(if info.divergent && info.use_task {
+                "ms_divergent"
+            } else if info.use_task {
+                "ms_main"
+            } else {
+                "ms_no_ts"
+            }),
             compilation_options: Default::default(),
         },
-        fragment: fs.as_ref().map(|frag| wgpu::FragmentState {
-            module: frag,
-            entry_point: Some(fs_name),
+        fragment: info.use_frag.then_some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_main"),
             targets: &[],
             compilation_options: Default::default(),
         }),
@@ -285,17 +193,8 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestIn
     let backend = ctx.adapter.get_info().backend;
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
-    let test_hash = hash_testing_context(ctx).to_string();
 
-    let Shaders {
-        ts,
-        ms,
-        fs,
-        ts_name,
-        ms_name,
-        fs_name,
-    } = get_shaders(device, backend, &test_hash, &info);
-    let frag = fs.unwrap();
+    let shader = get_shader(device, backend);
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
@@ -304,19 +203,25 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestIn
     let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
         label: None,
         layout: Some(&layout),
-        task: ts.as_ref().map(|task| wgpu::TaskState {
-            module: task,
-            entry_point: Some(ts_name),
-            compilation_options: Default::default(),
+        task: info.use_task.then_some(wgpu::TaskState {
+            module: &shader,
+            entry_point: Some("ts_main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),
         mesh: wgpu::MeshState {
-            module: &ms,
-            entry_point: Some(ms_name),
+            module: &shader,
+            entry_point: Some(if info.divergent && info.use_task {
+                "ms_divergent"
+            } else if info.use_task {
+                "ms_main"
+            } else {
+                "ms_no_ts"
+            }),
             compilation_options: Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
-            module: &frag,
-            entry_point: Some(fs_name),
+            module: &shader,
+            entry_point: Some("fs_main"),
             targets: &[],
             compilation_options: Default::default(),
         }),

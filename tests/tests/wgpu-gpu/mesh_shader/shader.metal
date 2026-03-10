@@ -44,14 +44,14 @@ constant float4 colors[3] = {
 
 
 [[object]]
-void taskShader(uint3 tid [[thread_position_in_grid]], object_data PayloadData &outPayload [[payload]], mesh_grid_properties grid) {
+void ts_main(uint3 tid [[thread_position_in_grid]], object_data PayloadData &outPayload [[payload]], mesh_grid_properties grid) {
     outPayload.ColorMask = float4(1.0, 1.0, 0.0, 1.0);
     outPayload.Visible = true;
     grid.set_threadgroups_per_grid(uint3(3, 1, 1));
 }
 
 [[mesh]]
-void meshShader(
+void ms_main(
     object_data PayloadData const& payload [[payload]],
     Meshlet out
 )
@@ -73,7 +73,7 @@ void meshShader(
 }
 
 [[mesh]]
-void meshNoTaskShader(
+void ms_no_ts(
     Meshlet out
 )
 {
@@ -93,6 +93,6 @@ void meshNoTaskShader(
     out.set_primitive(0, prim);
 }
 
-fragment float4 fragShader(FragmentIn data [[stage_in]]) {
+fragment float4 fs_main(FragmentIn data [[stage_in]]) {
     return data.Color * data.ColorMask;
 }

@@ -5,7 +5,7 @@ mod replay;
 
 use core::convert::Infallible;
 
-use alloc::{string::String, vec::Vec};
+use alloc::{borrow::Cow, string::String, vec::Vec};
 use macro_rules_attribute::apply;
 
 use crate::{
@@ -189,7 +189,7 @@ pub enum Action<'a, R: ReferenceType> {
         data: Vec<Data>,
 
         label: crate::Label<'a>,
-        num_workgroups: (u32, u32, u32),
+        entry_points: Cow<'a, [wgt::PassthroughShaderEntryPoint<'a>]>,
     },
     DestroyShaderModule(PointerId<markers::ShaderModule>),
     CreateComputePipeline {

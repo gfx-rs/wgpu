@@ -158,6 +158,9 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Added support for `insert_debug_marker`, `push_debug_group` and `pop_debug_group`. By @evilpie in [#9017](https://github.com/gfx-rs/wgpu/pull/9017).
 - Added support for `begin_occlusion_query` and `end_occlusion_query`. By @evilpie in [#9039](https://github.com/gfx-rs/wgpu/pull/9039).
 
+#### GLES
+- Added support for GLSL passthrough. By @inner-daemons in [#9064](https://github.com/gfx-rs/wgpu/pull/9064).
+
 ### Changes
 
 #### General
@@ -247,6 +250,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 #### General
 
 - Tracing now uses the `.metal` extension for metal source files, instead of `.msl`. By @inner-daemons in #8880.
+- Passthrough shaders now require a list of entry points when being created. by @inner-daemons in [#9064](https://github.com/gfx-rs/wgpu/pull/9064).
 
 #### naga
 

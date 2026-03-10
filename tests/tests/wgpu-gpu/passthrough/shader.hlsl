@@ -8,7 +8,7 @@ struct VSOut
 #ifdef SPIRV
 [shader("vertex")]
 #endif
-VSOut vertex_main(uint vid: SV_VertexID)
+VSOut vs_main(uint vid: SV_VertexID)
 {
     VSOut output;
 
@@ -25,7 +25,7 @@ VSOut vertex_main(uint vid: SV_VertexID)
 #ifdef SPIRV
 [shader("pixel")]
 #endif
-float4 fragment_main(VSOut input) : SV_TARGET
+float4 fs_main(VSOut input) : SV_TARGET
 {
     return float4(1.0, 1.0, 1.0, 1.0);
 }

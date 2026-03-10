@@ -1604,13 +1604,11 @@ impl crate::Queue for Queue {
 #[derive(Debug)]
 pub struct DxilPassthroughShader {
     pub shader: Vec<u8>,
-    pub num_workgroups: (u32, u32, u32),
 }
 
 #[derive(Debug)]
 pub struct HlslPassthroughShader {
     pub shader: String,
-    pub num_workgroups: (u32, u32, u32),
 }
 
 #[derive(Debug)]

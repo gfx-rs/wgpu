@@ -1,102 +1,43 @@
-// Same as in mesh shader tests
-fn compile_wgsl(device: &wgpu::Device) -> wgpu::ShaderModule {
-    // Workgroup memory zero initialization can be expensive for mesh shaders
-    unsafe {
-        device.create_shader_module_trusted(
-            wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
-            },
-            wgpu::ShaderRuntimeChecks::unchecked(),
-        )
-    }
-}
-fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::ShaderModule {
-    let out_path = format!(
-        "{}/src/mesh_shader/shader.{stage_str}.cso",
-        env!("CARGO_MANIFEST_DIR")
-    );
-    let cmd = std::process::Command::new("dxc")
-        .args([
-            "-T",
-            &format!("{stage_str}_6_5"),
-            "-E",
-            entry,
-            &format!("{}/src/mesh_shader/shader.hlsl", env!("CARGO_MANIFEST_DIR")),
-            "-Fo",
-            &out_path,
-        ])
-        .output()
-        .unwrap();
-    if !cmd.status.success() {
-        panic!("DXC failed:\n{}", String::from_utf8(cmd.stderr).unwrap());
-    }
-    let file = std::fs::read(&out_path).unwrap();
-    std::fs::remove_file(out_path).unwrap();
-    unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-            label: None,
-            num_workgroups: (1, 1, 1),
-            dxil: Some(std::borrow::Cow::Owned(file)),
-            ..Default::default()
-        })
-    }
-}
+use std::borrow::Cow;
 
-fn compile_msl(device: &wgpu::Device) -> wgpu::ShaderModule {
-    unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-            label: None,
-            msl: Some(std::borrow::Cow::Borrowed(include_str!("shader.metal"))),
-            num_workgroups: (1, 1, 1),
-            ..Default::default()
-        })
-    }
-}
-
-struct Shaders {
-    ts: wgpu::ShaderModule,
-    ms: wgpu::ShaderModule,
-    fs: wgpu::ShaderModule,
-    ts_name: &'static str,
-    ms_name: &'static str,
-    fs_name: &'static str,
-}
-
-fn get_shaders(device: &wgpu::Device, backend: wgpu::Backend) -> Shaders {
+fn get_shader(device: &wgpu::Device, backend: wgpu::Backend) -> wgpu::ShaderModule {
     // In the case that the platform does support mesh shaders, the dummy
     // shader is used to avoid requiring PASSTHROUGH_SHADERS.
     match backend {
         wgpu::Backend::Vulkan => {
-            let compiled = compile_wgsl(device);
-            Shaders {
-                ts: compiled.clone(),
-                ms: compiled.clone(),
-                fs: compiled.clone(),
-                ts_name: "ts_main",
-                ms_name: "ms_main",
-                fs_name: "fs_main",
+            // Workgroup memory zero initialization can be expensive for mesh shaders
+            unsafe {
+                device.create_shader_module_trusted(
+                    wgpu::ShaderModuleDescriptor {
+                        label: None,
+                        source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+                    },
+                    wgpu::ShaderRuntimeChecks::unchecked(),
+                )
             }
         }
-        wgpu::Backend::Dx12 => Shaders {
-            ts: compile_hlsl(device, "Task", "as"),
-            ms: compile_hlsl(device, "Mesh", "ms"),
-            fs: compile_hlsl(device, "Frag", "ps"),
-            ts_name: "main",
-            ms_name: "main",
-            fs_name: "main",
+        wgpu::Backend::Dx12 | wgpu::Backend::Metal => unsafe {
+            device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
+                label: None,
+                entry_points: Cow::Borrowed(&[
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: "ts_main".into(),
+                        workgroup_size: (1, 1, 1),
+                    },
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: "ms_main".into(),
+                        workgroup_size: (1, 1, 1),
+                    },
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: "fs_main".into(),
+                        workgroup_size: (0, 0, 0),
+                    },
+                ]),
+                hlsl: Some(Cow::Borrowed(include_str!("shader.hlsl"))),
+                msl: Some(Cow::Borrowed(include_str!("shader.metal"))),
+                ..Default::default()
+            })
         },
-        wgpu::Backend::Metal => {
-            let compiled = compile_msl(device);
-            Shaders {
-                ts: compiled.clone(),
-                ms: compiled.clone(),
-                fs: compiled.clone(),
-                ts_name: "taskShader",
-                ms_name: "meshShader",
-                fs_name: "fragShader",
-            }
-        }
         _ => unreachable!(),
     }
 }
@@ -111,14 +52,7 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
-        let Shaders {
-            ts,
-            ms,
-            fs,
-            ts_name,
-            ms_name,
-            fs_name,
-        } = get_shaders(device, adapter.get_info().backend);
+        let shader = get_shader(device, adapter.get_info().backend);
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
@@ -128,18 +62,18 @@ impl crate::framework::Example for Example {
             label: None,
             layout: Some(&pipeline_layout),
             task: Some(wgpu::TaskState {
-                module: &ts,
-                entry_point: Some(ts_name),
+                module: &shader,
+                entry_point: Some("ts_main"),
                 compilation_options: Default::default(),
             }),
             mesh: wgpu::MeshState {
-                module: &ms,
-                entry_point: Some(ms_name),
+                module: &shader,
+                entry_point: Some("ms_main"),
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
-                module: &fs,
-                entry_point: Some(fs_name),
+                module: &shader,
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(config.view_formats[0].into())],
             }),

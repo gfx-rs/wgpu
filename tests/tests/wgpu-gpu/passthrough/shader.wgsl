@@ -3,7 +3,7 @@ struct VSOut {
 };
 
 @vertex
-fn vertex_main(@builtin(vertex_index) vid: u32) -> VSOut {
+fn vs_main(@builtin(vertex_index) vid: u32) -> VSOut {
     var out: VSOut;
     
     // Hardcoded triangle in clip space
@@ -18,6 +18,6 @@ fn vertex_main(@builtin(vertex_index) vid: u32) -> VSOut {
 }
 
 @fragment
-fn fragment_main(in: VSOut) -> @location(0) vec4<f32> {
+fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
     return vec4<f32>(1.0, 1.0, 1.0, 1.0);
 }

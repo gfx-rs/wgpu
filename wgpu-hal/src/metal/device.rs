@@ -324,21 +324,24 @@ impl super::Device {
                     immutable_buffer_mask,
                 })
             }
-            ShaderModuleSource::Passthrough(ref shader) => Ok(CompiledShader {
-                library: shader.library.clone(),
-                function: shader
-                    .library
-                    .newFunctionWithName(&NSString::from_str(stage.entry_point))
-                    .ok_or(crate::PipelineError::EntryPoint(naga_stage))?,
-                wg_size: MTLSize {
-                    width: shader.num_workgroups.0 as usize,
-                    height: shader.num_workgroups.1 as usize,
-                    depth: shader.num_workgroups.2 as usize,
-                },
-                wg_memory_sizes: vec![],
-                sized_bindings: vec![],
-                immutable_buffer_mask: 0,
-            }),
+            ShaderModuleSource::Passthrough(ref shader) => {
+                let size = shader.num_workgroups[stage.entry_point];
+                Ok(CompiledShader {
+                    library: shader.library.clone(),
+                    function: shader
+                        .library
+                        .newFunctionWithName(&NSString::from_str(stage.entry_point))
+                        .ok_or(crate::PipelineError::EntryPoint(naga_stage))?,
+                    wg_size: MTLSize {
+                        width: size.0 as usize,
+                        height: size.1 as usize,
+                        depth: size.2 as usize,
+                    },
+                    wg_memory_sizes: vec![],
+                    sized_bindings: vec![],
+                    immutable_buffer_mask: 0,
+                })
+            }
         }
     }
 
@@ -1669,6 +1672,7 @@ impl crate::Device for super::Device {
 
             let module = desc.stage.module;
             let cs = if let ShaderModuleSource::Passthrough(passthrough_desc) = &module.source {
+                let size = passthrough_desc.num_workgroups[desc.stage.entry_point];
                 CompiledShader {
                     library: passthrough_desc.library.clone(),
                     function: passthrough_desc
@@ -1676,9 +1680,9 @@ impl crate::Device for super::Device {
                         .newFunctionWithName(&NSString::from_str(desc.stage.entry_point))
                         .ok_or(crate::PipelineError::EntryPoint(naga::ShaderStage::Compute))?,
                     wg_size: MTLSize {
-                        width: passthrough_desc.num_workgroups.0 as usize,
-                        height: passthrough_desc.num_workgroups.1 as usize,
-                        depth: passthrough_desc.num_workgroups.2 as usize,
+                        width: size.0 as usize,
+                        height: size.1 as usize,
+                        depth: size.2 as usize,
                     },
                     wg_memory_sizes: vec![],
                     sized_bindings: vec![],

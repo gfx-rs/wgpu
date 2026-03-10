@@ -2351,24 +2351,21 @@ pub enum ShaderInput<'a> {
     Naga(NagaShader),
     MetalLib {
         file: &'a [u8],
-        num_workgroups: (u32, u32, u32),
+        num_workgroups: hashbrown::HashMap<String, (u32, u32, u32)>,
     },
     Msl {
         shader: &'a str,
-        num_workgroups: (u32, u32, u32),
+        num_workgroups: hashbrown::HashMap<String, (u32, u32, u32)>,
     },
     SpirV(&'a [u32]),
     Dxil {
         shader: &'a [u8],
-        num_workgroups: (u32, u32, u32),
     },
     Hlsl {
         shader: &'a str,
-        num_workgroups: (u32, u32, u32),
     },
     Glsl {
         shader: &'a str,
-        num_workgroups: (u32, u32, u32),
     },
 }
 

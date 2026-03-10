@@ -269,7 +269,7 @@ impl Player {
                 id,
                 data,
                 label,
-                num_workgroups,
+                entry_points,
             } => {
                 let spirv = data.iter().find_map(|a| {
                     if a.kind() == DataKind::Spv {
@@ -281,27 +281,33 @@ impl Player {
                         None
                     }
                 });
-                let dxil = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::Dxil).then(|| loader.load(a)));
-                let hlsl = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::Hlsl).then(|| loader.load_utf8(a)));
-                let metallib = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::MetalLib).then(|| loader.load(a)));
-                let msl = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::Msl).then(|| loader.load_utf8(a)));
-                let glsl = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::Glsl).then(|| loader.load_utf8(a)));
-                let wgsl = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::Wgsl).then(|| loader.load_utf8(a)));
+                let dxil = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::Dxil).then(|| Cow::Owned(loader.load(a).into_owned()))
+                });
+                let hlsl = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::Hlsl)
+                        .then(|| Cow::Owned(loader.load_utf8(a).into_owned()))
+                });
+                let metallib = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::MetalLib)
+                        .then(|| Cow::Owned(loader.load(a).into_owned()))
+                });
+                let msl = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::Msl)
+                        .then(|| Cow::Owned(loader.load_utf8(a).into_owned()))
+                });
+                let glsl = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::Glsl)
+                        .then(|| Cow::Owned(loader.load_utf8(a).into_owned()))
+                });
+                let wgsl = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::Wgsl)
+                        .then(|| Cow::Owned(loader.load_utf8(a).into_owned()))
+                });
+
                 let desc = wgt::CreateShaderModuleDescriptorPassthrough {
                     label,
-                    num_workgroups,
+                    entry_points,
 
                     spirv,
                     dxil,

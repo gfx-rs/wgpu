@@ -53,7 +53,7 @@ use crate::{
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     timestamp_normalization::TIMESTAMP_NORMALIZATION_BUFFER_USES,
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
-    validation,
+    validation::{self, PassthroughInterface, ShaderMetaData},
     weak_vec::WeakVec,
     FastHashMap, LabelHelpers, OnceCellOrLock,
 };
@@ -2353,7 +2353,7 @@ impl Device {
         let module = pipeline::ShaderModule {
             raw: ManuallyDrop::new(raw),
             device: self.clone(),
-            interface: Some(interface),
+            interface: ShaderMetaData::Interface(interface),
             label: desc.label.to_string(),
         };
 
@@ -2372,6 +2372,21 @@ impl Device {
         self.check_is_valid()?;
         self.require_features(wgt::Features::PASSTHROUGH_SHADERS)?;
 
+        // Mainly important for GLSL or SPIR-V or DXIL, which each take exactly 1 entry point.
+        if (descriptor.dxil.is_some() || descriptor.glsl.is_some())
+            && descriptor.entry_points.len() != 1
+        {
+            return Err(pipeline::CreateShaderModuleError::IncorrectPassthroughEntryPointCount);
+        }
+
+        let entry_point_hashmap = || {
+            descriptor
+                .entry_points
+                .iter()
+                .map(|e| (e.name.to_string(), e.workgroup_size))
+                .collect()
+        };
+
         let hal_shader = match self.backend() {
             wgt::Backend::Vulkan => hal::ShaderInput::SpirV(
                 descriptor
@@ -2381,15 +2396,9 @@ impl Device {
             ),
             wgt::Backend::Dx12 => {
                 if let Some(dxil) = &descriptor.dxil {
-                    hal::ShaderInput::Dxil {
-                        shader: dxil,
-                        num_workgroups: descriptor.num_workgroups,
-                    }
+                    hal::ShaderInput::Dxil { shader: dxil }
                 } else if let Some(hlsl) = &descriptor.hlsl {
-                    hal::ShaderInput::Hlsl {
-                        shader: hlsl,
-                        num_workgroups: descriptor.num_workgroups,
-                    }
+                    hal::ShaderInput::Hlsl { shader: hlsl }
                 } else {
                     return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend);
                 }
@@ -2398,12 +2407,12 @@ impl Device {
                 if let Some(metallib) = &descriptor.metallib {
                     hal::ShaderInput::MetalLib {
                         file: metallib,
-                        num_workgroups: descriptor.num_workgroups,
+                        num_workgroups: entry_point_hashmap(),
                     }
                 } else if let Some(msl) = &descriptor.msl {
                     hal::ShaderInput::Msl {
                         shader: msl,
-                        num_workgroups: descriptor.num_workgroups,
+                        num_workgroups: entry_point_hashmap(),
                     }
                 } else {
                     return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend);
@@ -2414,7 +2423,6 @@ impl Device {
                     .glsl
                     .as_ref()
                     .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
-                num_workgroups: descriptor.num_workgroups,
             },
             wgt::Backend::Noop => {
                 return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend)
@@ -2445,7 +2453,13 @@ impl Device {
         let module = pipeline::ShaderModule {
             raw: ManuallyDrop::new(raw),
             device: self.clone(),
-            interface: None,
+            interface: ShaderMetaData::Passthrough(PassthroughInterface {
+                entry_point_names: descriptor
+                    .entry_points
+                    .iter()
+                    .map(|e| e.name.to_string())
+                    .collect(),
+            }),
             label: descriptor.label.to_string(),
         };
 
@@ -3818,7 +3832,7 @@ impl Device {
                 desc.stage.entry_point.as_ref().map(|ep| ep.as_ref()),
             )?;
 
-            if let Some(ref interface) = shader_module.interface {
+            if let Some(interface) = shader_module.interface.interface() {
                 let _ = interface.check_stage(
                     &mut binding_layout_source,
                     &mut shader_binding_sizes,
@@ -4359,7 +4373,7 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(ref interface) = vertex_shader_module.interface {
+                    if let Some(interface) = vertex_shader_module.interface.interface() {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -4402,7 +4416,7 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(ref interface) = task_shader_module.interface {
+                    if let Some(interface) = task_shader_module.interface.interface() {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -4443,7 +4457,7 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(ref interface) = mesh_shader_module.interface {
+                    if let Some(interface) = mesh_shader_module.interface.interface() {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -4494,7 +4508,7 @@ impl Device {
                     )
                     .map_err(stage_err)?;
 
-                if let Some(ref interface) = shader_module.interface {
+                if let Some(interface) = shader_module.interface.interface() {
                     io = interface
                         .check_stage(
                             &mut binding_layout_source,

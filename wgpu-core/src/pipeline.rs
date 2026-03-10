@@ -1,7 +1,7 @@
 use alloc::{
-    borrow::Cow,
+    borrow::{Cow, ToOwned},
     boxed::Box,
-    string::{String, ToString as _},
+    string::String,
     sync::Arc,
     vec::Vec,
 };
@@ -22,7 +22,9 @@ use crate::{
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
     resource::{InvalidResourceError, Labeled, TrackingData},
-    resource_log, validation, Label,
+    resource_log,
+    validation::{self, ShaderMetaData},
+    Label,
 };
 
 /// Information about buffer bindings, which
@@ -64,7 +66,7 @@ pub type ShaderModuleDescriptorPassthrough<'a> =
 pub struct ShaderModule {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynShaderModule>>,
     pub(crate) device: Arc<Device>,
-    pub(crate) interface: Option<validation::Interface>,
+    pub(crate) interface: ShaderMetaData,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
 }
@@ -95,11 +97,29 @@ impl ShaderModule {
         stage: naga::ShaderStage,
         entry_point: Option<&str>,
     ) -> Result<String, validation::StageError> {
-        match &self.interface {
-            Some(interface) => interface.finalize_entry_point_name(stage, entry_point),
-            None => entry_point
-                .map(|ep| ep.to_string())
-                .ok_or(validation::StageError::NoEntryPointFound),
+        match self.interface {
+            ShaderMetaData::Interface(ref interface) => {
+                interface.finalize_entry_point_name(stage, entry_point)
+            }
+            ShaderMetaData::Passthrough(ref interface) => {
+                if let Some(ep) = entry_point {
+                    if interface.entry_point_names.contains(ep) {
+                        Ok(ep.to_owned())
+                    } else {
+                        Err(validation::StageError::MissingEntryPoint(ep.to_owned()))
+                    }
+                } else {
+                    if interface.entry_point_names.len() != 1 {
+                        return Err(validation::StageError::MultipleEntryPointsFound);
+                    }
+                    Ok(interface
+                        .entry_point_names
+                        .iter()
+                        .next()
+                        .unwrap()
+                        .to_owned())
+                }
+            }
         }
     }
 }
@@ -135,6 +155,10 @@ pub enum CreateShaderModuleError {
     },
     #[error("Generic shader passthrough does not contain any code compatible with this backend.")]
     NotCompiledForBackend,
+    #[error(
+        "Generic passthrough shaders which use GLSL or DXIL must contain exactly one entry point."
+    )]
+    IncorrectPassthroughEntryPointCount,
 }
 
 impl WebGpuError for CreateShaderModuleError {
@@ -145,14 +169,16 @@ impl WebGpuError for CreateShaderModuleError {
 
             Self::Generation => ErrorType::Internal,
 
-            Self::Validation(..) | Self::InvalidGroupIndex { .. } => ErrorType::Validation,
+            Self::Validation(..)
+            | Self::InvalidGroupIndex { .. }
+            | Self::IncorrectPassthroughEntryPointCount
+            | Self::NotCompiledForBackend => ErrorType::Validation,
             #[cfg(feature = "wgsl")]
             Self::Parsing(..) => ErrorType::Validation,
             #[cfg(feature = "glsl")]
             Self::ParsingGlsl(..) => ErrorType::Validation,
             #[cfg(feature = "spirv")]
             Self::ParsingSpirV(..) => ErrorType::Validation,
-            Self::NotCompiledForBackend => ErrorType::Validation,
         }
     }
 }

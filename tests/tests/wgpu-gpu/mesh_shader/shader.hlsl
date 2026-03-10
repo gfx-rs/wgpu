@@ -18,14 +18,14 @@ struct EmptyPayload
 groupshared EmptyPayload _emptyPayload;
 
 [numthreads(1, 1, 1)]
-void Task()
+void ts_main()
 {
     DispatchMesh(1, 1, 1, _emptyPayload);
 }
 
 [outputtopology("triangle")]
 [numthreads(1, 1, 1)]
-void Mesh(out indices uint3 triangles[1], out vertices OutVertex vertices[3], in payload EmptyPayload _emptyPayload)
+void ms_main(out indices uint3 triangles[1], out vertices OutVertex vertices[3], in payload EmptyPayload _emptyPayload)
 {
     SetMeshOutputCounts(3, 1);
 
@@ -42,7 +42,7 @@ void Mesh(out indices uint3 triangles[1], out vertices OutVertex vertices[3], in
 
 [outputtopology("triangle")]
 [numthreads(1, 1, 1)]
-void MeshNoTask(out indices uint3 triangles[1], out vertices OutVertex vertices[3])
+void ms_no_ts(out indices uint3 triangles[1], out vertices OutVertex vertices[3])
 {
     SetMeshOutputCounts(3, 1);
 
@@ -57,7 +57,7 @@ void MeshNoTask(out indices uint3 triangles[1], out vertices OutVertex vertices[
     triangles[0] = uint3(0, 1, 2);
 }
 
-float4 Frag(InVertex vertex) : SV_Target
+float4 fs_main(InVertex vertex) : SV_Target
 {
     return vertex.Color;
 }

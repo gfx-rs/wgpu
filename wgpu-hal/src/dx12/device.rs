@@ -1833,24 +1833,16 @@ impl crate::Device for super::Device {
                 raw_name,
                 runtime_checks: desc.runtime_checks,
             }),
-            crate::ShaderInput::Dxil {
-                shader,
-                num_workgroups,
-            } => Ok(super::ShaderModule {
+            crate::ShaderInput::Dxil { shader } => Ok(super::ShaderModule {
                 source: super::ShaderModuleSource::DxilPassthrough(super::DxilPassthroughShader {
                     shader: shader.to_vec(),
-                    num_workgroups,
                 }),
                 raw_name,
                 runtime_checks: desc.runtime_checks,
             }),
-            crate::ShaderInput::Hlsl {
-                shader,
-                num_workgroups,
-            } => Ok(super::ShaderModule {
+            crate::ShaderInput::Hlsl { shader } => Ok(super::ShaderModule {
                 source: super::ShaderModuleSource::HlslPassthrough(super::HlslPassthroughShader {
                     shader: shader.to_owned(),
-                    num_workgroups,
                 }),
                 raw_name,
                 runtime_checks: desc.runtime_checks,
