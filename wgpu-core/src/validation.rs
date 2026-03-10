@@ -1427,7 +1427,7 @@ impl Interface {
                 .iter()
                 .fold(1u32, |total, &dim| total.saturating_mul(dim));
 
-            let workgroup_size_is_zero = entry_point.workgroup_size.contains(&0);
+            let workgroup_size_is_zero = total_invocations == 0;
             let too_many_invocations = total_invocations > max_workgroup_size_total;
             let dimension_too_large = entry_point.workgroup_size[0] > max_workgroup_size_limits[0]
                 || entry_point.workgroup_size[1] > max_workgroup_size_limits[1]
