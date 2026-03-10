@@ -1426,13 +1426,13 @@ impl Interface {
                 .workgroup_size
                 .iter()
                 .fold(1u32, |total, &dim| total.saturating_mul(dim));
+            let invalid_total_invocations =
+                total_invocations > max_workgroup_size_total || total_invocations == 0;
 
-            let workgroup_size_is_zero = total_invocations == 0;
-            let too_many_invocations = total_invocations > max_workgroup_size_total;
             let dimension_too_large = entry_point.workgroup_size[0] > max_workgroup_size_limits[0]
                 || entry_point.workgroup_size[1] > max_workgroup_size_limits[1]
                 || entry_point.workgroup_size[2] > max_workgroup_size_limits[2];
-            if workgroup_size_is_zero || too_many_invocations || dimension_too_large {
+            if invalid_total_invocations || dimension_too_large {
                 return Err(StageError::InvalidWorkgroupSize {
                     current: entry_point.workgroup_size,
                     current_total: total_invocations,
