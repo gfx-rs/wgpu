@@ -78,6 +78,7 @@ BREAKING CHANGE: The `depth_write_enabled` and `depth_compare` members of `Depth
 There is also a new constructor `DepthStencilState::stencil` which may be used instead of a struct literal for stencil operations.
 
 Example 1: A configuration that does a depth test and writes updated values:
+
 ```diff
  depth_stencil: Some(wgpu::DepthStencilState {
      format: wgpu::TextureFormat::Depth32Float,
@@ -91,6 +92,7 @@ Example 1: A configuration that does a depth test and writes updated values:
 ```
 
 Example 2: A configuration with only stencil:
+
 ```diff
  depth_stencil: Some(wgpu::DepthStencilState {
      format: wgpu::TextureFormat::Stencil8,
@@ -104,6 +106,7 @@ Example 2: A configuration with only stencil:
 ```
 
 Example 3: The previous example written using the new `stencil()` constructor:
+
 ```rust
 depth_stencil: Some(wgpu::DepthStencilState::stencil(
     wgpu::TextureFormat::Stencil8,
