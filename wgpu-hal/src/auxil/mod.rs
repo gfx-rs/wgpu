@@ -137,12 +137,6 @@ impl crate::TextureCopy {
 /// Other limits are left unchanged.
 #[cfg_attr(not(any_backend), allow(dead_code))]
 pub(crate) fn apply_hal_limits(mut limits: wgt::Limits) -> wgt::Limits {
-    // The Metal backend maintains two copies of many limit values (one as
-    // `wgt::Limits` and one as `metal::PrivateCapabilities`). In order to avoid
-    // confusing discrepancies between the two, some of the logic here is
-    // duplicated in the initialization of `metal::PrivateCapabilities`.
-    // See <https://github.com/gfx-rs/wgpu/issues/8715>.
-
     limits.max_bind_groups = limits.max_bind_groups.min(crate::MAX_BIND_GROUPS as u32);
     limits.max_vertex_buffers = limits
         .max_vertex_buffers

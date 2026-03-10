@@ -118,7 +118,8 @@ impl crate::Adapter for super::Adapter {
         use crate::TextureFormatCapabilities as Tfc;
         use wgt::TextureFormat as Tf;
 
-        let pc = &self.shared.private_caps;
+        let msl_version = self.shared.private_caps.msl_version;
+        let pc = &self.shared.private_texture_format_caps;
         // Affected formats documented at:
         // https://developer.apple.com/documentation/metal/mtlreadwritetexturetier/mtlreadwritetexturetier1?language=objc
         // https://developer.apple.com/documentation/metal/mtlreadwritetexturetier/mtlreadwritetexturetier2?language=objc
@@ -141,7 +142,7 @@ impl crate::Adapter for super::Adapter {
         } else {
             Tfc::empty()
         };
-        let is_not_apple1x = super::PrivateCapabilities::supports_any(
+        let is_not_apple1x = super::CapabilitiesQuery::supports_any(
             self.shared.device.as_ref(),
             &[
                 MTLFeatureSet::iOS_GPUFamily2_v1,
@@ -150,7 +151,7 @@ impl crate::Adapter for super::Adapter {
             ],
         );
 
-        let image_atomic_if = if pc.msl_version >= MTLLanguageVersion::Version3_1 {
+        let image_atomic_if = if msl_version >= MTLLanguageVersion::Version3_1 {
             Tfc::STORAGE_ATOMIC
         } else {
             Tfc::empty()
@@ -389,7 +390,11 @@ impl crate::Adapter for super::Adapter {
             wgt::TextureFormat::Bgra8UnormSrgb,
             wgt::TextureFormat::Rgba16Float,
         ];
-        if self.shared.private_caps.format_rgb10a2_unorm_all {
+        if self
+            .shared
+            .private_texture_format_caps
+            .format_rgb10a2_unorm_all
+        {
             formats.push(wgt::TextureFormat::Rgb10a2Unorm);
         }
 
@@ -542,7 +547,7 @@ const DEPTH_CLIP_MODE: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily1_v1,
 ];
 
-impl super::PrivateCapabilities {
+impl super::CapabilitiesQuery {
     fn supports_any(raw: &ProtocolObject<dyn MTLDevice>, features_sets: &[MTLFeatureSet]) -> bool {
         features_sets
             .iter()
@@ -658,11 +663,6 @@ impl super::PrivateCapabilities {
             MTLLanguageVersion::Version1_0
         };
 
-        // The `PrivateCapabilities` we are constructing here duplicates many of the limits
-        // in `wgt::Limits`, creating a risk of confusion if the limits are adjusted between
-        // the initialization here and the final `wgt::Limits` values. To reduce this risk,
-        // some of the calculations here duplicate logic in `auxil::apply_hal_limits`.
-        // See <https://github.com/gfx-rs/wgpu/issues/8715>.
         Self {
             msl_version,
             // macOS 10.11 doesn't support read-write resources
@@ -1046,14 +1046,6 @@ impl super::PrivateCapabilities {
         }
     }
 
-    pub fn device_type(&self) -> wgt::DeviceType {
-        if self.has_unified_memory.unwrap_or(self.low_power) {
-            wgt::DeviceType::IntegratedGpu
-        } else {
-            wgt::DeviceType::DiscreteGpu
-        }
-    }
-
     pub fn features(&self) -> wgt::Features {
         use wgt::Features as F;
 
@@ -1210,11 +1202,7 @@ impl super::PrivateCapabilities {
             .flags
             .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
 
-        // Be careful adjusting limits here. The `AdapterShared` stores the
-        // original `PrivateCapabilities`, so code could accidentally use
-        // the wrong value. See <https://github.com/gfx-rs/wgpu/issues/8715>.
-
-        let limits = wgt::Limits {
+        let limits = crate::auxil::apply_hal_limits(wgt::Limits {
             //
             // WebGPU LIMITS:
             // Based on https://gpuweb.github.io/gpuweb/correspondence/#limits
@@ -1237,14 +1225,12 @@ impl super::PrivateCapabilities {
             max_storage_textures_per_shader_stage: self.max_textures_per_stage.1,
             max_storage_buffers_per_shader_stage: MAX_STORAGE_BUFFERS_PER_SHADER_STAGE,
             max_uniform_buffers_per_shader_stage: MAX_UNIFORM_BUFFERS_PER_SHADER_STAGE,
-            max_vertex_buffers: MAX_VERTEX_BUFFERS.min(crate::MAX_VERTEX_BUFFERS as u32), // duplicative of `apply_hal_limits`,
+            max_vertex_buffers: MAX_VERTEX_BUFFERS,
             max_buffer_size: self.max_buffer_size,
-            // Note: any adjustment here will not be reflected in the stored `PrivateCapabilities`.
             // No limit, use maxBufferSize.
             max_uniform_buffer_binding_size: self.max_buffer_size,
             // No limit, use maxBufferSize.
-            max_storage_buffer_binding_size: self.max_buffer_size
-                & !(wgt::STORAGE_BINDING_SIZE_ALIGNMENT as u64 - 1),
+            max_storage_buffer_binding_size: self.max_buffer_size,
             min_uniform_buffer_offset_alignment: self.constant_buffer_offset_alignment,
             // No documented limit. Use 32, which is the lowest allowed value.
             min_storage_buffer_offset_alignment: 32,
@@ -1303,18 +1289,7 @@ impl super::PrivateCapabilities {
             max_mesh_output_primitives: 256,
             max_mesh_output_layers: self.max_texture_layers as u32,
             max_mesh_multiview_view_count: 0,
-        };
-
-        // Since a bunch of the limits are duplicated between `Limits` and
-        // `PrivateCapabilities`, reducing the limits at this point could make
-        // things inconsistent and lead to confusion. Make sure that doesn't
-        // happen. See <https://github.com/gfx-rs/wgpu/issues/8715>.
-        debug_assert!(
-            crate::auxil::apply_hal_limits(limits.clone()) == limits,
-            "Limits were modified by apply_hal_limits\nOriginal:\n{:#?}\nModified:\n{:#?}",
-            limits,
-            crate::auxil::apply_hal_limits(limits.clone())
-        );
+        });
 
         crate::Capabilities {
             limits,
@@ -1373,6 +1348,56 @@ impl super::PrivateCapabilities {
         ]
     }
 
+    pub fn private_capabilities(&self) -> super::PrivateCapabilities {
+        super::PrivateCapabilities {
+            msl_version: self.msl_version,
+            low_power: self.low_power,
+            headless: self.headless,
+            has_unified_memory: self.has_unified_memory,
+            timestamp_query_support: self.timestamp_query_support,
+            supports_memoryless_storage: self.supports_memoryless_storage,
+            mesh_shaders: self.mesh_shaders,
+        }
+    }
+
+    pub fn private_texture_format_capabilities(&self) -> super::PrivateTextureFormatCapabilities {
+        super::PrivateTextureFormatCapabilities {
+            read_write_texture_tier: self.read_write_texture_tier,
+            sample_count_mask: self.sample_count_mask,
+            int64_atomics: self.int64_atomics,
+            msaa_desktop: self.msaa_desktop,
+            msaa_apple3: self.msaa_apple3,
+            msaa_apple7: self.msaa_apple7,
+            format_r32float_all: self.format_r32float_all,
+            format_rgba8_srgb_all: self.format_rgba8_srgb_all,
+            format_rgb10a2_uint_write: self.format_rgb10a2_uint_write,
+            format_rgb10a2_unorm_all: self.format_rgb10a2_unorm_all,
+            format_rg11b10_all: self.format_rg11b10_all,
+            format_rg32float_all: self.format_rg32float_all,
+            format_rgba32float_all: self.format_rgba32float_all,
+            format_depth16unorm: self.format_depth16unorm,
+            format_depth16unorm_filter: self.format_depth16unorm_filter,
+            format_depth32float_filter: self.format_depth32float_filter,
+            format_depth24_stencil8: self.format_depth24_stencil8,
+            format_bc: self.format_bc,
+            format_eac_etc: self.format_eac_etc,
+            format_astc: self.format_astc,
+            format_astc_hdr: self.format_astc_hdr,
+        }
+    }
+}
+
+impl super::PrivateCapabilities {
+    pub fn device_type(&self) -> wgt::DeviceType {
+        if self.has_unified_memory.unwrap_or(self.low_power) {
+            wgt::DeviceType::IntegratedGpu
+        } else {
+            wgt::DeviceType::DiscreteGpu
+        }
+    }
+}
+
+impl super::PrivateTextureFormatCapabilities {
     pub fn map_format(&self, format: wgt::TextureFormat) -> MTLPixelFormat {
         use wgt::TextureFormat as Tf;
         use MTLPixelFormat as MTL;

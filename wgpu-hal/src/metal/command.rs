@@ -560,7 +560,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         T: Iterator<Item = crate::TextureCopy>,
     {
         let dst_texture = if src.format != dst.format {
-            let raw_format = self.shared.private_caps.map_format(src.format);
+            let raw_format = self
+                .shared
+                .private_texture_format_caps
+                .map_format(src.format);
             Cow::Owned(autoreleasepool(|_| {
                 dst.raw.newTextureViewWithPixelFormat(raw_format).unwrap()
             }))

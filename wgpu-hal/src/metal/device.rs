@@ -377,8 +377,10 @@ impl super::Device {
         raw: Retained<ProtocolObject<dyn MTLDevice>>,
         features: wgt::Features,
     ) -> super::Device {
+        let capabilities_query = super::CapabilitiesQuery::new(&raw);
+        let shared = super::AdapterShared::new(raw, &capabilities_query);
         super::Device {
-            shared: Arc::new(super::AdapterShared::new(raw)),
+            shared: Arc::new(shared),
             features,
             counters: Default::default(),
         }
@@ -458,7 +460,10 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> DeviceResult<super::Texture> {
-        let mtl_format = self.shared.private_caps.map_format(desc.format);
+        let mtl_format = self
+            .shared
+            .private_texture_format_caps
+            .map_format(desc.format);
 
         autoreleasepool(|_| {
             let descriptor = MTLTextureDescriptor::new();
@@ -545,10 +550,14 @@ impl crate::Device for super::Device {
 
         let raw_format = self
             .shared
-            .private_caps
+            .private_texture_format_caps
             .map_view_format(desc.format, aspects);
 
-        let format_equal = raw_format == self.shared.private_caps.map_format(texture.format);
+        let format_equal = raw_format
+            == self
+                .shared
+                .private_texture_format_caps
+                .map_format(texture.format);
         let type_equal = raw_type == texture.raw_type;
         let range_full_resource =
             desc.range
@@ -1509,7 +1518,10 @@ impl crate::Device for super::Device {
                     continue;
                 };
 
-                let raw_format = self.shared.private_caps.map_format(ct.format);
+                let raw_format = self
+                    .shared
+                    .private_texture_format_caps
+                    .map_format(ct.format);
                 at_descriptor.setPixelFormat(raw_format);
                 at_descriptor.setWriteMask(conv::map_color_write(ct.write_mask));
 
@@ -1531,7 +1543,10 @@ impl crate::Device for super::Device {
             // Setup depth stencil state
             let depth_stencil = match desc.depth_stencil {
                 Some(ref ds) => {
-                    let raw_format = self.shared.private_caps.map_format(ds.format);
+                    let raw_format = self
+                        .shared
+                        .private_texture_format_caps
+                        .map_format(ds.format);
                     let aspects = crate::FormatAspects::from(ds.format);
                     if aspects.contains(crate::FormatAspects::DEPTH) {
                         descriptor.setDepthAttachmentPixelFormat(raw_format);

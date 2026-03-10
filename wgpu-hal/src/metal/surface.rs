@@ -65,7 +65,7 @@ impl crate::Surface for super::Surface {
     ) -> Result<(), crate::SurfaceError> {
         log::debug!("build swapchain {config:?}");
 
-        let caps = &device.shared.private_caps;
+        let caps = &device.shared.private_texture_format_caps;
         *self.swapchain_format.write() = Some(config.format);
         *self.extent.write() = config.extent;
 
