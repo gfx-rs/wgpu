@@ -447,7 +447,7 @@ impl Draw {
             }
 
             unsafe {
-                encoder.dispatch([(batch.entries.len() as u32).div_ceil(64), 1, 1]);
+                encoder.dispatch_workgroups([(batch.entries.len() as u32).div_ceil(64), 1, 1]);
             }
         }
 

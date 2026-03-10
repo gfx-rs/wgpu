@@ -353,7 +353,7 @@ impl TimestampNormalizer {
                 0,
                 &[buffer_offset_timestamps, total_timestamps],
             );
-            encoder.dispatch([needed_workgroups, 1, 1]);
+            encoder.dispatch_workgroups([needed_workgroups, 1, 1]);
             encoder.end_compute_pass();
         }
     }

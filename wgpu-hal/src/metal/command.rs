@@ -1770,7 +1770,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn dispatch(&mut self, count: [u32; 3]) {
+    unsafe fn dispatch_workgroups(&mut self, count: [u32; 3]) {
         if count[0] > 0 && count[1] > 0 && count[2] > 0 {
             let encoder = self.state.compute.as_ref().unwrap();
             let raw_count = MTLSize {
@@ -1785,7 +1785,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
+    unsafe fn dispatch_workgroups_indirect(
+        &mut self,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+    ) {
         let encoder = self.state.compute.as_ref().unwrap();
         unsafe {
             encoder

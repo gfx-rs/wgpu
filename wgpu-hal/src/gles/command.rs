@@ -1245,14 +1245,18 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.set_pipeline_inner(&pipeline.inner);
     }
 
-    unsafe fn dispatch(&mut self, count: [u32; 3]) {
+    unsafe fn dispatch_workgroups(&mut self, count: [u32; 3]) {
         // Empty dispatches are invalid in OpenGL, but valid in WebGPU.
         if count.contains(&0) {
             return;
         }
         self.cmd_buffer.commands.push(C::Dispatch(count));
     }
-    unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
+    unsafe fn dispatch_workgroups_indirect(
+        &mut self,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+    ) {
         self.cmd_buffer.commands.push(C::DispatchIndirect {
             indirect_buf: buffer.raw.unwrap(),
             indirect_offset: offset,
