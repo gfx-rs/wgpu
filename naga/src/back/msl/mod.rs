@@ -75,9 +75,10 @@ use alloc::{
 };
 use core::fmt::{Error as FmtError, Write};
 
-use crate::{arena::Handle, ir, proc::index, valid::ModuleInfo};
+use crate::{arena::Handle, back::TaskDispatchLimits, ir, proc::index, valid::ModuleInfo};
 
 mod keywords;
+mod mesh_shader;
 pub mod sampler;
 mod writer;
 
@@ -178,6 +179,7 @@ enum ResolvedBinding {
         interpolation: Option<ResolvedInterpolation>,
     },
     Resource(BindTarget),
+    Payload,
 }
 
 #[derive(Copy, Clone)]
@@ -239,6 +241,8 @@ pub enum Error {
     ResolveArraySizeError(#[from] crate::proc::ResolveArraySizeError),
     #[error("entry point with stage {0:?} and name '{1}' not found")]
     EntryPointNotFound(ir::ShaderStage, String),
+    #[error("Cannot use mesh shader syntax prior to MSL 3.0")]
+    UnsupportedMeshShader,
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -277,6 +281,9 @@ enum LocationMode {
     /// Output from the fragment shader.
     FragmentOutput,
 
+    /// Output from the mesh shader.
+    MeshOutput,
+
     /// Compute shader input or output.
     Uniform,
 }
@@ -303,6 +310,11 @@ pub struct Options {
     /// If set, loops will have code injected into them, forcing the compiler
     /// to think the number of iterations is bounded.
     pub force_loop_bounding: bool,
+    /// Whether and how checks in the task shader should verify the dispatched
+    /// mesh grid size.
+    pub task_dispatch_limits: Option<TaskDispatchLimits>,
+    /// Whether to validate the output of a mesh shader workgroup.
+    pub mesh_shader_primitive_indices_clamp: bool,
 }
 
 impl Default for Options {
@@ -316,6 +328,8 @@ impl Default for Options {
             bounds_check_policies: index::BoundsCheckPolicies::default(),
             zero_initialize_workgroup_memory: true,
             force_loop_bounding: true,
+            task_dispatch_limits: None,
+            mesh_shader_primitive_indices_clamp: true,
         }
     }
 }
@@ -484,7 +498,7 @@ pub struct PipelineOptions {
     /// Metal doesn't like this for non-point primitive topologies and requires it for
     /// point primitive topologies.
     ///
-    /// Enable this for vertex shaders with point primitive topologies.
+    /// Enable this for vertex/mesh shaders with point primitive topologies.
     pub allow_and_force_point_size: bool,
 
     /// If set, when generating the Metal vertex shader, transform it
@@ -553,7 +567,7 @@ impl Options {
                 interpolation,
                 sampling,
                 blend_src,
-                per_primitive: _,
+                per_primitive,
             } => match mode {
                 LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(location)),
                 LocationMode::FragmentOutput => {
@@ -565,7 +579,9 @@ impl Options {
                         blend_src,
                     })
                 }
-                LocationMode::VertexOutput | LocationMode::FragmentInput => {
+                LocationMode::VertexOutput
+                | LocationMode::FragmentInput
+                | LocationMode::MeshOutput => {
                     Ok(ResolvedBinding::User {
                         prefix: if self.spirv_cross_compatibility {
                             "locn"
@@ -579,7 +595,11 @@ impl Options {
                             // sampling is `None` only for Flat interpolation.
                             let interpolation = interpolation.unwrap();
                             let sampling = sampling.unwrap_or(crate::Sampling::Center);
-                            Some(ResolvedInterpolation::from_binding(interpolation, sampling))
+                            Some(ResolvedInterpolation::from_binding(
+                                interpolation,
+                                sampling,
+                                per_primitive,
+                            ))
                         },
                     })
                 }
@@ -719,6 +739,8 @@ impl ResolvedBinding {
                     Bi::CullPrimitive => "primitive_culled",
                     // TODO: figure out how to make this written as a function call
                     Bi::PointIndex | Bi::LineIndices | Bi::TriangleIndices => unimplemented!(),
+                    // These aren't real builtins passed into MSL. They are extracted by the
+                    // wrapper function which actually sets the outputs.
                     Bi::MeshTaskSize
                     | Bi::VertexCount
                     | Bi::PrimitiveCount
@@ -773,6 +795,7 @@ impl ResolvedBinding {
                     return Err(Error::UnimplementedBindTarget(target.clone()));
                 }
             }
+            Self::Payload => write!(out, "payload")?,
         }
         write!(out, "]]")?;
         Ok(())
@@ -780,9 +803,17 @@ impl ResolvedBinding {
 }
 
 impl ResolvedInterpolation {
-    const fn from_binding(interpolation: crate::Interpolation, sampling: crate::Sampling) -> Self {
+    const fn from_binding(
+        interpolation: crate::Interpolation,
+        sampling: crate::Sampling,
+        per_primitive: bool,
+    ) -> Self {
         use crate::Interpolation as I;
         use crate::Sampling as S;
+
+        if per_primitive {
+            return Self::Flat;
+        }
 
         match (interpolation, sampling) {
             (I::Perspective, S::Center) => Self::CenterPerspective,
@@ -810,6 +841,23 @@ impl ResolvedInterpolation {
         Ok(())
     }
 }
+
+struct EntryPointArgument {
+    ty_name: String,
+    name: String,
+    binding: String,
+    init: Option<Handle<crate::Expression>>,
+}
+
+/// Shorthand result used internally by the backend
+type BackendResult = Result<(), Error>;
+
+const NAMESPACE: &str = "metal";
+
+// The name of the array member of the Metal struct types we generate to
+// represent Naga `Array` types. See the comments in `Writer::write_type_defs`
+// for details.
+const WRAPPED_ARRAY_FIELD: &str = "inner";
 
 /// Information about a translated module that is required
 /// for the use of the result.
@@ -864,8 +912,8 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::TEXTURE_EXTERNAL
         | Caps::SHADER_FLOAT16_IN_FLOAT32
         | Caps::SHADER_BARYCENTRICS
-        // No MESH_SHADER
-        // No MESH_SHADER_POINT_TOPOLOGY
+        | Caps::MESH_SHADER
+        | Caps::MESH_SHADER_POINT_TOPOLOGY
         | Caps::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING
         // No BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
         | Caps::STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING

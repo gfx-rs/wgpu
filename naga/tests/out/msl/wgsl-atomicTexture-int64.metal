@@ -13,6 +13,7 @@ kernel void cs_main(
 ) {
     image.atomic_max(metal::uint2(metal::int2(0, 0)), 1uL);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    metal::threadgroup_barrier(metal::mem_flags::mem_object_data);
     image.atomic_min(metal::uint2(metal::int2(0, 0)), 1uL);
     return;
 }

@@ -77,7 +77,7 @@ kernel void compute(
 , metal::uint3 num_wgs [[threadgroups_per_grid]]
 , threadgroup type_4& output
 ) {
-    if (metal::all(local_id == metal::uint3(0u))) {
+    if (local_index == 0u) {
         output = {};
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);

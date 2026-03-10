@@ -347,7 +347,8 @@ struct PrivateCapabilities {
     int64_atomics: bool,
     float_atomics: bool,
     mesh_shaders: bool,
-    max_mesh_task_workgroup_count: u32,
+    max_task_workgroup_count: u32,
+    max_mesh_workgroup_count: u32,
     max_task_payload_size: u32,
     supported_vertex_amplification_factor: u32,
     shader_barycentrics: bool,
@@ -435,6 +436,7 @@ pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
     counters: Arc<wgt::HalCounters>,
+    limits: wgt::Limits,
 }
 
 pub struct Surface {
@@ -815,7 +817,7 @@ unsafe impl Sync for PassthroughShader {}
 #[derive(Debug)]
 pub struct ShaderModule {
     source: ShaderModuleSource,
-    bounds_checks: wgt::ShaderRuntimeChecks,
+    runtime_checks: wgt::ShaderRuntimeChecks,
 }
 
 impl crate::DynShaderModule for ShaderModule {}

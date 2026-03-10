@@ -71,16 +71,6 @@ fn compile_hlsl(
     }
 }
 
-fn compile_msl(device: &wgpu::Device) -> wgpu::ShaderModule {
-    unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-            label: None,
-            msl: Some(std::borrow::Cow::Borrowed(include_str!("shader.metal"))),
-            num_workgroups: (1, 1, 1),
-            ..Default::default()
-        })
-    }
-}
 struct Shaders {
     ts: Option<wgpu::ShaderModule>,
     ms: wgpu::ShaderModule,
@@ -101,7 +91,7 @@ fn get_shaders(
     // In the case that the platform does support mesh shaders, the dummy
     // shader is used to avoid requiring PASSTHROUGH_SHADERS.
     match backend {
-        wgpu::Backend::Vulkan => {
+        wgpu::Backend::Vulkan | wgpu::Backend::Metal => {
             let compiled = compile_wgsl(device);
             Shaders {
                 ts: info.use_task.then_some(compiled.clone()),
@@ -135,21 +125,6 @@ fn get_shaders(
             ms_name: "main",
             fs_name: "main",
         },
-        wgpu::Backend::Metal => {
-            let compiled = compile_msl(device);
-            Shaders {
-                ts: info.use_task.then_some(compiled.clone()),
-                ms: compiled.clone(),
-                fs: info.use_frag.then_some(compiled),
-                ts_name: "taskShader",
-                ms_name: if info.use_task {
-                    "meshShader"
-                } else {
-                    "meshNoTaskShader"
-                },
-                fs_name: "fragShader",
-            }
-        }
         _ => unreachable!(),
     }
 }

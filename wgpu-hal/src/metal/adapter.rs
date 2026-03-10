@@ -46,7 +46,7 @@ impl crate::Adapter for super::Adapter {
     unsafe fn open(
         &self,
         features: wgt::Features,
-        _limits: &wgt::Limits,
+        limits: &wgt::Limits,
         _memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let queue = self
@@ -86,6 +86,7 @@ impl crate::Adapter for super::Adapter {
                 shared: Arc::clone(&self.shared),
                 features,
                 counters: Default::default(),
+                limits: limits.clone(),
             },
             queue: super::Queue {
                 raw: Arc::new(Mutex::new(queue)),
@@ -975,7 +976,26 @@ impl super::PrivateCapabilities {
             },
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             mesh_shaders,
-            max_mesh_task_workgroup_count: if mesh_shaders { 1024 } else { 0 },
+            max_task_workgroup_count: if mesh_shaders
+                && (metal4 || device.supportsFamily(MTLGPUFamily::Apple2))
+            {
+                u32::MAX
+            } else if mesh_shaders {
+                1024
+            } else {
+                0
+            },
+            max_mesh_workgroup_count: if mesh_shaders
+                && device.supportsFamily(MTLGPUFamily::Apple10)
+            {
+                2u32.pow(22)
+            } else if mesh_shaders && device.supportsFamily(MTLGPUFamily::Apple9) {
+                2u32.pow(20)
+            } else if mesh_shaders {
+                1024
+            } else {
+                0
+            },
             max_task_payload_size: if mesh_shaders { 16384 - 32 } else { 0 },
             supports_cooperative_matrix: family_check
                 && (device.supportsFamily(MTLGPUFamily::Apple7)
@@ -1109,7 +1129,14 @@ impl super::PrivateCapabilities {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);
         }
 
-        features.set(F::EXPERIMENTAL_MESH_SHADER, self.mesh_shaders);
+        features.set(
+            F::EXPERIMENTAL_MESH_SHADER | F::EXPERIMENTAL_MESH_SHADER_POINTS,
+            self.mesh_shaders,
+        );
+        features.set(
+            F::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
+            self.supported_vertex_amplification_factor > 1 && self.mesh_shaders,
+        );
 
         // Cooperative matrix (simdgroup matrix) requires MSL 2.3+
         features.set(
@@ -1217,8 +1244,10 @@ impl super::PrivateCapabilities {
             },
 
             // Should be not too large
-            max_task_mesh_workgroup_total_count: self.max_mesh_task_workgroup_count,
-            max_task_mesh_workgroups_per_dimension: self.max_mesh_task_workgroup_count,
+            max_task_workgroup_total_count: self.max_task_workgroup_count,
+            max_task_workgroups_per_dimension: self.max_task_workgroup_count,
+            max_mesh_workgroup_total_count: self.max_mesh_workgroup_count,
+            max_mesh_workgroups_per_dimension: self.max_mesh_workgroup_count,
             max_task_invocations_per_workgroup: if self.mesh_shaders { 1024 } else { 0 },
             max_task_invocations_per_dimension: if self.mesh_shaders { 1024 } else { 0 },
             max_mesh_invocations_per_workgroup: if self.mesh_shaders { 1024 } else { 0 },

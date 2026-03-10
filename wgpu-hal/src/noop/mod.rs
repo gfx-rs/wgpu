@@ -196,8 +196,10 @@ pub const CAPABILITIES: crate::Capabilities = {
             max_immediate_size: ALLOC_MAX_U32,
             max_non_sampler_bindings: ALLOC_MAX_U32,
 
-            max_task_mesh_workgroup_total_count: ALLOC_MAX_U32,
-            max_task_mesh_workgroups_per_dimension: ALLOC_MAX_U32,
+            max_task_workgroup_total_count: ALLOC_MAX_U32,
+            max_task_workgroups_per_dimension: ALLOC_MAX_U32,
+            max_mesh_workgroup_total_count: ALLOC_MAX_U32,
+            max_mesh_workgroups_per_dimension: ALLOC_MAX_U32,
             max_task_invocations_per_workgroup: ALLOC_MAX_U32,
             max_task_invocations_per_dimension: ALLOC_MAX_U32,
             max_mesh_invocations_per_workgroup: ALLOC_MAX_U32,

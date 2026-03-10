@@ -1,6 +1,9 @@
 capabilities = "MESH_SHADER | MESH_SHADER_POINT_TOPOLOGY"
-targets = "WGSL | SPIRV"
+targets = "WGSL | SPIRV | METAL"
 
 [spv]
 version = [1, 4]
 capabilities = ["MeshShadingEXT"]
+
+[msl]
+lang_version = [3, 0]
