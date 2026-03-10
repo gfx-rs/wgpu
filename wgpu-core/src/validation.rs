@@ -1422,7 +1422,10 @@ impl Interface {
                 ),
                 _ => unreachable!(),
             };
-            let total_invocations = entry_point.workgroup_size.iter().product::<u32>();
+            let total_invocations = entry_point
+                .workgroup_size
+                .iter()
+                .fold(1u32, |total, &dim| total.saturating_mul(dim));
 
             let workgroup_size_is_zero = entry_point.workgroup_size.contains(&0);
             let too_many_invocations = total_invocations > max_workgroup_size_total;
