@@ -8,7 +8,7 @@ OpCapability Int64Atomics
 OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %32 "cs_main" %29
+OpEntryPoint GLCompute %32 "cs_main" %29 %49
 OpExecutionMode %32 LocalSize 2 1 1
 OpDecorate %5 ArrayStride 8
 OpMemberDecorate %8 0 Offset 0
@@ -30,6 +30,7 @@ OpDecorate %19 Binding 2
 OpDecorate %20 Block
 OpMemberDecorate %20 0 Offset 0
 OpDecorate %29 BuiltIn LocalInvocationId
+OpDecorate %49 BuiltIn LocalInvocationIndex
 %2 = OpTypeVoid
 %3 = OpTypeInt 64 0
 %4 = OpTypeInt 64 1
@@ -70,8 +71,8 @@ OpDecorate %29 BuiltIn LocalInvocationId
 %46 = OpConstantNull  %3
 %47 = OpConstantNull  %5
 %48 = OpConstantNull  %8
-%49 = OpConstantNull  %9
-%50 = OpTypeVector %10 3
+%50 = OpTypePointer Input %7
+%49 = OpVariable  %50  Input
 %55 = OpConstant  %7  264
 %58 = OpTypeInt 32 1
 %57 = OpConstant  %58  1
@@ -87,8 +88,8 @@ OpDecorate %29 BuiltIn LocalInvocationId
 %40 = OpAccessChain  %39  %19 %35
 OpBranch %45
 %45 = OpLabel
-%51 = OpIEqual  %50  %31 %49
-%52 = OpAll  %10  %51
+%51 = OpLoad  %7  %49
+%52 = OpIEqual  %10  %51 %35
 OpSelectionMerge %53 None
 OpBranchConditional %52 %54 %53
 %54 = OpLabel

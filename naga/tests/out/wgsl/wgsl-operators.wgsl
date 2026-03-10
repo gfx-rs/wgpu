@@ -30,12 +30,12 @@ fn splat(m: f32, n: i32) -> vec4<f32> {
 fn splat_assignment() -> vec2<f32> {
     var a: vec2<f32> = vec2(2f);
 
-    let _e4 = a;
-    a = (_e4 + vec2(1f));
-    let _e8 = a;
-    a = (_e8 - vec2(3f));
-    let _e12 = a;
-    a = (_e12 / vec2(4f));
+    let _e3 = a;
+    a = (_e3 + vec2(1f));
+    let _e7 = a;
+    a = (_e7 - vec2(3f));
+    let _e11 = a;
+    a = (_e11 / vec2(4f));
     let _e15 = a;
     return _e15;
 }
@@ -287,10 +287,10 @@ fn assignment() {
     a_1 = (_e7 - 1i);
     let _e9 = a_1;
     let _e10 = a_1;
-    a_1 = (_e10 * _e9);
+    a_1 = (_e9 * _e10);
     let _e12 = a_1;
     let _e13 = a_1;
-    a_1 = (_e13 / _e12);
+    a_1 = (_e12 / _e13);
     let _e15 = a_1;
     a_1 = (_e15 % 1i);
     let _e17 = a_1;

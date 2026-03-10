@@ -465,7 +465,7 @@ impl crate::framework::Example for Example {
                 });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("shadow"),
-                bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
+                bind_group_layouts: &[Some(&bind_group_layout), Some(&local_bind_group_layout)],
                 immediate_size: 0,
             });
 
@@ -508,8 +508,8 @@ impl crate::framework::Example for Example {
                 },
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: Self::SHADOW_FORMAT,
-                    depth_write_enabled: true,
-                    depth_compare: wgpu::CompareFunction::LessEqual,
+                    depth_write_enabled: Some(true),
+                    depth_compare: Some(wgpu::CompareFunction::LessEqual),
                     stencil: wgpu::StencilState::default(),
                     bias: wgpu::DepthBiasState {
                         constant: 2, // corresponds to bilinear filtering
@@ -581,7 +581,7 @@ impl crate::framework::Example for Example {
                 });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("main"),
-                bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
+                bind_group_layouts: &[Some(&bind_group_layout), Some(&local_bind_group_layout)],
                 immediate_size: 0,
             });
 
@@ -647,8 +647,8 @@ impl crate::framework::Example for Example {
                 },
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: Self::DEPTH_FORMAT,
-                    depth_write_enabled: true,
-                    depth_compare: wgpu::CompareFunction::Less,
+                    depth_write_enabled: Some(true),
+                    depth_compare: Some(wgpu::CompareFunction::Less),
                     stencil: wgpu::StencilState::default(),
                     bias: wgpu::DepthBiasState::default(),
                 }),

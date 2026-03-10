@@ -115,17 +115,55 @@ impl crate::Surface for super::Surface {
 
     unsafe fn acquire_texture(
         &self,
-        _timeout_ms: Option<core::time::Duration>, //TODO
+        _timeout: Option<core::time::Duration>, // TODO
         _fence: &super::Fence,
-    ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
+    ) -> Result<crate::AcquiredSurfaceTexture<super::Api>, crate::SurfaceError> {
         let render_layer = self.render_layer.lock();
+
+        #[cfg(target_os = "macos")]
+        {
+            // Workaround for https://github.com/gfx-rs/wgpu/issues/8309
+            // When the window is occluded on macOS, presented drawables get stuck waiting
+            // for vsync. Check the window's occlusion state and skip acquisition if
+            // the window is not visible - this avoids a 1-second hang in nextDrawable().
+            use objc2::rc::Retained;
+            use objc2::runtime::NSObject;
+            use objc2_quartz_core::CALayer;
+
+            // The CAMetalLayer is typically a sublayer, so we need to traverse up
+            // to find the root layer whose delegate is the NSView.
+            let mut current_layer: Option<Retained<CALayer>> =
+                Some(Retained::into_super(render_layer.clone()));
+
+            while let Some(layer) = current_layer {
+                if let Some(delegate) = layer.delegate() {
+                    // Found a layer with a delegate - this should be the NSView
+                    let window: Option<Retained<NSObject>> =
+                        unsafe { objc2::msg_send![&*delegate, window] };
+
+                    if let Some(window) = window {
+                        const NS_WINDOW_OCCLUSION_STATE_VISIBLE: usize = 1 << 1;
+                        let occlusion_state: usize =
+                            unsafe { objc2::msg_send![&*window, occlusionState] };
+                        let is_visible = (occlusion_state & NS_WINDOW_OCCLUSION_STATE_VISIBLE) != 0;
+
+                        if !is_visible {
+                            return Err(crate::SurfaceError::Occluded);
+                        }
+                    }
+                    break;
+                }
+                current_layer = layer.superlayer();
+            }
+        }
+
         let (drawable, texture) = match autoreleasepool(|_| {
             render_layer
                 .nextDrawable()
                 .map(|drawable| (drawable.to_owned(), drawable.texture().to_owned()))
         }) {
             Some(pair) => pair,
-            None => return Ok(None),
+            None => return Err(crate::SurfaceError::Timeout),
         };
 
         let swapchain_format = self.swapchain_format.read().unwrap();
@@ -147,10 +185,10 @@ impl crate::Surface for super::Surface {
             present_with_transaction: render_layer.presentsWithTransaction(),
         };
 
-        Ok(Some(crate::AcquiredSurfaceTexture {
+        Ok(crate::AcquiredSurfaceTexture {
             texture: suf_texture,
             suboptimal: false,
-        }))
+        })
     }
 
     unsafe fn discard_texture(&self, _texture: super::SurfaceTexture) {}

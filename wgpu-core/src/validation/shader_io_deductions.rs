@@ -75,7 +75,7 @@ impl MaxFragmentShaderInputDeduction {
             | BuiltIn::InstanceIndex
             | BuiltIn::PointSize
             | BuiltIn::VertexIndex
-            | BuiltIn::DrawID
+            | BuiltIn::DrawIndex
             | BuiltIn::FragDepth
             | BuiltIn::GlobalInvocationId
             | BuiltIn::LocalInvocationId

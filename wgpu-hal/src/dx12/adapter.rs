@@ -364,7 +364,12 @@ impl super::Adapter {
             }
         };
 
-        let shader_model = if let Some(max_shader_model) = compiler_container.max_shader_model() {
+        let wgt_shader_model = backend_options
+            .force_shader_model
+            .get()
+            .or(compiler_container.max_shader_model());
+
+        let shader_model = if let Some(max_shader_model) = wgt_shader_model {
             let max_dxc_shader_model = match max_shader_model {
                 wgt::DxcShaderModel::V6_0 => ShaderModel::_6_0,
                 wgt::DxcShaderModel::V6_1 => ShaderModel::_6_1,
@@ -374,6 +379,8 @@ impl super::Adapter {
                 wgt::DxcShaderModel::V6_5 => ShaderModel::_6_5,
                 wgt::DxcShaderModel::V6_6 => ShaderModel::_6_6,
                 wgt::DxcShaderModel::V6_7 => ShaderModel::_6_7,
+                wgt::DxcShaderModel::V6_8 => ShaderModel::_6_8,
+                wgt::DxcShaderModel::V6_9 => ShaderModel::_6_9,
             };
 
             let shader_model = max_device_shader_model.min(max_dxc_shader_model);
@@ -398,7 +405,8 @@ impl super::Adapter {
                 ShaderModel::_6_5 => naga::back::hlsl::ShaderModel::V6_5,
                 ShaderModel::_6_6 => naga::back::hlsl::ShaderModel::V6_6,
                 ShaderModel::_6_7 => naga::back::hlsl::ShaderModel::V6_7,
-                _ => unreachable!(),
+                ShaderModel::_6_8 => naga::back::hlsl::ShaderModel::V6_8,
+                ShaderModel::_6_9 => naga::back::hlsl::ShaderModel::V6_9,
             }
         } else {
             naga::back::hlsl::ShaderModel::V5_1
@@ -481,7 +489,7 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_FORMAT_NV12
             | wgt::Features::FLOAT32_FILTERABLE
             | wgt::Features::TEXTURE_ATOMIC
-            | wgt::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS
+            | wgt::Features::PASSTHROUGH_SHADERS
             | wgt::Features::EXTERNAL_TEXTURE;
 
         //TODO: in order to expose this, we need to run a compute shader
@@ -800,9 +808,10 @@ impl super::Adapter {
                     max_uniform_buffers_per_shader_stage: full_heap_count,
                     max_binding_array_elements_per_shader_stage: full_heap_count,
                     max_binding_array_sampler_elements_per_shader_stage: full_heap_count,
-                    max_uniform_buffer_binding_size:
-                        Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16,
-                    max_storage_buffer_binding_size: auxil::MAX_I32_BINDING_SIZE,
+                    max_uniform_buffer_binding_size: u64::from(
+                        Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT,
+                    ) * 16,
+                    max_storage_buffer_binding_size: u64::from(auxil::MAX_I32_BINDING_SIZE),
                     max_vertex_buffers: Direct3D12::D3D12_VS_INPUT_REGISTER_COUNT,
                     max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
                     max_vertex_buffer_array_stride: Direct3D12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,

@@ -481,10 +481,7 @@ impl Global {
         (id, Some(error))
     }
 
-    pub fn texture_view_drop(
-        &self,
-        texture_view_id: id::TextureViewId,
-    ) -> Result<(), resource::TextureViewDestroyError> {
+    pub fn texture_view_drop(&self, texture_view_id: id::TextureViewId) {
         profiling::scope!("TextureView::drop");
         api_log!("TextureView::drop {texture_view_id:?}");
 
@@ -498,7 +495,6 @@ impl Global {
                 t.add(trace::Action::DestroyTextureView(view.to_trace()));
             }
         }
-        Ok(())
     }
 
     pub fn device_create_external_texture(
@@ -732,7 +728,10 @@ impl Global {
                 let bind_group_layouts_guard = hub.bind_group_layouts.read();
                 desc.bind_group_layouts
                     .iter()
-                    .map(|bgl_id| bind_group_layouts_guard.get(*bgl_id).get())
+                    .map(|bgl_id| match bgl_id {
+                        Some(bgl_id) => bind_group_layouts_guard.get(*bgl_id).get().map(Some),
+                        None => Ok(None),
+                    })
                     .collect::<Result<Vec<_>, _>>()
             };
 

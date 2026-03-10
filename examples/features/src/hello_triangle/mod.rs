@@ -1,5 +1,5 @@
 use std::{borrow::Cow, sync::Arc};
-use tempfile::tempdir;
+use wgpu::SurfaceError;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
@@ -12,11 +12,10 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     size.width = size.width.max(1);
     size.height = size.height.max(1);
 
-    let instance = wgpu::Instance::new(
-        wgpu::InstanceDescriptor::from_env_or_default()
-            // TODO: Use event_loop.owned_display_handle() with winit 0.30
-            .with_display_handle(Box::new(window.clone())),
-    );
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_with_display_handle_from_env(
+        // TODO: Use event_loop.owned_display_handle() with winit 0.30
+        Box::new(window.clone()),
+    ));
 
     let surface = instance.create_surface(&window).unwrap();
     let adapter = instance
@@ -29,8 +28,6 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         .await
         .expect("Failed to find an appropriate adapter");
 
-    let trace_dir = tempdir().expect("Failed to create temporary directory for trace");
-
     // Create the logical device and command queue
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
@@ -41,7 +38,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 .using_resolution(adapter.limits()),
             experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
-            trace: wgpu::Trace::Directory(trace_dir.path().to_path_buf()),
+            trace: wgpu::Trace::Off,
         })
         .await
         .expect("Failed to create device");
@@ -110,43 +107,51 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         // On macos the window needs to be redrawn manually after resizing
                         window.request_redraw();
                     }
-                    WindowEvent::RedrawRequested => {
-                        let frame = surface
-                            .get_current_texture()
-                            .expect("Failed to acquire next swap chain texture");
-                        let view = frame
-                            .texture
-                            .create_view(&wgpu::TextureViewDescriptor::default());
-                        let mut encoder =
-                            device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                                label: None,
-                            });
-                        {
-                            let mut rpass =
-                                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    WindowEvent::RedrawRequested => match surface.get_current_texture() {
+                        Ok(frame) => {
+                            let view = frame
+                                .texture
+                                .create_view(&wgpu::TextureViewDescriptor::default());
+                            let mut encoder =
+                                device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                                     label: None,
-                                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                        view: &view,
-                                        depth_slice: None,
-                                        resolve_target: None,
-                                        ops: wgpu::Operations {
-                                            load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                                            store: wgpu::StoreOp::Store,
-                                        },
-                                    })],
-                                    depth_stencil_attachment: None,
-                                    timestamp_writes: None,
-                                    occlusion_query_set: None,
-                                    multiview_mask: None,
                                 });
-                            rpass.set_pipeline(&render_pipeline);
-                            rpass.draw(0..3, 0..1);
-                        }
+                            {
+                                let mut rpass =
+                                    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                        label: None,
+                                        color_attachments: &[Some(
+                                            wgpu::RenderPassColorAttachment {
+                                                view: &view,
+                                                depth_slice: None,
+                                                resolve_target: None,
+                                                ops: wgpu::Operations {
+                                                    load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                                                    store: wgpu::StoreOp::Store,
+                                                },
+                                            },
+                                        )],
+                                        depth_stencil_attachment: None,
+                                        timestamp_writes: None,
+                                        occlusion_query_set: None,
+                                        multiview_mask: None,
+                                    });
+                                rpass.set_pipeline(&render_pipeline);
+                                rpass.draw(0..3, 0..1);
+                            }
 
-                        queue.submit(Some(encoder.finish()));
-                        window.pre_present_notify();
-                        frame.present();
-                    }
+                            queue.submit(Some(encoder.finish()));
+                            window.pre_present_notify();
+                            frame.present();
+                        }
+                        Err(SurfaceError::Timeout | SurfaceError::Occluded) => {
+                            window.request_redraw(); // Try again  later
+                        }
+                        Err(err) => {
+                            // TODO: reconfigure the surface instead
+                            panic!("get_current_texture: {err}");
+                        }
+                    },
                     WindowEvent::CloseRequested => target.exit(),
                     _ => {}
                 };

@@ -3,7 +3,7 @@ mod record;
 #[cfg(feature = "replay")]
 mod replay;
 
-use core::{convert::Infallible, ops::Range};
+use core::convert::Infallible;
 
 use alloc::{string::String, vec::Vec};
 use macro_rules_attribute::apply;
@@ -221,7 +221,8 @@ pub enum Action<'a, R: ReferenceType> {
     WriteBuffer {
         id: R::Buffer,
         data: Data,
-        range: Range<wgt::BufferAddress>,
+        offset: wgt::BufferAddress,
+        size: wgt::BufferAddress,
         queued: bool,
     },
     WriteTexture {

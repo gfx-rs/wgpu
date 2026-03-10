@@ -718,7 +718,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let mut do_index = 0;
         let mut dirty_textures = 0u32;
         let mut dirty_samplers = 0u32;
-        let group_info = &layout.group_infos[index as usize];
+        let group_info = layout.group_infos[index as usize].as_ref().unwrap();
 
         for (binding_layout, raw_binding) in group_info.entries.iter().zip(group.contents.iter()) {
             let slot = group_info.binding_to_slot[binding_layout.binding as usize] as u32;
@@ -1263,6 +1263,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
         &mut self,
         _acceleration_structure: &super::AccelerationStructure,
         _buf: &super::Buffer,
+    ) {
+        unimplemented!()
+    }
+
+    unsafe fn set_acceleration_structure_dependencies(
+        _command_buffers: &[&super::CommandBuffer],
+        _dependencies: &[&super::AccelerationStructure],
     ) {
         unimplemented!()
     }

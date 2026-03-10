@@ -43,8 +43,8 @@ fn breakIfSeparateVariable() {
     var counter: u32 = 0u;
 
     loop {
-        let _e3 = counter;
-        counter = (_e3 + 1u);
+        let _e2 = counter;
+        counter = (_e2 + 1u);
         continuing {
             let _e5 = counter;
             break if (_e5 == 5u);

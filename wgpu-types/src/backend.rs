@@ -252,6 +252,20 @@ pub struct GlBackendOptions {
     pub gles_minor_version: Gles3MinorVersion,
     /// Behavior of OpenGL fences. Affects how `on_completed_work_done` and `device.poll` behave.
     pub fence_behavior: GlFenceBehavior,
+    /// Controls whether debug functions (`glPushDebugGroup`, `glPopDebugGroup`,
+    /// `glObjectLabel`, etc.) are enabled when supported by the driver.
+    ///
+    /// By default ([`GlDebugFns::Auto`]), debug functions are automatically
+    /// disabled on devices with known bugs (e.g., Mali GPUs can crash in
+    /// `glPushDebugGroup`). Use [`GlDebugFns::ForceEnabled`] to override this
+    /// behavior, or [`GlDebugFns::Disabled`] to disable debug functions entirely.
+    ///
+    /// See also [`InstanceFlags::DISCARD_HAL_LABELS`], which prevents debug
+    /// markers and labels from being sent to *any* backend, but without the
+    /// driver-specific bug workarounds provided here.
+    ///
+    /// [`InstanceFlags::DISCARD_HAL_LABELS`]: crate::InstanceFlags::DISCARD_HAL_LABELS
+    pub debug_fns: GlDebugFns,
 }
 
 impl GlBackendOptions {
@@ -261,9 +275,11 @@ impl GlBackendOptions {
     #[must_use]
     pub fn from_env_or_default() -> Self {
         let gles_minor_version = Gles3MinorVersion::from_env().unwrap_or_default();
+        let debug_fns = GlDebugFns::from_env().unwrap_or_default();
         Self {
             gles_minor_version,
             fence_behavior: GlFenceBehavior::Normal,
+            debug_fns,
         }
     }
 
@@ -273,11 +289,96 @@ impl GlBackendOptions {
     #[must_use]
     pub fn with_env(self) -> Self {
         let gles_minor_version = self.gles_minor_version.with_env();
-        let short_circuit_fences = self.fence_behavior.with_env();
+        let fence_behavior = self.fence_behavior.with_env();
+        let debug_fns = self.debug_fns.with_env();
         Self {
             gles_minor_version,
-            fence_behavior: short_circuit_fences,
+            fence_behavior,
+            debug_fns,
         }
+    }
+}
+
+/// Controls whether OpenGL debug functions are enabled.
+///
+/// Debug functions include `glPushDebugGroup`, `glPopDebugGroup`, `glObjectLabel`, etc.
+/// These are useful for debugging but can cause crashes on some buggy drivers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum GlDebugFns {
+    /// Automatically decide whether to enable debug functions.
+    ///
+    /// Debug functions will be enabled if supported by the driver, unless
+    /// running on a device known to have buggy debug function implementations
+    /// (e.g., Mali GPUs which can crash in `glPushDebugGroup`).
+    ///
+    /// This is the default behavior.
+    #[default]
+    Auto,
+    /// Force enable debug functions if supported by the driver.
+    ///
+    /// This ignores any device-specific workarounds and enables debug functions
+    /// on all devices that support them, including those with known bugs.
+    ForceEnabled,
+    /// Disable debug functions entirely.
+    ///
+    /// Debug functions will not be used even if supported by the driver.
+    Disabled,
+}
+
+impl GlDebugFns {
+    /// Choose debug functions setting from the environment variable `WGPU_GL_DEBUG_FNS`.
+    ///
+    /// Possible values (case insensitive):
+    /// - `auto` - automatically decide based on device
+    /// - `forceenabled`, `force_enabled`, or `enabled` - force enable
+    /// - `disabled` - disable entirely
+    ///
+    /// Use with `unwrap_or_default()` to get the default value if the environment variable is not set.
+    #[must_use]
+    pub fn from_env() -> Option<Self> {
+        let value = crate::env::var("WGPU_GL_DEBUG_FNS")
+            .as_deref()?
+            .to_lowercase();
+        match value.as_str() {
+            "auto" => Some(Self::Auto),
+            "forceenabled" | "force_enabled" | "enabled" => Some(Self::ForceEnabled),
+            "disabled" => Some(Self::Disabled),
+            _ => None,
+        }
+    }
+
+    /// Takes the given setting, modifies it based on the `WGPU_GL_DEBUG_FNS` environment variable, and returns the result.
+    ///
+    /// See `from_env` for more information.
+    #[must_use]
+    pub fn with_env(self) -> Self {
+        if let Some(debug_fns) = Self::from_env() {
+            debug_fns
+        } else {
+            self
+        }
+    }
+}
+
+/// Used to force wgpu to expose certain features on passthrough shaders even when
+/// those features aren't present on runtime-compiled shaders
+#[derive(Default, Clone, Debug)]
+pub struct ForceShaderModelToken {
+    inner: Option<DxcShaderModel>,
+}
+impl ForceShaderModelToken {
+    /// Creates an unsafe token, opting you in to seeing features that you may not necessarily use
+    /// on standard runtime-compiled shaders.
+    /// # Safety
+    /// Do not make use in runtime-compiled shaders of any features that may not be supported by the FXC or DXC
+    /// version you use.
+    pub unsafe fn with_shader_model(sm: DxcShaderModel) -> Self {
+        Self { inner: Some(sm) }
+    }
+
+    /// Returns the shader model version, if any, in this token.
+    pub fn get(&self) -> Option<DxcShaderModel> {
+        self.inner.clone()
     }
 }
 
@@ -292,6 +393,11 @@ pub struct Dx12BackendOptions {
     pub presentation_system: Dx12SwapchainKind,
     /// Whether to wait for the latency waitable object before acquiring the next swapchain image.
     pub latency_waitable_object: Dx12UseFrameLatencyWaitableObject,
+    /// For use with passthrough shaders. Expose features as if this shader model is present, even if you do not
+    /// intend to ship DXC with your app.
+    ///
+    /// This does not override the device's shader model version, only the external shader compiler's version.
+    pub force_shader_model: ForceShaderModelToken,
 }
 
 impl Dx12BackendOptions {
@@ -308,6 +414,7 @@ impl Dx12BackendOptions {
             shader_compiler: compiler,
             presentation_system,
             latency_waitable_object,
+            force_shader_model: ForceShaderModelToken::default(),
         }
     }
 
@@ -323,6 +430,7 @@ impl Dx12BackendOptions {
             shader_compiler,
             presentation_system,
             latency_waitable_object,
+            force_shader_model: ForceShaderModelToken::default(),
         }
     }
 }
@@ -437,6 +545,44 @@ pub enum DxcShaderModel {
     V6_5,
     V6_6,
     V6_7,
+    V6_8,
+    V6_9,
+}
+
+impl DxcShaderModel {
+    /// Get the shader model supported by a certain DXC version.
+    pub fn from_dxc_version(major: u32, minor: u32) -> Self {
+        // DXC version roughly has corresponded to shader model so far, where DXC 1.x supports SM 6.x.
+        // See discussion in https://discord.com/channels/590611987420020747/996417435374714920/1471234702206701650.
+        // Presumably DXC 2.0 and up will still support shader model 6.9.
+        if major > 1 {
+            Self::V6_9
+        } else {
+            Self::from_parts(6, minor)
+        }
+    }
+
+    /// Parse a DxcShaderModel from its version components.
+    pub fn from_parts(major: u32, minor: u32) -> Self {
+        if major > 6 || minor > 8 {
+            Self::V6_9
+        } else {
+            match minor {
+                0 => DxcShaderModel::V6_0,
+                1 => DxcShaderModel::V6_1,
+                2 => DxcShaderModel::V6_2,
+                3 => DxcShaderModel::V6_3,
+                4 => DxcShaderModel::V6_4,
+                5 => DxcShaderModel::V6_5,
+                6 => DxcShaderModel::V6_6,
+                7 => DxcShaderModel::V6_7,
+                8 => DxcShaderModel::V6_8,
+                9 => DxcShaderModel::V6_9,
+                // > 6.9
+                _ => DxcShaderModel::V6_9,
+            }
+        }
+    }
 }
 
 /// Selects which DX12 shader compiler to use.
@@ -445,7 +591,6 @@ pub enum Dx12Compiler {
     /// The Fxc compiler (default) is old, slow and unmaintained.
     ///
     /// However, it doesn't require any additional .dlls to be shipped with the application.
-    #[default]
     Fxc,
     /// The Dxc compiler is new, fast and maintained.
     ///
@@ -458,14 +603,15 @@ pub enum Dx12Compiler {
     DynamicDxc {
         /// Path to `dxcompiler.dll`.
         dxc_path: String,
-        /// Maximum shader model the given dll supports.
-        max_shader_model: DxcShaderModel,
     },
     /// The statically-linked variant of Dxc.
     ///
     /// The `static-dxc` feature is required for this setting to be used successfully on DX12.
     /// Not available on `windows-aarch64-pc-*` targets.
     StaticDxc,
+    /// Use statically-linked DXC if available. Otherwise check for dynamically linked DXC on the PATH. Finally, fallback to FXC.
+    #[default]
+    Auto,
 }
 
 impl Dx12Compiler {
@@ -475,7 +621,6 @@ impl Dx12Compiler {
     pub fn default_dynamic_dxc() -> Self {
         Self::DynamicDxc {
             dxc_path: String::from("dxcompiler.dll"),
-            max_shader_model: DxcShaderModel::V6_7, // should be 6.8 but the variant is missing
         }
     }
 
@@ -494,6 +639,7 @@ impl Dx12Compiler {
             "dxc" | "dynamicdxc" => Some(Self::default_dynamic_dxc()),
             "staticdxc" => Some(Self::StaticDxc),
             "fxc" => Some(Self::Fxc),
+            "auto" => Some(Self::Auto),
             _ => None,
         }
     }

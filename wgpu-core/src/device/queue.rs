@@ -470,14 +470,13 @@ pub enum QueueWriteError {
 
 impl WebGpuError for QueueWriteError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Queue(e) => e,
-            Self::Transfer(e) => e,
-            Self::MemoryInitFailure(e) => e,
-            Self::DestroyedResource(e) => e,
-            Self::InvalidResource(e) => e,
-        };
-        e.webgpu_error_type()
+        match self {
+            Self::Queue(e) => e.webgpu_error_type(),
+            Self::Transfer(e) => e.webgpu_error_type(),
+            Self::MemoryInitFailure(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+        }
     }
 }
 
@@ -502,17 +501,14 @@ pub enum QueueSubmitError {
 
 impl WebGpuError for QueueSubmitError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Queue(e) => e,
-            Self::Unmap(e) => e,
-            Self::CommandEncoder(e) => e,
-            Self::ValidateAsActionsError(e) => e,
-            Self::InvalidResource(e) => e,
-            Self::DestroyedResource(_) | Self::BufferStillMapped(_) => {
-                return ErrorType::Validation
-            }
-        };
-        e.webgpu_error_type()
+        match self {
+            Self::Queue(e) => e.webgpu_error_type(),
+            Self::Unmap(e) => e.webgpu_error_type(),
+            Self::CommandEncoder(e) => e.webgpu_error_type(),
+            Self::ValidateAsActionsError(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(_) | Self::BufferStillMapped(_) => ErrorType::Validation,
+        }
     }
 }
 
@@ -660,10 +656,18 @@ impl Queue {
         if !buffer_offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             return Err(TransferError::UnalignedBufferOffset(buffer_offset));
         }
-        if buffer_offset + buffer_size.get() > buffer.size {
-            return Err(TransferError::BufferOverrun {
+
+        if buffer_offset > buffer.size {
+            return Err(TransferError::BufferStartOffsetOverrun {
                 start_offset: buffer_offset,
-                end_offset: buffer_offset + buffer_size.get(),
+                buffer_size: buffer.size,
+                side: CopySide::Destination,
+            });
+        }
+        if buffer_size.get() > buffer.size - buffer_offset {
+            return Err(TransferError::BufferEndOffsetOverrun {
+                start_offset: buffer_offset,
+                size: buffer_size.get(),
                 buffer_size: buffer.size,
                 side: CopySide::Destination,
             });
@@ -1273,6 +1277,7 @@ impl Queue {
                                     self.trace_submission(submit_index, commands);
                                 }
 
+                                cmd_buf_data.set_acceleration_structure_dependencies(&snatch_guard);
                                 cmd_buf_data.into_baked_commands()
                             }
                             Err(err) => {
@@ -1612,12 +1617,13 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *queue.device.trace.lock() {
             use crate::device::trace::DataKind;
-            let range = buffer_offset..buffer_offset + data.len() as u64;
+            let size = data.len() as u64;
             let data = trace.make_binary(DataKind::Bin, data);
             trace.add(Action::WriteBuffer {
                 id: buffer.to_trace(),
                 data,
-                range,
+                offset: buffer_offset,
+                size,
                 queued: true,
             });
         }

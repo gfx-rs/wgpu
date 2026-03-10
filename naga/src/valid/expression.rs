@@ -1,13 +1,10 @@
 use super::{compose::validate_compose, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags};
 use crate::arena::UniqueArena;
-use crate::valid::expression::builtin::validate_zero_value;
 use crate::{
     arena::Handle,
     proc::OverloadSet as _,
     proc::{IndexableLengthError, ResolveError},
 };
-
-pub mod builtin;
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -38,8 +35,8 @@ pub enum ExpressionError {
     InvalidSwizzleComponent(crate::SwizzleComponent, crate::VectorSize),
     #[error(transparent)]
     Compose(#[from] super::ComposeError),
-    #[error(transparent)]
-    ZeroValue(#[from] super::ZeroValueError),
+    #[error("Cannot construct zero value of {0:?} because it is not a constructible type")]
+    InvalidZeroValue(Handle<crate::Type>),
     #[error(transparent)]
     IndexableLength(#[from] IndexableLengthError),
     #[error("Operation {0:?} can't work with {1:?}")]
@@ -92,8 +89,14 @@ pub enum ExpressionError {
     InvalidDerivative,
     #[error("Image array index parameter is misplaced")]
     InvalidImageArrayIndex,
-    #[error("Inappropriate sample or level-of-detail index for texel access")]
-    InvalidImageOtherIndex,
+    #[error("Cannot textureLoad from a specific multisample sample on a non-multisampled image.")]
+    InvalidImageSampleSelector,
+    #[error("Cannot textureLoad from a multisampled image without specifying a sample.")]
+    MissingImageSampleSelector,
+    #[error("Cannot textureLoad with a specific mip level on a non-mipmapped image.")]
+    InvalidImageLevelSelector,
+    #[error("Cannot textureLoad from a mipmapped image without specifying a level.")]
+    MissingImageLevelSelector,
     #[error("Image array index type of {0:?} is not an integer scalar")]
     InvalidImageArrayIndexType(Handle<crate::Expression>),
     #[error("Image sample or level-of-detail index's type of {0:?} is not an integer scalar")]
@@ -460,7 +463,9 @@ impl super::Validator {
             }
             E::Constant(_) | E::Override(_) => ShaderStages::all(),
             E::ZeroValue(ty) => {
-                validate_zero_value(ty, module.to_ctx())?;
+                if !mod_info[ty].contains(TypeFlags::CONSTRUCTIBLE) {
+                    return Err(ExpressionError::InvalidZeroValue(ty));
+                }
                 ShaderStages::all()
             }
             E::Compose { ref components, ty } => {
@@ -802,8 +807,11 @@ impl super::Validator {
                             return Err(ExpressionError::InvalidImageOtherIndexType(sample));
                         }
                     }
-                    _ => {
-                        return Err(ExpressionError::InvalidImageOtherIndex);
+                    (Some(_), false) => {
+                        return Err(ExpressionError::InvalidImageSampleSelector);
+                    }
+                    (None, true) => {
+                        return Err(ExpressionError::MissingImageSampleSelector);
                     }
                 }
 
@@ -816,8 +824,11 @@ impl super::Validator {
                         }) => {}
                         _ => return Err(ExpressionError::InvalidImageArrayIndexType(level)),
                     },
-                    _ => {
-                        return Err(ExpressionError::InvalidImageOtherIndex);
+                    (Some(_), false) => {
+                        return Err(ExpressionError::InvalidImageLevelSelector);
+                    }
+                    (None, true) => {
+                        return Err(ExpressionError::MissingImageLevelSelector);
                     }
                 }
                 ShaderStages::all()
@@ -853,15 +864,14 @@ impl super::Validator {
             }
             E::Unary { op, expr } => {
                 use crate::UnaryOperator as Uo;
-                let inner = &resolver[expr];
-                match (op, inner.scalar_kind()) {
-                    (Uo::Negate, Some(Sk::Float | Sk::Sint))
-                    | (Uo::LogicalNot, Some(Sk::Bool))
-                    | (Uo::BitwiseNot, Some(Sk::Sint | Sk::Uint)) => {}
-                    other => {
-                        log::debug!("Op {op:?} kind {other:?}");
-                        return Err(ExpressionError::InvalidUnaryOperandType(op, expr));
-                    }
+                let Some((_, scalar)) = resolver[expr].vector_size_and_scalar() else {
+                    return Err(ExpressionError::InvalidUnaryOperandType(op, expr));
+                };
+                match (op, scalar.kind) {
+                    (Uo::Negate, Sk::Float | Sk::Sint) => {}
+                    (Uo::LogicalNot, Sk::Bool) => {}
+                    (Uo::BitwiseNot, Sk::Sint | Sk::Uint) => {}
+                    _ => return Err(ExpressionError::InvalidUnaryOperandType(op, expr)),
                 }
                 ShaderStages::all()
             }

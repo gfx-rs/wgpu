@@ -47,10 +47,20 @@ pub enum TransferError {
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error(transparent)]
     MissingTextureUsage(#[from] MissingTextureUsageError),
-    #[error("Copy of {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} buffer of size {buffer_size}")]
-    BufferOverrun {
+    #[error(
+        "Copy at offset {start_offset} bytes would end up overrunning the bounds of the {side:?} buffer of size {buffer_size}"
+    )]
+    BufferStartOffsetOverrun {
         start_offset: BufferAddress,
-        end_offset: BufferAddress,
+        buffer_size: BufferAddress,
+        side: CopySide,
+    },
+    #[error(
+        "Copy at offset {start_offset} for {size} bytes would end up overrunning the bounds of the {side:?} buffer of size {buffer_size}"
+    )]
+    BufferEndOffsetOverrun {
+        start_offset: BufferAddress,
+        size: BufferAddress,
         buffer_size: BufferAddress,
         side: CopySide,
     },
@@ -176,13 +186,14 @@ pub enum TransferError {
 
 impl WebGpuError for TransferError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::MissingBufferUsage(e) => e,
-            Self::MissingTextureUsage(e) => e,
-            Self::MemoryInitFailure(e) => e,
+        match self {
+            Self::MissingBufferUsage(e) => e.webgpu_error_type(),
+            Self::MissingTextureUsage(e) => e.webgpu_error_type(),
+            Self::MemoryInitFailure(e) => e.webgpu_error_type(),
 
-            Self::BufferOverrun { .. }
+            Self::BufferEndOffsetOverrun { .. }
             | Self::TextureOverrun { .. }
+            | Self::BufferStartOffsetOverrun { .. }
             | Self::UnsupportedPartialTransfer { .. }
             | Self::InvalidCopyWithinSameTexture { .. }
             | Self::InvalidTextureAspect { .. }
@@ -214,9 +225,8 @@ impl WebGpuError for TransferError {
             | Self::SampleCountNotEqual { .. }
             | Self::InvalidMipLevel { .. }
             | Self::SameSourceDestinationBuffer
-            | Self::BufferNotAvailable => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::BufferNotAvailable => ErrorType::Validation,
+        }
     }
 }
 
@@ -318,10 +328,10 @@ pub(crate) fn validate_linear_texture_data(
         bytes_in_copy,
     } = layout.get_buffer_texture_copy_info(format, aspect, copy_size)?;
 
-    if copy_width % block_width_texels != 0 {
+    if !copy_width.is_multiple_of(block_width_texels) {
         return Err(TransferError::UnalignedCopyWidth);
     }
-    if copy_height % block_height_texels != 0 {
+    if !copy_height.is_multiple_of(block_height_texels) {
         return Err(TransferError::UnalignedCopyHeight);
     }
 
@@ -340,11 +350,18 @@ pub(crate) fn validate_linear_texture_data(
         return Err(TransferError::UnspecifiedRowsPerImage);
     };
 
-    // Avoid underflow in the subtraction by checking bytes_in_copy against buffer_size first.
-    if bytes_in_copy > buffer_size || offset > buffer_size - bytes_in_copy {
-        return Err(TransferError::BufferOverrun {
+    if offset > buffer_size {
+        return Err(TransferError::BufferStartOffsetOverrun {
             start_offset: offset,
-            end_offset: offset.wrapping_add(bytes_in_copy),
+            buffer_size,
+            side: buffer_side,
+        });
+    }
+    // NOTE: Should never underflow because of our earlier check.
+    if bytes_in_copy > buffer_size - offset {
+        return Err(TransferError::BufferEndOffsetOverrun {
+            start_offset: offset,
+            size: bytes_in_copy,
             buffer_size,
             side: buffer_side,
         });
@@ -981,12 +998,20 @@ pub(super) fn copy_buffer_to_buffer(
         .map_err(TransferError::MissingBufferUsage)?;
     let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer, state.snatch_guard));
 
-    let (size, source_end_offset) = match size {
-        Some(size) => (size, source_offset + size),
-        None => (src_buffer.size - source_offset, src_buffer.size),
-    };
+    if source_offset > src_buffer.size {
+        return Err(TransferError::BufferStartOffsetOverrun {
+            start_offset: source_offset,
+            buffer_size: src_buffer.size,
+            side: CopySide::Source,
+        }
+        .into());
+    }
+    let size = size.unwrap_or_else(|| {
+        // NOTE: Should never underflow because of our earlier check.
+        src_buffer.size - source_offset
+    });
 
-    if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+    if !size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
         return Err(TransferError::UnalignedCopySize(size).into());
     }
     if !source_offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
@@ -1017,25 +1042,38 @@ pub(super) fn copy_buffer_to_buffer(
         }
     }
 
-    let destination_end_offset = destination_offset + size;
-    if source_end_offset > src_buffer.size {
-        return Err(TransferError::BufferOverrun {
+    if size > src_buffer.size - source_offset {
+        return Err(TransferError::BufferEndOffsetOverrun {
             start_offset: source_offset,
-            end_offset: source_end_offset,
+            size,
             buffer_size: src_buffer.size,
             side: CopySide::Source,
         }
         .into());
     }
-    if destination_end_offset > dst_buffer.size {
-        return Err(TransferError::BufferOverrun {
+    // NOTE: Should never overflow because of our earlier check.
+    let source_end_offset = source_offset + size;
+
+    if destination_offset > dst_buffer.size {
+        return Err(TransferError::BufferStartOffsetOverrun {
             start_offset: destination_offset,
-            end_offset: destination_end_offset,
             buffer_size: dst_buffer.size,
             side: CopySide::Destination,
         }
         .into());
     }
+    // NOTE: Should never underflow because of our earlier check.
+    if size > dst_buffer.size - destination_offset {
+        return Err(TransferError::BufferEndOffsetOverrun {
+            start_offset: destination_offset,
+            size,
+            buffer_size: dst_buffer.size,
+            side: CopySide::Destination,
+        }
+        .into());
+    }
+    // NOTE: Should never overflow because of our earlier check.
+    let destination_end_offset = destination_offset + size;
 
     // This must happen after parameter validation (so that errors are reported
     // as required by the spec), but before any side effects.
@@ -1049,14 +1087,14 @@ pub(super) fn copy_buffer_to_buffer(
         .buffer_memory_init_actions
         .extend(dst_buffer.initialization_status.read().create_action(
             dst_buffer,
-            destination_offset..(destination_offset + size),
+            destination_offset..destination_end_offset,
             MemoryInitKind::ImplicitlyInitialized,
         ));
     state
         .buffer_memory_init_actions
         .extend(src_buffer.initialization_status.read().create_action(
             src_buffer,
-            source_offset..(source_offset + size),
+            source_offset..source_end_offset,
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
@@ -1429,6 +1467,8 @@ pub(super) fn copy_texture_to_texture(
         depth: src_copy_size.depth.min(dst_copy_size.depth),
     };
 
+    let dst_format = dst_texture.desc.format;
+
     let regions = (0..array_layer_count).map(|rel_array_layer| {
         let mut src_base = src_tex_base.clone();
         let mut dst_base = dst_tex_base.clone();
@@ -1450,6 +1490,33 @@ pub(super) fn copy_texture_to_texture(
                 stencil.src_base.aspect = hal::FormatAspects::STENCIL;
                 stencil.dst_base.aspect = hal::FormatAspects::STENCIL;
                 [depth, stencil]
+            })
+            .collect::<Vec<_>>()
+    } else if let Some(plane_count) = dst_format.planes() {
+        regions
+            .into_iter()
+            .flat_map(|region| {
+                (0..plane_count).map(move |plane| {
+                    let mut plane_region = region.clone();
+
+                    let plane_aspect = wgt::TextureAspect::from_plane(plane)
+                        .expect("expected texture aspect to exist for the plane");
+                    let plane_aspect = hal::FormatAspects::new(dst_format, plane_aspect);
+                    plane_region.src_base.aspect = plane_aspect;
+                    plane_region.dst_base.aspect = plane_aspect;
+
+                    let (w_subsampling, h_subsampling) =
+                        dst_format.subsampling_factors(Some(plane));
+                    plane_region.src_base.origin.x /= w_subsampling;
+                    plane_region.src_base.origin.y /= h_subsampling;
+                    plane_region.dst_base.origin.x /= w_subsampling;
+                    plane_region.dst_base.origin.y /= h_subsampling;
+
+                    plane_region.size.width /= w_subsampling;
+                    plane_region.size.height /= h_subsampling;
+
+                    plane_region
+                })
             })
             .collect::<Vec<_>>()
     } else {

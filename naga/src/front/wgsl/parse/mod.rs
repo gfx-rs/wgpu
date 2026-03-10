@@ -183,6 +183,7 @@ impl<'a> BindingParser<'a> {
                 lexer.expect(Token::Paren('('))?;
                 self.location
                     .set(parser.expression(lexer, ctx)?, name_span)?;
+                lexer.next_if(Token::Separator(','));
                 lexer.expect(Token::Paren(')'))?;
             }
             "builtin" => {
@@ -192,6 +193,7 @@ impl<'a> BindingParser<'a> {
                     conv::map_built_in(&lexer.enable_extensions, raw, span)?,
                     name_span,
                 )?;
+                lexer.next_if(Token::Separator(','));
                 lexer.expect(Token::Paren(')'))?;
             }
             "interpolate" => {
@@ -204,6 +206,7 @@ impl<'a> BindingParser<'a> {
                     self.sampling
                         .set(conv::map_sampling(raw, span)?, name_span)?;
                 }
+                lexer.next_if(Token::Separator(','));
                 lexer.expect(Token::Paren(')'))?;
             }
 
@@ -919,12 +922,14 @@ impl Parser {
                     ("size", name_span) => {
                         lexer.expect(Token::Paren('('))?;
                         let expr = self.expression(lexer, ctx)?;
+                        lexer.next_if(Token::Separator(','));
                         lexer.expect(Token::Paren(')'))?;
                         size.set(expr, name_span)?;
                     }
                     ("align", name_span) => {
                         lexer.expect(Token::Paren('('))?;
                         let expr = self.expression(lexer, ctx)?;
+                        lexer.next_if(Token::Separator(','));
                         lexer.expect(Token::Paren(')'))?;
                         align.set(expr, name_span)?;
                     }
@@ -1879,16 +1884,19 @@ impl Parser {
                 "binding" => {
                     lexer.expect(Token::Paren('('))?;
                     bind_index.set(self.expression(lexer, &mut ctx)?, name_span)?;
+                    lexer.next_if(Token::Separator(','));
                     lexer.expect(Token::Paren(')'))?;
                 }
                 "group" => {
                     lexer.expect(Token::Paren('('))?;
                     bind_group.set(self.expression(lexer, &mut ctx)?, name_span)?;
+                    lexer.next_if(Token::Separator(','));
                     lexer.expect(Token::Paren(')'))?;
                 }
                 "id" => {
                     lexer.expect(Token::Paren('('))?;
                     id.set(self.expression(lexer, &mut ctx)?, name_span)?;
+                    lexer.next_if(Token::Separator(','));
                     lexer.expect(Token::Paren(')'))?;
                 }
                 "vertex" => {
@@ -1974,11 +1982,15 @@ impl Parser {
                 "workgroup_size" => {
                     lexer.expect(Token::Paren('('))?;
                     let mut new_workgroup_size = [None; 3];
-                    for (i, size) in new_workgroup_size.iter_mut().enumerate() {
+                    for size in new_workgroup_size.iter_mut() {
                         *size = Some(self.expression(lexer, &mut ctx)?);
                         match lexer.next() {
                             (Token::Paren(')'), _) => break,
-                            (Token::Separator(','), _) if i != 2 => (),
+                            (Token::Separator(','), _) => {
+                                if lexer.next_if(Token::Paren(')')) {
+                                    break;
+                                }
+                            }
                             other => {
                                 return Err(Box::new(Error::Unexpected(
                                     other.1,

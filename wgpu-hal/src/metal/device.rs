@@ -1,12 +1,8 @@
 use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
-use core::{
-    ffi::c_void,
-    ptr::{self, NonNull},
-    sync::atomic,
-};
-use dispatch2::DispatchData;
+use core::{ptr::NonNull, sync::atomic};
 use std::{thread, time};
 
+use bytemuck::TransparentWrapper;
 use objc2::{
     available, msg_send,
     rc::{autoreleasepool, Retained},
@@ -14,11 +10,13 @@ use objc2::{
 };
 use objc2_foundation::{ns_string, NSError, NSRange, NSString, NSUInteger};
 use objc2_metal::{
-    MTLBuffer, MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer, MTLCommandBufferStatus,
+    MTLAccelerationStructure, MTLAccelerationStructureInstanceOptions, MTLBuffer,
+    MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer, MTLCommandBufferStatus,
     MTLCompileOptions, MTLComputePipelineDescriptor, MTLComputePipelineState,
     MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode, MTLDepthStencilDescriptor,
-    MTLDevice, MTLFunction, MTLLanguageVersion, MTLLibrary, MTLMeshRenderPipelineDescriptor,
-    MTLMutability, MTLPipelineBufferDescriptorArray, MTLPixelFormat, MTLPrimitiveTopologyClass,
+    MTLDevice, MTLFunction, MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion,
+    MTLLibrary, MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
+    MTLPipelineBufferDescriptorArray, MTLPixelFormat, MTLPrimitiveTopologyClass,
     MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
     MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
     MTLSamplerMipFilter, MTLSamplerState, MTLSize, MTLStencilDescriptor, MTLStorageMode,
@@ -69,8 +67,10 @@ fn create_depth_stencil_desc(
     state: &wgt::DepthStencilState,
 ) -> Retained<MTLDepthStencilDescriptor> {
     let desc = MTLDepthStencilDescriptor::new();
-    desc.setDepthCompareFunction(conv::map_compare_function(state.depth_compare));
-    desc.setDepthWriteEnabled(state.depth_write_enabled);
+    desc.setDepthCompareFunction(conv::map_compare_function(
+        state.depth_compare.unwrap_or_default(),
+    ));
+    desc.setDepthWriteEnabled(state.depth_write_enabled.unwrap_or_default());
     let s = &state.stencil;
     if s.is_enabled() {
         let front_desc = create_stencil_desc(&s.front, s.read_mask, s.write_mask);
@@ -728,7 +728,7 @@ impl crate::Device for super::Device {
             need_sizes_buffer: false,
             resources: Default::default(),
         });
-        let mut bind_group_infos = arrayvec::ArrayVec::new();
+        let mut bind_group_infos = [const { None }; crate::MAX_BIND_GROUPS];
 
         // First, place the immediates
         for info in stage_data.iter_mut() {
@@ -742,7 +742,11 @@ impl crate::Device for super::Device {
         }
 
         // Second, place the described resources
-        for (group_index, &bgl) in desc.bind_group_layouts.iter().enumerate() {
+        for (group_index, bgl) in desc.bind_group_layouts.iter().enumerate() {
+            let Some(bgl) = bgl else {
+                continue;
+            };
+
             // remember where the resources for this set start at each shader stage
             let base_resource_indices = stage_data.map_ref(|info| info.counters.clone());
 
@@ -799,7 +803,10 @@ impl crate::Device for super::Device {
                                     wgt::StorageTextureAccess::Atomic => true,
                                 };
                             }
-                            wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
+                            wgt::BindingType::AccelerationStructure { .. } => {
+                                target.buffer = Some(info.counters.buffers as _);
+                                info.counters.buffers += 1;
+                            }
                             wgt::BindingType::ExternalTexture => {
                                 target.external_texture =
                                     Some(naga::back::msl::BindExternalTextureTarget {
@@ -824,7 +831,7 @@ impl crate::Device for super::Device {
                 }
             }
 
-            bind_group_infos.push(super::BindGroupLayoutInfo {
+            bind_group_infos[group_index] = Some(super::BindGroupLayoutInfo {
                 base_resource_indices,
             });
         }
@@ -966,12 +973,33 @@ impl crate::Device for super::Device {
                                     // need to be passed to useResource
                                 }
                             }
+                            wgt::BindingType::AccelerationStructure { .. } => {
+                                let start = entry.resource_index as usize;
+                                let end = start + count as usize;
+                                let acceleration_structures =
+                                    &desc.acceleration_structures[start..end];
+
+                                for (idx, &acceleration_structure) in
+                                    acceleration_structures.iter().enumerate()
+                                {
+                                    contents[idx] = acceleration_structure.raw.gpuResourceID();
+
+                                    let use_info = bg
+                                        .resources_to_use
+                                        .entry(acceleration_structure.as_raw().cast())
+                                        .or_default();
+                                    use_info.stages |= stages;
+                                    use_info.uses |= uses;
+                                    use_info.visible_in_compute |=
+                                        layout.visibility.contains(wgt::ShaderStages::COMPUTE);
+                                }
+                            }
                             _ => {
                                 unimplemented!();
                             }
                         }
 
-                        bg.buffers.push(super::BufferResource {
+                        bg.buffers.push(super::BufferLikeResource::Buffer {
                             ptr: NonNull::from(&*buffer),
                             offset: 0,
                             dynamic_index: None,
@@ -1015,7 +1043,7 @@ impl crate::Device for super::Device {
                                             }
                                             _ => None,
                                         };
-                                        super::BufferResource {
+                                        super::BufferLikeResource::Buffer {
                                             ptr: source.buffer.as_raw(),
                                             offset: source.offset,
                                             dynamic_index: if has_dynamic_offset {
@@ -1048,7 +1076,20 @@ impl crate::Device for super::Device {
                                 );
                                 counter.textures += 1;
                             }
-                            wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
+                            wgt::BindingType::AccelerationStructure { .. } => {
+                                let start = entry.resource_index as usize;
+                                let end = start + 1;
+                                bg.buffers.extend(
+                                    desc.acceleration_structures[start..end].iter().map(
+                                        |acceleration_structure| {
+                                            super::BufferLikeResource::AccelerationStructure(
+                                                acceleration_structure.as_raw(),
+                                            )
+                                        },
+                                    ),
+                                );
+                                counter.buffers += 1;
+                            }
                             wgt::BindingType::ExternalTexture => {
                                 // We don't yet support binding arrays of external textures.
                                 // https://github.com/gfx-rs/wgpu/issues/8027
@@ -1061,7 +1102,7 @@ impl crate::Device for super::Device {
                                         .iter()
                                         .map(|plane| plane.view.as_raw()),
                                 );
-                                bg.buffers.push(super::BufferResource {
+                                bg.buffers.push(super::BufferLikeResource::Buffer {
                                     ptr: external_texture.params.buffer.as_raw(),
                                     offset: external_texture.params.offset,
                                     dynamic_index: None,
@@ -1103,20 +1144,11 @@ impl crate::Device for super::Device {
                 num_workgroups,
             } => {
                 // SAFETY: this creates a reference to `file` that is dropped before `file` is dropped.
-                let data = unsafe {
-                    DispatchData::new(
-                        NonNull::new(file.as_ptr() as *mut c_void).unwrap(),
-                        file.len(),
-                        None,
-                        ptr::null_mut(),
-                    )
-                };
-                let library = self
-                    .shared
-                    .device
-                    .newLibraryWithData_error(&data)
-                    .map_err(|e| crate::ShaderError::Compilation(format!("Metallib: {e:?}")))?;
-                drop(data);
+                let library = super::library_from_metallib::new_library_from_metallib_bytes(
+                    &self.shared.device,
+                    file,
+                )
+                .map_err(|e| crate::ShaderError::Compilation(format!("Metallib: {e:?}")))?;
                 Ok(super::ShaderModule {
                     source: ShaderModuleSource::Passthrough(PassthroughShader {
                         library,
@@ -1885,34 +1917,87 @@ impl crate::Device for super::Device {
 
     unsafe fn get_acceleration_structure_build_sizes(
         &self,
-        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<super::Buffer>,
+        descriptor: &crate::GetAccelerationStructureBuildSizesDescriptor<super::Buffer>,
     ) -> crate::AccelerationStructureBuildSizes {
-        unimplemented!()
+        let acceleration_structure_descriptor =
+            conv::map_acceleration_structure_descriptor(descriptor.entries, descriptor.flags);
+        let info = self
+            .shared
+            .device
+            .accelerationStructureSizesWithDescriptor(&acceleration_structure_descriptor);
+        crate::AccelerationStructureBuildSizes {
+            acceleration_structure_size: info.accelerationStructureSize as u64,
+            update_scratch_size: info.refitScratchBufferSize as u64,
+            build_scratch_size: info.buildScratchBufferSize as u64,
+        }
     }
 
     unsafe fn get_acceleration_structure_device_address(
         &self,
-        _acceleration_structure: &super::AccelerationStructure,
+        acceleration_structure: &super::AccelerationStructure,
     ) -> wgt::BufferAddress {
-        unimplemented!()
+        acceleration_structure.raw.gpuResourceID().to_raw()
     }
 
     unsafe fn create_acceleration_structure(
         &self,
-        _desc: &crate::AccelerationStructureDescriptor,
+        descriptor: &crate::AccelerationStructureDescriptor,
     ) -> Result<super::AccelerationStructure, crate::DeviceError> {
-        unimplemented!()
+        // self.counters.acceleration_structures.add(1);
+        autoreleasepool(|_| {
+            Ok(super::AccelerationStructure {
+                raw: self
+                    .shared
+                    .device
+                    .newAccelerationStructureWithSize(descriptor.size as usize)
+                    .ok_or(crate::DeviceError::OutOfMemory)?,
+            })
+        })
     }
 
     unsafe fn destroy_acceleration_structure(
         &self,
         _acceleration_structure: super::AccelerationStructure,
     ) {
-        unimplemented!()
+        // self.counters.acceleration_structures.sub(1);
     }
 
-    fn tlas_instance_to_bytes(&self, _instance: TlasInstance) -> Vec<u8> {
-        unimplemented!()
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+        let temp = MTLIndirectAccelerationStructureInstanceDescriptor {
+            transformationMatrix: MTLPackedFloat4x3 {
+                columns: [
+                    MTLPackedFloat3 {
+                        x: instance.transform[0],
+                        y: instance.transform[4],
+                        z: instance.transform[8],
+                    },
+                    MTLPackedFloat3 {
+                        x: instance.transform[1],
+                        y: instance.transform[5],
+                        z: instance.transform[9],
+                    },
+                    MTLPackedFloat3 {
+                        x: instance.transform[2],
+                        y: instance.transform[6],
+                        z: instance.transform[10],
+                    },
+                    MTLPackedFloat3 {
+                        x: instance.transform[3],
+                        y: instance.transform[7],
+                        z: instance.transform[11],
+                    },
+                ],
+            },
+            options: MTLAccelerationStructureInstanceOptions::None,
+            mask: instance.mask as u32,
+            intersectionFunctionTableOffset: 0,
+            userID: instance.custom_data,
+            accelerationStructureID: unsafe { MTLResourceID::from_raw(instance.blas_address) },
+        };
+
+        wgt::bytemuck_wrapper!(unsafe struct Desc(MTLIndirectAccelerationStructureInstanceDescriptor));
+
+        bytemuck::bytes_of(&Desc::wrap(temp)).to_vec()
     }
 
     fn get_internal_counters(&self) -> wgt::HalCounters {

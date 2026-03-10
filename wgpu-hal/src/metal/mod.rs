@@ -22,6 +22,7 @@ mod adapter;
 mod command;
 mod conv;
 mod device;
+mod library_from_metallib;
 mod surface;
 mod time;
 
@@ -32,7 +33,6 @@ use alloc::{
 };
 use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
 
-use arrayvec::ArrayVec;
 use bitflags::bitflags;
 use hashbrown::HashMap;
 use naga::FastHashMap;
@@ -43,13 +43,14 @@ use objc2::{
 };
 use objc2_foundation::ns_string;
 use objc2_metal::{
-    MTLArgumentBuffersTier, MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer,
-    MTLCommandBufferStatus, MTLCommandQueue, MTLComputeCommandEncoder, MTLComputePipelineState,
-    MTLCounterSampleBuffer, MTLCullMode, MTLDepthClipMode, MTLDepthStencilState, MTLDevice,
-    MTLDrawable, MTLIndexType, MTLLanguageVersion, MTLLibrary, MTLPrimitiveType,
-    MTLReadWriteTextureTier, MTLRenderCommandEncoder, MTLRenderPipelineState, MTLRenderStages,
-    MTLResource, MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize, MTLTexture,
-    MTLTextureType, MTLTriangleFillMode, MTLWinding,
+    MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLArgumentBuffersTier,
+    MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandQueue,
+    MTLComputeCommandEncoder, MTLComputePipelineState, MTLCounterSampleBuffer, MTLCullMode,
+    MTLDepthClipMode, MTLDepthStencilState, MTLDevice, MTLDrawable, MTLIndexType,
+    MTLLanguageVersion, MTLLibrary, MTLPrimitiveType, MTLReadWriteTextureTier,
+    MTLRenderCommandEncoder, MTLRenderPipelineState, MTLRenderStages, MTLResource,
+    MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize, MTLTexture, MTLTextureType,
+    MTLTriangleFillMode, MTLWinding,
 };
 use objc2_quartz_core::CAMetalLayer;
 use parking_lot::{Mutex, RwLock};
@@ -150,16 +151,18 @@ impl crate::Instance for Instance {
 
     unsafe fn create_surface(
         &self,
-        _display_handle: raw_window_handle::RawDisplayHandle,
+        display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Surface, crate::InstanceError> {
-        let layer = match window_handle {
-            raw_window_handle::RawWindowHandle::AppKit(handle) => unsafe {
-                raw_window_metal::Layer::from_ns_view(handle.ns_view)
-            },
-            raw_window_handle::RawWindowHandle::UiKit(handle) => unsafe {
-                raw_window_metal::Layer::from_ui_view(handle.ui_view)
-            },
+        let layer = match (display_handle, window_handle) {
+            (
+                raw_window_handle::RawDisplayHandle::AppKit(_),
+                raw_window_handle::RawWindowHandle::AppKit(handle),
+            ) => unsafe { raw_window_metal::Layer::from_ns_view(handle.ns_view) },
+            (
+                raw_window_handle::RawDisplayHandle::UiKit(_),
+                raw_window_handle::RawWindowHandle::UiKit(handle),
+            ) => unsafe { raw_window_metal::Layer::from_ui_view(handle.ui_view) },
             _ => {
                 return Err(crate::InstanceError::new(format!(
                     "window handle {window_handle:?} is not a Metal-compatible handle"
@@ -351,6 +354,7 @@ struct PrivateCapabilities {
     supported_vertex_amplification_factor: u32,
     shader_barycentrics: bool,
     supports_memoryless_storage: bool,
+    supports_raytracing: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -731,7 +735,7 @@ struct ImmediateDataInfo {
 
 #[derive(Debug)]
 pub struct PipelineLayout {
-    bind_group_infos: ArrayVec<BindGroupLayoutInfo, { crate::MAX_BIND_GROUPS }>,
+    bind_group_infos: [Option<BindGroupLayoutInfo>; crate::MAX_BIND_GROUPS],
     immediates_infos: MultiStageData<Option<ImmediateDataInfo>>,
     total_counters: MultiStageResourceCounters,
     total_immediates: u32,
@@ -741,22 +745,25 @@ pub struct PipelineLayout {
 impl crate::DynPipelineLayout for PipelineLayout {}
 
 #[derive(Debug)]
-struct BufferResource {
-    ptr: NonNull<ProtocolObject<dyn MTLBuffer>>,
-    offset: wgt::BufferAddress,
-    dynamic_index: Option<u32>,
+enum BufferLikeResource {
+    Buffer {
+        ptr: NonNull<ProtocolObject<dyn MTLBuffer>>,
+        offset: wgt::BufferAddress,
+        dynamic_index: Option<u32>,
 
-    /// The buffer's size, if it is a [`Storage`] binding. Otherwise `None`.
-    ///
-    /// Buffers with the [`wgt::BufferBindingType::Storage`] binding type can
-    /// hold WGSL runtime-sized arrays. When one does, we must pass its size to
-    /// shader entry points to implement bounds checks and WGSL's `arrayLength`
-    /// function. See `device::CompiledShader::sized_bindings` for details.
-    ///
-    /// [`Storage`]: wgt::BufferBindingType::Storage
-    binding_size: Option<wgt::BufferSize>,
+        /// The buffer's size, if it is a [`Storage`] binding. Otherwise `None`.
+        ///
+        /// Buffers with the [`wgt::BufferBindingType::Storage`] binding type can
+        /// hold WGSL runtime-sized arrays. When one does, we must pass its size to
+        /// shader entry points to implement bounds checks and WGSL's `arrayLength`
+        /// function. See `device::CompiledShader::sized_bindings` for details.
+        ///
+        /// [`Storage`]: wgt::BufferBindingType::Storage
+        binding_size: Option<wgt::BufferSize>,
 
-    binding_location: u32,
+        binding_location: u32,
+    },
+    AccelerationStructure(NonNull<ProtocolObject<dyn MTLAccelerationStructure>>),
 }
 
 #[derive(Debug)]
@@ -779,7 +786,7 @@ impl Default for UseResourceInfo {
 #[derive(Debug, Default)]
 pub struct BindGroup {
     counters: MultiStageResourceCounters,
-    buffers: Vec<BufferResource>,
+    buffers: Vec<BufferLikeResource>,
     samplers: Vec<NonNull<ProtocolObject<dyn MTLSamplerState>>>,
     textures: Vec<NonNull<ProtocolObject<dyn MTLTexture>>>,
 
@@ -991,6 +998,8 @@ struct Temp {
 
 struct CommandState {
     blit: Option<Retained<ProtocolObject<dyn MTLBlitCommandEncoder>>>,
+    acceleration_structure_builder:
+        Option<Retained<ProtocolObject<dyn MTLAccelerationStructureCommandEncoder>>>,
     render: Option<Retained<ProtocolObject<dyn MTLRenderCommandEncoder>>>,
     compute: Option<Retained<ProtocolObject<dyn MTLComputeCommandEncoder>>>,
     raw_primitive_type: MTLPrimitiveType,
@@ -1063,9 +1072,19 @@ pub struct PipelineCache;
 impl crate::DynPipelineCache for PipelineCache {}
 
 #[derive(Debug)]
-pub struct AccelerationStructure;
+pub struct AccelerationStructure {
+    raw: Retained<ProtocolObject<dyn MTLAccelerationStructure>>,
+}
+
+impl AccelerationStructure {
+    fn as_raw(&self) -> NonNull<ProtocolObject<dyn MTLAccelerationStructure>> {
+        unsafe { NonNull::new_unchecked(Retained::as_ptr(&self.raw) as *mut _) }
+    }
+}
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
+unsafe impl Send for AccelerationStructure {}
+unsafe impl Sync for AccelerationStructure {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OsType {

@@ -2224,10 +2224,10 @@ fn invalid_local_vars() {
             var not_okay: ptr<storage, array<f32>> = &(*okay).data;
         }
         ":
-        Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::LocalVariable {
+        Err(valid::ValidationError::Function {
+            source: valid::FunctionError::LocalVariable {
                 name: local_var_name,
-                source: naga::valid::LocalVariableError::InvalidType(_),
+                source: valid::LocalVariableError::InvalidType(_),
                 ..
             },
             ..
@@ -2241,16 +2241,106 @@ fn invalid_local_vars() {
             var x: atomic<u32>;
         }
         ":
-        Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::LocalVariable {
+        Err(valid::ValidationError::Function {
+            source: valid::FunctionError::LocalVariable {
                 name: local_var_name,
-                source: naga::valid::LocalVariableError::InvalidType(_),
+                source: valid::LocalVariableError::InvalidType(_),
                 ..
             },
             ..
         })
         if local_var_name == "x"
     }
+
+    // Rejected in statement lowering
+    // There is a similar validator test in `validation.rs`.
+    check(
+        "
+        override len: u32;
+        var<workgroup> arr: array<u32, len>;
+        fn f() {
+            let x: array<u32, len> = arr;
+        }
+        ",
+        r#"error: type `x` is not constructible
+  ┌─ wgsl:5:17
+  │
+5 │             let x: array<u32, len> = arr;
+  │                 ^ type is not constructible
+
+"#,
+    );
+}
+
+#[test]
+fn invalid_zero_value_constructors() {
+    // There are similar validator tests in `validation.rs`.
+
+    // Rejected in constructor lowering
+    check(
+        "
+        fn f() {
+            let x = array<u32>();
+        }
+        ",
+        r#"error: type `array<u32>` is not constructible
+  ┌─ wgsl:3:21
+  │
+3 │             let x = array<u32>();
+  │                     ^^^^^^^^^^ type is not constructible
+
+"#,
+    );
+
+    // Rejected in constructor lowering
+    check(
+        "
+        override len: u32;
+        fn f() {
+            let x = array<u32, len>();
+        }
+        ",
+        r#"error: type `array<u32, len>` is not constructible
+  ┌─ wgsl:4:21
+  │
+4 │             let x = array<u32, len>();
+  │                     ^^^^^^^^^^^^^^^ type is not constructible
+
+"#,
+    );
+
+    // Rejected in constructor lowering
+    check(
+        "
+        fn f() {
+            let x = array<u32>(0, 1, 2);
+        }
+        ",
+        r#"error: type `array<u32>` is not constructible
+  ┌─ wgsl:3:21
+  │
+3 │             let x = array<u32>(0, 1, 2);
+  │                     ^^^^^^^^^^ type is not constructible
+
+"#,
+    );
+
+    // Rejected in constructor lowering
+    check(
+        "
+        struct Unsized { data: array<f32> }
+        fn main() {
+            var not_okay: Unsized = Unsized();
+        }
+        ",
+        r#"error: type `Unsized` is not constructible
+  ┌─ wgsl:4:37
+  │
+4 │             var not_okay: Unsized = Unsized();
+  │                                     ^^^^^^^ type is not constructible
+
+"#,
+    );
 }
 
 #[test]
@@ -4210,13 +4300,10 @@ fn invalid_clip_distances() {
 
 #[test]
 fn recognized_but_unimplemented_enable_extension() {
-    for extension in [
-        naga::front::wgsl::UnimplementedEnableExtension::Subgroups,
-        naga::front::wgsl::UnimplementedEnableExtension::PrimitiveIndex,
-    ] {
-        // NOTE: We match exhaustively here to help maintainers add or remove variants to the above
-        // array.
-        let snapshot = match extension {
+    let extension = naga::front::wgsl::UnimplementedEnableExtension::Subgroups;
+    // NOTE: We match exhaustively here to help maintainers add or remove variants to the above
+    // array.
+    let snapshot = match extension {
             naga::front::wgsl::UnimplementedEnableExtension::Subgroups => "\
 error: the `subgroups` enable-extension is not yet supported
   ┌─ wgsl:1:8
@@ -4227,25 +4314,14 @@ error: the `subgroups` enable-extension is not yet supported
   = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/5555>, so they can prioritize it!
 
 ",
-            naga::front::wgsl::UnimplementedEnableExtension::PrimitiveIndex => "\
-error: the `primitive_index` enable-extension is not yet supported
-  ┌─ wgsl:1:8
-  │
-1 │ enable primitive_index;
-  │        ^^^^^^^^^^^^^^^ this enable-extension specifies standard functionality which is not yet implemented in Naga
-  │
-  = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/8236>, so they can prioritize it!
-
-",
         };
 
-        let shader = {
-            let extension = naga::front::wgsl::EnableExtension::Unimplemented(extension);
-            format!("enable {};", extension.to_ident())
-        };
+    let shader = {
+        let extension = naga::front::wgsl::EnableExtension::Unimplemented(extension);
+        format!("enable {};", extension.to_ident())
+    };
 
-        check(&shader, snapshot);
-    }
+    check(&shader, snapshot);
 }
 
 #[test]

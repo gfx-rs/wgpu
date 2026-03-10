@@ -109,11 +109,6 @@ impl<T> Handle<T> {
         Handle::new(handle_index)
     }
 
-    /// Convert a `usize` index into a `Handle<T>`, without range checks.
-    pub(super) const unsafe fn from_usize_unchecked(index: usize) -> Self {
-        Handle::new(Index::new_unchecked(index as u32))
-    }
-
     /// Write this handle's index to `formatter`, preceded by `prefix`.
     pub fn write_prefixed(
         &self,

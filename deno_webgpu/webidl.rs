@@ -394,6 +394,8 @@ pub enum GPUFeatureName {
   Bgra8unormStorage,
   #[webidl(rename = "float32-filterable")]
   Float32Filterable,
+  #[webidl(rename = "float32-blendable")]
+  Float32Blendable,
   #[webidl(rename = "dual-source-blending")]
   DualSourceBlending,
   #[webidl(rename = "subgroups")]
@@ -489,6 +491,7 @@ pub fn feature_names_to_features(
       GPUFeatureName::Rg11b10ufloatRenderable => Features::RG11B10UFLOAT_RENDERABLE,
       GPUFeatureName::Bgra8unormStorage => Features::BGRA8UNORM_STORAGE,
       GPUFeatureName::Float32Filterable => Features::FLOAT32_FILTERABLE,
+      GPUFeatureName::Float32Blendable => Features::FLOAT32_BLENDABLE,
       GPUFeatureName::DualSourceBlending => Features::DUAL_SOURCE_BLENDING,
       GPUFeatureName::Subgroups => Features::SUBGROUP,
       GPUFeatureName::ExternalTexture => Features::EXTERNAL_TEXTURE,
@@ -520,7 +523,7 @@ pub fn feature_names_to_features(
       GPUFeatureName::ShaderI16 => Features::SHADER_I16,
       GPUFeatureName::ShaderPrimitiveIndex => Features::SHADER_PRIMITIVE_INDEX,
       GPUFeatureName::ShaderEarlyDepthTest => Features::SHADER_EARLY_DEPTH_TEST,
-      GPUFeatureName::PassthroughShaders => Features::EXPERIMENTAL_PASSTHROUGH_SHADERS,
+      GPUFeatureName::PassthroughShaders => Features::PASSTHROUGH_SHADERS,
     };
     features.set(feature, true);
   }
@@ -577,6 +580,9 @@ pub fn features_to_feature_names(
   }
   if features.contains(wgpu_types::Features::FLOAT32_FILTERABLE) {
     return_features.insert(Float32Filterable);
+  }
+  if features.contains(wgpu_types::Features::FLOAT32_BLENDABLE) {
+    return_features.insert(Float32Blendable);
   }
   if features.contains(wgpu_types::Features::DUAL_SOURCE_BLENDING) {
     return_features.insert(DualSourceBlending);
@@ -680,7 +686,7 @@ pub fn features_to_feature_names(
   if features.contains(wgpu_types::Features::SHADER_EARLY_DEPTH_TEST) {
     return_features.insert(ShaderEarlyDepthTest);
   }
-  if features.contains(wgpu_types::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS) {
+  if features.contains(wgpu_types::Features::PASSTHROUGH_SHADERS) {
     return_features.insert(PassthroughShaders);
   }
 
@@ -803,16 +809,11 @@ impl<'a> WebIdlConverter<'a> for GPUColorWriteFlags {
       },
     )?;
 
-    let flags =
-      wgpu_types::ColorWrites::from_bits(flags_value).ok_or_else(|| {
-        WebIdlError::other(
-          prefix,
-          context,
-          JsErrorBox::type_error("color write flags are not valid"),
-        )
-      })?;
-
-    Ok(GPUColorWriteFlags(flags))
+    // WebGPU specifies a validation error for invalid color write mask values.
+    // We propagate invalid bits here; wgpu_core will validate it.
+    Ok(GPUColorWriteFlags(
+      wgpu_types::ColorWrites::from_bits_retain(flags_value),
+    ))
   }
 }
 

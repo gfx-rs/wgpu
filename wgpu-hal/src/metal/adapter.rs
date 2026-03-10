@@ -2,7 +2,8 @@ use objc2::{available, runtime::ProtocolObject};
 use objc2_foundation::{NSOperatingSystemVersion, NSProcessInfo};
 use objc2_metal::{
     MTLArgumentBuffersTier, MTLCounterSamplingPoint, MTLDevice, MTLFeatureSet, MTLGPUFamily,
-    MTLLanguageVersion, MTLPixelFormat, MTLReadWriteTextureTier,
+    MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion, MTLPixelFormat,
+    MTLReadWriteTextureTier,
 };
 use parking_lot::Mutex;
 use wgt::{AstcBlock, AstcChannel};
@@ -979,6 +980,17 @@ impl super::PrivateCapabilities {
             supports_cooperative_matrix: family_check
                 && (device.supportsFamily(MTLGPUFamily::Apple7)
                     || device.supportsFamily(MTLGPUFamily::Mac2)),
+            // https://developer.apple.com/documentation/metal/mtlresidencyset
+            supports_raytracing: if available!(
+                macos = 15.0,
+                ios = 18.0,
+                tvos = 18.0,
+                visionos = 2.0,
+            ) {
+                device.supportsRaytracing() && device.supportsRaytracingFromRender()
+            } else {
+                false
+            },
         }
     }
 
@@ -1004,10 +1016,11 @@ impl super::PrivateCapabilities {
             | F::SHADER_F16
             | F::DEPTH32FLOAT_STENCIL8
             | F::BGRA8UNORM_STORAGE
-            | F::EXPERIMENTAL_PASSTHROUGH_SHADERS
+            | F::PASSTHROUGH_SHADERS
             | F::EXTERNAL_TEXTURE;
 
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
+        features.set(F::FLOAT32_BLENDABLE, true);
         features.set(F::INDIRECT_FIRST_INSTANCE, self.indirect_draw_dispatch);
         features.set(
             F::TIMESTAMP_QUERY | F::TIMESTAMP_QUERY_INSIDE_ENCODERS,
@@ -1108,6 +1121,8 @@ impl super::PrivateCapabilities {
             features.insert(F::MULTIVIEW);
         }
 
+        features.set(F::EXPERIMENTAL_RAY_QUERY, self.supports_raytracing);
+
         features
     }
 
@@ -1164,9 +1179,9 @@ impl super::PrivateCapabilities {
             max_binding_array_sampler_elements_per_shader_stage: self
                 .max_sampler_binding_array_elements,
             // Note: any adjustment here will not be reflected in the stored `PrivateCapabilities`.
-            max_uniform_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32,
-            max_storage_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32
-                & !(wgt::STORAGE_BINDING_SIZE_ALIGNMENT - 1),
+            max_uniform_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64),
+            max_storage_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64)
+                & !(wgt::STORAGE_BINDING_SIZE_ALIGNMENT as u64 - 1),
             max_vertex_buffers: self.max_vertex_buffers,
             max_vertex_attributes: 31,
             max_vertex_buffer_array_stride: base.max_vertex_buffer_array_stride,
@@ -1186,16 +1201,14 @@ impl super::PrivateCapabilities {
             max_buffer_size: self.max_buffer_size,
             max_non_sampler_bindings: u32::MAX,
 
-            max_blas_primitive_count: 0, // When added: 2^28 from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
-            max_blas_geometry_count: 0,  // When added: 2^24
-            max_tlas_instance_count: 0,  // When added: 2^24
-            // Unsure what this will be when added: acceleration structures count as a buffer so
-            // it may be worth using argument buffers for this all acceleration structures, then
-            // there will be no limit.
+            // from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
+            max_blas_primitive_count: 1 << 28,
+            max_blas_geometry_count: 1 << 24,
+            max_tlas_instance_count: 1 << 24,
             // From 2.17.7 in https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
             // > [Acceleration structures] are opaque objects that can be bound directly using
             // buffer binding points or via argument buffers
-            max_acceleration_structures_per_shader_stage: 0,
+            max_acceleration_structures_per_shader_stage: self.max_buffers_per_stage,
 
             max_multiview_view_count: if self.supported_vertex_amplification_factor > 1 {
                 self.supported_vertex_amplification_factor
@@ -1238,8 +1251,9 @@ impl super::PrivateCapabilities {
                 // Metal Shading Language it generates, so from `wgpu_hal`'s
                 // users' point of view, references are tightly checked.
                 uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
-                raw_tlas_instance_size: 0,
-                ray_tracing_scratch_buffer_alignment: 0,
+                raw_tlas_instance_size: size_of::<MTLIndirectAccelerationStructureInstanceDescriptor>(
+                ),
+                ray_tracing_scratch_buffer_alignment: 1,
             },
             downlevel,
             cooperative_matrix_properties: self.cooperative_matrix_properties(),

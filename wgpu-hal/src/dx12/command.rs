@@ -1127,7 +1127,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         group: &super::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
-        let info = &layout.bind_group_infos[index as usize];
+        let info = layout.bind_group_infos[index as usize].as_ref().unwrap();
         let mut root_index = info.base_root_index as usize;
 
         // Bind CBV/SRC/UAV descriptor tables
@@ -1849,5 +1849,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 conv::map_acceleration_structure_copy_mode(copy),
             )
         }
+    }
+
+    unsafe fn set_acceleration_structure_dependencies(
+        _command_buffers: &[&super::CommandBuffer],
+        _dependencies: &[&super::AccelerationStructure],
+    ) {
     }
 }

@@ -234,9 +234,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> webgpu_sys::GpuText
         TextureFormat::Bgra8UnormSrgb => tf::Bgra8unormSrgb,
         // Packed 32-bit formats
         TextureFormat::Rgb9e5Ufloat => tf::Rgb9e5ufloat,
-        TextureFormat::Rgb10a2Uint => {
-            unimplemented!("Current version of web_sys is missing {texture_format:?}")
-        }
+        TextureFormat::Rgb10a2Uint => tf::Rgb10a2uint,
         TextureFormat::Rgb10a2Unorm => tf::Rgb10a2unorm,
         TextureFormat::Rg11b10Ufloat => tf::Rg11b10ufloat,
         // 64-bit formats
@@ -435,8 +433,12 @@ fn map_stencil_state_face(desc: &wgt::StencilFaceState) -> webgpu_sys::GpuStenci
 
 fn map_depth_stencil_state(desc: &wgt::DepthStencilState) -> webgpu_sys::GpuDepthStencilState {
     let mapped = webgpu_sys::GpuDepthStencilState::new(map_texture_format(desc.format));
-    mapped.set_depth_compare(map_compare_function(desc.depth_compare));
-    mapped.set_depth_write_enabled(desc.depth_write_enabled);
+    if let Some(compare) = desc.depth_compare {
+        mapped.set_depth_compare(map_compare_function(compare));
+    }
+    if let Some(write_enabled) = desc.depth_write_enabled {
+        mapped.set_depth_write_enabled(write_enabled);
+    }
     mapped.set_depth_bias(desc.bias.constant);
     mapped.set_depth_bias_clamp(desc.bias.clamp);
     mapped.set_depth_bias_slope_scale(desc.bias.slope_scale);
@@ -802,8 +804,8 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_uniform_buffers_per_shader_stage: limits.max_uniform_buffers_per_shader_stage(),
         max_binding_array_elements_per_shader_stage: 0,
         max_binding_array_sampler_elements_per_shader_stage: 0,
-        max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size() as u32,
-        max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size() as u32,
+        max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size() as u64,
+        max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size() as u64,
         max_vertex_buffers: limits.max_vertex_buffers(),
         max_buffer_size: limits.max_buffer_size() as u64,
         max_vertex_attributes: limits.max_vertex_attributes(),
@@ -1678,16 +1680,8 @@ impl dispatch::AdapterInterface for WebAdapter {
 
         let mapped_desc = webgpu_sys::GpuDeviceDescriptor::new();
 
-        // TODO: Migrate to a web_sys api.
-        // See https://github.com/rustwasm/wasm-bindgen/issues/3587
-        let limits_object = map_js_sys_limits(&desc.required_limits);
-
-        js_sys::Reflect::set(
-            &mapped_desc,
-            &JsValue::from("requiredLimits"),
-            &limits_object,
-        )
-        .expect("Setting Object properties should never fail.");
+        let required_limits = map_js_sys_limits(&desc.required_limits);
+        mapped_desc.set_required_limits(&required_limits);
 
         let required_features = FEATURES_MAPPING
             .iter()
@@ -1733,20 +1727,7 @@ impl dispatch::AdapterInterface for WebAdapter {
     }
 
     fn get_info(&self) -> crate::AdapterInfo {
-        // TODO(https://github.com/gfx-rs/wgpu/issues/8818): web-sys has no way of getting information on adapters
-        wgt::AdapterInfo {
-            name: String::new(),
-            vendor: 0,
-            device: 0,
-            device_type: wgt::DeviceType::Other,
-            device_pci_bus_id: String::new(),
-            driver: String::new(),
-            driver_info: String::new(),
-            backend: wgt::Backend::BrowserWebGpu,
-            subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
-            subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
-            transient_saves_memory: false,
-        }
+        map_adapter_info(&self.inner.info())
     }
 
     fn get_texture_format_features(
@@ -2148,10 +2129,14 @@ impl dispatch::DeviceInterface for WebDevice {
         &self,
         desc: &crate::PipelineLayoutDescriptor<'_>,
     ) -> dispatch::DispatchPipelineLayout {
+        let null = wasm_bindgen::JsValue::NULL;
         let temp_layouts = desc
             .bind_group_layouts
             .iter()
-            .map(|bgl| &bgl.inner.as_webgpu().inner)
+            .map(|bgl| match bgl {
+                Some(bgl) => bgl.inner.as_webgpu().inner.as_ref(),
+                None => &null,
+            })
             .collect::<js_sys::Array>();
         let mapped_desc = webgpu_sys::GpuPipelineLayoutDescriptor::new(&temp_layouts);
         if let Some(label) = desc.label {
@@ -2596,20 +2581,11 @@ impl dispatch::QueueInterface for WebQueue {
         data: &[u8],
     ) {
         let buffer = buffer.as_webgpu();
-        /* Skip the copy once gecko allows BufferSource instead of ArrayBuffer
-        self.inner.write_buffer_with_f64_and_u8_array_and_f64_and_f64(
-            &buffer.buffer,
-            offset as f64,
-            data,
-            0f64,
-            data.len() as f64,
-        );
-        */
         self.inner
-            .write_buffer_with_f64_and_buffer_source_and_f64_and_f64(
+            .write_buffer_with_f64_and_u8_slice_and_f64_and_f64(
                 &buffer.inner,
                 offset as f64,
-                &js_sys::Uint8Array::from(data).buffer(),
+                data,
                 0f64,
                 data.len() as f64,
             )
@@ -2688,18 +2664,10 @@ impl dispatch::QueueInterface for WebQueue {
         }
         mapped_data_layout.set_offset(data_layout.offset as f64);
 
-        /* Skip the copy once gecko allows BufferSource instead of ArrayBuffer
-        self.inner.write_texture_with_u8_array_and_gpu_extent_3d_dict(
-            &map_texture_copy_view(texture),
-            data,
-            &mapped_data_layout,
-            &map_extent_3d(size),
-        );
-        */
         self.inner
-            .write_texture_with_buffer_source_and_gpu_extent_3d_dict(
+            .write_texture_with_u8_slice_and_gpu_extent_3d_dict(
                 &map_texture_copy_view(texture),
-                &js_sys::Uint8Array::from(data).buffer(),
+                data,
                 &mapped_data_layout,
                 &map_extent_3d(size),
             )
@@ -3256,19 +3224,16 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         }
     }
 
-    fn insert_debug_marker(&self, _label: &str) {
-        // Not available in gecko yet
-        // self.insert_debug_marker(label);
+    fn insert_debug_marker(&self, label: &str) {
+        self.inner.insert_debug_marker(label)
     }
 
-    fn push_debug_group(&self, _label: &str) {
-        // Not available in gecko yet
-        // self.push_debug_group(label);
+    fn push_debug_group(&self, group_label: &str) {
+        self.inner.push_debug_group(group_label)
     }
 
     fn pop_debug_group(&self) {
-        // Not available in gecko yet
-        // self.pop_debug_group();
+        self.inner.pop_debug_group()
     }
 
     fn write_timestamp(&self, _query_set: &dispatch::DispatchQuerySet, _query_index: u32) {
@@ -3354,18 +3319,15 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
         bind_group: Option<&dispatch::DispatchBindGroup>,
         offsets: &[crate::DynamicOffset],
     ) {
-        let Some(bind_group) = bind_group else {
-            return;
-        };
-        let bind_group = &bind_group.as_webgpu().inner;
+        let bind_group = bind_group.map(|bind_group| &bind_group.as_webgpu().inner);
 
         if offsets.is_empty() {
-            self.inner.set_bind_group(index, Some(bind_group));
+            self.inner.set_bind_group(index, bind_group);
         } else {
             self.inner
                 .set_bind_group_with_u32_slice_and_f64_and_dynamic_offsets_data_length(
                     index,
-                    Some(bind_group),
+                    bind_group,
                     offsets,
                     0f64,
                     offsets.len() as u32,
@@ -3378,19 +3340,16 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
         panic!("IMMEDIATES feature must be enabled to call set_immediates")
     }
 
-    fn insert_debug_marker(&mut self, _label: &str) {
-        // Not available in gecko yet
-        // self.inner.insert_debug_marker(label);
+    fn insert_debug_marker(&mut self, label: &str) {
+        self.inner.insert_debug_marker(label);
     }
 
-    fn push_debug_group(&mut self, _group_label: &str) {
-        // Not available in gecko yet
-        // self.inner.push_debug_group(group_label);
+    fn push_debug_group(&mut self, group_label: &str) {
+        self.inner.push_debug_group(group_label);
     }
 
     fn pop_debug_group(&mut self) {
-        // Not available in gecko yet
-        // self.inner.pop_debug_group();
+        self.inner.pop_debug_group();
     }
 
     fn write_timestamp(&mut self, _query_set: &dispatch::DispatchQuerySet, _query_index: u32) {
@@ -3444,18 +3403,15 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         bind_group: Option<&dispatch::DispatchBindGroup>,
         offsets: &[crate::DynamicOffset],
     ) {
-        let Some(bind_group) = bind_group else {
-            return;
-        };
-        let bind_group = &bind_group.as_webgpu().inner;
+        let bind_group = bind_group.map(|bind_group| &bind_group.as_webgpu().inner);
 
         if offsets.is_empty() {
-            self.inner.set_bind_group(index, Some(bind_group));
+            self.inner.set_bind_group(index, bind_group);
         } else {
             self.inner
                 .set_bind_group_with_u32_slice_and_f64_and_dynamic_offsets_data_length(
                     index,
-                    Some(bind_group),
+                    bind_group,
                     offsets,
                     0f64,
                     offsets.len() as u32,
@@ -3667,33 +3623,28 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         panic!("MESH_SHADER feature must be enabled to call multi_draw_mesh_tasks_indirect_count")
     }
 
-    fn insert_debug_marker(&mut self, _label: &str) {
-        // Not available in gecko yet
-        // self.inner.insert_debug_marker(label);
+    fn insert_debug_marker(&mut self, label: &str) {
+        self.inner.insert_debug_marker(label);
     }
 
-    fn push_debug_group(&mut self, _group_label: &str) {
-        // Not available in gecko yet
-        // self.inner.push_debug_group(group_label);
+    fn push_debug_group(&mut self, group_label: &str) {
+        self.inner.push_debug_group(group_label);
     }
 
     fn pop_debug_group(&mut self) {
-        // Not available in gecko yet
-        // self.inner.pop_debug_group();
+        self.inner.pop_debug_group();
     }
 
     fn write_timestamp(&mut self, _query_set: &dispatch::DispatchQuerySet, _query_index: u32) {
         panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a render pass.")
     }
 
-    fn begin_occlusion_query(&mut self, _query_index: u32) {
-        // Not available in gecko yet
-        // self.inner.begin_occlusion_query(query_index);
+    fn begin_occlusion_query(&mut self, query_index: u32) {
+        self.inner.begin_occlusion_query(query_index);
     }
 
     fn end_occlusion_query(&mut self) {
-        // Not available in gecko yet
-        // self.inner.end_occlusion_query();
+        self.inner.end_occlusion_query();
     }
 
     fn begin_pipeline_statistics_query(
@@ -3701,14 +3652,11 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         _query_set: &dispatch::DispatchQuerySet,
         _query_index: u32,
     ) {
-        // Not available in gecko yet
-        // let query_set = query_set.as_webgpu();
-        // self.inner.begin_pipeline_statistics_query(query_set, query_index);
+        // Removed from WebGPU in https://github.com/gpuweb/gpuweb/pull/2296
     }
 
     fn end_pipeline_statistics_query(&mut self) {
-        // Not available in gecko yet
-        // self.inner.end_pipeline_statistics_query();
+        // Removed from WebGPU https://github.com/gpuweb/gpuweb/pull/2296
     }
 
     fn execute_bundles(
@@ -3746,18 +3694,15 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         bind_group: Option<&dispatch::DispatchBindGroup>,
         offsets: &[crate::DynamicOffset],
     ) {
-        let Some(bind_group) = bind_group else {
-            return;
-        };
-        let bind_group = &bind_group.as_webgpu().inner;
+        let bind_group = bind_group.map(|bind_group| &bind_group.as_webgpu().inner);
 
         if offsets.is_empty() {
-            self.inner.set_bind_group(index, Some(bind_group));
+            self.inner.set_bind_group(index, bind_group);
         } else {
             self.inner
                 .set_bind_group_with_u32_slice_and_f64_and_dynamic_offsets_data_length(
                     index,
-                    Some(bind_group),
+                    bind_group,
                     offsets,
                     0f64,
                     offsets.len() as u32,

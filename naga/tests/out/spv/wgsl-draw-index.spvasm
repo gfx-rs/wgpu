@@ -1,0 +1,36 @@
+; SPIR-V
+; Version: 1.4
+; Generator: rspirv
+; Bound: 21
+OpCapability Shader
+OpCapability DrawParameters
+OpExtension "SPV_KHR_shader_draw_parameters"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Vertex %14 "vertex" %9 %12
+OpMemberDecorate %4 0 Offset 0
+OpDecorate %9 BuiltIn DrawIndex
+OpDecorate %12 BuiltIn Position
+%2 = OpTypeVoid
+%3 = OpTypeInt 32 0
+%4 = OpTypeStruct %3
+%6 = OpTypeFloat 32
+%5 = OpTypeVector %6 4
+%10 = OpTypePointer Input %3
+%9 = OpVariable  %10  Input
+%13 = OpTypePointer Output %5
+%12 = OpVariable  %13  Output
+%15 = OpTypeFunction %2
+%16 = OpConstant  %6  1
+%14 = OpFunction  %2  None %15
+%7 = OpLabel
+%11 = OpLoad  %3  %9
+%8 = OpCompositeConstruct  %4  %11
+OpBranch %17
+%17 = OpLabel
+%18 = OpCompositeExtract  %3  %8 0
+%19 = OpConvertUToF  %6  %18
+%20 = OpCompositeConstruct  %5  %19 %16 %16 %16
+OpStore %12 %20
+OpReturn
+OpFunctionEnd

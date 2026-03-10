@@ -68,10 +68,8 @@
         WriteBuffer(
             id: PointerId(0x120),
             data: File("data1.bin"),
-            range: (
-                start: 4,
-                end: 20,
-            ),
+            offset: 4,
+            size: 16,
             queued: true,
         ),
         CreateShaderModule(
@@ -122,7 +120,7 @@
         CreatePipelineLayout(PointerId(0x10), (
             label: None,
             bind_group_layouts: [
-                PointerId(0x10),
+                Some(PointerId(0x10)),
             ],
             immediate_size: 0,
         )),

@@ -152,6 +152,34 @@ struct Args {
     /// "67108864"), the string "none", or the string "all".
     #[argh(option, default = "CapabilitiesArg(naga::valid::Capabilities::all())")]
     capabilities: CapabilitiesArg,
+
+    /// the limits on the task shader dispatch size
+    #[argh(option, default = "TaskDispatchLimitsArg(None)")]
+    task_limits: TaskDispatchLimitsArg,
+
+    /// whether or not the mesh shader output should be validated.
+    #[argh(option, default = "true")]
+    validate_mesh_output: bool,
+}
+
+/// Newtype so we can implement [`FromStr`] for `Option<TaskDispatchLimits>`.
+#[derive(Debug, Clone, Copy)]
+struct TaskDispatchLimitsArg(Option<naga::back::TaskDispatchLimits>);
+
+impl FromStr for TaskDispatchLimitsArg {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let values = s
+            .split_once(",")
+            .ok_or_else(|| format!("No comma present for --task-limits value: {s}"))?;
+        let x = values.0.parse::<u32>().map_err(|e| e.to_string())?;
+        let y = values.1.parse::<u32>().map_err(|e| e.to_string())?;
+        Ok(Self(Some(naga::back::TaskDispatchLimits {
+            max_mesh_workgroups_per_dim: x,
+            max_mesh_workgroups_total: y,
+        })))
+    }
 }
 
 /// Newtype so we can implement [`FromStr`] for `BoundsCheckPolicy`.
@@ -545,6 +573,9 @@ fn run() -> anyhow::Result<()> {
     params.compact = args.compact;
     params.capabilities = args.capabilities.0;
 
+    params.spv_out.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
+    params.spv_out.task_dispatch_limits = args.task_limits.0;
+
     if args.bulk_validate {
         return bulk_validate(&args, &params);
     }
@@ -597,19 +628,21 @@ fn run() -> anyhow::Result<()> {
     let output_paths = files;
 
     // Decide which capabilities our output formats can support.
-    let validation_caps =
-        output_paths
-            .clone()
-            .fold(naga::valid::Capabilities::all(), |caps, path| {
-                use naga::valid::Capabilities as C;
-                let missing = match Path::new(path).extension().and_then(|ex| ex.to_str()) {
-                    Some("wgsl") => C::CLIP_DISTANCE | C::CULL_DISTANCE,
-                    Some("metal") => C::CULL_DISTANCE,
-                    Some("hlsl") => C::empty(),
-                    _ => C::TEXTURE_EXTERNAL,
-                };
-                caps & !missing
-            });
+    let validation_caps = output_paths
+        .clone()
+        .fold(params.capabilities, |caps, path| {
+            use naga::valid::Capabilities as C;
+            let allowed = match Path::new(path).extension().and_then(|ex| ex.to_str()) {
+                Some("wgsl") => naga::back::wgsl::supported_capabilities(),
+                Some("metal") => naga::back::msl::supported_capabilities(),
+                Some("hlsl") => naga::back::hlsl::supported_capabilities(),
+                Some("spv") | Some("spirv") => naga::back::spv::supported_capabilities(),
+                Some("glsl") | Some("frag") | Some("vert") | Some("comp") | Some("task")
+                | Some("mesh") => naga::back::glsl::supported_capabilities(),
+                _ => C::all() - C::TEXTURE_EXTERNAL,
+            };
+            caps & allowed
+        });
 
     // Validate the IR before compaction.
     let info = match naga::valid::Validator::new(params.validation_flags, validation_caps)
