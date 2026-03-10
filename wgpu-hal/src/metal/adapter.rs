@@ -1202,7 +1202,7 @@ impl super::CapabilitiesQuery {
             .flags
             .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
 
-        let limits = crate::auxil::apply_hal_limits(wgt::Limits {
+        let limits = crate::auxil::adjust_raw_limits(wgt::Limits {
             //
             // WebGPU LIMITS:
             // Based on https://gpuweb.github.io/gpuweb/correspondence/#limits

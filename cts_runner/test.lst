@@ -57,12 +57,22 @@ webgpu:api,operation,vertex_state,correctness:setVertexBuffer_offset_and_attribu
 webgpu:api,validation,buffer,create:*
 webgpu:api,validation,buffer,destroy:*
 webgpu:api,validation,capability_checks,limits,maxBindGroups:setBindGroup,*
+webgpu:api,validation,capability_checks,limits,maxBindingsPerBindGroup:validate,*
 webgpu:api,validation,capability_checks,limits,maxBufferSize:*
+webgpu:api,validation,capability_checks,limits,maxComputeWorkgroupSizeX:validate,*
+webgpu:api,validation,capability_checks,limits,maxComputeWorkgroupSizeY:validate,*
+webgpu:api,validation,capability_checks,limits,maxComputeWorkgroupSizeZ:validate,*
+webgpu:api,validation,capability_checks,limits,maxComputeWorkgroupsPerDimension:validate,*
 //FAIL: other `maxInterStageShaderVariables` cases w/ limitTest ∈ [underDefault, overMaximum]
 // https://github.com/gfx-rs/wgpu/issues/8945
 webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";*
 webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atMaximum";*
 webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="betweenDefaultAndMaximum";*
+webgpu:api,validation,capability_checks,limits,maxStorageBufferBindingSize:validate,*
+webgpu:api,validation,capability_checks,limits,maxUniformBufferBindingSize:validate,*
+webgpu:api,validation,capability_checks,limits,maxVertexBufferArrayStride:validate,*
+webgpu:api,validation,capability_checks,limits,minStorageBufferOffsetAlignment:validate,*
+webgpu:api,validation,capability_checks,limits,minUniformBufferOffsetAlignment:validate,*
 webgpu:api,validation,compute_pipeline:basic:*
 webgpu:api,validation,compute_pipeline:limits,invocations_per_workgroup,each_component:*
 webgpu:api,validation,compute_pipeline:limits,invocations_per_workgroup:*

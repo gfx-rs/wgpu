@@ -1594,7 +1594,7 @@ impl PhysicalDeviceProperties {
             .map(|a| a.max_multiview_view_count.min(32))
             .unwrap_or(0);
 
-        crate::auxil::apply_hal_limits(wgt::Limits {
+        crate::auxil::adjust_raw_limits(wgt::Limits {
             //
             // WebGPU LIMITS:
             // Based on https://gpuweb.github.io/gpuweb/correspondence/#limits

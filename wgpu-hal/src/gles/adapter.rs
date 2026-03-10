@@ -704,7 +704,7 @@ impl super::Adapter {
         let max_color_attachment_bytes_per_sample =
             max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
-        let limits = crate::auxil::apply_hal_limits(wgt::Limits {
+        let limits = crate::auxil::adjust_raw_limits(wgt::Limits {
             max_texture_dimension_1d: max_texture_size,
             max_texture_dimension_2d: max_texture_size,
             max_texture_dimension_3d: max_texture_3d_size,

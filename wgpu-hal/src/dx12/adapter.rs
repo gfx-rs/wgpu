@@ -861,7 +861,7 @@ impl super::Adapter {
             info,
             features,
             capabilities: crate::Capabilities {
-                limits: auxil::apply_hal_limits(wgt::Limits {
+                limits: auxil::adjust_raw_limits(wgt::Limits {
                     //
                     // WebGPU LIMITS:
                     // Based on https://gpuweb.github.io/gpuweb/correspondence/#limits

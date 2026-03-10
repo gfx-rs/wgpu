@@ -131,12 +131,11 @@ impl crate::TextureCopy {
     }
 }
 
-/// Clamp the limits in `limits` to honor HAL-imposed maximums and WebGPU
-/// alignment requirements.
-///
-/// Other limits are left unchanged.
+/// Adjust `limits` to honor HAL-imposed maximums and comply with WebGPU's
+/// adapter capability guarantees.
 #[cfg_attr(not(any_backend), allow(dead_code))]
-pub(crate) fn apply_hal_limits(mut limits: wgt::Limits) -> wgt::Limits {
+pub(crate) fn adjust_raw_limits(mut limits: wgt::Limits) -> wgt::Limits {
+    // Apply hal limits.
     limits.max_bind_groups = limits.max_bind_groups.min(crate::MAX_BIND_GROUPS as u32);
     limits.max_vertex_buffers = limits
         .max_vertex_buffers
@@ -145,13 +144,14 @@ pub(crate) fn apply_hal_limits(mut limits: wgt::Limits) -> wgt::Limits {
         .max_color_attachments
         .min(crate::MAX_COLOR_ATTACHMENTS as u32);
 
+    // Adjust limits according to WebGPU adapter capability guarantees.
+    // See <https://gpuweb.github.io/gpuweb/#adapter-capability-guarantees>.
+
     // WebGPU requires maxBindingsPerBindGroup to be at least the sum of all
     // per-stage limits multiplied with the maximum shader stages per pipeline.
     //
     // Since backends already report their maximum maxBindingsPerBindGroup,
     // we need to lower all per-stage limits to satisfy this guarantee.
-    //
-    // See <https://gpuweb.github.io/gpuweb/#adapter-capability-guarantees>.
     const MAX_SHADER_STAGES_PER_PIPELINE: u32 = 2;
     let max_per_stage_resources =
         limits.max_bindings_per_bind_group / MAX_SHADER_STAGES_PER_PIPELINE;
@@ -168,6 +168,8 @@ pub(crate) fn apply_hal_limits(mut limits: wgt::Limits) -> wgt::Limits {
         max_per_stage_resources,
     );
 
+    // Not required by the spec but dynamic buffers count
+    // towards non-dynamic buffer limits as well.
     limits.max_dynamic_uniform_buffers_per_pipeline_layout = limits
         .max_dynamic_uniform_buffers_per_pipeline_layout
         .min(limits.max_uniform_buffers_per_shader_stage);
@@ -175,11 +177,27 @@ pub(crate) fn apply_hal_limits(mut limits: wgt::Limits) -> wgt::Limits {
         .max_dynamic_storage_buffers_per_pipeline_layout
         .min(limits.max_storage_buffers_per_shader_stage);
 
-    // Round some limits down to the WebGPU alignment requirement, to avoid
-    // suggesting values that won't work. (In particular, the CTS queries limits
-    // and then tests the exact limit value.)
-    limits.max_storage_buffer_binding_size &= u64::from(!(wgt::STORAGE_BINDING_SIZE_ALIGNMENT - 1));
+    limits.min_uniform_buffer_offset_alignment = limits.min_uniform_buffer_offset_alignment.max(32);
+    limits.min_storage_buffer_offset_alignment = limits.min_storage_buffer_offset_alignment.max(32);
+
+    limits.max_uniform_buffer_binding_size = limits
+        .max_uniform_buffer_binding_size
+        .min(limits.max_buffer_size);
+    limits.max_storage_buffer_binding_size = limits
+        .max_storage_buffer_binding_size
+        .min(limits.max_buffer_size);
+
+    limits.max_storage_buffer_binding_size &= !(u64::from(wgt::STORAGE_BINDING_SIZE_ALIGNMENT) - 1);
     limits.max_vertex_buffer_array_stride &= !(wgt::VERTEX_ALIGNMENT as u32 - 1);
+
+    let x = limits.max_compute_workgroup_size_x;
+    let y = limits.max_compute_workgroup_size_y;
+    let z = limits.max_compute_workgroup_size_z;
+    let m = limits.max_compute_invocations_per_workgroup;
+    limits.max_compute_workgroup_size_x = x.min(m);
+    limits.max_compute_workgroup_size_y = y.min(m);
+    limits.max_compute_workgroup_size_z = z.min(m);
+    limits.max_compute_invocations_per_workgroup = m.min(x.saturating_mul(y).saturating_mul(z));
 
     limits
 }
