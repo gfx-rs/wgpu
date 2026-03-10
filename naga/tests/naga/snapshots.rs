@@ -190,6 +190,7 @@ Note: this is an issue with snapshot configuration, not code. If you added a new
             &params.hlsl,
             &params.pipeline_constants,
             frag_ep,
+            &shared_info,
         );
     }
 
@@ -339,6 +340,7 @@ fn write_output_hlsl(
     options: &naga::back::hlsl::Options,
     pipeline_constants: &naga::back::PipelineConstants,
     frag_ep: Option<naga::back::hlsl::FragmentEntryPoint>,
+    shared_info: &WriterSharedOptions,
 ) {
     use naga::back::hlsl;
 
@@ -348,9 +350,13 @@ fn write_output_hlsl(
         naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
             .expect("override evaluation failed");
 
+    let mut options = options.clone();
+    options.mesh_shader_primitive_indices_clamp = shared_info.mesh_output_validation;
+    options.task_dispatch_limits = shared_info.task_limits;
+
     let mut buffer = String::new();
     let pipeline_options = Default::default();
-    let mut writer = hlsl::Writer::new(&mut buffer, options, &pipeline_options);
+    let mut writer = hlsl::Writer::new(&mut buffer, &options, &pipeline_options);
     let reflection_info = writer
         .write(&module, &info, frag_ep.as_ref())
         .expect("HLSL write failed");
@@ -370,9 +376,9 @@ fn write_output_hlsl(
             naga::ShaderStage::Vertex => &mut config.vertex,
             naga::ShaderStage::Fragment => &mut config.fragment,
             naga::ShaderStage::Compute => &mut config.compute,
-            naga::ShaderStage::Task
-            | naga::ShaderStage::Mesh
-            | naga::ShaderStage::RayGeneration
+            naga::ShaderStage::Task => &mut config.task,
+            naga::ShaderStage::Mesh => &mut config.mesh,
+            naga::ShaderStage::RayGeneration
             | naga::ShaderStage::AnyHit
             | naga::ShaderStage::ClosestHit
             | naga::ShaderStage::Miss => unreachable!(),

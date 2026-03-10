@@ -4,7 +4,7 @@ static uint global_2 = (uint)0;
 static uint global_3 = (uint)0;
 
 struct ComputeInput_main {
-    uint __local_invocation_index : SV_GroupIndex;
+    uint local_invocation_index : SV_GroupIndex;
 };
 
 void function()
@@ -39,7 +39,7 @@ void function()
 void main(ComputeInput_main computeinput_main)
 {
     uint param = (1u + WaveGetLaneCount() - 1u) / WaveGetLaneCount();
-    uint param_1 = computeinput_main.__local_invocation_index / WaveGetLaneCount();
+    uint param_1 = computeinput_main.local_invocation_index / WaveGetLaneCount();
     uint param_2 = WaveGetLaneCount();
     uint param_3 = WaveGetLaneIndex();
     global = param;

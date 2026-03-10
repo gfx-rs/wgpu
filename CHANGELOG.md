@@ -180,6 +180,12 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Added support for dual-source blending in SPIR-V shaders. By @andyleiserson in [#8865](https://github.com/gfx-rs/wgpu/pull/8865).
 - Added `supported_capabilities` to all backends. By @inner-daemons in [#9068](https://github.com/gfx-rs/wgpu/pull/9068).
 
+### General
+
+#### DX12
+
+- Added support for mesh shaders in naga's HLSL writer, completing DX12 support for mesh shaders. By @inner-daemons in #8752.
+
 ### Bug Fixes
 
 #### General
@@ -192,6 +198,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Renamed `EXPERIMENTAL_PASSTHROUGH_SHADERS` to `PASSTHROUGH_SHADERS` and made this no longer an experimental feature. by @inner-daemons in [#9054](https://github.com/gfx-rs/wgpu/pull/9054).
 - BREAKING: End offsets in trace and `player` commands are now represented using `offset` + `size` instead. By @ErichDonGubler in [9073](https://github.com/gfx-rs/wgpu/pull/9073).
 - Validate some uncaught cases where buffer transfer operations could overflow when computing an end offset. By @ErichDonGubler in [9073](https://github.com/gfx-rs/wgpu/pull/9073).
+- Fix various issues relating to `local_invocation_index` and `local_invocation_id` in HLSL and MSL. By @inner-daemons in [#9099](https://github.com/gfx-rs/wgpu/pull/9099).
 - Added internal labels to validation GPU objects and timestamp normalization code to improve clarity in graphics debuggers. By @szostid in [9094](https://github.com/gfx-rs/wgpu/pull/9094)
 - Fix multi-planar texture copying. By @noituri [#9069](https://github.com/gfx-rs/wgpu/pull/9069)
 
@@ -224,8 +231,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Require that the blend factor is `One` when the blend operation is `Min` or `Max`. The `BlendFactorOnUnsupportedTarget` error is now reported within `ColorStateError` rather than directly in `CreateRenderPipelineError`. By @andyleiserson in [#9110](https://github.com/gfx-rs/wgpu/pull/9110).
 
 #### Vulkan
-
-- Fixed a variety of mesh shader SPIR-V writer issues from the original implementation. By @inner-daemons in [#8756](https://github.com/gfx-rs/wgpu/pull/8756)
+- Fixed a variety of mesh shader SPIR-V writer issues from the original implementation. By @inner-daemons in [#8756](https://github.com/gfx-rs/wgpu/pull/8756).
 
 #### Metal / macOS
 - Fix one-second delay when switching a wgpu app to the foreground. By [@emilk](https://github.com/emilk) in [#9141](https://github.com/gfx-rs/wgpu/pull/9141)

@@ -688,6 +688,7 @@ impl super::Adapter {
             }
             .is_ok()
                 && features7.MeshShaderTier != Direct3D12::D3D12_MESH_SHADER_TIER_NOT_SUPPORTED
+                && shader_model >= naga::back::hlsl::ShaderModel::V6_5
         };
         features.set(
             wgt::Features::EXPERIMENTAL_MESH_SHADER,

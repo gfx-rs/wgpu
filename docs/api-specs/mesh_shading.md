@@ -90,9 +90,16 @@ An example of using mesh shaders to render a single triangle can be seen [here](
 
 > **NOTE**: More limits will be added when support is added to `naga`.
 
-* `Limits::max_task_workgroup_total_count` - the maximum total number of workgroups from a `draw_mesh_tasks` command or similar. The dimensions passed must be less than or equal to this limit when multiplied together.
-* `Limits::max_task_workgroups_per_dimension` - the maximum for each of the 3 workgroup dimensions in a `draw_mesh_tasks` command. Each dimension passed must be less than or equal to this limit.
-* `max_mesh_multiview_count` - The maximum number of views used when multiview rendering with a mesh shader pipeline.
+* `Limits::max_task_mesh_workgroup_total_count` - the maximum total number of workgroups from a `draw_mesh_tasks` command or similar. The dimensions passed must be less than or equal to this limit when multiplied together.
+* `Limits::max_task_mesh_workgroups_per_dimension` - the maximum for each of the 3 workgroup dimensions in a `draw_mesh_tasks` command. Each dimension passed must be less than or equal to this limit.
+* `max_task_invocations_per_workgroup` - The maximum total number of threads in a task shader workgroup, given by `workgroupSize.x * workgroupSize.y * workgroupSize.z`.
+* `max_task_invocations_per_dimension` the maximum value for each of `workgroupSize.x`, `workgroupSize.y` and `workgroupSize.z` in task shader workgroups.
+* `max_mesh_invocations_per_workgroup` - The maximum total number of threads in a mesh shader workgroup, given by `workgroupSize.x * workgroupSize.y * workgroupSize.z`.
+* `max_mesh_invocations_per_dimension` the maximum value for each of `workgroupSize.x`, `workgroupSize.y` and `workgroupSize.z` in mesh shader workgroups.
+* `max_task_payload_size` - the size of an `var<task_payload>` variable, in bytes.
+* `max_mesh_output_vertices` - the maximum number of vertices that a single mesh shader workgroup may output.
+* `max_mesh_output_primitives` - the maximum number of primitives that a single mesh shader workgroup may output.
+* `max_mesh_multiview_count` - the maximum number of views used when multiview rendering with a mesh shader pipeline.
 * `max_mesh_output_layers` - the maximum number of output layers for a mesh shader pipeline.
 
 ## Naga implementation
@@ -131,6 +138,8 @@ A task shader entry point must have a `@workgroup_size` attribute, meeting the s
 A task shader entry point must also have a `@payload(G)` property, where `G` is the name of a global variable in the `task_payload` address space. Each task shader workgroup has its own instance of this variable, visible to all invocations in the workgroup. Whatever value the workgroup collectively stores in that global variable becomes the **task payload**, and is provided to all invocations in the mesh shader grid dispatched for the workgroup. A task payload variable must be at least 4 bytes in size.
 
 A task shader entry point must return a `vec3<u32>` value decorated with `@builtin(mesh_task_size)`. The return value of each workgroup's first invocation (that is, the one whose `local_invocation_index` is `0`) is taken as the size of a **mesh shader grid** to dispatch, measured in workgroups. (If the task shader entry point returns `vec3(0, 0, 0)`, then no mesh shaders are dispatched.) Mesh shader grids are described in the next section.
+
+The output of a task shader is set to zero if it violates either of the limits `max_task_mesh_workgroup_total_count` or `max_task_mesh_workgroups_per_dimension`.
 
 Each task shader workgroup dispatches an independent mesh shader grid: in mesh shader invocations, `@builtin` values like `workgroup_id` and `global_invocation_id` describe the position of the workgroup and invocation within that grid;
 and `@builtin(num_workgroups)` matches the task shader workgroup's return value. Mesh shaders dispatched for other task shader workgroups are not included in the count. If it is necessary for a mesh shader to know which task shader workgroup dispatched it, the task shader can include its own workgroup id in the task payload.
