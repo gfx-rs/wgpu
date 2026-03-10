@@ -114,8 +114,9 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 )),
 ```
 
-#### Other breaking changes
-- ⚠️ `get_current_texture` can now return `SurfaceError::Occluded` [#9141](https://github.com/gfx-rs/wgpu/pull/9141)
+#### Other Breaking Changes
+
+- `get_current_texture` can now return `SurfaceError::Occluded`. By @emilk in [#9141](https://github.com/gfx-rs/wgpu/pull/9141).
 
 ### New Features
 
@@ -231,6 +232,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Fixed a variety of mesh shader SPIR-V writer issues from the original implementation. By @inner-daemons in [#8756](https://github.com/gfx-rs/wgpu/pull/8756)
 
 #### Metal / macOS
+
 - Fix one-second delay when switching a wgpu app to the foreground. By [@emilk](https://github.com/emilk) in [#9141](https://github.com/gfx-rs/wgpu/pull/9141)
 
 #### GLES
