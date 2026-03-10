@@ -17,7 +17,7 @@ env:
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
-  MSRV: "1.93"
+  REPO_MSRV: "1.93"
 
 # Every time a PR is pushed to, cancel any previous jobs. This
 # makes us behave nicer to github and get faster turnaround times
@@ -83,8 +83,8 @@ jobs:
 
       - name: Install Repo MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --target ${{ matrix.target }} --component llvm-tools
-          rustup override set ${{ env.MSRV }}
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --target ${{ matrix.target }} --component llvm-tools
+          rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
       - name: Install `cargo-llvm-cov`
