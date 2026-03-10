@@ -282,16 +282,16 @@ impl WebGpuError for InputError {
 #[non_exhaustive]
 pub enum StageError {
     #[error(
-        "Shader entry point's workgroup size {current:?} ({current_total} total invocations) must be less or equal to the per-dimension \
-        limit `Limits::{per_dimension_limit}` of {limit:?} and the total invocation limit `Limits::{total_limit}` of {total}"
+        "Shader entry point's workgroup size {dimensions:?} ({total} total invocations) must be less or equal to the per-dimension \
+        limit `Limits::{per_dimension_limits_desc}` of {per_dimension_limits:?} and the total invocation limit `Limits::{total_limit_desc}` of {total_limit}"
     )]
     InvalidWorkgroupSize {
-        current: [u32; 3],
-        current_total: u32,
-        limit: [u32; 3],
+        dimensions: [u32; 3],
+        per_dimension_limits: [u32; 3],
+        per_dimension_limits_desc: &'static str,
         total: u32,
-        per_dimension_limit: &'static str,
-        total_limit: &'static str,
+        total_limit: u32,
+        total_limit_desc: &'static str,
     },
     #[error("Unable to find entry point '{0}'")]
     MissingEntryPoint(String),
@@ -1434,12 +1434,12 @@ impl Interface {
                 || entry_point.workgroup_size[2] > max_workgroup_size_limits[2];
             if invalid_total_invocations || dimension_too_large {
                 return Err(StageError::InvalidWorkgroupSize {
-                    current: entry_point.workgroup_size,
-                    current_total: total_invocations,
-                    limit: max_workgroup_size_limits,
-                    total: max_workgroup_size_total,
-                    per_dimension_limit,
-                    total_limit,
+                    dimensions: entry_point.workgroup_size,
+                    total: total_invocations,
+                    per_dimension_limits: max_workgroup_size_limits,
+                    total_limit: max_workgroup_size_total,
+                    per_dimension_limits_desc: per_dimension_limit,
+                    total_limit_desc: total_limit,
                 });
             }
         }

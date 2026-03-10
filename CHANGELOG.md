@@ -117,6 +117,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 #### Other Breaking Changes
 
 - `Surface::get_current_texture` can now return `SurfaceError::Occluded`. By @emilk in [#9141](https://github.com/gfx-rs/wgpu/pull/9141).
+- Use clearer field names for `StageError::InvalidWorkgroupSize`. By @ErichDonGubler in [#????](https://github.com/gfx-rs/wgpu/pull/????).
 
 ### New Features
 
