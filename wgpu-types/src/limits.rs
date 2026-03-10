@@ -232,7 +232,7 @@ pub struct Limits {
     ///
     /// Expect the size to be:
     /// - Vulkan: 128-256 bytes
-    /// - DX12: 256 bytes
+    /// - DX12: 128 bytes
     /// - Metal: 4096 bytes
     /// - OpenGL doesn't natively support immediates, and are emulated with uniforms,
     ///   so this number is less useful but likely 256.

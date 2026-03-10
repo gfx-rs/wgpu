@@ -741,14 +741,9 @@ impl super::Adapter {
         // TODO: Determine if IPresentationManager is supported
         let presentation_timer = auxil::dxgi::time::PresentationTimer::new_dxgi();
 
-        let base = wgt::Limits::default();
-
         let downlevel = wgt::DownlevelCapabilities::default();
 
-        // See https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-feature-levels#feature-level-support
-        let max_color_attachments = 8;
-        let max_color_attachment_bytes_per_sample =
-            max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
+        // Resource Binding Tiers: https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-support#limits-dependant-on-hardware
 
         let max_srv_count = match options.ResourceBindingTier {
             Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => 128,
@@ -794,79 +789,119 @@ impl super::Adapter {
             features,
             capabilities: crate::Capabilities {
                 limits: auxil::apply_hal_limits(wgt::Limits {
+                    //
+                    // WebGPU LIMITS:
+                    // Based on https://gpuweb.github.io/gpuweb/correspondence/#limits
+                    //
+                    // 16384
                     max_texture_dimension_1d: Direct3D12::D3D12_REQ_TEXTURE1D_U_DIMENSION,
+                    // 16384
                     max_texture_dimension_2d: Direct3D12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION
                         .min(Direct3D12::D3D12_REQ_TEXTURECUBE_DIMENSION),
+                    // 2048
                     max_texture_dimension_3d: Direct3D12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
+                    // 2048
                     max_texture_array_layers: Direct3D12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION,
-                    max_bind_groups: crate::MAX_BIND_GROUPS as u32,
+                    // No real limit.
                     max_bindings_per_bind_group: 65535,
-                    // dynamic offsets take a root constant, so we expose the minimum here
-                    max_dynamic_uniform_buffers_per_pipeline_layout: base
-                        .max_dynamic_uniform_buffers_per_pipeline_layout,
-                    max_dynamic_storage_buffers_per_pipeline_layout: base
-                        .max_dynamic_storage_buffers_per_pipeline_layout,
                     max_sampled_textures_per_shader_stage,
+                    // 16 or 2048
                     max_samplers_per_shader_stage: match options.ResourceBindingTier {
                         Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => 16,
                         _ => Direct3D12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
                     },
-                    // these both account towards `uav_count`, but we can't express the limit as as sum
-                    // of the two, so we divide it by 4 to account for the worst case scenario
-                    // (2 shader stages, with both using 16 storage textures and 16 storage buffers)
-                    max_storage_buffers_per_shader_stage: uav_count / 4,
+                    // These both count towards `uav_count`, but we can't
+                    // express the limit as as sum of the two, so we divide
+                    // it by 4 to account for the worst case scenario
+                    // (with 2 shader stages).
                     max_storage_textures_per_shader_stage: uav_count / 4,
-                    max_uniform_buffers_per_shader_stage: full_heap_count,
-                    max_binding_array_elements_per_shader_stage: full_heap_count,
-                    max_binding_array_sampler_elements_per_shader_stage: full_heap_count,
-                    max_uniform_buffer_binding_size: u64::from(
-                        Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT,
-                    ) * 16,
-                    max_storage_buffer_binding_size: u64::from(auxil::MAX_I32_BINDING_SIZE),
-                    max_vertex_buffers: Direct3D12::D3D12_VS_INPUT_REGISTER_COUNT,
-                    max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
-                    max_vertex_buffer_array_stride: Direct3D12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
-                    // The immediates are part of the root signature which
-                    // has a limit of 64 DWORDS (256 bytes), but other resources
-                    // also share the root signature:
-                    //
-                    // - immediates consume a `DWORD` for each `4 bytes` of data
-                    // - If a bind group has buffers it will consume a `DWORD`
-                    //   for the descriptor table
-                    // - If a bind group has samplers it will consume a `DWORD`
-                    //   for the descriptor table
-                    // - Each dynamic uniform buffer will consume `2 DWORDs` for the
-                    //   root descriptor
-                    // - Each dynamic storage buffer will consume `1 DWORD` for a
-                    //   root constant representing the dynamic offset
-                    // - The special constants buffer count as constants
-                    //
-                    // Since we can't know beforehand all root signatures that
-                    // will be created, the max size to be used for push
-                    // constants needs to be set to a reasonable number instead.
-                    //
-                    // Source: https://learn.microsoft.com/en-us/windows/win32/direct3d12/root-signature-limits#memory-limits-and-costs
-                    max_immediate_size: 128,
-                    min_uniform_buffer_offset_alignment:
-                        Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
-                    min_storage_buffer_offset_alignment: 4,
-                    max_inter_stage_shader_variables: base.max_inter_stage_shader_variables,
-                    max_color_attachments,
-                    max_color_attachment_bytes_per_sample,
-                    // From: https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.6%20Inter-Thread%20Data%20Sharing
-                    max_compute_workgroup_storage_size: 32768,
-                    max_compute_invocations_per_workgroup:
-                        Direct3D12::D3D12_CS_4_X_THREAD_GROUP_MAX_THREADS_PER_GROUP,
-                    max_compute_workgroup_size_x: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_X,
-                    max_compute_workgroup_size_y: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_Y,
-                    max_compute_workgroup_size_z: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_Z,
-                    max_compute_workgroups_per_dimension:
-                        Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                    max_storage_buffers_per_shader_stage: uav_count / 4,
+                    // 14 or FULL HEAP
+                    max_uniform_buffers_per_shader_stage: match options.ResourceBindingTier {
+                        Direct3D12::D3D12_RESOURCE_BINDING_TIER_1
+                        | Direct3D12::D3D12_RESOURCE_BINDING_TIER_2 => 14,
+                        _ => full_heap_count,
+                    },
+                    // See `InputSlot` param docs: https://learn.microsoft.com/en-ca/windows/win32/api/d3d12/ns-d3d12-d3d12_input_element_desc
+                    max_vertex_buffers: 16,
                     // Dx12 does not expose a maximum buffer size in the API.
                     // This limit is chosen to avoid potential issues with drivers should they internally
                     // store buffer sizes using 32 bit ints (a situation we have already encountered with vulkan).
                     max_buffer_size: i32::MAX as u64,
+                    max_storage_buffer_binding_size: auxil::MAX_I32_BINDING_SIZE as u64,
+                    // 65536
+                    max_uniform_buffer_binding_size:
+                        Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT as u64 * 16,
+                    // 254
+                    min_uniform_buffer_offset_alignment:
+                        Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
+                    // 16
+                    min_storage_buffer_offset_alignment:
+                        Direct3D12::D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT,
+                    // 32
+                    max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
+                    // 2048
+                    max_vertex_buffer_array_stride: Direct3D12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
+                    // 31
+                    max_inter_stage_shader_variables: Direct3D12::D3D12_VS_OUTPUT_REGISTER_COUNT
+                        .min(Direct3D12::D3D12_PS_INPUT_REGISTER_COUNT)
+                        - 1, // - 1 for position
+                    // Limits that must share D3D12's root signature size of
+                    // D3D12_MAX_ROOT_COST 64 DWORDS (256 bytes).
+                    //
+                    // Root constants and root tables use 1 DWORD.
+                    // Root descriptors use 2 DWORDs.
+                    // Source: https://learn.microsoft.com/en-us/windows/win32/direct3d12/root-signature-limits#memory-limits-and-costs
+                    //
+                    // Per pipeline layout:
+                    // - RootElement::Constant, (immediates) 32 root constants
+                    //     (bounded by maxImmediateSize) = 32 x 4 bytes = 128 bytes
+                    // - RootElement::SamplerHeap, a root table = 4 bytes
+                    // - RootElement::SpecialConstantBuffer, 3 root constants = 3 x 4 bytes = 12 bytes
+                    // - RootElement::DynamicOffsetsBuffer, a root constant per dynamic storage buffer
+                    //     (bounded by maxDynamicStorageBuffersPerPipelineLayout) = 4 x 4 bytes = 16 bytes
+                    // - RootElement::DynamicUniformBuffer, a root descriptor per dynamic uniform buffer
+                    //     (bounded by maxDynamicUniformBuffersPerPipelineLayout) = 8 x 8 bytes = 64 bytes
+                    // Per bind group:
+                    // - RootElement::Table, a root table
+                    //     (bounded by maxBindGroups) = 8 x 4 bytes = 32 bytes
+                    //
+                    // Source: logic in `create_pipeline_layout`
+                    //
+                    // Total: 128 + 4 + 12 + 16 + 64 + 32 = 256 bytes
+                    //
+                    max_immediate_size: 128,
+                    max_bind_groups: crate::MAX_BIND_GROUPS as u32,
+                    max_dynamic_uniform_buffers_per_pipeline_layout: 8,
+                    max_dynamic_storage_buffers_per_pipeline_layout: 4,
+                    //
+                    // 8
+                    max_color_attachments: Direct3D12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT,
+                    // 128 (No documented limit)
+                    max_color_attachment_bytes_per_sample:
+                        Direct3D12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT
+                            * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST,
+                    // From: https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.6%20Inter-Thread%20Data%20Sharing
+                    max_compute_workgroup_storage_size: 32768,
+                    // 1024
+                    max_compute_invocations_per_workgroup:
+                        Direct3D12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP,
+                    // 1024
+                    max_compute_workgroup_size_x: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_X,
+                    // 1024
+                    max_compute_workgroup_size_y: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_Y,
+                    // 64
+                    max_compute_workgroup_size_z: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_Z,
+                    // 65535
+                    max_compute_workgroups_per_dimension:
+                        Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                    //
+                    // NATIVE (Non-WebGPU) LIMITS:
+                    //
                     max_non_sampler_bindings: 1_000_000,
+
+                    max_binding_array_elements_per_shader_stage: full_heap_count,
+                    max_binding_array_sampler_elements_per_shader_stage: full_heap_count,
 
                     // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-api
                     max_task_mesh_workgroup_total_count: if mesh_shader_supported {
