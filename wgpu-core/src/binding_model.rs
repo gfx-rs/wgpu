@@ -866,10 +866,17 @@ pub enum ImmediateUploadError {
         immediate_size: u32,
     },
     #[error(
-        "Provided immediate data offset {0} does not respect `IMMEDIATE_DATA_ALIGNMENT` ({ida})",
+        "Provided immediate data start offset {0} does not respect \
+        `IMMEDIATE_DATA_ALIGNMENT` ({ida})",
         ida = wgt::IMMEDIATE_DATA_ALIGNMENT
     )]
-    Unaligned(u32),
+    StartOffsetUnaligned(u32),
+    #[error(
+        "Provided immediate data byte size {0} does not respect \
+        `IMMEDIATE_DATA_ALIGNMENT` ({ida})",
+        ida = wgt::IMMEDIATE_DATA_ALIGNMENT
+    )]
+    SizeUnaligned(u32),
     #[error(
         "Provided immediate data start offset {} + size {} overruns the immediate data range \
         with a size of {}",
@@ -990,7 +997,11 @@ impl PipelineLayout {
         // and we validate that they are within the ranges.
 
         if !offset.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
-            return Err(ImmediateUploadError::Unaligned(offset));
+            return Err(ImmediateUploadError::StartOffsetUnaligned(offset));
+        }
+
+        if !size_bytes.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
+            return Err(ImmediateUploadError::SizeUnaligned(offset));
         }
 
         if offset > self.immediate_size {
