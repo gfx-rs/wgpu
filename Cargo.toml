@@ -188,7 +188,7 @@ shell-words = "1"
 smallvec = "1.14"
 spirv = { version = "0.3", git = "https://github.com/gfx-rs/rspirv", rev = "89ce4d0e64c91b0635f617409dc57cb031749a39" }
 static_assertions = "1.1"
-strum = { version = "0.27.1", default-features = false, features = ["derive"] }
+strum = { version = "0.28.0", default-features = false, features = ["derive"] }
 syn = "2.0.98"
 tempfile = "3"
 toml = "1.0.0"
