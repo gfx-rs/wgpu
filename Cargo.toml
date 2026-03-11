@@ -22,6 +22,7 @@ members = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-macros",
+    "wgpu-naga-bridge",
     "wgpu-types",
     "wgpu",
     "xtask",
@@ -45,6 +46,7 @@ default-members = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-macros",
+    "wgpu-naga-bridge",
     "wgpu-types",
     "wgpu",
     "xtask",
@@ -84,6 +86,7 @@ wgpu = { version = "28.0.0", path = "./wgpu", default-features = false, features
 wgpu-core = { version = "28.0.0", path = "./wgpu-core" }
 wgpu-hal = { version = "28.0.0", path = "./wgpu-hal" }
 wgpu-macros = { version = "28.0.0", path = "./wgpu-macros" }
+wgpu-naga-bridge = { version = "28.0.0", path = "./wgpu-naga-bridge" }
 wgpu-test = { version = "28.0.0", path = "./tests" }
 wgpu-types = { version = "28.0.0", path = "./wgpu-types", default-features = false }
 

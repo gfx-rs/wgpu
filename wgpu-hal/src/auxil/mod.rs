@@ -55,19 +55,7 @@ pub mod db {
 /// offset at some intermediate point, internally, as i32.
 pub const MAX_I32_BINDING_SIZE: u32 = (1 << 31) - 1;
 
-pub fn map_naga_stage(stage: naga::ShaderStage) -> wgt::ShaderStages {
-    match stage {
-        naga::ShaderStage::Vertex => wgt::ShaderStages::VERTEX,
-        naga::ShaderStage::Fragment => wgt::ShaderStages::FRAGMENT,
-        naga::ShaderStage::Compute => wgt::ShaderStages::COMPUTE,
-        naga::ShaderStage::Task => wgt::ShaderStages::TASK,
-        naga::ShaderStage::Mesh => wgt::ShaderStages::MESH,
-        naga::ShaderStage::RayGeneration => wgt::ShaderStages::RAY_GENERATION,
-        naga::ShaderStage::AnyHit => wgt::ShaderStages::ANY_HIT,
-        naga::ShaderStage::ClosestHit => wgt::ShaderStages::CLOSEST_HIT,
-        naga::ShaderStage::Miss => wgt::ShaderStages::MISS,
-    }
-}
+pub use wgpu_naga_bridge::map_naga_stage;
 
 impl crate::CopyExtent {
     pub fn map_extent_to_copy_size(extent: &wgt::Extent3d, dim: wgt::TextureDimension) -> Self {
