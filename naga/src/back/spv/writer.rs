@@ -3609,40 +3609,11 @@ impl Writer {
             .iter()
             .flat_map(|entry| entry.function.arguments.iter())
             .any(|arg| has_view_index_check(ir_module, arg.binding.as_ref(), arg.ty));
-        let mut has_ray_query = ir_module.special_types.ray_intersection.is_some();
         let has_vertex_return = ir_module.special_types.ray_vertex_return.is_some();
-        // implies we need a longer search.
-        let mut has_ray_tracing = ir_module.special_types.ray_desc.is_some();
-        let mut has_ray_tracing_pipeline = false;
-
-        for (_, &crate::Type { ref inner, .. }) in ir_module.types.iter() {
-            // spirv does not know whether these have vertex return - that is done by us
-            match *inner {
-                crate::TypeInner::AccelerationStructure { .. } => {
-                    has_ray_tracing = true;
-                }
-                crate::TypeInner::RayQuery { .. } => has_ray_query = true,
-                _ => {}
-            }
-        }
-
-        for (index, ep) in ir_module.entry_points.iter().enumerate() {
-            if ep_index.is_some() && ep_index != Some(index) {
-                continue;
-            }
-
-            if matches!(
-                ep.stage,
-                crate::ShaderStage::RayGeneration
-                    | crate::ShaderStage::AnyHit
-                    | crate::ShaderStage::ClosestHit
-                    | crate::ShaderStage::Miss
-            ) {
-                has_ray_tracing_pipeline = true;
-            } else {
-                has_ray_query |= has_ray_tracing;
-            }
-        }
+        
+        let rt_uses = ir_module.uses_ray_tracing(ep_index);
+        let has_ray_query = rt_uses.queries;
+        let has_ray_tracing_pipeline = rt_uses.pipelines;
 
         self.has_ray_tracing_pipeline = has_ray_tracing_pipeline;
 
