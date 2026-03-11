@@ -1980,6 +1980,8 @@ impl Writer {
             crate::TypeInner::AccelerationStructure { .. } => {
                 self.require_any(
                     "Acceleration Structure",
+                    // unless we use this conditional, the ray query snapshot
+                    // tests pick the wrong capability 
                     &[if self.has_ray_tracing_pipeline {
                         spirv::Capability::RayTracingKHR
                     } else {
