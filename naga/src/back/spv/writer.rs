@@ -1981,7 +1981,7 @@ impl Writer {
                 self.require_any(
                     "Acceleration Structure",
                     // unless we use this conditional, the ray query snapshot
-                    // tests pick the wrong capability 
+                    // tests pick the wrong capability
                     &[if self.has_ray_tracing_pipeline {
                         spirv::Capability::RayTracingKHR
                     } else {
@@ -3325,7 +3325,9 @@ impl Writer {
         let id = self.id_gen.next();
         let class = map_storage_class(global_variable.space);
 
-        if let crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload = global_variable.space {
+        if let crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload =
+            global_variable.space
+        {
             self.require_any("ray tracing pipelines", &[spirv::Capability::RayTracingKHR])?;
         }
 
