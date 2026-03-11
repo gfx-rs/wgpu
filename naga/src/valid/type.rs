@@ -44,13 +44,17 @@ bitflags::bitflags! {
         /// The data can be copied around.
         const COPY = 0x4;
 
-        /// Can be be used for user-defined IO between pipeline stages.
+        /// Can be be used in pipeline stage I/O.
         ///
-        /// This covers anything that can be in [`Location`] binding:
-        /// non-bool scalars and vectors, matrices, and structs and
-        /// arrays containing only interface types.
+        /// Applies to the following:
+        ///   - Types that may be used in a [`Location`] binding (numeric scalars and vectors)
+        ///
+        /// See [location-attr] and [input-output].
         ///
         /// [`Location`]: crate::Binding::Location
+        /// [location-attr]: https://gpuweb.github.io/gpuweb/wgsl/#location-attr
+        /// [input-output]: https://gpuweb.github.io/gpuweb/wgsl/#input-output-locations
+        /// https://gpuweb.github.io/gpuweb/wgsl/#location-attr
         const IO_SHAREABLE = 0x8;
 
         /// Can be used for host-shareable structures.
@@ -645,7 +649,6 @@ impl super::Validator {
                         | TypeFlags::SIZED
                         | TypeFlags::COPY
                         | TypeFlags::HOST_SHAREABLE
-                        | TypeFlags::IO_SHAREABLE
                         | TypeFlags::ARGUMENT
                         | TypeFlags::CONSTRUCTIBLE
                         | TypeFlags::CREATION_RESOLVED,
