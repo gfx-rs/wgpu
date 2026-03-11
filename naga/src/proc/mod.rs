@@ -956,7 +956,6 @@ impl crate::Module {
 
         uses.queries |= self.special_types.ray_intersection.is_some();
 
-
         for (_, &crate::Type { ref inner, .. }) in self.types.iter() {
             // Backends do not know whether these have vertex return - that is done by us
             match *inner {
@@ -973,7 +972,7 @@ impl crate::Module {
                 continue;
             }
 
-            // if we have a ray tracing pipeline shader we are definitly using 
+            // if we have a ray tracing pipeline shader we are definitly using
             // pipelines, otherwise, if we have a ray tracing type, we might
             // be using it in the shader (which would require ray queries),
             // so we should use queries.

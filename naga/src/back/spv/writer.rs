@@ -3610,7 +3610,7 @@ impl Writer {
             .flat_map(|entry| entry.function.arguments.iter())
             .any(|arg| has_view_index_check(ir_module, arg.binding.as_ref(), arg.ty));
         let has_vertex_return = ir_module.special_types.ray_vertex_return.is_some();
-        
+
         let rt_uses = ir_module.uses_ray_tracing(ep_index);
         let has_ray_query = rt_uses.queries;
         let has_ray_tracing_pipeline = rt_uses.pipelines;
