@@ -4800,6 +4800,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-bug-repro-01-texture-atomic-bug"
+version = "0.0.0"
+dependencies = [
+ "env_logger",
+ "pollster",
+ "wgpu",
+ "winit 0.30.13",
+]
+
+[[package]]
 name = "wgpu-core"
 version = "28.0.0"
 dependencies = [
