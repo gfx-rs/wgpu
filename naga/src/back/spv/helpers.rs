@@ -56,9 +56,10 @@ pub(super) const fn map_storage_class(space: crate::AddressSpace) -> spirv::Stor
         crate::AddressSpace::WorkGroup => spirv::StorageClass::Workgroup,
         crate::AddressSpace::Immediate => spirv::StorageClass::PushConstant,
         crate::AddressSpace::TaskPayload => spirv::StorageClass::TaskPayloadWorkgroupEXT,
-        // We can't require capabilities here but we request capabilities on the ray pipeline stages.
-        // Therefore we also don't need the capabilities here because these are only allowed to be accessed
-        // in the ray pipeline stages
+        // We can't require capabilities here but we request capabilities on the ray pipeline stages
+        // and when writing global variables - global variables because we may be writing an
+        // uncompacted module and pipeline stages for all other cases because these can only be 
+        //accessed in a ray tracing pipeline stage.
         crate::AddressSpace::RayPayload => spirv::StorageClass::RayPayloadKHR,
         crate::AddressSpace::IncomingRayPayload => spirv::StorageClass::IncomingRayPayloadKHR,
     }
