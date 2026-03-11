@@ -110,6 +110,7 @@ unicode-ident = { workspace = true, optional = true }
 cfg_aliases.workspace = true
 
 [dev-dependencies]
+bytemuck.workspace = true
 diff.workspace = true
 env_logger.workspace = true
 hashbrown = { workspace = true, features = ["serde"] }
