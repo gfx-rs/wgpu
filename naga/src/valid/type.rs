@@ -1,7 +1,7 @@
 use alloc::string::String;
 
 use super::Capabilities;
-use crate::{arena::Handle, proc::Alignment};
+use crate::{arena::Handle, ir, proc::Alignment};
 
 bitflags::bitflags! {
     /// Flags associated with [`Type`]s by [`Validator`].
@@ -48,6 +48,7 @@ bitflags::bitflags! {
         ///
         /// Applies to the following:
         ///   - Types that may be used in a [`Location`] binding (numeric scalars and vectors)
+        ///   - `@blend_src` structs
         ///
         /// See [location-attr] and [input-output].
         ///
@@ -152,6 +153,8 @@ pub enum TypeError {
     },
     #[error("Structure types must have at least one member")]
     EmptyStruct,
+    #[error("Invalid `@blend_src` structure: {0}")]
+    InvalidBlendSrc(super::VaryingError),
     #[error(transparent)]
     WidthError(#[from] WidthError),
     #[error(
@@ -644,6 +647,9 @@ impl super::Validator {
                     return Err(TypeError::EmptyStruct);
                 }
 
+                let mut blend_src_types = [None, None];
+                let mut non_blend_src_location = None;
+
                 let mut ti = TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::SIZED
@@ -676,6 +682,48 @@ impl super::Validator {
                         }
                     }
                     ti.flags &= base_info.flags;
+
+                    match member.binding {
+                        Some(ir::Binding::Location {
+                            location,
+                            blend_src: Some(blend_src),
+                            ..
+                        }) => {
+                            // `blend_src` is only valid if dual source blending was explicitly enabled,
+                            // see https://www.w3.org/TR/WGSL/#extension-dual_source_blending
+                            if !self
+                                .capabilities
+                                .contains(Capabilities::DUAL_SOURCE_BLENDING)
+                            {
+                                return Err(TypeError::MissingCapability(
+                                    Capabilities::DUAL_SOURCE_BLENDING,
+                                ));
+                            }
+                            if !(location == 0 && (blend_src == 0 || blend_src == 1)) {
+                                return Err(TypeError::InvalidBlendSrc(
+                                    super::VaryingError::InvalidBlendSrcIndex {
+                                        location,
+                                        blend_src,
+                                    },
+                                ));
+                            }
+                            if blend_src_types[blend_src as usize]
+                                .replace(member.ty)
+                                .is_some()
+                            {
+                                // @blend_src(i) appeared multiple times
+                                return Err(TypeError::InvalidBlendSrc(
+                                    super::VaryingError::BindingCollisionBlendSrc { blend_src },
+                                ));
+                            }
+                        }
+                        Some(ir::Binding::Location {
+                            location,
+                            blend_src: None,
+                            ..
+                        }) => non_blend_src_location = Some(location),
+                        _ => {}
+                    }
 
                     if member.offset < min_offset {
                         // HACK: this could be nicer. We want to allow some structures
@@ -757,6 +805,57 @@ impl super::Validator {
                             ti.uniform_layout =
                                 Err((handle, Disalignment::UnsizedMember { index: i as u32 }));
                         }
+                    }
+                }
+
+                match blend_src_types {
+                    [None, None] => {}
+                    [Some(ty0), Some(ty1)] => {
+                        if let Some(location) = non_blend_src_location {
+                            // If `@blend_src` members are present, then `@location`
+                            // may only be used for those members.
+                            return Err(TypeError::InvalidBlendSrc(
+                                super::VaryingError::InvalidBlendSrcWithOtherBindings { location },
+                            ));
+                        }
+                        let ty0_inner = &gctx.types[ty0].inner;
+                        let ty1_inner = &gctx.types[ty1].inner;
+                        // The two blend sources must have the same type...
+                        if !ty0_inner.non_struct_equivalent(ty1_inner, gctx.types) {
+                            return Err(TypeError::InvalidBlendSrc(
+                                super::VaryingError::BlendSrcOutputTypeMismatch {
+                                    blend_src_0_type: ty0,
+                                    blend_src_1_type: ty1,
+                                },
+                            ));
+                        }
+                        // ... and that type must be I/O-shareable.
+                        if !self.types[ty0.index()]
+                            .flags
+                            .contains(TypeFlags::IO_SHAREABLE)
+                        {
+                            return Err(TypeError::InvalidBlendSrc(
+                                super::VaryingError::NotIOShareableType(ty0),
+                            ));
+                        }
+
+                        // `@blend_src` is the only case where we classify a struct as
+                        // I/O-shareable. (In the case of a struct with `@location` bindings, we
+                        // process the members individually in interface validation, and do not
+                        // classify the struct as I/O-shareable.)
+                        ti.flags |= TypeFlags::IO_SHAREABLE;
+                    }
+                    [None, Some(_)] | [Some(_), None] => {
+                        // Only one of the blend sources was specified.
+                        return Err(TypeError::InvalidBlendSrc(
+                            super::VaryingError::IncompleteBlendSrcUsage {
+                                present_blend_src: blend_src_types
+                                    .iter()
+                                    .position(|src| src.is_some())
+                                    .unwrap()
+                                    as u32,
+                            },
+                        ));
                     }
                 }
 

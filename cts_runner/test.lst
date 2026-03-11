@@ -247,7 +247,7 @@ webgpu:api,validation,render_pass,resolve:resolve_attachment:*
 webgpu:api,validation,render_pipeline,depth_stencil_state:*
 webgpu:api,validation,render_pipeline,float32_blendable:*
 webgpu:api,validation,render_pipeline,fragment_state:color_target_exists:*
-webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,use_blend_src:*
+webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,*
 webgpu:api,validation,render_pipeline,fragment_state:limits,*
 webgpu:api,validation,render_pipeline,fragment_state:targets_blend:*
 webgpu:api,validation,render_pipeline,fragment_state:targets_format_filterable:*
@@ -415,10 +415,7 @@ webgpu:shader,validation,expression,call,builtin,value_constructor:*
 webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:*
 webgpu:shader,validation,expression,overload_resolution:*
 webgpu:shader,validation,extension,clip_distances:*
-webgpu:shader,validation,extension,dual_source_blending:blend_src_same_type:*
-webgpu:shader,validation,extension,dual_source_blending:blend_src_stage_input_output:*
-webgpu:shader,validation,extension,dual_source_blending:blend_src_syntax_validation:*
-webgpu:shader,validation,extension,dual_source_blending:use_blend_src_requires_extension_enabled:*
+webgpu:shader,validation,extension,dual_source_blending:*
 webgpu:shader,validation,extension,pointer_composite_access:*
 webgpu:shader,validation,functions,restrictions:param_type_can_be_alias:*
 webgpu:shader,validation,parse,blankspace:blankspace:*

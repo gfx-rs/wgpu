@@ -724,6 +724,8 @@ pub enum CreateRenderPipelineError {
     },
     #[error("In the provided shader, the type given for group {group} binding {binding} has a size of {size}. As the device does not support `DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED`, the type must have a size that is a multiple of 16 bytes.")]
     UnalignedShader { group: u32, binding: u32, size: u64 },
+    #[error("Dual-source blending requires exactly one color target, but {count} color targets are present")]
+    DualSourceBlendingWithMultipleColorTargets { count: usize },
     #[error("{}", concat!(
         "At least one color attachment or depth-stencil attachment was expected, ",
         "but no render target for the pipeline was specified."
@@ -759,6 +761,7 @@ impl WebGpuError for CreateRenderPipelineError {
             | Self::ConservativeRasterizationNonFillPolygonMode
             | Self::Stage { .. }
             | Self::UnalignedShader { .. }
+            | Self::DualSourceBlendingWithMultipleColorTargets { .. }
             | Self::NoTargetSpecified
             | Self::PipelineConstants { .. }
             | Self::VertexAttributeStrideTooLarge { .. } => ErrorType::Validation,

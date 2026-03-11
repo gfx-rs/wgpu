@@ -258,6 +258,10 @@ By @kpreid in [#9042](https://github.com/gfx-rs/wgpu/pull/9042).
 - Tracing support has been restored. By @andyleiserson in [#8429](https://github.com/gfx-rs/wgpu/pull/8429).
 - Pipelines using passthrough shaders now correctly require explicit pipeline layout. By @inner-daemons in #8881.
 - Allow using a shader that defines I/O for dual-source blending in a pipeline that does not make use of it. By @andyleiserson in [#8856](https://github.com/gfx-rs/wgpu/pull/8856).
+- Improve validation of dual-source blending, by @andyleiserson in [#9200](https://github.com/gfx-rs/wgpu/pull/9200):
+  - Validate structs with `@blend_src` members whether or not they are used by an entry point.
+  - Dual-source blending is not supported when there are multiple color attachments.
+  - `TypeFlags::IO_SHAREABLE` is not set for structs other than `@blend_src` structs.
 - Validate `strip_index_format` isn't None and equals index buffer format for indexed drawing with strip topology. By @beicause in [#8850](https://github.com/gfx-rs/wgpu/pull/8850).
 - Renamed `EXPERIMENTAL_PASSTHROUGH_SHADERS` to `PASSTHROUGH_SHADERS` and made this no longer an experimental feature. by @inner-daemons in [#9054](https://github.com/gfx-rs/wgpu/pull/9054).
 - BREAKING: End offsets in trace and `player` commands are now represented using `offset` + `size` instead. By @ErichDonGubler in [9073](https://github.com/gfx-rs/wgpu/pull/9073).
