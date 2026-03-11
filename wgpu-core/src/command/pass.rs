@@ -232,17 +232,16 @@ where
 
     let values_offset = values_offset.ok_or(InvalidValuesOffset)?;
 
-    let end_offset_bytes = offset + size_bytes;
-    let values_end_offset = (values_offset + size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT) as usize;
-    let data_slice = &immediates_data[(values_offset as usize)..values_end_offset];
-
     let pipeline_layout = state
         .binder
         .pipeline_layout
         .as_ref()
         .ok_or(MissingPipeline)?;
 
-    pipeline_layout.validate_immediates_ranges(offset, end_offset_bytes)?;
+    pipeline_layout.validate_immediates_ranges(offset, size_bytes)?;
+
+    let values_end_offset = (values_offset + size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT) as usize;
+    let data_slice = &immediates_data[(values_offset as usize)..values_end_offset];
 
     f(data_slice);
 

@@ -858,17 +858,30 @@ impl WebGpuError for CreatePipelineLayoutError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ImmediateUploadError {
-    #[error("Provided immediate data written to offset {offset}..{end_offset} overruns the immediate data range with a size of {size}")]
-    TooLarge {
-        offset: u32,
-        end_offset: u32,
-        size: u32,
+    #[error(
+        "Start offset {start_offset} overruns the immediate data range with a size of {immediate_size}"
+    )]
+    StartOffsetOverrun {
+        start_offset: u32,
+        immediate_size: u32,
     },
     #[error(
         "Provided immediate data offset {0} does not respect `IMMEDIATE_DATA_ALIGNMENT` ({ida})",
         ida = wgt::IMMEDIATE_DATA_ALIGNMENT
     )]
     Unaligned(u32),
+    #[error(
+        "Provided immediate data start offset {} + size {} overruns the immediate data range \
+        with a size of {}",
+        start_offset,
+        size,
+        immediate_size
+    )]
+    EndOffsetOverrun {
+        start_offset: u32,
+        size: u32,
+        immediate_size: u32,
+    },
 }
 
 impl WebGpuError for ImmediateUploadError {
@@ -970,7 +983,7 @@ impl PipelineLayout {
     pub(crate) fn validate_immediates_ranges(
         &self,
         offset: u32,
-        end_offset: u32,
+        size_bytes: u32,
     ) -> Result<(), ImmediateUploadError> {
         // Don't need to validate size against the immediate data size limit here,
         // as immediate data ranges are already validated to be within bounds,
@@ -980,13 +993,21 @@ impl PipelineLayout {
             return Err(ImmediateUploadError::Unaligned(offset));
         }
 
-        if end_offset > self.immediate_size {
-            return Err(ImmediateUploadError::TooLarge {
-                offset,
-                end_offset,
-                size: self.immediate_size,
+        if offset > self.immediate_size {
+            return Err(ImmediateUploadError::StartOffsetOverrun {
+                start_offset: offset,
+                immediate_size: self.immediate_size,
             });
         }
+
+        if size_bytes > self.immediate_size - offset {
+            return Err(ImmediateUploadError::EndOffsetOverrun {
+                start_offset: offset,
+                size: size_bytes,
+                immediate_size: self.immediate_size,
+            });
+        }
+
         Ok(())
     }
 }
