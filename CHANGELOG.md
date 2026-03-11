@@ -237,6 +237,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 #### Metal / macOS
 
 - Fix one-second delay when switching a wgpu app to the foreground. By [@emilk](https://github.com/emilk) in [#9141](https://github.com/gfx-rs/wgpu/pull/9141)
+- Work around Metal driver bug with atomic textures. By @atlv24 in [#9185](https://github.com/gfx-rs/wgpu/pull/9185)
 
 #### GLES
 
