@@ -1325,7 +1325,7 @@ bitflags_array! {
         /// Backend mapping:
         /// - Vulkan
         /// - DX12
-        /// - Metal
+        /// - Metal (3.2+)
         /// - GLES (ES 3.1+ / GL 4.3+)
         ///
         /// This is a native only feature.

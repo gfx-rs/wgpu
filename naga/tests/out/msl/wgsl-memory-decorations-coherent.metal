@@ -1,4 +1,4 @@
-// language: metal1.0
+// language: metal3.2
 #include <metal_stdlib>
 #include <simd/simd.h>
 
@@ -15,7 +15,7 @@ struct Data {
 };
 
 kernel void main_(
-  device Data& coherent_buf [[user(fake0)]]
+  coherent device Data& coherent_buf [[user(fake0)]]
 , device Data const& plain_buf [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {

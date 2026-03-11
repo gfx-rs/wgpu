@@ -1017,8 +1017,7 @@ impl super::PrivateCapabilities {
             | F::DEPTH32FLOAT_STENCIL8
             | F::BGRA8UNORM_STORAGE
             | F::PASSTHROUGH_SHADERS
-            | F::EXTERNAL_TEXTURE
-            | F::MEMORY_DECORATION_COHERENT;
+            | F::EXTERNAL_TEXTURE;
 
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
         features.set(F::FLOAT32_BLENDABLE, true);
@@ -1091,6 +1090,10 @@ impl super::PrivateCapabilities {
         features.set(
             F::SHADER_FLOAT32_ATOMIC,
             self.float_atomics && self.msl_version >= MTLLanguageVersion::Version3_0,
+        );
+        features.set(
+            F::MEMORY_DECORATION_COHERENT,
+            self.msl_version >= MTLLanguageVersion::Version3_2,
         );
 
         features.set(

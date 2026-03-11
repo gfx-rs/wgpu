@@ -177,8 +177,9 @@ impl super::Device {
                         MTLLanguageVersion::Version2_4 => (2, 4),
                         MTLLanguageVersion::Version3_0 => (3, 0),
                         MTLLanguageVersion::Version3_1 => (3, 1),
-                        // Newer version, fall back to 3.1
-                        _ => (3, 1),
+                        MTLLanguageVersion::Version3_2 => (3, 2),
+                        // Newer version, fall back to 3.2
+                        _ => (3, 2),
                     },
                     inline_samplers: Default::default(),
                     spirv_cross_compatibility: false,
