@@ -1157,6 +1157,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::BUFFER_BINDING_ARRAY
         | Caps::STORAGE_TEXTURE_BINDING_ARRAY
         | Caps::STORAGE_BUFFER_BINDING_ARRAY
+        | Caps::ACCELERATION_STRUCTURE_BINDING_ARRAY
         | Caps::CLIP_DISTANCE
         // No cull distance
         | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS

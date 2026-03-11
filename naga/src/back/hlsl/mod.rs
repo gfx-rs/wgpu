@@ -770,6 +770,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         // No BUFFER_BINDING_ARRAY
         | Caps::STORAGE_TEXTURE_BINDING_ARRAY
         // No STORAGE_BUFFER_BINDING_ARRAY
+        | Caps::ACCELERATION_STRUCTURE_BINDING_ARRAY
         // No CLIP_DISTANCE
         // No CULL_DISTANCE
         | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS

@@ -3,7 +3,7 @@ use std::{borrow::Cow, num::NonZeroU32};
 use wgpu::util::DeviceExt;
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
@@ -24,9 +24,7 @@ static BINDING_ARRAY_TLAS: GpuTestConfiguration = GpuTestConfiguration::new()
                 max_acceleration_structures_per_shader_stage: 8,
                 max_binding_array_acceleration_structure_elements_per_shader_stage: 8,
                 ..Limits::default().using_minimum_supported_acceleration_structure_values()
-            })
-            // As of writing, Metal's HAL does not implement binding acceleration structures.
-            .skip(FailureCase::backend(Backends::METAL)),
+            }),
     )
     .run_async(|ctx| async move { binding_array_tlas(ctx).await });
 
