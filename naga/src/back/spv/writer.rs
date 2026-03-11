@@ -3638,7 +3638,7 @@ impl Writer {
             ) {
                 has_ray_tracing_pipeline = true;
             } else {
-                has_ray_query = has_ray_query || has_ray_tracing;
+                has_ray_query |= has_ray_tracing;
             }
         }
 
