@@ -19,6 +19,7 @@ pub mod mipmap;
 pub mod msaa_line;
 pub mod multiple_render_targets;
 pub mod multiview;
+pub mod rainbow_circle;
 pub mod ray_cube_compute;
 pub mod ray_cube_fragment;
 pub mod ray_cube_normals;
