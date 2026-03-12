@@ -1421,6 +1421,7 @@ impl super::CapabilitiesQuery {
                 // Not yet supported
                 ray_tracing_pipeline_group_data_size: 0,
                 ray_tracing_pipeline_group_data_alignment: 0,
+                ray_tracing_pipeline_data_offset_alignment: 0,
             },
             downlevel,
             cooperative_matrix_properties: self.cooperative_matrix_properties(),

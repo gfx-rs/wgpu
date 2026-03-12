@@ -182,6 +182,7 @@ pub const CAPABILITIES: crate::Capabilities = {
             ray_tracing_scratch_buffer_alignment: 1,
             ray_tracing_pipeline_group_data_size: 1,
             ray_tracing_pipeline_group_data_alignment: 1,
+            ray_tracing_pipeline_data_offset_alignment: 1,
         },
         downlevel: wgt::DownlevelCapabilities {
             flags: wgt::DownlevelFlags::all(),

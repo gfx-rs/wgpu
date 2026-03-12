@@ -1819,6 +1819,11 @@ impl PhysicalDeviceProperties {
                 .map_or(0, |ray_tracing_pipeline| {
                     ray_tracing_pipeline.shader_group_handle_alignment
                 }),
+            ray_tracing_pipeline_data_offset_alignment: self
+                .ray_tracing_pipeline
+                .map_or(0, |ray_tracing_pipeline| {
+                    ray_tracing_pipeline.shader_group_base_alignment
+                }),
         }
     }
 }
