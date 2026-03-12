@@ -240,7 +240,8 @@ where
 
     pipeline_layout.validate_immediates_ranges(offset, size_bytes)?;
 
-    let values_offset_usize = values_offset as usize;
+    let values_offset_usize = usize::try_from(values_offset)
+        .expect("`values_offset` is outside the bounds of `usize` (!?)");
     if values_offset_usize > immediates_data.len() {
         return Err(ImmediateUploadError::ValueStartIndexOverrun {
             start_index: values_offset,
@@ -251,7 +252,8 @@ where
 
     // NOTE: The `validate_immediates_ranges` call above validates `size_bytes` is aligned.
     let size_immediate_elements = size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT;
-    let size_immediate_elements_usize = size_immediate_elements as usize;
+    let size_immediate_elements_usize = usize::try_from(size_immediate_elements)
+        .expect("`size_immediate_elements` is outside the bounds of `usize` (!?)");
     if size_immediate_elements_usize > immediates_data.len() - values_offset_usize {
         return Err(ImmediateUploadError::ValueEndIndexOverrun {
             start_index: values_offset,
