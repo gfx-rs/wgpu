@@ -1253,6 +1253,8 @@ pub struct ShaderBindingData {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     pub(crate) device: Arc<Device>,
     pub(crate) num_intersection_groups: u64,
+    pub(crate) miss_offset: wgt::BufferAddress,
+    pub(crate) intersection_offset: wgt::BufferAddress,
 }
 
 impl ShaderBindingData {
@@ -1261,14 +1263,52 @@ impl ShaderBindingData {
         pipeline: &dyn hal::DynRayTracingPipeline,
         num_intersection_groups: usize,
     ) -> Result<Self, CreateRayTracingPipelineError> {
-        let tot_num_groups = num_intersection_groups + 1 /* miss shader */ + 1 /* closest hit shader */;
-        let size =
-            tot_num_groups as u64 * device.alignments.ray_tracing_pipeline_group_data_size as u64;
+        let mut base_data = Vec::new();
+
+        let closest_hit_data = unsafe {
+            device
+                .raw()
+                .get_raytracing_pipeline_group_data(pipeline, 0..1)
+        }
+        .map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
+
+        base_data.extend_from_slice(&closest_hit_data);
+
+        let padded_miss_offset = (base_data.len() as wgt::BufferAddress).next_multiple_of(
+            device.alignments.ray_tracing_pipeline_data_offset_alignment as wgt::BufferAddress,
+        );
+
+        base_data.resize(padded_miss_offset as _, 0);
+
+        let miss_data = unsafe {
+            device
+                .raw()
+                .get_raytracing_pipeline_group_data(pipeline, 1..2)
+        }
+        .map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
+
+        base_data.extend_from_slice(&miss_data);
+
+        let padded_intersection_offset = (base_data.len() as wgt::BufferAddress).next_multiple_of(
+            device.alignments.ray_tracing_pipeline_data_offset_alignment as wgt::BufferAddress,
+        );
+
+        base_data.resize(padded_intersection_offset as _, 0);
+
+        let intersection_data = unsafe {
+            device.raw().get_raytracing_pipeline_group_data(
+                pipeline,
+                2..(2 + num_intersection_groups as u32),
+            )
+        }
+        .map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
+
+        base_data.extend_from_slice(&intersection_data);
 
         let buffer = unsafe {
             device.raw().create_buffer(&BufferDescriptor {
                 label: None,
-                size,
+                size: base_data.len() as _,
                 usage: wgt::BufferUses::RAY_TRACING_PIPELINE_SHADER_DATA
                     | wgt::BufferUses::COPY_DST,
                 memory_flags: hal::MemoryFlags::PREFER_COHERENT,
@@ -1276,18 +1316,11 @@ impl ShaderBindingData {
         }
         .map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
 
-        let data = unsafe {
-            device
-                .raw()
-                .get_raytracing_pipeline_group_data(pipeline, 0..tot_num_groups as _)
-        }
-        .map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
-
         // If there is no queue anymore, the ray tracing pipeline can't be accessed, so we don't have to worry about UB from uninitialized values
         if let Some(queue) = device.get_queue() {
-            let mut staging = crate::resource::StagingBuffer::new(&device, NonZeroU64::new(size).expect("The total number of groups is always greater than zero, and `ray_tracing_pipeline_group_data_size` must be too."))?;
+            let mut staging = crate::resource::StagingBuffer::new(&device, NonZeroU64::new(base_data.len() as _).expect("The total number of groups is always greater than zero, and `ray_tracing_pipeline_group_data_size` must be too."))?;
 
-            staging.write(&data);
+            staging.write(&base_data);
 
             let staging_buf = staging.flush();
 
@@ -1300,7 +1333,8 @@ impl ShaderBindingData {
                     &[hal::BufferCopy {
                         src_offset: 0,
                         dst_offset: 0,
-                        size: NonZeroU64::new(size).expect("Already checked size isn't zero."),
+                        size: NonZeroU64::new(base_data.len() as _)
+                            .expect("Already checked size isn't zero."),
                     }],
                 )
             };
@@ -1312,6 +1346,8 @@ impl ShaderBindingData {
             raw: ManuallyDrop::new(buffer),
             device,
             num_intersection_groups: num_intersection_groups as _,
+            miss_offset: padded_miss_offset,
+            intersection_offset: padded_intersection_offset,
         })
     }
 }

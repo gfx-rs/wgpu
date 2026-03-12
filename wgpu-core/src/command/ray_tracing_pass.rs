@@ -873,13 +873,13 @@ fn trace_rays(
             },
             hal::PipelineGroupData {
                 buffer: shader_binding_data.raw.as_ref(),
-                offset: device.alignments.ray_tracing_pipeline_group_data_alignment as u64,
+                offset: shader_binding_data.miss_offset,
                 stride: device.alignments.ray_tracing_pipeline_group_data_alignment as _,
                 count: 1,
             },
             hal::PipelineGroupData {
                 buffer: shader_binding_data.raw.as_ref(),
-                offset: 2 * device.alignments.ray_tracing_pipeline_group_data_alignment as u64,
+                offset: shader_binding_data.intersection_offset,
                 stride: device.alignments.ray_tracing_pipeline_group_data_alignment as _,
                 count: shader_binding_data.num_intersection_groups,
             },
