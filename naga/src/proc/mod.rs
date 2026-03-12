@@ -972,7 +972,7 @@ impl crate::Module {
                 continue;
             }
 
-            // if we have a ray tracing pipeline shader we are definitly using
+            // if we have a ray tracing pipeline shader we are definitely using
             // pipelines, otherwise, if we have a ray tracing type, we might
             // be using it in the shader (which would require ray queries),
             // so we should use queries.
