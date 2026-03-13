@@ -216,7 +216,26 @@ impl super::Adapter {
         }
         .unwrap();
 
-        if options.ResourceBindingTier.0 < Direct3D12::D3D12_RESOURCE_BINDING_TIER_2.0 {
+        /// Resource Binding Tiers: https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-support#limits-dependant-on-hardware
+        #[derive(PartialEq, Eq, PartialOrd, Ord)]
+        enum ResourceBindingTier {
+            T1,
+            T2,
+            T3,
+        }
+        let rbt = match options.ResourceBindingTier {
+            Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => ResourceBindingTier::T1,
+            Direct3D12::D3D12_RESOURCE_BINDING_TIER_2 => ResourceBindingTier::T2,
+            tier if tier.0 >= Direct3D12::D3D12_RESOURCE_BINDING_TIER_3.0 => {
+                ResourceBindingTier::T3
+            }
+            other => {
+                log::debug!("Got zero or negative value for resource binding tier {other:?}");
+                ResourceBindingTier::T1
+            }
+        };
+
+        if rbt == ResourceBindingTier::T1 {
             if let Some(telemetry) = telemetry {
                 (telemetry.d3d12_expose_adapter)(
                     &desc,
@@ -432,38 +451,6 @@ impl super::Adapter {
             unrestricted_buffer_texture_copy_pitch_supported,
         };
 
-        // Theoretically vram limited, but in practice 2^20 is the limit
-        let tier3_practical_descriptor_limit = 1 << 20;
-
-        let (full_heap_count, uav_count) = match options.ResourceBindingTier {
-            Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => {
-                let uav_count = match max_feature_level {
-                    FeatureLevel::_11_0 => 8,
-                    _ => 64,
-                };
-
-                (
-                    Direct3D12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_1,
-                    uav_count,
-                )
-            }
-            Direct3D12::D3D12_RESOURCE_BINDING_TIER_2 => (
-                Direct3D12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_2,
-                64,
-            ),
-            tier if tier.0 >= Direct3D12::D3D12_RESOURCE_BINDING_TIER_3.0 => (
-                tier3_practical_descriptor_limit,
-                tier3_practical_descriptor_limit,
-            ),
-            other => {
-                log::debug!("Got zero or negative value for resource binding tier {other:?}");
-                (
-                    Direct3D12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_1,
-                    8,
-                )
-            }
-        };
-
         // these should always be available on d3d12
         let mut features = wgt::Features::empty()
             | wgt::Features::DEPTH_CLIP_CONTROL
@@ -516,8 +503,7 @@ impl super::Adapter {
                 | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
                 // See note below the table https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-support
                 | wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY,
-            shader_model >= naga::back::hlsl::ShaderModel::V5_1
-                && options.ResourceBindingTier.0 >= Direct3D12::D3D12_RESOURCE_BINDING_TIER_3.0,
+            shader_model >= naga::back::hlsl::ShaderModel::V5_1 && rbt >= ResourceBindingTier::T3,
         );
 
         let bgra8unorm_storage_supported = {
@@ -743,20 +729,61 @@ impl super::Adapter {
 
         let downlevel = wgt::DownlevelCapabilities::default();
 
-        // Resource Binding Tiers: https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-support#limits-dependant-on-hardware
+        // "Maximum number of descriptors in a Constant Buffer View (CBV), Shader Resource View (SRV), or Unordered Access View(UAV) heap used for rendering"
+        let full_heap_count = match rbt {
+            ResourceBindingTier::T1 | ResourceBindingTier::T2 => 1_000_000,
+            // 1_000_000+
+            ResourceBindingTier::T3 => {
+                // Theoretically vram limited, but in practice 2^20 is the limit
+                1 << 20
+            }
+        };
 
-        let max_srv_count = match options.ResourceBindingTier {
-            Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => 128,
+        // "Maximum number of Constant Buffer Views in all descriptor tables per shader stage"
+        let max_uniform_buffers_per_shader_stage = match rbt {
+            ResourceBindingTier::T1 | ResourceBindingTier::T2 => 14,
+            _ => full_heap_count,
+        };
+
+        // "Maximum number of Shader Resource Views in all descriptor tables per shader stage"
+        let max_srv_per_shader_stage = match rbt {
+            ResourceBindingTier::T1 => 128,
             _ => full_heap_count,
         };
 
         // If we also support acceleration structures these are shared so we must halve it.
         // It's unlikely that this affects anything because most devices that support ray tracing
         // probably have a higher binding tier than one.
-        let max_sampled_textures_per_shader_stage = if !supports_ray_tracing {
-            max_srv_count
+        let max_sampled_textures_per_shader_stage = if supports_ray_tracing {
+            max_srv_per_shader_stage / 2
         } else {
-            max_srv_count / 2
+            max_srv_per_shader_stage
+        };
+        let max_acceleration_structures_per_shader_stage = if supports_ray_tracing {
+            max_srv_per_shader_stage / 2
+        } else {
+            0
+        };
+
+        // "Maximum number of Unordered Access Views in all descriptor tables across all stages"
+        let max_uav_across_all_stages = match rbt {
+            ResourceBindingTier::T1 => match max_feature_level {
+                FeatureLevel::_11_0 => 8,
+                _ => 64,
+            },
+            ResourceBindingTier::T2 => 64,
+            ResourceBindingTier::T3 => full_heap_count,
+        };
+        const MAX_SHADER_STAGES_PER_PIPELINE: u32 = 2;
+        // We must share the UAV limit across both storage resource limits.
+        let max_uav_per_shader_stage = max_uav_across_all_stages / MAX_SHADER_STAGES_PER_PIPELINE;
+        let max_storage_textures_per_shader_stage = max_uav_per_shader_stage / 2;
+        let max_storage_buffers_per_shader_stage = max_uav_per_shader_stage / 2;
+
+        // "Maximum number of Samplers in all descriptor tables per shader stage"
+        let max_samplers_per_shader_stage = match rbt {
+            ResourceBindingTier::T1 => 16,
+            _ => 2048,
         };
 
         // See https://microsoft.github.io/DirectX-Specs/d3d/ViewInstancing.html#maximum-viewinstancecount
@@ -805,23 +832,10 @@ impl super::Adapter {
                     // No real limit.
                     max_bindings_per_bind_group: u32::MAX,
                     max_sampled_textures_per_shader_stage,
-                    // 16 or 2048
-                    max_samplers_per_shader_stage: match options.ResourceBindingTier {
-                        Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => 16,
-                        _ => Direct3D12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
-                    },
-                    // These both count towards `uav_count`, but we can't
-                    // express the limit as as sum of the two, so we divide
-                    // it by 4 to account for the worst case scenario
-                    // (with 2 shader stages).
-                    max_storage_textures_per_shader_stage: uav_count / 4,
-                    max_storage_buffers_per_shader_stage: uav_count / 4,
-                    // 14 or FULL HEAP
-                    max_uniform_buffers_per_shader_stage: match options.ResourceBindingTier {
-                        Direct3D12::D3D12_RESOURCE_BINDING_TIER_1
-                        | Direct3D12::D3D12_RESOURCE_BINDING_TIER_2 => 14,
-                        _ => full_heap_count,
-                    },
+                    max_samplers_per_shader_stage,
+                    max_storage_textures_per_shader_stage,
+                    max_storage_buffers_per_shader_stage,
+                    max_uniform_buffers_per_shader_stage,
                     // See `InputSlot` param docs: https://learn.microsoft.com/en-ca/windows/win32/api/d3d12/ns-d3d12-d3d12_input_element_desc
                     max_vertex_buffers: 16,
                     // Dx12 does not expose a maximum buffer size in the API.
@@ -956,17 +970,9 @@ impl super::Adapter {
                     } else {
                         0
                     },
-                    max_acceleration_structures_per_shader_stage: if supports_ray_tracing {
-                        max_srv_count / 2
-                    } else {
-                        0
-                    },
+                    max_acceleration_structures_per_shader_stage,
                     max_binding_array_acceleration_structure_elements_per_shader_stage:
-                        if supports_ray_tracing {
-                            max_srv_count / 2
-                        } else {
-                            0
-                        },
+                        max_acceleration_structures_per_shader_stage,
                     max_multiview_view_count,
                 }),
                 alignments: crate::Alignments {
