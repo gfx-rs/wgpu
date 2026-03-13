@@ -704,7 +704,7 @@ impl super::Adapter {
                 && shader_model >= naga::back::hlsl::ShaderModel::V6_1
         };
         features.set(
-            wgt::Features::SHADER_BARYCENTRICS,
+            wgt::Features::SHADER_BARYCENTRICS | wgt::Features::SHADER_PER_VERTEX,
             shader_barycentrics_supported,
         );
 

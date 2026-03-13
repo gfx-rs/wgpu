@@ -1043,6 +1043,7 @@ impl super::CapabilitiesQuery {
             } else {
                 false
             },
+            shader_per_vertex: family_check && device.supportsFamily(MTLGPUFamily::Apple10),
         }
     }
 
@@ -1152,6 +1153,8 @@ impl super::CapabilitiesQuery {
             F::SHADER_BARYCENTRICS,
             self.shader_barycentrics && self.msl_version >= MTLLanguageVersion::Version2_2,
         );
+
+        features.set(F::SHADER_PER_VERTEX, self.shader_per_vertex);
 
         if self.supports_simd_scoped_operations {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);

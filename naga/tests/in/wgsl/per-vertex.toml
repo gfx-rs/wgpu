@@ -1,2 +1,2 @@
 capabilities = "PER_VERTEX"
-targets = "WGSL | SPIRV"
+targets = "WGSL | SPIRV | HLSL | MSL"
