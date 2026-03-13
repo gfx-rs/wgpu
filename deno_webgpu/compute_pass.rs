@@ -12,7 +12,9 @@ use deno_core::webidl::WebIdlConverter;
 use deno_core::webidl::WebIdlError;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
+use wgpu_core::binding_model::ImmediateUploadError;
 
+use crate::error::GPUError;
 use crate::error::GPUGenericError;
 use crate::Instance;
 
@@ -226,6 +228,119 @@ impl GPUComputePassEncoder {
         .err()
     };
 
+    self.error_handler.push_error(err);
+
+    Ok(())
+  }
+
+  // TODO: share marshalling code
+  #[required(2)]
+  #[undefined]
+  fn set_immediates<'a>(
+    &self,
+    scope: &mut v8::HandleScope<'a>,
+    #[webidl(options(enforce_range = true))] range_offset: u32,
+    data: v8::Local<v8::Value>,
+    data_offset: v8::Local<'a, v8::Value>,
+    size: v8::Local<'a, v8::Value>,
+  ) -> Result<(), WebIdlError> {
+    const PREFIX: &str =
+      "Failed to execute 'setImmediateData' on 'GPUComputePassEncoder'";
+
+    let data_size;
+    let data_byte_len;
+    let data_buffer;
+    // TODO: Surely some helpers for this must exist?
+    if let Ok(typed_array) = data.try_cast::<v8::TypedArray>() {
+      data_byte_len = typed_array.byte_length();
+      data_size = typed_array.length();
+      data_buffer = typed_array.buffer(scope).and_then(|b| b.data());
+    } else if let Ok(array_buf_view) = data.try_cast::<v8::ArrayBufferView>() {
+      data_byte_len = array_buf_view.byte_length();
+      data_size = 1;
+      data_buffer = array_buf_view.buffer(scope).and_then(|b| b.data());
+    } else if let Ok(array_buf) = data.try_cast::<v8::ArrayBuffer>() {
+      data_byte_len = array_buf.byte_length();
+      data_size = 1;
+      data_buffer = array_buf.data();
+    } else if let Ok(shared_array_buf) =
+      data.try_cast::<v8::SharedArrayBuffer>()
+    {
+      data_byte_len = shared_array_buf.byte_length();
+      data_size = 1;
+      // TODO: file issue about `data` convenience accessor
+      data_buffer = shared_array_buf.get_backing_store().data();
+    } else {
+      return Err(WebIdlError::new(
+        Cow::Borrowed(PREFIX),
+        (|| Cow::Borrowed("Argument 2")).into(),
+        deno_core::webidl::WebIdlErrorKind::ConvertToConverterType(
+          "AllowSharedBufferSource",
+        ),
+      ));
+    }
+
+    let data_offset = <u64 as WebIdlConverter<'a>>::convert(
+      scope,
+      data_offset,
+      Cow::Borrowed(PREFIX),
+      (|| Cow::Borrowed("Argument 3")).into(),
+      &IntOptions {
+        clamp: false,
+        enforce_range: true,
+      },
+    )
+    .map(|o| (o as usize) * data_size)?;
+
+    let size = u64::convert(
+      scope,
+      size,
+      Cow::Borrowed(PREFIX),
+      (|| Cow::Borrowed("Argument 4")).into(),
+      &IntOptions {
+        clamp: false,
+        enforce_range: true,
+      },
+    )
+    .map(|o| (o as usize) * data_size)?;
+
+    let data: &[_] = data_buffer.map_or(&[], |b| unsafe {
+      // SAFETY: created from an array buffer, slice is dropped at end of function call
+      std::slice::from_raw_parts(b.as_ptr() as *const u8, data_byte_len)
+    });
+
+    let data = match data.get(data_offset..(data_offset + size)) {
+      Some(some) => some,
+      None => {
+        let err = if data_offset > data.len() {
+          ImmediateUploadError::StartOffsetOverrun {
+            start_offset: data_offset as u32,
+            immediate_size: data_byte_len as u32,
+          }
+        } else {
+          ImmediateUploadError::EndOffsetOverrun {
+            start_offset: data_offset as u32,
+            size: size as u32,
+            immediate_size: data_byte_len as u32,
+          }
+        };
+
+        self
+          .error_handler
+          .push_error(Some(GPUError::Validation(err.to_string())));
+
+        return Ok(());
+      }
+    };
+
+    let err = self
+      .instance
+      .compute_pass_set_immediates(
+        &mut self.compute_pass.borrow_mut(),
+        range_offset,
+        data,
+      )
+      .err();
     self.error_handler.push_error(err);
 
     Ok(())
