@@ -891,19 +891,19 @@ fn blas_first_vertex(ctx: TestingContext) {
         .create_command_encoder(&CommandEncoderDescriptor::default());
 
     let entry = BlasBuildEntry {
-            blas: &blas,
-            geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
-                size: &blas_size,
-                vertex_buffer: &large_buffer,
-                // Leaves 3 at the end to build with.
-                first_vertex: 9,
-                vertex_stride: size_of::<[f32; 3]>() as BufferAddress,
-                index_buffer: None,
-                first_index: None,
-                transform_buffer: None,
-                transform_buffer_offset: None,
-            }]),
-        };
+        blas: &blas,
+        geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
+            size: &blas_size,
+            vertex_buffer: &large_buffer,
+            // Leaves 3 at the end to build with.
+            first_vertex: 9,
+            vertex_stride: size_of::<[f32; 3]>() as BufferAddress,
+            index_buffer: None,
+            first_index: None,
+            transform_buffer: None,
+            transform_buffer_offset: None,
+        }]),
+    };
 
     encoder.build_acceleration_structures([&entry], []);
 

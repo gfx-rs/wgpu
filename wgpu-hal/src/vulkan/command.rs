@@ -609,7 +609,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                                 // index buffer we need to have IndexType::NONE_KHR as our index type.
                                 .index_type(vk::IndexType::NONE_KHR)
                                 .vertex_data(vk::DeviceOrHostAddressConstKHR {
-                                    device_address: get_device_address(triangles.vertex_buffer) + (triangles.first_vertex as u64 * triangles.vertex_stride),
+                                    device_address: get_device_address(triangles.vertex_buffer)
+                                        + (triangles.first_vertex as u64 * triangles.vertex_stride),
                                 })
                                 .vertex_format(conv::map_vertex_format(triangles.vertex_format))
                                 .max_vertex(triangles.vertex_count)
@@ -628,8 +629,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                                 .primitive_count(indices.count / 3)
                                 .primitive_offset(indices.offset);
                         } else {
-                            range = range
-                                .primitive_count(triangles.vertex_count / 3);
+                            range = range.primitive_count(triangles.vertex_count / 3);
                         }
 
                         if let Some(ref transform) = triangles.transform {
