@@ -236,6 +236,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 #### Vulkan
 
 - Fixed a variety of mesh shader SPIR-V writer issues from the original implementation. By @inner-daemons in [#8756](https://github.com/gfx-rs/wgpu/pull/8756)
+- Offset the vertex buffer device address when building a BLAS instead of using the `first_vertex` field. By @Vecvec in [#9220](https://github.com/gfx-rs/wgpu/pull/9220) 
 
 #### Metal / macOS
 
