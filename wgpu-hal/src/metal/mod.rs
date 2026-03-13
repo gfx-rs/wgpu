@@ -311,13 +311,11 @@ struct PrivateCapabilities {
     format_depth32float_none: bool,
     format_bgr10a2_all: bool,
     format_bgr10a2_no_write: bool,
-    max_buffers_per_stage: ResourceIndex,
-    max_vertex_buffers: ResourceIndex,
-    max_textures_per_stage: ResourceIndex,
-    max_samplers_per_stage: ResourceIndex,
+    max_textures_per_stage: (ResourceIndex, ResourceIndex),
     max_binding_array_elements: ResourceIndex,
     max_sampler_binding_array_elements: ResourceIndex,
     buffer_alignment: u64,
+    constant_buffer_offset_alignment: u32,
 
     /// Platform-reported maximum buffer size
     ///
@@ -330,7 +328,7 @@ struct PrivateCapabilities {
     max_fragment_input_components: u64,
     max_color_render_targets: u8,
     max_color_attachment_bytes_per_sample: u8,
-    max_varying_components: u32,
+    max_inter_stage_shader_variables: u32,
     max_threads_per_group: u32,
     max_total_threadgroup_memory: u32,
     sample_count_mask: crate::TextureFormatCapabilities,
@@ -737,7 +735,6 @@ struct ImmediateDataInfo {
 pub struct PipelineLayout {
     bind_group_infos: [Option<BindGroupLayoutInfo>; crate::MAX_BIND_GROUPS],
     immediates_infos: MultiStageData<Option<ImmediateDataInfo>>,
-    total_counters: MultiStageResourceCounters,
     total_immediates: u32,
     per_stage_map: MultiStageResources,
 }
@@ -1027,7 +1024,7 @@ struct CommandState {
     /// [`ResourceBinding`]: naga::ResourceBinding
     storage_buffer_length_map: FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
 
-    vertex_buffer_size_map: FastHashMap<u64, wgt::BufferSize>,
+    vertex_buffer_size_map: FastHashMap<u32, wgt::BufferSize>,
 
     immediates: Vec<u32>,
 

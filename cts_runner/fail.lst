@@ -20,7 +20,6 @@ webgpu:api,validation,compute_pipeline:overrides,workgroup_size,limits:* // 0%
 webgpu:api,validation,createBindGroup:buffer,resource_state:* // 0%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,createBindGroup:external_texture,* // 0%, no external external texture in deno
 webgpu:api,validation,createBindGroup:texture,resource_state:* // crash, https://github.com/gfx-rs/wgpu/issues/7881
-webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:* // metal, https://github.com/gfx-rs/wgpu/issues/8173
 webgpu:api,validation,createBindGroupLayout:visibility,VERTEX_shader_stage_buffer_type:* // 25%, writable storage buffers not allowed in VERTEX
 webgpu:api,validation,createBindGroupLayout:visibility,VERTEX_shader_stage_storage_texture_access:* // 25%, write-access storage textures not allowed in VERTEX
 webgpu:api,validation,createBindGroupLayout:visibility:* // 25%, missing per-stage storage limits

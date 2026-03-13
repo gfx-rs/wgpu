@@ -24,7 +24,7 @@ use objc2_metal::{
     MTLVertexStepFunction,
 };
 
-use super::{conv, PassthroughShader, ShaderModuleSource};
+use super::{adapter::VERTEX_BUFFER_SLOT_START, conv, PassthroughShader, ShaderModuleSource};
 use crate::{auxil::map_naga_stage, TlasInstance};
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
@@ -845,14 +845,6 @@ impl crate::Device for super::Device {
                 info.sizes_buffer = Some(info.counters.buffers);
                 info.counters.buffers += 1;
             }
-
-            if info.counters.buffers > self.shared.private_caps.max_buffers_per_stage
-                || info.counters.textures > self.shared.private_caps.max_textures_per_stage
-                || info.counters.samplers > self.shared.private_caps.max_samplers_per_stage
-            {
-                log::error!("Resource limit exceeded: {info:?}");
-                return Err(crate::DeviceError::OutOfMemory);
-            }
         }
 
         let immediates_infos = stage_data.map_ref(|info| {
@@ -861,8 +853,6 @@ impl crate::Device for super::Device {
                 buffer_index,
             })
         });
-
-        let total_counters = stage_data.map_ref(|info| info.counters.clone());
 
         let per_stage_map = stage_data.map(|info| naga::back::msl::EntryPointResources {
             immediates_buffer: info
@@ -879,7 +869,6 @@ impl crate::Device for super::Device {
         Ok(super::PipelineLayout {
             bind_group_infos,
             immediates_infos,
-            total_counters,
             total_immediates: desc.immediate_size,
             per_stage_map,
         })
@@ -1281,7 +1270,7 @@ impl crate::Device for super::Device {
                         }
 
                         let mapping = naga::back::msl::VertexBufferMapping {
-                            id: self.shared.private_caps.max_vertex_buffers - 1 - i as u32,
+                            id: VERTEX_BUFFER_SLOT_START + i as u32,
                             stride: if vbl.array_stride > 0 {
                                 vbl.array_stride.try_into().unwrap()
                             } else {
@@ -1341,27 +1330,11 @@ impl crate::Device for super::Device {
                         });
                     }
 
-                    // Validate vertex buffer count
-                    if desc.layout.total_counters.vs.buffers + (vertex_buffers.len() as u32)
-                        > self.shared.private_caps.max_vertex_buffers
-                    {
-                        let msg = format!(
-                            "pipeline needs too many buffers in the vertex stage: {} vertex and {} layout",
-                            vertex_buffers.len(),
-                            desc.layout.total_counters.vs.buffers
-                        );
-                        return Err(crate::PipelineError::Linkage(
-                            wgt::ShaderStages::VERTEX,
-                            msg,
-                        ));
-                    }
-
                     // Set the pipeline vertex buffer info
                     if !vertex_buffers.is_empty() {
                         let vertex_descriptor = MTLVertexDescriptor::new();
                         for (i, vb) in vertex_buffers.iter().enumerate() {
-                            let buffer_index =
-                                self.shared.private_caps.max_vertex_buffers as usize - 1 - i;
+                            let buffer_index = VERTEX_BUFFER_SLOT_START as usize + i;
                             let buffer_desc = unsafe {
                                 vertex_descriptor
                                     .layouts()

@@ -13,7 +13,7 @@ use objc2_metal::{
     MTLVisibilityResultMode,
 };
 
-use super::{conv, TimestampQuerySupport};
+use super::{adapter::VERTEX_BUFFER_SLOT_START, conv, TimestampQuerySupport};
 use crate::CommandEncoder as _;
 use alloc::{
     borrow::{Cow, ToOwned as _},
@@ -435,7 +435,7 @@ impl super::CommandState {
         // they were added to the map.
         result_sizes.extend(stage_info.vertex_buffer_mappings.iter().map(|vbm| {
             self.vertex_buffer_size_map
-                .get(&(vbm.id as u64))
+                .get(&vbm.id)
                 .map(|size| u32::try_from(size.get()).unwrap_or(u32::MAX))
                 .unwrap_or_default()
         }));
@@ -1344,7 +1344,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         index: u32,
         binding: crate::BufferBinding<'a, super::Buffer>,
     ) {
-        let buffer_index = self.shared.private_caps.max_vertex_buffers as u64 - 1 - index as u64;
+        let buffer_index = VERTEX_BUFFER_SLOT_START + index;
         let encoder = self.state.render.as_ref().unwrap();
         unsafe {
             encoder.setVertexBuffer_offset_atIndex(
