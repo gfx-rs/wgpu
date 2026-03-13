@@ -1376,12 +1376,11 @@ impl crate::Surface for Surface {
                     }
                     SurfaceTarget::CoreWindow(core_window) => {
                         profiling::scope!("IDXGIFactory2::CreateSwapChainForCoreWindow");
-                        let core_window = unsafe {
-                            windows_core::IUnknown::from_raw_borrowed(&core_window)
-                        }
-                        .ok_or(crate::SurfaceError::Other(
-                            "CoreWindow pointer should not be NULL",
-                        ))?;
+                        let core_window =
+                            unsafe { windows_core::IUnknown::from_raw_borrowed(&core_window) }
+                                .ok_or(crate::SurfaceError::Other(
+                                    "CoreWindow pointer should not be NULL",
+                                ))?;
 
                         unsafe {
                             self.factory.CreateSwapChainForCoreWindow(
