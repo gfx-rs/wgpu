@@ -240,6 +240,8 @@ pub enum Error {
     ResolveArraySizeError(#[from] crate::proc::ResolveArraySizeError),
     #[error("entry point with stage {0:?} and name '{1}' not found")]
     EntryPointNotFound(ir::ShaderStage, String),
+    #[error("Per vertex fragment inputs are not supported prior to MSL 4.0")]
+    PerVertexNotSupported,
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
