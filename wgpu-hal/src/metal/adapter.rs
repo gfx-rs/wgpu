@@ -5,10 +5,11 @@ use objc2_metal::{
     MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion, MTLPixelFormat,
     MTLReadWriteTextureTier,
 };
-use parking_lot::Mutex;
 use wgt::{AstcBlock, AstcChannel};
 
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
+
+use crate::metal::QueueShared;
 
 use super::{OsFeatures, TimestampQuerySupport};
 
@@ -105,7 +106,7 @@ impl crate::Adapter for super::Adapter {
                 counters: Default::default(),
             },
             queue: super::Queue {
-                raw: Arc::new(Mutex::new(queue)),
+                shared: Arc::new(QueueShared { raw: queue }),
                 timestamp_period,
             },
         })

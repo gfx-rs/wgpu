@@ -691,7 +691,7 @@ impl crate::Device for super::Device {
         self.counters.command_encoders.add(1);
         Ok(super::CommandEncoder {
             shared: Arc::clone(&self.shared),
-            raw_queue: Arc::clone(&desc.queue.raw),
+            queue_shared: Arc::clone(&desc.queue.shared),
             raw_cmd_buf: None,
             state: super::CommandState::default(),
             temp: super::Temp::default(),
