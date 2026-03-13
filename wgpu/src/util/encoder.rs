@@ -71,8 +71,6 @@ pub trait RenderEncoder<'a> {
         indirect_offset: BufferAddress,
     );
 
-    /// [`wgt::Features::IMMEDIATES`] must be enabled on the device in order to call this function.
-    ///
     /// Set immediate data for subsequent draw calls.
     ///
     /// Write the bytes in `data` at offset `offset` within immediate data

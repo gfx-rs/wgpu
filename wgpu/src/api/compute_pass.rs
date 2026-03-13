@@ -111,7 +111,6 @@ impl ComputePass<'_> {
     }
 }
 
-/// [`Features::IMMEDIATES`] must be enabled on the device in order to call these functions.
 impl ComputePass<'_> {
     /// Set immediate data for subsequent dispatch calls.
     ///

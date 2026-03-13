@@ -16,7 +16,6 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 static NUM_WORKGROUPS_BUILTIN: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::IMMEDIATES)
             .downlevel_flags(
                 wgpu::DownlevelFlags::COMPUTE_SHADERS | wgpu::DownlevelFlags::INDIRECT_EXECUTION,
             )
@@ -36,7 +35,6 @@ static NUM_WORKGROUPS_BUILTIN: GpuTestConfiguration = GpuTestConfiguration::new(
 static DISCARD_DISPATCH: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::IMMEDIATES)
             .downlevel_flags(
                 wgpu::DownlevelFlags::COMPUTE_SHADERS | wgpu::DownlevelFlags::INDIRECT_EXECUTION,
             )
@@ -67,7 +65,6 @@ static DISCARD_DISPATCH: GpuTestConfiguration = GpuTestConfiguration::new()
 static RESET_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::IMMEDIATES)
             .downlevel_flags(
                 wgpu::DownlevelFlags::COMPUTE_SHADERS | wgpu::DownlevelFlags::INDIRECT_EXECUTION,
             )
@@ -109,7 +106,6 @@ static RESET_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
 static ZERO_SIZED_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::IMMEDIATES)
             .downlevel_flags(
                 wgpu::DownlevelFlags::COMPUTE_SHADERS | wgpu::DownlevelFlags::INDIRECT_EXECUTION,
             )

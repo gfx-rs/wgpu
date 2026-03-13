@@ -234,7 +234,6 @@ pub struct Limits {
     pub max_compute_workgroups_per_dimension: u32,
 
     /// Amount of storage available for immediates in bytes. Defaults to 0. Higher is "better".
-    /// Requesting more than 0 during device creation requires [`Features::IMMEDIATES`] to be enabled.
     ///
     /// Expect the size to be:
     /// - Vulkan: 128-256 bytes

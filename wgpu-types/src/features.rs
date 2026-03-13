@@ -15,7 +15,7 @@
 //! [`bitflags`] does not currently support customized flag naming.
 //! See <https://github.com/bitflags/bitflags/issues/470>.
 
-use crate::{link_to_wgpu_docs, link_to_wgpu_item, VertexFormat};
+use crate::{link_to_wgpu_docs, VertexFormat};
 #[cfg(feature = "serde")]
 use alloc::fmt;
 use alloc::vec::Vec;
@@ -85,10 +85,7 @@ mod webgpu_impl {
     pub const WEBGPU_FEATURE_CLIP_DISTANCES: u64 = 1 << 15;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_IMMEDIATES: u64 = 1 << 16;
-
-    #[doc(hidden)]
-    pub const WEBGPU_FEATURE_PRIMITIVE_INDEX: u64 = 1 << 17;
+    pub const WEBGPU_FEATURE_PRIMITIVE_INDEX: u64 = 1 << 16;
 }
 
 macro_rules! bitflags_array_impl {
@@ -1732,39 +1729,6 @@ bitflags_array! {
         /// This is a web and native feature.
         #[name("clip-distances")]
         const CLIP_DISTANCES = WEBGPU_FEATURE_CLIP_DISTANCES;
-
-        /// Allows the use of immediate data: small, fast bits of memory that can be updated
-        /// inside a [`RenderPass`].
-        ///
-        /// Allows the user to call [`RenderPass::set_immediates`], provide a non-zero immediate data size
-        /// to [`PipelineLayoutDescriptor`], and provide a non-zero limit to [`Limits::max_immediate_size`].
-        ///
-        /// A block of immediate data can be declared in WGSL with `var<immediate>`:
-        ///
-        /// ```rust,ignore
-        /// struct Immediates { example: f32, }
-        /// var<immediate> c: Immediates;
-        /// ```
-        ///
-        /// In GLSL, this corresponds to `layout(immediates) uniform Name {..}`.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan
-        /// - Metal
-        /// - OpenGL (emulated with uniforms)
-        /// - WebGPU
-        ///
-        /// WebGPU support is currently a proposal and will be available in browsers in the future.
-        ///
-        /// This is a web and native feature.
-        ///
-        #[doc = link_to_wgpu_item!(struct RenderPass)]
-        #[doc = link_to_wgpu_item!(struct PipelineLayoutDescriptor)]
-        #[doc = link_to_wgpu_docs!(["`RenderPass::set_immediates`"]: "struct.RenderPass.html#method.set_immediates")]
-        /// [`Limits::max_immediate_size`]: super::Limits
-        #[name("immediates")]
-        const IMMEDIATES = WEBGPU_FEATURE_IMMEDIATES;
 
         /// Enables `builtin(primitive_index)` in fragment shaders.
         ///

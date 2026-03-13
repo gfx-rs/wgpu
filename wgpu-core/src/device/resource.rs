@@ -3688,9 +3688,6 @@ impl Device {
             });
         }
 
-        if desc.immediate_size != 0 {
-            self.require_features(wgt::Features::IMMEDIATES)?;
-        }
         if self.limits.max_immediate_size < desc.immediate_size {
             return Err(Error::ImmediateRangeTooLarge {
                 size: desc.immediate_size,

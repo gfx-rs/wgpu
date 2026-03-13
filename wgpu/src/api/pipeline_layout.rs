@@ -40,7 +40,8 @@ pub struct PipelineLayoutDescriptor<'a> {
     /// in the shader. The `var<immediate>`s in the shader attached to
     /// this pipeline must be equal or smaller than this size.
     ///
-    /// If this value is non-zero, [`Features::IMMEDIATES`] must be enabled.
+    /// This must be no greater than the device's
+    /// [`max_immediate_size` limit](wgt::Limits::max_immediate_size).
     pub immediate_size: u32,
 }
 #[cfg(send_sync)]

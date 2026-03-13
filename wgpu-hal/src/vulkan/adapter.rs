@@ -647,7 +647,6 @@ impl PhysicalDeviceFeatures {
         use wgt::{DownlevelFlags as Df, Features as F};
         let mut features = F::empty()
             | F::MAPPABLE_PRIMARY_BUFFERS
-            | F::IMMEDIATES
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::ADDRESS_MODE_CLAMP_TO_ZERO
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES

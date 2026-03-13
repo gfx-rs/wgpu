@@ -3346,6 +3346,7 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
     }
 
     fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
+        // TODO: fixit
         panic!("IMMEDIATES feature must be enabled to call set_immediates")
     }
 
@@ -3475,6 +3476,7 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
     }
 
     fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
+        // TODO: fixit
         panic!("IMMEDIATES feature must be enabled to call set_immediates")
     }
 
@@ -3766,6 +3768,7 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
     }
 
     fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
+        // TODO: fixit
         panic!("IMMEDIATES feature must be enabled to call set_immediates")
     }
 

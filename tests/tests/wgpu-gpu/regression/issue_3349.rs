@@ -29,14 +29,10 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 /// We then validate the data is correct from every position.
 #[gpu_test]
 static MULTI_STAGE_DATA_BINDING: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(wgpu::Features::IMMEDIATES)
-            .limits(wgpu::Limits {
-                max_immediate_size: 16,
-                ..Default::default()
-            }),
-    )
+    .parameters(TestParameters::default().limits(wgpu::Limits {
+        max_immediate_size: 16,
+        ..Default::default()
+    }))
     .run_async(multi_stage_data_binding_test);
 
 async fn multi_stage_data_binding_test(ctx: TestingContext) {

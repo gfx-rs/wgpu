@@ -351,8 +351,7 @@ const UPLEVEL: Bucket = Bucket {
         // TIER1/TIER2 not implemented in wgpu; https://github.com/gfx-rs/wgpu/issues/8122
         .union(Features::PRIMITIVE_INDEX)
         // TEXTURE_COMPONENT_SWIZZLE not implemented in wgpu; https://github.com/gfx-rs/wgpu/issues/1028
-        .union(Features::SUBGROUP)
-        .union(Features::IMMEDIATES),
+        .union(Features::SUBGROUP),
 };
 
 // e.g. Apple M Series
@@ -561,10 +560,7 @@ mod tests {
                 .union(Features::SUBGROUP)
                 //.union(Features::TEXTURE_FORMATS_TIER1) not implemented
                 //.union(Features::TEXTURE_FORMATS_TIER2) not implemented
-                .union(Features::PRIMITIVE_INDEX)
-                //.union(Features::TEXTURE_COMPONENT_SWIZZLE) not implemented
-                // Standard-track features not in official spec
-                .union(Features::IMMEDIATES),
+                .union(Features::PRIMITIVE_INDEX), //.union(Features::TEXTURE_COMPONENT_SWIZZLE) not implemented
         );
         assert!(
             difference.is_empty(),

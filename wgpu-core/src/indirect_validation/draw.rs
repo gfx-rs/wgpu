@@ -531,7 +531,7 @@ fn create_validation_module(
     let module = panic!("Indirect validation requires the wgsl feature flag to be enabled!");
 
     let info = crate::device::create_validator(
-        wgt::Features::IMMEDIATES,
+        wgt::Features::empty(),
         wgt::DownlevelFlags::empty(),
         naga::valid::ValidationFlags::all(),
     )
