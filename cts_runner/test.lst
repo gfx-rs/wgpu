@@ -95,24 +95,14 @@ webgpu:api,validation,createBindGroup:texture_binding_must_have_correct_usage:*
 webgpu:api,validation,createBindGroup:texture_must_have_correct_component_type:*
 webgpu:api,validation,createBindGroup:texture_must_have_correct_dimension:*
 webgpu:api,validation,createBindGroupLayout:duplicate_bindings:*
-fails-if(vulkan) webgpu:api,validation,createBindGroupLayout:max_dynamic_buffers:*
-fails-if(vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"sampler":{"type":"comparison"}}
-fails-if(vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"sampler":{"type":"filtering"}}
-fails-if(vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"sampler":{"type":"non-filtering"}}
-fails-if(dx12,vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"storageTexture":{"access":"read-only","format":"r32float"}}
-fails-if(dx12,vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"storageTexture":{"access":"read-write","format":"r32float"}}
-fails-if(dx12,vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"storageTexture":{"access":"write-only","format":"r32float"}}
-fails-if(dx12,vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"texture":{"multisampled":false,"sampleType":"unfilterable-float"}}
-fails-if(dx12,vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:maxedEntry={"texture":{"multisampled":true,"sampleType":"unfilterable-float"}}
+webgpu:api,validation,createBindGroupLayout:max_dynamic_buffers:*
+webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_bind_group_layout:*
+fails-if(metal) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:*
 webgpu:api,validation,createBindGroupLayout:maximum_binding_limit:*
 webgpu:api,validation,createBindGroupLayout:multisampled_validation:*
 webgpu:api,validation,createBindGroupLayout:storage_texture,formats:*
 webgpu:api,validation,createBindGroupLayout:storage_texture,layout_dimension:*
-webgpu:api,validation,createPipelineLayout:bind_group_layouts,create_pipeline_with_null_bind_group_layouts:*
-webgpu:api,validation,createPipelineLayout:bind_group_layouts,device_mismatch:*
-webgpu:api,validation,createPipelineLayout:bind_group_layouts,null_bind_group_layouts:*
-webgpu:api,validation,createPipelineLayout:bind_group_layouts,set_pipeline_with_null_bind_group_layouts:*
-webgpu:api,validation,createPipelineLayout:number_of_bind_group_layouts_exceeds_the_maximum_value:*
+webgpu:api,validation,createPipelineLayout:*
 webgpu:api,validation,createSampler:*
 webgpu:api,validation,createTexture:*
 webgpu:api,validation,createView:array_layers:*
@@ -176,6 +166,7 @@ webgpu:api,validation,encoding,encoder_open_state:non_pass_commands:*
 webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:*
 webgpu:api,validation,encoding,encoder_state:*
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:*
+webgpu:api,validation,encoding,queries,begin_end:nesting:*
 webgpu:api,validation,encoding,queries,begin_end:occlusion_query,*
 webgpu:api,validation,encoding,queries,general:occlusion_query,*
 webgpu:api,validation,error_scope:*
@@ -214,6 +205,7 @@ webgpu:api,validation,image_copy,layout_related:offset_alignment:*
 webgpu:api,validation,image_copy,layout_related:required_bytes_in_copy:*
 webgpu:api,validation,image_copy,layout_related:rows_per_image_alignment:*
 webgpu:api,validation,image_copy,texture_related:*
+fails-if(dx12) webgpu:api,validation,layout_shader_compat:pipeline_layout_shader_exact_match:*
 webgpu:api,validation,query_set,destroy:*
 webgpu:api,validation,queue,buffer_mapped:copyBufferToBuffer:*
 webgpu:api,validation,queue,buffer_mapped:copyBufferToTexture:*
@@ -226,8 +218,7 @@ webgpu:api,validation,queue,writeBuffer:buffer_state:*
 webgpu:api,validation,queue,writeBuffer:buffer,device_mismatch:*
 webgpu:api,validation,queue,writeBuffer:usages:*
 webgpu:api,validation,queue,writeTexture:*
-webgpu:api,validation,render_pass,attachment_compatibility:render_pass_and_bundle,color_sparse:*
-webgpu:api,validation,render_pass,attachment_compatibility:render_pass_and_bundle,depth_format:*
+webgpu:api,validation,render_pass,attachment_compatibility:render_pass_and_bundle,*
 webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,color_count:*
 webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,color_format:*
 webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,color_sparse:*
@@ -298,7 +289,7 @@ webgpu:api,validation,texture,destroy:twice:*
 webgpu:api,validation,texture,float32_filterable:create_bind_group:*
 webgpu:api,validation,texture,rg11b10ufloat_renderable:*
 
-webgpu:shader,execution,expression,call,builtin,atan2:f16:*
+fails-if(dx12) webgpu:shader,execution,expression,call,builtin,atan2:f16:*
 webgpu:shader,execution,expression,call,builtin,atan2:f32:*
 webgpu:shader,execution,expression,call,builtin,dot:abstract_int_vec2:*
 webgpu:shader,execution,expression,call,builtin,dot:abstract_int_vec3:*
@@ -333,6 +324,7 @@ webgpu:shader,execution,flow_control,return:*
 // Many other vertex_buffer_access subtests also passing, but there are too many to enumerate.
 // Fails on Metal in CI only, not when running locally.
 fails-if(metal) webgpu:shader,execution,robust_access_vertex:vertex_buffer_access:indexed=true;indirect=false;drawCallTestParameter="baseVertex";type="float32x4";additionalBuffers=4;partialLastNumber=false;offsetVertexBuffer=true
+webgpu:shader,execution,statement,compound:*
 
 webgpu:shader,validation,const_assert,const_assert:*
 webgpu:shader,validation,decl,assignment_statement:*

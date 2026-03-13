@@ -147,9 +147,13 @@ impl crate::Instance for super::Instance {
 
     unsafe fn create_surface(
         &self,
-        _display_handle: raw_window_handle::RawDisplayHandle,
+        display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<super::Surface, crate::InstanceError> {
+        assert!(matches!(
+            display_handle,
+            raw_window_handle::RawDisplayHandle::Windows(_)
+        ));
         match window_handle {
             raw_window_handle::RawWindowHandle::Win32(handle) => {
                 // https://github.com/rust-windowing/raw-window-handle/issues/171

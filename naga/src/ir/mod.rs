@@ -727,6 +727,22 @@ bitflags::bitflags! {
     }
 }
 
+bitflags::bitflags! {
+    /// Memory decorations for global variables.
+    #[cfg_attr(feature = "serialize", derive(Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(Deserialize))]
+    #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+    #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    pub struct MemoryDecorations: u8 {
+        /// Reads and writes are automatically visible to other invocations
+        /// without explicit barriers.
+        const COHERENT = 0x1;
+        /// The variable may be modified by something external to the shader,
+        /// preventing certain compiler optimizations.
+        const VOLATILE = 0x2;
+    }
+}
+
 /// Image storage format.
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -1170,6 +1186,13 @@ pub struct GlobalVariable {
     ///
     /// This refers to an [`Expression`] in [`Module::global_expressions`].
     pub init: Option<Handle<Expression>>,
+    /// Memory decorations for this variable.
+    ///
+    /// These are meaningful for storage address space variables in SPIR-V,
+    /// where they map to SPIR-V memory decorations on the variable.
+    ///
+    /// In WGSL, these can be set with attributes like `@coherent` or `@volatile`.
+    pub memory_decorations: MemoryDecorations,
 }
 
 /// Variable defined at function level.

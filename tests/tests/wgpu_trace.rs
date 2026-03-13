@@ -23,7 +23,7 @@ fn trace_test(test_type: TestType) {
                 noop: wgt::NoopBackendOptions { enable: true },
                 ..Default::default()
             },
-            ..Default::default()
+            ..wgt::instance::InstanceDescriptor::new_without_display_handle()
         },
         None,
     );

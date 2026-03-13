@@ -151,16 +151,18 @@ impl crate::Instance for Instance {
 
     unsafe fn create_surface(
         &self,
-        _display_handle: raw_window_handle::RawDisplayHandle,
+        display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Surface, crate::InstanceError> {
-        let layer = match window_handle {
-            raw_window_handle::RawWindowHandle::AppKit(handle) => unsafe {
-                raw_window_metal::Layer::from_ns_view(handle.ns_view)
-            },
-            raw_window_handle::RawWindowHandle::UiKit(handle) => unsafe {
-                raw_window_metal::Layer::from_ui_view(handle.ui_view)
-            },
+        let layer = match (display_handle, window_handle) {
+            (
+                raw_window_handle::RawDisplayHandle::AppKit(_),
+                raw_window_handle::RawWindowHandle::AppKit(handle),
+            ) => unsafe { raw_window_metal::Layer::from_ns_view(handle.ns_view) },
+            (
+                raw_window_handle::RawDisplayHandle::UiKit(_),
+                raw_window_handle::RawWindowHandle::UiKit(handle),
+            ) => unsafe { raw_window_metal::Layer::from_ui_view(handle.ui_view) },
             _ => {
                 return Err(crate::InstanceError::new(format!(
                     "window handle {window_handle:?} is not a Metal-compatible handle"

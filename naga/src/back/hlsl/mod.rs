@@ -770,6 +770,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         // No BUFFER_BINDING_ARRAY
         | Caps::STORAGE_TEXTURE_BINDING_ARRAY
         // No STORAGE_BUFFER_BINDING_ARRAY
+        | Caps::ACCELERATION_STRUCTURE_BINDING_ARRAY
         // No CLIP_DISTANCE
         // No CULL_DISTANCE
         | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
@@ -799,8 +800,10 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         // No BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
         | Caps::STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING
         | Caps::STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
-    // No COOPERATIVE_MATRIX
-    // No PER_VERTEX
-    // No RAY_TRACING_PIPELINE
-    // No DRAW_INDEX
+        // No COOPERATIVE_MATRIX
+        // No PER_VERTEX
+        // No RAY_TRACING_PIPELINE
+        // No DRAW_INDEX
+        // No MEMORY_DECORATION_VOLATILE
+        | Caps::MEMORY_DECORATION_COHERENT
 }

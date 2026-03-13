@@ -490,7 +490,8 @@ impl super::Adapter {
             | wgt::Features::FLOAT32_FILTERABLE
             | wgt::Features::TEXTURE_ATOMIC
             | wgt::Features::PASSTHROUGH_SHADERS
-            | wgt::Features::EXTERNAL_TEXTURE;
+            | wgt::Features::EXTERNAL_TEXTURE
+            | wgt::Features::MEMORY_DECORATION_COHERENT;
 
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
@@ -615,9 +616,19 @@ impl super::Adapter {
             >= Direct3D12::D3D12_RAYTRACING_TIER_1_1.0
             && shader_model >= naga::back::hlsl::ShaderModel::V6_5
             && has_features5;
+
         features.set(
             wgt::Features::EXPERIMENTAL_RAY_QUERY
                 | wgt::Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
+            supports_ray_tracing,
+        );
+
+        // Binding arrays of TLAS are supported on D3D12 when ray tracing is supported.
+        //
+        // This flag is used for shader-side `binding_array<acceleration_structure>` as well as
+        // allowing `BindGroupLayoutEntry::count = Some(...)` for `BindingType::AccelerationStructure`.
+        features.set(
+            wgt::Features::ACCELERATION_STRUCTURE_BINDING_ARRAY,
             supports_ray_tracing,
         );
 
@@ -808,9 +819,10 @@ impl super::Adapter {
                     max_uniform_buffers_per_shader_stage: full_heap_count,
                     max_binding_array_elements_per_shader_stage: full_heap_count,
                     max_binding_array_sampler_elements_per_shader_stage: full_heap_count,
-                    max_uniform_buffer_binding_size:
-                        Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16,
-                    max_storage_buffer_binding_size: auxil::MAX_I32_BINDING_SIZE,
+                    max_uniform_buffer_binding_size: u64::from(
+                        Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT,
+                    ) * 16,
+                    max_storage_buffer_binding_size: u64::from(auxil::MAX_I32_BINDING_SIZE),
                     max_vertex_buffers: Direct3D12::D3D12_VS_INPUT_REGISTER_COUNT,
                     max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
                     max_vertex_buffer_array_stride: Direct3D12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
@@ -914,7 +926,12 @@ impl super::Adapter {
                     } else {
                         0
                     },
-
+                    max_binding_array_acceleration_structure_elements_per_shader_stage:
+                        if supports_ray_tracing {
+                            max_srv_count / 2
+                        } else {
+                            0
+                        },
                     max_multiview_view_count,
                 }),
                 alignments: crate::Alignments {

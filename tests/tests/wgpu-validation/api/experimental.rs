@@ -5,7 +5,7 @@ fn noop_adapter() -> wgpu::Adapter {
             noop: wgpu::NoopBackendOptions { enable: true },
             ..Default::default()
         },
-        ..Default::default()
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
     });
 
     pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))

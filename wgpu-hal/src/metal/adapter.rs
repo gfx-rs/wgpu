@@ -1091,6 +1091,10 @@ impl super::PrivateCapabilities {
             F::SHADER_FLOAT32_ATOMIC,
             self.float_atomics && self.msl_version >= MTLLanguageVersion::Version3_0,
         );
+        features.set(
+            F::MEMORY_DECORATION_COHERENT,
+            self.msl_version >= MTLLanguageVersion::Version3_2,
+        );
 
         features.set(
             F::ADDRESS_MODE_CLAMP_TO_BORDER,
@@ -1178,10 +1182,11 @@ impl super::PrivateCapabilities {
             max_binding_array_elements_per_shader_stage: self.max_binding_array_elements,
             max_binding_array_sampler_elements_per_shader_stage: self
                 .max_sampler_binding_array_elements,
+            max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
             // Note: any adjustment here will not be reflected in the stored `PrivateCapabilities`.
-            max_uniform_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32,
-            max_storage_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32
-                & !(wgt::STORAGE_BINDING_SIZE_ALIGNMENT - 1),
+            max_uniform_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64),
+            max_storage_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64)
+                & !(wgt::STORAGE_BINDING_SIZE_ALIGNMENT as u64 - 1),
             max_vertex_buffers: self.max_vertex_buffers,
             max_vertex_attributes: 31,
             max_vertex_buffer_array_stride: base.max_vertex_buffer_array_stride,

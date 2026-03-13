@@ -158,7 +158,10 @@ async fn binding_array_buffers(
             size: 16,
             mapped_at_creation: true,
         });
-        buffer.slice(..).get_mapped_range_mut()[0..4].copy_from_slice(&data.0);
+        buffer
+            .get_mapped_range_mut(..)
+            .slice(0..4)
+            .copy_from_slice(&data.0);
         buffer.unmap();
         buffers.push(buffer);
     }

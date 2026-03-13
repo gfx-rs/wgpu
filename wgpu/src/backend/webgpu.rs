@@ -29,7 +29,7 @@ use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{
     dispatch::{self, BlasCompactCallback},
-    Blas, SurfaceTargetUnsafe, Tlas,
+    Blas, SurfaceTargetUnsafe, Tlas, WriteOnly,
 };
 
 use defined_non_null_js_value::DefinedNonNullJsValue;
@@ -804,8 +804,9 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_uniform_buffers_per_shader_stage: limits.max_uniform_buffers_per_shader_stage(),
         max_binding_array_elements_per_shader_stage: 0,
         max_binding_array_sampler_elements_per_shader_stage: 0,
-        max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size() as u32,
-        max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size() as u32,
+        max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
+        max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size() as u64,
+        max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size() as u64,
         max_vertex_buffers: limits.max_vertex_buffers(),
         max_buffer_size: limits.max_buffer_size() as u64,
         max_vertex_attributes: limits.max_vertex_attributes(),
@@ -2100,6 +2101,9 @@ impl dispatch::DeviceInterface for WebDevice {
                         panic!("Web backend does not support BINDING_INDEXING extension")
                     }
                     crate::BindingResource::AccelerationStructure(_) => {
+                        unimplemented!("Raytracing not implemented for web")
+                    }
+                    crate::BindingResource::AccelerationStructureArray(_) => {
                         unimplemented!("Raytracing not implemented for web")
                     }
                     crate::BindingResource::ExternalTexture(_) => {
@@ -3950,20 +3954,28 @@ impl Drop for WebSurfaceOutputDetail {
     }
 }
 
-impl dispatch::BufferMappedRangeInterface for WebBufferMappedRange {
-    #[inline]
-    fn slice(&self) -> &[u8] {
+impl WebBufferMappedRange {
+    fn get_temporary_mapping(&self) -> &[u8] {
         self.temporary_mapping
             .get_or_init(|| self.actual_mapping.to_vec())
-            .as_slice()
+    }
+}
+impl dispatch::BufferMappedRangeInterface for WebBufferMappedRange {
+    fn len(&self) -> usize {
+        self.get_temporary_mapping().len()
     }
 
     #[inline]
-    fn slice_mut(&mut self) -> &mut [u8] {
+    unsafe fn read_slice(&self) -> &[u8] {
+        self.get_temporary_mapping()
+    }
+
+    #[inline]
+    unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]> {
         self.temporary_mapping_modified = true;
-        self.temporary_mapping
-            .get_or_init(|| self.actual_mapping.to_vec());
-        self.temporary_mapping.get_mut().unwrap()
+        self.get_temporary_mapping();
+        let t: &mut Vec<u8> = self.temporary_mapping.get_mut().unwrap();
+        WriteOnly::from_mut(t)
     }
 
     #[inline]
@@ -3992,13 +4004,14 @@ impl Drop for WebBufferMappedRange {
 }
 
 impl dispatch::QueueWriteBufferInterface for WebQueueWriteBuffer {
-    fn slice(&self) -> &[u8] {
-        &self.inner
+    #[inline]
+    fn len(&self) -> usize {
+        self.inner.len()
     }
 
     #[inline]
-    fn slice_mut(&mut self) -> &mut [u8] {
-        &mut self.inner
+    unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]> {
+        WriteOnly::from_mut(&mut *self.inner)
     }
 }
 impl Drop for WebQueueWriteBuffer {

@@ -58,9 +58,17 @@ impl Drop for SurfaceTexture {
 pub enum SurfaceError {
     /// A timeout was encountered while trying to acquire the next frame.
     Timeout,
+    /// The window is occluded (e.g. minimized or behind another window).
+    ///
+    /// Try again once the window is no longer occluded.
+    Occluded,
     /// The underlying surface has changed, and therefore the swap chain must be updated.
+    ///
+    /// Reconfigure your surface and try again.
     Outdated,
     /// The swap chain has been lost and needs to be recreated.
+    ///
+    /// Reconfigure your surface and try again.
     Lost,
     /// There is no more memory left to allocate a new frame.
     OutOfMemory,
@@ -73,6 +81,7 @@ impl fmt::Display for SurfaceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", match self {
             Self::Timeout => "A timeout was encountered while trying to acquire the next frame",
+            Self::Occluded => "The window is occluded (e.g. minimized or behind another window)",
             Self::Outdated => "The underlying surface has changed, and therefore the swap chain must be updated",
             Self::Lost =>  "The swap chain has been lost and needs to be recreated",
             Self::OutOfMemory => "There is no more memory left to allocate a new frame",

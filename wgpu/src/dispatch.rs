@@ -11,11 +11,22 @@
 //!
 //! [`dispatch_types`]: macro.dispatch_types.html
 
-#![allow(drop_bounds)] // This exists to remind implementors to impl drop.
-#![allow(clippy::too_many_arguments)] // It's fine.
-#![allow(missing_docs, clippy::missing_safety_doc)] // Interfaces are not documented
+#![allow(
+    drop_bounds,
+    reason = "This exists to remind implementors to impl drop."
+)]
+#![allow(clippy::too_many_arguments, reason = "It's fine.")]
+#![allow(
+    missing_docs,
+    clippy::missing_safety_doc,
+    reason = "Interfaces are not documented"
+)]
+#![allow(
+    clippy::len_without_is_empty,
+    reason = "trait is minimal, not ergonomic"
+)]
 
-use crate::{Blas, Tlas, WasmNotSend, WasmNotSendSync};
+use crate::{Blas, Tlas, WasmNotSend, WasmNotSendSync, WriteOnly};
 
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{any::Any, fmt::Debug, future::Future, hash::Hash, ops::Range, pin::Pin};
@@ -572,14 +583,26 @@ pub trait SurfaceOutputDetailInterface: CommonTraits {
 }
 
 pub trait QueueWriteBufferInterface: CommonTraits {
-    fn slice(&self) -> &[u8];
+    fn len(&self) -> usize;
 
-    fn slice_mut(&mut self) -> &mut [u8];
+    /// # Safety
+    ///
+    /// Must only be used on write, not read, mappings.
+    unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]>;
 }
 
 pub trait BufferMappedRangeInterface: CommonTraits {
-    fn slice(&self) -> &[u8];
-    fn slice_mut(&mut self) -> &mut [u8];
+    fn len(&self) -> usize;
+
+    /// # Safety
+    ///
+    /// Must only be used on read, not write, mappings.
+    unsafe fn read_slice(&self) -> &[u8];
+
+    /// # Safety
+    ///
+    /// Must only be used on write, not read, mappings.
+    unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]>;
 
     #[cfg(webgpu)]
     fn as_uint8array(&self) -> &js_sys::Uint8Array;

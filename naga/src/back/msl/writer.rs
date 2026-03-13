@@ -428,8 +428,16 @@ impl TypedGlobalVariable<'_> {
             first_time: false,
         };
 
-        let (space, access, reference) = match var.space.to_msl_name() {
+        let (coherent, space, access, reference) = match var.space.to_msl_name() {
             Some(space) if self.reference => {
+                let coherent = if var
+                    .memory_decorations
+                    .contains(crate::MemoryDecorations::COHERENT)
+                {
+                    "coherent "
+                } else {
+                    ""
+                };
                 let access = if var.space.needs_access_qualifier()
                     && !self.usage.intersects(valid::GlobalUse::WRITE)
                 {
@@ -437,14 +445,15 @@ impl TypedGlobalVariable<'_> {
                 } else {
                     ""
                 };
-                (space, access, "&")
+                (coherent, space, access, "&")
             }
-            _ => ("", "", ""),
+            _ => ("", "", "", ""),
         };
 
         Ok(write!(
             out,
-            "{}{}{}{}{}{} {}",
+            "{}{}{}{}{}{}{} {}",
+            coherent,
             space,
             if space.is_empty() { "" } else { " " },
             ty_name,

@@ -59,6 +59,45 @@ pub enum AstcChannel {
     Hdr,
 }
 
+bitflags::bitflags! {
+    /// Represents the different format channels of a texture format.
+    #[repr(transparent)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct TextureChannel: u16 {
+        /// Texture format contains a `red` channel.
+        const RED = 1 << 0;
+        /// Texture format contains a `green` channel.
+        const GREEN = 1 << 1;
+        /// Texture format contains a `blue` channel.
+        const BLUE = 1 << 2;
+        /// Texture format contains an `alpha` channel.
+        const ALPHA = 1 << 3;
+        /// Texture format contains a `stencil` channel.
+        const STENCIL = 1 << 4;
+        /// Texture format contains a `depth` channel.
+        const DEPTH = 1 << 5;
+        /// Texture format contains a `luminance` channel.
+        const LUMINANCE = 1 << 6;
+        /// Texture format contains a `blue-difference` channel.
+        const CHROMINANCE_BLUE = 1 << 7;
+        /// Texture format contains a `red-difference` channel.
+        const CHROMINANCE_RED = 1 << 8;
+
+        /// Texture format contains channels for `red` and `green`.
+        const RG = Self::RED.bits() | Self::GREEN.bits();
+        /// Texture format contains channels for `red`, `green` and `blue`.
+        const RGB = Self::RG.bits() | Self::BLUE.bits();
+        /// Texture format contains channels for `red`, `green`, `blue` and `alpha`.
+        const RGBA = Self::RGB.bits() | Self::ALPHA.bits();
+        /// Texture format contains channels for `depth` and `stencil`.
+        const DEPTH_STENCIL =  Self::DEPTH.bits() | Self::STENCIL.bits();
+        /// Texture format contains a `luminance` (`Y`), `blue-difference` (`Cb`) and `red-difference` (`Cr`) channel.
+        const LUMINANCE_CHROMINANCE = Self::LUMINANCE.bits() | Self::CHROMINANCE_BLUE.bits() | Self::CHROMINANCE_RED.bits();
+    }
+}
+
 /// Format in which a texture’s texels are stored in GPU memory.
 ///
 /// Certain formats additionally specify a conversion.
@@ -468,15 +507,7 @@ impl TextureFormat {
     /// see <https://gpuweb.github.io/gpuweb/#depth-formats>
     #[must_use]
     pub fn is_depth_stencil_format(&self) -> bool {
-        match *self {
-            Self::Stencil8
-            | Self::Depth16Unorm
-            | Self::Depth24Plus
-            | Self::Depth24PlusStencil8
-            | Self::Depth32Float
-            | Self::Depth32FloatStencil8 => true,
-            _ => false,
-        }
+        self.channels().intersects(TextureChannel::DEPTH_STENCIL)
     }
 
     /// Returns `true` if the format is a combined depth-stencil format
@@ -484,10 +515,7 @@ impl TextureFormat {
     /// see <https://gpuweb.github.io/gpuweb/#combined-depth-stencil-format>
     #[must_use]
     pub fn is_combined_depth_stencil_format(&self) -> bool {
-        match *self {
-            Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => true,
-            _ => false,
-        }
+        self.channels().contains(TextureChannel::DEPTH_STENCIL)
     }
 
     /// Returns `true` if the format is a multi-planar format
@@ -520,32 +548,129 @@ impl TextureFormat {
         }
     }
 
+    /// Returns a [TextureChannel] with the bits set where the texture format contains
+    /// the respective channels.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use wgpu_types::{TextureFormat, TextureChannel};
+    ///
+    /// // `Rgba` has a `red`, `green`, `blue` and `alpha` channel!
+    /// assert!(TextureFormat::Rgba8Unorm.channels().contains(TextureChannel::RGBA));
+    ///
+    /// // `Rg` hasn't got an alpha channel...
+    /// assert!(!TextureFormat::Rg8Unorm.channels().contains(TextureChannel::ALPHA));
+    /// // ... but it has a red channel ...
+    /// assert!(TextureFormat::Rg8Unorm.channels().contains(TextureChannel::RED));
+    /// // ... and also a green channel (yay!)
+    /// assert!(TextureFormat::Rg8Unorm.channels().contains(TextureChannel::GREEN));
+    ///
+    /// // A stencil texture has a... stencil channel
+    /// assert!(TextureFormat::Stencil8.channels().contains(TextureChannel::STENCIL));
+    /// // And the `NV12` format should have a `luminance`, `blue-difference` and `red-difference` channel.
+    /// assert!(TextureFormat::NV12.channels().contains(TextureChannel::LUMINANCE_CHROMINANCE));
+    /// ```
+    #[must_use]
+    pub fn channels(&self) -> TextureChannel {
+        match self {
+            Self::R8Unorm
+            | Self::R8Snorm
+            | Self::R8Uint
+            | Self::R8Sint
+            | Self::R16Uint
+            | Self::R16Sint
+            | Self::R16Unorm
+            | Self::R16Snorm
+            | Self::R32Uint
+            | Self::R32Sint
+            | Self::R32Float
+            | Self::R16Float
+            | Self::R64Uint
+            | Self::Bc4RUnorm
+            | Self::Bc4RSnorm
+            | Self::EacR11Unorm
+            | Self::EacR11Snorm => TextureChannel::RED,
+
+            Self::Rg8Unorm
+            | Self::Rg8Snorm
+            | Self::Rg8Uint
+            | Self::Rg8Sint
+            | Self::Rg16Uint
+            | Self::Rg16Sint
+            | Self::Rg16Unorm
+            | Self::Rg16Snorm
+            | Self::Rg16Float
+            | Self::Rg32Uint
+            | Self::Rg32Sint
+            | Self::Rg32Float
+            | Self::Bc5RgUnorm
+            | Self::Bc5RgSnorm
+            | Self::EacRg11Unorm
+            | Self::EacRg11Snorm => TextureChannel::RG,
+
+            Self::Rgb9e5Ufloat
+            | Self::Rg11b10Ufloat
+            | Self::Bc6hRgbUfloat
+            | Self::Bc6hRgbFloat
+            | Self::Etc2Rgb8Unorm
+            | Self::Etc2Rgb8UnormSrgb => TextureChannel::RGB,
+
+            Self::Rgba8Unorm
+            | Self::Rgba8UnormSrgb
+            | Self::Rgba8Snorm
+            | Self::Rgba8Uint
+            | Self::Rgba8Sint
+            | Self::Bgra8Unorm
+            | Self::Bgra8UnormSrgb
+            | Self::Rgb10a2Uint
+            | Self::Rgb10a2Unorm
+            | Self::Rgba16Uint
+            | Self::Rgba16Sint
+            | Self::Rgba16Unorm
+            | Self::Rgba16Snorm
+            | Self::Rgba16Float
+            | Self::Rgba32Uint
+            | Self::Rgba32Sint
+            | Self::Rgba32Float
+            | Self::Bc1RgbaUnorm
+            | Self::Bc1RgbaUnormSrgb
+            | Self::Bc2RgbaUnorm
+            | Self::Bc2RgbaUnormSrgb
+            | Self::Bc3RgbaUnorm
+            | Self::Bc3RgbaUnormSrgb
+            | Self::Bc7RgbaUnorm
+            | Self::Bc7RgbaUnormSrgb
+            | Self::Etc2Rgb8A1Unorm
+            | Self::Etc2Rgb8A1UnormSrgb
+            | Self::Etc2Rgba8Unorm
+            | Self::Etc2Rgba8UnormSrgb
+            | Self::Astc { .. } => TextureChannel::RGBA,
+
+            Self::Stencil8 => TextureChannel::STENCIL,
+            Self::Depth16Unorm | Self::Depth24Plus | Self::Depth32Float => TextureChannel::DEPTH,
+
+            Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => TextureChannel::DEPTH_STENCIL,
+
+            Self::NV12 | Self::P010 => TextureChannel::LUMINANCE_CHROMINANCE,
+        }
+    }
+
     /// Returns `true` if the format has a color aspect
     #[must_use]
     pub fn has_color_aspect(&self) -> bool {
-        !self.is_depth_stencil_format()
+        self.channels().intersects(TextureChannel::RGBA)
     }
 
     /// Returns `true` if the format has a depth aspect
     #[must_use]
     pub fn has_depth_aspect(&self) -> bool {
-        match *self {
-            Self::Depth16Unorm
-            | Self::Depth24Plus
-            | Self::Depth24PlusStencil8
-            | Self::Depth32Float
-            | Self::Depth32FloatStencil8 => true,
-            _ => false,
-        }
+        self.channels().intersects(TextureChannel::DEPTH)
     }
 
     /// Returns `true` if the format has a stencil aspect
     #[must_use]
     pub fn has_stencil_aspect(&self) -> bool {
-        match *self {
-            Self::Stencil8 | Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => true,
-            _ => false,
-        }
+        self.channels().intersects(TextureChannel::STENCIL)
     }
 
     /// Returns the size multiple requirement for a texture using this format.
@@ -2476,5 +2601,134 @@ mod tests {
             serde_json::from_str::<TextureFormat>("\"eac-rg11snorm\"").unwrap(),
             TextureFormat::EacRg11Snorm
         );
+    }
+
+    /// test if `TextureFormat::is_depth_stencil_format` is behaving correctly
+    #[test]
+    fn is_depth_stencil_format() {
+        let depth_stencil_formats = [
+            TextureFormat::Stencil8,
+            TextureFormat::Depth16Unorm,
+            TextureFormat::Depth24Plus,
+            TextureFormat::Depth24PlusStencil8,
+            TextureFormat::Depth32Float,
+            TextureFormat::Depth32FloatStencil8,
+        ];
+
+        for format in depth_stencil_formats {
+            assert!(format.is_depth_stencil_format());
+        }
+
+        // some non-depth-stencil-formats shouldn't be accepted
+        let non_depth_stencil_formats = [
+            TextureFormat::R8Unorm,
+            TextureFormat::Rgba8Unorm,
+            TextureFormat::Rg16Uint,
+            TextureFormat::NV12,
+        ];
+
+        for format in non_depth_stencil_formats {
+            assert!(!format.is_depth_stencil_format());
+        }
+    }
+
+    /// test if `TextureFormat::is_combined_depth_stencil_format` is behaving correctly
+    #[test]
+    fn is_combined_depth_stencil_format() {
+        let valid_formats = [
+            TextureFormat::Depth24PlusStencil8,
+            TextureFormat::Depth32FloatStencil8,
+        ];
+
+        for format in valid_formats {
+            assert!(format.is_combined_depth_stencil_format());
+        }
+
+        let some_invalid_formats = [
+            TextureFormat::Depth16Unorm,
+            TextureFormat::Depth24Plus,
+            TextureFormat::Stencil8,
+            TextureFormat::Rgba8UnormSrgb,
+            TextureFormat::Rgba8Unorm,
+        ];
+
+        for format in some_invalid_formats {
+            assert!(!format.is_combined_depth_stencil_format());
+        }
+    }
+
+    /// test if `TextureFormat::has_color_aspect` is behaving correctly
+    #[test]
+    fn has_color_aspect() {
+        let some_valid_formats = [
+            TextureFormat::R8Unorm,
+            TextureFormat::Rg8Unorm,
+            TextureFormat::Bc7RgbaUnorm,
+            TextureFormat::Rgba8Unorm,
+        ];
+
+        for format in some_valid_formats {
+            assert!(format.has_color_aspect());
+        }
+
+        let some_invalid_formats = [
+            TextureFormat::NV12,
+            TextureFormat::Stencil8,
+            TextureFormat::Depth24PlusStencil8,
+        ];
+
+        for format in some_invalid_formats {
+            assert!(!format.has_color_aspect());
+        }
+    }
+
+    /// test if `TextureFormat::has_depth_aspect` is behaving correctly
+    #[test]
+    fn has_depth_aspect() {
+        let valid_formats = [
+            TextureFormat::Depth16Unorm,
+            TextureFormat::Depth24Plus,
+            TextureFormat::Depth24PlusStencil8,
+            TextureFormat::Depth32Float,
+            TextureFormat::Depth32FloatStencil8,
+        ];
+
+        for format in valid_formats {
+            assert!(format.has_depth_aspect());
+        }
+
+        let some_invalid_formats = [
+            TextureFormat::Rgba8Unorm,
+            TextureFormat::Bc7RgbaUnorm,
+            TextureFormat::Stencil8,
+        ];
+
+        for format in some_invalid_formats {
+            assert!(!format.has_depth_aspect());
+        }
+    }
+
+    /// test if `TextureFormat::has_stencil_aspect` is behaving correctly
+    #[test]
+    fn has_stencil_aspect() {
+        let valid_formats = [
+            TextureFormat::Stencil8,
+            TextureFormat::Depth24PlusStencil8,
+            TextureFormat::Depth32FloatStencil8,
+        ];
+
+        for format in valid_formats {
+            assert!(format.has_stencil_aspect());
+        }
+
+        let some_invalid_formats = [
+            TextureFormat::R8Unorm,
+            TextureFormat::Depth16Unorm,
+            TextureFormat::NV12,
+        ];
+
+        for format in some_invalid_formats {
+            assert!(!format.has_stencil_aspect());
+        }
     }
 }

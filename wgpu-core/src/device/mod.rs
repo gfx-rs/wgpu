@@ -444,6 +444,10 @@ pub fn features_to_naga_capabilities(
             .contains(wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
     );
     caps.set(
+        Caps::ACCELERATION_STRUCTURE_BINDING_ARRAY,
+        features.contains(wgt::Features::ACCELERATION_STRUCTURE_BINDING_ARRAY),
+    );
+    caps.set(
         Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS,
         features.contains(wgt::Features::TEXTURE_FORMAT_16BIT_NORM),
     );
@@ -541,6 +545,14 @@ pub fn features_to_naga_capabilities(
     caps.set(
         Caps::DRAW_INDEX,
         features.intersects(wgt::Features::SHADER_DRAW_INDEX),
+    );
+    caps.set(
+        Caps::MEMORY_DECORATION_COHERENT,
+        features.contains(wgt::Features::MEMORY_DECORATION_COHERENT),
+    );
+    caps.set(
+        Caps::MEMORY_DECORATION_VOLATILE,
+        features.contains(wgt::Features::MEMORY_DECORATION_VOLATILE),
     );
 
     caps

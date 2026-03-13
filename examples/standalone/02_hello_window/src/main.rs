@@ -18,9 +18,9 @@ struct State {
 
 impl State {
     async fn new(display: OwnedDisplayHandle, window: Arc<Window>) -> State {
-        let instance = wgpu::Instance::new(
-            wgpu::InstanceDescriptor::default().with_display_handle(Box::new(display)),
-        );
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_with_display_handle(
+            Box::new(display),
+        ));
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions::default())
             .await
@@ -78,11 +78,14 @@ impl State {
     }
 
     fn render(&mut self) {
-        // Create texture view
-        let surface_texture = self
-            .surface
-            .get_current_texture()
-            .expect("failed to acquire next swapchain texture");
+        // Create texture view.
+        // NOTE: We must handle Timeout because the surface may be unavailable
+        // (e.g., when the window is occluded on macOS).
+        let surface_texture = match self.surface.get_current_texture() {
+            Ok(texture) => texture,
+            Err(wgpu::SurfaceError::Occluded) => return, // Can't render right now. Try again later.
+            Err(err) => panic!("failed to acquire next swapchain texture: {err}"),
+        };
         let texture_view = surface_texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor {

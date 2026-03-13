@@ -20,13 +20,10 @@ webgpu:api,validation,compute_pipeline:overrides,workgroup_size,limits:* // 0%
 webgpu:api,validation,createBindGroup:buffer,resource_state:* // 0%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,createBindGroup:external_texture,* // 0%, no external external texture in deno
 webgpu:api,validation,createBindGroup:texture,resource_state:* // crash, https://github.com/gfx-rs/wgpu/issues/7881
-webgpu:api,validation,createBindGroupLayout:max_dynamic_buffers:* // fails on vulkan
-webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_bind_group_layout:* // https://github.com/gfx-rs/wgpu/issues/8748
 webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:* // metal, https://github.com/gfx-rs/wgpu/issues/8173
 webgpu:api,validation,createBindGroupLayout:visibility,VERTEX_shader_stage_buffer_type:* // 25%, writable storage buffers not allowed in VERTEX
 webgpu:api,validation,createBindGroupLayout:visibility,VERTEX_shader_stage_storage_texture_access:* // 25%, write-access storage textures not allowed in VERTEX
 webgpu:api,validation,createBindGroupLayout:visibility:* // 25%, missing per-stage storage limits
-webgpu:api,validation,createPipelineLayout:number_of_dynamic_buffers_exceeds_the_maximum_value:* // limits issue
 webgpu:api,validation,createView:texture_state:* // 0%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_ranges:* // ***, https://github.com/gfx-rs/wgpu/issues/8118
 webgpu:api,validation,encoding,cmds,debug:* // 92%, https://github.com/gfx-rs/wgpu/issues/8039
@@ -42,7 +39,7 @@ webgpu:api,validation,encoding,encoder_open_state:* // https://github.com/gfx-rs
 webgpu:api,validation,encoding,queries,resolveQuerySet:* // 93%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,render_bundle:* // 81%, readonly flag normalization mismatch
 webgpu:api,validation,image_copy,buffer_texture_copies:* // https://github.com/gfx-rs/wgpu/issues/7946
-webgpu:api,validation,layout_shader_compat:pipeline_layout_shader_exact_match:* // 99%, storage texture read-write bindings not compatible with write-only shaders
+webgpu:api,validation,layout_shader_compat:pipeline_layout_shader_exact_match:* // dx12, https://bugzilla.mozilla.org/show_bug.cgi?id=2017725
 webgpu:api,validation,non_filterable_texture:non_filterable_texture_with_filtering_sampler:* // 80%, depth textures with filtering samplers
 webgpu:api,validation,query_set,create:count:* // 0%, wgpu incorrectly rejects zero-count query sets
 webgpu:api,validation,queue,buffer_mapped:* // ***, vulkan
@@ -50,8 +47,7 @@ webgpu:api,validation,queue,destroyed,* // 71%, writeBuffer/writeTexture return 
 webgpu:api,validation,queue,writeBuffer:ranges:* // 0%, missing OperationError for invalid ranges
 webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,depth_stencil_read_only_write_state:* // fails on dx12
 webgpu:api,validation,render_pass,render_pass_descriptor:depth_stencil_attachment,loadOp_storeOp_match_depthReadOnly_stencilReadOnly:* // 33%, missing validation: depth/stencil load/store ops provided for missing texture format aspects
-webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,color_target_count:* // https://github.com/gfx-rs/wgpu/pull/8856
-webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,use_blend_src:* // 62%, https://github.com/gfx-rs/wgpu/pull/8856
+webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,color_target_count:*
 webgpu:api,validation,render_pipeline,fragment_state:pipeline_output_targets,blend:* // 95%, blend factors reading source alpha require vec4
 webgpu:api,validation,render_pipeline,fragment_state:pipeline_output_targets:* // 3%, color target without shader output requires writeMask=0
 webgpu:api,validation,render_pipeline,inter_stage:* // 15%, inter-stage type validation gaps and interpolation default handling
@@ -67,6 +63,8 @@ webgpu:api,validation,resource_usages,texture,in_pass_encoder:subresources_and_b
 webgpu:api,validation,resource_usages,texture,in_render_common:subresources,depth_stencil_attachment_and_bind_group:* // 69%, https://github.com/gfx-rs/wgpu/issues/8705
 webgpu:api,validation,state,device_lost,destroy:* // crash
 webgpu:api,validation,texture,destroy:submit_a_destroyed_texture_as_attachment:* // 44%, https://github.com/gfx-rs/wgpu/issues/8714
+
+webgpu:shader,execution,expression,call,builtin,atan2:f16:* // dx12, fails with dxc, passes with fxc, https://github.com/gfx-rs/wgpu/issues/9179
 
 webgpu:shader,validation,decl,context_dependent_resolution:* // 92%, f16 as reserved keyword when enabled
 webgpu:shader,validation,decl,let:* // texture/sampler let
@@ -158,9 +156,9 @@ webgpu:shader,validation,expression,call,builtin,unpack4xI8:* // 75%, missing co
 webgpu:shader,validation,expression,call,builtin,unpack4xU8:* // 75%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,value_constructor:* // 92%, value constructors lack must-use validation + abstract-float matrix validation issues
 webgpu:shader,validation,expression,early_evaluation:* // 67%, mixed override/runtime composite evaluation
-webgpu:shader,validation,expression,matrix,* // 83%, #5474, #8790, #8868
+webgpu:shader,validation,expression,matrix,* // 92%, #5474, #8868, overflow/underflow/atomic
 webgpu:shader,validation,expression,precedence:* // 76%, https://github.com/gfx-rs/wgpu/issues/4536
-webgpu:shader,validation,expression,unary,* // 99%, matrix negation accepted, #5474
+webgpu:shader,validation,expression,unary,* // 99%, atomics #5474
 webgpu:shader,validation,extension,dual_source_blending:blend_src_usage:* // 61%, @blend_src validation gaps
 webgpu:shader,validation,extension,readonly_and_readwrite_storage_textures:* // 0%, CTS bug https://github.com/gpuweb/cts/pull/4567
 webgpu:shader,validation,functions,alias_analysis:* // 2%, https://github.com/gfx-rs/wgpu/issues/7650

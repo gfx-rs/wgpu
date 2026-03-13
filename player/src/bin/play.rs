@@ -17,7 +17,7 @@ fn main() {
     };
 
     #[cfg(feature = "winit")]
-    use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+    use raw_window_handle::HasWindowHandle;
     #[cfg(feature = "winit")]
     use winit::{
         event::KeyEvent,
@@ -71,7 +71,7 @@ fn main() {
             .unwrap(),
     );
 
-    let instance_desc = wgt::InstanceDescriptor::from_env_or_default();
+    let instance_desc = wgt::InstanceDescriptor::new_without_display_handle_from_env();
     #[cfg(feature = "winit")]
     // TODO: Use event_loop.owned_display_handle() with winit 0.30
     let instance_desc = instance_desc.with_display_handle(Box::new(window.clone()));
@@ -79,13 +79,8 @@ fn main() {
     let instance = wgc::instance::Instance::new("player", instance_desc, None);
 
     #[cfg(feature = "winit")]
-    let surface = unsafe {
-        instance.create_surface(
-            window.display_handle().unwrap().into(),
-            window.window_handle().unwrap().into(),
-        )
-    }
-    .unwrap();
+    let surface =
+        unsafe { instance.create_surface(None, window.window_handle().unwrap().into()) }.unwrap();
     #[cfg(feature = "winit")]
     let mut configured_surface_id = None;
 

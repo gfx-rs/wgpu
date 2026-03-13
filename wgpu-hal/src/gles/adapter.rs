@@ -311,11 +311,10 @@ impl super::Adapter {
             es_supported || full_supported
         };
 
-        // Naga won't let you emit storage buffers at versions below this, so
-        // we currently can't support GL_ARB_shader_storage_buffer_object.
-        let supports_storage = supported((3, 1), (4, 3));
-        // Same with compute shaders and GL_ARB_compute_shader
-        let supports_compute = supported((3, 1), (4, 3));
+        let supports_storage =
+            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_shader_storage_buffer_object");
+        let supports_compute =
+            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_compute_shader");
         let supports_work_group_params = supports_compute;
 
         // ANGLE provides renderer strings like: "ANGLE (Apple, Apple M1 Pro, OpenGL 4.1)"
@@ -665,6 +664,13 @@ impl super::Adapter {
             features.set(wgt::Features::INDIRECT_FIRST_INSTANCE, supported);
         }
 
+        // GLSL ES 3.10+ / GLSL 4.30+ natively support coherent/volatile qualifiers
+        // on storage buffers. These were introduced alongside storage buffer support.
+        if supports_storage {
+            features |= wgt::Features::MEMORY_DECORATION_COHERENT
+                | wgt::Features::MEMORY_DECORATION_VOLATILE;
+        }
+
         let max_texture_size = unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) } as u32;
         let max_texture_3d_size = unsafe { gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) } as u32;
 
@@ -716,14 +722,15 @@ impl super::Adapter {
             max_uniform_buffers_per_shader_stage,
             max_binding_array_elements_per_shader_stage: 0,
             max_binding_array_sampler_elements_per_shader_stage: 0,
+            max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
             max_uniform_buffer_binding_size: unsafe {
                 gl.get_parameter_i32(glow::MAX_UNIFORM_BLOCK_SIZE)
-            } as u32,
+            } as u64,
             max_storage_buffer_binding_size: if supports_storage {
                 unsafe { gl.get_parameter_i32(glow::MAX_SHADER_STORAGE_BLOCK_SIZE) }
             } else {
                 0
-            } as u32,
+            } as u64,
             max_vertex_buffers: if private_caps
                 .contains(super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT)
             {

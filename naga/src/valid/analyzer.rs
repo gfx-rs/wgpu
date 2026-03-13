@@ -1323,6 +1323,7 @@ fn uniform_control_flow() {
             ty,
             space: crate::AddressSpace::Handle,
             binding: None,
+            memory_decorations: crate::MemoryDecorations::empty(),
         },
         Default::default(),
     );
@@ -1333,6 +1334,7 @@ fn uniform_control_flow() {
             ty,
             binding: None,
             space: crate::AddressSpace::Uniform,
+            memory_decorations: crate::MemoryDecorations::empty(),
         },
         Default::default(),
     );

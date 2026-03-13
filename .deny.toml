@@ -21,9 +21,6 @@ skip = [
     { name = "bincode", version = "1.3.3" },
     { name = "which", version = "6.0.3" },
 
-    # Winit uses an old version
-    { name = "windows-sys", version = "0.52.0" },
-
     # parking-lot uses an old version
     { name = "redox_syscall", version = "0.5.18" },
 ]

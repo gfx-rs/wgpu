@@ -451,7 +451,11 @@ impl PhysicalDeviceFeatures {
             {
                 Some(
                     vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default()
-                        .acceleration_structure(true),
+                        .acceleration_structure(true)
+                        .descriptor_binding_acceleration_structure_update_after_bind(
+                            requested_features
+                                .contains(wgt::Features::ACCELERATION_STRUCTURE_BINDING_ARRAY),
+                        ),
                 )
             } else {
                 None
@@ -648,7 +652,9 @@ impl PhysicalDeviceFeatures {
             | F::PIPELINE_CACHE
             | F::SHADER_EARLY_DEPTH_TEST
             | F::TEXTURE_ATOMIC
-            | F::PASSTHROUGH_SHADERS;
+            | F::PASSTHROUGH_SHADERS
+            | F::MEMORY_DECORATION_COHERENT
+            | F::MEMORY_DECORATION_VOLATILE;
 
         let mut dl_flags = Df::COMPUTE_SHADERS
             | Df::BASE_VERTEX
@@ -913,12 +919,31 @@ impl PhysicalDeviceFeatures {
             && caps.supports_extension(khr::acceleration_structure::NAME)
             && caps.supports_extension(khr::buffer_device_address::NAME);
 
+        let supports_ray_query =
+            supports_acceleration_structures && caps.supports_extension(khr::ray_query::NAME);
+        let supports_acceleration_structure_binding_array = supports_ray_query
+            && self
+                .acceleration_structure
+                .as_ref()
+                .is_some_and(|features| {
+                    features.descriptor_binding_acceleration_structure_update_after_bind != 0
+                });
+
         features.set(
             F::EXPERIMENTAL_RAY_QUERY
             // Although this doesn't really require ray queries, it does not make sense to be enabled if acceleration structures
             // aren't enabled.
                 | F::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
-            supports_acceleration_structures && caps.supports_extension(khr::ray_query::NAME),
+            supports_ray_query,
+        );
+
+        // Binding arrays of TLAS are supported on Vulkan when ray queries are supported.
+        //
+        // Note: this flag is used for shader-side `binding_array<acceleration_structure>` as well as
+        // allowing `BindGroupLayoutEntry::count = Some(...)` for `BindingType::AccelerationStructure`.
+        features.set(
+            F::ACCELERATION_STRUCTURE_BINDING_ARRAY,
+            supports_acceleration_structure_binding_array,
         );
 
         let rg11b10ufloat_renderable = supports_format(
@@ -1455,12 +1480,22 @@ impl PhysicalDeviceProperties {
             max_uniform_buffers_per_shader_stage: limits.max_per_stage_descriptor_uniform_buffers,
             max_binding_array_elements_per_shader_stage: max_binding_array_elements,
             max_binding_array_sampler_elements_per_shader_stage: max_sampler_binding_array_elements,
+            max_binding_array_acceleration_structure_elements_per_shader_stage: if self
+                .descriptor_indexing
+                .is_some()
+            {
+                max_acceleration_structures_per_shader_stage
+            } else {
+                0
+            },
             max_uniform_buffer_binding_size: limits
                 .max_uniform_buffer_range
-                .min(crate::auxil::MAX_I32_BINDING_SIZE),
+                .min(crate::auxil::MAX_I32_BINDING_SIZE)
+                .into(),
             max_storage_buffer_binding_size: limits
                 .max_storage_buffer_range
-                .min(crate::auxil::MAX_I32_BINDING_SIZE),
+                .min(crate::auxil::MAX_I32_BINDING_SIZE)
+                .into(),
             max_vertex_buffers: limits.max_vertex_input_bindings,
             max_vertex_attributes: limits.max_vertex_input_attributes,
             max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,

@@ -1306,6 +1306,39 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const SHADER_DRAW_INDEX = 1 << 59;
+        /// Allows the user to create arrays of acceleration structures in shaders:
+        ///
+        /// ex.
+        /// - `var tlas: binding_array<acceleration_structure, 10>` (WGSL)
+        ///
+        /// This capability allows them to exist and to be indexed by dynamically uniform values.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const ACCELERATION_STRUCTURE_BINDING_ARRAY = 1 << 60;
+
+        /// Enables the `@coherent` memory decoration on storage buffer variables.
+        ///
+        /// Backend mapping:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal (3.2+)
+        /// - GLES (ES 3.1+ / GL 4.3+)
+        ///
+        /// This is a native only feature.
+        const MEMORY_DECORATION_COHERENT = 1 << 61;
+
+        /// Enables the `@volatile` memory decoration on storage buffer variables.
+        ///
+        /// Backend mapping:
+        /// - Vulkan
+        /// - GLES (ES 3.1+ / GL 4.3+)
+        ///
+        /// This is a native only feature.
+        const MEMORY_DECORATION_VOLATILE = 1 << 62;
     }
 
     /// Features that are not guaranteed to be supported.

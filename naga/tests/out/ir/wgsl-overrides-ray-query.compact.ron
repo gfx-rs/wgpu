@@ -108,6 +108,7 @@
             )),
             ty: 1,
             init: None,
+            memory_decorations: (""),
         ),
     ],
     global_expressions: [],

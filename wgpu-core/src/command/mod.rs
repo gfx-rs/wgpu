@@ -1602,23 +1602,22 @@ impl CommandEncoderError {
 
 impl WebGpuError for CommandEncoderError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::InvalidResource(e) => e,
-            Self::DebugGroupError(e) => e,
-            Self::MissingFeatures(e) => e,
-            Self::State(e) => e,
-            Self::DestroyedResource(e) => e,
-            Self::Transfer(e) => e,
-            Self::Clear(e) => e,
-            Self::Query(e) => e,
-            Self::BuildAccelerationStructure(e) => e,
-            Self::TransitionResources(e) => e,
-            Self::ResourceUsage(e) => e,
-            Self::ComputePass(e) => e,
-            Self::RenderPass(e) => e,
-        };
-        e.webgpu_error_type()
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::DebugGroupError(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
+            Self::State(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
+            Self::Transfer(e) => e.webgpu_error_type(),
+            Self::Clear(e) => e.webgpu_error_type(),
+            Self::Query(e) => e.webgpu_error_type(),
+            Self::BuildAccelerationStructure(e) => e.webgpu_error_type(),
+            Self::TransitionResources(e) => e.webgpu_error_type(),
+            Self::ResourceUsage(e) => e.webgpu_error_type(),
+            Self::ComputePass(e) => e.webgpu_error_type(),
+            Self::RenderPass(e) => e.webgpu_error_type(),
+        }
     }
 }
 
