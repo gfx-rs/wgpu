@@ -1367,10 +1367,6 @@ impl PhysicalDeviceProperties {
     fn to_wgpu_limits(&self) -> wgt::Limits {
         let limits = &self.properties.limits;
 
-        let max_compute_workgroup_sizes = limits.max_compute_work_group_size;
-        let max_compute_workgroups_per_dimension = limits.max_compute_work_group_count[0]
-            .min(limits.max_compute_work_group_count[1])
-            .min(limits.max_compute_work_group_count[2]);
         let (
             mut max_task_mesh_workgroup_total_count,
             mut max_task_mesh_workgroups_per_dimension,
@@ -1435,6 +1431,59 @@ impl PhysicalDeviceProperties {
                 .min(descriptor_indexing.max_per_stage_descriptor_update_after_bind_samplers);
         }
 
+        // When summed, the 3 limits below must be under Vulkan's maxFragmentCombinedOutputResources.
+        // https://gpuweb.github.io/gpuweb/correspondence/#vulkan-maxFragmentCombinedOutputResources
+        //
+        // - maxStorageTexturesPerShaderStage, WebGPU default: 4
+        // - maxStorageBuffersPerShaderStage, WebGPU default: 8
+        // - maxColorAttachments, WebGPU default: 8
+        //
+        // However, maxFragmentCombinedOutputResources should be ignored on
+        // intel/nvidia/amd/imgtec since it's not reported correctly.
+        //
+        // https://github.com/gpuweb/gpuweb/issues/3631#issuecomment-1498747606
+        // https://github.com/gpuweb/gpuweb/issues/4018
+        let mut max_storage_textures_per_shader_stage =
+            limits.max_per_stage_descriptor_storage_images;
+        let mut max_storage_buffers_per_shader_stage =
+            limits.max_per_stage_descriptor_storage_buffers;
+        let mut max_color_attachments = limits
+            .max_color_attachments
+            .min(limits.max_fragment_output_attachments);
+
+        let ignore_max_fragment_combined_output_resources = [
+            crate::auxil::db::intel::VENDOR,
+            crate::auxil::db::nvidia::VENDOR,
+            crate::auxil::db::amd::VENDOR,
+            crate::auxil::db::imgtec::VENDOR,
+        ]
+        .contains(&self.properties.vendor_id);
+
+        if !ignore_max_fragment_combined_output_resources
+            && max_storage_textures_per_shader_stage
+                + max_storage_buffers_per_shader_stage
+                + max_color_attachments
+                > limits.max_fragment_combined_output_resources
+        {
+            // Divide the limit equally between the 3 limits while allowing
+            // unused limit capacity to be used by some limits that
+            // can make use of it.
+            let mut rem_limit = limits.max_fragment_combined_output_resources;
+            let limit = rem_limit / 3;
+            let diff = limit.saturating_sub(max_storage_textures_per_shader_stage);
+            max_storage_textures_per_shader_stage =
+                max_storage_textures_per_shader_stage.min(limit);
+
+            rem_limit -= limit + diff;
+            let limit = rem_limit / 2;
+            let diff = limit.saturating_sub(max_storage_buffers_per_shader_stage);
+            max_storage_buffers_per_shader_stage = max_storage_buffers_per_shader_stage.min(limit);
+
+            rem_limit -= limit + diff;
+            let limit = rem_limit;
+            max_color_attachments = max_color_attachments.min(limit);
+        }
+
         // TODO: programmatically determine this, if possible. It's unclear whether we can
         // as of https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447.
         //
@@ -1443,7 +1492,7 @@ impl PhysicalDeviceProperties {
         //
         // 16 bytes per sample is the maximum size for a color attachment.
         let max_color_attachment_bytes_per_sample =
-            limits.max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
+            max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
         let mut max_blas_geometry_count = 0;
         let mut max_blas_primitive_count = 0;
@@ -1463,21 +1512,66 @@ impl PhysicalDeviceProperties {
             .unwrap_or(0);
 
         crate::auxil::apply_hal_limits(wgt::Limits {
+            //
+            // WebGPU LIMITS:
+            // Based on https://gpuweb.github.io/gpuweb/correspondence/#limits
+            //
             max_texture_dimension_1d: limits.max_image_dimension1_d,
-            max_texture_dimension_2d: limits.max_image_dimension2_d,
+            max_texture_dimension_2d: limits
+                .max_image_dimension2_d
+                .min(limits.max_image_dimension_cube)
+                .min(limits.max_framebuffer_width)
+                .min(limits.max_framebuffer_height),
             max_texture_dimension_3d: limits.max_image_dimension3_d,
             max_texture_array_layers: limits.max_image_array_layers,
             max_bind_groups: limits.max_bound_descriptor_sets,
-            max_bindings_per_bind_group: wgt::Limits::default().max_bindings_per_bind_group,
+            // No real limit but use the default to avoid driver issues.
+            // https://github.com/gpuweb/gpuweb/issues/3279
+            max_bindings_per_bind_group: 1000,
             max_dynamic_uniform_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_uniform_buffers_dynamic,
             max_dynamic_storage_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_storage_buffers_dynamic,
-            max_sampled_textures_per_shader_stage: limits.max_per_stage_descriptor_sampled_images,
             max_samplers_per_shader_stage: limits.max_per_stage_descriptor_samplers,
-            max_storage_buffers_per_shader_stage: limits.max_per_stage_descriptor_storage_buffers,
-            max_storage_textures_per_shader_stage: limits.max_per_stage_descriptor_storage_images,
+            max_sampled_textures_per_shader_stage: limits.max_per_stage_descriptor_sampled_images,
+            max_storage_textures_per_shader_stage,
+            max_storage_buffers_per_shader_stage,
             max_uniform_buffers_per_shader_stage: limits.max_per_stage_descriptor_uniform_buffers,
+            max_vertex_buffers: limits.max_vertex_input_bindings,
+            max_buffer_size,
+            max_uniform_buffer_binding_size: limits
+                .max_uniform_buffer_range
+                .min(crate::auxil::MAX_I32_BINDING_SIZE)
+                .into(),
+            max_storage_buffer_binding_size: limits
+                .max_storage_buffer_range
+                .min(crate::auxil::MAX_I32_BINDING_SIZE)
+                .into(),
+            min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
+            min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
+            max_vertex_attributes: limits.max_vertex_input_attributes,
+            max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,
+            max_inter_stage_shader_variables: limits
+                .max_vertex_output_components
+                .min(limits.max_fragment_input_components)
+                / 4
+                - 1, // -1 for position
+            max_color_attachments,
+            max_color_attachment_bytes_per_sample,
+            max_compute_workgroup_storage_size: limits.max_compute_shared_memory_size,
+            max_compute_invocations_per_workgroup: limits.max_compute_work_group_invocations,
+            max_compute_workgroup_size_x: limits.max_compute_work_group_size[0],
+            max_compute_workgroup_size_y: limits.max_compute_work_group_size[1],
+            max_compute_workgroup_size_z: limits.max_compute_work_group_size[2],
+            max_compute_workgroups_per_dimension: limits.max_compute_work_group_count[0]
+                .min(limits.max_compute_work_group_count[1])
+                .min(limits.max_compute_work_group_count[2]),
+            max_immediate_size: limits.max_push_constants_size,
+            //
+            // NATIVE (Non-WebGPU) LIMITS:
+            //
+            max_non_sampler_bindings: u32::MAX,
+
             max_binding_array_elements_per_shader_stage: max_binding_array_elements,
             max_binding_array_sampler_elements_per_shader_stage: max_sampler_binding_array_elements,
             max_binding_array_acceleration_structure_elements_per_shader_stage: if self
@@ -1488,34 +1582,6 @@ impl PhysicalDeviceProperties {
             } else {
                 0
             },
-            max_uniform_buffer_binding_size: limits
-                .max_uniform_buffer_range
-                .min(crate::auxil::MAX_I32_BINDING_SIZE)
-                .into(),
-            max_storage_buffer_binding_size: limits
-                .max_storage_buffer_range
-                .min(crate::auxil::MAX_I32_BINDING_SIZE)
-                .into(),
-            max_vertex_buffers: limits.max_vertex_input_bindings,
-            max_vertex_attributes: limits.max_vertex_input_attributes,
-            max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,
-            max_immediate_size: limits.max_push_constants_size,
-            max_inter_stage_shader_variables: limits
-                .max_vertex_output_components
-                .min(limits.max_fragment_input_components)
-                / 4,
-            min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
-            min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
-            max_color_attachments: limits.max_color_attachments,
-            max_color_attachment_bytes_per_sample,
-            max_compute_workgroup_storage_size: limits.max_compute_shared_memory_size,
-            max_compute_invocations_per_workgroup: limits.max_compute_work_group_invocations,
-            max_compute_workgroup_size_x: max_compute_workgroup_sizes[0],
-            max_compute_workgroup_size_y: max_compute_workgroup_sizes[1],
-            max_compute_workgroup_size_z: max_compute_workgroup_sizes[2],
-            max_compute_workgroups_per_dimension,
-            max_buffer_size,
-            max_non_sampler_bindings: u32::MAX,
 
             max_task_mesh_workgroup_total_count,
             max_task_mesh_workgroups_per_dimension,
