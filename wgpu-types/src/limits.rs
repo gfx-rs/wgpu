@@ -541,7 +541,7 @@ impl Limits {
     ///     max_acceleration_structures_per_shader_stage: 0,
     ///
     ///     max_multiview_view_count: 0,
-    /// 
+    ///
     ///     max_intersection_group_count: 0,
     ///     max_ray_dispatch_count: 0,
     ///     max_ray_recursion_depth: 0,
@@ -627,7 +627,7 @@ impl Limits {
     ///     max_acceleration_structures_per_shader_stage: 0,
     ///
     ///     max_multiview_view_count: 0,
-    /// 
+    ///
     ///     max_intersection_group_count: 0,
     ///     max_ray_dispatch_count: 0,
     ///     max_ray_recursion_depth: 0,
