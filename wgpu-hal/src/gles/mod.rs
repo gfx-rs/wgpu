@@ -80,16 +80,13 @@ we don't bother with that combination.
 */
 
 ///cbindgen:ignore
-#[cfg(any(
-    all(windows, any(__WINRT__, target_vendor = "uwp")),
-    not(any(windows, webgl))
-))]
+#[cfg(any(all(windows, target_vendor = "uwp"), not(any(windows, webgl))))]
 mod egl;
 #[cfg(Emscripten)]
 mod emscripten;
 #[cfg(webgl)]
 mod web;
-#[cfg(all(windows, not(any(__WINRT__, target_vendor = "uwp"))))]
+#[cfg(all(windows, not(target_vendor = "uwp")))]
 mod wgl;
 
 mod adapter;
@@ -101,15 +98,9 @@ mod queue;
 
 pub use fence::Fence;
 
-#[cfg(any(
-    all(windows, any(__WINRT__, target_vendor = "uwp")),
-    not(any(windows, webgl))
-))]
+#[cfg(any(all(windows, target_vendor = "uwp"), not(any(windows, webgl))))]
 pub use self::egl::{AdapterContext, AdapterContextLock};
-#[cfg(any(
-    all(windows, any(__WINRT__, target_vendor = "uwp")),
-    not(any(windows, webgl))
-))]
+#[cfg(any(all(windows, target_vendor = "uwp"), not(any(windows, webgl))))]
 pub use self::egl::{Instance, Surface};
 
 #[cfg(webgl)]
@@ -117,9 +108,9 @@ pub use self::web::AdapterContext;
 #[cfg(webgl)]
 pub use self::web::{Instance, Surface};
 
-#[cfg(all(windows, not(any(__WINRT__, target_vendor = "uwp"))))]
+#[cfg(all(windows, not(target_vendor = "uwp")))]
 use self::wgl::AdapterContext;
-#[cfg(all(windows, not(any(__WINRT__, target_vendor = "uwp"))))]
+#[cfg(all(windows, not(target_vendor = "uwp")))]
 pub use self::wgl::{Instance, Surface};
 
 use alloc::{boxed::Box, string::String, string::ToString as _, sync::Arc, vec::Vec};

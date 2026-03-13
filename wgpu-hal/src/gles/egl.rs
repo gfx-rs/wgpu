@@ -29,6 +29,11 @@ type EglInstance = khronos_egl::Instance<khronos_egl::Static>;
 
 type EglLabel = *const ffi::c_void;
 
+#[cfg(unix)]
+type WaylandWindow = *mut wayland_sys::egl::wl_egl_window;
+#[cfg(not(unix))]
+type WaylandWindow = *mut ffi::c_void;
+
 #[allow(clippy::upper_case_acronyms)]
 type EGLDEBUGPROCKHR = Option<
     unsafe extern "system" fn(
@@ -76,6 +81,62 @@ unsafe extern "system" fn egl_debug_proc(
     };
 
     log::log!(log_severity, "EGL '{command}' code 0x{error:x}: {message}",);
+}
+
+#[cfg(unix)]
+unsafe fn resize_wayland_window(window: WaylandWindow, width: i32, height: i32) {
+    wayland_sys::ffi_dispatch!(
+        wayland_sys::egl::wayland_egl_handle(),
+        wl_egl_window_resize,
+        window,
+        width,
+        height,
+        0,
+        0,
+    );
+}
+
+#[cfg(not(unix))]
+unsafe fn resize_wayland_window(_window: WaylandWindow, _width: i32, _height: i32) {
+    unreachable!("Wayland EGL windows are only available on unix targets");
+}
+
+#[cfg(unix)]
+unsafe fn create_wayland_window(
+    surface: *mut ffi::c_void,
+    width: i32,
+    height: i32,
+) -> WaylandWindow {
+    wayland_sys::ffi_dispatch!(
+        wayland_sys::egl::wayland_egl_handle(),
+        wl_egl_window_create,
+        surface.cast(),
+        width,
+        height,
+    )
+}
+
+#[cfg(not(unix))]
+unsafe fn create_wayland_window(
+    _surface: *mut ffi::c_void,
+    _width: i32,
+    _height: i32,
+) -> WaylandWindow {
+    unreachable!("Wayland EGL windows are only available on unix targets");
+}
+
+#[cfg(unix)]
+unsafe fn destroy_wayland_window(window: WaylandWindow) {
+    wayland_sys::ffi_dispatch!(
+        wayland_sys::egl::wayland_egl_handle(),
+        wl_egl_window_destroy,
+        window,
+    );
+}
+
+#[cfg(not(unix))]
+unsafe fn destroy_wayland_window(_window: WaylandWindow) {
+    unreachable!("Wayland EGL windows are only available on unix targets");
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -442,10 +503,10 @@ impl Inner {
 
         let (config, supports_native_window) = choose_config(&egl, display, srgb_kind)?;
 
-        #[cfg(all(windows, any(__WINRT__, target_vendor = "uwp")))]
+        #[cfg(all(windows, target_vendor = "uwp"))]
         let supports_opengl = false;
 
-        #[cfg(not(all(windows, any(__WINRT__, target_vendor = "uwp"))))]
+        #[cfg(not(all(windows, target_vendor = "uwp")))]
         let supports_opengl = if version >= (1, 4) {
             let client_apis = egl
                 .query_string(Some(display), khronos_egl::CLIENT_APIS)
@@ -1057,7 +1118,7 @@ impl super::Device {
 #[derive(Debug)]
 pub struct Swapchain {
     surface: khronos_egl::Surface,
-    wl_window: Option<*mut wayland_sys::egl::wl_egl_window>,
+    wl_window: Option<WaylandWindow>,
     framebuffer: glow::Framebuffer,
     renderbuffer: glow::Renderbuffer,
     /// Extent because the window lies
@@ -1165,10 +1226,7 @@ impl Surface {
     unsafe fn unconfigure_impl(
         &self,
         device: &super::Device,
-    ) -> Option<(
-        khronos_egl::Surface,
-        Option<*mut wayland_sys::egl::wl_egl_window>,
-    )> {
+    ) -> Option<(khronos_egl::Surface, Option<WaylandWindow>)> {
         let gl = &device.shared.context.lock();
         match self.swapchain.write().take() {
             Some(sc) => {
@@ -1201,15 +1259,13 @@ impl crate::Surface for Surface {
         let (surface, wl_window) = match unsafe { self.unconfigure_impl(device) } {
             Some((sc, wl_window)) => {
                 if let Some(window) = wl_window {
-                    wayland_sys::ffi_dispatch!(
-                        wayland_sys::egl::wayland_egl_handle(),
-                        wl_egl_window_resize,
-                        window,
-                        config.extent.width as i32,
-                        config.extent.height as i32,
-                        0,
-                        0,
-                    );
+                    unsafe {
+                        resize_wayland_window(
+                            window,
+                            config.extent.width as i32,
+                            config.extent.height as i32,
+                        )
+                    };
                 }
 
                 (sc, wl_window)
@@ -1236,13 +1292,13 @@ impl crate::Surface for Surface {
                     (WindowKind::Unknown, Rwh::OhosNdk(handle)) => handle.native_window.as_ptr(),
                     #[cfg(unix)]
                     (WindowKind::Wayland, Rwh::Wayland(handle)) => {
-                        let window = wayland_sys::ffi_dispatch!(
-                            wayland_sys::egl::wayland_egl_handle(),
-                            wl_egl_window_create,
-                            handle.surface.as_ptr().cast(),
-                            config.extent.width as i32,
-                            config.extent.height as i32,
-                        );
+                        let window = unsafe {
+                            create_wayland_window(
+                                handle.surface.as_ptr().cast(),
+                                config.extent.width as i32,
+                                config.extent.height as i32,
+                            )
+                        };
                         wl_window = Some(window);
                         window.cast()
                     }
@@ -1403,11 +1459,7 @@ impl crate::Surface for Surface {
                 .destroy_surface(self.egl.display, surface)
                 .unwrap();
             if let Some(window) = wl_window {
-                wayland_sys::ffi_dispatch!(
-                    wayland_sys::egl::wayland_egl_handle(),
-                    wl_egl_window_destroy,
-                    window,
-                );
+                unsafe { destroy_wayland_window(window) };
             }
         }
     }
