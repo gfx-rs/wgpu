@@ -729,6 +729,35 @@ impl super::Adapter {
 
         let downlevel = wgt::DownlevelCapabilities::default();
 
+        // Limits that must share D3D12's root signature size of
+        // D3D12_MAX_ROOT_COST 64 DWORDS (256 bytes).
+        //
+        // Root constants and root tables use 1 DWORD.
+        // Root descriptors use 2 DWORDs.
+        // Source: https://learn.microsoft.com/en-us/windows/win32/direct3d12/root-signature-limits#memory-limits-and-costs
+        //
+        // Per pipeline layout:
+        // - RootElement::Constant, (immediates) 32 root constants
+        //     (bounded by maxImmediateSize) = 32 x 4 bytes = 128 bytes
+        // - RootElement::SamplerHeap, a root table = 4 bytes
+        // - RootElement::SpecialConstantBuffer, 3 root constants = 3 x 4 bytes = 12 bytes
+        // - RootElement::DynamicOffsetsBuffer, a root constant per dynamic storage buffer
+        //     (bounded by maxDynamicStorageBuffersPerPipelineLayout) = 4 x 4 bytes = 16 bytes
+        // - RootElement::DynamicUniformBuffer, a root descriptor per dynamic uniform buffer
+        //     (bounded by maxDynamicUniformBuffersPerPipelineLayout) = 8 x 8 bytes = 64 bytes
+        // Per bind group:
+        // - RootElement::Table, a root table
+        //     (bounded by maxBindGroups) = 8 x 4 bytes = 32 bytes
+        //
+        // Source: logic in `create_pipeline_layout`
+        //
+        // Total: 128 + 4 + 12 + 16 + 64 + 32 = 256 bytes
+        //
+        let max_immediate_size = 128;
+        let max_bind_groups = 8;
+        let max_dynamic_uniform_buffers_per_pipeline_layout = 8;
+        let max_dynamic_storage_buffers_per_pipeline_layout = 4;
+
         // "Maximum number of descriptors in a Constant Buffer View (CBV), Shader Resource View (SRV), or Unordered Access View(UAV) heap used for rendering"
         let full_heap_count = match rbt {
             ResourceBindingTier::T1 | ResourceBindingTier::T2 => 1_000_000,
@@ -746,20 +775,24 @@ impl super::Adapter {
         };
 
         // "Maximum number of Shader Resource Views in all descriptor tables per shader stage"
-        let max_srv_per_shader_stage = match rbt {
+        let mut max_srv_per_shader_stage = match rbt {
             ResourceBindingTier::T1 => 128,
             _ => full_heap_count,
         };
 
+        // We use an extra SRV for all samplers in a bind group.
+        // See comment in `create_pipeline_layout`.
+        max_srv_per_shader_stage -= max_bind_groups;
+
         // If we also support acceleration structures these are shared so we must halve it.
         // It's unlikely that this affects anything because most devices that support ray tracing
         // probably have a higher binding tier than one.
-        let max_sampled_textures_per_shader_stage = if supports_ray_tracing {
+        let mut max_sampled_textures_per_shader_stage = if supports_ray_tracing {
             max_srv_per_shader_stage / 2
         } else {
             max_srv_per_shader_stage
         };
-        let max_acceleration_structures_per_shader_stage = if supports_ray_tracing {
+        let mut max_acceleration_structures_per_shader_stage = if supports_ray_tracing {
             max_srv_per_shader_stage / 2
         } else {
             0
@@ -778,7 +811,20 @@ impl super::Adapter {
         // We must share the UAV limit across both storage resource limits.
         let max_uav_per_shader_stage = max_uav_across_all_stages / MAX_SHADER_STAGES_PER_PIPELINE;
         let max_storage_textures_per_shader_stage = max_uav_per_shader_stage / 2;
-        let max_storage_buffers_per_shader_stage = max_uav_per_shader_stage / 2;
+        let mut max_storage_buffers_per_shader_stage = max_uav_per_shader_stage / 2;
+
+        // WebGPU storage buffers count as 1 SRV if they are read-only
+        // or as 1 UAV if they are read-write. See comment in
+        // `create_pipeline_layout`. Make sure we don't exceed
+        // the maximum number of SRVs for the relevant limits.
+        auxil::cap_limits_to_be_under_the_sum_limit(
+            [
+                &mut max_sampled_textures_per_shader_stage,
+                &mut max_acceleration_structures_per_shader_stage,
+                &mut max_storage_buffers_per_shader_stage,
+            ],
+            max_srv_per_shader_stage,
+        );
 
         // "Maximum number of Samplers in all descriptor tables per shader stage"
         let max_samplers_per_shader_stage = match rbt {
@@ -860,35 +906,10 @@ impl super::Adapter {
                     max_inter_stage_shader_variables: Direct3D12::D3D12_VS_OUTPUT_REGISTER_COUNT
                         .min(Direct3D12::D3D12_PS_INPUT_REGISTER_COUNT)
                         - 1, // - 1 for position
-                    // Limits that must share D3D12's root signature size of
-                    // D3D12_MAX_ROOT_COST 64 DWORDS (256 bytes).
-                    //
-                    // Root constants and root tables use 1 DWORD.
-                    // Root descriptors use 2 DWORDs.
-                    // Source: https://learn.microsoft.com/en-us/windows/win32/direct3d12/root-signature-limits#memory-limits-and-costs
-                    //
-                    // Per pipeline layout:
-                    // - RootElement::Constant, (immediates) 32 root constants
-                    //     (bounded by maxImmediateSize) = 32 x 4 bytes = 128 bytes
-                    // - RootElement::SamplerHeap, a root table = 4 bytes
-                    // - RootElement::SpecialConstantBuffer, 3 root constants = 3 x 4 bytes = 12 bytes
-                    // - RootElement::DynamicOffsetsBuffer, a root constant per dynamic storage buffer
-                    //     (bounded by maxDynamicStorageBuffersPerPipelineLayout) = 4 x 4 bytes = 16 bytes
-                    // - RootElement::DynamicUniformBuffer, a root descriptor per dynamic uniform buffer
-                    //     (bounded by maxDynamicUniformBuffersPerPipelineLayout) = 8 x 8 bytes = 64 bytes
-                    // Per bind group:
-                    // - RootElement::Table, a root table
-                    //     (bounded by maxBindGroups) = 8 x 4 bytes = 32 bytes
-                    //
-                    // Source: logic in `create_pipeline_layout`
-                    //
-                    // Total: 128 + 4 + 12 + 16 + 64 + 32 = 256 bytes
-                    //
-                    max_immediate_size: 128,
-                    max_bind_groups: crate::MAX_BIND_GROUPS as u32,
-                    max_dynamic_uniform_buffers_per_pipeline_layout: 8,
-                    max_dynamic_storage_buffers_per_pipeline_layout: 4,
-                    //
+                    max_immediate_size,
+                    max_bind_groups,
+                    max_dynamic_uniform_buffers_per_pipeline_layout,
+                    max_dynamic_storage_buffers_per_pipeline_layout,
                     // 8
                     max_color_attachments: Direct3D12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT,
                     // 128 (No documented limit)
