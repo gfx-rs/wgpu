@@ -131,14 +131,14 @@ async fn binding_array_tlas(ctx: TestingContext) {
         [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
         0,
         0xff,
-        wgpu::IntersectionShaderIndex::QueryData(0)
+        wgpu::IntersectionShaderIndex::QueryData(0),
     ));
     tlas_b[0] = Some(wgpu::TlasInstance::new(
         &blas,
         [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
         0,
         0xff,
-        wgpu::IntersectionShaderIndex::QueryData(0)
+        wgpu::IntersectionShaderIndex::QueryData(0),
     ));
 
     // Build BLAS and TLASes.

@@ -2062,7 +2062,7 @@ pub struct Alignments {
     pub ray_tracing_pipeline_group_data_alignment: u32,
 
     /// If ray tracing pipelines are implemented, this must be a power of two (and non zero).
-    /// 
+    ///
     /// The offset within `PipelineGroupData` must be a multiple of this
     pub ray_tracing_pipeline_data_offset_alignment: u32,
 }

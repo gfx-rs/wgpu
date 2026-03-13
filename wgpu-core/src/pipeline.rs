@@ -1010,7 +1010,9 @@ impl ShaderBindingData {
 
         base_data.extend_from_slice(&closest_hit_data);
 
-        let padded_miss_offset = (base_data.len() as wgt::BufferAddress).next_multiple_of(device.alignments.ray_tracing_pipeline_data_offset_alignment as wgt::BufferAddress);
+        let padded_miss_offset = (base_data.len() as wgt::BufferAddress).next_multiple_of(
+            device.alignments.ray_tracing_pipeline_data_offset_alignment as wgt::BufferAddress,
+        );
 
         base_data.resize(padded_miss_offset as _, 0);
 
@@ -1023,14 +1025,17 @@ impl ShaderBindingData {
 
         base_data.extend_from_slice(&miss_data);
 
-        let padded_intersection_offset = (base_data.len() as wgt::BufferAddress).next_multiple_of(device.alignments.ray_tracing_pipeline_data_offset_alignment as wgt::BufferAddress);
+        let padded_intersection_offset = (base_data.len() as wgt::BufferAddress).next_multiple_of(
+            device.alignments.ray_tracing_pipeline_data_offset_alignment as wgt::BufferAddress,
+        );
 
         base_data.resize(padded_intersection_offset as _, 0);
 
         let intersection_data = unsafe {
-            device
-                .raw()
-                .get_raytracing_pipeline_group_data(pipeline, 2..(2 + num_intersection_groups as u32))
+            device.raw().get_raytracing_pipeline_group_data(
+                pipeline,
+                2..(2 + num_intersection_groups as u32),
+            )
         }
         .map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
 
@@ -1064,7 +1069,8 @@ impl ShaderBindingData {
                     &[hal::BufferCopy {
                         src_offset: 0,
                         dst_offset: 0,
-                        size: NonZeroU64::new(base_data.len() as _).expect("Already checked size isn't zero."),
+                        size: NonZeroU64::new(base_data.len() as _)
+                            .expect("Already checked size isn't zero."),
                     }],
                 )
             };

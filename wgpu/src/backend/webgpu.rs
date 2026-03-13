@@ -3281,7 +3281,7 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         }
         .into()
     }
-    
+
     fn begin_ray_tracing_pass(
         &self,
         _desc: &crate::RayTracingPassDescriptor<'_>,
