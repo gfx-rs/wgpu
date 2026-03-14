@@ -245,12 +245,6 @@ jobs:
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
 
-      - name: (Mac) Select latest Xcode
-        if: startsWith(matrix.os, 'macos')
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest
-
       - name: (Linux `aarch64`) Install `aarch64-linux-gnu` `g++`
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
