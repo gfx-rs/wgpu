@@ -149,6 +149,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - BREAKING: Add `V6_8` variant to `DxcShaderModel` and `naga::back::hlsl::ShaderModel`. By @inner-daemons in [#8882](https://github.com/gfx-rs/wgpu/pull/8882) and @ErichDonGubler in [#9083](https://github.com/gfx-rs/wgpu/pull/9083).
 - BREAKING: Add `V6_9` variant to `DxcShaderModel` and `naga::back::hlsl::ShaderModel`. By @ErichDonGubler in [#????](https://github.com/gfx-rs/wgpu/pull/????).
 - `DisplayHandle` is now optional in surface creation if it was passed to `InstanceDescriptor::display`. By @MarijnS95 in [#8782](https://github.com/gfx-rs/wgpu/pull/8782)
+- Add support for `per_vertex` in Metal and DX12, as well as some validation for `per_vertex`, and a new enable extension, `wgpu_per_vertex`. By @inner-daemons in [#9219](https://github.com/gfx-rs/wgpu/pull/9219).
 
 #### naga
 
