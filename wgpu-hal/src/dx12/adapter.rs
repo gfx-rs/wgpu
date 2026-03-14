@@ -905,7 +905,7 @@ impl super::Adapter {
                     // 31
                     max_inter_stage_shader_variables: Direct3D12::D3D12_VS_OUTPUT_REGISTER_COUNT
                         .min(Direct3D12::D3D12_PS_INPUT_REGISTER_COUNT)
-                        - 1, // - 1 for position
+                        - 2, // - 1 for position, -1 for SV_PrimitiveID
                     max_immediate_size,
                     max_bind_groups,
                     max_dynamic_uniform_buffers_per_pipeline_layout,
