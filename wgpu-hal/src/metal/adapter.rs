@@ -642,9 +642,7 @@ impl super::CapabilitiesQuery {
                 && !is_virtual;
 
         let msl_version = if available!(macos = 26.0, ios = 26.0, tvos = 26.0, visionos = 26.0) {
-            // MTLLanguageVersion::Version_4
-            // https://learn.microsoft.com/en-us/dotnet/api/metal.mtllanguageversion?view=net-ios-26.0-10.0
-            MTLLanguageVersion(262144)
+            MTLLanguageVersion::Version4_0
         } else if available!(macos = 14.0, ios = 17.0, tvos = 17.0, visionos = 1.0) {
             MTLLanguageVersion::Version3_1
         } else if available!(macos = 13.0, ios = 16.0, tvos = 16.0, visionos = 1.0) {
