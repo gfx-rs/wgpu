@@ -583,7 +583,7 @@ impl Inner {
             let result = if supports_opengl {
                 create_context(khronos_egl::OPENGL_API, &gl_context_attributes).or_else(
                     |gl_error| {
-                        log::info!("Failed to create desktop OpenGL context: {gl_error}, falling back to OpenGL ES");
+                        log::debug!("Failed to create desktop OpenGL context: {gl_error}, falling back to OpenGL ES");
                         create_context(khronos_egl::OPENGL_ES_API, &gles_context_attributes)
                     },
                 )
