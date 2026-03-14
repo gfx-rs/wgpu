@@ -91,6 +91,9 @@ pub(super) struct EntryPointInterface {
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord)]
 enum InterfaceKey {
     Location(u32),
+    // FXC doesn't consider SV_PrimitiveID a system value, so it must appear
+    // before any other SVs in the struct.
+    PrimitiveIndex,
     BuiltIn(crate::BuiltIn),
     Other,
 }
@@ -99,6 +102,7 @@ impl InterfaceKey {
     const fn new(binding: Option<&crate::Binding>) -> Self {
         match binding {
             Some(&crate::Binding::Location { location, .. }) => Self::Location(location),
+            Some(&crate::Binding::BuiltIn(crate::BuiltIn::PrimitiveIndex)) => Self::PrimitiveIndex,
             Some(&crate::Binding::BuiltIn(built_in)) => Self::BuiltIn(built_in),
             None => Self::Other,
         }
