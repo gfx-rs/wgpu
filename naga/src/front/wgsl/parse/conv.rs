@@ -172,12 +172,19 @@ pub fn map_built_in(
     Ok(built_in)
 }
 
-pub fn map_interpolation(word: &str, span: Span) -> Result<'_, crate::Interpolation> {
+pub fn map_interpolation(
+    enable_extensions: &EnableExtensions,
+    word: &str,
+    span: Span,
+) -> Result<'static, crate::Interpolation> {
     match word {
         "linear" => Ok(crate::Interpolation::Linear),
         "flat" => Ok(crate::Interpolation::Flat),
         "perspective" => Ok(crate::Interpolation::Perspective),
-        "per_vertex" => Ok(crate::Interpolation::PerVertex),
+        "per_vertex" => {
+            enable_extensions.require(ImplementedEnableExtension::PerVertex, span)?;
+            Ok(crate::Interpolation::PerVertex)
+        }
         _ => Err(Box::new(Error::UnknownAttribute(span))),
     }
 }

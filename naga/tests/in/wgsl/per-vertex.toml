@@ -1,5 +1,5 @@
 capabilities = "PER_VERTEX"
-targets = "WGSL | SPIRV | METAL"
+targets = "WGSL | SPIRV | METAL | HLSL"
 
 [msl]
 lang_version = [4, 0]
