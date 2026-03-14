@@ -633,6 +633,16 @@ impl ReadbackBuffers {
     }
 
     pub async fn assert_buffer_contents(&self, ctx: &TestingContext, expected_data: &[u8]) {
+        self.assert_buffer_contents_imprecise(ctx, expected_data, 0)
+            .await;
+    }
+
+    pub async fn assert_buffer_contents_imprecise(
+        &self,
+        ctx: &TestingContext,
+        expected_data: &[u8],
+        max_diff: u8,
+    ) {
         let result_buffer = self
             .retrieve_buffer(ctx, &self.buffer, self.buffer_aspect())
             .await;
@@ -643,7 +653,10 @@ impl ReadbackBuffers {
             expected_data.len()
         );
         let result_buffer = &result_buffer[..expected_data.len()];
-        assert_eq!(result_buffer, expected_data);
+        assert!(result_buffer
+            .iter()
+            .zip(expected_data)
+            .all(|(a, b)| a.abs_diff(*b) <= max_diff));
         self.buffer.unmap();
     }
 }

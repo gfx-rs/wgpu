@@ -571,9 +571,15 @@ mod dummy_interpolation_shader {
                 naga::Interpolation::PerVertex => "array<u32, 3>",
             };
 
+            let enable_extension = if interpolation == naga::Interpolation::PerVertex {
+                "enable wgpu_per_vertex;\n\n"
+            } else {
+                ""
+            };
             let interpolate_attr = format!("@interpolate({interpolation_str}{sampling_str})");
             let source = format!(
                 "\
+                {enable_extension}
                 struct VertexOutput {{
     @location(0) {interpolate_attr} member: {member_type},
 }}
