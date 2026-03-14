@@ -112,6 +112,12 @@ jobs:
           debug = "line-tables-only"
           EOF
 
+      - name: (Mac) Select latest Xcode
+        if: matrix.os == 'macos-14'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest
+
       - name: (Windows) Install DXC
         if: matrix.os == 'windows-2022'
         uses: ./.github/actions/install-dxc
