@@ -861,6 +861,8 @@ pub enum ConstantEvaluatorError {
     InvalidMathArg,
     #[error("{0:?} built-in function expects {1:?} arguments but {2:?} were supplied")]
     InvalidMathArgCount(crate::MathFunction, usize, usize),
+    #[error("{0} built-in function argument is out of valid range")]
+    InvalidMathArgValue(String),
     #[error("Cannot apply relational function to type")]
     InvalidRelationalArg(RelationalFunction),
     #[error("value of `low` is greater than `high` for clamp built-in function")]
@@ -1510,13 +1512,27 @@ impl<'a> ConstantEvaluator<'a> {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.cos()]) })
             }
             crate::MathFunction::Cosh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.cosh()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    let result = e.cosh();
+                    if result.is_finite() {
+                        Ok([result])
+                    } else {
+                        Err(ConstantEvaluatorError::Overflow("cosh".into()))
+                    }
+                })
             }
             crate::MathFunction::Sin => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.sin()]) })
             }
             crate::MathFunction::Sinh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.sinh()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    let result = e.sinh();
+                    if result.is_finite() {
+                        Ok([result])
+                    } else {
+                        Err(ConstantEvaluatorError::Overflow("sinh".into()))
+                    }
+                })
             }
             crate::MathFunction::Tan => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.tan()]) })
@@ -1525,10 +1541,22 @@ impl<'a> ConstantEvaluator<'a> {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.tanh()]) })
             }
             crate::MathFunction::Acos => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.acos()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    if e.abs() <= One::one() {
+                        Ok([e.acos()])
+                    } else {
+                        Err(ConstantEvaluatorError::InvalidMathArgValue("acos".into()))
+                    }
+                })
             }
             crate::MathFunction::Asin => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.asin()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    if e.abs() <= One::one() {
+                        Ok([e.asin()])
+                    } else {
+                        Err(ConstantEvaluatorError::InvalidMathArgValue("asin".into()))
+                    }
+                })
             }
             crate::MathFunction::Atan => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.atan()]) })
@@ -1538,20 +1566,35 @@ impl<'a> ConstantEvaluator<'a> {
                     Ok([y.atan2(x)])
                 })
             }
-            crate::MathFunction::Asinh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.asinh()]) })
-            }
+            crate::MathFunction::Asinh => component_wise_float(self, span, [arg], |e| match e {
+                Float::Abstract([e]) => Ok(Float::Abstract([libm::asinh(e)])),
+                Float::F32([e]) => Ok(Float::F32([(e as f64).asinh() as f32])),
+                Float::F16([e]) => Ok(Float::F16([e.asinh()])),
+            }),
             crate::MathFunction::Acosh => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.acosh()]) })
             }
             crate::MathFunction::Atanh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.atanh()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    if e.abs() < One::one() {
+                        Ok([e.atanh()])
+                    } else {
+                        Err(ConstantEvaluatorError::InvalidMathArgValue("atanh".into()))
+                    }
+                })
             }
             crate::MathFunction::Radians => {
                 component_wise_float!(self, span, [arg], |e1| { Ok([e1.to_radians()]) })
             }
             crate::MathFunction::Degrees => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.to_degrees()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    let result = e.to_degrees();
+                    if result.is_finite() {
+                        Ok([result])
+                    } else {
+                        Err(ConstantEvaluatorError::Overflow("degrees".into()))
+                    }
+                })
             }
 
             // decomposition
@@ -1605,16 +1648,42 @@ impl<'a> ConstantEvaluator<'a> {
 
             // exponent
             crate::MathFunction::Exp => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.exp()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    let result = e.exp();
+                    if result.is_finite() {
+                        Ok([result])
+                    } else {
+                        Err(ConstantEvaluatorError::Overflow("exp".into()))
+                    }
+                })
             }
             crate::MathFunction::Exp2 => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.exp2()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    let result = e.exp2();
+                    if result.is_finite() {
+                        Ok([result])
+                    } else {
+                        Err(ConstantEvaluatorError::Overflow("exp2".into()))
+                    }
+                })
             }
             crate::MathFunction::Log => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.ln()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    if e > Zero::zero() {
+                        Ok([e.ln()])
+                    } else {
+                        Err(ConstantEvaluatorError::InvalidMathArgValue("log".into()))
+                    }
+                })
             }
             crate::MathFunction::Log2 => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.log2()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    if e > Zero::zero() {
+                        Ok([e.log2()])
+                    } else {
+                        Err(ConstantEvaluatorError::InvalidMathArgValue("log2".into()))
+                    }
+                })
             }
             crate::MathFunction::Pow => {
                 component_wise_float!(self, span, [arg, arg1.unwrap()], |e1, e2| {
@@ -1654,7 +1723,13 @@ impl<'a> ConstantEvaluator<'a> {
                 })
             }
             crate::MathFunction::Sqrt => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.sqrt()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    if e >= Zero::zero() {
+                        Ok([e.sqrt()])
+                    } else {
+                        Err(ConstantEvaluatorError::InvalidMathArgValue("sqrt".into()))
+                    }
+                })
             }
             crate::MathFunction::InverseSqrt => {
                 component_wise_float(self, span, [arg], |e| match e {
@@ -1718,6 +1793,22 @@ impl<'a> ConstantEvaluator<'a> {
                     return Err(ConstantEvaluatorError::InvalidMathArg);
                 }
 
+                fn float_dot_checked<P>(a: &[P], b: &[P]) -> Result<P, ConstantEvaluatorError>
+                where
+                    P: num_traits::Float,
+                {
+                    let result = a
+                        .iter()
+                        .zip(b.iter())
+                        .map(|(&aa, &bb)| aa * bb)
+                        .fold(P::zero(), |acc, x| acc + x);
+                    if result.is_finite() {
+                        Ok(result)
+                    } else {
+                        Err(ConstantEvaluatorError::Overflow("in dot built-in".into()))
+                    }
+                }
+
                 fn int_dot_checked<P>(a: &[P], b: &[P]) -> Result<P, ConstantEvaluatorError>
                 where
                     P: num_traits::PrimInt + num_traits::CheckedAdd + num_traits::CheckedMul,
@@ -1748,7 +1839,7 @@ impl<'a> ConstantEvaluator<'a> {
                 }
 
                 let result = match_literal_vector!(match (e1, e2) => Literal {
-                    Float => |e1, e2| { e1.iter().zip(e2.iter()).map(|(&aa, &bb)| aa * bb).sum() },
+                    Float => |e1, e2| { float_dot_checked(e1, e2)? },
                     AbstractInt => |e1, e2 | { int_dot_checked(e1, e2)? },
                     I32 => |e1, e2| { int_dot_wrapping(e1, e2) },
                     U32 => |e1, e2| { int_dot_wrapping(e1, e2) },
@@ -2667,14 +2758,20 @@ impl<'a> ConstantEvaluator<'a> {
                                 _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                             })
                         }
-                        (Literal::F16(a), Literal::F16(b)) => Literal::F16(match op {
-                            BinaryOperator::Add => a + b,
-                            BinaryOperator::Subtract => a - b,
-                            BinaryOperator::Multiply => a * b,
-                            BinaryOperator::Divide => a / b,
-                            BinaryOperator::Modulo => a % b,
-                            _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
-                        }),
+                        (Literal::F16(a), Literal::F16(b)) => {
+                            let result = match op {
+                                BinaryOperator::Add => a + b,
+                                BinaryOperator::Subtract => a - b,
+                                BinaryOperator::Multiply => a * b,
+                                BinaryOperator::Divide => a / b,
+                                BinaryOperator::Modulo => a % b,
+                                _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                            };
+                            if !result.is_finite() {
+                                return Err(ConstantEvaluatorError::Overflow(format!("{op:?}")));
+                            }
+                            Literal::F16(result)
+                        }
                         (Literal::AbstractInt(a), Literal::AbstractInt(b)) => {
                             Literal::AbstractInt(match op {
                                 BinaryOperator::Add => a.checked_add(b).ok_or_else(|| {
@@ -2707,14 +2804,18 @@ impl<'a> ConstantEvaluator<'a> {
                             })
                         }
                         (Literal::AbstractFloat(a), Literal::AbstractFloat(b)) => {
-                            Literal::AbstractFloat(match op {
+                            let result = match op {
                                 BinaryOperator::Add => a + b,
                                 BinaryOperator::Subtract => a - b,
                                 BinaryOperator::Multiply => a * b,
                                 BinaryOperator::Divide => a / b,
                                 BinaryOperator::Modulo => a % b,
                                 _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
-                            })
+                            };
+                            if !result.is_finite() {
+                                return Err(ConstantEvaluatorError::Overflow(format!("{op:?}")));
+                            }
+                            Literal::AbstractFloat(result)
                         }
                         (Literal::Bool(a), Literal::Bool(b)) => Literal::Bool(match op {
                             BinaryOperator::LogicalAnd => a && b,

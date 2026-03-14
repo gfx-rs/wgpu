@@ -79,28 +79,19 @@ webgpu:shader,validation,expression,binary,comparison:* // 74%, https://github.c
 webgpu:shader,validation,expression,binary,div_rem:* // 86%, https://github.com/gfx-rs/wgpu/issues/5474
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:* // 92%, https://github.com/gfx-rs/wgpu/issues/8440
 webgpu:shader,validation,expression,call,builtin,abs:* // 98%, atomic type validation gap, https://github.com/gfx-rs/wgpu/issues/5474
-webgpu:shader,validation,expression,call,builtin,acos:* // 71%, missing domain validation [-1,1] in const eval
 webgpu:shader,validation,expression,call,builtin,acosh:* // 56%, missing domain validation [1,∞) in const eval
-webgpu:shader,validation,expression,call,builtin,asin:* // 71%, missing NaN/Infinity validation for AbstractFloat and F16
-webgpu:shader,validation,expression,call,builtin,asinh:* // 85%, asinh(large f32) produces infinity
-webgpu:shader,validation,expression,call,builtin,atanh:* // 72%, atanh domain (-1,1) not validated in const eval
 webgpu:shader,validation,expression,call,builtin,atomics:* // 86%, atomics in vertex shaders, invalid address spaces/access modes
 webgpu:shader,validation,expression,call,builtin,bitcast:* // 57%, bitcast const-eval unimplemented; size validation missing; f16 vector validation incorrect
 webgpu:shader,validation,expression,call,builtin,clamp:* // 71%, clamp low<=high constraint not checked for const/override parameters
-webgpu:shader,validation,expression,call,builtin,cosh:* // 61%, overflow detection missing for abstract-int, abstract-float, f16
 webgpu:shader,validation,expression,call,builtin,countLeadingZeros:* // 98%, atomic type validation gap, https://github.com/gfx-rs/wgpu/issues/5474
 webgpu:shader,validation,expression,call,builtin,countOneBits:* // 98%, atomic type validation gap, https://github.com/gfx-rs/wgpu/issues/5474
 webgpu:shader,validation,expression,call,builtin,countTrailingZeros:* // 98%, atomic type validation gap, https://github.com/gfx-rs/wgpu/issues/5474
 webgpu:shader,validation,expression,call,builtin,cross:* // 86%, abstract int/float overflow issues in const eval
-webgpu:shader,validation,expression,call,builtin,degrees:* // 73%, const eval overflow detection missing for abstract/f16
 webgpu:shader,validation,expression,call,builtin,derivatives:* // 83%, f16 support not properly validated
 webgpu:shader,validation,expression,call,builtin,determinant:* // 71%, abstract int/float const eval issues
 webgpu:shader,validation,expression,call,builtin,distance:* // 66%, scalar distance uses wrong formula (sqrt instead of abs)
-webgpu:shader,validation,expression,call,builtin,dot:* // 79%, const eval overflow issues for abstract/f16
 webgpu:shader,validation,expression,call,builtin,dot4I8Packed:* // 91%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,dot4U8Packed:* // 91%, missing const eval (#4507)
-webgpu:shader,validation,expression,call,builtin,exp:* // 61%, const eval overflow detection missing for abstract/f16
-webgpu:shader,validation,expression,call,builtin,exp2:* // 80%, f16 overflow detection missing
 webgpu:shader,validation,expression,call,builtin,extractBits:* // 55%, const eval issues
 webgpu:shader,validation,expression,call,builtin,faceForward:* // 68%, const eval overflow for abstract/f16
 webgpu:shader,validation,expression,call,builtin,firstLeadingBit:* // 98%, atomic type validation gap, https://github.com/gfx-rs/wgpu/issues/5474
@@ -111,8 +102,6 @@ webgpu:shader,validation,expression,call,builtin,insertBits:* // 73%, missing co
 webgpu:shader,validation,expression,call,builtin,inverseSqrt:* // 61%, const eval overflow for abstract/f16
 webgpu:shader,validation,expression,call,builtin,ldexp:* // 43%, const eval not implemented
 webgpu:shader,validation,expression,call,builtin,length:* // 74%, const eval overflow for abstract/f16
-webgpu:shader,validation,expression,call,builtin,log:* // 64%, domain validation (x > 0) missing for abstract/f16
-webgpu:shader,validation,expression,call,builtin,log2:* // 64%, domain validation (x > 0) missing for abstract/f16
 webgpu:shader,validation,expression,call,builtin,mix:* // 66%, const eval issues
 webgpu:shader,validation,expression,call,builtin,modf:* // 52%, const eval not fully implemented
 webgpu:shader,validation,expression,call,builtin,normalize:* // 63%, missing const/override eval overflow validation (intermediate values overflow to infinity)
@@ -131,9 +120,7 @@ webgpu:shader,validation,expression,call,builtin,reflect:* // 39%, const eval no
 webgpu:shader,validation,expression,call,builtin,refract:* // 44%, const eval not implemented
 webgpu:shader,validation,expression,call,builtin,reverseBits:* // 98%, atomic type validation gap, https://github.com/gfx-rs/wgpu/issues/5474
 webgpu:shader,validation,expression,call,builtin,select:* // >99%, https://github.com/gfx-rs/wgpu/issues/5474
-webgpu:shader,validation,expression,call,builtin,sinh:* // 61%, const eval overflow for abstract/f16
 webgpu:shader,validation,expression,call,builtin,smoothstep:* // 69%, const eval issues
-webgpu:shader,validation,expression,call,builtin,sqrt:* // 64%, domain validation (x >= 0) missing for abstract/f16
 webgpu:shader,validation,expression,call,builtin,textureDimensions:* // >99%, no external texture in deno
 webgpu:shader,validation,expression,call,builtin,textureGather:* // 99%, https://github.com/gfx-rs/wgpu/issues/8876
 webgpu:shader,validation,expression,call,builtin,textureGatherCompare:* // 99%, edge case in offset or external texture validation
@@ -155,7 +142,7 @@ webgpu:shader,validation,expression,call,builtin,unpack4xI8:* // 75%, missing co
 webgpu:shader,validation,expression,call,builtin,unpack4xU8:* // 75%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,value_constructor:* // 92%, value constructors lack must-use validation + abstract-float matrix validation issues
 webgpu:shader,validation,expression,early_evaluation:* // 67%, mixed override/runtime composite evaluation
-webgpu:shader,validation,expression,matrix,* // 92%, #5474, #8868, overflow/underflow/atomic
+webgpu:shader,validation,expression,matrix,* // 99%, #5474, #8868, atomic
 webgpu:shader,validation,expression,precedence:* // 76%, https://github.com/gfx-rs/wgpu/issues/4536
 webgpu:shader,validation,expression,unary,* // 99%, atomics #5474
 webgpu:shader,validation,extension,dual_source_blending:blend_src_usage:* // 61%, @blend_src validation gaps
