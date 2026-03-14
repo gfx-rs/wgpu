@@ -114,6 +114,14 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 )),
 ```
 
+#### `WriteOnly`
+
+To ensure memory safety when accessing mapped GPU memory, `MapMode::Write` buffer mappings (`BufferViewMut` and also `QueueWriteBufferView`) can no longer be dereferenced to Rust `&mut [u8]`. Instead, they must be used through the new pointer type `wgpu::WriteOnly<[u8]>`, which does not allow reading at all.
+
+`WriteOnly<[u8]>` is designed to offer similar functionality to `&mut [u8]` and have almost no performance overhead, but you will probably need to make some changes for anything more complicated than `get_mapped_range_mut().copy_from_slice(my_data)`; in particular, replacing `view[start..end]` with `view.slice(start..end)`.
+
+By @kpreid in [#9042](https://github.com/gfx-rs/wgpu/pull/9042).
+
 #### Other Breaking Changes
 
 - `Surface::get_current_texture` can now return `SurfaceError::Occluded`. By @emilk in [#9141](https://github.com/gfx-rs/wgpu/pull/9141).
@@ -177,7 +185,6 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
   - Split the `TransferError::BufferOverrun` variant into new `BufferStartOffsetOverrun` and `BufferEndOffsetOverrun` variants.
 - The various "max resources per stage" limits are now capped at 100, so that their total remains below `max_bindings_per_bind_group`, as required by WebGPU. By @andyleiserson in [#9118](https://github.com/gfx-rs/wgpu/pull/9118).
 - The `max_uniform_buffer_binding_size` and `max_storage_buffer_binding_size` limits are now `u64` instead of `u32`, to match WebGPU. By @wingertge in [#9146](https://github.com/gfx-rs/wgpu/pull/9146).
-- To ensure memory safety when accessing mapped memory, `MAP_WRITE` buffer mappings are no longer exposed as Rust `&mut [u8]`, but the new type `WriteOnly<[u8]>`, which does not allow reading. Similar methods are provided where possible, but changes to your code will likely be needed, particularly including replacing `view[start..end]` with `view.slice(start..end)`. By @kpreid in [#9042](https://github.com/gfx-rs/wgpu/pull/9042).
 - The main 3 native backends now report their limits properly. By @teoxoy in [#9196](https://github.com/gfx-rs/wgpu/pull/9196).
 
 #### Metal
