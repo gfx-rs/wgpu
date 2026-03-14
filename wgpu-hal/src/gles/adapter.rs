@@ -480,7 +480,7 @@ impl super::Adapter {
             full_ver.is_some() || extensions.contains("GL_EXT_clip_cull_distance"),
         );
         features.set(
-            wgt::Features::SHADER_PRIMITIVE_INDEX,
+            wgt::Features::PRIMITIVE_INDEX,
             supported((3, 2), (3, 2))
                 || extensions.contains("OES_geometry_shader")
                 || extensions.contains("GL_ARB_geometry_shader4"),

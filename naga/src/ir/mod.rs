@@ -401,6 +401,11 @@ pub enum AddressSpace {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum BuiltIn {
+    // This must be at the top so that it gets sorted to the top. PrimitiveIndex is considered a non SV
+    // by FXC so it must appear before any other SVs.
+    /// Read in fragment shaders, written in mesh shaders, read in any and closest hit shaders.
+    PrimitiveIndex,
+
     /// Written in vertex/mesh shaders, read in fragment shaders
     Position { invariant: bool },
     /// Read in task, mesh, vertex, and fragment shaders
@@ -429,8 +434,6 @@ pub enum BuiltIn {
     PointCoord,
     /// Read in fragment shaders
     FrontFacing,
-    /// Read in fragment shaders, written in mesh shaders, read in any and closest hit shaders.
-    PrimitiveIndex,
     /// Read in fragment shaders
     Barycentric { perspective: bool },
     /// Read in fragment shaders
