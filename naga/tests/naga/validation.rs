@@ -435,6 +435,7 @@ fn incompatible_interpolation_and_sampling_types() {
                     naga::Interpolation::Flat,
                     Some(naga::Sampling::First | naga::Sampling::Either)
                 )
+                | (naga::Interpolation::PerVertex, Some(naga::Sampling::Center))
         );
 
         if valid {
@@ -456,11 +457,12 @@ fn incompatible_interpolation_and_sampling_types() {
         }
     };
 
+    // Note: `PerVertex` is excluded here because its invalid sampling combinations produce
+    // `VaryingError::InvalidPerVertexSampling` rather than `InvalidInterpolationSamplingCombination`.
     let invalid_cases = [
         naga::Interpolation::Flat,
         naga::Interpolation::Linear,
         naga::Interpolation::Perspective,
-        naga::Interpolation::PerVertex,
     ]
     .into_iter()
     .cartesian_product(

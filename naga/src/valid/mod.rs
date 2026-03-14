@@ -235,6 +235,7 @@ impl Capabilities {
             Self::RAY_HIT_VERTEX_POSITION => Some(Ext::WgpuRayQueryVertexReturn),
             Self::COOPERATIVE_MATRIX => Some(Ext::WgpuCooperativeMatrix),
             Self::RAY_TRACING_PIPELINE => Some(Ext::WgpuRayTracingPipeline),
+            Self::PER_VERTEX => Some(Ext::PerVertex),
             _ => None,
         }
     }

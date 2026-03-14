@@ -4893,6 +4893,38 @@ fn mesh_shader_enable_extension() {
     );
 }
 
+#[test]
+fn per_vertex_enable_extension() {
+    // `task_payload` address space
+    check_extension_validation!(
+        Capabilities::PER_VERTEX,
+        r#"@fragment
+fn fs_main(@location(0) @interpolate(per_vertex) v: array<f32, 3>) -> @location(0) vec4<f32> {
+    return vec4(v[0], v[1], v[2], 1.0);
+}
+
+        "#,
+        r#"error: the `wgpu_per_vertex` enable extension is not enabled
+  ┌─ wgsl:2:38
+  │
+2 │ fn fs_main(@location(0) @interpolate(per_vertex) v: array<f32, 3>) -> @location(0) vec4<f32> {
+  │                                      ^^^^^^^^^^ the `wgpu_per_vertex` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_per_vertex;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Argument(
+                0,
+                naga::valid::VaryingError::UnsupportedCapability(
+                    naga::valid::Capabilities::PER_VERTEX
+                )
+            ),
+            ..
+        })
+    );
+}
+
 /// Checks that every ray tracing pipeline binding in naga is invalid in other stages.
 #[test]
 fn check_ray_tracing_pipeline_bindings() {
