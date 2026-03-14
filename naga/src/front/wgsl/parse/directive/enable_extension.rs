@@ -225,7 +225,7 @@ pub enum ImplementedEnableExtension {
     ///
     /// [`enable primitive-index;`]: https://www.w3.org/TR/WGSL/#extension-primitive_index
     PrimitiveIndex,
-    /// Enables the @interpolate(per_vertex) attribute in WGSL, native only.
+    /// Enables the `wgpu_per_vertex` extension, allows using `@interpolate(per_vertex)` attribute in WGSL, native only.
     PerVertex,
 }
 
