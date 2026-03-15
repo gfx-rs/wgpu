@@ -20,8 +20,8 @@ void main() {
     barrier();
     Input input_ = Input(gl_LocalInvocationID, gl_LocalInvocationIndex);
     wg_var = (input_.local_invocation_index * 2u);
-    uint _e8 = wg_var;
-    wg_var = (_e8 + input_.local_invocation_id.x);
+    uint _e6 = wg_var;
+    wg_var = (_e6 + input_.local_invocation_id.x);
     return;
 }
 

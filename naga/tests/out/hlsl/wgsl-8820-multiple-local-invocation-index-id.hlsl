@@ -13,7 +13,7 @@ void compute1_(Input input, uint3 local_invocation_id : SV_GroupThreadID)
     }
     GroupMemoryBarrierWithGroupSync();
     wg_var = (input.local_invocation_index * 2u);
-    uint _e8 = wg_var;
-    wg_var = (_e8 + input.local_invocation_id.x);
+    uint _e6 = wg_var;
+    wg_var = (_e6 + input.local_invocation_id.x);
     return;
 }

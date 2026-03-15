@@ -47,10 +47,10 @@ OpBranch %27
 %28 = OpCompositeExtract  %3  %9 1
 %29 = OpIMul  %3  %28 %18
 OpStore %6 %29
-%30 = OpCompositeExtract  %4  %9 0
-%31 = OpCompositeExtract  %3  %30 0
-%32 = OpLoad  %3  %6
-%33 = OpIAdd  %3  %32 %31
+%30 = OpLoad  %3  %6
+%31 = OpCompositeExtract  %4  %9 0
+%32 = OpCompositeExtract  %3  %31 0
+%33 = OpIAdd  %3  %30 %32
 OpStore %6 %33
 OpReturn
 OpFunctionEnd
