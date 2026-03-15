@@ -5,10 +5,11 @@ use objc2_metal::{
     MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion, MTLPixelFormat,
     MTLReadWriteTextureTier,
 };
-use parking_lot::Mutex;
 use wgt::{AstcBlock, AstcChannel};
 
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
+
+use crate::metal::QueueShared;
 
 use super::{OsFeatures, TimestampQuerySupport};
 
@@ -105,7 +106,7 @@ impl crate::Adapter for super::Adapter {
                 counters: Default::default(),
             },
             queue: super::Queue {
-                raw: Arc::new(Mutex::new(queue)),
+                shared: Arc::new(QueueShared { raw: queue }),
                 timestamp_period,
             },
         })
@@ -641,7 +642,9 @@ impl super::CapabilitiesQuery {
                     // Mesh shaders don't work on virtual devices even if they should be supported. CI thing
                 && !is_virtual;
 
-        let msl_version = if available!(macos = 14.0, ios = 17.0, tvos = 17.0, visionos = 1.0) {
+        let msl_version = if available!(macos = 15.0, ios = 18.0, tvos = 18.0, visionos = 2.0) {
+            MTLLanguageVersion::Version3_2
+        } else if available!(macos = 14.0, ios = 17.0, tvos = 17.0, visionos = 1.0) {
             MTLLanguageVersion::Version3_1
         } else if available!(macos = 13.0, ios = 16.0, tvos = 16.0, visionos = 1.0) {
             MTLLanguageVersion::Version3_0

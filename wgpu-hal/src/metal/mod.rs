@@ -446,7 +446,7 @@ pub struct Adapter {
 }
 
 pub struct Queue {
-    raw: Arc<Mutex<Retained<ProtocolObject<dyn MTLCommandQueue>>>>,
+    shared: Arc<QueueShared>,
     timestamp_period: f32,
 }
 
@@ -459,14 +459,14 @@ impl Queue {
         timestamp_period: f32,
     ) -> Self {
         Self {
-            raw: Arc::new(Mutex::new(raw)),
+            shared: Arc::new(QueueShared { raw }),
             timestamp_period,
         }
     }
+}
 
-    pub fn as_raw(&self) -> &Arc<Mutex<Retained<ProtocolObject<dyn MTLCommandQueue>>>> {
-        &self.raw
-    }
+pub struct QueueShared {
+    raw: Retained<ProtocolObject<dyn MTLCommandQueue>>,
 }
 
 pub struct Device {
@@ -528,10 +528,11 @@ impl crate::Queue for Queue {
 
                 let raw = match command_buffers.last() {
                     Some(&cmd_buf) => cmd_buf.raw.clone(),
-                    None => {
-                        let queue = self.raw.lock();
-                        queue.commandBufferWithUnretainedReferences().unwrap()
-                    }
+                    None => self
+                        .shared
+                        .raw
+                        .commandBufferWithUnretainedReferences()
+                        .unwrap(),
                 };
                 raw.setLabel(Some(ns_string!("(wgpu internal) Signal")));
                 unsafe { raw.addCompletedHandler(block2::RcBlock::as_ptr(&block)) };
@@ -566,9 +567,8 @@ impl crate::Queue for Queue {
         _surface: &Surface,
         texture: SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
-        let queue = &self.raw.lock();
         autoreleasepool(|_| {
-            let command_buffer = queue.commandBuffer().unwrap();
+            let command_buffer = self.shared.raw.commandBuffer().unwrap();
             command_buffer.setLabel(Some(ns_string!("(wgpu internal) Present")));
 
             // https://developer.apple.com/documentation/quartzcore/cametallayer/1478157-presentswithtransaction?language=objc
@@ -1072,7 +1072,7 @@ struct CommandState {
 
 pub struct CommandEncoder {
     shared: Arc<AdapterShared>,
-    raw_queue: Arc<Mutex<Retained<ProtocolObject<dyn MTLCommandQueue>>>>,
+    queue_shared: Arc<QueueShared>,
     raw_cmd_buf: Option<Retained<ProtocolObject<dyn MTLCommandBuffer>>>,
     state: CommandState,
     temp: Temp,
@@ -1082,7 +1082,6 @@ pub struct CommandEncoder {
 impl fmt::Debug for CommandEncoder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CommandEncoder")
-            .field("raw_queue", &self.raw_queue)
             .field("raw_cmd_buf", &self.raw_cmd_buf)
             .finish()
     }

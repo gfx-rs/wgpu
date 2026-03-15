@@ -452,7 +452,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     type A = super::Api;
 
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
-        let queue = &self.raw_queue.lock();
+        let queue = &self.queue_shared.raw;
         let retain_references = self.shared.settings.retain_command_buffer_references;
         let raw = autoreleasepool(move |_| {
             let cmd_buf_ref = if retain_references {
