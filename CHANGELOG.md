@@ -260,6 +260,11 @@ By @kpreid in [#9042](https://github.com/gfx-rs/wgpu/pull/9042).
 #### Vulkan
 
 - Remove incorrect ordered texture uses. By @NiklasEi in [#8924](https://github.com/gfx-rs/wgpu/pull/8924).
+### Performance
+
+#### GLES
+
+- The GL backend would now try to take advantage of `GL_EXT_multisampled_render_to_texture` extension when applicable to skip the multi-sample resolve operation. By @opstic in [#8536](https://github.com/gfx-rs/wgpu/pull/8536).
 
 ### Documentation
 
@@ -673,12 +678,6 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 #### hal
 
 - `DropCallback`s are now called after dropping all other fields of their parent structs. By @jerzywilczek in [#8353](https://github.com/gfx-rs/wgpu/pull/8353)
-
-### Performance
-
-#### GLES / OpenGL
-
-- The GL backend would now try to take advantage of `GL_EXT_multisampled_render_to_texture` extension when applicable to skip the multi-sample resolve operation. By @opstic in [#8536](https://github.com/gfx-rs/wgpu/pull/8536).
 
 ## v27.0.4 (2025-10-23)
 
