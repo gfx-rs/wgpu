@@ -39,6 +39,7 @@ mod life_cycle;
 mod mem_leaks;
 mod mesh_shader;
 mod multiview;
+mod naga_capabilities;
 mod occlusion_query;
 mod oob_indexing;
 mod oom;
@@ -157,6 +158,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     vertex_state::all_tests(&mut tests);
     write_texture::all_tests(&mut tests);
     zero_init_texture_after_discard::all_tests(&mut tests);
+    naga_capabilities::all_tests(&mut tests);
 
     tests
 }

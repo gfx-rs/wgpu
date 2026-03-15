@@ -157,6 +157,9 @@ pub const CAPABILITIES: crate::Capabilities = {
     /// Guaranteed to be no bigger than isize::MAX which is the maximum size of an allocation,
     /// except on 16-bit platforms which we certainly don’t fit in.
     const ALLOC_MAX_U32: u32 = i32::MAX as u32;
+    /// Guaranteed to be no bigger than isize::MAX which is the maximum size of an allocation,
+    /// except on 16-bit platforms which we certainly don’t fit in.
+    const ALLOC_MAX_U64: u64 = i32::MAX as u64;
 
     crate::Capabilities {
         limits: wgt::Limits {
@@ -176,10 +179,11 @@ pub const CAPABILITIES: crate::Capabilities = {
             max_uniform_buffers_per_shader_stage: ALLOC_MAX_U32,
             max_binding_array_elements_per_shader_stage: ALLOC_MAX_U32,
             max_binding_array_sampler_elements_per_shader_stage: ALLOC_MAX_U32,
-            max_uniform_buffer_binding_size: ALLOC_MAX_U32,
-            max_storage_buffer_binding_size: ALLOC_MAX_U32,
+            max_binding_array_acceleration_structure_elements_per_shader_stage: ALLOC_MAX_U32,
+            max_uniform_buffer_binding_size: ALLOC_MAX_U64,
+            max_storage_buffer_binding_size: ALLOC_MAX_U64,
             max_vertex_buffers: ALLOC_MAX_U32,
-            max_buffer_size: ALLOC_MAX_U32 as u64,
+            max_buffer_size: ALLOC_MAX_U64,
             max_vertex_attributes: ALLOC_MAX_U32,
             max_vertex_buffer_array_stride: ALLOC_MAX_U32,
             max_inter_stage_shader_variables: ALLOC_MAX_U32,
@@ -247,10 +251,10 @@ impl crate::Surface for Context {
 
     unsafe fn acquire_texture(
         &self,
-        timeout: Option<Duration>,
-        fence: &Fence,
-    ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
-        Ok(None)
+        _timeout: Option<Duration>,
+        _fence: &Fence,
+    ) -> Result<crate::AcquiredSurfaceTexture<Api>, crate::SurfaceError> {
+        Err(crate::SurfaceError::Timeout)
     }
     unsafe fn discard_texture(&self, texture: Resource) {}
 }
@@ -282,6 +286,16 @@ impl crate::Adapter for Context {
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         wgt::PresentationTimestamp::INVALID_TIMESTAMP
+    }
+
+    fn get_ordered_buffer_usages(&self) -> wgt::BufferUses {
+        wgt::BufferUses::INCLUSIVE | wgt::BufferUses::MAP_WRITE
+    }
+
+    fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
+        wgt::TextureUses::INCLUSIVE
+            | wgt::TextureUses::COLOR_TARGET
+            | wgt::TextureUses::DEPTH_STENCIL_WRITE
     }
 }
 

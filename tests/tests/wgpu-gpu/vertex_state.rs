@@ -12,7 +12,15 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 
 #[gpu_test]
 static SET_ARRAY_STRIDE_TO_0: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().limits(wgpu::Limits::downlevel_defaults()))
+    .parameters(
+        TestParameters::default()
+            .limits(wgpu::Limits::downlevel_defaults())
+            // https://github.com/gfx-rs/wgpu/issues/9184
+            .expect_fail(
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("vertexAttributeAccessBeyondStride"),
+            ),
+    )
     .run_async(set_array_stride_to_0);
 
 /// Tests that draws using a vertex buffer with stride of 0 works correctly (especially on the

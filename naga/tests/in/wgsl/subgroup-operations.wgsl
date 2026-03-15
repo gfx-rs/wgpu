@@ -9,8 +9,6 @@ fn main(
     @builtin(subgroup_id) subgroup_id: u32,
     @builtin(subgroup_invocation_id) subgroup_invocation_id: u32,
 ) {
-    subgroupBarrier();
-
     _ = subgroupBallot((subgroup_invocation_id & 1u) == 1u);
     _ = subgroupBallot();
 

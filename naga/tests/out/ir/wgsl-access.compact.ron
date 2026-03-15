@@ -434,6 +434,7 @@
             binding: None,
             ty: 3,
             init: Some(6),
+            memory_decorations: (""),
         ),
         (
             name: Some("bar"),
@@ -446,6 +447,7 @@
             )),
             ty: 14,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("baz"),
@@ -456,6 +458,7 @@
             )),
             ty: 16,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("qux"),
@@ -468,6 +471,7 @@
             )),
             ty: 17,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("nested_mat_cx2"),
@@ -478,6 +482,7 @@
             )),
             ty: 20,
             init: None,
+            memory_decorations: (""),
         ),
     ],
     global_expressions: [

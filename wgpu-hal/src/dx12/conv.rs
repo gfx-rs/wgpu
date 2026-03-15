@@ -373,12 +373,12 @@ fn map_stencil_face(face: &wgt::StencilFaceState) -> Direct3D12::D3D12_DEPTH_STE
 pub fn map_depth_stencil(ds: &wgt::DepthStencilState) -> Direct3D12::D3D12_DEPTH_STENCIL_DESC {
     Direct3D12::D3D12_DEPTH_STENCIL_DESC {
         DepthEnable: ds.is_depth_enabled().into(),
-        DepthWriteMask: if ds.depth_write_enabled {
+        DepthWriteMask: if ds.depth_write_enabled.unwrap_or_default() {
             Direct3D12::D3D12_DEPTH_WRITE_MASK_ALL
         } else {
             Direct3D12::D3D12_DEPTH_WRITE_MASK_ZERO
         },
-        DepthFunc: map_comparison(ds.depth_compare),
+        DepthFunc: map_comparison(ds.depth_compare.unwrap_or_default()),
         StencilEnable: ds.stencil.is_enabled().into(),
         StencilReadMask: ds.stencil.read_mask as u8,
         StencilWriteMask: ds.stencil.write_mask as u8,

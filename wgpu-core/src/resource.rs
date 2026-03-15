@@ -281,34 +281,53 @@ pub enum BufferAccessError {
     #[error("Buffer range size invalid: range_size {range_size} must be multiple of 4")]
     UnalignedRangeSize { range_size: wgt::BufferAddress },
     #[error("Buffer access out of bounds: index {index} would underrun the buffer (limit: {min})")]
-    OutOfBoundsUnderrun {
+    OutOfBoundsStartOffsetUnderrun {
         index: wgt::BufferAddress,
         min: wgt::BufferAddress,
     },
     #[error(
-        "Buffer access out of bounds: last index {index} would overrun the buffer (limit: {max})"
+        "Buffer access out of bounds: start offset {index} would overrun the buffer (limit: {max})"
     )]
-    OutOfBoundsOverrun {
+    OutOfBoundsStartOffsetOverrun {
         index: wgt::BufferAddress,
         max: wgt::BufferAddress,
     },
-    #[error("Buffer map range start {start} is greater than end {end}")]
-    NegativeRange {
-        start: wgt::BufferAddress,
-        end: wgt::BufferAddress,
+    #[error(
+        "Buffer access out of bounds: start offset {index} + size {size} would overrun the buffer (limit: {max})"
+    )]
+    OutOfBoundsEndOffsetOverrun {
+        index: wgt::BufferAddress,
+        size: wgt::BufferAddress,
+        max: wgt::BufferAddress,
     },
     #[error("Buffer map aborted")]
     MapAborted,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+    #[error("Map start offset ({offset}) is out-of-bounds for buffer of size {buffer_size}")]
+    MapStartOffsetOverrun {
+        offset: wgt::BufferAddress,
+        buffer_size: wgt::BufferAddress,
+    },
+    #[error(
+        "Map end offset (start at {} + size of {}) is out-of-bounds for buffer of size {}",
+        offset,
+        size,
+        buffer_size
+    )]
+    MapEndOffsetOverrun {
+        offset: wgt::BufferAddress,
+        size: wgt::BufferAddress,
+        buffer_size: wgt::BufferAddress,
+    },
 }
 
 impl WebGpuError for BufferAccessError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::InvalidResource(e) => e,
-            Self::DestroyedResource(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
 
             Self::Failed
             | Self::AlreadyMapped
@@ -318,12 +337,13 @@ impl WebGpuError for BufferAccessError {
             | Self::UnalignedRange
             | Self::UnalignedOffset { .. }
             | Self::UnalignedRangeSize { .. }
-            | Self::OutOfBoundsUnderrun { .. }
-            | Self::OutOfBoundsOverrun { .. }
-            | Self::NegativeRange { .. }
-            | Self::MapAborted => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::OutOfBoundsStartOffsetUnderrun { .. }
+            | Self::OutOfBoundsStartOffsetOverrun { .. }
+            | Self::OutOfBoundsEndOffsetOverrun { .. }
+            | Self::MapAborted
+            | Self::MapStartOffsetOverrun { .. }
+            | Self::MapEndOffsetOverrun { .. } => ErrorType::Validation,
+        }
     }
 }
 
@@ -588,13 +608,35 @@ impl Buffer {
         if !offset.is_multiple_of(wgt::MAP_ALIGNMENT) {
             return Err((op, BufferAccessError::UnalignedOffset { offset }));
         }
-        if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+        if !range_size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             return Err((op, BufferAccessError::UnalignedRangeSize { range_size }));
         }
 
-        let range = offset..(offset + range_size);
+        if offset > self.size {
+            return Err((
+                op,
+                BufferAccessError::MapStartOffsetOverrun {
+                    offset,
+                    buffer_size: self.size,
+                },
+            ));
+        }
+        // NOTE: Should never underflow because of our earlier check.
+        if range_size > self.size - offset {
+            return Err((
+                op,
+                BufferAccessError::MapEndOffsetOverrun {
+                    offset,
+                    size: range_size,
+                    buffer_size: self.size,
+                },
+            ));
+        }
+        let end_offset = offset + range_size;
 
-        if range.start % wgt::MAP_ALIGNMENT != 0 || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+        if !offset.is_multiple_of(wgt::MAP_ALIGNMENT)
+            || !end_offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT)
+        {
             return Err((op, BufferAccessError::UnalignedRange));
         }
 
@@ -605,25 +647,6 @@ impl Buffer {
 
         if let Err(e) = self.check_usage(pub_usage) {
             return Err((op, e.into()));
-        }
-
-        if range.start > range.end {
-            return Err((
-                op,
-                BufferAccessError::NegativeRange {
-                    start: range.start,
-                    end: range.end,
-                },
-            ));
-        }
-        if range.end > self.size {
-            return Err((
-                op,
-                BufferAccessError::OutOfBoundsOverrun {
-                    index: range.end,
-                    max: self.size,
-                },
-            ));
         }
 
         let device = &self.device;
@@ -648,7 +671,7 @@ impl Buffer {
                     return Err((op, BufferAccessError::MapAlreadyPending));
                 }
                 BufferMapState::Idle => BufferMapState::Waiting(BufferPendingMapping {
-                    range,
+                    range: offset..end_offset,
                     op,
                     _parent_buffer: self.clone(),
                 }),
@@ -696,17 +719,24 @@ impl Buffer {
         if !offset.is_multiple_of(wgt::MAP_ALIGNMENT) {
             return Err(BufferAccessError::UnalignedOffset { offset });
         }
-        if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+        if !range_size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             return Err(BufferAccessError::UnalignedRangeSize { range_size });
         }
         let map_state = &*self.map_state.lock();
         match *map_state {
             BufferMapState::Init { ref staging_buffer } => {
-                // offset (u64) can not be < 0, so no need to validate the lower bound
-                if offset + range_size > self.size {
-                    return Err(BufferAccessError::OutOfBoundsOverrun {
-                        index: offset + range_size - 1,
-                        max: self.size,
+                if offset > self.size {
+                    return Err(BufferAccessError::MapStartOffsetOverrun {
+                        offset,
+                        buffer_size: self.size,
+                    });
+                }
+                // NOTE: Should never underflow because of our earlier check.
+                if range_size > self.size - offset {
+                    return Err(BufferAccessError::MapEndOffsetOverrun {
+                        offset,
+                        size: range_size,
+                        buffer_size: self.size,
                     });
                 }
                 let ptr = unsafe { staging_buffer.ptr() };
@@ -718,15 +748,22 @@ impl Buffer {
                 ref range,
                 ..
             } => {
+                if offset > range.end {
+                    return Err(BufferAccessError::OutOfBoundsStartOffsetOverrun {
+                        index: offset,
+                        max: range.end,
+                    });
+                }
                 if offset < range.start {
-                    return Err(BufferAccessError::OutOfBoundsUnderrun {
+                    return Err(BufferAccessError::OutOfBoundsStartOffsetUnderrun {
                         index: offset,
                         min: range.start,
                     });
                 }
-                if offset + range_size > range.end {
-                    return Err(BufferAccessError::OutOfBoundsOverrun {
-                        index: offset + range_size - 1,
+                if range_size > range.end - offset {
+                    return Err(BufferAccessError::OutOfBoundsEndOffsetOverrun {
+                        index: offset,
+                        size: range_size,
                         max: range.end,
                     });
                 }
@@ -821,7 +858,9 @@ impl Buffer {
                     trace.add(trace::Action::WriteBuffer {
                         id: self.to_trace(),
                         data,
-                        range: 0..self.size,
+                        // NOTE: `self.size` here corresponds to `data`'s actual length.
+                        offset: 0,
+                        size: self.size,
                         queued: true,
                     });
                 }
@@ -887,7 +926,8 @@ impl Buffer {
                         trace.add(trace::Action::WriteBuffer {
                             id: self.to_trace(),
                             data,
-                            range: range.clone(),
+                            offset: range.start,
+                            size,
                             queued: false,
                         });
                     }
@@ -986,19 +1026,18 @@ crate::impl_trackable!(Buffer);
 
 impl WebGpuError for CreateBufferError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::AccessError(e) => e,
-            Self::MissingDownlevelFlags(e) => e,
-            Self::IndirectValidationBindGroup(e) => e,
-            Self::MissingFeatures(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::AccessError(e) => e.webgpu_error_type(),
+            Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
+            Self::IndirectValidationBindGroup(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
 
             Self::UnalignedSize
             | Self::InvalidUsage(_)
             | Self::UsageMismatch(_)
-            | Self::MaxBufferSize { .. } => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::MaxBufferSize { .. } => ErrorType::Validation,
+        }
     }
 }
 
@@ -1618,12 +1657,12 @@ impl Borrow<TextureSelector> for Texture {
 
 impl WebGpuError for CreateTextureError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::CreateTextureView(e) => e,
-            Self::InvalidDimension(e) => e,
-            Self::MissingFeatures(_, e) => e,
-            Self::MissingDownlevelFlags(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::CreateTextureView(e) => e.webgpu_error_type(),
+            Self::InvalidDimension(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(_, e) => e.webgpu_error_type(),
+            Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
 
             Self::InvalidUsage(_)
             | Self::IncompatibleUsage(_, _)
@@ -1636,9 +1675,8 @@ impl WebGpuError for CreateTextureError {
             | Self::InvalidMultisampledStorageBinding
             | Self::InvalidMultisampledFormat(_)
             | Self::InvalidSampleCount(..)
-            | Self::MultisampledNotRenderAttachment => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::MultisampledNotRenderAttachment => ErrorType::Validation,
+        }
     }
 }
 
@@ -1872,10 +1910,6 @@ impl WebGpuError for CreateTextureViewError {
     }
 }
 
-#[derive(Clone, Debug, Error)]
-#[non_exhaustive]
-pub enum TextureViewDestroyError {}
-
 crate::impl_resource_type!(TextureView);
 crate::impl_labeled!(TextureView);
 crate::impl_parent_device!(TextureView);
@@ -1950,22 +1984,19 @@ pub enum CreateExternalTextureError {
 
 impl WebGpuError for CreateExternalTextureError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            CreateExternalTextureError::Device(e) => e,
-            CreateExternalTextureError::MissingFeatures(e) => e,
-            CreateExternalTextureError::InvalidResource(e) => e,
-            CreateExternalTextureError::CreateBuffer(e) => e,
-            CreateExternalTextureError::QueueWrite(e) => e,
-            CreateExternalTextureError::MissingTextureUsage(e) => e,
+        match self {
+            CreateExternalTextureError::Device(e) => e.webgpu_error_type(),
+            CreateExternalTextureError::MissingFeatures(e) => e.webgpu_error_type(),
+            CreateExternalTextureError::InvalidResource(e) => e.webgpu_error_type(),
+            CreateExternalTextureError::CreateBuffer(e) => e.webgpu_error_type(),
+            CreateExternalTextureError::QueueWrite(e) => e.webgpu_error_type(),
+            CreateExternalTextureError::MissingTextureUsage(e) => e.webgpu_error_type(),
             CreateExternalTextureError::IncorrectPlaneCount { .. }
             | CreateExternalTextureError::InvalidPlaneMultisample(_)
             | CreateExternalTextureError::InvalidPlaneSampleType { .. }
             | CreateExternalTextureError::InvalidPlaneDimension(_)
-            | CreateExternalTextureError::InvalidPlaneFormat { .. } => {
-                return ErrorType::Validation
-            }
-        };
-        e.webgpu_error_type()
+            | CreateExternalTextureError::InvalidPlaneFormat { .. } => ErrorType::Validation,
+        }
     }
 }
 
@@ -2089,17 +2120,16 @@ crate::impl_trackable!(Sampler);
 
 impl WebGpuError for CreateSamplerError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::MissingFeatures(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
 
             Self::InvalidLodMinClamp(_)
             | Self::InvalidLodMaxClamp { .. }
             | Self::InvalidAnisotropy(_)
             | Self::InvalidFilterModeWithAnisotropy { .. }
-            | Self::InvalidMipmapFilterModeWithAnisotropy { .. } => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::InvalidMipmapFilterModeWithAnisotropy { .. } => ErrorType::Validation,
+        }
     }
 }
 
@@ -2118,13 +2148,12 @@ pub enum CreateQuerySetError {
 
 impl WebGpuError for CreateQuerySetError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::MissingFeatures(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
 
-            Self::TooManyQueries { .. } | Self::ZeroCount => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            Self::TooManyQueries { .. } | Self::ZeroCount => ErrorType::Validation,
+        }
     }
 }
 

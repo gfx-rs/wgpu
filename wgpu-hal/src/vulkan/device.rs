@@ -1420,7 +1420,19 @@ impl crate::Device for super::Device {
         let vk_set_layouts = desc
             .bind_group_layouts
             .iter()
-            .map(|bgl| bgl.raw)
+            .map(|bgl| match bgl {
+                Some(bgl) => bgl.raw,
+                None => {
+                    // `VUID-VkPipelineLayoutCreateInfo-pSetLayouts-parameter`
+                    // says `VK_NULL_HANDLE` is allowed but
+                    // `VUID-VkPipelineLayoutCreateInfo-graphicsPipelineLibrary-06753`
+                    // says it's not, unless the `graphicsPipelineLibrary`
+                    // feature is enabled.
+                    //
+                    // We use an empty descriptor set layout to work around this.
+                    self.shared.empty_descriptor_set_layout
+                }
+            })
             .collect::<Vec<_>>();
         let vk_immediates_ranges: Option<vk::PushConstantRange> = if desc.immediate_size != 0 {
             Some(vk::PushConstantRange {
@@ -1452,7 +1464,11 @@ impl crate::Device for super::Device {
         }
 
         let mut binding_map = BTreeMap::new();
-        for (group, &layout) in desc.bind_group_layouts.iter().enumerate() {
+        for (group, layout) in desc.bind_group_layouts.iter().enumerate() {
+            let Some(layout) = layout else {
+                continue;
+            };
+
             for &(binding, binding_info) in &layout.binding_map {
                 binding_map.insert(
                     naga::ResourceBinding {
@@ -1916,8 +1932,8 @@ impl crate::Device for super::Device {
             if ds.is_depth_enabled() {
                 vk_depth_stencil = vk_depth_stencil
                     .depth_test_enable(true)
-                    .depth_write_enable(ds.depth_write_enabled)
-                    .depth_compare_op(conv::map_comparison(ds.depth_compare));
+                    .depth_write_enable(ds.depth_write_enabled.unwrap_or_default())
+                    .depth_compare_op(conv::map_comparison(ds.depth_compare.unwrap_or_default()));
             }
             if ds.stencil.is_enabled() {
                 let s = &ds.stencil;

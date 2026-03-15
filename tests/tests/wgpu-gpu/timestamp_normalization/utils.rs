@@ -67,7 +67,9 @@ static U64_MUL_U32: GpuTestConfiguration = GpuTestConfiguration::new()
             .limits(Limits {
                 max_storage_buffer_binding_size: 256 * 1024 * 1024,
                 ..Limits::downlevel_defaults()
-            }),
+            })
+            // https://github.com/gfx-rs/wgpu/issues/9187
+            .expect_fail(wgpu_test::FailureCase::kosmic_krisp().panic("18446744073709551615 * 4294967295 should be 79228162495817593515539431425 but is 39614081238685424718767456257\n  left: 39614081238685424718767456257\n right: 79228162495817593515539431425")),
     )
     .run_sync(test_u64_mul_u32);
 

@@ -1,5 +1,5 @@
 use alloc::boxed::Box;
-use core::ops::{Deref, DerefMut};
+use core::ops::{Deref, RangeBounds};
 
 use crate::{api::DeferredCommandBufferActions, *};
 
@@ -55,9 +55,7 @@ static_assertions::assert_impl_all!(PollType: Send, Sync);
 
 /// A write-only view into a staging buffer.
 ///
-/// Reading into this buffer won't yield the contents of the buffer from the
-/// GPU and is likely to be slow. Because of this, although [`AsMut`] is
-/// implemented for this type, [`AsRef`] is not.
+/// This type is what [`Queue::write_buffer_with()`] returns.
 pub struct QueueWriteBufferView {
     queue: Queue,
     buffer: Buffer,
@@ -75,31 +73,44 @@ impl QueueWriteBufferView {
     }
 }
 
-impl Deref for QueueWriteBufferView {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        self.inner.slice()
-    }
-}
-
-impl DerefMut for QueueWriteBufferView {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.inner.slice_mut()
-    }
-}
-
-impl AsMut<[u8]> for QueueWriteBufferView {
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.inner.slice_mut()
-    }
-}
-
 impl Drop for QueueWriteBufferView {
     fn drop(&mut self) {
         self.queue
             .inner
             .write_staging_buffer(&self.buffer.inner, self.offset, &self.inner);
+    }
+}
+
+/// These methods are equivalent to the methods of the same names on [`WriteOnly`].
+impl QueueWriteBufferView {
+    /// Returns the length of this view; the number of bytes to be written.
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Returns `true` if the view has a length of 0.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns a [`WriteOnly`] reference to a portion of this.
+    ///
+    /// `.slice(..)` can be used to access the whole data.
+    pub fn slice<'a, S: RangeBounds<usize>>(&'a mut self, bounds: S) -> WriteOnly<'a, [u8]> {
+        // SAFETY:
+        // * this is a write mapping
+        // * function signature ensures no aliasing
+        unsafe { self.inner.write_slice() }.into_slice(bounds)
+    }
+
+    /// Copies all elements from src into `self`.
+    ///
+    /// The length of `src` must be the same as `self`.
+    ///
+    /// This method is equivalent to
+    /// [`self.slice(..).copy_from_slice(src)`][WriteOnly::copy_from_slice].
+    pub fn copy_from_slice(&mut self, src: &[u8]) {
+        self.slice(..).copy_from_slice(src)
     }
 }
 

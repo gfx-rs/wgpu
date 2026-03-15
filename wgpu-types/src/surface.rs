@@ -265,8 +265,16 @@ pub enum SurfaceStatus {
     /// match the surface. A re-configuration is needed.
     Suboptimal,
     /// Unable to get the next frame, timed out.
+    ///
+    /// Try reconfiguring your surface.
     Timeout,
+    /// The window is occluded (e.g. minimized or behind another window).
+    ///
+    /// Try again once the window is no longer occluded.
+    Occluded,
     /// The surface under the swap chain has changed.
+    ///
+    /// Try reconfiguring your surface.
     Outdated,
     /// The surface under the swap chain is lost.
     Lost,

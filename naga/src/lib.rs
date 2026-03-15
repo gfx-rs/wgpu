@@ -99,6 +99,7 @@ void main() {
     )
 )]
 #![no_std]
+#![forbid(unsafe_code)]
 
 #[cfg(std)]
 extern crate std;

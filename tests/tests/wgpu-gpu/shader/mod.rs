@@ -279,7 +279,7 @@ async fn shader_input_output_test(
         .device
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&bgl],
+            bind_group_layouts: &[Some(&bgl)],
             immediate_size: match storage_type {
                 InputStorageType::Immediate => MAX_BUFFER_SIZE as u32,
                 _ => 0,

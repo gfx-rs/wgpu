@@ -480,8 +480,7 @@ pub(crate) struct AutoConversionLeafScalarError {
 pub(crate) struct ConcretizationFailedError {
     pub expr_span: Span,
     pub expr_type: String,
-    pub scalar: String,
-    pub inner: ConstantEvaluatorError,
+    pub concretization_preferences: Vec<(String, ConstantEvaluatorError)>,
 }
 
 impl<'a> Error<'a> {
@@ -1161,19 +1160,20 @@ impl<'a> Error<'a> {
                 let ConcretizationFailedError {
                     expr_span,
                     ref expr_type,
-                    ref scalar,
-                    ref inner,
+                    ref concretization_preferences,
                 } = **error;
                 ParseError {
-                    message: format!("failed to convert expression to a concrete type: {inner}"),
+                    message: "failed to convert expression to a concrete type".to_string(),
                     labels: vec![(
                         expr_span,
                         format!("this expression has type {expr_type}").into(),
                     )],
-                    notes: vec![format!(
-                        "the expression should have been converted to have {} scalar type",
-                        scalar
-                    )],
+                    notes: concretization_preferences
+                        .iter()
+                        .map(|&(ref scalar, ref err)|
+                            format!("the expression couldn't be converted to have {scalar} scalar type: {err}")
+                        )
+                        .collect(),
                 }
             }
             Error::ExceededLimitForNestedBraces { span, limit } => ParseError {

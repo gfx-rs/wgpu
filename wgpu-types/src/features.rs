@@ -68,6 +68,9 @@ mod webgpu_impl {
 
     #[doc(hidden)]
     pub const WEBGPU_FEATURE_IMMEDIATES: u64 = 1 << 16;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_PRIMITIVE_INDEX: u64 = 1 << 17;
 }
 
 macro_rules! bitflags_array_impl {
@@ -647,12 +650,13 @@ bitflags_array! {
         /// Implies [`Features::TIMESTAMP_QUERY`] is supported.
         ///
         /// Additionally allows for timestamp writes on command encoders
-        /// using  [`CommandEncoder::write_timestamp`].
+        /// using [`CommandEncoder::write_timestamp`].
         ///
         /// Supported platforms:
         /// - Vulkan
         /// - DX12
         /// - Metal
+        /// - OpenGL (with GL_ARB_timer_query)
         ///
         /// This is a native only feature.
         ///
@@ -670,6 +674,7 @@ bitflags_array! {
         /// - Vulkan
         /// - DX12
         /// - Metal (AMD & Intel, not Apple GPUs)
+        /// - OpenGL (with GL_ARB_timer_query)
         ///
         /// This is generally not available on tile-based rasterization GPUs.
         ///
@@ -986,20 +991,9 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const SHADER_I16 = 1 << 34;
-        /// Enables `builtin(primitive_index)` in fragment shaders.
-        ///
-        /// Note: enables geometry processing for pipelines using the builtin.
-        /// This may come with a significant performance impact on some hardware.
-        /// Other pipelines are not affected.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        /// - DX12
-        /// - Metal (some)
-        /// - OpenGL (some)
-        ///
-        /// This is a native only feature.
-        const SHADER_PRIMITIVE_INDEX = 1 << 35;
+
+        // Bit 35 (formerly SHADER_PRIMITIVE_INDEX) is available.
+
         /// Allows shaders to use the `early_depth_test` attribute.
         ///
         /// The attribute is applied to the fragment shader entry point. It can be used in two
@@ -1223,7 +1217,7 @@ bitflags_array! {
         /// [this comment](https://github.com/gfx-rs/wgpu/issues/3103#issuecomment-2833058367).
         ///
         #[doc = link_to_wgpu_docs!(["`Device::create_shader_module_passthrough`"]: "struct.Device.html#method.create_shader_module_passthrough")]
-        const EXPERIMENTAL_PASSTHROUGH_SHADERS = 1 << 52;
+        const PASSTHROUGH_SHADERS = 1 << 52;
 
         /// Enables shader barycentric coordinates.
         ///
@@ -1304,6 +1298,41 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const SHADER_DRAW_INDEX = 1 << 59;
+        /// Allows the user to create arrays of acceleration structures in shaders:
+        ///
+        /// ex.
+        /// - `var tlas: binding_array<acceleration_structure, 10>` (WGSL)
+        ///
+        /// This capability allows them to exist and to be indexed by dynamically uniform values.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const ACCELERATION_STRUCTURE_BINDING_ARRAY = 1 << 60;
+
+        /// Enables the `@coherent` memory decoration on storage buffer variables.
+        ///
+        /// Backend mapping:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal (3.2+)
+        /// - GLES (ES 3.1+ / GL 4.3+)
+        ///
+        /// This is a native only feature.
+        const MEMORY_DECORATION_COHERENT = 1 << 61;
+
+        /// Enables the `@volatile` memory decoration on storage buffer variables.
+        ///
+        /// Backend mapping:
+        /// - Vulkan
+        /// - GLES (ES 3.1+ / GL 4.3+)
+        ///
+        /// This is a native only feature.
+        const MEMORY_DECORATION_VOLATILE = 1 << 62;
+
+        // Adding a new feature? Bit 35 (formerly SHADER_PRIMITIVE_INDEX) is available.
     }
 
     /// Features that are not guaranteed to be supported.
@@ -1332,6 +1361,7 @@ bitflags_array! {
         /// Supported platforms:
         /// - desktops
         /// - some mobile chips
+        /// - WebGPU
         ///
         /// This is a web and native feature.
         const DEPTH_CLIP_CONTROL = WEBGPU_FEATURE_DEPTH_CLIP_CONTROL;
@@ -1343,6 +1373,7 @@ bitflags_array! {
         /// - DX12
         /// - Metal
         /// - OpenGL
+        /// - WebGPU
         ///
         /// This is a web and native feature.
         ///
@@ -1363,6 +1394,7 @@ bitflags_array! {
         /// Supported Platforms:
         /// - desktops
         /// - Mobile (All Apple9 and some Apple7 and Apple8 devices)
+        /// - WebGPU
         ///
         /// This is a web and native feature.
         const TEXTURE_COMPRESSION_BC = WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC;
@@ -1376,6 +1408,7 @@ bitflags_array! {
         /// Supported Platforms:
         /// - desktops
         /// - Mobile (All Apple9 and some Apple7 and Apple8 devices)
+        /// - WebGPU
         ///
         /// This is a web and native feature.
         const TEXTURE_COMPRESSION_BC_SLICED_3D = WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC_SLICED_3D;
@@ -1392,6 +1425,7 @@ bitflags_array! {
         /// Supported Platforms:
         /// - Vulkan on Intel
         /// - Mobile (some)
+        /// - WebGPU
         ///
         /// This is a web and native feature.
         const TEXTURE_COMPRESSION_ETC2 = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ETC2;
@@ -1411,6 +1445,7 @@ bitflags_array! {
         /// Supported Platforms:
         /// - Vulkan on Intel
         /// - Mobile (some)
+        /// - WebGPU
         ///
         /// This is a web and native feature.
         const TEXTURE_COMPRESSION_ASTC = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC;
@@ -1425,6 +1460,7 @@ bitflags_array! {
         /// - Vulkan (some)
         /// - Metal on Apple3+
         /// - OpenGL/WebGL (some)
+        /// - WebGPU
         ///
         /// Not Supported:
         /// - DX12
@@ -1452,6 +1488,8 @@ bitflags_array! {
         /// - Vulkan
         /// - DX12
         /// - Metal
+        /// - OpenGL (with GL_ARB_timer_query)
+        /// - WebGPU
         ///
         /// This is a web and native feature.
         ///
@@ -1473,6 +1511,7 @@ bitflags_array! {
         /// - DX12
         /// - Metal on Apple3+ or Mac1+
         /// - OpenGL (Desktop 4.2+ with ARB_shader_draw_parameters only)
+        /// - WebGPU
         ///
         /// Not Supported:
         /// - OpenGL ES / WebGL
@@ -1490,6 +1529,7 @@ bitflags_array! {
         /// - Vulkan
         /// - Metal
         /// - DX12
+        /// - WebGPU
         ///
         /// This is a web and native feature.
         const SHADER_F16 = WEBGPU_FEATURE_SHADER_F16;
@@ -1500,6 +1540,7 @@ bitflags_array! {
         /// - Vulkan
         /// - DX12
         /// - Metal
+        /// - WebGPU
         ///
         /// This is a web and native feature.
         ///
@@ -1512,6 +1553,7 @@ bitflags_array! {
         /// - Vulkan
         /// - DX12
         /// - Metal
+        /// - WebGPU
         ///
         /// This is a web and native feature.
         ///
@@ -1527,6 +1569,7 @@ bitflags_array! {
         /// - DX12
         /// - Metal on macOS or Apple9+ GPUs, optional on iOS/iPadOS with Apple7/8 GPUs
         /// - GL with one of `GL_ARB_color_buffer_float`/`GL_EXT_color_buffer_float`/`OES_texture_float_linear`
+        /// - WebGPU
         ///
         /// This is a web and native feature.
         const FLOAT32_FILTERABLE = WEBGPU_FEATURE_FLOAT32_FILTERABLE;
@@ -1535,6 +1578,7 @@ bitflags_array! {
         ///
         /// Supported Platforms:
         /// - Vulkan
+        /// - WebGPU
         const FLOAT32_BLENDABLE = WEBGPU_FEATURE_FLOAT32_BLENDABLE;
 
         /// Allows two outputs from a shader to be used for blending.
@@ -1547,6 +1591,7 @@ bitflags_array! {
         /// - Metal (with MSL 1.2+)
         /// - Vulkan (with dualSrcBlend)
         /// - DX12
+        /// - WebGPU
         ///
         /// This is a web and native feature.
         const DUAL_SOURCE_BLENDING = WEBGPU_FEATURE_DUAL_SOURCE_BLENDING;
@@ -1555,7 +1600,9 @@ bitflags_array! {
         ///
         /// Supported platforms:
         /// - Vulkan (mainly on Desktop GPUs)
+        /// - Metal
         /// - GL (Desktop or `GL_EXT_clip_cull_distance`)
+        /// - WebGPU
         ///
         /// This is a web and native feature.
         const CLIP_DISTANCES = WEBGPU_FEATURE_CLIP_DISTANCES;
@@ -1580,6 +1627,7 @@ bitflags_array! {
         /// - Vulkan
         /// - Metal
         /// - OpenGL (emulated with uniforms)
+        /// - WebGPU
         ///
         /// WebGPU support is currently a proposal and will be available in browsers in the future.
         ///
@@ -1590,6 +1638,21 @@ bitflags_array! {
         #[doc = link_to_wgpu_docs!(["`RenderPass::set_immediates`"]: "struct.RenderPass.html#method.set_immediates")]
         /// [`Limits::max_immediate_size`]: super::Limits
         const IMMEDIATES = WEBGPU_FEATURE_IMMEDIATES;
+
+        /// Enables `builtin(primitive_index)` in fragment shaders.
+        ///
+        /// Note: enables geometry processing for pipelines using the builtin.
+        /// This may come with a significant performance impact on some hardware.
+        /// Other pipelines are not affected.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with geometryShader)
+        /// - DX12
+        /// - Metal (some)
+        /// - OpenGL (some)
+        ///
+        /// This is a web and native feature.
+        const PRIMITIVE_INDEX = WEBGPU_FEATURE_PRIMITIVE_INDEX;
     }
 }
 
@@ -1621,7 +1684,6 @@ impl Features {
                 | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_POINTS.bits()
                 | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
                 | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
-                | FeaturesWGPU::EXPERIMENTAL_PASSTHROUGH_SHADERS.bits()
                 | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits(),
             FeaturesWebGPU::empty().bits(),
         ]))

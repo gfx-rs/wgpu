@@ -45,12 +45,12 @@ metal::float4 splat(
 metal::float2 splat_assignment(
 ) {
     metal::float2 a = metal::float2(2.0);
-    metal::float2 _e4 = a;
-    a = _e4 + metal::float2(1.0);
-    metal::float2 _e8 = a;
-    a = _e8 - metal::float2(3.0);
-    metal::float2 _e12 = a;
-    a = _e12 / metal::float2(4.0);
+    metal::float2 _e3 = a;
+    a = _e3 + metal::float2(1.0);
+    metal::float2 _e7 = a;
+    a = _e7 - metal::float2(3.0);
+    metal::float2 _e11 = a;
+    a = _e11 / metal::float2(4.0);
     metal::float2 _e15 = a;
     return _e15;
 }
@@ -263,15 +263,15 @@ void arithmetic(
         metal::float2 rem4_1 = metal::fmod(metal::float2(2.0), metal::float2(1.0));
         metal::float2 rem5_1 = metal::fmod(metal::float2(2.0), metal::float2(1.0));
     }
-    metal::float3x3 add = metal::float3x3 {} + metal::float3x3 {};
-    metal::float3x3 sub = metal::float3x3 {} - metal::float3x3 {};
+    metal::float3x3 add = metal::float3x3(metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0));
+    metal::float3x3 sub = metal::float3x3(metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0));
     metal::float3x3 mul_scalar0_ = metal::float3x3 {} * 1.0;
     metal::float3x3 mul_scalar1_ = 2.0 * metal::float3x3 {};
     metal::float3 mul_vector0_ = metal::float4x3 {} * metal::float4(1.0);
     metal::float4 mul_vector1_ = metal::float3(2.0) * metal::float4x3 {};
-    metal::float3x3 mul = metal::float4x3 {} * metal::float3x4 {};
-    int _e175 = prevent_const_eval;
-    wgpu_7437_ = as_type<int>(as_type<uint>(_e175) + as_type<uint>((-2147483647 - 1)));
+    metal::float3x3 mul = metal::float3x3(metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0));
+    int _e205 = prevent_const_eval;
+    wgpu_7437_ = as_type<int>(as_type<uint>(_e205) + as_type<uint>((-2147483647 - 1)));
     return;
 }
 
@@ -356,10 +356,10 @@ void assignment(
     a_1 = as_type<int>(as_type<uint>(_e7) - as_type<uint>(1));
     int _e9 = a_1;
     int _e10 = a_1;
-    a_1 = as_type<int>(as_type<uint>(_e10) * as_type<uint>(_e9));
+    a_1 = as_type<int>(as_type<uint>(_e9) * as_type<uint>(_e10));
     int _e12 = a_1;
     int _e13 = a_1;
-    a_1 = naga_div(_e13, _e12);
+    a_1 = naga_div(_e12, _e13);
     int _e15 = a_1;
     a_1 = naga_mod(_e15, 1);
     int _e17 = a_1;

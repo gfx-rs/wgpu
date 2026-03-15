@@ -196,22 +196,22 @@ OpLine %3 27 18
 OpLine %3 27 9
 OpStore %59 %93
 OpLine %3 28 9
-%94 = OpLoad  %4  %59
+%94 = OpAccessChain  %60  %55 %36
+%95 = OpLoad  %4  %94
+%96 = OpLoad  %4  %59
 OpLine %3 28 9
-%95 = OpFMul  %4  %94 %52
-%96 = OpAccessChain  %60  %55 %36
-%97 = OpLoad  %4  %96
-%98 = OpFAdd  %4  %97 %95
+%97 = OpFMul  %4  %96 %52
+%98 = OpFAdd  %4  %95 %97
 OpLine %3 28 9
 %99 = OpAccessChain  %60  %55 %36
 OpStore %99 %98
 OpLine %3 29 9
-%100 = OpLoad  %4  %59
+%100 = OpAccessChain  %60  %55 %30
+%101 = OpLoad  %4  %100
+%102 = OpLoad  %4  %59
 OpLine %3 29 9
-%101 = OpFMul  %4  %100 %53
-%102 = OpAccessChain  %60  %55 %30
-%103 = OpLoad  %4  %102
-%104 = OpFAdd  %4  %103 %101
+%103 = OpFMul  %4  %102 %53
+%104 = OpFAdd  %4  %101 %103
 OpLine %3 29 9
 %105 = OpAccessChain  %60  %55 %30
 OpStore %105 %104
@@ -219,8 +219,9 @@ OpBranch %91
 %91 = OpLabel
 OpBranch %67
 %67 = OpLabel
-OpLine %3 26 29
+OpLine %3 1 1
 %106 = OpLoad  %9  %57
+OpLine %3 26 29
 %107 = OpIAdd  %9  %106 %54
 OpLine %3 26 29
 OpStore %57 %107

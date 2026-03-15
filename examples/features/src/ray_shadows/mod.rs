@@ -94,7 +94,7 @@ impl crate::framework::Example for Example {
 
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits {
-            max_immediate_size: 12,
+            max_immediate_size: 16,
             ..wgpu::Limits::default()
         }
         .using_minimum_supported_acceleration_structure_values()
@@ -185,8 +185,8 @@ impl crate::framework::Example for Example {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&bind_group_layout],
-            immediate_size: 12,
+            bind_group_layouts: &[Some(&bind_group_layout)],
+            immediate_size: 16,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -352,7 +352,9 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::default(),
-    base_test_parameters: wgpu_test::TestParameters::default(),
+    base_test_parameters: wgpu_test::TestParameters::default()
+        // https://github.com/gfx-rs/wgpu/issues/9100
+        .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::METAL)),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,
 };

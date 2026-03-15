@@ -1,7 +1,7 @@
 //! [`Backend`], [`Backends`], and backend-specific options.
 
 use alloc::string::String;
-use core::hash::Hash;
+use core::{hash::Hash, str::FromStr};
 
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
@@ -546,6 +546,7 @@ pub enum DxcShaderModel {
     V6_6,
     V6_7,
     V6_8,
+    V6_9,
 }
 
 impl DxcShaderModel {
@@ -553,9 +554,9 @@ impl DxcShaderModel {
     pub fn from_dxc_version(major: u32, minor: u32) -> Self {
         // DXC version roughly has corresponded to shader model so far, where DXC 1.x supports SM 6.x.
         // See discussion in https://discord.com/channels/590611987420020747/996417435374714920/1471234702206701650.
-        // Presumably DXC 2.0 and up will still support shader model 6.8.
+        // Presumably DXC 2.0 and up will still support shader model 6.9.
         if major > 1 {
-            Self::V6_8
+            Self::V6_9
         } else {
             Self::from_parts(6, minor)
         }
@@ -564,7 +565,7 @@ impl DxcShaderModel {
     /// Parse a DxcShaderModel from its version components.
     pub fn from_parts(major: u32, minor: u32) -> Self {
         if major > 6 || minor > 8 {
-            Self::V6_8
+            Self::V6_9
         } else {
             match minor {
                 0 => DxcShaderModel::V6_0,
@@ -575,8 +576,10 @@ impl DxcShaderModel {
                 5 => DxcShaderModel::V6_5,
                 6 => DxcShaderModel::V6_6,
                 7 => DxcShaderModel::V6_7,
-                // >= 6.8
-                _ => DxcShaderModel::V6_8,
+                8 => DxcShaderModel::V6_8,
+                9 => DxcShaderModel::V6_9,
+                // > 6.9
+                _ => DxcShaderModel::V6_9,
             }
         }
     }
@@ -629,16 +632,13 @@ impl Dx12Compiler {
     /// - `StaticDxc`
     #[must_use]
     pub fn from_env() -> Option<Self> {
-        let value = crate::env::var("WGPU_DX12_COMPILER")
-            .as_deref()?
-            .to_lowercase();
-        match value.as_str() {
-            "dxc" | "dynamicdxc" => Some(Self::default_dynamic_dxc()),
-            "staticdxc" => Some(Self::StaticDxc),
-            "fxc" => Some(Self::Fxc),
-            "auto" => Some(Self::Auto),
-            _ => None,
-        }
+        let env = crate::env::var("WGPU_DX12_COMPILER")?;
+        env.parse().map_err(|expected_msg| {
+            log::warn!(
+                "Unknown value `{env:?}` for `WGPU_DX12_COMPILER` environment variable. {expected_msg}"
+            )
+        })
+        .ok()
     }
 
     /// Takes the given compiler, modifies it based on the `WGPU_DX12_COMPILER` environment variable, and returns the result.
@@ -651,6 +651,20 @@ impl Dx12Compiler {
         } else {
             self
         }
+    }
+}
+
+impl FromStr for Dx12Compiler {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(match value.to_lowercase().as_str() {
+            "dxc" | "dynamicdxc" => Self::default_dynamic_dxc(),
+            "staticdxc" => Self::StaticDxc,
+            "fxc" => Self::Fxc,
+            "auto" => Self::Auto,
+            _ => return Err("Expected `dynamicdxc` (alias `dxc`), `staticdxc`, `fxc`, or `auto`."),
+        })
     }
 }
 

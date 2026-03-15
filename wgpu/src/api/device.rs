@@ -66,7 +66,7 @@ impl Device {
                 noop: NoopBackendOptions { enable: true },
                 ..Default::default()
             },
-            ..Default::default()
+            ..InstanceDescriptor::new_without_display_handle()
         });
 
         // Both of these futures are trivial and should complete instantaneously,

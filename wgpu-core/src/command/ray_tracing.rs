@@ -522,6 +522,51 @@ impl CommandBufferMutable {
         }
         Ok(())
     }
+
+    pub(crate) fn set_acceleration_structure_dependencies(&self, snatch_guard: &SnatchGuard) {
+        profiling::scope!("CommandEncoder::[submission]::set_acceleration_structure_dependencies");
+        let tlas_dependencies_locks: Vec<_> = self
+            .as_actions
+            .iter()
+            .filter_map(|action| {
+                if let AsAction::UseTlas(tlas) = action {
+                    Some(tlas.dependencies.read())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let mut tlas_dependencies_lock_iter = tlas_dependencies_locks.iter();
+        let mut dependencies = Vec::new();
+        for action in &self.as_actions {
+            match action {
+                AsAction::Build(build) => {
+                    for tlas_build in build.tlas_s_built.iter() {
+                        for dependency in &tlas_build.dependencies {
+                            if let Some(dependency) = dependency.raw(snatch_guard) {
+                                dependencies.push(dependency);
+                            }
+                        }
+                    }
+                }
+                AsAction::UseTlas(_tlas) => {
+                    let tlas_dependencies = tlas_dependencies_lock_iter.next().unwrap(); // _tlas.dependencies.read();
+                    for dependency in tlas_dependencies.iter() {
+                        if let Some(dependency) = dependency.raw(snatch_guard) {
+                            dependencies.push(dependency);
+                        }
+                    }
+                }
+            }
+        }
+        if !dependencies.is_empty() {
+            unsafe {
+                self.encoder
+                    .raw
+                    .set_acceleration_structure_dependencies(&self.encoder.list, &dependencies);
+            }
+        }
+    }
 }
 
 ///iterates over the blas iterator, and it's geometry, pushing the buffers into a storage vector (and also some validation).

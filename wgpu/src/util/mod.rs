@@ -84,7 +84,8 @@ impl DownloadBuffer {
 impl core::ops::Deref for DownloadBuffer {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
-        self.mapped_range.slice()
+        // SAFETY: `self.mapped_range` is always a read mapping
+        unsafe { self.mapped_range.read_slice() }
     }
 }
 

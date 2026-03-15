@@ -27,7 +27,6 @@ use crate::{
 use crate::span::{AddSpan as _, WithSpan};
 pub use analyzer::{ExpressionInfo, FunctionInfo, GlobalUse, Uniformity, UniformityRequirements};
 pub use compose::ComposeError;
-pub use expression::builtin::ZeroValueError;
 pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
 pub use function::{CallError, FunctionError, LocalVariableError, SubgroupError};
@@ -209,6 +208,12 @@ bitflags::bitflags! {
         const RAY_TRACING_PIPELINE = 1 << 38;
         /// Support for draw index builtin
         const DRAW_INDEX = 1 << 39;
+        /// Support for binding arrays of acceleration structures.
+        const ACCELERATION_STRUCTURE_BINDING_ARRAY = 1 << 40;
+        /// Support for the `@coherent` memory decoration on storage buffers.
+        const MEMORY_DECORATION_COHERENT = 1 << 41;
+        /// Support for the `@volatile` memory decoration on storage buffers.
+        const MEMORY_DECORATION_VOLATILE = 1 << 42;
     }
 }
 
@@ -771,6 +776,10 @@ impl Validator {
                     }
                     .with_span_handle(handle, &module.types)
                 })?;
+            debug_assert!(
+                ty_info.flags.contains(TypeFlags::CONSTRUCTIBLE)
+                    == module.types[handle].inner.is_constructible(&module.types)
+            );
             mod_info.type_flags.push(ty_info.flags);
             self.types[handle.index()] = ty_info;
         }

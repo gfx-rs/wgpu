@@ -511,14 +511,7 @@ impl<'a> Lexer<'a> {
         extension: ImplementedEnableExtension,
         span: Span,
     ) -> Result<'static, ()> {
-        if self.enable_extensions.contains(extension) {
-            Ok(())
-        } else {
-            Err(Box::new(Error::EnableExtensionNotEnabled {
-                kind: extension.into(),
-                span,
-            }))
-        }
+        self.enable_extensions.require(extension, span)
     }
 
     /// Calls the function with a lexer and returns the result of the function as well as the span for everything the function parsed

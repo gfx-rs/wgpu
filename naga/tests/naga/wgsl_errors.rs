@@ -2224,10 +2224,10 @@ fn invalid_local_vars() {
             var not_okay: ptr<storage, array<f32>> = &(*okay).data;
         }
         ":
-        Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::LocalVariable {
+        Err(valid::ValidationError::Function {
+            source: valid::FunctionError::LocalVariable {
                 name: local_var_name,
-                source: naga::valid::LocalVariableError::InvalidType(_),
+                source: valid::LocalVariableError::InvalidType(_),
                 ..
             },
             ..
@@ -2241,16 +2241,106 @@ fn invalid_local_vars() {
             var x: atomic<u32>;
         }
         ":
-        Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::LocalVariable {
+        Err(valid::ValidationError::Function {
+            source: valid::FunctionError::LocalVariable {
                 name: local_var_name,
-                source: naga::valid::LocalVariableError::InvalidType(_),
+                source: valid::LocalVariableError::InvalidType(_),
                 ..
             },
             ..
         })
         if local_var_name == "x"
     }
+
+    // Rejected in statement lowering
+    // There is a similar validator test in `validation.rs`.
+    check(
+        "
+        override len: u32;
+        var<workgroup> arr: array<u32, len>;
+        fn f() {
+            let x: array<u32, len> = arr;
+        }
+        ",
+        r#"error: type `x` is not constructible
+  ┌─ wgsl:5:17
+  │
+5 │             let x: array<u32, len> = arr;
+  │                 ^ type is not constructible
+
+"#,
+    );
+}
+
+#[test]
+fn invalid_zero_value_constructors() {
+    // There are similar validator tests in `validation.rs`.
+
+    // Rejected in constructor lowering
+    check(
+        "
+        fn f() {
+            let x = array<u32>();
+        }
+        ",
+        r#"error: type `array<u32>` is not constructible
+  ┌─ wgsl:3:21
+  │
+3 │             let x = array<u32>();
+  │                     ^^^^^^^^^^ type is not constructible
+
+"#,
+    );
+
+    // Rejected in constructor lowering
+    check(
+        "
+        override len: u32;
+        fn f() {
+            let x = array<u32, len>();
+        }
+        ",
+        r#"error: type `array<u32, len>` is not constructible
+  ┌─ wgsl:4:21
+  │
+4 │             let x = array<u32, len>();
+  │                     ^^^^^^^^^^^^^^^ type is not constructible
+
+"#,
+    );
+
+    // Rejected in constructor lowering
+    check(
+        "
+        fn f() {
+            let x = array<u32>(0, 1, 2);
+        }
+        ",
+        r#"error: type `array<u32>` is not constructible
+  ┌─ wgsl:3:21
+  │
+3 │             let x = array<u32>(0, 1, 2);
+  │                     ^^^^^^^^^^ type is not constructible
+
+"#,
+    );
+
+    // Rejected in constructor lowering
+    check(
+        "
+        struct Unsized { data: array<f32> }
+        fn main() {
+            var not_okay: Unsized = Unsized();
+        }
+        ",
+        r#"error: type `Unsized` is not constructible
+  ┌─ wgsl:4:37
+  │
+4 │             var not_okay: Unsized = Unsized();
+  │                                     ^^^^^^^ type is not constructible
+
+"#,
+    );
 }
 
 #[test]
@@ -4595,7 +4685,7 @@ fn binding_array_requires_capability() {
         Capabilities::TEXTURE_EXTERNAL
     }
 
-    // Acceleration structures are not allowed in binding arrays
+    // Binding arrays of acceleration structures require a capability.
     check_validation! {
         r#"
             enable wgpu_ray_query;
@@ -4603,10 +4693,12 @@ fn binding_array_requires_capability() {
             var acc_struct_array: binding_array<acceleration_structure, 10>;
         "#:
         Err(naga::valid::ValidationError::GlobalVariable {
-            source: naga::valid::GlobalVariableError::InvalidBindingArray(_),
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::ACCELERATION_STRUCTURE_BINDING_ARRAY
+            ),
             ..
         }),
-        Capabilities::all()
+        Capabilities::RAY_QUERY
     }
 }
 

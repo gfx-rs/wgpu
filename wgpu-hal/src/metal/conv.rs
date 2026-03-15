@@ -1,7 +1,13 @@
-use objc2_foundation::NSRange;
+use objc2::rc::Retained;
+use objc2_foundation::{NSArray, NSRange};
 use objc2_metal::{
-    MTLBlendFactor, MTLBlendOperation, MTLBlitOption, MTLClearColor, MTLColorWriteMask,
-    MTLCompareFunction, MTLCullMode, MTLOrigin, MTLPrimitiveTopologyClass, MTLPrimitiveType,
+    MTLAccelerationStructureBoundingBoxGeometryDescriptor, MTLAccelerationStructureDescriptor,
+    MTLAccelerationStructureGeometryDescriptor, MTLAccelerationStructureInstanceDescriptorType,
+    MTLAccelerationStructureTriangleGeometryDescriptor, MTLAccelerationStructureUsage,
+    MTLAttributeFormat, MTLBlendFactor, MTLBlendOperation, MTLBlitOption, MTLClearColor,
+    MTLColorWriteMask, MTLCompareFunction, MTLCullMode, MTLIndexType,
+    MTLInstanceAccelerationStructureDescriptor, MTLOrigin,
+    MTLPrimitiveAccelerationStructureDescriptor, MTLPrimitiveTopologyClass, MTLPrimitiveType,
     MTLRenderStages, MTLResourceUsage, MTLSamplerAddressMode, MTLSamplerBorderColor,
     MTLSamplerMinMagFilter, MTLSize, MTLStencilOperation, MTLStoreAction, MTLTextureType,
     MTLTextureUsage, MTLVertexFormat, MTLVertexStepFunction, MTLWinding,
@@ -235,6 +241,13 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> MTLVertexFormat {
     }
 }
 
+pub fn map_index_format(format: wgt::IndexFormat) -> (u64, MTLIndexType) {
+    match format {
+        wgt::IndexFormat::Uint16 => (2, MTLIndexType::UInt16),
+        wgt::IndexFormat::Uint32 => (4, MTLIndexType::UInt32),
+    }
+}
+
 pub fn map_step_mode(mode: wgt::VertexStepMode) -> MTLVertexStepFunction {
     match mode {
         wgt::VertexStepMode::Vertex => MTLVertexStepFunction::PerVertex,
@@ -354,4 +367,121 @@ pub fn map_resource_usage(ty: &wgt::BindingType) -> MTLResourceUsage {
         wgt::BindingType::Sampler(..) => MTLResourceUsage::empty(),
         _ => unreachable!(),
     }
+}
+
+pub fn map_acceleration_structure_descriptor<'a>(
+    entries: &'a crate::AccelerationStructureEntries<'a, super::Buffer>,
+    flags: crate::AccelerationStructureBuildFlags,
+) -> Retained<MTLAccelerationStructureDescriptor> {
+    let descriptor = match entries {
+        crate::AccelerationStructureEntries::Instances(instances) => {
+            let descriptor = MTLInstanceAccelerationStructureDescriptor::new();
+            descriptor.setInstanceDescriptorType(
+                MTLAccelerationStructureInstanceDescriptorType::Indirect,
+            );
+            descriptor.setInstanceCount(instances.count as usize);
+            descriptor.setInstanceDescriptorBuffer(Some(&instances.buffer.unwrap().raw));
+            unsafe {
+                descriptor.setInstanceDescriptorBufferOffset(instances.offset as usize);
+            }
+            descriptor.into_super()
+        }
+        crate::AccelerationStructureEntries::Triangles(entries) => {
+            let geometry_descriptors = entries
+                .iter()
+                .map(|triangles| {
+                    let descriptor = MTLAccelerationStructureTriangleGeometryDescriptor::new();
+                    if let Some(indices) = triangles.indices.as_ref() {
+                        descriptor.setIndexBuffer(Some(&indices.buffer.unwrap().raw));
+                        unsafe {
+                            descriptor.setIndexBufferOffset(indices.offset as usize);
+                        }
+                        descriptor.setIndexType(map_index_format(indices.format).1);
+                        descriptor.setTriangleCount(indices.count as usize / 3);
+                    } else {
+                        descriptor.setTriangleCount(triangles.vertex_count as usize / 3);
+                    }
+                    descriptor.setVertexBuffer(Some(&triangles.vertex_buffer.unwrap().raw));
+                    unsafe {
+                        descriptor.setVertexBufferOffset(
+                            triangles.first_vertex as usize * triangles.vertex_stride as usize,
+                        );
+                    }
+                    descriptor.setVertexStride(triangles.vertex_stride as usize);
+                    // Safety: MTLVertexFormat and MTLAttributeFormat are identical.
+                    // https://docs.rs/objc2-metal/latest/objc2_metal/struct.MTLAttributeFormat.html
+                    // https://docs.rs/objc2-metal/latest/objc2_metal/struct.MTLVertexFormat.html
+                    descriptor.setVertexFormat(unsafe {
+                        core::mem::transmute::<MTLVertexFormat, MTLAttributeFormat>(
+                            map_vertex_format(triangles.vertex_format),
+                        )
+                    });
+                    if let Some(transform) = triangles.transform.as_ref() {
+                        unsafe {
+                            descriptor.setTransformationMatrixBuffer(Some(&transform.buffer.raw));
+                            descriptor
+                                .setTransformationMatrixBufferOffset(transform.offset as usize);
+                        }
+                    }
+                    descriptor.setOpaque(
+                        triangles
+                            .flags
+                            .contains(wgt::AccelerationStructureGeometryFlags::OPAQUE),
+                    );
+                    if !triangles.flags.contains(
+                        wgt::AccelerationStructureGeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION,
+                    ) {
+                        descriptor.allowDuplicateIntersectionFunctionInvocation();
+                    }
+                    // descriptor.setIntersectionFunctionTableOffset(offset);
+                    descriptor.into_super()
+                })
+                .collect::<alloc::vec::Vec<Retained<MTLAccelerationStructureGeometryDescriptor>>>();
+            let descriptor = MTLPrimitiveAccelerationStructureDescriptor::new();
+            descriptor.setGeometryDescriptors(Some(&NSArray::from_retained_slice(
+                geometry_descriptors.as_slice(),
+            )));
+            descriptor.into_super()
+        }
+        crate::AccelerationStructureEntries::AABBs(entries) => {
+            let geometry_descriptors = entries
+                .iter()
+                .map(|aabbs| {
+                    let descriptor = MTLAccelerationStructureBoundingBoxGeometryDescriptor::new();
+                    descriptor.setBoundingBoxBuffer(Some(&aabbs.buffer.unwrap().raw));
+                    descriptor.setBoundingBoxCount(aabbs.count as usize);
+                    unsafe {
+                        descriptor.setBoundingBoxStride(aabbs.stride as usize);
+                        descriptor.setBoundingBoxBufferOffset(aabbs.offset as usize);
+                    }
+                    descriptor.setOpaque(
+                        aabbs
+                            .flags
+                            .contains(wgt::AccelerationStructureGeometryFlags::OPAQUE),
+                    );
+                    if !aabbs.flags.contains(
+                        wgt::AccelerationStructureGeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION,
+                    ) {
+                        descriptor.allowDuplicateIntersectionFunctionInvocation();
+                    }
+                    // descriptor.setIntersectionFunctionTableOffset(offset);
+                    descriptor.into_super()
+                })
+                .collect::<alloc::vec::Vec<Retained<MTLAccelerationStructureGeometryDescriptor>>>();
+            let descriptor = MTLPrimitiveAccelerationStructureDescriptor::new();
+            descriptor.setGeometryDescriptors(Some(&NSArray::from_retained_slice(
+                geometry_descriptors.as_slice(),
+            )));
+            descriptor.into_super()
+        }
+    };
+    let mut usage = MTLAccelerationStructureUsage::None;
+    if flags.contains(wgt::AccelerationStructureFlags::ALLOW_UPDATE) {
+        usage |= MTLAccelerationStructureUsage::Refit;
+    }
+    if flags.contains(wgt::AccelerationStructureFlags::PREFER_FAST_BUILD) {
+        usage |= MTLAccelerationStructureUsage::PreferFastBuild;
+    }
+    descriptor.setUsage(usage);
+    descriptor
 }

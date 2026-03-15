@@ -695,6 +695,11 @@ impl<'a> IntoTrace for &'_ crate::binding_model::ResolvedBindGroupDescriptor<'a>
                             ResolvedBindingResource::AccelerationStructure(tlas_id) => {
                                 BindingResource::AccelerationStructure(tlas_id.to_trace())
                             }
+                            ResolvedBindingResource::AccelerationStructureArray(tlas_ids) => {
+                                let resolved: Vec<_> =
+                                    tlas_ids.iter().map(|id| id.to_trace()).collect();
+                                BindingResource::AccelerationStructureArray(Cow::Owned(resolved))
+                            }
                             ResolvedBindingResource::ExternalTexture(external_texture_id) => {
                                 BindingResource::ExternalTexture(external_texture_id.to_trace())
                             }
@@ -893,12 +898,14 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         A::WriteBuffer {
             id,
             data,
-            range,
+            offset,
+            size,
             queued,
         } => A::WriteBuffer {
             id,
             data,
-            range,
+            offset,
+            size,
             queued,
         },
         A::WriteTexture {
