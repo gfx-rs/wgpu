@@ -20,10 +20,12 @@ use core::{
     ptr::NonNull,
 };
 
+use crate::link_to_wgpu_item;
+
 /// Like `&'a mut T`, but allows only write operations.
 ///
-/// This pointer type is obtained from [`BufferViewMut`][crate::BufferViewMut] and
-/// [`QueueWriteBufferView`][crate::QueueWriteBufferView].
+/// This pointer type is obtained from [`BufferViewMut`] and
+/// [`QueueWriteBufferView`].
 /// It is an unfortunate necessity due to the fact that mapped GPU memory may be [write combining],
 /// which means it cannot work normally with all of the things that Rust `&mut` access allows you to
 /// do.
@@ -38,6 +40,8 @@ use core::{
 // FIXME: Add an introduction to the necessity of explicit reborrowing.
 ///
 /// [write combining]: https://en.wikipedia.org/wiki/Write_combining
+#[doc = link_to_wgpu_item!(struct BufferViewMut)]
+#[doc = link_to_wgpu_item!(struct QueueWriteBufferView)]
 pub struct WriteOnly<'a, T: ?Sized> {
     /// The data which this write-only reference allows **writing** to.
     ///
