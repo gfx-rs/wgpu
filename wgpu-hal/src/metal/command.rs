@@ -5,9 +5,9 @@ use objc2::{
 use objc2_foundation::{NSRange, NSString, NSUInteger};
 use objc2_metal::{
     MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLBlitCommandEncoder,
-    MTLBlitPassDescriptor, MTLBuffer, MTLCommandBuffer, MTLCommandEncoder, MTLCommandQueue,
-    MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLCounterDontSample, MTLDevice,
-    MTLLoadAction, MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor,
+    MTLBlitPassDescriptor, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandEncoder,
+    MTLCommandQueue, MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLCounterDontSample,
+    MTLDevice, MTLLoadAction, MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor,
     MTLResidencySet, MTLResidencySetDescriptor, MTLSamplerState, MTLScissorRect, MTLSize,
     MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping, MTLViewport,
     MTLVisibilityResultMode,
@@ -20,6 +20,7 @@ use super::{
 use crate::CommandEncoder as _;
 use alloc::{
     borrow::{Cow, ToOwned as _},
+    sync::Arc,
     vec::Vec,
 };
 use core::{ops::Range, ptr::NonNull, sync::atomic};
@@ -532,6 +533,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         Ok(super::CommandBuffer {
             raw: self.raw_cmd_buf.take().unwrap(),
+            queue_shared: Arc::clone(&self.queue_shared),
         })
     }
 
@@ -1895,5 +1897,23 @@ impl Drop for super::CommandEncoder {
             self.discard_encoding();
         }
         self.counters.command_encoders.sub(1);
+    }
+}
+
+impl Drop for super::CommandBuffer {
+    fn drop(&mut self) {
+        // `command_buffer_created_not_submitted` is usually decremented when the command
+        // buffer is submitted. But if we're dropping a command buffer that was never
+        // submitted, we need to decrement the count here.
+        let status = self.raw.status();
+        if status == MTLCommandBufferStatus::NotEnqueued
+            || status == MTLCommandBufferStatus::Enqueued
+        {
+            let previous = self
+                .queue_shared
+                .command_buffer_created_not_submitted
+                .fetch_sub(1, atomic::Ordering::AcqRel);
+            debug_assert!(previous > 0);
+        }
     }
 }
