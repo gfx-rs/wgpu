@@ -558,7 +558,10 @@ pub(super) fn encode_compute_pass(
 
         immediates: Vec::new(),
 
-        intermediate_trackers: Tracker::new(),
+        intermediate_trackers: Tracker::new(
+            device.ordered_buffer_usages,
+            device.ordered_texture_usages,
+        ),
     };
 
     let indices = &device.tracker_indices;
@@ -843,10 +846,7 @@ fn dispatch(state: &mut State, groups: [u32; 3]) -> Result<(), ComputePassErrorI
         .limits
         .max_compute_workgroups_per_dimension;
 
-    if groups[0] > groups_size_limit
-        || groups[1] > groups_size_limit
-        || groups[2] > groups_size_limit
-    {
+    if groups.iter().copied().any(|g| g > groups_size_limit) {
         return Err(ComputePassErrorInner::Dispatch(
             DispatchError::InvalidGroupSize {
                 current: groups,

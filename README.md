@@ -88,7 +88,7 @@ Testing, examples, and `::from_env()` methods use a standardized set of environm
 
 See the [documentation](https://docs.rs/wgpu/latest/wgpu/index.html?search=env) for more environment variables.
 
-When running the CTS, use the variables `DENO_WEBGPU_ADAPTER_NAME`, `DENO_WEBGPU_BACKEND`, `DENO_WEBGPU_POWER_PREFERENCE`.
+When running the CTS, use the variables `DENO_WEBGPU_ADAPTER_NAME`, `DENO_WEBGPU_BACKEND`, `DENO_WEBGPU_POWER_PREFERENCE`, and `DENO_WEBGPU_DX12_COMPILER`.
 
 ## Repo Overview
 

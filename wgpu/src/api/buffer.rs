@@ -1,7 +1,7 @@
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::{
     error, fmt,
-    ops::{Bound, Deref, DerefMut, Range, RangeBounds},
+    ops::{Bound, Deref, Range, RangeBounds},
 };
 
 use crate::util::Mutex;
@@ -140,8 +140,8 @@ use crate::*;
 /// buffer.map_async(wgpu::MapMode::Write, .., move |result| {
 ///     if result.is_ok() {
 ///         let mut view = capturable.get_mapped_range_mut(..);
-///         let floats: &mut [f32] = bytemuck::cast_slice_mut(&mut view);
-///         floats.fill(42.0);
+///         let mut floats: wgpu::WriteOnly<[[u8; 4]]> = view.slice(..).into_chunks::<4>().0;
+///         floats.fill(42.0f32.to_ne_bytes());
 ///         drop(view);
 ///         capturable.unmap();
 ///     }
@@ -613,7 +613,7 @@ impl<'a> BufferSlice<'a> {
         }
     }
 
-    /// Gain write access to the bytes of a [mapped] [`Buffer`].
+    /// Gain write-only access to the bytes of a [mapped] [`Buffer`].
     ///
     /// Returns a [`BufferViewMut`] referring to the buffer range represented by
     /// `self`. See the documentation for [`BufferViewMut`] for more details.
@@ -825,7 +825,7 @@ impl MapContext {
     ///
     /// This panics if the given range does not exactly match one previously
     /// passed to [`MapContext::validate_and_add`].
-    fn remove(&mut self, offset: BufferAddress, size: BufferSize) {
+    pub(crate) fn remove(&mut self, offset: BufferAddress, size: BufferSize) {
         let end = offset + size.get();
 
         let index = self
@@ -894,43 +894,16 @@ pub struct BufferView {
     inner: dispatch::DispatchBufferMappedRange,
 }
 
-#[cfg(webgpu)]
-impl BufferView {
-    /// Provides the same data as dereferencing the view, but as a `Uint8Array` in js.
-    /// This can be MUCH faster than dereferencing the view which copies the data into
-    /// the Rust / wasm heap.
-    pub fn as_uint8array(&self) -> &js_sys::Uint8Array {
-        self.inner.as_uint8array()
-    }
-}
-
-impl core::ops::Deref for BufferView {
-    type Target = [u8];
-
-    #[inline]
-    fn deref(&self) -> &[u8] {
-        self.inner.slice()
-    }
-}
-
-impl AsRef<[u8]> for BufferView {
-    #[inline]
-    fn as_ref(&self) -> &[u8] {
-        self.inner.slice()
-    }
-}
-
 /// A write-only view of a mapped buffer's bytes.
 ///
 /// To get a `BufferViewMut`, first [map] the buffer, and then
 /// call `buffer.slice(range).get_mapped_range_mut()`.
 ///
-/// `BufferViewMut` dereferences to `&mut [u8]`, so you can use all the usual
-/// Rust slice methods to access the buffer's contents. It also implements
-/// `AsMut<[u8]>`, if that's more convenient.
-///
-/// It is possible to read the buffer using this view, but doing so is not
-/// recommended, as it is likely to be slow.
+/// Because Rust has no write-only reference type
+/// (`&[u8]` is read-only and `&mut [u8]` is read-write),
+/// this type does not dereference to a slice in the way that [`BufferView`] does.
+/// Instead, [`.slice()`][BufferViewMut::slice] returns a special [`WriteOnly`] pointer type,
+/// and there are also a few convenience methods such as [`BufferViewMut::copy_from_slice()`].
 ///
 /// Before the buffer can be unmapped, all `BufferViewMut`s observing it
 /// must be dropped. Otherwise, the call to [`Buffer::unmap`] will panic.
@@ -947,24 +920,25 @@ pub struct BufferViewMut {
     inner: dispatch::DispatchBufferMappedRange,
 }
 
-impl AsMut<[u8]> for BufferViewMut {
-    #[inline]
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.inner.slice_mut()
-    }
-}
+// `BufferView` simply dereferences. `BufferViewMut` cannot, because mapped memory may be
+// write-combining memory <https://en.wikipedia.org/wiki/Write_combining>,
+// and not support the expected behavior of atomic accesses.
+// Further context: <https://github.com/gfx-rs/wgpu/issues/8897>
 
-impl Deref for BufferViewMut {
+impl core::ops::Deref for BufferView {
     type Target = [u8];
 
-    fn deref(&self) -> &Self::Target {
-        self.inner.slice()
+    #[inline]
+    fn deref(&self) -> &[u8] {
+        // SAFETY: this is a read mapping
+        unsafe { self.inner.read_slice() }
     }
 }
 
-impl DerefMut for BufferViewMut {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.inner.slice_mut()
+impl AsRef<[u8]> for BufferView {
+    #[inline]
+    fn as_ref(&self) -> &[u8] {
+        self
     }
 }
 
@@ -983,6 +957,50 @@ impl Drop for BufferViewMut {
             .map_context
             .lock()
             .remove(self.offset, self.size);
+    }
+}
+
+#[cfg(webgpu)]
+impl BufferView {
+    /// Provides the same data as dereferencing the view, but as a `Uint8Array` in js.
+    /// This can be MUCH faster than dereferencing the view which copies the data into
+    /// the Rust / wasm heap.
+    pub fn as_uint8array(&self) -> &js_sys::Uint8Array {
+        self.inner.as_uint8array()
+    }
+}
+
+/// These methods are equivalent to the methods of the same names on [`WriteOnly`].
+impl BufferViewMut {
+    /// Returns the length of this view; the number of bytes to be written.
+    pub fn len(&self) -> usize {
+        // cannot fail because we can't actually map more than isize::MAX bytes
+        usize::try_from(self.size.get()).unwrap()
+    }
+
+    /// Returns `true` if the view has a length of 0.
+    ///
+    /// Note that this is currently impossible.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns a [`WriteOnly`] reference to a portion of this.
+    ///
+    /// `.slice(..)` can be used to access the whole data.
+    pub fn slice<'a, S: RangeBounds<usize>>(&'a mut self, bounds: S) -> WriteOnly<'a, [u8]> {
+        // SAFETY: this is a write mapping
+        unsafe { self.inner.write_slice() }.into_slice(bounds)
+    }
+
+    /// Copies all elements from src into `self`.
+    ///
+    /// The length of `src` must be the same as `self`.
+    ///
+    /// This method is equivalent to
+    /// [`self.slice(..).copy_from_slice(src)`][WriteOnly::copy_from_slice].
+    pub fn copy_from_slice(&mut self, src: &[u8]) {
+        self.slice(..).copy_from_slice(src)
     }
 }
 

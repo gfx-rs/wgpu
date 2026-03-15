@@ -208,6 +208,12 @@ bitflags::bitflags! {
         const RAY_TRACING_PIPELINE = 1 << 38;
         /// Support for draw index builtin
         const DRAW_INDEX = 1 << 39;
+        /// Support for binding arrays of acceleration structures.
+        const ACCELERATION_STRUCTURE_BINDING_ARRAY = 1 << 40;
+        /// Support for the `@coherent` memory decoration on storage buffers.
+        const MEMORY_DECORATION_COHERENT = 1 << 41;
+        /// Support for the `@volatile` memory decoration on storage buffers.
+        const MEMORY_DECORATION_VOLATILE = 1 << 42;
     }
 }
 

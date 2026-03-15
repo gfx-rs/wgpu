@@ -428,8 +428,16 @@ impl TypedGlobalVariable<'_> {
             first_time: false,
         };
 
-        let (space, access, reference) = match var.space.to_msl_name() {
+        let (coherent, space, access, reference) = match var.space.to_msl_name() {
             Some(space) if self.reference => {
+                let coherent = if var
+                    .memory_decorations
+                    .contains(crate::MemoryDecorations::COHERENT)
+                {
+                    "coherent "
+                } else {
+                    ""
+                };
                 let access = if var.space.needs_access_qualifier()
                     && !self.usage.intersects(valid::GlobalUse::WRITE)
                 {
@@ -437,14 +445,15 @@ impl TypedGlobalVariable<'_> {
                 } else {
                     ""
                 };
-                (space, access, "&")
+                (coherent, space, access, "&")
             }
-            _ => ("", "", ""),
+            _ => ("", "", "", ""),
         };
 
         Ok(write!(
             out,
-            "{}{}{}{}{}{} {}",
+            "{}{}{}{}{}{}{} {}",
+            coherent,
             space,
             if space.is_empty() { "" } else { " " },
             ty_name,
@@ -1483,6 +1492,35 @@ impl<W: Write> Writer<W> {
         write!(self.out, ", ")?;
         self.put_expression(value, &context.expression, true)?;
         writeln!(self.out, ");")?;
+
+        // Workaround for Apple Metal TBDR driver bug: fragment shader atomic
+        // texture writes randomly drop unless followed by a standard texture
+        // write. Insert a dead-code write behind an unprovable condition so
+        // the compiler emits proper memory safety barriers.
+        // See: https://projects.blender.org/blender/blender/commit/aa95220576706122d79c91c7f5c522e6c7416425
+        let value_ty = context.expression.resolve_type(value);
+        let zero_value = match (value_ty.scalar_kind(), value_ty.scalar_width()) {
+            (Some(crate::ScalarKind::Sint), _) => "int4(0)",
+            (_, Some(8)) => "ulong4(0uL)",
+            _ => "uint4(0u)",
+        };
+        let coord_ty = context.expression.resolve_type(address.coordinate);
+        let x = if matches!(coord_ty, crate::TypeInner::Scalar(_)) {
+            ""
+        } else {
+            ".x"
+        };
+        write!(self.out, "{level}if (")?;
+        self.put_expression(address.coordinate, &context.expression, true)?;
+        write!(self.out, "{x} == -99999) {{ ")?;
+        self.put_expression(image, &context.expression, false)?;
+        write!(self.out, ".write({zero_value}, ")?;
+        self.put_cast_to_uint_scalar_or_vector(address.coordinate, &context.expression)?;
+        if let Some(array_index) = address.array_index {
+            write!(self.out, ", ")?;
+            self.put_expression(array_index, &context.expression, true)?;
+        }
+        writeln!(self.out, "); }}")?;
 
         Ok(())
     }

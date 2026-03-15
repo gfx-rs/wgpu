@@ -158,6 +158,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_uniform_buffers_per_shader_stage,
         max_binding_array_elements_per_shader_stage,
         max_binding_array_sampler_elements_per_shader_stage,
+        max_binding_array_acceleration_structure_elements_per_shader_stage,
         max_uniform_buffer_binding_size,
         max_storage_buffer_binding_size,
         max_vertex_buffers,
@@ -212,6 +213,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t               Max Uniform Buffers Per Shader Stage: {max_uniform_buffers_per_shader_stage}")?;
     writeln!(output, "\t\t        Max Binding Array Elements Per Shader Stage: {max_binding_array_elements_per_shader_stage}")?;
     writeln!(output, "\t\tMax Binding Array Sampler Elements Per Shader Stage: {max_binding_array_sampler_elements_per_shader_stage}")?;
+    writeln!(output, "\t\t   Max Binding Array AS Elements Per Shader Stage: {max_binding_array_acceleration_structure_elements_per_shader_stage}")?;
     writeln!(output, "\t\t                    Max Uniform Buffer Binding Size: {max_uniform_buffer_binding_size}")?;
     writeln!(output, "\t\t                    Max Storage Buffer Binding Size: {max_storage_buffer_binding_size}")?;
     writeln!(output, "\t\t                                    Max Buffer Size: {max_buffer_size}")?;

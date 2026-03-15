@@ -19,11 +19,11 @@ impl<T: raw_window_handle::HasDisplayHandle + core::fmt::Debug + Send + Sync + '
 
 /// Options for creating an instance.
 ///
-/// If you want to allow control of instance settings via environment variables, call either
-/// [`InstanceDescriptor::from_env_or_default()`] or [`InstanceDescriptor::with_env()`]. Each type
-/// within this descriptor has its own equivalent methods, so you can select which options you want
-/// to expose to influence from the environment.
-#[derive(Debug, Default)]
+/// If you want to allow control of instance settings via environment variables, call any of the
+/// `*from_env()` functions or [`InstanceDescriptor::with_env()`]. Each type within this descriptor
+/// has its own equivalent methods, so you can select which options you want to expose to influence
+/// from the environment.
+#[derive(Debug)]
 pub struct InstanceDescriptor {
     /// Which [`Backends`] to enable.
     ///
@@ -58,19 +58,45 @@ pub struct InstanceDescriptor {
     /// the `EventLoop`) here.
     ///
     /// [`OwnedDisplayHandle`]: https://docs.rs/winit/latest/winit/event_loop/struct.OwnedDisplayHandle.html
-    // FUTURE: The RawDisplayHandle trait can/should be removed entirely from create_display()? At
-    // least `trait WindowHandle: HasWindowHandle + HasDisplayHandle` should really be removed as
-    // it's impractical and not implementable everywhere.
     pub display: Option<alloc::boxed::Box<dyn WgpuHasDisplayHandle>>,
 }
 
 impl InstanceDescriptor {
+    /// The default instance options, without display handle.
+    #[must_use]
+    pub fn new_without_display_handle() -> Self {
+        Self {
+            backends: Default::default(),
+            flags: Default::default(),
+            memory_budget_thresholds: Default::default(),
+            backend_options: Default::default(),
+            display: None,
+        }
+    }
+
+    /// The default instance options, with display handle.
+    #[must_use]
+    pub fn new_with_display_handle(display: alloc::boxed::Box<dyn WgpuHasDisplayHandle>) -> Self {
+        Self::new_without_display_handle().with_display_handle(display)
+    }
+
     /// Choose instance options entirely from environment variables.
     ///
     /// This is equivalent to calling `from_env` on every field.
     #[must_use]
-    pub fn from_env_or_default() -> Self {
-        Self::default().with_env()
+    pub fn new_without_display_handle_from_env() -> Self {
+        Self::new_without_display_handle().with_env()
+    }
+
+    /// Choose instance options entirely from environment variables, while including a display handle.
+    ///
+    /// This is equivalent to calling `from_env` on every field.
+    #[must_use]
+    pub fn new_with_display_handle_from_env(
+        display: alloc::boxed::Box<dyn WgpuHasDisplayHandle>,
+    ) -> Self {
+        // Self::new_without_display_handle_from_env().with_display_handle(display)
+        Self::new_with_display_handle(display).with_env()
     }
 
     /// Takes the given options, modifies them based on the environment variables, and returns the result.
@@ -86,7 +112,7 @@ impl InstanceDescriptor {
             flags,
             memory_budget_thresholds: MemoryBudgetThresholds::default(),
             backend_options,
-            display: None,
+            display: self.display,
         }
     }
 

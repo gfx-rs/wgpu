@@ -1,0 +1,12 @@
+(
+    vertex:[
+    ],
+    fragment:[
+        (
+            entry_point:"func",
+            target_profile:"ps_5_0",
+        ),
+    ],
+    compute:[
+    ],
+)

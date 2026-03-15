@@ -20,7 +20,7 @@ pub struct GpuReport {
 impl GpuReport {
     pub fn generate() -> Self {
         let instance = wgpu::Instance::new({
-            let mut desc = wgpu::InstanceDescriptor::default();
+            let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
             desc.backend_options.dx12.shader_compiler = Dx12Compiler::StaticDxc;
             desc.flags = wgpu::InstanceFlags::debugging();
             desc.with_env()

@@ -29,7 +29,7 @@ impl DeviceState {
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::from_env().unwrap_or(base_backend),
-            ..wgpu::InstanceDescriptor::from_env_or_default()
+            ..wgpu::InstanceDescriptor::new_without_display_handle_from_env()
         });
 
         let adapter = block_on(wgpu::util::initialize_adapter_from_env_or_default(

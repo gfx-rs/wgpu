@@ -781,6 +781,16 @@ impl Player {
                         let tlas = self.resolve_tlas_id(tlas_id);
                         wgc::binding_model::ResolvedBindingResource::AccelerationStructure(tlas)
                     }
+                    BindingResource::AccelerationStructureArray(tlas_ids) => {
+                        let resolved_tlas: Vec<_> = tlas_ids
+                            .to_vec()
+                            .into_iter()
+                            .map(|id| self.resolve_tlas_id(id))
+                            .collect();
+                        wgc::binding_model::ResolvedBindingResource::AccelerationStructureArray(
+                            Cow::Owned(resolved_tlas),
+                        )
+                    }
                     BindingResource::ExternalTexture(external_texture_id) => {
                         let external_texture =
                             self.resolve_external_texture_id(external_texture_id);

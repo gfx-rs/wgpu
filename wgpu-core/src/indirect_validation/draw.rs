@@ -14,10 +14,7 @@ use crate::{
     FastHashMap,
 };
 use alloc::{boxed::Box, string::ToString, sync::Arc, vec, vec::Vec};
-use core::{
-    mem::{size_of, size_of_val},
-    num::NonZeroU64,
-};
+use core::{mem::size_of, num::NonZeroU64};
 use wgt::Limits;
 
 /// Note: This needs to be under:
@@ -653,7 +650,7 @@ fn create_bind_group_layout(
 
 /// Returns the largest binding size that when combined with dynamic offsets can address the whole buffer.
 fn calculate_src_buffer_binding_size(buffer_size: u64, limits: &Limits) -> u64 {
-    let max_storage_buffer_binding_size = limits.max_storage_buffer_binding_size as u64;
+    let max_storage_buffer_binding_size = limits.max_storage_buffer_binding_size;
     let min_storage_buffer_offset_alignment = limits.min_storage_buffer_offset_alignment as u64;
 
     if buffer_size <= max_storage_buffer_binding_size {
@@ -893,12 +890,13 @@ impl MetadataEntry {
         vertex_or_index_limit: u64,
         instance_limit: u64,
     ) -> Self {
-        debug_assert_eq!(
-            4,
-            size_of_val(&Limits::default().max_storage_buffer_binding_size)
-        );
+        const U32_MAX_AS_U64: u64 = u32::MAX as u64;
 
-        let src_offset = src_offset as u32; // max_storage_buffer_binding_size is a u32
+        // NOTE: buffer sizes should never exceed `u32::MAX`.
+        assert!(src_offset <= U32_MAX_AS_U64);
+        assert!(dst_offset <= U32_MAX_AS_U64);
+
+        let src_offset = src_offset as u32;
         let src_offset = src_offset / 4; // translate byte offset to offset in u32's
 
         // `src_offset` needs at most 30 bits,
@@ -906,7 +904,7 @@ impl MetadataEntry {
         let src_offset = src_offset | ((indexed as u32) << 31);
 
         // max value for limits since first_X and X_count indirect draw arguments are u32
-        let max_limit = u32::MAX as u64 + u32::MAX as u64; // 1 11111111 11111111 11111111 11111110
+        let max_limit = U32_MAX_AS_U64 + U32_MAX_AS_U64; // 1 11111111 11111111 11111111 11111110
 
         let vertex_or_index_limit = vertex_or_index_limit.min(max_limit);
         let vertex_or_index_limit_bit_32 = (vertex_or_index_limit >> 32) as u32; // extract bit 32
@@ -916,7 +914,7 @@ impl MetadataEntry {
         let instance_limit_bit_32 = (instance_limit >> 32) as u32; // extract bit 32
         let instance_limit = instance_limit as u32; // truncate the limit to a u32
 
-        let dst_offset = dst_offset as u32; // max_storage_buffer_binding_size is a u32
+        let dst_offset = dst_offset as u32;
         let dst_offset = dst_offset / 4; // translate byte offset to offset in u32's
 
         // `dst_offset` needs at most 30 bits,

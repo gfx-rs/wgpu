@@ -84,6 +84,7 @@
             )),
             ty: 0,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("w_mem"),
@@ -91,6 +92,7 @@
             binding: None,
             ty: 1,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("w_mem2"),
@@ -98,6 +100,7 @@
             binding: None,
             ty: 1,
             init: None,
+            memory_decorations: (""),
         ),
     ],
     global_expressions: [

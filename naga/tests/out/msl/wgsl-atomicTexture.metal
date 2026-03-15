@@ -13,16 +13,28 @@ kernel void cs_main(
 , metal::texture2d<int, metal::access::read_write> image_s [[user(fake0)]]
 ) {
     image_u.atomic_fetch_max(metal::uint2(metal::int2(0, 0)), 1u);
+    if (metal::int2(0, 0).x == -99999) { image_u.write(uint4(0u), metal::uint2(metal::int2(0, 0))); }
     image_u.atomic_fetch_min(metal::uint2(metal::int2(0, 0)), 1u);
+    if (metal::int2(0, 0).x == -99999) { image_u.write(uint4(0u), metal::uint2(metal::int2(0, 0))); }
     image_u.atomic_fetch_add(metal::uint2(metal::int2(0, 0)), 1u);
+    if (metal::int2(0, 0).x == -99999) { image_u.write(uint4(0u), metal::uint2(metal::int2(0, 0))); }
     image_u.atomic_fetch_and(metal::uint2(metal::int2(0, 0)), 1u);
+    if (metal::int2(0, 0).x == -99999) { image_u.write(uint4(0u), metal::uint2(metal::int2(0, 0))); }
     image_u.atomic_fetch_or(metal::uint2(metal::int2(0, 0)), 1u);
+    if (metal::int2(0, 0).x == -99999) { image_u.write(uint4(0u), metal::uint2(metal::int2(0, 0))); }
     image_u.atomic_fetch_xor(metal::uint2(metal::int2(0, 0)), 1u);
+    if (metal::int2(0, 0).x == -99999) { image_u.write(uint4(0u), metal::uint2(metal::int2(0, 0))); }
     image_s.atomic_fetch_max(metal::uint2(metal::int2(0, 0)), 1);
+    if (metal::int2(0, 0).x == -99999) { image_s.write(int4(0), metal::uint2(metal::int2(0, 0))); }
     image_s.atomic_fetch_min(metal::uint2(metal::int2(0, 0)), 1);
+    if (metal::int2(0, 0).x == -99999) { image_s.write(int4(0), metal::uint2(metal::int2(0, 0))); }
     image_s.atomic_fetch_add(metal::uint2(metal::int2(0, 0)), 1);
+    if (metal::int2(0, 0).x == -99999) { image_s.write(int4(0), metal::uint2(metal::int2(0, 0))); }
     image_s.atomic_fetch_and(metal::uint2(metal::int2(0, 0)), 1);
+    if (metal::int2(0, 0).x == -99999) { image_s.write(int4(0), metal::uint2(metal::int2(0, 0))); }
     image_s.atomic_fetch_or(metal::uint2(metal::int2(0, 0)), 1);
+    if (metal::int2(0, 0).x == -99999) { image_s.write(int4(0), metal::uint2(metal::int2(0, 0))); }
     image_s.atomic_fetch_xor(metal::uint2(metal::int2(0, 0)), 1);
+    if (metal::int2(0, 0).x == -99999) { image_s.write(int4(0), metal::uint2(metal::int2(0, 0))); }
     return;
 }
