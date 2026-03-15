@@ -49,7 +49,7 @@ mod texture;
 mod tokens;
 mod transfers;
 mod vertex;
-pub mod write_only;
+mod write_only;
 
 pub use adapter::*;
 pub use backend::*;
