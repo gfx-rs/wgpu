@@ -382,8 +382,7 @@ impl Swapchain for NativeSwapchain {
         &mut self,
         timeout: Option<core::time::Duration>,
         fence: &crate::vulkan::Fence,
-    ) -> Result<Option<crate::AcquiredSurfaceTexture<crate::api::Vulkan>>, crate::SurfaceError>
-    {
+    ) -> Result<crate::AcquiredSurfaceTexture<crate::api::Vulkan>, crate::SurfaceError> {
         let mut timeout_ns = match timeout {
             Some(duration) => duration.as_nanos() as u64,
             None => u64::MAX,
@@ -445,7 +444,7 @@ impl Swapchain for NativeSwapchain {
             Ok(pair) => pair,
             Err(error) => {
                 return match error {
-                    vk::Result::TIMEOUT => Ok(None),
+                    vk::Result::TIMEOUT => Err(crate::SurfaceError::Timeout),
                     vk::Result::NOT_READY | vk::Result::ERROR_OUT_OF_DATE_KHR => {
                         Err(crate::SurfaceError::Outdated)
                     }
@@ -513,10 +512,10 @@ impl Swapchain for NativeSwapchain {
                 present_semaphores: present_semaphore_arc,
             }),
         };
-        Ok(Some(crate::AcquiredSurfaceTexture {
+        Ok(crate::AcquiredSurfaceTexture {
             texture,
             suboptimal,
-        }))
+        })
     }
 
     unsafe fn discard_texture(

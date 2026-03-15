@@ -215,6 +215,7 @@
             binding: None,
             ty: 2,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("Vertex_Uv"),
@@ -222,6 +223,7 @@
             binding: None,
             ty: 2,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("Vertex_Position"),
@@ -229,6 +231,7 @@
             binding: None,
             ty: 3,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some(""),
@@ -239,6 +242,7 @@
             )),
             ty: 4,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some(""),
@@ -246,6 +250,7 @@
             binding: None,
             ty: 7,
             init: Some(11),
+            memory_decorations: (""),
         ),
         (
             name: Some(""),
@@ -256,6 +261,7 @@
             )),
             ty: 9,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some(""),
@@ -266,6 +272,7 @@
             )),
             ty: 10,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("Vertex_Normal"),
@@ -273,6 +280,7 @@
             binding: None,
             ty: 3,
             init: None,
+            memory_decorations: (""),
         ),
     ],
     global_expressions: [

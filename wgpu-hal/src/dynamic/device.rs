@@ -290,7 +290,7 @@ impl<D: Device + DynResource> DynDevice for D {
         let bind_group_layouts: Vec<_> = desc
             .bind_group_layouts
             .iter()
-            .map(|bgl| bgl.expect_downcast_ref())
+            .map(|bgl| bgl.map(|bgl| bgl.expect_downcast_ref()))
             .collect();
         let desc = PipelineLayoutDescriptor {
             label: desc.label,

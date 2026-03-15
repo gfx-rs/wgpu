@@ -189,6 +189,8 @@ bitflags::bitflags! {
     struct DecorationFlags: u32 {
         const NON_READABLE = 0x1;
         const NON_WRITABLE = 0x2;
+        const COHERENT = 0x4;
+        const VOLATILE = 0x8;
     }
 }
 
@@ -202,6 +204,17 @@ impl DecorationFlags {
             access &= !crate::StorageAccess::STORE;
         }
         access
+    }
+
+    fn to_memory_decorations(self) -> crate::MemoryDecorations {
+        let mut decorations = crate::MemoryDecorations::empty();
+        if self.contains(DecorationFlags::COHERENT) {
+            decorations |= crate::MemoryDecorations::COHERENT;
+        }
+        if self.contains(DecorationFlags::VOLATILE) {
+            decorations |= crate::MemoryDecorations::VOLATILE;
+        }
+        decorations
     }
 }
 
@@ -812,6 +825,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             }
             spirv::Decoration::NonWritable => {
                 dec.flags |= DecorationFlags::NON_WRITABLE;
+            }
+            spirv::Decoration::Coherent => {
+                dec.flags |= DecorationFlags::COHERENT;
+            }
+            spirv::Decoration::Volatile => {
+                dec.flags |= DecorationFlags::VOLATILE;
             }
             spirv::Decoration::ColMajor => {
                 dec.matrix_major = Some(Majority::Column);
@@ -2641,15 +2660,31 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         let inner = crate::TypeInner::Image {
             class: if is_depth == 1 {
+                if is_sampled == 2 {
+                    return Err(Error::InvalidImageDepthStorage);
+                }
+
                 crate::ImageClass::Depth { multi: is_msaa }
-            } else if format != 0 {
+            }
+            // If we have an unknown format and storage texture, this is
+            // StorageRead/WriteWithoutFormat. We don't currently support
+            // this.
+            else if is_sampled == 2 && format == 0 {
+                return Err(Error::InvalidStorageImageWithoutFormat);
+            }
+            // If we have explicit class information (is_sampled = 2 = Storage), use it.
+            //
+            // If we have unknown class information (is_sampled = 0 = Unknown), infer the
+            // class from the presence of an explicit format.
+            else if format != 0 && (is_sampled == 0 || is_sampled == 2) {
                 crate::ImageClass::Storage {
                     format: map_image_format(format)?,
                     access: crate::StorageAccess::default(),
                 }
-            } else if is_sampled == 2 {
-                return Err(Error::InvalidImageWriteType);
-            } else {
+            }
+            // We will hit this case either when sampled is 1, or if we have unknown
+            // sampling information or when sampled is 0 and we have no explicit format.
+            else {
                 crate::ImageClass::Sampled {
                     kind,
                     multi: is_msaa,
@@ -2991,6 +3026,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     space,
                     ty,
                     init,
+                    memory_decorations: dec.flags.to_memory_decorations(),
                 };
                 (Variable::Global, var)
             }
@@ -3038,6 +3074,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     binding: None,
                     ty,
                     init: None,
+                    memory_decorations: crate::MemoryDecorations::empty(),
                 };
 
                 let inner = Variable::Input(crate::FunctionArgument {
@@ -3098,6 +3135,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     binding: None,
                     ty,
                     init,
+                    memory_decorations: crate::MemoryDecorations::empty(),
                 };
                 let inner = Variable::Output(crate::FunctionResult { ty, binding });
                 (inner, var)

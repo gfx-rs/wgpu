@@ -60,7 +60,7 @@ fn fragment(@builtin(primitive_index) index: u32) -> @location(0) vec4<f32> {
 
 #[gpu_test]
 static PRIMITIVE_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(Features::SHADER_PRIMITIVE_INDEX))
+    .parameters(TestParameters::default().features(Features::PRIMITIVE_INDEX))
     .run_async(primitive_index);
 
 async fn mesh_primitive_index(
@@ -148,7 +148,7 @@ fn fragment(FRAGMENT_PRIMITIVE_INDEX) -> @location(0) vec4<f32> {
 fn mesh_params() -> TestParameters {
     // TODO: when naga support for MSL/HLSL mesh shaders lands enable Metal and DX12
     TestParameters::default()
-        .features(Features::SHADER_PRIMITIVE_INDEX | Features::EXPERIMENTAL_MESH_SHADER)
+        .features(Features::PRIMITIVE_INDEX | Features::EXPERIMENTAL_MESH_SHADER)
         .limits(Limits::defaults().using_recommended_minimum_mesh_shader_values())
         .skip(FailureCase::backend(
             wgpu::Backends::METAL | wgpu::Backends::DX12,

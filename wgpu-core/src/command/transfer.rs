@@ -186,10 +186,10 @@ pub enum TransferError {
 
 impl WebGpuError for TransferError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::MissingBufferUsage(e) => e,
-            Self::MissingTextureUsage(e) => e,
-            Self::MemoryInitFailure(e) => e,
+        match self {
+            Self::MissingBufferUsage(e) => e.webgpu_error_type(),
+            Self::MissingTextureUsage(e) => e.webgpu_error_type(),
+            Self::MemoryInitFailure(e) => e.webgpu_error_type(),
 
             Self::BufferEndOffsetOverrun { .. }
             | Self::TextureOverrun { .. }
@@ -225,9 +225,8 @@ impl WebGpuError for TransferError {
             | Self::SampleCountNotEqual { .. }
             | Self::InvalidMipLevel { .. }
             | Self::SameSourceDestinationBuffer
-            | Self::BufferNotAvailable => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::BufferNotAvailable => ErrorType::Validation,
+        }
     }
 }
 
@@ -1468,6 +1467,8 @@ pub(super) fn copy_texture_to_texture(
         depth: src_copy_size.depth.min(dst_copy_size.depth),
     };
 
+    let dst_format = dst_texture.desc.format;
+
     let regions = (0..array_layer_count).map(|rel_array_layer| {
         let mut src_base = src_tex_base.clone();
         let mut dst_base = dst_tex_base.clone();
@@ -1489,6 +1490,33 @@ pub(super) fn copy_texture_to_texture(
                 stencil.src_base.aspect = hal::FormatAspects::STENCIL;
                 stencil.dst_base.aspect = hal::FormatAspects::STENCIL;
                 [depth, stencil]
+            })
+            .collect::<Vec<_>>()
+    } else if let Some(plane_count) = dst_format.planes() {
+        regions
+            .into_iter()
+            .flat_map(|region| {
+                (0..plane_count).map(move |plane| {
+                    let mut plane_region = region.clone();
+
+                    let plane_aspect = wgt::TextureAspect::from_plane(plane)
+                        .expect("expected texture aspect to exist for the plane");
+                    let plane_aspect = hal::FormatAspects::new(dst_format, plane_aspect);
+                    plane_region.src_base.aspect = plane_aspect;
+                    plane_region.dst_base.aspect = plane_aspect;
+
+                    let (w_subsampling, h_subsampling) =
+                        dst_format.subsampling_factors(Some(plane));
+                    plane_region.src_base.origin.x /= w_subsampling;
+                    plane_region.src_base.origin.y /= h_subsampling;
+                    plane_region.dst_base.origin.x /= w_subsampling;
+                    plane_region.dst_base.origin.y /= h_subsampling;
+
+                    plane_region.size.width /= w_subsampling;
+                    plane_region.size.height /= h_subsampling;
+
+                    plane_region
+                })
             })
             .collect::<Vec<_>>()
     } else {

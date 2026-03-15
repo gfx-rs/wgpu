@@ -38,12 +38,12 @@ float2 splat_assignment()
 {
     float2 a = (2.0).xx;
 
-    float2 _e4 = a;
-    a = (_e4 + (1.0).xx);
-    float2 _e8 = a;
-    a = (_e8 - (3.0).xx);
-    float2 _e12 = a;
-    a = (_e12 / (4.0).xx);
+    float2 _e3 = a;
+    a = (_e3 + (1.0).xx);
+    float2 _e7 = a;
+    a = (_e7 - (3.0).xx);
+    float2 _e11 = a;
+    a = (_e11 / (4.0).xx);
     float2 _e15 = a;
     return _e15;
 }
@@ -207,10 +207,6 @@ float4x3 ZeroValuefloat4x3() {
     return (float4x3)0;
 }
 
-float3x4 ZeroValuefloat3x4() {
-    return (float3x4)0;
-}
-
 void arithmetic()
 {
     int prevent_const_eval = (int)0;
@@ -281,15 +277,15 @@ void arithmetic()
         float2 rem4_1 = naga_mod((2.0).xx, (1.0).xx);
         float2 rem5_1 = naga_mod((2.0).xx, (1.0).xx);
     }
-    float3x3 add = (ZeroValuefloat3x3() + ZeroValuefloat3x3());
-    float3x3 sub = (ZeroValuefloat3x3() - ZeroValuefloat3x3());
+    float3x3 add = float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0));
+    float3x3 sub = float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0));
     float3x3 mul_scalar0_ = mul(1.0, ZeroValuefloat3x3());
     float3x3 mul_scalar1_ = mul(ZeroValuefloat3x3(), 2.0);
     float3 mul_vector0_ = mul((1.0).xxxx, ZeroValuefloat4x3());
     float4 mul_vector1_ = mul(ZeroValuefloat4x3(), (2.0).xxx);
-    float3x3 mul_ = mul(ZeroValuefloat3x4(), ZeroValuefloat4x3());
-    int _e175 = prevent_const_eval;
-    wgpu_7437_ = asint(asuint(_e175) + asuint(int(-2147483647 - 1)));
+    float3x3 mul_ = float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0));
+    int _e205 = prevent_const_eval;
+    wgpu_7437_ = asint(asuint(_e205) + asuint(int(-2147483647 - 1)));
     return;
 }
 
@@ -379,10 +375,10 @@ void assignment()
     a_1 = asint(asuint(_e7) - asuint(int(1)));
     int _e9 = a_1;
     int _e10 = a_1;
-    a_1 = asint(asuint(_e10) * asuint(_e9));
+    a_1 = asint(asuint(_e9) * asuint(_e10));
     int _e12 = a_1;
     int _e13 = a_1;
-    a_1 = naga_div(_e13, _e12);
+    a_1 = naga_div(_e12, _e13);
     int _e15 = a_1;
     a_1 = naga_mod(_e15, int(1));
     int _e17 = a_1;

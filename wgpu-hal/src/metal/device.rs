@@ -24,7 +24,7 @@ use objc2_metal::{
     MTLVertexStepFunction,
 };
 
-use super::{conv, PassthroughShader, ShaderModuleSource};
+use super::{adapter::VERTEX_BUFFER_SLOT_START, conv, PassthroughShader, ShaderModuleSource};
 use crate::{auxil::map_naga_stage, TlasInstance};
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
@@ -67,8 +67,10 @@ fn create_depth_stencil_desc(
     state: &wgt::DepthStencilState,
 ) -> Retained<MTLDepthStencilDescriptor> {
     let desc = MTLDepthStencilDescriptor::new();
-    desc.setDepthCompareFunction(conv::map_compare_function(state.depth_compare));
-    desc.setDepthWriteEnabled(state.depth_write_enabled);
+    desc.setDepthCompareFunction(conv::map_compare_function(
+        state.depth_compare.unwrap_or_default(),
+    ));
+    desc.setDepthWriteEnabled(state.depth_write_enabled.unwrap_or_default());
     let s = &state.stencil;
     if s.is_enabled() {
         let front_desc = create_stencil_desc(&s.front, s.read_mask, s.write_mask);
@@ -175,8 +177,9 @@ impl super::Device {
                         MTLLanguageVersion::Version2_4 => (2, 4),
                         MTLLanguageVersion::Version3_0 => (3, 0),
                         MTLLanguageVersion::Version3_1 => (3, 1),
-                        // Newer version, fall back to 3.1
-                        _ => (3, 1),
+                        MTLLanguageVersion::Version3_2 => (3, 2),
+                        // Newer version, fall back to 3.2
+                        _ => (3, 2),
                     },
                     inline_samplers: Default::default(),
                     spirv_cross_compatibility: false,
@@ -374,8 +377,10 @@ impl super::Device {
         raw: Retained<ProtocolObject<dyn MTLDevice>>,
         features: wgt::Features,
     ) -> super::Device {
+        let capabilities_query = super::CapabilitiesQuery::new(&raw);
+        let shared = super::AdapterShared::new(raw, &capabilities_query);
         super::Device {
-            shared: Arc::new(super::AdapterShared::new(raw)),
+            shared: Arc::new(shared),
             features,
             counters: Default::default(),
         }
@@ -455,7 +460,10 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> DeviceResult<super::Texture> {
-        let mtl_format = self.shared.private_caps.map_format(desc.format);
+        let mtl_format = self
+            .shared
+            .private_texture_format_caps
+            .map_format(desc.format);
 
         autoreleasepool(|_| {
             let descriptor = MTLTextureDescriptor::new();
@@ -542,10 +550,14 @@ impl crate::Device for super::Device {
 
         let raw_format = self
             .shared
-            .private_caps
+            .private_texture_format_caps
             .map_view_format(desc.format, aspects);
 
-        let format_equal = raw_format == self.shared.private_caps.map_format(texture.format);
+        let format_equal = raw_format
+            == self
+                .shared
+                .private_texture_format_caps
+                .map_format(texture.format);
         let type_equal = raw_type == texture.raw_type;
         let range_full_resource =
             desc.range
@@ -679,7 +691,7 @@ impl crate::Device for super::Device {
         self.counters.command_encoders.add(1);
         Ok(super::CommandEncoder {
             shared: Arc::clone(&self.shared),
-            raw_queue: Arc::clone(&desc.queue.raw),
+            queue_shared: Arc::clone(&desc.queue.shared),
             raw_cmd_buf: None,
             state: super::CommandState::default(),
             temp: super::Temp::default(),
@@ -726,7 +738,7 @@ impl crate::Device for super::Device {
             need_sizes_buffer: false,
             resources: Default::default(),
         });
-        let mut bind_group_infos = arrayvec::ArrayVec::new();
+        let mut bind_group_infos = [const { None }; crate::MAX_BIND_GROUPS];
 
         // First, place the immediates
         for info in stage_data.iter_mut() {
@@ -740,7 +752,11 @@ impl crate::Device for super::Device {
         }
 
         // Second, place the described resources
-        for (group_index, &bgl) in desc.bind_group_layouts.iter().enumerate() {
+        for (group_index, bgl) in desc.bind_group_layouts.iter().enumerate() {
+            let Some(bgl) = bgl else {
+                continue;
+            };
+
             // remember where the resources for this set start at each shader stage
             let base_resource_indices = stage_data.map_ref(|info| info.counters.clone());
 
@@ -825,7 +841,7 @@ impl crate::Device for super::Device {
                 }
             }
 
-            bind_group_infos.push(super::BindGroupLayoutInfo {
+            bind_group_infos[group_index] = Some(super::BindGroupLayoutInfo {
                 base_resource_indices,
             });
         }
@@ -838,14 +854,6 @@ impl crate::Device for super::Device {
                 info.sizes_buffer = Some(info.counters.buffers);
                 info.counters.buffers += 1;
             }
-
-            if info.counters.buffers > self.shared.private_caps.max_buffers_per_stage
-                || info.counters.textures > self.shared.private_caps.max_textures_per_stage
-                || info.counters.samplers > self.shared.private_caps.max_samplers_per_stage
-            {
-                log::error!("Resource limit exceeded: {info:?}");
-                return Err(crate::DeviceError::OutOfMemory);
-            }
         }
 
         let immediates_infos = stage_data.map_ref(|info| {
@@ -854,8 +862,6 @@ impl crate::Device for super::Device {
                 buffer_index,
             })
         });
-
-        let total_counters = stage_data.map_ref(|info| info.counters.clone());
 
         let per_stage_map = stage_data.map(|info| naga::back::msl::EntryPointResources {
             immediates_buffer: info
@@ -872,7 +878,6 @@ impl crate::Device for super::Device {
         Ok(super::PipelineLayout {
             bind_group_infos,
             immediates_infos,
-            total_counters,
             total_immediates: desc.immediate_size,
             per_stage_map,
         })
@@ -1274,7 +1279,7 @@ impl crate::Device for super::Device {
                         }
 
                         let mapping = naga::back::msl::VertexBufferMapping {
-                            id: self.shared.private_caps.max_vertex_buffers - 1 - i as u32,
+                            id: VERTEX_BUFFER_SLOT_START + i as u32,
                             stride: if vbl.array_stride > 0 {
                                 vbl.array_stride.try_into().unwrap()
                             } else {
@@ -1334,27 +1339,11 @@ impl crate::Device for super::Device {
                         });
                     }
 
-                    // Validate vertex buffer count
-                    if desc.layout.total_counters.vs.buffers + (vertex_buffers.len() as u32)
-                        > self.shared.private_caps.max_vertex_buffers
-                    {
-                        let msg = format!(
-                            "pipeline needs too many buffers in the vertex stage: {} vertex and {} layout",
-                            vertex_buffers.len(),
-                            desc.layout.total_counters.vs.buffers
-                        );
-                        return Err(crate::PipelineError::Linkage(
-                            wgt::ShaderStages::VERTEX,
-                            msg,
-                        ));
-                    }
-
                     // Set the pipeline vertex buffer info
                     if !vertex_buffers.is_empty() {
                         let vertex_descriptor = MTLVertexDescriptor::new();
                         for (i, vb) in vertex_buffers.iter().enumerate() {
-                            let buffer_index =
-                                self.shared.private_caps.max_vertex_buffers as usize - 1 - i;
+                            let buffer_index = VERTEX_BUFFER_SLOT_START as usize + i;
                             let buffer_desc = unsafe {
                                 vertex_descriptor
                                     .layouts()
@@ -1529,7 +1518,10 @@ impl crate::Device for super::Device {
                     continue;
                 };
 
-                let raw_format = self.shared.private_caps.map_format(ct.format);
+                let raw_format = self
+                    .shared
+                    .private_texture_format_caps
+                    .map_format(ct.format);
                 at_descriptor.setPixelFormat(raw_format);
                 at_descriptor.setWriteMask(conv::map_color_write(ct.write_mask));
 
@@ -1551,7 +1543,10 @@ impl crate::Device for super::Device {
             // Setup depth stencil state
             let depth_stencil = match desc.depth_stencil {
                 Some(ref ds) => {
-                    let raw_format = self.shared.private_caps.map_format(ds.format);
+                    let raw_format = self
+                        .shared
+                        .private_texture_format_caps
+                        .map_format(ds.format);
                     let aspects = crate::FormatAspects::from(ds.format);
                     if aspects.contains(crate::FormatAspects::DEPTH) {
                         descriptor.setDepthAttachmentPixelFormat(raw_format);

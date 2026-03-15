@@ -158,7 +158,10 @@ async fn binding_array_buffers(
             size: 16,
             mapped_at_creation: true,
         });
-        buffer.slice(..).get_mapped_range_mut()[0..4].copy_from_slice(&data.0);
+        buffer
+            .get_mapped_range_mut(..)
+            .slice(0..4)
+            .copy_from_slice(&data.0);
         buffer.unmap();
         buffers.push(buffer);
     }
@@ -227,7 +230,7 @@ async fn binding_array_buffers(
         .device
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
 

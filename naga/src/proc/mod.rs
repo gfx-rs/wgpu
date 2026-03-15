@@ -144,6 +144,18 @@ impl crate::Literal {
         Self::new(1, scalar)
     }
 
+    pub const fn minus_one(scalar: crate::Scalar) -> Option<Self> {
+        match (scalar.kind, scalar.width) {
+            (crate::ScalarKind::Float, 8) => Some(Self::F64(-1.0)),
+            (crate::ScalarKind::Float, 4) => Some(Self::F32(-1.0)),
+            (crate::ScalarKind::Float, 2) => Some(Self::F16(half::f16::from_f32_const(-1.0))),
+            (crate::ScalarKind::Sint, 8) => Some(Self::I64(-1)),
+            (crate::ScalarKind::Sint, 4) => Some(Self::I32(-1)),
+            (crate::ScalarKind::AbstractInt, 8) => Some(Self::AbstractInt(-1)),
+            _ => None,
+        }
+    }
+
     pub const fn width(&self) -> crate::Bytes {
         match *self {
             Self::F64(_) | Self::I64(_) | Self::U64(_) => 8,

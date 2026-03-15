@@ -96,7 +96,7 @@
 #![cfg_attr(not(any(wgpu_core, webgpu)), allow(unused))]
 
 extern crate alloc;
-#[cfg(std)]
+#[cfg(any(std, test))]
 extern crate std;
 #[cfg(wgpu_core)]
 pub extern crate wgpu_core as wgc;
@@ -116,6 +116,7 @@ mod cmp;
 mod dispatch;
 mod macros;
 pub mod util;
+mod write_only;
 
 //
 //
@@ -155,6 +156,7 @@ pub use wgt::{
     MAXIMUM_SUBGROUP_MAX_SIZE, MINIMUM_SUBGROUP_MIN_SIZE, QUERY_RESOLVE_BUFFER_ALIGNMENT,
     QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_ALIGNMENT,
 };
+pub use write_only::{WriteOnly, WriteOnlyIter};
 
 #[expect(deprecated)]
 pub use wgt::VERTEX_STRIDE_ALIGNMENT;

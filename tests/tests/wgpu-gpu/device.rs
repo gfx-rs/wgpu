@@ -419,7 +419,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
                             min_binding_size: std::num::NonZeroU64::new(
-                                (ctx.device.limits().max_uniform_buffer_binding_size * 2) as u64,
+                                ctx.device.limits().max_uniform_buffer_binding_size * 2,
                             ),
                         },
                         count: None,
@@ -439,7 +439,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             ctx.device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: None,
-                    bind_group_layouts: &[&invalid_bind_group_layout],
+                    bind_group_layouts: &[Some(&invalid_bind_group_layout)],
                     immediate_size: 0,
                 });
 

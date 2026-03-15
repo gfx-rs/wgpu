@@ -470,14 +470,13 @@ pub enum QueueWriteError {
 
 impl WebGpuError for QueueWriteError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Queue(e) => e,
-            Self::Transfer(e) => e,
-            Self::MemoryInitFailure(e) => e,
-            Self::DestroyedResource(e) => e,
-            Self::InvalidResource(e) => e,
-        };
-        e.webgpu_error_type()
+        match self {
+            Self::Queue(e) => e.webgpu_error_type(),
+            Self::Transfer(e) => e.webgpu_error_type(),
+            Self::MemoryInitFailure(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+        }
     }
 }
 
@@ -502,17 +501,14 @@ pub enum QueueSubmitError {
 
 impl WebGpuError for QueueSubmitError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Queue(e) => e,
-            Self::Unmap(e) => e,
-            Self::CommandEncoder(e) => e,
-            Self::ValidateAsActionsError(e) => e,
-            Self::InvalidResource(e) => e,
-            Self::DestroyedResource(_) | Self::BufferStillMapped(_) => {
-                return ErrorType::Validation
-            }
-        };
-        e.webgpu_error_type()
+        match self {
+            Self::Queue(e) => e.webgpu_error_type(),
+            Self::Unmap(e) => e.webgpu_error_type(),
+            Self::CommandEncoder(e) => e.webgpu_error_type(),
+            Self::ValidateAsActionsError(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(_) | Self::BufferStillMapped(_) => ErrorType::Validation,
+        }
     }
 }
 

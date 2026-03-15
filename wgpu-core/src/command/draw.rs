@@ -130,14 +130,14 @@ pub enum RenderCommandError {
 
 impl WebGpuError for RenderCommandError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::IncompatiblePipelineTargets(e) => e,
-            Self::ResourceUsageCompatibility(e) => e,
-            Self::DestroyedResource(e) => e,
-            Self::MissingBufferUsage(e) => e,
-            Self::MissingTextureUsage(e) => e,
-            Self::ImmediateData(e) => e,
-            Self::BindingError(e) => e,
+        match self {
+            Self::IncompatiblePipelineTargets(e) => e.webgpu_error_type(),
+            Self::ResourceUsageCompatibility(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
+            Self::MissingBufferUsage(e) => e.webgpu_error_type(),
+            Self::MissingTextureUsage(e) => e.webgpu_error_type(),
+            Self::ImmediateData(e) => e.webgpu_error_type(),
+            Self::BindingError(e) => e.webgpu_error_type(),
 
             Self::BindGroupIndexOutOfRange { .. }
             | Self::VertexBufferIndexOutOfRange { .. }
@@ -149,9 +149,8 @@ impl WebGpuError for RenderCommandError {
             | Self::InvalidViewportRectPosition { .. }
             | Self::InvalidViewportDepth(..)
             | Self::InvalidScissorRect(..)
-            | Self::Unimplemented(..) => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::Unimplemented(..) => ErrorType::Validation,
+        }
     }
 }
 

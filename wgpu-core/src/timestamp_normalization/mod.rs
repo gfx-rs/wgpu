@@ -195,7 +195,7 @@ impl TimestampNormalizer {
                         Some("(wgpu internal) Timestamp normalizer pipeline layout"),
                         device.instance_flags,
                     ),
-                    bind_group_layouts: &[temporary_bind_group_layout.as_ref()],
+                    bind_group_layouts: &[Some(temporary_bind_group_layout.as_ref())],
                     immediate_size: 8,
                     flags: hal::PipelineLayoutFlags::empty(),
                 })
@@ -276,7 +276,7 @@ impl TimestampNormalizer {
             // at once to normalize the timestamps, we can't use it. We force the buffer to fail
             // to allocate. The lowest max binding size is 128MB, and query sets must be small
             // (no more than 4096), so this should never be hit in practice by sane programs.
-            if buffer_size.get() > device.adapter.limits().max_storage_buffer_binding_size as u64 {
+            if buffer_size.get() > device.adapter.limits().max_storage_buffer_binding_size {
                 return Err(DeviceError::OutOfMemory);
             }
 
@@ -347,7 +347,7 @@ impl TimestampNormalizer {
                 timestamp_writes: None,
             });
             encoder.set_compute_pipeline(&*state.pipeline);
-            encoder.set_bind_group(&*state.pipeline_layout, 0, Some(bind_group), &[]);
+            encoder.set_bind_group(&*state.pipeline_layout, 0, bind_group, &[]);
             encoder.set_immediates(
                 &*state.pipeline_layout,
                 0,

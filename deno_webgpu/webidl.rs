@@ -394,10 +394,14 @@ pub enum GPUFeatureName {
   Bgra8unormStorage,
   #[webidl(rename = "float32-filterable")]
   Float32Filterable,
+  #[webidl(rename = "float32-blendable")]
+  Float32Blendable,
   #[webidl(rename = "dual-source-blending")]
   DualSourceBlending,
   #[webidl(rename = "subgroups")]
   Subgroups,
+  #[webidl(rename = "primitive-index")]
+  PrimitiveIndex,
 
   // standard feature, but not default yet in wgpu due to incomplete support
   // (and even if enabled in wgpu, doing so may not be appropriate in Deno)
@@ -459,8 +463,6 @@ pub enum GPUFeatureName {
   ShaderF64,
   #[webidl(rename = "shader-i16")]
   ShaderI16,
-  #[webidl(rename = "shader-primitive-index")]
-  ShaderPrimitiveIndex,
   #[webidl(rename = "shader-early-depth-test")]
   ShaderEarlyDepthTest,
   #[webidl(rename = "passthrough-shaders")]
@@ -489,6 +491,7 @@ pub fn feature_names_to_features(
       GPUFeatureName::Rg11b10ufloatRenderable => Features::RG11B10UFLOAT_RENDERABLE,
       GPUFeatureName::Bgra8unormStorage => Features::BGRA8UNORM_STORAGE,
       GPUFeatureName::Float32Filterable => Features::FLOAT32_FILTERABLE,
+      GPUFeatureName::Float32Blendable => Features::FLOAT32_BLENDABLE,
       GPUFeatureName::DualSourceBlending => Features::DUAL_SOURCE_BLENDING,
       GPUFeatureName::Subgroups => Features::SUBGROUP,
       GPUFeatureName::ExternalTexture => Features::EXTERNAL_TEXTURE,
@@ -518,7 +521,7 @@ pub fn feature_names_to_features(
       GPUFeatureName::VertexAttribute64Bit => Features::VERTEX_ATTRIBUTE_64BIT,
       GPUFeatureName::ShaderF64 => Features::SHADER_F64,
       GPUFeatureName::ShaderI16 => Features::SHADER_I16,
-      GPUFeatureName::ShaderPrimitiveIndex => Features::SHADER_PRIMITIVE_INDEX,
+      GPUFeatureName::PrimitiveIndex => Features::PRIMITIVE_INDEX,
       GPUFeatureName::ShaderEarlyDepthTest => Features::SHADER_EARLY_DEPTH_TEST,
       GPUFeatureName::PassthroughShaders => Features::PASSTHROUGH_SHADERS,
     };
@@ -577,6 +580,9 @@ pub fn features_to_feature_names(
   }
   if features.contains(wgpu_types::Features::FLOAT32_FILTERABLE) {
     return_features.insert(Float32Filterable);
+  }
+  if features.contains(wgpu_types::Features::FLOAT32_BLENDABLE) {
+    return_features.insert(Float32Blendable);
   }
   if features.contains(wgpu_types::Features::DUAL_SOURCE_BLENDING) {
     return_features.insert(DualSourceBlending);
@@ -674,8 +680,8 @@ pub fn features_to_feature_names(
   if features.contains(wgpu_types::Features::SHADER_I16) {
     return_features.insert(ShaderI16);
   }
-  if features.contains(wgpu_types::Features::SHADER_PRIMITIVE_INDEX) {
-    return_features.insert(ShaderPrimitiveIndex);
+  if features.contains(wgpu_types::Features::PRIMITIVE_INDEX) {
+    return_features.insert(PrimitiveIndex);
   }
   if features.contains(wgpu_types::Features::SHADER_EARLY_DEPTH_TEST) {
     return_features.insert(ShaderEarlyDepthTest);
@@ -803,16 +809,11 @@ impl<'a> WebIdlConverter<'a> for GPUColorWriteFlags {
       },
     )?;
 
-    let flags =
-      wgpu_types::ColorWrites::from_bits(flags_value).ok_or_else(|| {
-        WebIdlError::other(
-          prefix,
-          context,
-          JsErrorBox::type_error("color write flags are not valid"),
-        )
-      })?;
-
-    Ok(GPUColorWriteFlags(flags))
+    // WebGPU specifies a validation error for invalid color write mask values.
+    // We propagate invalid bits here; wgpu_core will validate it.
+    Ok(GPUColorWriteFlags(
+      wgpu_types::ColorWrites::from_bits_retain(flags_value),
+    ))
   }
 }
 

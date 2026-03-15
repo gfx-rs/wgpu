@@ -78,6 +78,7 @@
             binding: None,
             ty: 2,
             init: None,
+            memory_decorations: (""),
         ),
     ],
     global_expressions: [],
