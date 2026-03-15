@@ -107,6 +107,7 @@ impl<'a, T: ?Sized> WriteOnly<'a, T> {
     /// # Example
     ///
     /// ```
+    /// # use wgpu_types as wgpu;
     /// fn write_numbers(slice: wgpu::WriteOnly<[u32]>) {
     ///     for (i, mut elem) in slice.into_iter().enumerate() {
     ///         elem.write(i as u32);
@@ -177,6 +178,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// # Example
     ///
     /// ```
+    /// # use wgpu_types as wgpu;
     /// let example_slice: &mut [u8] = &mut [0; 10];
     /// assert_eq!(wgpu::WriteOnly::from_mut(example_slice).len(), example_slice.len());
     /// ```
@@ -203,6 +205,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// # Example
     ///
     /// ```
+    /// # use wgpu_types as wgpu;
     /// // Ordinarily you would get a `WriteOnly` from `wgpu::Buffer` instead.
     /// let mut data: [u8; 9] = [0; 9];
     /// let mut wo = wgpu::WriteOnly::from_mut(data.as_mut_slice());
@@ -259,6 +262,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// # Example
     ///
     /// ```
+    /// # use wgpu_types as wgpu;
     /// // Ordinarily you would get a `WriteOnly` from `wgpu::Buffer` instead.
     /// let mut buf: [u8; 10] = [0; 10];
     /// let wo = wgpu::WriteOnly::from_mut(buf.as_mut_slice());
@@ -305,6 +309,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// # Example
     ///
     /// ```
+    /// # use wgpu_types as wgpu;
     /// // Ordinarily you would get a `WriteOnly` from `wgpu::Buffer` instead.
     /// let mut buf = vec![0; 10];
     /// let mut wo = wgpu::WriteOnly::from_mut(buf.as_mut_slice());
@@ -357,6 +362,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// # Example
     ///
     /// ```
+    /// # use wgpu_types as wgpu;
     /// // Ordinarily you would get a `WriteOnly` from `wgpu::Buffer` instead.
     /// let mut buf = vec![0; 5];
     /// let mut wo = wgpu::WriteOnly::from_mut(buf.as_mut_slice());
@@ -415,6 +421,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// (If a transformation is not required, use [`WriteOnly::copy_from_slice()`].)
     ///
     /// ```
+    /// # use wgpu_types as wgpu;
     /// fn write_text_as_chars(text: &str, output: wgpu::WriteOnly<[u8]>) {
     ///     let (mut output, _remainder) = output.into_chunks::<{ size_of::<u32>() }>();
     ///     output.write_iter(text.chars().map(|ch| (ch as u32).to_ne_bytes()));
