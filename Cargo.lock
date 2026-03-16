@@ -366,6 +366,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bit-set"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34ddef2995421ab6a5c779542c81ee77c115206f4ad9d5a8e05f4ff49716a3dd"
+dependencies = [
+ "bit-vec 0.9.1",
+]
+
+[[package]]
 name = "bit-vec"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -945,7 +954,7 @@ dependencies = [
  "anyhow",
  "az",
  "bincode 1.3.3",
- "bit-set",
+ "bit-set 0.8.0",
  "bit-vec 0.8.0",
  "boxed_error",
  "bytes",
@@ -2389,7 +2398,7 @@ version = "28.0.0"
 dependencies = [
  "arbitrary",
  "arrayvec",
- "bit-set",
+ "bit-set 0.9.1",
  "bitflags 2.11.0",
  "cfg-if",
  "cfg_aliases 0.2.1",
@@ -4820,7 +4829,7 @@ name = "wgpu-core"
 version = "28.0.0"
 dependencies = [
  "arrayvec",
- "bit-set",
+ "bit-set 0.9.1",
  "bit-vec 0.9.1",
  "bitflags 2.11.0",
  "bytemuck",
@@ -4944,7 +4953,7 @@ dependencies = [
  "android_system_properties",
  "arrayvec",
  "ash",
- "bit-set",
+ "bit-set 0.9.1",
  "bitflags 2.11.0",
  "block2 0.6.2",
  "bytemuck",
