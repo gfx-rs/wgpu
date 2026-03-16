@@ -663,6 +663,10 @@ impl super::Adapter {
             // that's the only way to get gl_InstanceID to work correctly.
             features.set(wgt::Features::INDIRECT_FIRST_INSTANCE, supported);
         }
+        private_caps.set(
+            super::PrivateCapabilities::MULTISAMPLED_RENDER_TO_TEXTURE,
+            extensions.contains("GL_EXT_multisampled_render_to_texture"),
+        );
 
         // GLSL ES 3.10+ / GLSL 4.30+ natively support coherent/volatile qualifiers
         // on storage buffers. These were introduced alongside storage buffer support.

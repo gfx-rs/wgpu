@@ -222,6 +222,7 @@ By @kpreid in [#9042](https://github.com/gfx-rs/wgpu/pull/9042).
 - Renamed `EXPERIMENTAL_PASSTHROUGH_SHADERS` to `PASSTHROUGH_SHADERS` and made this no longer an experimental feature. by @inner-daemons in [#9054](https://github.com/gfx-rs/wgpu/pull/9054).
 - BREAKING: End offsets in trace and `player` commands are now represented using `offset` + `size` instead. By @ErichDonGubler in [9073](https://github.com/gfx-rs/wgpu/pull/9073).
 - Validate some uncaught cases where buffer transfer operations could overflow when computing an end offset. By @ErichDonGubler in [9073](https://github.com/gfx-rs/wgpu/pull/9073).
+- Fix `local_invocation_id` and `local_invocation_index` being written multiple times in HLSL/MSL backends, and naming conflicts when users name variables `__local_invocation_id` or `__local_invocation_index`. By @inner-daemons in [#9099](https://github.com/gfx-rs/wgpu/pull/9099).
 - Added internal labels to validation GPU objects and timestamp normalization code to improve clarity in graphics debuggers. By @szostid in [9094](https://github.com/gfx-rs/wgpu/pull/9094)
 - Fix multi-planar texture copying. By @noituri [#9069](https://github.com/gfx-rs/wgpu/pull/9069)
 
@@ -272,6 +273,11 @@ By @kpreid in [#9042](https://github.com/gfx-rs/wgpu/pull/9042).
 #### Vulkan
 
 - Remove incorrect ordered texture uses. By @NiklasEi in [#8924](https://github.com/gfx-rs/wgpu/pull/8924).
+### Performance
+
+#### GLES
+
+- The GL backend would now try to take advantage of `GL_EXT_multisampled_render_to_texture` extension when applicable to skip the multi-sample resolve operation. By @opstic in [#8536](https://github.com/gfx-rs/wgpu/pull/8536).
 
 ### Documentation
 
