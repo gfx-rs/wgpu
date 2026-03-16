@@ -22,7 +22,7 @@ kernel void compute1_(
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     const Input input = { local_invocation_id, local_invocation_index };
     wg_var = input.local_invocation_index * 2u;
-    uint _e8 = wg_var;
-    wg_var = _e8 + input.local_invocation_id[0];
+    uint _e6 = wg_var;
+    wg_var = _e6 + input.local_invocation_id[0];
     return;
 }

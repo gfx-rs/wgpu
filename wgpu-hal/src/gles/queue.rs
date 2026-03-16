@@ -111,6 +111,7 @@ impl super::Queue {
         attachment: u32,
         view: &super::TextureView,
         depth_slice: Option<u32>,
+        sample_count: u32,
     ) {
         match view.inner {
             super::TextureInner::Renderbuffer { raw } => {
@@ -156,13 +157,24 @@ impl super::Queue {
                 } else {
                     unsafe {
                         assert_eq!(view.mip_levels.len(), 1);
-                        gl.framebuffer_texture_2d(
-                            fbo_target,
-                            attachment,
-                            get_2d_target(target, view.array_layers.start),
-                            Some(raw),
-                            view.mip_levels.start as i32,
-                        )
+                        if sample_count != 1 {
+                            gl.framebuffer_texture_2d_multisample(
+                                fbo_target,
+                                attachment,
+                                get_2d_target(target, view.array_layers.start),
+                                Some(raw),
+                                view.mip_levels.start as i32,
+                                sample_count as i32,
+                            )
+                        } else {
+                            gl.framebuffer_texture_2d(
+                                fbo_target,
+                                attachment,
+                                get_2d_target(target, view.array_layers.start),
+                                Some(raw),
+                                view.mip_levels.start as i32,
+                            )
+                        }
                     };
                 }
             }
@@ -1119,9 +1131,17 @@ impl super::Queue {
                 attachment,
                 ref view,
                 depth_slice,
+                sample_count,
             } => {
                 unsafe {
-                    self.set_attachment(gl, glow::DRAW_FRAMEBUFFER, attachment, view, depth_slice)
+                    self.set_attachment(
+                        gl,
+                        glow::DRAW_FRAMEBUFFER,
+                        attachment,
+                        view,
+                        depth_slice,
+                        sample_count,
+                    )
                 };
             }
             C::ResolveAttachment {
@@ -1139,6 +1159,7 @@ impl super::Queue {
                         glow::COLOR_ATTACHMENT0,
                         dst,
                         None,
+                        1,
                     )
                 };
                 unsafe {

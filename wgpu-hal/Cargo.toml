@@ -200,6 +200,7 @@ required-features = ["gles"]
 
 [dependencies]
 naga.workspace = true
+wgpu-naga-bridge.workspace = true
 wgpu-types = { workspace = true, default-features = false }
 
 # Dependencies in the lib and empty backend

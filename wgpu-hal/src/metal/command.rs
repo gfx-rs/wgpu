@@ -13,7 +13,7 @@ use objc2_metal::{
     MTLVisibilityResultMode,
 };
 
-use super::{conv, TimestampQuerySupport};
+use super::{adapter::VERTEX_BUFFER_SLOT_START, conv, TimestampQuerySupport};
 use crate::CommandEncoder as _;
 use alloc::{
     borrow::{Cow, ToOwned as _},
@@ -435,7 +435,7 @@ impl super::CommandState {
         // they were added to the map.
         result_sizes.extend(stage_info.vertex_buffer_mappings.iter().map(|vbm| {
             self.vertex_buffer_size_map
-                .get(&(vbm.id as u64))
+                .get(&vbm.id)
                 .map(|size| u32::try_from(size.get()).unwrap_or(u32::MAX))
                 .unwrap_or_default()
         }));
@@ -452,7 +452,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     type A = super::Api;
 
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
-        let queue = &self.raw_queue.lock();
+        let queue = &self.queue_shared.raw;
         let retain_references = self.shared.settings.retain_command_buffer_references;
         let raw = autoreleasepool(move |_| {
             let cmd_buf_ref = if retain_references {
@@ -560,7 +560,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         T: Iterator<Item = crate::TextureCopy>,
     {
         let dst_texture = if src.format != dst.format {
-            let raw_format = self.shared.private_caps.map_format(src.format);
+            let raw_format = self
+                .shared
+                .private_texture_format_caps
+                .map_format(src.format);
             Cow::Owned(autoreleasepool(|_| {
                 dst.raw.newTextureViewWithPixelFormat(raw_format).unwrap()
             }))
@@ -1344,7 +1347,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         index: u32,
         binding: crate::BufferBinding<'a, super::Buffer>,
     ) {
-        let buffer_index = self.shared.private_caps.max_vertex_buffers as u64 - 1 - index as u64;
+        let buffer_index = VERTEX_BUFFER_SLOT_START + index;
         let encoder = self.state.render.as_ref().unwrap();
         unsafe {
             encoder.setVertexBuffer_offset_atIndex(

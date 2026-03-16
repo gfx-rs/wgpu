@@ -190,6 +190,7 @@
             )),
             ty: 8,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("samp"),
@@ -200,6 +201,7 @@
             )),
             ty: 9,
             init: None,
+            memory_decorations: (""),
         ),
     ],
     global_expressions: [],

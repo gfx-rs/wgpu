@@ -18,9 +18,9 @@ struct State {
 
 impl State {
     async fn new(display: OwnedDisplayHandle, window: Arc<Window>) -> State {
-        let instance = wgpu::Instance::new(
-            wgpu::InstanceDescriptor::default().with_display_handle(Box::new(display)),
-        );
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_with_display_handle(
+            Box::new(display),
+        ));
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions::default())
             .await

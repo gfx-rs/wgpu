@@ -45,7 +45,7 @@ static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX),
+            .features(wgpu::Features::PRIMITIVE_INDEX),
     )
     .run_async(|ctx| async move {
         //
@@ -69,7 +69,7 @@ static DRAW_INDEXED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX),
+            .features(wgpu::Features::PRIMITIVE_INDEX),
     )
     .run_async(|ctx| async move {
         //

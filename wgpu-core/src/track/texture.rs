@@ -49,10 +49,6 @@ impl ResourceUses for TextureUses {
         Self::bits(&self)
     }
 
-    fn all_ordered(self) -> bool {
-        Self::ORDERED.contains(self)
-    }
-
     fn any_exclusive(self) -> bool {
         self.intersects(Self::EXCLUSIVE)
     }
@@ -263,6 +259,7 @@ impl TextureStateSet {
 pub(crate) struct TextureUsageScope {
     set: TextureStateSet,
     metadata: ResourceMetadata<Arc<Texture>>,
+    ordered_uses_mask: TextureUses,
 }
 
 impl Default for TextureUsageScope {
@@ -270,6 +267,7 @@ impl Default for TextureUsageScope {
         Self {
             set: TextureStateSet::new(),
             metadata: ResourceMetadata::new(),
+            ordered_uses_mask: TextureUses::empty(),
         }
     }
 }
@@ -292,6 +290,10 @@ impl TextureUsageScope {
     pub fn set_size(&mut self, size: usize) {
         self.set.set_size(size);
         self.metadata.set_size(size);
+    }
+
+    pub fn set_ordered_uses_mask(&mut self, ordered_uses_mask: TextureUses) {
+        self.ordered_uses_mask = ordered_uses_mask;
     }
 
     /// Returns true if the tracker owns no resources.
@@ -419,10 +421,12 @@ pub(crate) struct TextureTracker {
     metadata: ResourceMetadata<Arc<Texture>>,
 
     temp: Vec<PendingTransition<TextureUses>>,
+
+    ordered_uses_mask: TextureUses,
 }
 
 impl TextureTracker {
-    pub fn new() -> Self {
+    pub fn new(ordered_uses_mask: TextureUses) -> Self {
         Self {
             start_set: TextureStateSet::new(),
             end_set: TextureStateSet::new(),
@@ -430,6 +434,8 @@ impl TextureTracker {
             metadata: ResourceMetadata::new(),
 
             temp: Vec::new(),
+
+            ordered_uses_mask,
         }
     }
 
@@ -516,6 +522,7 @@ impl TextureTracker {
                 None,
                 ResourceMetadataProvider::Direct { resource: texture },
                 &mut self.temp,
+                self.ordered_uses_mask,
             )
         }
 
@@ -557,6 +564,7 @@ impl TextureTracker {
                         metadata: &tracker.metadata,
                     },
                     &mut self.temp,
+                    self.ordered_uses_mask,
                 );
             }
         }
@@ -593,6 +601,7 @@ impl TextureTracker {
                         metadata: &scope.metadata,
                     },
                     &mut self.temp,
+                    self.ordered_uses_mask,
                 );
             }
         }
@@ -648,6 +657,7 @@ impl TextureTracker {
                         metadata: &scope.metadata,
                     },
                     &mut self.temp,
+                    self.ordered_uses_mask,
                 )
             };
 
@@ -672,14 +682,16 @@ pub(crate) struct DeviceTextureTracker {
     current_state_set: TextureStateSet,
     metadata: ResourceMetadata<Weak<Texture>>,
     temp: Vec<PendingTransition<TextureUses>>,
+    ordered_uses_mask: TextureUses,
 }
 
 impl DeviceTextureTracker {
-    pub fn new() -> Self {
+    pub fn new(ordered_uses_mask: TextureUses) -> Self {
         Self {
             current_state_set: TextureStateSet::new(),
             metadata: ResourceMetadata::new(),
             temp: Vec::new(),
+            ordered_uses_mask,
         }
     }
 
@@ -704,7 +716,7 @@ impl DeviceTextureTracker {
     /// Inserts a single texture and a state into the resource tracker.
     ///
     /// If the resource already exists in the tracker, it will be overwritten.
-    pub fn insert_single(&mut self, texture: &Arc<Texture>, usage: TextureUses) {
+    pub fn insert_single(&mut self, texture: &Arc<Texture>, state: TextureUses) {
         let index = texture.tracker_index().as_usize();
 
         self.allow_index(index);
@@ -718,7 +730,7 @@ impl DeviceTextureTracker {
                 &mut self.current_state_set,
                 &mut self.metadata,
                 index,
-                TextureStateProvider::KnownSingle { state: usage },
+                TextureStateProvider::KnownSingle { state },
                 None,
                 ResourceMetadataProvider::Direct {
                     resource: &Arc::downgrade(texture),
@@ -754,6 +766,7 @@ impl DeviceTextureTracker {
                 index,
                 start_state_provider.clone(),
                 &mut self.temp,
+                self.ordered_uses_mask,
             )
         };
         unsafe {
@@ -795,6 +808,7 @@ impl DeviceTextureTracker {
                     index,
                     start_state_provider,
                     &mut self.temp,
+                    self.ordered_uses_mask,
                 );
                 update(
                     texture_selector,
@@ -834,6 +848,7 @@ impl DeviceTextureTracker {
                     index,
                     start_state_provider.clone(),
                     &mut self.temp,
+                    self.ordered_uses_mask,
                 );
                 update(
                     texture_selector,
@@ -1034,6 +1049,7 @@ unsafe fn insert_or_barrier_update(
     end_state_provider: Option<TextureStateProvider<'_>>,
     metadata_provider: ResourceMetadataProvider<'_, Arc<Texture>>,
     barriers: &mut Vec<PendingTransition<TextureUses>>,
+    ordered_uses_mask: TextureUses,
 ) {
     let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
 
@@ -1061,6 +1077,7 @@ unsafe fn insert_or_barrier_update(
             index,
             start_state_provider,
             barriers,
+            ordered_uses_mask,
         )
     };
     unsafe {
@@ -1290,6 +1307,7 @@ unsafe fn barrier(
     index: usize,
     state_provider: TextureStateProvider<'_>,
     barriers: &mut Vec<PendingTransition<TextureUses>>,
+    ordered_uses_mask: TextureUses,
 ) {
     let current_state = unsafe { current_state_set.get_unchecked(index) };
 
@@ -1297,7 +1315,7 @@ unsafe fn barrier(
 
     match (current_state, new_state) {
         (SingleOrManyStates::Single(current_simple), SingleOrManyStates::Single(new_simple)) => {
-            if skip_barrier(current_simple, new_simple) {
+            if skip_barrier(current_simple, ordered_uses_mask, new_simple) {
                 return;
             }
 
@@ -1316,7 +1334,7 @@ unsafe fn barrier(
                     continue;
                 }
 
-                if skip_barrier(current_simple, new_state) {
+                if skip_barrier(current_simple, ordered_uses_mask, new_state) {
                     continue;
                 }
 
@@ -1339,7 +1357,7 @@ unsafe fn barrier(
                         continue;
                     }
 
-                    if skip_barrier(current_layer_state, new_simple) {
+                    if skip_barrier(current_layer_state, ordered_uses_mask, new_simple) {
                         continue;
                     }
 
@@ -1371,7 +1389,7 @@ unsafe fn barrier(
                             continue;
                         }
 
-                        if skip_barrier(*current_layer_state, new_state) {
+                        if skip_barrier(*current_layer_state, ordered_uses_mask, new_state) {
                             continue;
                         }
 

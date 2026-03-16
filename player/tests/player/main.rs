@@ -181,7 +181,7 @@ impl Corpus {
             for test_path in &corpus.tests {
                 println!("\t\tTest '{test_path:?}'");
 
-                let instance_desc = wgt::InstanceDescriptor::from_env_or_default();
+                let instance_desc = wgt::InstanceDescriptor::new_without_display_handle_from_env();
                 let instance_flags = instance_desc.flags;
                 let instance = wgc::instance::Instance::new("test", instance_desc, None);
                 let adapter = match instance.request_adapter(

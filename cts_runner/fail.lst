@@ -20,7 +20,6 @@ webgpu:api,validation,compute_pipeline:overrides,workgroup_size,limits:* // 0%
 webgpu:api,validation,createBindGroup:buffer,resource_state:* // 0%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,createBindGroup:external_texture,* // 0%, no external external texture in deno
 webgpu:api,validation,createBindGroup:texture,resource_state:* // crash, https://github.com/gfx-rs/wgpu/issues/7881
-webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:* // metal, https://github.com/gfx-rs/wgpu/issues/8173
 webgpu:api,validation,createBindGroupLayout:visibility,VERTEX_shader_stage_buffer_type:* // 25%, writable storage buffers not allowed in VERTEX
 webgpu:api,validation,createBindGroupLayout:visibility,VERTEX_shader_stage_storage_texture_access:* // 25%, write-access storage textures not allowed in VERTEX
 webgpu:api,validation,createBindGroupLayout:visibility:* // 25%, missing per-stage storage limits
@@ -63,6 +62,8 @@ webgpu:api,validation,resource_usages,texture,in_pass_encoder:subresources_and_b
 webgpu:api,validation,resource_usages,texture,in_render_common:subresources,depth_stencil_attachment_and_bind_group:* // 69%, https://github.com/gfx-rs/wgpu/issues/8705
 webgpu:api,validation,state,device_lost,destroy:* // crash
 webgpu:api,validation,texture,destroy:submit_a_destroyed_texture_as_attachment:* // 44%, https://github.com/gfx-rs/wgpu/issues/8714
+
+webgpu:shader,execution,expression,call,builtin,atan2:f16:* // dx12, fails with dxc, passes with fxc, https://github.com/gfx-rs/wgpu/issues/9179
 
 webgpu:shader,validation,decl,context_dependent_resolution:* // 92%, f16 as reserved keyword when enabled
 webgpu:shader,validation,decl,let:* // texture/sampler let
@@ -154,7 +155,7 @@ webgpu:shader,validation,expression,call,builtin,unpack4xI8:* // 75%, missing co
 webgpu:shader,validation,expression,call,builtin,unpack4xU8:* // 75%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,value_constructor:* // 92%, value constructors lack must-use validation + abstract-float matrix validation issues
 webgpu:shader,validation,expression,early_evaluation:* // 67%, mixed override/runtime composite evaluation
-webgpu:shader,validation,expression,matrix,* // 83%, #5474, #8790, #8868
+webgpu:shader,validation,expression,matrix,* // 92%, #5474, #8868, overflow/underflow/atomic
 webgpu:shader,validation,expression,precedence:* // 76%, https://github.com/gfx-rs/wgpu/issues/4536
 webgpu:shader,validation,expression,unary,* // 99%, atomics #5474
 webgpu:shader,validation,extension,dual_source_blending:blend_src_usage:* // 61%, @blend_src validation gaps

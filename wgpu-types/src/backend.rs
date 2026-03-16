@@ -1,7 +1,7 @@
 //! [`Backend`], [`Backends`], and backend-specific options.
 
 use alloc::string::String;
-use core::hash::Hash;
+use core::{hash::Hash, str::FromStr};
 
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
@@ -632,16 +632,13 @@ impl Dx12Compiler {
     /// - `StaticDxc`
     #[must_use]
     pub fn from_env() -> Option<Self> {
-        let value = crate::env::var("WGPU_DX12_COMPILER")
-            .as_deref()?
-            .to_lowercase();
-        match value.as_str() {
-            "dxc" | "dynamicdxc" => Some(Self::default_dynamic_dxc()),
-            "staticdxc" => Some(Self::StaticDxc),
-            "fxc" => Some(Self::Fxc),
-            "auto" => Some(Self::Auto),
-            _ => None,
-        }
+        let env = crate::env::var("WGPU_DX12_COMPILER")?;
+        env.parse().map_err(|expected_msg| {
+            log::warn!(
+                "Unknown value `{env:?}` for `WGPU_DX12_COMPILER` environment variable. {expected_msg}"
+            )
+        })
+        .ok()
     }
 
     /// Takes the given compiler, modifies it based on the `WGPU_DX12_COMPILER` environment variable, and returns the result.
@@ -654,6 +651,20 @@ impl Dx12Compiler {
         } else {
             self
         }
+    }
+}
+
+impl FromStr for Dx12Compiler {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(match value.to_lowercase().as_str() {
+            "dxc" | "dynamicdxc" => Self::default_dynamic_dxc(),
+            "staticdxc" => Self::StaticDxc,
+            "fxc" => Self::Fxc,
+            "auto" => Self::Auto,
+            _ => return Err("Expected `dynamicdxc` (alias `dxc`), `staticdxc`, `fxc`, or `auto`."),
+        })
     }
 }
 
