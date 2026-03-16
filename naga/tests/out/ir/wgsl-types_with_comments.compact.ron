@@ -56,6 +56,7 @@
             binding: None,
             ty: 0,
             init: None,
+            memory_decorations: (""),
         ),
     ],
     global_expressions: [

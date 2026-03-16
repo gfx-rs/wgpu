@@ -157,6 +157,20 @@ impl FailureCase {
         }
     }
 
+    /// Tests running on the KosmicKrisp Vulkan driver on macOS.
+    pub fn kosmic_krisp() -> Self {
+        FailureCase {
+            backends: Some(wgpu::Backends::VULKAN),
+            driver: Some("KosmicKrisp"),
+            ..FailureCase::default()
+        }
+    }
+
+    /// Tests running on either Vulkan driver on macOS.
+    pub fn mac_vulkan(f: impl Fn(FailureCase) -> FailureCase) -> Vec<Self> {
+        vec![f(FailureCase::molten_vk()), f(FailureCase::kosmic_krisp())]
+    }
+
     /// Return the reasons why this case should fail.
     pub fn reasons(&self) -> &[FailureReason] {
         if self.reasons.is_empty() {

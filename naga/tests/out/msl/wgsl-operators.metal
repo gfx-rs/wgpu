@@ -263,15 +263,15 @@ void arithmetic(
         metal::float2 rem4_1 = metal::fmod(metal::float2(2.0), metal::float2(1.0));
         metal::float2 rem5_1 = metal::fmod(metal::float2(2.0), metal::float2(1.0));
     }
-    metal::float3x3 add = metal::float3x3 {} + metal::float3x3 {};
-    metal::float3x3 sub = metal::float3x3 {} - metal::float3x3 {};
+    metal::float3x3 add = metal::float3x3(metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0));
+    metal::float3x3 sub = metal::float3x3(metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0));
     metal::float3x3 mul_scalar0_ = metal::float3x3 {} * 1.0;
     metal::float3x3 mul_scalar1_ = 2.0 * metal::float3x3 {};
     metal::float3 mul_vector0_ = metal::float4x3 {} * metal::float4(1.0);
     metal::float4 mul_vector1_ = metal::float3(2.0) * metal::float4x3 {};
-    metal::float3x3 mul = metal::float4x3 {} * metal::float3x4 {};
-    int _e175 = prevent_const_eval;
-    wgpu_7437_ = as_type<int>(as_type<uint>(_e175) + as_type<uint>((-2147483647 - 1)));
+    metal::float3x3 mul = metal::float3x3(metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0));
+    int _e205 = prevent_const_eval;
+    wgpu_7437_ = as_type<int>(as_type<uint>(_e205) + as_type<uint>((-2147483647 - 1)));
     return;
 }
 

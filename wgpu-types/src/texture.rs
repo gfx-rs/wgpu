@@ -251,11 +251,6 @@ bitflags::bitflags! {
         /// The combination of states that a texture must exclusively be in.
         /// cbindgen:ignore
         const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
-        /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
-        /// If a usage is ordered, then if the texture state doesn't change between draw calls, there
-        /// are no barriers needed for synchronization.
-        /// cbindgen:ignore
-        const ORDERED = Self::INCLUSIVE.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits();
 
         /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource
         const COMPLEX = 1 << 13;

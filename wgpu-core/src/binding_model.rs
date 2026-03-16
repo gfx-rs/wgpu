@@ -327,6 +327,7 @@ pub enum BindingTypeMaxCountErrorKind {
     UniformBuffers,
     BindingArrayElements,
     BindingArraySamplerElements,
+    BindingArrayAccelerationStructureElements,
     AccelerationStructures,
 }
 
@@ -353,6 +354,9 @@ impl BindingTypeMaxCountErrorKind {
             }
             BindingTypeMaxCountErrorKind::BindingArraySamplerElements => {
                 "max_binding_array_sampler_elements_per_shader_stage"
+            }
+            BindingTypeMaxCountErrorKind::BindingArrayAccelerationStructureElements => {
+                "max_binding_array_acceleration_structure_elements_per_shader_stage"
             }
             BindingTypeMaxCountErrorKind::AccelerationStructures => {
                 "max_acceleration_structures_per_shader_stage"
@@ -433,6 +437,7 @@ pub(crate) struct BindingTypeMaxCountValidator {
     acceleration_structures: PerStageBindingTypeCounter,
     binding_array_elements: PerStageBindingTypeCounter,
     binding_array_sampler_elements: PerStageBindingTypeCounter,
+    binding_array_acceleration_structure_elements: PerStageBindingTypeCounter,
     has_bindless_array: bool,
 }
 
@@ -444,9 +449,16 @@ impl BindingTypeMaxCountValidator {
             self.binding_array_elements.add(binding.visibility, count);
             self.has_bindless_array = true;
 
-            if let wgt::BindingType::Sampler(_) = binding.ty {
-                self.binding_array_sampler_elements
-                    .add(binding.visibility, count);
+            match binding.ty {
+                wgt::BindingType::Sampler(_) => {
+                    self.binding_array_sampler_elements
+                        .add(binding.visibility, count);
+                }
+                wgt::BindingType::AccelerationStructure { .. } => {
+                    self.binding_array_acceleration_structure_elements
+                        .add(binding.visibility, count);
+                }
+                _ => {}
             }
         } else {
             match binding.ty {
@@ -513,6 +525,8 @@ impl BindingTypeMaxCountValidator {
             .merge(&other.binding_array_elements);
         self.binding_array_sampler_elements
             .merge(&other.binding_array_sampler_elements);
+        self.binding_array_acceleration_structure_elements
+            .merge(&other.binding_array_acceleration_structure_elements);
     }
 
     pub(crate) fn validate(&self, limits: &wgt::Limits) -> Result<(), BindingTypeMaxCountError> {
@@ -560,6 +574,11 @@ impl BindingTypeMaxCountValidator {
             limits.max_binding_array_sampler_elements_per_shader_stage,
             BindingTypeMaxCountErrorKind::BindingArraySamplerElements,
         )?;
+        self.binding_array_acceleration_structure_elements
+            .validate(
+                limits.max_binding_array_acceleration_structure_elements_per_shader_stage,
+                BindingTypeMaxCountErrorKind::BindingArrayAccelerationStructureElements,
+            )?;
         self.acceleration_structures.validate(
             limits.max_acceleration_structures_per_shader_stage,
             BindingTypeMaxCountErrorKind::AccelerationStructures,
@@ -600,9 +619,11 @@ pub struct BindGroupEntry<
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
+    [TLAS]: ToOwned,
     <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
     <[S] as ToOwned>::Owned: fmt::Debug,
     <[TV] as ToOwned>::Owned: fmt::Debug,
+    <[TLAS] as ToOwned>::Owned: fmt::Debug,
 {
     /// Slot for which binding provides resource. Corresponds to an entry of the same
     /// binding index in the [`BindGroupLayoutDescriptor`].
@@ -640,9 +661,11 @@ pub struct BindGroupDescriptor<
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
+    [TLAS]: ToOwned,
     <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
     <[S] as ToOwned>::Owned: fmt::Debug,
     <[TV] as ToOwned>::Owned: fmt::Debug,
+    <[TLAS] as ToOwned>::Owned: fmt::Debug,
     [BindGroupEntry<'a, B, S, TV, TLAS, ET>]: ToOwned,
     <[BindGroupEntry<'a, B, S, TV, TLAS, ET>] as ToOwned>::Owned: fmt::Debug,
 {
@@ -1007,9 +1030,11 @@ pub enum BindingResource<
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
+    [TLAS]: ToOwned,
     <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
     <[S] as ToOwned>::Owned: fmt::Debug,
     <[TV] as ToOwned>::Owned: fmt::Debug,
+    <[TLAS] as ToOwned>::Owned: fmt::Debug,
 {
     Buffer(BufferBinding<B>),
     #[cfg_attr(
@@ -1030,6 +1055,11 @@ pub enum BindingResource<
     )]
     TextureViewArray(Cow<'a, [TV]>),
     AccelerationStructure(TLAS),
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(deserialize = "<[TLAS] as ToOwned>::Owned: Deserialize<'de>"))
+    )]
+    AccelerationStructureArray(Cow<'a, [TLAS]>),
     ExternalTexture(ET),
 }
 

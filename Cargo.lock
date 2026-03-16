@@ -892,6 +892,7 @@ dependencies = [
  "deno_webgpu",
  "deno_webidl",
  "env_logger",
+ "log",
  "pico-args",
  "tempfile",
  "termcolor",
@@ -4799,6 +4800,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-bug-repro-01-texture-atomic-bug"
+version = "0.0.0"
+dependencies = [
+ "env_logger",
+ "pollster",
+ "wgpu",
+ "winit 0.30.13",
+]
+
+[[package]]
 name = "wgpu-core"
 version = "28.0.0"
 dependencies = [
@@ -4829,6 +4840,7 @@ dependencies = [
  "wgpu-core-deps-wasm",
  "wgpu-core-deps-windows-linux-android",
  "wgpu-hal",
+ "wgpu-naga-bridge",
  "wgpu-types",
 ]
 
@@ -4970,6 +4982,7 @@ dependencies = [
  "wasm-bindgen",
  "wayland-sys",
  "web-sys",
+ "wgpu-naga-bridge",
  "wgpu-types",
  "windows",
  "windows-core",
@@ -4998,6 +5011,14 @@ dependencies = [
  "heck",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "wgpu-naga-bridge"
+version = "28.0.0"
+dependencies = [
+ "naga",
+ "wgpu-types",
 ]
 
 [[package]]

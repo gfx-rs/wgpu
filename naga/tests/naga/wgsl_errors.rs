@@ -4685,7 +4685,7 @@ fn binding_array_requires_capability() {
         Capabilities::TEXTURE_EXTERNAL
     }
 
-    // Acceleration structures are not allowed in binding arrays
+    // Binding arrays of acceleration structures require a capability.
     check_validation! {
         r#"
             enable wgpu_ray_query;
@@ -4693,10 +4693,12 @@ fn binding_array_requires_capability() {
             var acc_struct_array: binding_array<acceleration_structure, 10>;
         "#:
         Err(naga::valid::ValidationError::GlobalVariable {
-            source: naga::valid::GlobalVariableError::InvalidBindingArray(_),
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::ACCELERATION_STRUCTURE_BINDING_ARRAY
+            ),
             ..
         }),
-        Capabilities::all()
+        Capabilities::RAY_QUERY
     }
 }
 

@@ -32,6 +32,28 @@ pub async fn run() -> Result<(), AnyError> {
         .ok_or_else(|| anyhow!("missing specifier in first command line argument"))?;
     let specifier = resolve_url_or_path(&url, &env::current_dir()?)?;
 
+    #[cfg(target_os = "windows")]
+    match env::var(deno_webgpu::DX12_COMPILER_ENV_VAR) {
+        Ok(val) => {
+            log::info!(
+                "Environment variable `{}` is set to `{val}`.",
+                deno_webgpu::DX12_COMPILER_ENV_VAR,
+            );
+        }
+        Err(_) => {
+            log::info!(
+                "cts_runner uses DXC by default. Configure with `{}` environment variable.",
+                deno_webgpu::DX12_COMPILER_ENV_VAR
+            );
+            unsafe {
+                // SAFETY: Both of the following conditions apply; either is sufficient.
+                // 1. Calling `env::set_var` is always safe on Windows.
+                // 2. We are single-threaded at this point.
+                env::set_var(deno_webgpu::DX12_COMPILER_ENV_VAR, "dynamicdxc");
+            }
+        }
+    }
+
     let options = RuntimeOptions {
         module_loader: Some(Rc::new(deno_core::FsModuleLoader)),
         extensions: vec![

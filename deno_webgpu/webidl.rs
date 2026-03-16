@@ -400,6 +400,8 @@ pub enum GPUFeatureName {
   DualSourceBlending,
   #[webidl(rename = "subgroups")]
   Subgroups,
+  #[webidl(rename = "primitive-index")]
+  PrimitiveIndex,
 
   // standard feature, but not default yet in wgpu due to incomplete support
   // (and even if enabled in wgpu, doing so may not be appropriate in Deno)
@@ -461,8 +463,6 @@ pub enum GPUFeatureName {
   ShaderF64,
   #[webidl(rename = "shader-i16")]
   ShaderI16,
-  #[webidl(rename = "shader-primitive-index")]
-  ShaderPrimitiveIndex,
   #[webidl(rename = "shader-early-depth-test")]
   ShaderEarlyDepthTest,
   #[webidl(rename = "passthrough-shaders")]
@@ -521,7 +521,7 @@ pub fn feature_names_to_features(
       GPUFeatureName::VertexAttribute64Bit => Features::VERTEX_ATTRIBUTE_64BIT,
       GPUFeatureName::ShaderF64 => Features::SHADER_F64,
       GPUFeatureName::ShaderI16 => Features::SHADER_I16,
-      GPUFeatureName::ShaderPrimitiveIndex => Features::SHADER_PRIMITIVE_INDEX,
+      GPUFeatureName::PrimitiveIndex => Features::PRIMITIVE_INDEX,
       GPUFeatureName::ShaderEarlyDepthTest => Features::SHADER_EARLY_DEPTH_TEST,
       GPUFeatureName::PassthroughShaders => Features::PASSTHROUGH_SHADERS,
     };
@@ -680,8 +680,8 @@ pub fn features_to_feature_names(
   if features.contains(wgpu_types::Features::SHADER_I16) {
     return_features.insert(ShaderI16);
   }
-  if features.contains(wgpu_types::Features::SHADER_PRIMITIVE_INDEX) {
-    return_features.insert(ShaderPrimitiveIndex);
+  if features.contains(wgpu_types::Features::PRIMITIVE_INDEX) {
+    return_features.insert(PrimitiveIndex);
   }
   if features.contains(wgpu_types::Features::SHADER_EARLY_DEPTH_TEST) {
     return_features.insert(ShaderEarlyDepthTest);
