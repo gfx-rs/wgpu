@@ -23,6 +23,10 @@ skip = [
 
     # parking-lot uses an old version
     { name = "redox_syscall", version = "0.5.18" },
+
+    # deno uses an old version
+    { name = "bit-vec", version = "0.8.0" },
+    { name = "bit-set", version = "0.8.0" },
 ]
 wildcards = "deny"
 allow-wildcard-paths = true
@@ -65,10 +69,10 @@ private = { ignore = true }
 allow-git = [
     # Waiting on releases; used in examples/tests only
 
-    # Pending a release for https://github.com/Xudong-Huang/generator-rs/pull/75
-    "https://github.com/Xudong-Huang/generator-rs",
-    # Pending a release for https://github.com/gfx-rs/rspirv
-    "https://github.com/gfx-rs/rspirv",
+    # Pending a release for https://github.com/rust-cli/env_logger/commit/143fa647ab33ed3acc9f160dfa3cb075cc62b5a3
+    "https://github.com/rust-cli/env_logger",
+    # Pending merge/release for https://github.com/LukasKalbertodt/libtest-mimic/pull/58
+    "https://github.com/cwfitzgerald/libtest-mimic",
 ]
 unknown-registry = "deny"
 unknown-git = "deny"
