@@ -1804,7 +1804,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.out,
                 "{}if ({} == 0) {{",
                 back::INDENT,
-                // This is guaranteed to be Some if workgroup variables might need to be initialized
+                // need_workgroup_variables_initialization forces this to be written
+                // if the user doesn't specify it (so this must be Some())
                 local_invocation_index_name.as_ref().unwrap(),
             )?;
             self.write_workgroup_variables_initialization(
