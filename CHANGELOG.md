@@ -195,6 +195,7 @@ By @kpreid in [#9042](https://github.com/gfx-rs/wgpu/pull/9042).
 - Prevent UB from incorrectly using ray queries on HLSL. By @Vecvec in [#8763](https://github.com/gfx-rs/wgpu/pull/8763).
 - Added support for dual-source blending in SPIR-V shaders. By @andyleiserson in [#8865](https://github.com/gfx-rs/wgpu/pull/8865).
 - Added `supported_capabilities` to all backends. By @inner-daemons in [#9068](https://github.com/gfx-rs/wgpu/pull/9068).
+- Updated codespan-reporting to 0.13. By @cwfitzgerald in [#9243](https://github.com/gfx-rs/wgpu/pull/9243).
 
 #### Metal
 

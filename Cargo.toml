@@ -118,7 +118,7 @@ bytemuck = { version = "1.22", features = [
 cargo_metadata = "0.23"
 cfg_aliases = "0.2.1"
 cfg-if = "1"
-codespan-reporting = { version = "0.12", default-features = false }
+codespan-reporting = { version = "0.13", default-features = false }
 ctor = "0.6"
 diff = "0.1"
 document-features = "0.2.10"
