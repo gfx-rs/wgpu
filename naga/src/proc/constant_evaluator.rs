@@ -1461,7 +1461,7 @@ impl<'a> ConstantEvaluator<'a> {
         }
 
         // NOTE: We try to match the declaration order of `MathFunction` here.
-        match fun {
+        return match fun {
             // comparison
             crate::MathFunction::Abs => {
                 component_wise_scalar(self, span, [arg], |args| match args {
@@ -1571,20 +1571,12 @@ impl<'a> ConstantEvaluator<'a> {
                 Float::F32([e]) => Ok(Float::F32([(e as f64).asinh() as f32])),
                 Float::F16([e]) => Ok(Float::F16([e.asinh()])),
             }),
-            crate::MathFunction::Acosh => {
-                let _ = component_wise_float!(self, span, [arg], |e| {
-                    if e >= One::one() {
-                        Ok([e])
-                    } else {
-                        Err(ConstantEvaluatorError::InvalidMathArgValue("acosh".into()))
-                    }
-                })?;
-                component_wise_float(self, span, [arg], |e| match e {
-                    Float::Abstract([e]) => Ok(Float::Abstract([libm::acosh(e)])),
-                    Float::F32([e]) => Ok(Float::F32([(e as f64).acosh() as f32])),
-                    Float::F16([e]) => Ok(Float::F16([e.acosh()])),
-                })
-            }
+            crate::MathFunction::Acosh => component_wise_float(self, span, [arg], |e| match e {
+                Float::Abstract([e]) if e >= One::one() => Ok(Float::Abstract([libm::acosh(e)])),
+                Float::F32([e]) if e >= One::one() => Ok(Float::F32([(e as f64).acosh() as f32])),
+                Float::F16([e]) if e >= One::one() => Ok(Float::F16([e.acosh()])),
+                _ => Err(ConstantEvaluatorError::InvalidMathArgValue("acosh".into())),
+            }),
             crate::MathFunction::Atanh => {
                 component_wise_float!(self, span, [arg], |e| {
                     if e.abs() < One::one() {
@@ -1876,26 +1868,10 @@ impl<'a> ConstantEvaluator<'a> {
                 // https://www.w3.org/TR/WGSL/#length-builtin
                 let e1 = self.extract_vec(arg, true)?;
 
-                fn float_length<F>(e: &[F]) -> Result<F, ConstantEvaluatorError>
-                where
-                    F: core::ops::Mul<F>,
-                    F: num_traits::Float + iter::Sum,
-                {
-                    if e.len() == 1 {
-                        // Avoids possible overflow in squaring
-                        Ok(e[0].abs())
-                    } else {
-                        let result = e.iter().map(|&ei| ei * ei).sum::<F>().sqrt();
-                        if result.is_finite() {
-                            Ok(result)
-                        } else {
-                            Err(ConstantEvaluatorError::Overflow("length".into()))
-                        }
-                    }
-                }
-
                 let result = match_literal_vector!(match e1 => Literal {
-                    Float => |e1| { float_length(e1)? },
+                    Float => |e1| {
+                        float_length(e1).ok_or_else(|| ConstantEvaluatorError::Overflow("length".into()))?
+                    },
                 })?;
                 self.register_evaluated_expr(Expression::Literal(result), span)
             }
@@ -1940,23 +1916,13 @@ impl<'a> ConstantEvaluator<'a> {
                     F: core::ops::Mul<F>,
                     F: num_traits::Float + iter::Sum,
                 {
-                    let len = if e.len() == 1 {
-                        // Avoids possible overflow in squaring
-                        e[0].abs()
-                    } else {
-                        let len = e.iter().map(|&ei| ei * ei).sum::<F>().sqrt();
-                        if len.is_finite() {
-                            len
-                        } else {
-                            return Err(ConstantEvaluatorError::Overflow("normalize".into()));
-                        }
-                    };
-
-                    if len.is_zero() {
-                        return Err(ConstantEvaluatorError::InvalidMathArgValue(
+                    let len = match float_length(e) {
+                        Some(len) if !len.is_zero() => Ok(len),
+                        Some(_) => Err(ConstantEvaluatorError::InvalidMathArgValue(
                             "normalize".into(),
-                        ));
-                    }
+                        )),
+                        None => Err(ConstantEvaluatorError::Overflow("normalize".into())),
+                    }?;
 
                     let mut out = ArrayVec::new();
                     for &ei in e {
@@ -2005,6 +1971,19 @@ impl<'a> ConstantEvaluator<'a> {
             | crate::MathFunction::Unpack4xU8 => Err(ConstantEvaluatorError::NotImplemented(
                 format!("{fun:?} built-in function"),
             )),
+        };
+
+        fn float_length<F>(e: &[F]) -> Option<F>
+        where
+            F: core::ops::Mul<F> + num_traits::Float + iter::Sum,
+        {
+            if e.len() == 1 {
+                // Avoids possible overflow in squaring
+                Some(e[0].abs())
+            } else {
+                let result = e.iter().map(|&ei| ei * ei).sum::<F>().sqrt();
+                result.is_finite().then_some(result)
+            }
         }
     }
 
