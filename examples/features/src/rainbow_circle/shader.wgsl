@@ -1,4 +1,19 @@
-// Taken from the slang playground website, generated from slang code.
+// This shader has gone through several stages of derived work:
+//
+// 1. Originally authored by a user named `dynamite`, distributed as a [Shadertoy page] under the
+//    [CC BY-NC-SA 3.0 license].
+//
+//    [Shadertoy page]: https://www.shadertoy.com/view/XdlSDs
+//    [CC BY-NC-SA 3.0 license]: https://creativecommons.org/licenses/by-nc-sa/3.0/deed.en
+//
+// 2. Ported to Slang for the Slang Playground project as [the `circle.slang` demo].
+//
+//    [the `circle.slang` demo]: https://github.com/shader-slang/slang-playground/blob/60f0ca29d9952d3cb598936511288f00451ced34/public/demos/circle.slang
+//
+// 3. Compiled to WGSL via Slang 2026.4 on the Slang playground.
+//
+//    For convenience, both the ported shader and the WGSL output can be found at:
+//    <https://shader-slang.org/slang-playground/?target=WGSL&code=eJx9VNtu2kAQfcZfMcrTmsDa4JBKpqlEIJWQkjYqUW9RFC14jVeyvdZ6zaVR_r2za-5Ji7AFc86cOTsztufBAEqRFSmHMmERV1BIpXkEsZIZJFoXZeh5y-WS1rCWazqTmbcQfOn9jNLJqKSOhyqVTqQKIVrnLBOam9itmPG85CEMh3D9q_1l2J4MIKD-TnamONNiwVEwk3lJpZp7aZ1UetN1O5-1S-ZhhhdxHlGeOw5aRX9QpGw9V7LKo_42pHiO_kQ-7zvO4x4Pw4fx3c2TU-UiliqDOJVMgxYZP-V9_ja4u3kej065sWKWrNcFZ6lgJaDjLlzVcLd_DARbIDgBLrbAhSlcd5Oc4dGLSvMz98l5zKtMJ9iSqCSdyxbYy8QPTQ4Ht7dhOBn_vnn--pmcyUpj-gNf6UpZkYUUEYiMzfkdEzmpRK67EImyYHqWPFj18SiEyffn0UnQdV4cwE-k2PJerHhKTtNaQKxciXPj-UT84S5cfYIXp9GwHSnwhG-S6GoNTehSP4b2QSaGXfCA2I64B_F1H-U2Q2LVtmd0zvW9IG4ttacwJDDN8i4p6KpV0LW7xxRiKc_nOiGF2_Tph15_67RaIGZ-EYYmsE4L1EGmNmXN1BG89GmMA2s0PA89gE44zGQq1Y68GsrUHLxa0BUeUXuBcRnULjdgnMmIsGlJzH-3ZdDY3bgJAB8cDMtK1aYC4tNurwX7u6XiV8RgFeAjdKjvYsT0vrHLpwrOrwyEPgyvf4zODbqNv-LF05LDgWj3QNSG2lbtPZl_Fpm-V-RUtPtGdPpfUXUsaqdhF7WeBUw5yzBox0pQHAdQLVzU6hwui2H9EJFODAv3Ac7BlPFpD_kzWdYjbELHtwpm_ZrY_46FU5YVZlulIj2Ez7csk6dd1wzKb9mg65omNppgBm6OhGse-BtTuKFHg79GT9ux7_xZhuL4TOf2zUEI2VDNau3agkXNGiD5FW-vfwGjSbCy>
 
 @binding(1) @group(0) var outputTexture_0 : texture_storage_2d<rgba8unorm, write>;
 
