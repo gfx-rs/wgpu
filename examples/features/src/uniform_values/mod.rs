@@ -395,19 +395,15 @@ impl ApplicationHandler<UniformAction> for App {
             WindowEvent::RedrawRequested => {
                 let frame = match wgpu_ctx.surface.get_current_texture() {
                     CurrentSurfaceTexture::Success(frame) => frame,
-                    CurrentSurfaceTexture::Suboptimal(frame) => {
-                        wgpu_ctx
-                            .surface
-                            .configure(&wgpu_ctx.device, &wgpu_ctx.surface_config);
-                        frame
-                    }
                     CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => {
                         if let Some(window) = &self.window {
                             window.request_redraw();
                         }
                         return;
                     }
-                    CurrentSurfaceTexture::Outdated | CurrentSurfaceTexture::Other => {
+                    CurrentSurfaceTexture::Suboptimal(_)
+                    | CurrentSurfaceTexture::Outdated
+                    | CurrentSurfaceTexture::Other => {
                         wgpu_ctx
                             .surface
                             .configure(&wgpu_ctx.device, &wgpu_ctx.surface_config);

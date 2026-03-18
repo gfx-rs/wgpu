@@ -224,12 +224,6 @@ impl ApplicationHandler<TriangleAction> for App {
             WindowEvent::RedrawRequested => {
                 let frame = match wgpu_state.surface.get_current_texture() {
                     CurrentSurfaceTexture::Success(frame) => frame,
-                    CurrentSurfaceTexture::Suboptimal(frame) => {
-                        wgpu_state
-                            .surface
-                            .configure(&wgpu_state.device, &wgpu_state.config);
-                        frame
-                    }
                     CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => {
                         // Try again later
                         if let Some(window) = &self.window {
@@ -237,7 +231,9 @@ impl ApplicationHandler<TriangleAction> for App {
                         }
                         return;
                     }
-                    CurrentSurfaceTexture::Outdated | CurrentSurfaceTexture::Other => {
+                    CurrentSurfaceTexture::Suboptimal(_)
+                    | CurrentSurfaceTexture::Outdated
+                    | CurrentSurfaceTexture::Other => {
                         wgpu_state
                             .surface
                             .configure(&wgpu_state.device, &wgpu_state.config);

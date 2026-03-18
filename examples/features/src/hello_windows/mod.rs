@@ -199,15 +199,13 @@ impl ApplicationHandler for App {
                 if let Some(viewport) = viewports.get_mut(&window_id) {
                     let frame = match viewport.get_current_texture() {
                         CurrentSurfaceTexture::Success(frame) => frame,
-                        CurrentSurfaceTexture::Suboptimal(frame) => {
-                            viewport.desc.surface.configure(device, &viewport.config);
-                            frame
-                        }
                         CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => {
                             viewport.desc.window.request_redraw();
                             return;
                         }
-                        CurrentSurfaceTexture::Outdated | CurrentSurfaceTexture::Other => {
+                        CurrentSurfaceTexture::Suboptimal(_)
+                        | CurrentSurfaceTexture::Outdated
+                        | CurrentSurfaceTexture::Other => {
                             viewport.desc.surface.configure(device, &viewport.config);
                             viewport.desc.window.request_redraw();
                             return;
