@@ -1,8 +1,6 @@
 [bans]
 multiple-versions = "deny"
 skip-tree = [
-    { name = "windows-sys", version = "0.45" },
-    { name = "winit", version = "0.29" },
     { name = "rustc-hash", version = "1.1.0" },
 
     # introduced by Deno, to be investigated
@@ -10,6 +8,12 @@ skip-tree = [
 
     # Winit 0.30 uses an older objc2
     { name = "objc2-foundation", version = "0.2" },
+
+    # glutin and tracy-client-sys use windows-sys 0.52, pulling older windows-targets
+    { name = "windows-targets", version = "0.52" },
+
+    # winit uses an old version via android-activity → jni
+    { name = "windows-targets", version = "0.42" },
 ]
 skip = [
     # flume -> fastrand uses an old version only on wasm32
@@ -20,6 +24,24 @@ skip = [
     # Deno uses an old version
     { name = "bincode", version = "1.3.3" },
     { name = "which", version = "6.0.3" },
+
+    # Winit uses an old version via android-activity → jni
+    { name = "windows-sys", version = "0.45" },
+
+    # Winit uses an old version via calloop → rustix 0.38
+    { name = "linux-raw-sys", version = "0.4" },
+    { name = "rustix", version = "0.38" },
+    { name = "windows-sys", version = "0.59" },
+
+    # Winit uses an old version via android-activity
+    { name = "thiserror", version = "1" },
+    { name = "thiserror-impl", version = "1" },
+
+    # glutin uses an old version
+    { name = "windows-sys", version = "0.52" },
+
+    # getrandom 0.3 uses an old version
+    { name = "r-efi", version = "5" },
 
     # parking-lot uses an old version
     { name = "redox_syscall", version = "0.5.18" },

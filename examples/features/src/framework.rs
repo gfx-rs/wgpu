@@ -1,10 +1,12 @@
+use std::future::Future;
 use std::sync::Arc;
 
 use wgpu::{Instance, Surface};
 use winit::{
+    application::ApplicationHandler,
     dpi::PhysicalSize,
-    event::{Event, KeyEvent, StartCause, WindowEvent},
-    event_loop::{EventLoop, EventLoopWindowTarget},
+    event::{KeyEvent, WindowEvent},
+    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
     keyboard::{Key, NamedKey},
     window::Window,
 };
@@ -80,34 +82,18 @@ fn init_logger() {
     }
 }
 
-struct EventLoopWrapper {
-    event_loop: EventLoop<()>,
-    window: Arc<Window>,
+/// Runs a future to completion. On native this blocks via pollster, on wasm this spawns
+/// a local task. This allows the same async wgpu initialization code to work on both platforms.
+#[cfg(not(target_arch = "wasm32"))]
+fn spawn(f: impl Future<Output = ()> + 'static) {
+    pollster::block_on(f);
 }
 
-impl EventLoopWrapper {
-    pub fn new(title: &str) -> Self {
-        let event_loop = EventLoop::new().unwrap();
-        let mut builder = winit::window::WindowBuilder::new();
-        #[cfg(target_arch = "wasm32")]
-        {
-            use wasm_bindgen::JsCast;
-            use winit::platform::web::WindowBuilderExtWebSys;
-            let canvas = web_sys::window()
-                .unwrap()
-                .document()
-                .unwrap()
-                .get_element_by_id("canvas")
-                .unwrap()
-                .dyn_into::<web_sys::HtmlCanvasElement>()
-                .unwrap();
-            builder = builder.with_canvas(Some(canvas));
-        }
-        builder = builder.with_title(title);
-        let window = Arc::new(builder.build(&event_loop).unwrap());
-
-        Self { event_loop, window }
-    }
+/// Runs a future to completion. On native this blocks via pollster, on wasm this spawns
+/// a local task. This allows the same async wgpu initialization code to work on both platforms.
+#[cfg(target_arch = "wasm32")]
+fn spawn(f: impl Future<Output = ()> + 'static) {
+    wasm_bindgen_futures::spawn_local(f);
 }
 
 /// Wrapper type which manages the surface and surface configuration.
@@ -140,20 +126,10 @@ impl SurfaceWrapper {
         }
     }
 
-    /// Check if the event is the start condition for the surface.
-    fn start_condition(e: &Event<()>) -> bool {
-        match e {
-            // On all other platforms, we can create the surface immediately.
-            Event::NewEvents(StartCause::Init) => !cfg!(target_os = "android"),
-            // On android we need to wait for a resumed event to create the surface.
-            Event::Resumed => cfg!(target_os = "android"),
-            _ => false,
-        }
-    }
-
-    /// Called when an event which matches [`Self::start_condition`] is received.
+    /// Called on resume to create (on native) and configure the surface.
     ///
     /// On all native platforms, this is where we create the surface.
+    /// On wasm, the surface was already created in [`Self::pre_adapter`].
     ///
     /// Additionally, we configure the surface based on the (now valid) window size.
     fn resume(&mut self, context: &ExampleContext, window: Arc<Window>, srgb: bool) {
@@ -257,14 +233,15 @@ struct ExampleContext {
 }
 impl ExampleContext {
     /// Initializes the example context.
-    async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: Arc<Window>) -> Self {
+    async fn init_async<E: Example>(
+        surface: &mut SurfaceWrapper,
+        window: Arc<Window>,
+        display_handle: winit::event_loop::OwnedDisplayHandle,
+    ) -> Self {
         log::info!("Initializing wgpu...");
 
         let instance_descriptor =
-            wgpu::InstanceDescriptor::new_with_display_handle_from_env(Box::new(
-                // TODO: Use event_loop.owned_display_handle() with winit 0.30
-                window.clone(),
-            ));
+            wgpu::InstanceDescriptor::new_with_display_handle_from_env(Box::new(display_handle));
         let instance = wgpu::Instance::new(instance_descriptor);
         surface.pre_adapter(&instance, window);
         let adapter = get_adapter_with_capabilities_or_from_env(
@@ -336,7 +313,244 @@ impl FrameCounter {
     }
 }
 
-async fn start<E: Example>(title: &str) {
+/// User event sent via [`EventLoopProxy`] to deliver async initialization results
+/// back to the main event loop.
+enum AppAction {
+    /// The async wgpu initialization has completed.
+    WgpuInitialized {
+        context: ExampleContext,
+        surface: SurfaceWrapper,
+    },
+}
+
+#[expect(clippy::large_enum_variant)]
+enum AppState<E> {
+    /// Waiting for the first `resumed()` call.
+    Uninitialized,
+    /// Window created, async wgpu initialization in progress.
+    Loading,
+    /// Fully initialized and rendering.
+    Running {
+        context: ExampleContext,
+        surface: SurfaceWrapper,
+        example: E,
+    },
+}
+
+/// The main application struct, implementing winit's [`ApplicationHandler`].
+///
+/// Winit 0.30 requires that windows are not created until the `resumed()` callback,
+/// and that all wgpu resources (instance, adapter, device) are initialized after the
+/// window exists. On native, this init happens synchronously via `pollster::block_on`.
+/// On wasm, it happens asynchronously via `wasm_bindgen_futures::spawn_local`, with
+/// the results delivered back through an [`EventLoopProxy`] user event.
+struct App<E: Example> {
+    title: &'static str,
+    proxy: EventLoopProxy<AppAction>,
+    window: Option<Arc<Window>>,
+    frame_counter: FrameCounter,
+    occluded: bool,
+    state: AppState<E>,
+}
+
+impl<E: Example> App<E> {
+    fn new(title: &'static str, event_loop: &EventLoop<AppAction>) -> Self {
+        Self {
+            title,
+            proxy: event_loop.create_proxy(),
+            window: None,
+            frame_counter: FrameCounter::new(),
+            occluded: false,
+            state: AppState::Uninitialized,
+        }
+    }
+}
+
+impl<E: Example> ApplicationHandler<AppAction> for App<E> {
+    /// Called when the application is (re)started. On the first call, the window and wgpu
+    /// resources are created. On Android, this may be called again after each suspend —
+    /// in that case we only need to re-create the surface.
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        // On Android, re-create the surface after a suspend/resume cycle.
+        if let AppState::Running {
+            ref context,
+            ref mut surface,
+            ..
+        } = self.state
+        {
+            if let Some(window) = &self.window {
+                surface.resume(context, window.clone(), E::SRGB);
+                window.request_redraw();
+            }
+            return;
+        }
+
+        if !matches!(self.state, AppState::Uninitialized) {
+            return;
+        }
+        self.state = AppState::Loading;
+
+        #[cfg_attr(
+            not(target_arch = "wasm32"),
+            expect(unused_mut, reason = "wasm32 re-assigns to specify canvas")
+        )]
+        let mut attributes = Window::default_attributes().with_title(self.title);
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            use winit::platform::web::WindowAttributesExtWebSys;
+            let canvas = web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .get_element_by_id("canvas")
+                .unwrap()
+                .dyn_into::<web_sys::HtmlCanvasElement>()
+                .unwrap();
+            attributes = attributes.with_canvas(Some(canvas));
+        }
+
+        let window = Arc::new(
+            event_loop
+                .create_window(attributes)
+                .expect("Failed to create window"),
+        );
+        self.window = Some(window.clone());
+
+        let display_handle = event_loop.owned_display_handle();
+        let proxy = self.proxy.clone();
+
+        // Spawn the async wgpu initialization. On native, `spawn` uses `pollster::block_on`
+        // so this completes synchronously before `resumed()` returns. On wasm, `spawn` uses
+        // `wasm_bindgen_futures::spawn_local` so the result arrives later via `user_event()`.
+        spawn(async move {
+            let mut surface = SurfaceWrapper::new();
+            let context =
+                ExampleContext::init_async::<E>(&mut surface, window.clone(), display_handle).await;
+            surface.resume(&context, window, E::SRGB);
+            let _ = proxy.send_event(AppAction::WgpuInitialized { context, surface });
+        });
+    }
+
+    /// Receives the result of the async wgpu initialization. Creates the [`Example`] and
+    /// transitions to the running state.
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: AppAction) {
+        match event {
+            AppAction::WgpuInitialized { context, surface } => {
+                let example = E::init(
+                    surface.config(),
+                    &context.adapter,
+                    &context.device,
+                    &context.queue,
+                );
+
+                self.state = AppState::Running {
+                    context,
+                    surface,
+                    example,
+                };
+
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+        }
+    }
+
+    fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
+        if let AppState::Running { surface, .. } = &mut self.state {
+            surface.suspend();
+        }
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: winit::window::WindowId,
+        event: WindowEvent,
+    ) {
+        let AppState::Running {
+            ref mut context,
+            ref mut surface,
+            ref mut example,
+        } = self.state
+        else {
+            return;
+        };
+
+        match event {
+            WindowEvent::Resized(size) => {
+                surface.resize(context, size);
+                example.resize(surface.config(), &context.device, &context.queue);
+
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        logical_key: Key::Named(NamedKey::Escape),
+                        ..
+                    },
+                ..
+            }
+            | WindowEvent::CloseRequested => {
+                event_loop.exit();
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        logical_key: Key::Character(s),
+                        ..
+                    },
+                ..
+            } if s == "r" => {
+                println!("{:#?}", context.instance.generate_report());
+            }
+            WindowEvent::RedrawRequested => {
+                // Don't render while occluded, this may leak on apple platforms.
+                if self.occluded {
+                    return;
+                }
+
+                self.frame_counter.update();
+
+                if let Some(frame) = surface.acquire(context) {
+                    let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
+                        format: Some(surface.config().view_formats[0]),
+                        ..wgpu::TextureViewDescriptor::default()
+                    });
+
+                    example.render(&view, &context.device, &context.queue);
+
+                    if let Some(window) = &self.window {
+                        window.pre_present_notify();
+                    }
+                    frame.present();
+                }
+
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            WindowEvent::Occluded(is_occluded) => {
+                self.occluded = is_occluded;
+                // Resume rendering when un-occluded.
+                if !is_occluded {
+                    if let Some(window) = &self.window {
+                        window.request_redraw();
+                    }
+                }
+            }
+            _ => example.update(event),
+        }
+    }
+}
+
+fn start<E: Example>(title: &'static str) {
     init_logger();
 
     log::debug!(
@@ -344,123 +558,24 @@ async fn start<E: Example>(title: &str) {
         wgpu::Instance::enabled_backend_features()
     );
 
-    let window_loop = EventLoopWrapper::new(title);
-    let mut surface = SurfaceWrapper::new();
-    let context = ExampleContext::init_async::<E>(&mut surface, window_loop.window.clone()).await;
-    let mut frame_counter = FrameCounter::new();
+    let event_loop = EventLoop::with_user_event().build().unwrap();
 
-    // We wait to create the example until we have a valid surface.
-    let mut example = None;
+    #[cfg_attr(target_arch = "wasm32", expect(unused_mut))]
+    let mut app = App::<E>::new(title, &event_loop);
 
+    log::info!("Entering event loop...");
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             use winit::platform::web::EventLoopExtWebSys;
-            let event_loop_function = EventLoop::spawn;
+            event_loop.spawn_app(app);
         } else {
-            let event_loop_function = EventLoop::run;
+            event_loop.run_app(&mut app).unwrap();
         }
     }
-
-    log::info!("Entering event loop...");
-    #[cfg_attr(target_arch = "wasm32", expect(clippy::let_unit_value))]
-    let _ = (event_loop_function)(
-        window_loop.event_loop,
-        move |event: Event<()>, target: &EventLoopWindowTarget<()>| {
-            match event {
-                ref e if SurfaceWrapper::start_condition(e) => {
-                    surface.resume(&context, window_loop.window.clone(), E::SRGB);
-
-                    // If we haven't created the example yet, do so now.
-                    if example.is_none() {
-                        example = Some(E::init(
-                            surface.config(),
-                            &context.adapter,
-                            &context.device,
-                            &context.queue,
-                        ));
-                    }
-                }
-                Event::Suspended => {
-                    surface.suspend();
-                }
-                Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::Resized(size) => {
-                        surface.resize(&context, size);
-                        example.as_mut().unwrap().resize(
-                            surface.config(),
-                            &context.device,
-                            &context.queue,
-                        );
-
-                        window_loop.window.request_redraw();
-                    }
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                logical_key: Key::Named(NamedKey::Escape),
-                                ..
-                            },
-                        ..
-                    }
-                    | WindowEvent::CloseRequested => {
-                        target.exit();
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                logical_key: Key::Character(s),
-                                ..
-                            },
-                        ..
-                    } if s == "r" => {
-                        println!("{:#?}", context.instance.generate_report());
-                    }
-                    WindowEvent::RedrawRequested => {
-                        // On MacOS, currently redraw requested comes in _before_ Init does.
-                        // If this happens, just drop the requested redraw on the floor.
-                        //
-                        // See https://github.com/rust-windowing/winit/issues/3235 for some discussion
-                        if example.is_none() {
-                            return;
-                        }
-
-                        frame_counter.update();
-
-                        if let Some(frame) = surface.acquire(&context) {
-                            let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
-                                format: Some(surface.config().view_formats[0]),
-                                ..wgpu::TextureViewDescriptor::default()
-                            });
-
-                            example.as_mut().unwrap().render(
-                                &view,
-                                &context.device,
-                                &context.queue,
-                            );
-
-                            window_loop.window.pre_present_notify();
-                            frame.present();
-                        }
-
-                        window_loop.window.request_redraw();
-                    }
-                    _ => example.as_mut().unwrap().update(event),
-                },
-                _ => {}
-            }
-        },
-    );
 }
 
 pub fn run<E: Example>(title: &'static str) {
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
-            wasm_bindgen_futures::spawn_local(async move { start::<E>(title).await })
-        } else {
-            pollster::block_on(start::<E>(title));
-        }
-    }
+    start::<E>(title);
 }
 
 #[cfg(target_arch = "wasm32")]
