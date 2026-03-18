@@ -106,18 +106,17 @@ impl Surface<'_> {
         self.config.lock().clone()
     }
 
-    /// Returns the next texture to be presented by the swapchain for drawing.
+    /// Returns the next texture to be presented by the surface for drawing.
     ///
     /// In order to present the [`SurfaceTexture`] returned by this method,
     /// first a [`Queue::submit`] needs to be done with some work rendering to this texture.
     /// Then [`SurfaceTexture::present`] needs to be called.
     ///
-    /// If a SurfaceTexture referencing this surface is alive when the swapchain is recreated,
-    /// recreating the swapchain will panic.
+    /// If a [`SurfaceTexture`] referencing this surface is alive when [`Surface::configure()`]
+    /// is called, the configure call will panic.
     ///
-    /// This may return [`CurrentSurfaceTexture::Timeout`] if the surface is not visible
-    /// (e.g., the window is minimized, fully occluded, or on another virtual desktop).
-    /// Applications should handle this by skipping the current frame.
+    /// See the documentation of [`CurrentSurfaceTexture`] for how each possible result
+    /// should be handled.
     pub fn get_current_texture(&self) -> CurrentSurfaceTexture {
         let (texture, status, detail) = self.inner.get_current_texture();
 

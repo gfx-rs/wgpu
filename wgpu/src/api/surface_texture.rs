@@ -1,5 +1,3 @@
-use core::fmt;
-
 use crate::*;
 
 /// Surface texture that can be rendered to.
@@ -52,7 +50,7 @@ impl Drop for SurfaceTexture {
 
 /// Result of a call to [`Surface::get_current_texture`].
 ///
-/// See variant documentation of how to handle failed acquisitions.
+/// See variant documentation for how to handle each case.
 #[derive(Debug)]
 pub enum CurrentSurfaceTexture {
     /// Successfully acquired a surface texture with no issues.
@@ -69,32 +67,19 @@ pub enum CurrentSurfaceTexture {
     /// Applications should skip the current frame and try again once the window
     /// is no longer occluded.
     Occluded,
-    /// The underlying surface has changed, and therefore the swap chain must be updated.
+    /// The underlying surface has changed, and therefore the surface configuration is outdated.
     ///
-    /// Reconfigure your surface and try again.
+    /// Call [`Surface::configure()`] and try again.
     Outdated,
-    /// The swap chain has been lost and needs to be recreated.
+    /// The surface has been lost and needs to be recreated.
     ///
-    /// If the device as a whole is lost (see [crate::Device::set_device_lost_callback])
+    /// If the device as a whole is lost (see [`set_device_lost_callback()`][crate::Device::set_device_lost_callback]), then
     /// you need to recreate the device and all resources.
-    /// Otherwise, recreate the surface and try again.
+    /// Otherwise, call [`Instance::create_surface()`] to recreate the surface,
+    /// then [`Surface::configure()`], and try again.
     Lost,
     /// Acquiring a texture failed with a generic error.
     Other,
-}
-
-impl fmt::Display for CurrentSurfaceTexture {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", match self {
-            Self::Success(_) => "Successfully acquired surface texture",
-            Self::Suboptimal(_) => "Acquired surface texture (suboptimal, reconfiguration recommended)",
-            Self::Timeout => "A timeout was encountered while trying to acquire the next frame",
-            Self::Occluded => "The window is occluded (e.g. minimized or behind another window)",
-            Self::Outdated => "The underlying surface has changed, and therefore the swap chain must be updated",
-            Self::Lost => "The swap chain has been lost and needs to be recreated",
-            Self::Other => "Acquiring a texture failed with a generic error",
-        })
-    }
 }
 
 fn thread_panicking() -> bool {
