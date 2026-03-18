@@ -198,5 +198,5 @@ fn create_tv_and_bg(
 }
 
 pub fn main() {
-    crate::framework::run::<Example>("rainbow-circle");
+    crate::framework::run::<Example>("render-with-compute");
 }

@@ -153,8 +153,8 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgpu: true,
     },
     ExampleDesc {
-        name: "rainbow_circle",
-        function: wgpu_examples::rainbow_circle::main,
+        name: "render_with_compute",
+        function: wgpu_examples::render_with_compute::main,
         webgl: false,
         webgpu: true,
     },
