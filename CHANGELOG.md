@@ -235,6 +235,7 @@ By @kpreid in [#9042](https://github.com/gfx-rs/wgpu/pull/9042).
 #### deno_webgpu
 
 - Expose the `GPU.wgslLanguageFeatures` property. By @andyleiserson in [#8884](https://github.com/gfx-rs/wgpu/pull/8884).
+- `GPUFeatureName` now includes all `wgpu` extensions. Feature names for extensions should be written with a `wgpu-` prefix, although unprefixed names that were accepted previously are still accepted. By @andyleiserson in [#9163](https://github.com/gfx-rs/wgpu/pull/9163).
 
 #### Hal
 
