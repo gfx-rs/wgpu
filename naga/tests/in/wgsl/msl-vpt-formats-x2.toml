@@ -1,4 +1,5 @@
 targets = "METAL"
+capabilities = "SHADER_FLOAT16"
 
 [msl_pipeline]
 allow_and_force_point_size = false
@@ -47,7 +48,10 @@ attributes = [
     { offset = 608, shader_location = 38, format = "Sint32x4" },
     { offset = 624, shader_location = 39, format = "unorm10-10-10-2" },
     { offset = 640, shader_location = 40, format = "unorm8x4-bgra" },
+    { offset = 656, shader_location = 41, format = "Float16" },
+    { offset = 672, shader_location = 42, format = "Float16x2" },
+    { offset = 688, shader_location = 43, format = "Float16x4" },
 ]
 id = 1
 step_mode = "ByVertex"
-stride = 644
+stride = 704

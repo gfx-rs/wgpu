@@ -49,6 +49,7 @@ mod texture;
 mod tokens;
 mod transfers;
 mod vertex;
+mod write_only;
 
 pub use adapter::*;
 pub use backend::*;
@@ -70,6 +71,7 @@ pub use texture::*;
 pub use tokens::*;
 pub use transfers::*;
 pub use vertex::*;
+pub use write_only::*;
 
 /// Create a Markdown link definition referring to the `wgpu` crate.
 ///

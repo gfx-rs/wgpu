@@ -1,18 +1,14 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
 
 use parking_lot::RwLock;
-use windows::{
-    core::Interface as _,
-    Win32::{
-        Foundation,
-        Graphics::{Direct3D12, Dxgi},
-    },
-};
+use windows::Win32::{Foundation, Graphics::Dxgi};
 
 use super::SurfaceTarget;
 use crate::{
     auxil,
-    dx12::{shader_compilation::CompilerContainer, D3D12Lib, DCompLib},
+    dx12::{
+        device_creation::DeviceFactory, shader_compilation::CompilerContainer, D3D12Lib, DCompLib,
+    },
 };
 
 impl crate::Instance for super::Instance {
@@ -24,27 +20,11 @@ impl crate::Instance for super::Instance {
             crate::InstanceError::with_source(String::from("failed to load d3d12.dll"), e)
         })?;
 
-        if desc
-            .flags
-            .intersects(wgt::InstanceFlags::VALIDATION | wgt::InstanceFlags::GPU_BASED_VALIDATION)
-        {
-            // Enable debug layer
-            if let Ok(Some(debug_controller)) = lib_main.debug_interface() {
-                if desc.flags.intersects(wgt::InstanceFlags::VALIDATION) {
-                    unsafe { debug_controller.EnableDebugLayer() }
-                }
-                if desc
-                    .flags
-                    .intersects(wgt::InstanceFlags::GPU_BASED_VALIDATION)
-                {
-                    if let Ok(debug1) = debug_controller.cast::<Direct3D12::ID3D12Debug1>() {
-                        unsafe { debug1.SetEnableGPUBasedValidation(true) }
-                    } else {
-                        log::warn!("Failed to enable GPU-based validation");
-                    }
-                }
-            }
-        }
+        // Create DeviceFactory first so we know which debug path to use
+        let device_factory =
+            DeviceFactory::new(&lib_main, desc.backend_options.dx12.agility_sdk.as_ref())?;
+
+        device_factory.enable_debug_layer(&lib_main, desc.flags);
 
         let (lib_dxgi, factory) = auxil::dxgi::factory::create_factory(desc.flags)?;
 
@@ -133,6 +113,7 @@ impl crate::Instance for super::Instance {
             factory,
             factory_media,
             library: Arc::new(lib_main),
+            device_factory: Arc::new(device_factory),
             dcomp_lib: Arc::new(DCompLib::new()),
             presentation_system: desc.backend_options.dx12.presentation_system,
             _lib_dxgi: lib_dxgi,
@@ -193,6 +174,7 @@ impl crate::Instance for super::Instance {
                 super::Adapter::expose(
                     raw,
                     &self.library,
+                    &self.device_factory,
                     &self.dcomp_lib,
                     self.flags,
                     self.memory_budget_thresholds,

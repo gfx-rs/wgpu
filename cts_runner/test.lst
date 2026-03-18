@@ -57,12 +57,22 @@ webgpu:api,operation,vertex_state,correctness:setVertexBuffer_offset_and_attribu
 webgpu:api,validation,buffer,create:*
 webgpu:api,validation,buffer,destroy:*
 webgpu:api,validation,capability_checks,limits,maxBindGroups:setBindGroup,*
+webgpu:api,validation,capability_checks,limits,maxBindingsPerBindGroup:validate,*
 webgpu:api,validation,capability_checks,limits,maxBufferSize:*
+webgpu:api,validation,capability_checks,limits,maxComputeWorkgroupSizeX:validate,*
+webgpu:api,validation,capability_checks,limits,maxComputeWorkgroupSizeY:validate,*
+webgpu:api,validation,capability_checks,limits,maxComputeWorkgroupSizeZ:validate,*
+webgpu:api,validation,capability_checks,limits,maxComputeWorkgroupsPerDimension:validate,*
 //FAIL: other `maxInterStageShaderVariables` cases w/ limitTest ∈ [underDefault, overMaximum]
 // https://github.com/gfx-rs/wgpu/issues/8945
 webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";*
 webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atMaximum";*
 webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="betweenDefaultAndMaximum";*
+webgpu:api,validation,capability_checks,limits,maxStorageBufferBindingSize:validate,*
+webgpu:api,validation,capability_checks,limits,maxUniformBufferBindingSize:validate,*
+webgpu:api,validation,capability_checks,limits,maxVertexBufferArrayStride:validate,*
+webgpu:api,validation,capability_checks,limits,minStorageBufferOffsetAlignment:validate,*
+webgpu:api,validation,capability_checks,limits,minUniformBufferOffsetAlignment:validate,*
 webgpu:api,validation,compute_pipeline:basic:*
 webgpu:api,validation,compute_pipeline:limits,invocations_per_workgroup,each_component:*
 webgpu:api,validation,compute_pipeline:limits,invocations_per_workgroup:*
@@ -96,8 +106,8 @@ webgpu:api,validation,createBindGroup:texture_must_have_correct_component_type:*
 webgpu:api,validation,createBindGroup:texture_must_have_correct_dimension:*
 webgpu:api,validation,createBindGroupLayout:duplicate_bindings:*
 webgpu:api,validation,createBindGroupLayout:max_dynamic_buffers:*
-webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_bind_group_layout:*
-fails-if(metal) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:*
+// Doesn't actually fail, but is very slow. https://github.com/gfx-rs/wgpu/issues/9229
+fails-if(dx12) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,*
 webgpu:api,validation,createBindGroupLayout:maximum_binding_limit:*
 webgpu:api,validation,createBindGroupLayout:multisampled_validation:*
 webgpu:api,validation,createBindGroupLayout:storage_texture,formats:*
@@ -246,7 +256,7 @@ webgpu:api,validation,render_pipeline,fragment_state:targets_format_renderable:*
 webgpu:api,validation,render_pipeline,fragment_state:targets_write_mask:*
 webgpu:api,validation,render_pipeline,inter_stage:location,*
 webgpu:api,validation,render_pipeline,inter_stage:max_shader_variable_location:*
-webgpu:api,validation,render_pipeline,inter_stage:max_variables_count,*
+fails-if(dx12) webgpu:api,validation,render_pipeline,inter_stage:max_variables_count,*
 webgpu:api,validation,render_pipeline,misc:basic:*
 fails-if(vulkan) webgpu:api,validation,render_pipeline,misc:external_texture:*
 webgpu:api,validation,render_pipeline,misc:no_attachment:*
@@ -324,6 +334,15 @@ webgpu:shader,execution,flow_control,return:*
 // Many other vertex_buffer_access subtests also passing, but there are too many to enumerate.
 // Fails on Metal in CI only, not when running locally.
 fails-if(metal) webgpu:shader,execution,robust_access_vertex:vertex_buffer_access:indexed=true;indirect=false;drawCallTestParameter="baseVertex";type="float32x4";additionalBuffers=4;partialLastNumber=false;offsetVertexBuffer=true
+webgpu:shader,execution,shader_io,fragment_builtins:inputs,front_facing:*
+webgpu:shader,execution,shader_io,fragment_builtins:inputs,interStage,centroid:*
+fails-if(vulkan) webgpu:shader,execution,shader_io,fragment_builtins:inputs,interStage:*
+fails-if(dx12,vulkan) webgpu:shader,execution,shader_io,fragment_builtins:inputs,position:*
+webgpu:shader,execution,shader_io,fragment_builtins:inputs,sample_index:*
+fails-if(dx12,vulkan) webgpu:shader,execution,shader_io,fragment_builtins:inputs,sample_mask:*
+webgpu:shader,execution,shader_io,fragment_builtins:primitive_index,*
+webgpu:shader,execution,shader_io,fragment_builtins:subgroup_invocation_id:*
+webgpu:shader,execution,shader_io,fragment_builtins:subgroup_size:*
 webgpu:shader,execution,statement,compound:*
 
 webgpu:shader,validation,const_assert,const_assert:*
@@ -348,18 +367,29 @@ webgpu:shader,validation,expression,binary,parse:*
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:array_override:op="%26%26";a_val=1;b_val=1
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:invalid_types:*
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:scalar_vector:op="%26%26";lhs="bool";rhs="bool"
+webgpu:shader,validation,expression,call,builtin,acos:*
 webgpu:shader,validation,expression,call,builtin,all:*
 webgpu:shader,validation,expression,call,builtin,any:*
 webgpu:shader,validation,expression,call,builtin,arrayLength:*
+webgpu:shader,validation,expression,call,builtin,asin:*
+webgpu:shader,validation,expression,call,builtin,asinh:*
 webgpu:shader,validation,expression,call,builtin,atan:*
 webgpu:shader,validation,expression,call,builtin,atan2:*
+webgpu:shader,validation,expression,call,builtin,atanh:*
 webgpu:shader,validation,expression,call,builtin,barriers:*
 webgpu:shader,validation,expression,call,builtin,ceil:*
 webgpu:shader,validation,expression,call,builtin,cos:*
+webgpu:shader,validation,expression,call,builtin,cosh:*
+webgpu:shader,validation,expression,call,builtin,degrees:*
 webgpu:shader,validation,expression,call,builtin,distance:values:stage="constant";type="f32"
+webgpu:shader,validation,expression,call,builtin,dot:*
+webgpu:shader,validation,expression,call,builtin,exp:*
+webgpu:shader,validation,expression,call,builtin,exp2:*
 webgpu:shader,validation,expression,call,builtin,floor:*
 webgpu:shader,validation,expression,call,builtin,fract:*
 webgpu:shader,validation,expression,call,builtin,length:scalar:stage="constant";type="f32"
+webgpu:shader,validation,expression,call,builtin,log:*
+webgpu:shader,validation,expression,call,builtin,log2:*
 webgpu:shader,validation,expression,call,builtin,max:*
 webgpu:shader,validation,expression,call,builtin,min:*
 webgpu:shader,validation,expression,call,builtin,radians:*
@@ -367,6 +397,8 @@ webgpu:shader,validation,expression,call,builtin,round:*
 webgpu:shader,validation,expression,call,builtin,saturate:*
 webgpu:shader,validation,expression,call,builtin,sign:*
 webgpu:shader,validation,expression,call,builtin,sin:*
+webgpu:shader,validation,expression,call,builtin,sinh:*
+webgpu:shader,validation,expression,call,builtin,sqrt:*
 webgpu:shader,validation,expression,call,builtin,step:*
 webgpu:shader,validation,expression,call,builtin,tan:*
 webgpu:shader,validation,expression,call,builtin,tanh:*
@@ -379,20 +411,7 @@ webgpu:shader,validation,expression,call,builtin,textureNumSamples:*
 fails-if(vulkan) webgpu:shader,validation,expression,call,builtin,textureSampleBaseClampToEdge:*
 webgpu:shader,validation,expression,call,builtin,textureStore:*
 webgpu:shader,validation,expression,call,builtin,trunc:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:array_value:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:array_zero_value:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:matrix_zero_value:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:must_use:ctor="mat4x4";use=true
-webgpu:shader,validation,expression,call,builtin,value_constructor:partial_eval:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:scalar_value:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:scalar_zero_value:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:struct_value:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:struct_zero_value:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:vector_copy:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:vector_elementwise:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:vector_mixed:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:vector_splat:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:vector_zero_value:*
+webgpu:shader,validation,expression,call,builtin,value_constructor:*
 webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:*
 webgpu:shader,validation,expression,overload_resolution:*
 webgpu:shader,validation,extension,clip_distances:*

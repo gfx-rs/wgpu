@@ -637,8 +637,8 @@ impl Validator {
     pub fn reset(&mut self) {
         self.types.clear();
         self.layouter.clear();
-        self.location_mask.clear();
-        self.blend_src_mask.clear();
+        self.location_mask.make_empty();
+        self.blend_src_mask.make_empty();
         self.ep_resource_bindings.clear();
         self.switch_values.clear();
         self.valid_expression_list.clear();

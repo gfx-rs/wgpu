@@ -261,6 +261,16 @@ pub struct Device {
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelCapabilities,
+    /// Buffer uses listed here, are expected to be ordered by the underlying hardware.
+    /// If a usage is ordered, then if the buffer state doesn't change between draw calls,
+    /// there are no barriers needed for synchronization.
+    /// See the implementations of [`hal::Adapter::get_ordered_buffer_usages`] for hardware specific info
+    pub(crate) ordered_buffer_usages: wgt::BufferUses,
+    /// Texture uses listed here, are expected to be ordered by the underlying hardware.
+    /// If a usage is ordered, then if the buffer state doesn't change between draw calls,
+    /// there are no barriers needed for synchronization.
+    /// See the implementations of [`hal::Adapter::get_ordered_texture_usages`] for hardware specific info
+    pub(crate) ordered_texture_usages: wgt::TextureUses,
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
     pub(crate) usage_scopes: UsageScopePool,
@@ -435,6 +445,9 @@ impl Device {
             }
         };
 
+        let ordered_buffer_usages = adapter.raw.adapter.get_ordered_buffer_usages();
+        let ordered_texture_usages = adapter.raw.adapter.get_ordered_texture_usages();
+
         let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
 
         let command_allocator = command::CommandAllocator::new();
@@ -529,7 +542,10 @@ impl Device {
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
             device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
-            trackers: Mutex::new(rank::DEVICE_TRACKERS, DeviceTracker::new()),
+            trackers: Mutex::new(
+                rank::DEVICE_TRACKERS,
+                DeviceTracker::new(ordered_buffer_usages, ordered_texture_usages),
+            ),
             tracker_indices: TrackerIndexAllocators::new(),
             bgl_pool: ResourcePool::new(),
             #[cfg(feature = "trace")]
@@ -538,6 +554,8 @@ impl Device {
             limits: desc.required_limits.clone(),
             features: desc.required_features,
             downlevel,
+            ordered_buffer_usages,
+            ordered_texture_usages,
             instance_flags,
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
@@ -5225,7 +5243,12 @@ impl Device {
     }
 
     pub(crate) fn new_usage_scope(&self) -> UsageScope<'_> {
-        UsageScope::new_pooled(&self.usage_scopes, &self.tracker_indices)
+        UsageScope::new_pooled(
+            &self.usage_scopes,
+            &self.tracker_indices,
+            self.ordered_buffer_usages,
+            self.ordered_texture_usages,
+        )
     }
 
     pub fn get_hal_counters(&self) -> wgt::HalCounters {

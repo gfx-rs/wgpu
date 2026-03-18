@@ -58,41 +58,37 @@ static PARTIAL_BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConf
 
 #[gpu_test]
 static BINDING_ARRAY_STORAGE_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
-            .features(
-                Features::BUFFER_BINDING_ARRAY
-                    | Features::STORAGE_RESOURCE_BINDING_ARRAY
-                    | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-            )
-            .limits(Limits {
-                max_binding_array_elements_per_shader_stage: 17,
-                ..Limits::default()
-            })
-            // See https://github.com/gfx-rs/wgpu/issues/6745.
-            .expect_fail(FailureCase::molten_vk()),
-    )
+    .parameters(TestParameters {
+        required_instance_flags: wgpu::InstanceFlags::GPU_BASED_VALIDATION,
+        required_features: Features::BUFFER_BINDING_ARRAY
+            | Features::STORAGE_RESOURCE_BINDING_ARRAY
+            | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        required_limits: Limits {
+            max_binding_array_elements_per_shader_stage: 17,
+            ..Limits::default()
+        },
+        // See https://github.com/gfx-rs/wgpu/issues/6745.
+        failures: FailureCase::mac_vulkan(|case| case.panic("bad SPIR-V wrapper struct inference")),
+        ..Default::default()
+    })
     .run_async(|ctx| async move { binding_array_buffers(ctx, BufferType::Storage, false).await });
 
 #[gpu_test]
 static PARTIAL_BINDING_ARRAY_STORAGE_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
-            .features(
-                Features::BUFFER_BINDING_ARRAY
-                    | Features::PARTIALLY_BOUND_BINDING_ARRAY
-                    | Features::STORAGE_RESOURCE_BINDING_ARRAY
-                    | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-            )
-            .limits(Limits {
-                max_binding_array_elements_per_shader_stage: 33,
-                ..Limits::default()
-            })
-            // See https://github.com/gfx-rs/wgpu/issues/6745.
-            .expect_fail(FailureCase::molten_vk()),
-    )
+    .parameters(TestParameters {
+        required_instance_flags: wgpu::InstanceFlags::GPU_BASED_VALIDATION,
+        required_features: Features::BUFFER_BINDING_ARRAY
+            | Features::PARTIALLY_BOUND_BINDING_ARRAY
+            | Features::STORAGE_RESOURCE_BINDING_ARRAY
+            | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        required_limits: Limits {
+            max_binding_array_elements_per_shader_stage: 33,
+            ..Limits::default()
+        },
+        // See https://github.com/gfx-rs/wgpu/issues/6745.
+        failures: FailureCase::mac_vulkan(|case| case.panic("bad SPIR-V wrapper struct inference")),
+        ..Default::default()
+    })
     .run_async(|ctx| async move { binding_array_buffers(ctx, BufferType::Storage, true).await });
 
 enum BufferType {

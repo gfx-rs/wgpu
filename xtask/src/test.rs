@@ -4,7 +4,27 @@ use anyhow::Context;
 use pico_args::Arguments;
 use xshell::Shell;
 
-use crate::{install_warp, util::flatten_args};
+use crate::{install_agility_sdk, install_warp, util::flatten_args};
+
+/// Apply Agility SDK environment variables to a command.
+fn apply_agility_sdk_env<'a>(
+    cmd: xshell::Cmd<'a>,
+    agility_sdk_info: &Option<install_agility_sdk::AgilitySDKInfo>,
+    require: bool,
+) -> xshell::Cmd<'a> {
+    let Some(info) = agility_sdk_info else {
+        return cmd;
+    };
+    let cmd = cmd.env("WGPU_DX12_AGILITY_SDK_PATH", &info.sdk_path).env(
+        "WGPU_DX12_AGILITY_SDK_VERSION",
+        info.sdk_version.to_string(),
+    );
+    if require {
+        cmd.env("WGPU_DX12_AGILITY_SDK_REQUIRE", "1")
+    } else {
+        cmd
+    }
+}
 
 pub fn run_tests(
     shell: Shell,
@@ -13,6 +33,7 @@ pub fn run_tests(
 ) -> anyhow::Result<()> {
     let llvm_cov = args.contains("--llvm-cov");
     let list = args.contains("--list");
+    let no_require_agility_sdk = args.contains("--no-require-agility-sdk");
 
     // Determine the build profile from arguments
     let is_release = args.contains("--release");
@@ -46,8 +67,8 @@ pub fn run_tests(
 
     // Retries handled by cargo nextest natively
 
-    // Install WARP on Windows for D3D12 testing
-    if cfg!(target_os = "windows") {
+    // Install WARP and Agility SDK on Windows for D3D12 testing
+    let agility_sdk_info = if cfg!(target_os = "windows") {
         let llvm_cov_dir = if llvm_cov {
             "target/llvm-cov-target"
         } else {
@@ -55,7 +76,10 @@ pub fn run_tests(
         };
         let target_dir = format!("{llvm_cov_dir}/{profile}");
         install_warp::install_warp(&shell, &target_dir)?;
-    }
+        Some(install_agility_sdk::install_agility_sdk(&shell)?)
+    } else {
+        None
+    };
 
     let test_suite_run_flags: &[_] = if llvm_cov {
         &["llvm-cov", "--no-cfg-coverage", "--no-report", "nextest"]
@@ -71,7 +95,7 @@ pub fn run_tests(
     // and once for the cli binary.
     //
     // Needs to be kept in sync with the test in wgpu-info/src/tests.rs
-    shell
+    let mut gpuconfig_cmd = shell
         .cmd("cargo")
         .args(test_suite_run_flags)
         // Use the same build configuration as the main tests, so that we only build once.
@@ -83,7 +107,10 @@ pub fn run_tests(
         // old or missing .gpuconfig files.
         .args(["-E", "binary(wgpu-info)", "generate_gpuconfig_report"])
         // Turn on the env var for saving the .gpuconfig files
-        .env("WGPU_INFO_SAVE_GPUCONFIG_REPORT", "1")
+        .env("WGPU_INFO_SAVE_GPUCONFIG_REPORT", "1");
+    gpuconfig_cmd =
+        apply_agility_sdk_env(gpuconfig_cmd, &agility_sdk_info, !no_require_agility_sdk);
+    gpuconfig_cmd
         .quiet()
         .run()
         .context("Failed to run tests to generate .gpuconfig")?;
@@ -103,25 +130,24 @@ pub fn run_tests(
 
     if list {
         log::info!("Listing tests");
-        shell
+        let mut list_cmd = shell
             .cmd("cargo")
             .args(["nextest", "list"])
             .args(["-v", "--benches", "--tests", "--all-features"])
-            .args(cargo_args)
-            .run()
-            .context("Failed to list tests")?;
+            .args(cargo_args);
+        list_cmd = apply_agility_sdk_env(list_cmd, &agility_sdk_info, !no_require_agility_sdk);
+        list_cmd.run().context("Failed to list tests")?;
         return Ok(());
     }
     log::info!("Running cargo tests");
 
-    shell
+    let mut test_cmd = shell
         .cmd("cargo")
         .args(test_suite_run_flags)
         .args(["--benches", "--tests", "--all-features"])
-        .args(cargo_args)
-        .quiet()
-        .run()
-        .context("Tests failed")?;
+        .args(cargo_args);
+    test_cmd = apply_agility_sdk_env(test_cmd, &agility_sdk_info, !no_require_agility_sdk);
+    test_cmd.quiet().run().context("Tests failed")?;
 
     log::info!("Finished tests");
 

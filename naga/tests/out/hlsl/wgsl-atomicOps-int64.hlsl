@@ -30,9 +30,9 @@ groupshared int64_t workgroup_atomic_arr[2];
 groupshared Struct workgroup_struct;
 
 [numthreads(2, 1, 1)]
-void cs_main(uint3 id : SV_GroupThreadID, uint3 __local_invocation_id : SV_GroupThreadID)
+void cs_main(uint3 id : SV_GroupThreadID)
 {
-    if (all(__local_invocation_id == uint3(0u, 0u, 0u))) {
+    if (all(id == uint3(0u, 0u, 0u))) {
         workgroup_atomic_scalar = (uint64_t)0;
         workgroup_atomic_arr = (int64_t[2])0;
         workgroup_struct = (Struct)0;

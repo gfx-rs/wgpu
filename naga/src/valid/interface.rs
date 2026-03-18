@@ -871,7 +871,7 @@ impl VaryingContext<'_> {
                     let span_context = self.types.get_span_context(ty);
 
                     // If there's any blend_src usage, it must apply to all members of which there must be exactly 2.
-                    if members.len() != 2 || self.blend_src_mask.len() != 2 {
+                    if members.len() != 2 || self.blend_src_mask.count() != 2 {
                         return Err(
                             VaryingError::IncompleteBlendSrcUsage.with_span_context(span_context)
                         );
@@ -1360,7 +1360,7 @@ impl super::Validator {
             }
         }
 
-        self.location_mask.clear();
+        self.location_mask.make_empty();
         let mut argument_built_ins = crate::FastHashSet::default();
         // TODO: add span info to function arguments
         for (index, fa) in ep.function.arguments.iter().enumerate() {
@@ -1381,7 +1381,7 @@ impl super::Validator {
                 .map_err_inner(|e| EntryPointError::Argument(index as u32, e).with_span())?;
         }
 
-        self.location_mask.clear();
+        self.location_mask.make_empty();
         if let Some(ref fr) = ep.function.result {
             let mut result_built_ins = crate::FastHashSet::default();
             let mut ctx = VaryingContext {
