@@ -304,6 +304,7 @@ By @kpreid in [#9042](https://github.com/gfx-rs/wgpu/pull/9042).
 
 - Fix one-second delay when switching a wgpu app to the foreground. By [@emilk](https://github.com/emilk) in [#9141](https://github.com/gfx-rs/wgpu/pull/9141)
 - Work around Metal driver bug with atomic textures. By @atlv24 in [#9185](https://github.com/gfx-rs/wgpu/pull/9185)
+- Fix setting an immediate for a Mesh shader. By [@waywardmonkeys](https://github.com/waywardmonkeys) in [#9254](https://github.com/gfx-rs/wgpu/pull/9254)
 
 #### GLES
 
