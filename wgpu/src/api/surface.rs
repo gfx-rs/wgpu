@@ -115,20 +115,20 @@ impl Surface<'_> {
     /// If a SurfaceTexture referencing this surface is alive when the swapchain is recreated,
     /// recreating the swapchain will panic.
     ///
-    /// This may return [`SurfaceError::Timeout`] if the surface is not visible
+    /// This may return [`CurrentSurfaceTexture::Timeout`] if the surface is not visible
     /// (e.g., the window is minimized, fully occluded, or on another virtual desktop).
     /// Applications should handle this by skipping the current frame.
-    pub fn get_current_texture(&self) -> Result<SurfaceTexture, SurfaceError> {
+    pub fn get_current_texture(&self) -> CurrentSurfaceTexture {
         let (texture, status, detail) = self.inner.get_current_texture();
 
         let suboptimal = match status {
             SurfaceStatus::Good => false,
             SurfaceStatus::Suboptimal => true,
-            SurfaceStatus::Timeout => return Err(SurfaceError::Timeout),
-            SurfaceStatus::Occluded => return Err(SurfaceError::Occluded),
-            SurfaceStatus::Outdated => return Err(SurfaceError::Outdated),
-            SurfaceStatus::Lost => return Err(SurfaceError::Lost),
-            SurfaceStatus::Unknown => return Err(SurfaceError::Other),
+            SurfaceStatus::Timeout => return CurrentSurfaceTexture::Timeout,
+            SurfaceStatus::Occluded => return CurrentSurfaceTexture::Occluded,
+            SurfaceStatus::Outdated => return CurrentSurfaceTexture::Outdated,
+            SurfaceStatus::Lost => return CurrentSurfaceTexture::Lost,
+            SurfaceStatus::Unknown => return CurrentSurfaceTexture::Other,
         };
 
         let guard = self.config.lock();
@@ -151,17 +151,24 @@ impl Surface<'_> {
             view_formats: &[],
         };
 
-        texture
-            .map(|texture| SurfaceTexture {
-                texture: Texture {
-                    inner: texture,
-                    descriptor,
-                },
-                suboptimal,
-                presented: false,
-                detail,
-            })
-            .ok_or(SurfaceError::Lost)
+        match texture {
+            Some(texture) => {
+                let surface_texture = SurfaceTexture {
+                    texture: Texture {
+                        inner: texture,
+                        descriptor,
+                    },
+                    presented: false,
+                    detail,
+                };
+                if suboptimal {
+                    CurrentSurfaceTexture::Suboptimal(surface_texture)
+                } else {
+                    CurrentSurfaceTexture::Success(surface_texture)
+                }
+            }
+            None => CurrentSurfaceTexture::Lost,
+        }
     }
 
     /// Get the [`wgpu_hal`] surface from this `Surface`.

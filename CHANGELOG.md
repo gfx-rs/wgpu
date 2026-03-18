@@ -44,6 +44,32 @@ Bottom level categories:
 
 ### Major Changes
 
+#### `Surface::get_current_texture` now returns `CurrentSurfaceTexture` enum
+
+`Surface::get_current_texture` no longer returns `Result<SurfaceTexture, SurfaceError>`.
+Instead, it returns a single `CurrentSurfaceTexture` enum that represents all possible outcomes as variants.
+`SurfaceError` has been removed, and the `suboptimal` field on `SurfaceTexture` has been replaced by a dedicated `Suboptimal` variant.
+
+```diff
+- match surface.get_current_texture() {
+-     Ok(frame) => { /* render */ }
+-     Err(wgpu::SurfaceError::Timeout | wgpu::SurfaceError::Occluded) => { /* skip frame */ }
+-     Err(wgpu::SurfaceError::Outdated | wgpu::SurfaceError::Lost) => { /* reconfigure */ }
+-     Err(err) => panic!("{err}"),
+- }
++ match surface.get_current_texture() {
++     wgpu::CurrentSurfaceTexture::Success(frame) => { /* render */ }
++     wgpu::CurrentSurfaceTexture::Timeout
++     | wgpu::CurrentSurfaceTexture::Occluded => { /* skip frame */ }
++     wgpu::CurrentSurfaceTexture::Outdated
++     | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => { /* reconfigure surface */ }
++     wgpu::CurrentSurfaceTexture::Lost => { /* reconfigure surface, or recreate device if device lost */ }
++     wgpu::CurrentSurfaceTexture::Other => { /* try again? 🤷 */ }
++ }
+```
+
+By @cwfitzgerald, @Wumpf and @emilk in [#9141](https://github.com/gfx-rs/wgpu/pull/9141) and [#????](https://github.com/gfx-rs/wgpu/pull/????).
+
 #### `InstanceDescriptor` initialization APIs
 
 `InstanceDescriptor`'s convenience constructors (an implementation of `Default` and the static `from_env_or_default` method) have been removed. In their place are new static methods that force recognition of whether a display handle is used:
@@ -164,7 +190,6 @@ By @kpreid in [#9042](https://github.com/gfx-rs/wgpu/pull/9042).
 
 #### Other Breaking Changes
 
-- `Surface::get_current_texture` can now return `SurfaceError::Occluded`. By @emilk in [#9141](https://github.com/gfx-rs/wgpu/pull/9141).
 - Use clearer field names for `StageError::InvalidWorkgroupSize`. By @ErichDonGubler in [#9192](https://github.com/gfx-rs/wgpu/pull/9192).
 
 ### New Features
