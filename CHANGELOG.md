@@ -50,25 +50,22 @@ Bottom level categories:
 Instead, it returns a single `CurrentSurfaceTexture` enum that represents all possible outcomes as variants.
 `SurfaceError` has been removed, and the `suboptimal` field on `SurfaceTexture` has been replaced by a dedicated `Suboptimal` variant.
 
-```diff
-- match surface.get_current_texture() {
--     Ok(frame) => { /* render */ }
--     Err(wgpu::SurfaceError::Timeout | wgpu::SurfaceError::Occluded) => { /* skip frame */ }
--     Err(wgpu::SurfaceError::Outdated | wgpu::SurfaceError::Lost) => { /* reconfigure */ }
--     Err(err) => panic!("{err}"),
-- }
-+ match surface.get_current_texture() {
-+     wgpu::CurrentSurfaceTexture::Success(frame) => { /* render */ }
-+     wgpu::CurrentSurfaceTexture::Timeout
-+     | wgpu::CurrentSurfaceTexture::Occluded => { /* skip frame */ }
-+     wgpu::CurrentSurfaceTexture::Outdated
-+     | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => { /* reconfigure surface */ }
-+     wgpu::CurrentSurfaceTexture::Lost => { /* reconfigure surface, or recreate device if device lost */ }
-+     wgpu::CurrentSurfaceTexture::Other => { /* try again? 🤷 */ }
-+ }
+```rust
+match surface.get_current_texture() {
+    wgpu::CurrentSurfaceTexture::Success(frame) => { /* render */ }
+    wgpu::CurrentSurfaceTexture::Timeout
+      | wgpu::CurrentSurfaceTexture::Occluded => { /* skip frame */ }
+    wgpu::CurrentSurfaceTexture::Outdated
+      | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => { /* reconfigure surface */ }
+    wgpu::CurrentSurfaceTexture::Lost => { /* reconfigure surface, or recreate device if device lost */ }
+    wgpu::CurrentSurfaceTexture::Validation => {
+        /* Only happens if there is a validation error and you
+           have registered a error scope or uncaptured error handler. */
+    }
+}
 ```
 
-By @cwfitzgerald, @Wumpf and @emilk in [#9141](https://github.com/gfx-rs/wgpu/pull/9141) and [#????](https://github.com/gfx-rs/wgpu/pull/????).
+By @cwfitzgerald, @Wumpf, and @emilk in [#9141](https://github.com/gfx-rs/wgpu/pull/9141) and [#????](https://github.com/gfx-rs/wgpu/pull/????).
 
 #### `InstanceDescriptor` initialization APIs
 

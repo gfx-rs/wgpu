@@ -127,7 +127,7 @@ impl Surface<'_> {
             SurfaceStatus::Occluded => return CurrentSurfaceTexture::Occluded,
             SurfaceStatus::Outdated => return CurrentSurfaceTexture::Outdated,
             SurfaceStatus::Lost => return CurrentSurfaceTexture::Lost,
-            SurfaceStatus::Unknown => return CurrentSurfaceTexture::Other,
+            SurfaceStatus::Validation => return CurrentSurfaceTexture::Validation,
         };
 
         let guard = self.config.lock();

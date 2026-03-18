@@ -401,9 +401,7 @@ impl ApplicationHandler<UniformAction> for App {
                         }
                         return;
                     }
-                    CurrentSurfaceTexture::Suboptimal(_)
-                    | CurrentSurfaceTexture::Outdated
-                    | CurrentSurfaceTexture::Other => {
+                    CurrentSurfaceTexture::Suboptimal(_) | CurrentSurfaceTexture::Outdated => {
                         wgpu_ctx
                             .surface
                             .configure(&wgpu_ctx.device, &wgpu_ctx.surface_config);
@@ -411,6 +409,9 @@ impl ApplicationHandler<UniformAction> for App {
                             window.request_redraw();
                         }
                         return;
+                    }
+                    CurrentSurfaceTexture::Validation => {
+                        unreachable!("No error scope registered, so validation errors will panic")
                     }
                     CurrentSurfaceTexture::Lost => {
                         wgpu_ctx.surface = wgpu_ctx

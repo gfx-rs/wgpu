@@ -231,9 +231,7 @@ impl ApplicationHandler<TriangleAction> for App {
                         }
                         return;
                     }
-                    CurrentSurfaceTexture::Suboptimal(_)
-                    | CurrentSurfaceTexture::Outdated
-                    | CurrentSurfaceTexture::Other => {
+                    CurrentSurfaceTexture::Suboptimal(_) | CurrentSurfaceTexture::Outdated => {
                         wgpu_state
                             .surface
                             .configure(&wgpu_state.device, &wgpu_state.config);
@@ -241,6 +239,9 @@ impl ApplicationHandler<TriangleAction> for App {
                             window.request_redraw();
                         }
                         return;
+                    }
+                    CurrentSurfaceTexture::Validation => {
+                        unreachable!("No error scope registered, so validation errors will panic")
                     }
                     CurrentSurfaceTexture::Lost => {
                         wgpu_state.surface = wgpu_state

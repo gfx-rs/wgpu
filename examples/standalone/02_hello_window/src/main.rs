@@ -86,11 +86,12 @@ impl State {
         let surface_texture = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(texture) => texture,
             wgpu::CurrentSurfaceTexture::Occluded | wgpu::CurrentSurfaceTexture::Timeout => return,
-            wgpu::CurrentSurfaceTexture::Suboptimal(_)
-            | wgpu::CurrentSurfaceTexture::Outdated
-            | wgpu::CurrentSurfaceTexture::Other => {
+            wgpu::CurrentSurfaceTexture::Suboptimal(_) | wgpu::CurrentSurfaceTexture::Outdated => {
                 self.configure_surface();
                 return;
+            }
+            wgpu::CurrentSurfaceTexture::Validation => {
+                unreachable!("No error scope registered, so validation errors will panic")
             }
             wgpu::CurrentSurfaceTexture::Lost => {
                 self.surface = self.instance.create_surface(self.window.clone()).unwrap();

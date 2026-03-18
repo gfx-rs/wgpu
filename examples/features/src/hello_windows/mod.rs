@@ -203,12 +203,15 @@ impl ApplicationHandler for App {
                             viewport.desc.window.request_redraw();
                             return;
                         }
-                        CurrentSurfaceTexture::Suboptimal(_)
-                        | CurrentSurfaceTexture::Outdated
-                        | CurrentSurfaceTexture::Other => {
+                        CurrentSurfaceTexture::Suboptimal(_) | CurrentSurfaceTexture::Outdated => {
                             viewport.desc.surface.configure(device, &viewport.config);
                             viewport.desc.window.request_redraw();
                             return;
+                        }
+                        CurrentSurfaceTexture::Validation => {
+                            unreachable!(
+                                "No error scope registered, so validation errors will panic"
+                            )
                         }
                         CurrentSurfaceTexture::Lost => {
                             viewport.desc.surface = instance

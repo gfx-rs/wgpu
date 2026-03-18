@@ -78,8 +78,12 @@ pub enum CurrentSurfaceTexture {
     /// Otherwise, call [`Instance::create_surface()`] to recreate the surface,
     /// then [`Surface::configure()`], and try again.
     Lost,
-    /// Acquiring a texture failed with a generic error.
-    Other,
+    /// A validation error inside [`Surface::get_current_texture()`] was raised
+    /// and caught by an [error scope](crate::Device::push_error_scope) or
+    /// [`on_uncaptured_error()`][crate::Device::on_uncaptured_error].
+    ///
+    /// Applications should attend to the validation error and try again.
+    Validation,
 }
 
 fn thread_panicking() -> bool {
