@@ -106,7 +106,8 @@ webgpu:api,validation,createBindGroup:texture_must_have_correct_component_type:*
 webgpu:api,validation,createBindGroup:texture_must_have_correct_dimension:*
 webgpu:api,validation,createBindGroupLayout:duplicate_bindings:*
 webgpu:api,validation,createBindGroupLayout:max_dynamic_buffers:*
-webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,*
+// Doesn't actually fail, but is very slow. https://github.com/gfx-rs/wgpu/issues/9229
+fails-if(dx12) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,*
 webgpu:api,validation,createBindGroupLayout:maximum_binding_limit:*
 webgpu:api,validation,createBindGroupLayout:multisampled_validation:*
 webgpu:api,validation,createBindGroupLayout:storage_texture,formats:*
@@ -410,20 +411,7 @@ webgpu:shader,validation,expression,call,builtin,textureNumSamples:*
 fails-if(vulkan) webgpu:shader,validation,expression,call,builtin,textureSampleBaseClampToEdge:*
 webgpu:shader,validation,expression,call,builtin,textureStore:*
 webgpu:shader,validation,expression,call,builtin,trunc:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:array_value:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:array_zero_value:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:matrix_zero_value:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:must_use:ctor="mat4x4";use=true
-webgpu:shader,validation,expression,call,builtin,value_constructor:partial_eval:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:scalar_value:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:scalar_zero_value:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:struct_value:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:struct_zero_value:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:vector_copy:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:vector_elementwise:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:vector_mixed:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:vector_splat:*
-webgpu:shader,validation,expression,call,builtin,value_constructor:vector_zero_value:*
+webgpu:shader,validation,expression,call,builtin,value_constructor:*
 webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:*
 webgpu:shader,validation,expression,overload_resolution:*
 webgpu:shader,validation,extension,clip_distances:*

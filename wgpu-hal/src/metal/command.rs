@@ -5,21 +5,25 @@ use objc2::{
 use objc2_foundation::{NSRange, NSString, NSUInteger};
 use objc2_metal::{
     MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLBlitCommandEncoder,
-    MTLBlitPassDescriptor, MTLBuffer, MTLCommandBuffer, MTLCommandEncoder, MTLCommandQueue,
-    MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLCounterDontSample, MTLDevice,
-    MTLLoadAction, MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor,
+    MTLBlitPassDescriptor, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandEncoder,
+    MTLCommandQueue, MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLCounterDontSample,
+    MTLDevice, MTLLoadAction, MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor,
     MTLResidencySet, MTLResidencySetDescriptor, MTLSamplerState, MTLScissorRect, MTLSize,
     MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping, MTLViewport,
     MTLVisibilityResultMode,
 };
 
-use super::{adapter::VERTEX_BUFFER_SLOT_START, conv, TimestampQuerySupport};
+use super::{
+    adapter::{self, VERTEX_BUFFER_SLOT_START},
+    conv, TimestampQuerySupport,
+};
 use crate::CommandEncoder as _;
 use alloc::{
     borrow::{Cow, ToOwned as _},
+    sync::Arc,
     vec::Vec,
 };
-use core::{ops::Range, ptr::NonNull};
+use core::{ops::Range, ptr::NonNull, sync::atomic};
 use smallvec::SmallVec;
 
 // has to match `Temp::binding_sizes`
@@ -454,6 +458,26 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         let queue = &self.queue_shared.raw;
         let retain_references = self.shared.settings.retain_command_buffer_references;
+
+        // Guard against exhausting Metal's command buffer budget. Use the hard
+        // limit (`MAX_COMMAND_BUFFERS`) so we fail before Metal can hang inside
+        // `new_command_buffer`.
+        let previous = self
+            .queue_shared
+            .command_buffer_created_not_submitted
+            .fetch_add(1, atomic::Ordering::AcqRel);
+        if previous >= adapter::MAX_COMMAND_BUFFERS {
+            let current = previous + 1;
+            log::warn!(
+                "metal: refusing to create new command buffer; {current} outstanding command \
+                 buffers exceeds the limit of {}. Treating this as device lost. \
+                 Ensure command encoders are submitted or dropped rather than kept alive \
+                 to avoid exhausting Metal's command buffer budget.",
+                adapter::MAX_COMMAND_BUFFERS
+            );
+            return Err(crate::DeviceError::Lost);
+        }
+
         let raw = autoreleasepool(move |_| {
             let cmd_buf_ref = if retain_references {
                 queue.commandBuffer()
@@ -483,7 +507,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
         if let Some(encoder) = self.state.compute.take() {
             encoder.endEncoding();
         }
+        let had_command_buffer = self.raw_cmd_buf.is_some();
+        // Clear the Option first so the underlying `metal::CommandBuffer` is
+        // dropped before we update the counter.
         self.raw_cmd_buf = None;
+        if had_command_buffer {
+            self.queue_shared
+                .command_buffer_created_not_submitted
+                .fetch_sub(1, atomic::Ordering::AcqRel);
+        }
     }
 
     unsafe fn end_encoding(&mut self) -> Result<super::CommandBuffer, crate::DeviceError> {
@@ -501,6 +533,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         Ok(super::CommandBuffer {
             raw: self.raw_cmd_buf.take().unwrap(),
+            queue_shared: Arc::clone(&self.queue_shared),
         })
     }
 
@@ -1864,5 +1897,23 @@ impl Drop for super::CommandEncoder {
             self.discard_encoding();
         }
         self.counters.command_encoders.sub(1);
+    }
+}
+
+impl Drop for super::CommandBuffer {
+    fn drop(&mut self) {
+        // `command_buffer_created_not_submitted` is usually decremented when the command
+        // buffer is submitted. But if we're dropping a command buffer that was never
+        // submitted, we need to decrement the count here.
+        let status = self.raw.status();
+        if status == MTLCommandBufferStatus::NotEnqueued
+            || status == MTLCommandBufferStatus::Enqueued
+        {
+            let previous = self
+                .queue_shared
+                .command_buffer_created_not_submitted
+                .fetch_sub(1, atomic::Ordering::AcqRel);
+            debug_assert!(previous > 0);
+        }
     }
 }

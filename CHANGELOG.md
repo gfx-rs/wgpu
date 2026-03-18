@@ -44,6 +44,17 @@ Bottom level categories:
 
 ### Major Changes
 
+#### `InstanceDescriptor` initialization APIs
+
+`InstanceDescriptor`'s convenience constructors (an implementation of `Default` and the static `from_env_or_default` method) have been removed. In their place are new static methods that force recognition of whether a display handle is used:
+
+- `new_with_display_handle`
+- `new_with_display_handle_from_env`
+- `new_without_display_handle`
+- `new_without_display_handle_from_env`
+
+By @MarijnS95 in [#8782](https://github.com/gfx-rs/wgpu/pull/8782)
+
 #### Bind group layouts now optional in `PipelineLayoutDescriptor`
 
 Allow gaps in bind group layouts and added full support for unbinding. As a result of this `PipelineLayoutDescriptor`'s `bind_group_layouts` field now has type of `&[Option<&BindGroupLayout>]`, making this a breaking change. To migrate wrap bind group layout references in `Some`:
@@ -113,6 +124,35 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
     wgpu::StencilState::default(),
 )),
 ```
+
+#### D3D12 Agility SDK support
+
+Added support for loading a specific [DirectX 12 Agility SDK](https://devblogs.microsoft.com/directx/directx12agility/) runtime via the [Independent Devices API](https://devblogs.microsoft.com/directx/d3d12-independent-devices/). The Agility SDK lets applications ship a newer D3D12 runtime alongside their binary, unlocking the latest D3D12 features without waiting for an OS update.
+
+Configure it programmatically:
+
+```rust
+let options = wgpu::Dx12BackendOptions {
+    agility_sdk: Some(wgpu::Dx12AgilitySDK {
+        sdk_version: 619,
+        sdk_path: "path/to/sdk/bin/x64".into(),
+    }),
+    ..Default::default()
+};
+```
+
+Or via environment variables:
+
+```
+WGPU_DX12_AGILITY_SDK_PATH=path/to/sdk/bin/x64
+WGPU_DX12_AGILITY_SDK_VERSION=619
+```
+
+The `sdk_version` must match the version of the `D3D12Core.dll` in the provided path exactly, or loading will fail.
+
+If the Agility SDK fails to load (e.g. version mismatch, missing DLL, or unsupported OS), wgpu logs a warning and falls back to the system D3D12 runtime.
+
+By @cwfitzgerald in [#9130](https://github.com/gfx-rs/wgpu/pull/9130).
 
 #### `WriteOnly`
 
@@ -188,7 +228,6 @@ By @kpreid in [#9042](https://github.com/gfx-rs/wgpu/pull/9042).
 - The `max_uniform_buffer_binding_size` and `max_storage_buffer_binding_size` limits are now `u64` instead of `u32`, to match WebGPU. By @wingertge in [#9146](https://github.com/gfx-rs/wgpu/pull/9146).
 - The main 3 native backends now report their limits properly. By @teoxoy in [#9196](https://github.com/gfx-rs/wgpu/pull/9196).
 
-
 #### naga
 
 - Naga and `wgpu` now reject shaders with an `enable` directive for functionality that is not available, even if that functionality is not used by the shader. By @andyleiserson in [#8913](https://github.com/gfx-rs/wgpu/pull/8913).
@@ -259,7 +298,7 @@ By @kpreid in [#9042](https://github.com/gfx-rs/wgpu/pull/9042).
 #### Vulkan
 
 - Fixed a variety of mesh shader SPIR-V writer issues from the original implementation. By @inner-daemons in [#8756](https://github.com/gfx-rs/wgpu/pull/8756)
-- Offset the vertex buffer device address when building a BLAS instead of using the `first_vertex` field. By @Vecvec in [#9220](https://github.com/gfx-rs/wgpu/pull/9220) 
+- Offset the vertex buffer device address when building a BLAS instead of using the `first_vertex` field. By @Vecvec in [#9220](https://github.com/gfx-rs/wgpu/pull/9220)
 
 #### Metal / macOS
 
@@ -275,6 +314,7 @@ By @kpreid in [#9042](https://github.com/gfx-rs/wgpu/pull/9042).
 #### Vulkan
 
 - Remove incorrect ordered texture uses. By @NiklasEi in [#8924](https://github.com/gfx-rs/wgpu/pull/8924).
+
 ### Performance
 
 #### GLES
