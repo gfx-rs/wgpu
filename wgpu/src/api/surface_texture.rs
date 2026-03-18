@@ -57,8 +57,8 @@ impl Drop for SurfaceTexture {
 pub enum CurrentSurfaceTexture {
     /// Successfully acquired a surface texture with no issues.
     Success(SurfaceTexture),
-    /// Successfully acquired a surface texture, but the surface should be
-    /// reconfigured for optimal performance.
+    /// Successfully acquired a surface texture, but texture no longer matches the properties of the underlying surface.
+    /// It's highly recommended to call [`Surface::configure`] again for optimal performance.
     Suboptimal(SurfaceTexture),
     /// A timeout was encountered while trying to acquire the next frame.
     ///
