@@ -4,7 +4,7 @@ use std::{thread, time};
 
 use bytemuck::TransparentWrapper;
 use objc2::{
-    available, msg_send,
+    available,
     rc::{autoreleasepool, Retained},
     runtime::ProtocolObject,
 };
@@ -16,7 +16,7 @@ use objc2_metal::{
     MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode, MTLDepthStencilDescriptor,
     MTLDevice, MTLFunction, MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion,
     MTLLibrary, MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
-    MTLPipelineBufferDescriptorArray, MTLPixelFormat, MTLPrimitiveTopologyClass,
+    MTLPipelineBufferDescriptorArray, MTLPipelineOption, MTLPixelFormat, MTLPrimitiveTopologyClass,
     MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
     MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
     MTLSamplerMipFilter, MTLSamplerState, MTLSize, MTLStencilDescriptor, MTLStorageMode,
@@ -1598,15 +1598,14 @@ impl crate::Device for super::Device {
                     .shared
                     .device
                     .newRenderPipelineStateWithDescriptor_error(&d),
-                MetalGenericRenderPipelineDescriptor::Mesh(d) => {
-                    // TODO(https://github.com/gfx-rs/wgpu/issues/8944):
-                    // `newRenderPipelineStateWithMeshDescriptor:error:` is
-                    // not exposed on `MTLDevice`, is this always correct?
-                    let device = &self.shared.device;
-                    unsafe {
-                        msg_send![device, newRenderPipelineStateWithMeshDescriptor: &*d, error: _]
-                    }
-                }
+                MetalGenericRenderPipelineDescriptor::Mesh(d) => self
+                    .shared
+                    .device
+                    .newRenderPipelineStateWithMeshDescriptor_options_reflection_error(
+                        &d,
+                        MTLPipelineOption::empty(),
+                        None,
+                    ),
             }
             .map_err(|e| {
                 crate::PipelineError::Linkage(
@@ -1704,13 +1703,14 @@ impl crate::Device for super::Device {
                 descriptor.setLabel(Some(&NSString::from_str(name)));
             }
 
-            // TODO(https://github.com/gfx-rs/wgpu/issues/8944):
-            // `newComputePipelineStateWithDescriptor:error:` is not exposed
-            // on `MTLDevice`, is this always correct?
-            let device = &self.shared.device;
-            let raw = unsafe {
-                msg_send![device, newComputePipelineStateWithDescriptor: &*descriptor, error: _]
-            };
+            let raw = self
+                .shared
+                .device
+                .newComputePipelineStateWithDescriptor_options_reflection_error(
+                    &descriptor,
+                    MTLPipelineOption::empty(),
+                    None,
+                );
 
             let raw: Retained<ProtocolObject<dyn MTLComputePipelineState>> =
                 raw.map_err(|e: Retained<NSError>| {
