@@ -1210,7 +1210,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             if let Some(ms) = layout.immediates_infos.ms {
                 if self.shared.private_caps.mesh_shaders {
                     unsafe {
-                        render.setObjectBytes_length_atIndex(
+                        render.setMeshBytes_length_atIndex(
                             bytes,
                             layout.total_immediates as usize * WORD_SIZE,
                             ms.buffer_index as _,
