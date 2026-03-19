@@ -26,6 +26,7 @@ struct App {
 }
 
 struct State {
+    instance: wgpu::Instance,
     window: Arc<Window>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -250,6 +251,7 @@ impl State {
         });
 
         State {
+            instance,
             window,
             device,
             queue,
@@ -271,12 +273,17 @@ impl State {
 
     fn render_frame(&mut self) {
         let frame = match self.surface.get_current_texture() {
-            Ok(f) => f,
-            Err(wgpu::SurfaceError::Outdated | wgpu::SurfaceError::Lost) => {
+            wgpu::CurrentSurfaceTexture::Success(f) => f,
+            wgpu::CurrentSurfaceTexture::Suboptimal(_) | wgpu::CurrentSurfaceTexture::Outdated => {
                 self.surface.configure(&self.device, &self.surface_config);
                 return;
             }
-            Err(_) => return,
+            wgpu::CurrentSurfaceTexture::Lost => {
+                self.surface = self.instance.create_surface(self.window.clone()).unwrap();
+                self.surface.configure(&self.device, &self.surface_config);
+                return;
+            }
+            _ => return,
         };
         let frame_view = frame.texture.create_view(&Default::default());
         let mut enc = self.device.create_command_encoder(&Default::default());

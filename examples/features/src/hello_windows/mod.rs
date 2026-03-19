@@ -1,7 +1,7 @@
 #![cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
 
 use std::{collections::HashMap, sync::Arc};
-use wgpu::SurfaceError;
+use wgpu::CurrentSurfaceTexture;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -48,7 +48,7 @@ impl Viewport {
         self.desc.surface.configure(device, &self.config);
     }
 
-    fn get_current_texture(&mut self) -> Result<wgpu::SurfaceTexture, SurfaceError> {
+    fn get_current_texture(&mut self) -> CurrentSurfaceTexture {
         self.desc.surface.get_current_texture()
     }
 }
@@ -63,6 +63,7 @@ const COLUMNS: u32 = 4;
 enum AppState {
     Uninitialized,
     Running {
+        instance: wgpu::Instance,
         device: wgpu::Device,
         queue: wgpu::Queue,
         viewports: HashMap<WindowId, Viewport>,
@@ -162,6 +163,7 @@ impl ApplicationHandler for App {
             .collect();
 
         self.state = AppState::Running {
+            instance,
             device,
             queue,
             viewports,
@@ -175,6 +177,7 @@ impl ApplicationHandler for App {
         event: WindowEvent,
     ) {
         let AppState::Running {
+            instance,
             device,
             queue,
             viewports,
@@ -194,51 +197,59 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 if let Some(viewport) = viewports.get_mut(&window_id) {
-                    match viewport.get_current_texture() {
-                        Ok(frame) => {
-                            let view = frame
-                                .texture
-                                .create_view(&wgpu::TextureViewDescriptor::default());
-                            let mut encoder =
-                                device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                                    label: None,
-                                });
-                            {
-                                let _rpass =
-                                    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                        label: None,
-                                        color_attachments: &[Some(
-                                            wgpu::RenderPassColorAttachment {
-                                                view: &view,
-                                                depth_slice: None,
-                                                resolve_target: None,
-                                                ops: wgpu::Operations {
-                                                    load: wgpu::LoadOp::Clear(
-                                                        viewport.desc.background,
-                                                    ),
-                                                    store: wgpu::StoreOp::Store,
-                                                },
-                                            },
-                                        )],
-                                        depth_stencil_attachment: None,
-                                        timestamp_writes: None,
-                                        occlusion_query_set: None,
-                                        multiview_mask: None,
-                                    });
-                            }
-
-                            queue.submit(Some(encoder.finish()));
-                            viewport.desc.window.pre_present_notify();
-                            frame.present();
-                        }
-                        Err(SurfaceError::Timeout | SurfaceError::Occluded) => {
+                    let frame = match viewport.get_current_texture() {
+                        CurrentSurfaceTexture::Success(frame) => frame,
+                        CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => {
                             viewport.desc.window.request_redraw();
+                            return;
                         }
-                        Err(err) => {
-                            // TODO: reconfigure the surface instead
-                            panic!("get_current_texture: {err}");
+                        CurrentSurfaceTexture::Suboptimal(_) | CurrentSurfaceTexture::Outdated => {
+                            viewport.desc.surface.configure(device, &viewport.config);
+                            viewport.desc.window.request_redraw();
+                            return;
                         }
+                        CurrentSurfaceTexture::Validation => {
+                            unreachable!(
+                                "No error scope registered, so validation errors will panic"
+                            )
+                        }
+                        CurrentSurfaceTexture::Lost => {
+                            viewport.desc.surface = instance
+                                .create_surface(viewport.desc.window.clone())
+                                .unwrap();
+                            viewport.desc.surface.configure(device, &viewport.config);
+                            viewport.desc.window.request_redraw();
+                            return;
+                        }
+                    };
+
+                    let view = frame
+                        .texture
+                        .create_view(&wgpu::TextureViewDescriptor::default());
+                    let mut encoder = device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+                    {
+                        let _rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                            label: None,
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view: &view,
+                                depth_slice: None,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(viewport.desc.background),
+                                    store: wgpu::StoreOp::Store,
+                                },
+                            })],
+                            depth_stencil_attachment: None,
+                            timestamp_writes: None,
+                            occlusion_query_set: None,
+                            multiview_mask: None,
+                        });
                     }
+
+                    queue.submit(Some(encoder.finish()));
+                    viewport.desc.window.pre_present_notify();
+                    frame.present();
                 }
             }
             WindowEvent::Occluded(is_occluded) => {

@@ -1315,6 +1315,7 @@ impl Interface {
                 ),
                 _ => unreachable!(),
             };
+
             let total_invocations = entry_point
                 .workgroup_size
                 .iter()
@@ -1322,9 +1323,16 @@ impl Interface {
             let invalid_total_invocations =
                 total_invocations > max_workgroup_size_total || total_invocations == 0;
 
-            let dimension_too_large = entry_point.workgroup_size[0] > max_workgroup_size_limits[0]
-                || entry_point.workgroup_size[1] > max_workgroup_size_limits[1]
-                || entry_point.workgroup_size[2] > max_workgroup_size_limits[2];
+            assert_eq!(
+                entry_point.workgroup_size.len(),
+                max_workgroup_size_limits.len()
+            );
+            let dimension_too_large = entry_point
+                .workgroup_size
+                .iter()
+                .zip(max_workgroup_size_limits.iter())
+                .any(|(dim, limit)| dim > limit);
+
             if invalid_total_invocations || dimension_too_large {
                 return Err(StageError::InvalidWorkgroupSize {
                     dimensions: entry_point.workgroup_size,

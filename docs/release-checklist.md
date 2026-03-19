@@ -14,7 +14,7 @@ Anyone in the @gfx-rs/wgpu team can perform these steps.
 
 Approx 1 Week Before:
 
-- Determine if `glow` (@groves), `metal-rs` (@gfx-rs/wgpu) or any other dependant crates will need a release. If so, coordinate with their maintainers.
+- Determine if `glow` (@groves), `rspirv` (@gfx-rs/wgpu) or any other dependant crates will need a release. If so, coordinate with their maintainers.
 - Go through the changelog:
   - Re-categorize miscategorized items.
   - Edit major changes so a user can easily understand what they need to do.
@@ -27,9 +27,10 @@ Day of Release:
 - Bump the wgpu dependency numbers in the following places:
   - `Cargo.toml`
   - `examples/standalone/*`
+  - `examples/bug-repro/*`
 - Grep for the previous version to ensure various documentation links are updated.
   - For example, if the previous version was v24.0.0, grep for `v24` and `24.0`
-- Ensure `glow` and `metal` are updated to the latest version if needed.
+- Ensure `glow` and `rspirv` are updated to the latest version if needed.
 - Add a new header for the changelog with the release version and date.
 - Create a PR with all of the version changes and changelog updates.
 - Once the PR is CI clean, (force) merge it.

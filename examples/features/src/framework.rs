@@ -183,25 +183,43 @@ impl SurfaceWrapper {
     /// Acquire the next surface texture.
     ///
     /// Returns `None` on failure.
-    fn acquire(&mut self, context: &ExampleContext) -> Option<wgpu::SurfaceTexture> {
+    fn acquire(
+        &mut self,
+        context: &ExampleContext,
+        window: Arc<Window>,
+    ) -> Option<wgpu::SurfaceTexture> {
+        use wgpu::CurrentSurfaceTexture;
+
         let surface = self.surface.as_ref().unwrap();
 
         match surface.get_current_texture() {
-            Ok(frame) => Some(frame),
+            CurrentSurfaceTexture::Success(frame) => Some(frame),
             // If we timed out or the window is occluded, skip this frame:
-            Err(wgpu::SurfaceError::Timeout | wgpu::SurfaceError::Occluded) => None,
-            Err(
-                // If the surface is outdated, or was lost, reconfigure it.
-                wgpu::SurfaceError::Outdated
-                | wgpu::SurfaceError::Lost
-                | wgpu::SurfaceError::Other
-                // If OutOfMemory happens, reconfiguring may not help, but we might as well try
-                | wgpu::SurfaceError::OutOfMemory,
-            ) => {
+            CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => None,
+            // If the surface is outdated or suboptimal, reconfigure and retry.
+            CurrentSurfaceTexture::Suboptimal(_) | CurrentSurfaceTexture::Outdated => {
                 surface.configure(&context.device, self.config());
-                Some(surface
-                    .get_current_texture()
-                    .expect("Failed to acquire next surface texture!"))
+                match surface.get_current_texture() {
+                    CurrentSurfaceTexture::Success(frame)
+                    | CurrentSurfaceTexture::Suboptimal(frame) => Some(frame),
+                    other => panic!("Failed to acquire next surface texture: {other:?}"),
+                }
+            }
+            CurrentSurfaceTexture::Validation => {
+                unreachable!("No error scope registered, so validation errors will panic")
+            }
+            // If the surface is lost, recreate and reconfigure it.
+            CurrentSurfaceTexture::Lost => {
+                self.surface = Some(context.instance.create_surface(window).unwrap());
+                self.surface
+                    .as_ref()
+                    .unwrap()
+                    .configure(&context.device, self.config());
+                match self.surface.as_ref().unwrap().get_current_texture() {
+                    CurrentSurfaceTexture::Success(frame)
+                    | CurrentSurfaceTexture::Suboptimal(frame) => Some(frame),
+                    other => panic!("Failed to acquire next surface texture: {other:?}"),
+                }
             }
         }
     }
@@ -518,7 +536,8 @@ impl<E: Example> ApplicationHandler<AppAction> for App<E> {
 
                 self.frame_counter.update();
 
-                if let Some(frame) = surface.acquire(context) {
+                let window_arc = self.window.clone().unwrap();
+                if let Some(frame) = surface.acquire(context, window_arc) {
                     let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
                         format: Some(surface.config().view_formats[0]),
                         ..wgpu::TextureViewDescriptor::default()
