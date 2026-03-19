@@ -235,6 +235,7 @@ pub(crate) enum Error<'a> {
     InvalidAddrOfOperand(Span),
     InvalidAtomicPointer(Span),
     InvalidAtomicOperandType(Span),
+    InvalidAtomicAccess(Span),
     InvalidRayQueryPointer(Span),
     NotPointer(Span),
     NotReference(&'static str, Span),
@@ -822,6 +823,11 @@ impl<'a> Error<'a> {
             Error::InvalidAtomicOperandType(span) => ParseError {
                 message: "atomic operand type is inconsistent with the operation".to_string(),
                 labels: vec![(span, "atomic operand type is invalid".into())],
+                notes: vec![],
+            },
+            Error::InvalidAtomicAccess(span) => ParseError {
+                message: "atomic variables cannot be accessed directly; use atomic built-in functions".to_string(),
+                labels: vec![(span, "direct access to atomic variable is not allowed".into())],
                 notes: vec![],
             },
             Error::InvalidRayQueryPointer(span) => ParseError {
