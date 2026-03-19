@@ -33,11 +33,15 @@ Day of Release:
 - Ensure `glow` and `rspirv` are updated to the latest version if needed.
 - Add a new header for the changelog with the release version and date.
 - Create a PR with all of the version changes and changelog updates.
-- Once the PR is CI clean, (force) merge it.
+- While waiting on the PR, do a dry run of publishing.
+  ```bash
+    cargo publish --dry-run --workspace --all-features --exclude deno_webgpu
+  ```
+- Once the PR is CI clean and publish worked, (force) merge it.
 - Checkout `trunk` with the merged PR.
 - Publish! These commands can be pasted directly into your terminal in a single command, and they will publish everything.
   ```bash
-    cargo publish --workspace --exclude deno_webgpu
+    cargo publish --workspace --all-features --exclude deno_webgpu
   ```
 - If there were any newly published crates, ensure `github:gfx-rs/wgpu` is added as an owner of that crate.
 - Create a new tag called `vX.Y.Z` and push it to the repo.
