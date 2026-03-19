@@ -7190,10 +7190,10 @@ template <typename A>
                         };
                         let resolved = options.resolve_local_binding(binding, out_mode)?;
                         write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
+                        resolved.try_fmt(&mut self.out)?;
                         if let Some(array_len) = array_len {
                             write!(self.out, " [{array_len}]")?;
                         }
-                        resolved.try_fmt(&mut self.out)?;
                         writeln!(self.out, ";")?;
                     }
 
