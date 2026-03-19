@@ -34,7 +34,6 @@ use crate::query_set::GPUQuerySet;
 use crate::render_bundle::GPURenderBundleEncoder;
 use crate::render_pipeline::GPURenderPipeline;
 use crate::shader::GPUCompilationInfo;
-use crate::webidl::features_to_feature_names;
 use crate::Instance;
 
 /// External memory associated with device and queue, to encourage V8 to garbage
@@ -104,7 +103,6 @@ impl GPUDevice {
   fn features(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
     self.features.get(scope, |scope| {
       let features = self.instance.device_features(self.id);
-      let features = features_to_feature_names(features);
       GPUSupportedFeatures::new(scope, features)
     })
   }
@@ -379,7 +377,11 @@ impl GPUDevice {
     let bind_group_layouts = descriptor
       .bind_group_layouts
       .into_iter()
-      .map(|bind_group_layout| bind_group_layout.id)
+      .map(|bind_group_layout| {
+        bind_group_layout
+          .into_option()
+          .map(|bind_group_layout| bind_group_layout.id)
+      })
       .collect();
 
     let wgpu_descriptor = wgpu_core::binding_model::PipelineLayoutDescriptor {
@@ -890,13 +892,8 @@ impl GPUDevice {
 
       wgpu_types::DepthStencilState {
         format: depth_stencil.format.into(),
-        depth_write_enabled: depth_stencil
-          .depth_write_enabled
-          .unwrap_or_default(),
-        depth_compare: depth_stencil
-          .depth_compare
-          .map(Into::into)
-          .unwrap_or(wgpu_types::CompareFunction::Never), // TODO(wgpu): should be optional here
+        depth_write_enabled: depth_stencil.depth_write_enabled,
+        depth_compare: depth_stencil.depth_compare.map(Into::into),
         stencil: wgpu_types::StencilState {
           front,
           back,

@@ -1,6 +1,7 @@
 use alloc::{
     boxed::Box,
     string::{String, ToString as _},
+    sync::Arc,
     vec::Vec,
 };
 use core::fmt;
@@ -281,16 +282,18 @@ impl WebGpuError for InputError {
 #[non_exhaustive]
 pub enum StageError {
     #[error(
-        "Shader entry point's workgroup size {current:?} ({current_total} total invocations) must be less or equal to the per-dimension
-        limit `Limits::{per_dimension_limit}` of {limit:?} and the total invocation limit `Limits::{total_limit}` of {total}"
+        "Shader entry point's workgroup size {dimensions:?} ({total} total invocations) must be \
+        less or equal to the per-dimension limit `Limits::{per_dimension_limits_desc}` of \
+        {per_dimension_limits:?} and the total invocation limit `Limits::{total_limit_desc}` of \
+        {total_limit}"
     )]
     InvalidWorkgroupSize {
-        current: [u32; 3],
-        current_total: u32,
-        limit: [u32; 3],
+        dimensions: [u32; 3],
+        per_dimension_limits: [u32; 3],
+        per_dimension_limits_desc: &'static str,
         total: u32,
-        per_dimension_limit: &'static str,
-        total_limit: &'static str,
+        total_limit: u32,
+        total_limit_desc: &'static str,
     },
     #[error("Unable to find entry point '{0}'")]
     MissingEntryPoint(String),
@@ -404,19 +407,19 @@ pub enum StageError {
 
 impl WebGpuError for StageError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Binding(_, e) => e,
-            Self::InvalidResource(e) => e,
+        match self {
+            Self::Binding(_, e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
             Self::Filtering {
                 texture: _,
                 sampler: _,
                 error,
-            } => error,
+            } => error.webgpu_error_type(),
             Self::Input {
                 location: _,
                 var: _,
                 error,
-            } => error,
+            } => error.webgpu_error_type(),
             Self::InvalidWorkgroupSize { .. }
             | Self::MissingEntryPoint(..)
             | Self::NoEntryPointFound
@@ -434,123 +437,13 @@ impl WebGpuError for StageError {
             | Self::MissingPrimitiveIndex
             | Self::DrawIdError
             | Self::InvalidDualSourceBlending
-            | Self::MissingFragDepthAttachment => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::MissingFragDepthAttachment => ErrorType::Validation,
+        }
     }
 }
 
-pub fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::StorageFormat> {
-    use naga::StorageFormat as Sf;
-    use wgt::TextureFormat as Tf;
-
-    Some(match format {
-        Tf::R8Unorm => Sf::R8Unorm,
-        Tf::R8Snorm => Sf::R8Snorm,
-        Tf::R8Uint => Sf::R8Uint,
-        Tf::R8Sint => Sf::R8Sint,
-
-        Tf::R16Uint => Sf::R16Uint,
-        Tf::R16Sint => Sf::R16Sint,
-        Tf::R16Float => Sf::R16Float,
-        Tf::Rg8Unorm => Sf::Rg8Unorm,
-        Tf::Rg8Snorm => Sf::Rg8Snorm,
-        Tf::Rg8Uint => Sf::Rg8Uint,
-        Tf::Rg8Sint => Sf::Rg8Sint,
-
-        Tf::R32Uint => Sf::R32Uint,
-        Tf::R32Sint => Sf::R32Sint,
-        Tf::R32Float => Sf::R32Float,
-        Tf::Rg16Uint => Sf::Rg16Uint,
-        Tf::Rg16Sint => Sf::Rg16Sint,
-        Tf::Rg16Float => Sf::Rg16Float,
-        Tf::Rgba8Unorm => Sf::Rgba8Unorm,
-        Tf::Rgba8Snorm => Sf::Rgba8Snorm,
-        Tf::Rgba8Uint => Sf::Rgba8Uint,
-        Tf::Rgba8Sint => Sf::Rgba8Sint,
-        Tf::Bgra8Unorm => Sf::Bgra8Unorm,
-
-        Tf::Rgb10a2Uint => Sf::Rgb10a2Uint,
-        Tf::Rgb10a2Unorm => Sf::Rgb10a2Unorm,
-        Tf::Rg11b10Ufloat => Sf::Rg11b10Ufloat,
-
-        Tf::R64Uint => Sf::R64Uint,
-        Tf::Rg32Uint => Sf::Rg32Uint,
-        Tf::Rg32Sint => Sf::Rg32Sint,
-        Tf::Rg32Float => Sf::Rg32Float,
-        Tf::Rgba16Uint => Sf::Rgba16Uint,
-        Tf::Rgba16Sint => Sf::Rgba16Sint,
-        Tf::Rgba16Float => Sf::Rgba16Float,
-
-        Tf::Rgba32Uint => Sf::Rgba32Uint,
-        Tf::Rgba32Sint => Sf::Rgba32Sint,
-        Tf::Rgba32Float => Sf::Rgba32Float,
-
-        Tf::R16Unorm => Sf::R16Unorm,
-        Tf::R16Snorm => Sf::R16Snorm,
-        Tf::Rg16Unorm => Sf::Rg16Unorm,
-        Tf::Rg16Snorm => Sf::Rg16Snorm,
-        Tf::Rgba16Unorm => Sf::Rgba16Unorm,
-        Tf::Rgba16Snorm => Sf::Rgba16Snorm,
-
-        _ => return None,
-    })
-}
-
-pub fn map_storage_format_from_naga(format: naga::StorageFormat) -> wgt::TextureFormat {
-    use naga::StorageFormat as Sf;
-    use wgt::TextureFormat as Tf;
-
-    match format {
-        Sf::R8Unorm => Tf::R8Unorm,
-        Sf::R8Snorm => Tf::R8Snorm,
-        Sf::R8Uint => Tf::R8Uint,
-        Sf::R8Sint => Tf::R8Sint,
-
-        Sf::R16Uint => Tf::R16Uint,
-        Sf::R16Sint => Tf::R16Sint,
-        Sf::R16Float => Tf::R16Float,
-        Sf::Rg8Unorm => Tf::Rg8Unorm,
-        Sf::Rg8Snorm => Tf::Rg8Snorm,
-        Sf::Rg8Uint => Tf::Rg8Uint,
-        Sf::Rg8Sint => Tf::Rg8Sint,
-
-        Sf::R32Uint => Tf::R32Uint,
-        Sf::R32Sint => Tf::R32Sint,
-        Sf::R32Float => Tf::R32Float,
-        Sf::Rg16Uint => Tf::Rg16Uint,
-        Sf::Rg16Sint => Tf::Rg16Sint,
-        Sf::Rg16Float => Tf::Rg16Float,
-        Sf::Rgba8Unorm => Tf::Rgba8Unorm,
-        Sf::Rgba8Snorm => Tf::Rgba8Snorm,
-        Sf::Rgba8Uint => Tf::Rgba8Uint,
-        Sf::Rgba8Sint => Tf::Rgba8Sint,
-        Sf::Bgra8Unorm => Tf::Bgra8Unorm,
-
-        Sf::Rgb10a2Uint => Tf::Rgb10a2Uint,
-        Sf::Rgb10a2Unorm => Tf::Rgb10a2Unorm,
-        Sf::Rg11b10Ufloat => Tf::Rg11b10Ufloat,
-
-        Sf::R64Uint => Tf::R64Uint,
-        Sf::Rg32Uint => Tf::Rg32Uint,
-        Sf::Rg32Sint => Tf::Rg32Sint,
-        Sf::Rg32Float => Tf::Rg32Float,
-        Sf::Rgba16Uint => Tf::Rgba16Uint,
-        Sf::Rgba16Sint => Tf::Rgba16Sint,
-        Sf::Rgba16Float => Tf::Rgba16Float,
-
-        Sf::Rgba32Uint => Tf::Rgba32Uint,
-        Sf::Rgba32Sint => Tf::Rgba32Sint,
-        Sf::Rgba32Float => Tf::Rgba32Float,
-
-        Sf::R16Unorm => Tf::R16Unorm,
-        Sf::R16Snorm => Tf::R16Snorm,
-        Sf::Rg16Unorm => Tf::Rg16Unorm,
-        Sf::Rg16Snorm => Tf::Rg16Snorm,
-        Sf::Rgba16Unorm => Tf::Rgba16Unorm,
-        Sf::Rgba16Snorm => Tf::Rgba16Snorm,
-    }
-}
+pub use wgpu_naga_bridge::map_storage_format_from_naga;
+pub use wgpu_naga_bridge::map_storage_format_to_naga;
 
 impl Resource {
     fn check_binding_use(&self, entry: &BindGroupLayoutEntry) -> Result<(), BindingError> {
@@ -1010,7 +903,7 @@ pub fn check_texture_format(
     }
 }
 
-pub enum BindingLayoutSource<'a> {
+pub enum BindingLayoutSource {
     /// The binding layout is derived from the pipeline layout.
     ///
     /// This will be filled in by the shader binding validation, as it iterates the shader's interfaces.
@@ -1018,10 +911,10 @@ pub enum BindingLayoutSource<'a> {
     /// The binding layout is provided by the user in BGLs.
     ///
     /// This will be validated against the shader's interfaces.
-    Provided(ArrayVec<&'a bgl::EntryMap, { hal::MAX_BIND_GROUPS }>),
+    Provided(Arc<crate::binding_model::PipelineLayout>),
 }
 
-impl<'a> BindingLayoutSource<'a> {
+impl BindingLayoutSource {
     pub fn new_derived(limits: &wgt::Limits) -> Self {
         let mut array = ArrayVec::new();
         for _ in 0..limits.max_bind_groups {
@@ -1247,7 +1140,7 @@ impl Interface {
     /// <https://www.w3.org/TR/webgpu/#abstract-opdef-validating-inter-stage-interfaces>.
     pub fn check_stage(
         &self,
-        layouts: &mut BindingLayoutSource<'_>,
+        layouts: &mut BindingLayoutSource,
         shader_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         entry_point_name: &str,
         shader_stage: ShaderStageForValidation,
@@ -1269,7 +1162,7 @@ impl Interface {
             let res = &self.resources[handle];
             let result = 'err: {
                 match layouts {
-                    BindingLayoutSource::Provided(layouts) => {
+                    BindingLayoutSource::Provided(pipeline_layout) => {
                         // update the required binding size for this buffer
                         if let ResourceType::Buffer { size } = res.ty {
                             match shader_binding_sizes.entry(res.bind) {
@@ -1282,11 +1175,9 @@ impl Interface {
                             }
                         }
 
-                        let Some(map) = layouts.get(res.bind.group as usize) else {
-                            break 'err Err(BindingError::Missing);
-                        };
-
-                        let Some(entry) = map.get(res.bind.binding) else {
+                        let Some(entry) =
+                            pipeline_layout.get_bgl_entry(res.bind.group, res.bind.binding)
+                        else {
                             break 'err Err(BindingError::Missing);
                         };
 
@@ -1340,15 +1231,15 @@ impl Interface {
         //
         // We only need to do this if the binding layout is provided by the user, as derived
         // layouts will inherently be correctly tagged.
-        if let BindingLayoutSource::Provided(layouts) = layouts {
+        if let BindingLayoutSource::Provided(pipeline_layout) = layouts {
             for &(texture_handle, sampler_handle) in entry_point.sampling_pairs.iter() {
                 let texture_bind = &self.resources[texture_handle].bind;
                 let sampler_bind = &self.resources[sampler_handle].bind;
-                let texture_layout = layouts[texture_bind.group as usize]
-                    .get(texture_bind.binding)
+                let texture_layout = pipeline_layout
+                    .get_bgl_entry(texture_bind.group, texture_bind.binding)
                     .unwrap();
-                let sampler_layout = layouts[sampler_bind.group as usize]
-                    .get(sampler_bind.binding)
+                let sampler_layout = pipeline_layout
+                    .get_bgl_entry(sampler_bind.group, sampler_bind.binding)
                     .unwrap();
                 assert!(texture_layout.visibility.contains(stage_bit));
                 assert!(sampler_layout.visibility.contains(stage_bit));
@@ -1424,21 +1315,32 @@ impl Interface {
                 ),
                 _ => unreachable!(),
             };
-            let total_invocations = entry_point.workgroup_size.iter().product::<u32>();
 
-            let workgroup_size_is_zero = entry_point.workgroup_size.contains(&0);
-            let too_many_invocations = total_invocations > max_workgroup_size_total;
-            let dimension_too_large = entry_point.workgroup_size[0] > max_workgroup_size_limits[0]
-                || entry_point.workgroup_size[1] > max_workgroup_size_limits[1]
-                || entry_point.workgroup_size[2] > max_workgroup_size_limits[2];
-            if workgroup_size_is_zero || too_many_invocations || dimension_too_large {
+            let total_invocations = entry_point
+                .workgroup_size
+                .iter()
+                .fold(1u32, |total, &dim| total.saturating_mul(dim));
+            let invalid_total_invocations =
+                total_invocations > max_workgroup_size_total || total_invocations == 0;
+
+            assert_eq!(
+                entry_point.workgroup_size.len(),
+                max_workgroup_size_limits.len()
+            );
+            let dimension_too_large = entry_point
+                .workgroup_size
+                .iter()
+                .zip(max_workgroup_size_limits.iter())
+                .any(|(dim, limit)| dim > limit);
+
+            if invalid_total_invocations || dimension_too_large {
                 return Err(StageError::InvalidWorkgroupSize {
-                    current: entry_point.workgroup_size,
-                    current_total: total_invocations,
-                    limit: max_workgroup_size_limits,
-                    total: max_workgroup_size_total,
-                    per_dimension_limit,
-                    total_limit,
+                    dimensions: entry_point.workgroup_size,
+                    total: total_invocations,
+                    per_dimension_limits: max_workgroup_size_limits,
+                    total_limit: max_workgroup_size_total,
+                    per_dimension_limits_desc: per_dimension_limit,
+                    total_limit_desc: total_limit,
                 });
             }
         }

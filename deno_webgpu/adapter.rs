@@ -1,7 +1,6 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
-#[allow(clippy::disallowed_types)]
-use std::collections::HashSet;
+use std::ops::BitOr;
 use std::rc::Rc;
 
 use deno_core::cppgc::SameObject;
@@ -16,13 +15,14 @@ use super::device::GPUDevice;
 use super::device::DEVICE_EXTERNAL_MEMORY_SIZE;
 use super::queue::GPUQueue;
 use crate::error::GPUGenericError;
-use crate::webidl::features_to_feature_names;
 use crate::webidl::GPUFeatureName;
 use crate::Instance;
 
 #[derive(WebIDL)]
 #[webidl(dictionary)]
 pub(crate) struct GPURequestAdapterOptions {
+  #[webidl(default = "core".into())]
+  pub feature_level: String,
   pub power_preference: Option<GPUPowerPreference>,
   #[webidl(default = false)]
   pub force_fallback_adapter: bool,
@@ -94,7 +94,6 @@ impl GPUAdapter {
       let features = self.instance.adapter_features(self.id);
       // Only expose WebGPU features, not wgpu native-only features
       let features = features & wgpu_types::Features::all_webgpu_mask();
-      let features = features_to_feature_names(features);
       GPUSupportedFeatures::new(scope, features)
     })
   }
@@ -116,14 +115,12 @@ impl GPUAdapter {
     scope: &mut v8::HandleScope,
     #[webidl] descriptor: GPUDeviceDescriptor,
   ) -> Result<v8::Global<v8::Value>, CreateDeviceError> {
-    let features = self.instance.adapter_features(self.id);
-    let supported_features = features_to_feature_names(features);
-    #[allow(clippy::disallowed_types)]
+    let supported_features = self.instance.adapter_features(self.id);
     let required_features = descriptor
       .required_features
       .iter()
-      .cloned()
-      .collect::<HashSet<_>>();
+      .map(|f| wgpu_types::Features::from(*f))
+      .fold(wgpu_types::Features::empty(), BitOr::bitor);
 
     // External textures are a required part of WebGPU, and `external-texture`
     // is not a WebGPU-defined feature. `wgpu` has it behind a feature for now,
@@ -133,9 +130,9 @@ impl GPUAdapter {
     // There is probably not anything useful that Deno applications can do with
     // external textures, but it is useful to be able to enable it in
     // `cts_runner`.
-    if required_features
-      .difference(&supported_features)
-      .any(|feat| *feat != GPUFeatureName::ExternalTexture)
+    if !required_features
+      .difference(supported_features | wgpu_types::Features::EXTERNAL_TEXTURE)
+      .is_empty()
     {
       return Err(CreateDeviceError::RequiredFeaturesNotASubset);
     }
@@ -157,9 +154,7 @@ impl GPUAdapter {
 
     let wgpu_descriptor = wgpu_types::DeviceDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
-      required_features: super::webidl::feature_names_to_features(
-        descriptor.required_features,
-      ),
+      required_features,
       required_limits,
       experimental_features: wgpu_types::ExperimentalFeatures::disabled(),
       memory_hints: Default::default(),
@@ -335,7 +330,35 @@ impl GPUSupportedLimits {
   }
 
   #[getter]
+  fn maxStorageBuffersInVertexStage(&self) -> u32 {
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8748): InVertexStage limit
+    // not implemented; return the PerShaderStage limit.
+    self.0.max_storage_buffers_per_shader_stage
+  }
+
+  #[getter]
+  fn maxStorageBuffersInFragmentStage(&self) -> u32 {
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8748): InFragmentStage limit
+    // not implemented; return the PerShaderStage limit.
+    self.0.max_storage_buffers_per_shader_stage
+  }
+
+  #[getter]
   fn maxStorageTexturesPerShaderStage(&self) -> u32 {
+    self.0.max_storage_textures_per_shader_stage
+  }
+
+  #[getter]
+  fn maxStorageTexturesInVertexStage(&self) -> u32 {
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8748): InVertexStage limit
+    // not implemented; return the PerShaderStage limit.
+    self.0.max_storage_textures_per_shader_stage
+  }
+
+  #[getter]
+  fn maxStorageTexturesInFragmentStage(&self) -> u32 {
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8748): InFragmentStage limit
+    // not implemented; return the PerShaderStage limit.
     self.0.max_storage_textures_per_shader_stage
   }
 
@@ -345,12 +368,14 @@ impl GPUSupportedLimits {
   }
 
   #[getter]
-  fn maxUniformBufferBindingSize(&self) -> u32 {
+  #[number]
+  fn maxUniformBufferBindingSize(&self) -> u64 {
     self.0.max_uniform_buffer_binding_size
   }
 
   #[getter]
-  fn maxStorageBufferBindingSize(&self) -> u32 {
+  #[number]
+  fn maxStorageBufferBindingSize(&self) -> u64 {
     self.0.max_storage_buffer_binding_size
   }
 
@@ -440,15 +465,14 @@ impl GarbageCollected for GPUSupportedFeatures {
 }
 
 impl GPUSupportedFeatures {
-  #[allow(clippy::disallowed_types)]
   pub fn new(
     scope: &mut v8::HandleScope,
-    features: HashSet<GPUFeatureName>,
+    features: wgpu_types::Features,
   ) -> Self {
     let set = v8::Set::new(scope);
 
-    for feature in features {
-      let key = v8::String::new(scope, feature.as_str()).unwrap();
+    for feature in features.iter() {
+      let key = v8::String::new(scope, feature.as_str().unwrap()).unwrap();
       set.add(scope, key.into());
     }
 
@@ -498,7 +522,7 @@ impl GPUAdapterInfo {
   #[getter]
   #[string]
   fn architecture(&self) -> &'static str {
-    "" // TODO: wgpu#2170
+    "" // TODO(https://github.com/gfx-rs/wgpu/issues/8649): implement when wgpu has architecture detection
   }
 
   #[getter]
@@ -525,7 +549,6 @@ impl GPUAdapterInfo {
 
   #[getter]
   fn is_fallback_adapter(&self) -> bool {
-    // TODO(lucacasonato): report correctly from wgpu
-    false
+    self.info.device_type == wgpu_types::DeviceType::Cpu
   }
 }

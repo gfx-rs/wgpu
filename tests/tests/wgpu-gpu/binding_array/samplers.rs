@@ -22,7 +22,13 @@ static BINDING_ARRAY_SAMPLERS: GpuTestConfiguration = GpuTestConfiguration::new(
                 max_binding_array_elements_per_shader_stage: 2,
                 max_binding_array_sampler_elements_per_shader_stage: 2,
                 ..Limits::default()
-            }),
+            })
+            // https://github.com/gfx-rs/wgpu/issues/9184
+            .expect_fail(
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline"),
+            ),
     )
     .run_async(|ctx| async move { binding_array_samplers(ctx, false).await });
 
@@ -40,7 +46,13 @@ static PARTIAL_BINDING_ARRAY_SAMPLERS: GpuTestConfiguration = GpuTestConfigurati
                 max_binding_array_elements_per_shader_stage: 4,
                 max_binding_array_sampler_elements_per_shader_stage: 4,
                 ..Limits::default()
-            }),
+            })
+            // https://github.com/gfx-rs/wgpu/issues/9184
+            .expect_fail(
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline"),
+            ),
     )
     .run_async(|ctx| async move { binding_array_samplers(ctx, true).await });
 
@@ -213,7 +225,7 @@ async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
         .device
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
 

@@ -3,7 +3,7 @@ mod record;
 #[cfg(feature = "replay")]
 mod replay;
 
-use core::{convert::Infallible, ops::Range};
+use core::convert::Infallible;
 
 use alloc::{string::String, vec::Vec};
 use macro_rules_attribute::apply;
@@ -193,12 +193,12 @@ pub enum Action<'a, R: ReferenceType> {
     },
     DestroyShaderModule(PointerId<markers::ShaderModule>),
     CreateComputePipeline {
-        id: PointerId<markers::ComputePipeline>,
+        id: Option<PointerId<markers::ComputePipeline>>,
         desc: TraceComputePipelineDescriptor<'a>,
     },
     DestroyComputePipeline(PointerId<markers::ComputePipeline>),
     CreateGeneralRenderPipeline {
-        id: PointerId<markers::RenderPipeline>,
+        id: Option<PointerId<markers::RenderPipeline>>,
         desc: TraceGeneralRenderPipelineDescriptor<'a>,
     },
     DestroyRenderPipeline(PointerId<markers::RenderPipeline>),
@@ -221,7 +221,8 @@ pub enum Action<'a, R: ReferenceType> {
     WriteBuffer {
         id: R::Buffer,
         data: Data,
-        range: Range<wgt::BufferAddress>,
+        offset: wgt::BufferAddress,
+        size: wgt::BufferAddress,
         queued: bool,
     },
     WriteTexture {

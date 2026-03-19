@@ -5,6 +5,8 @@
 // (Note: only the wgsl files are different for each of the -formats-xN tests.
 // The toml files are all the same.)
 
+enable f16;
+
 struct VertexOutput {
   @builtin(position) position: vec4<f32>,
 }
@@ -51,6 +53,10 @@ struct VertexInput {
   @location(38) v_sint32x4  : vec3<i32>,
   @location(39) v_unorm10_10_10_2: vec3<f32>,
   @location(40) v_unorm8x4_bgra: vec3<f32>,
+
+  @location(41) v_float16_as_f16   : vec3<f16>,
+  @location(42) v_float16x2_as_f16 : vec3<f16>,
+  @location(43) v_float16x4_as_f16 : vec3<f16>,
 }
 
 @vertex

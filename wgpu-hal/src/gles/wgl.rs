@@ -563,12 +563,12 @@ impl crate::Instance for Instance {
         })
     }
 
-    #[cfg_attr(target_os = "macos", allow(unused, unused_mut, unreachable_code))]
     unsafe fn create_surface(
         &self,
-        _display_handle: RawDisplayHandle,
+        display_handle: RawDisplayHandle,
         window_handle: RawWindowHandle,
     ) -> Result<Surface, crate::InstanceError> {
+        assert!(matches!(display_handle, RawDisplayHandle::Windows(_)));
         let window = if let RawWindowHandle::Win32(handle) = window_handle {
             handle
         } else {
@@ -873,7 +873,7 @@ impl crate::Surface for Surface {
         &self,
         _timeout_ms: Option<Duration>,
         _fence: &super::Fence,
-    ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
+    ) -> Result<crate::AcquiredSurfaceTexture<super::Api>, crate::SurfaceError> {
         let swapchain = self.swapchain.read();
         let sc = swapchain.as_ref().unwrap();
         let texture = super::Texture {
@@ -891,10 +891,10 @@ impl crate::Surface for Surface {
                 depth: 1,
             },
         };
-        Ok(Some(crate::AcquiredSurfaceTexture {
+        Ok(crate::AcquiredSurfaceTexture {
             texture,
             suboptimal: false,
-        }))
+        })
     }
     unsafe fn discard_texture(&self, _texture: super::Texture) {}
 }

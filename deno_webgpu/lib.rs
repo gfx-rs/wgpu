@@ -11,6 +11,8 @@ use deno_core::op2;
 use deno_core::v8;
 use deno_core::GarbageCollected;
 use deno_core::OpState;
+use serde::de::IntoDeserializer;
+use serde::Deserialize as _;
 pub use wgpu_core;
 pub use wgpu_types;
 use wgpu_types::PowerPreference;
@@ -41,6 +43,8 @@ mod texture;
 mod webidl;
 
 pub const UNSTABLE_FEATURE_NAME: &str = "webgpu";
+
+pub const DX12_COMPILER_ENV_VAR: &str = "DENO_WEBGPU_DX12_COMPILER";
 
 #[allow(clippy::print_stdout)]
 pub fn print_linker_flags(name: &str) {
@@ -169,6 +173,9 @@ impl GPU {
   ) -> Option<adapter::GPUAdapter> {
     let mut state = state.borrow_mut();
 
+    let dx12_compiler = std::env::var(DX12_COMPILER_ENV_VAR)
+      .ok()
+      .and_then(|s| s.parse().ok());
     let backends = std::env::var("DENO_WEBGPU_BACKEND").map_or_else(
       |_| wgpu_types::Backends::all(),
       |s| wgpu_types::Backends::from_comma_list(&s),
@@ -187,7 +194,8 @@ impl GPU {
           },
           backend_options: wgpu_types::BackendOptions {
             dx12: wgpu_types::Dx12BackendOptions {
-              shader_compiler: wgpu_types::Dx12Compiler::Fxc,
+              shader_compiler: dx12_compiler
+                .unwrap_or(wgpu_types::Dx12Compiler::Fxc),
               ..Default::default()
             },
             gl: wgpu_types::GlBackendOptions::default(),
@@ -199,6 +207,16 @@ impl GPU {
       )));
       state.borrow::<Instance>()
     };
+
+    // Check that the feature level string is valid.
+    // `wgpu` does not support compatibility-level adapters. As permitted
+    // by the spec, we always return a core-level adapter.
+    wgpu_types::FeatureLevel::deserialize(IntoDeserializer::<
+      serde::de::value::Error,
+    >::into_deserializer(
+      options.feature_level.as_str()
+    ))
+    .ok()?;
 
     let descriptor = wgpu_core::instance::RequestAdapterOptions {
       power_preference: options

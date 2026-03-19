@@ -185,7 +185,7 @@ impl crate::framework::Example for Example {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 16,
         });
 
@@ -352,7 +352,9 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::default(),
-    base_test_parameters: wgpu_test::TestParameters::default(),
+    base_test_parameters: wgpu_test::TestParameters::default()
+        // https://github.com/gfx-rs/wgpu/issues/9100
+        .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::METAL)),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,
 };

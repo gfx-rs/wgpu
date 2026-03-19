@@ -123,8 +123,8 @@ fragment fs_mainOutput fs_main(
             float _e23 = fetch_shadow(_e19, light.proj * in.world_position, t_shadow, sampler_shadow);
             metal::float3 light_dir = metal::normalize(light.pos.xyz - in.world_position.xyz);
             float diffuse = metal::max(0.0, metal::dot(normal_1, light_dir));
-            metal::float3 _e37 = color;
-            color = _e37 + ((_e23 * diffuse) * light.color.xyz);
+            metal::float3 _e33 = color;
+            color = _e33 + ((_e23 * diffuse) * light.color.xyz);
         }
     }
     metal::float3 _e42 = color;
@@ -176,8 +176,8 @@ fragment fs_main_without_storageOutput fs_main_without_storage(
             float _e23 = fetch_shadow(_e19, light_1.proj * in_1.world_position, t_shadow, sampler_shadow);
             metal::float3 light_dir_1 = metal::normalize(light_1.pos.xyz - in_1.world_position.xyz);
             float diffuse_1 = metal::max(0.0, metal::dot(normal_2, light_dir_1));
-            metal::float3 _e37 = color_1;
-            color_1 = _e37 + ((_e23 * diffuse_1) * light_1.color.xyz);
+            metal::float3 _e33 = color_1;
+            color_1 = _e33 + ((_e23 * diffuse_1) * light_1.color.xyz);
         }
     }
     metal::float3 _e42 = color_1;

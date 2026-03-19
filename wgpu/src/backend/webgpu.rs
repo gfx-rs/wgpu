@@ -29,7 +29,7 @@ use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{
     dispatch::{self, BlasCompactCallback},
-    Blas, SurfaceTargetUnsafe, Tlas,
+    Blas, SurfaceTargetUnsafe, Tlas, WriteOnly,
 };
 
 use defined_non_null_js_value::DefinedNonNullJsValue;
@@ -433,8 +433,12 @@ fn map_stencil_state_face(desc: &wgt::StencilFaceState) -> webgpu_sys::GpuStenci
 
 fn map_depth_stencil_state(desc: &wgt::DepthStencilState) -> webgpu_sys::GpuDepthStencilState {
     let mapped = webgpu_sys::GpuDepthStencilState::new(map_texture_format(desc.format));
-    mapped.set_depth_compare(map_compare_function(desc.depth_compare));
-    mapped.set_depth_write_enabled(desc.depth_write_enabled);
+    if let Some(compare) = desc.depth_compare {
+        mapped.set_depth_compare(map_compare_function(compare));
+    }
+    if let Some(write_enabled) = desc.depth_write_enabled {
+        mapped.set_depth_write_enabled(write_enabled);
+    }
     mapped.set_depth_bias(desc.bias.constant);
     mapped.set_depth_bias_clamp(desc.bias.clamp);
     mapped.set_depth_bias_slope_scale(desc.bias.slope_scale);
@@ -707,7 +711,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 15] = [
+const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 16] = [
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
         webgpu_sys::GpuFeatureName::DepthClipControl,
@@ -761,6 +765,10 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 15] = [
         webgpu_sys::GpuFeatureName::Float32Filterable,
     ),
     (
+        wgt::Features::FLOAT32_BLENDABLE,
+        webgpu_sys::GpuFeatureName::Float32Blendable,
+    ),
+    (
         wgt::Features::DUAL_SOURCE_BLENDING,
         webgpu_sys::GpuFeatureName::DualSourceBlending,
     ),
@@ -800,8 +808,9 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_uniform_buffers_per_shader_stage: limits.max_uniform_buffers_per_shader_stage(),
         max_binding_array_elements_per_shader_stage: 0,
         max_binding_array_sampler_elements_per_shader_stage: 0,
-        max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size() as u32,
-        max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size() as u32,
+        max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
+        max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size() as u64,
+        max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size() as u64,
         max_vertex_buffers: limits.max_vertex_buffers(),
         max_buffer_size: limits.max_buffer_size() as u64,
         max_vertex_attributes: limits.max_vertex_attributes(),
@@ -2098,6 +2107,9 @@ impl dispatch::DeviceInterface for WebDevice {
                     crate::BindingResource::AccelerationStructure(_) => {
                         unimplemented!("Raytracing not implemented for web")
                     }
+                    crate::BindingResource::AccelerationStructureArray(_) => {
+                        unimplemented!("Raytracing not implemented for web")
+                    }
                     crate::BindingResource::ExternalTexture(_) => {
                         unimplemented!("ExternalTexture not implemented for web")
                     }
@@ -2125,10 +2137,14 @@ impl dispatch::DeviceInterface for WebDevice {
         &self,
         desc: &crate::PipelineLayoutDescriptor<'_>,
     ) -> dispatch::DispatchPipelineLayout {
+        let null = wasm_bindgen::JsValue::NULL;
         let temp_layouts = desc
             .bind_group_layouts
             .iter()
-            .map(|bgl| &bgl.inner.as_webgpu().inner)
+            .map(|bgl| match bgl {
+                Some(bgl) => bgl.inner.as_webgpu().inner.as_ref(),
+                None => &null,
+            })
             .collect::<js_sys::Array>();
         let mapped_desc = webgpu_sys::GpuPipelineLayoutDescriptor::new(&temp_layouts);
         if let Some(label) = desc.label {
@@ -3311,18 +3327,15 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
         bind_group: Option<&dispatch::DispatchBindGroup>,
         offsets: &[crate::DynamicOffset],
     ) {
-        let Some(bind_group) = bind_group else {
-            return;
-        };
-        let bind_group = &bind_group.as_webgpu().inner;
+        let bind_group = bind_group.map(|bind_group| &bind_group.as_webgpu().inner);
 
         if offsets.is_empty() {
-            self.inner.set_bind_group(index, Some(bind_group));
+            self.inner.set_bind_group(index, bind_group);
         } else {
             self.inner
                 .set_bind_group_with_u32_slice_and_f64_and_dynamic_offsets_data_length(
                     index,
-                    Some(bind_group),
+                    bind_group,
                     offsets,
                     0f64,
                     offsets.len() as u32,
@@ -3398,18 +3411,15 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         bind_group: Option<&dispatch::DispatchBindGroup>,
         offsets: &[crate::DynamicOffset],
     ) {
-        let Some(bind_group) = bind_group else {
-            return;
-        };
-        let bind_group = &bind_group.as_webgpu().inner;
+        let bind_group = bind_group.map(|bind_group| &bind_group.as_webgpu().inner);
 
         if offsets.is_empty() {
-            self.inner.set_bind_group(index, Some(bind_group));
+            self.inner.set_bind_group(index, bind_group);
         } else {
             self.inner
                 .set_bind_group_with_u32_slice_and_f64_and_dynamic_offsets_data_length(
                     index,
-                    Some(bind_group),
+                    bind_group,
                     offsets,
                     0f64,
                     offsets.len() as u32,
@@ -3692,18 +3702,15 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         bind_group: Option<&dispatch::DispatchBindGroup>,
         offsets: &[crate::DynamicOffset],
     ) {
-        let Some(bind_group) = bind_group else {
-            return;
-        };
-        let bind_group = &bind_group.as_webgpu().inner;
+        let bind_group = bind_group.map(|bind_group| &bind_group.as_webgpu().inner);
 
         if offsets.is_empty() {
-            self.inner.set_bind_group(index, Some(bind_group));
+            self.inner.set_bind_group(index, bind_group);
         } else {
             self.inner
                 .set_bind_group_with_u32_slice_and_f64_and_dynamic_offsets_data_length(
                     index,
-                    Some(bind_group),
+                    bind_group,
                     offsets,
                     0f64,
                     offsets.len() as u32,
@@ -3951,20 +3958,28 @@ impl Drop for WebSurfaceOutputDetail {
     }
 }
 
-impl dispatch::BufferMappedRangeInterface for WebBufferMappedRange {
-    #[inline]
-    fn slice(&self) -> &[u8] {
+impl WebBufferMappedRange {
+    fn get_temporary_mapping(&self) -> &[u8] {
         self.temporary_mapping
             .get_or_init(|| self.actual_mapping.to_vec())
-            .as_slice()
+    }
+}
+impl dispatch::BufferMappedRangeInterface for WebBufferMappedRange {
+    fn len(&self) -> usize {
+        self.get_temporary_mapping().len()
     }
 
     #[inline]
-    fn slice_mut(&mut self) -> &mut [u8] {
+    unsafe fn read_slice(&self) -> &[u8] {
+        self.get_temporary_mapping()
+    }
+
+    #[inline]
+    unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]> {
         self.temporary_mapping_modified = true;
-        self.temporary_mapping
-            .get_or_init(|| self.actual_mapping.to_vec());
-        self.temporary_mapping.get_mut().unwrap()
+        self.get_temporary_mapping();
+        let t: &mut Vec<u8> = self.temporary_mapping.get_mut().unwrap();
+        WriteOnly::from_mut(t)
     }
 
     #[inline]
@@ -3993,13 +4008,14 @@ impl Drop for WebBufferMappedRange {
 }
 
 impl dispatch::QueueWriteBufferInterface for WebQueueWriteBuffer {
-    fn slice(&self) -> &[u8] {
-        &self.inner
+    #[inline]
+    fn len(&self) -> usize {
+        self.inner.len()
     }
 
     #[inline]
-    fn slice_mut(&mut self) -> &mut [u8] {
-        &mut self.inner
+    unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]> {
+        WriteOnly::from_mut(&mut *self.inner)
     }
 }
 impl Drop for WebQueueWriteBuffer {

@@ -265,13 +265,22 @@ pub enum SurfaceStatus {
     /// match the surface. A re-configuration is needed.
     Suboptimal,
     /// Unable to get the next frame, timed out.
+    ///
+    /// Try reconfiguring your surface.
     Timeout,
+    /// The window is occluded (e.g. minimized or behind another window).
+    ///
+    /// Try again once the window is no longer occluded.
+    Occluded,
     /// The surface under the swap chain has changed.
+    ///
+    /// Try reconfiguring your surface.
     Outdated,
     /// The surface under the swap chain is lost.
     Lost,
-    /// The surface status is not known since `Surface::get_current_texture` previously failed.
-    Unknown,
+    /// `Surface::get_current_texture` has hit a validation error which was caught
+    /// by a error scope.
+    Validation,
 }
 
 /// Nanosecond timestamp used by the presentation engine.

@@ -5,7 +5,6 @@ struct Structure {
 
 @compute @workgroup_size(1, 1, 1) 
 fn main(sizes: Structure, @builtin(subgroup_id) subgroup_id: u32, @builtin(subgroup_invocation_id) subgroup_invocation_id: u32) {
-    subgroupBarrier();
     let _e7 = subgroupBallot(((subgroup_invocation_id & 1u) == 1u));
     let _e8 = subgroupBallot();
     let _e11 = subgroupAll((subgroup_invocation_id != 0u));

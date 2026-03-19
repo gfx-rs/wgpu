@@ -124,7 +124,7 @@ impl FeaturesManager {
         check_feature!(CLIP_DISTANCE, 130, 300 /* with extension */);
         check_feature!(CULL_DISTANCE, 450, 300 /* with extension */);
         check_feature!(SAMPLE_VARIABLES, 400, 300);
-        check_feature!(DYNAMIC_ARRAY_SIZE, 430, 310);
+        check_feature!(DYNAMIC_ARRAY_SIZE, 400 /* with extension */, 310);
         check_feature!(DUAL_SOURCE_BLENDING, 330, 300 /* with extension */);
         check_feature!(SUBGROUP_OPERATIONS, 430, 310);
         check_feature!(TEXTURE_ATOMICS, 420, 310);

@@ -11,7 +11,36 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
 
     let targets = params.targets.unwrap();
 
-    let capabilities = params.capabilities.unwrap_or_default();
+    let mut capabilities = params.capabilities.unwrap_or_default();
+    {
+        let mut allowed_capabilities = naga::valid::Capabilities::all();
+        if targets.contains(Targets::GLSL) {
+            allowed_capabilities &= naga::back::glsl::supported_capabilities();
+        }
+        if targets.contains(Targets::HLSL) {
+            allowed_capabilities &= naga::back::hlsl::supported_capabilities();
+        }
+        if targets.contains(Targets::SPIRV) {
+            allowed_capabilities &= naga::back::spv::supported_capabilities();
+        }
+        if targets.contains(Targets::WGSL) {
+            allowed_capabilities &= naga::back::wgsl::supported_capabilities();
+        }
+        if targets.contains(Targets::METAL) {
+            allowed_capabilities &= naga::back::msl::supported_capabilities();
+        }
+        if capabilities == naga::valid::Capabilities::all() {
+            capabilities = allowed_capabilities;
+        } else {
+            let diff = capabilities - allowed_capabilities;
+            if !diff.is_empty() {
+                panic!(
+                    "Invalid capabilities for backends on shader {name}: used {diff:?} which aren't supported by one of the targets.
+Note: this is an issue with snapshot configuration, not code. If you added a new capability, add it to `supported_capabilities()` in each backend where it is supported"
+                );
+            }
+        }
+    }
 
     {
         if targets.contains(Targets::IR) {

@@ -1974,6 +1974,19 @@ impl<W: Write> Writer<W> {
             writeln!(self.out)?;
         }
 
+        if global
+            .memory_decorations
+            .contains(crate::MemoryDecorations::COHERENT)
+        {
+            write!(self.out, "@coherent ")?;
+        }
+        if global
+            .memory_decorations
+            .contains(crate::MemoryDecorations::VOLATILE)
+        {
+            write!(self.out, "@volatile ")?;
+        }
+
         // First write global name and address space if supported
         write!(self.out, "var")?;
         let (address, maybe_access) = address_space_str(global.space);

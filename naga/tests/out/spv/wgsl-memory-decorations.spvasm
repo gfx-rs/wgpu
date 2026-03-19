@@ -1,0 +1,52 @@
+; SPIR-V
+; Version: 1.0
+; Generator: rspirv
+; Bound: 24
+OpCapability Shader
+OpExtension "SPV_KHR_storage_buffer_storage_class"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %12 "main"
+OpExecutionMode %12 LocalSize 1 1 1
+OpDecorate %4 ArrayStride 4
+OpMemberDecorate %5 0 Offset 0
+OpDecorate %5 Block
+OpDecorate %6 Coherent
+OpDecorate %6 DescriptorSet 0
+OpDecorate %6 Binding 0
+OpDecorate %8 Volatile
+OpDecorate %8 DescriptorSet 0
+OpDecorate %8 Binding 1
+OpDecorate %9 Coherent
+OpDecorate %9 Volatile
+OpDecorate %9 DescriptorSet 0
+OpDecorate %9 Binding 2
+OpDecorate %10 DescriptorSet 0
+OpDecorate %10 Binding 3
+%2 = OpTypeVoid
+%3 = OpTypeInt 32 0
+%4 = OpTypeRuntimeArray %3
+%5 = OpTypeStruct %4
+%7 = OpTypePointer StorageBuffer %5
+%6 = OpVariable  %7  StorageBuffer
+%8 = OpVariable  %7  StorageBuffer
+%9 = OpVariable  %7  StorageBuffer
+%10 = OpVariable  %7  StorageBuffer
+%13 = OpTypeFunction %2
+%15 = OpTypePointer StorageBuffer %4
+%16 = OpTypePointer StorageBuffer %3
+%17 = OpConstant  %3  0
+%12 = OpFunction  %2  None %13
+%11 = OpLabel
+OpBranch %14
+%14 = OpLabel
+%18 = OpAccessChain  %16  %8 %17 %17
+%19 = OpLoad  %3  %18
+%20 = OpAccessChain  %16  %6 %17 %17
+OpStore %20 %19
+%21 = OpAccessChain  %16  %10 %17 %17
+%22 = OpLoad  %3  %21
+%23 = OpAccessChain  %16  %9 %17 %17
+OpStore %23 %22
+OpReturn
+OpFunctionEnd

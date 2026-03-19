@@ -78,6 +78,7 @@ mod conv;
 mod dcomp;
 mod descriptor;
 mod device;
+mod device_creation;
 mod instance;
 mod pipeline_desc;
 mod sampler;
@@ -266,7 +267,54 @@ impl D3D12Lib {
 
         result__.ok_or(crate::DeviceError::Unexpected).map(Some)
     }
+
+    /// Calls D3D12GetInterface to obtain a COM interface by CLSID and IID.
+    ///
+    /// This is used by the Independent Devices API to obtain `ID3D12SDKConfiguration1`.
+    fn get_interface<T: Interface>(
+        &self,
+        clsid: &windows_core::GUID,
+    ) -> Result<T, GetInterfaceError> {
+        // Calls windows::Win32::Graphics::Direct3D12::D3D12GetInterface on d3d12.dll
+        type Fun = extern "system" fn(
+            rclsid: *const windows_core::GUID,
+            riid: *const windows_core::GUID,
+            ppvdebug: *mut *mut ffi::c_void,
+        ) -> windows_core::HRESULT;
+        let func: libloading::Symbol<Fun> =
+            unsafe { self.lib.get(c"D3D12GetInterface".to_bytes()) }
+                .map_err(|_| GetInterfaceError::GetProcAddress)?;
+
+        let mut result__: Option<T> = None;
+
+        let res = (func)(clsid, &T::IID, <*mut _>::cast(&mut result__));
+
+        if res.is_err() {
+            return Err(GetInterfaceError::D3D12GetInterface(res));
+        }
+
+        result__.ok_or(GetInterfaceError::RetIsNull)
+    }
 }
+
+#[derive(Clone, Copy, Debug)]
+pub(super) enum GetInterfaceError {
+    GetProcAddress,
+    D3D12GetInterface(windows_core::HRESULT),
+    RetIsNull,
+}
+
+impl fmt::Display for GetInterfaceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::GetProcAddress => write!(f, "D3D12GetInterface not found in d3d12.dll"),
+            Self::D3D12GetInterface(hr) => write!(f, "D3D12GetInterface failed: {hr}"),
+            Self::RetIsNull => write!(f, "D3D12GetInterface returned null"),
+        }
+    }
+}
+
+impl core::error::Error for GetInterfaceError {}
 
 #[derive(Debug)]
 pub(super) struct DxgiLib {
@@ -466,6 +514,11 @@ const ZERO_BUFFER_SIZE: wgt::BufferAddress = 256 << 10;
 pub struct Instance {
     factory: DxgiFactory,
     factory_media: Option<Dxgi::IDXGIFactoryMedia>,
+    // `device_factory` must be dropped before `library` because the COM
+    // object's Release call goes through the d3d12.dll vtable.  If
+    // `library` (which unloads d3d12.dll) is dropped first the Release
+    // segfaults.
+    device_factory: Arc<device_creation::DeviceFactory>,
     library: Arc<D3D12Lib>,
     dcomp_lib: Arc<DCompLib>,
     supports_allow_tearing: bool,
@@ -966,8 +1019,11 @@ impl Texture {
 
     fn calc_subresource_for_copy(&self, base: &crate::TextureCopyBase) -> u32 {
         let plane = match base.aspect {
-            crate::FormatAspects::COLOR | crate::FormatAspects::DEPTH => 0,
-            crate::FormatAspects::STENCIL => 1,
+            crate::FormatAspects::COLOR
+            | crate::FormatAspects::DEPTH
+            | crate::FormatAspects::PLANE_0 => 0,
+            crate::FormatAspects::STENCIL | crate::FormatAspects::PLANE_1 => 1,
+            crate::FormatAspects::PLANE_2 => 2,
             _ => unreachable!(),
         };
         self.calc_subresource(base.mip_level, base.array_layer, plane)
@@ -1119,7 +1175,7 @@ pub struct PipelineLayout {
     shared: PipelineLayoutShared,
     // Storing for each associated bind group, which tables we created
     // in the root signature. This is required for binding descriptor sets.
-    bind_group_infos: ArrayVec<BindGroupInfo, { crate::MAX_BIND_GROUPS }>,
+    bind_group_infos: [Option<BindGroupInfo>; crate::MAX_BIND_GROUPS],
     naga_options: naga::back::hlsl::Options,
 }
 
@@ -1497,7 +1553,7 @@ impl crate::Surface for Surface {
         &self,
         timeout: Option<core::time::Duration>,
         _fence: &Fence,
-    ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
+    ) -> Result<crate::AcquiredSurfaceTexture<Api>, crate::SurfaceError> {
         let mut swapchain = self.swap_chain.write();
         let sc = swapchain.as_mut().unwrap();
 
@@ -1525,10 +1581,10 @@ impl crate::Surface for Surface {
                 sc.format.theoretical_memory_footprint(sc.size),
             ),
         };
-        Ok(Some(crate::AcquiredSurfaceTexture {
+        Ok(crate::AcquiredSurfaceTexture {
             texture,
             suboptimal: false,
-        }))
+        })
     }
     unsafe fn discard_texture(&self, _texture: Texture) {
         let mut swapchain = self.swap_chain.write();

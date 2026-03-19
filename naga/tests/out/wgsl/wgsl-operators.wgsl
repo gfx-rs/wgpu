@@ -30,12 +30,12 @@ fn splat(m: f32, n: i32) -> vec4<f32> {
 fn splat_assignment() -> vec2<f32> {
     var a: vec2<f32> = vec2(2f);
 
-    let _e4 = a;
-    a = (_e4 + vec2(1f));
-    let _e8 = a;
-    a = (_e8 - vec2(3f));
-    let _e12 = a;
-    a = (_e12 / vec2(4f));
+    let _e3 = a;
+    a = (_e3 + vec2(1f));
+    let _e7 = a;
+    a = (_e7 - vec2(3f));
+    let _e11 = a;
+    a = (_e11 / vec2(4f));
     let _e15 = a;
     return _e15;
 }
@@ -196,15 +196,15 @@ fn arithmetic() {
         let rem4_1 = (vec2(2f) % vec2(1f));
         let rem5_1 = (vec2(2f) % vec2(1f));
     }
-    let add = (mat3x3<f32>() + mat3x3<f32>());
-    let sub = (mat3x3<f32>() - mat3x3<f32>());
+    let add = mat3x3<f32>(vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f));
+    let sub = mat3x3<f32>(vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f));
     let mul_scalar0_ = (mat3x3<f32>() * 1f);
     let mul_scalar1_ = (2f * mat3x3<f32>());
     let mul_vector0_ = (mat4x3<f32>() * vec4(1f));
     let mul_vector1_ = (vec3(2f) * mat4x3<f32>());
-    let mul = (mat4x3<f32>() * mat3x4<f32>());
-    let _e175 = prevent_const_eval;
-    wgpu_7437_ = (_e175 + i32(-2147483648));
+    let mul = mat3x3<f32>(vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f));
+    let _e205 = prevent_const_eval;
+    wgpu_7437_ = (_e205 + i32(-2147483648));
     return;
 }
 
@@ -287,10 +287,10 @@ fn assignment() {
     a_1 = (_e7 - 1i);
     let _e9 = a_1;
     let _e10 = a_1;
-    a_1 = (_e10 * _e9);
+    a_1 = (_e9 * _e10);
     let _e12 = a_1;
     let _e13 = a_1;
-    a_1 = (_e13 / _e12);
+    a_1 = (_e12 / _e13);
     let _e15 = a_1;
     a_1 = (_e15 % 1i);
     let _e17 = a_1;

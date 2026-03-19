@@ -41,6 +41,7 @@
             binding: None,
             ty: 1,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("sized_no_comma"),
@@ -48,6 +49,7 @@
             binding: None,
             ty: 1,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("unsized_comma"),
@@ -60,6 +62,7 @@
             )),
             ty: 2,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("unsized_no_comma"),
@@ -72,6 +75,7 @@
             )),
             ty: 2,
             init: None,
+            memory_decorations: (""),
         ),
     ],
     global_expressions: [],

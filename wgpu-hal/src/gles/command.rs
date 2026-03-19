@@ -556,10 +556,30 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 for (i, cat) in desc.color_attachments.iter().enumerate() {
                     if let Some(cat) = cat.as_ref() {
                         let attachment = glow::COLOR_ATTACHMENT0 + i as u32;
+                        // Try to use the multisampled render-to-texture extension to avoid resolving
+                        if let Some(ref rat) = cat.resolve_target {
+                            if matches!(rat.view.inner, super::TextureInner::Texture { .. })
+                                && self.private_caps.contains(
+                                    super::PrivateCapabilities::MULTISAMPLED_RENDER_TO_TEXTURE,
+                                )
+                                && !cat.ops.contains(crate::AttachmentOps::STORE)
+                                // Extension specifies that only COLOR_ATTACHMENT0 is valid
+                                && i == 0
+                            {
+                                self.cmd_buffer.commands.push(C::BindAttachment {
+                                    attachment,
+                                    view: rat.view.clone(),
+                                    depth_slice: None,
+                                    sample_count: desc.sample_count,
+                                });
+                                continue;
+                            }
+                        }
                         self.cmd_buffer.commands.push(C::BindAttachment {
                             attachment,
                             view: cat.target.view.clone(),
                             depth_slice: cat.depth_slice,
+                            sample_count: 1,
                         });
                         if let Some(ref rat) = cat.resolve_target {
                             self.state
@@ -582,6 +602,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         attachment,
                         view: dsat.target.view.clone(),
                         depth_slice: None,
+                        sample_count: 1,
                     });
                     if aspects.contains(crate::FormatAspects::DEPTH)
                         && dsat.depth_ops.contains(crate::AttachmentOps::STORE_DISCARD)
@@ -718,7 +739,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let mut do_index = 0;
         let mut dirty_textures = 0u32;
         let mut dirty_samplers = 0u32;
-        let group_info = &layout.group_infos[index as usize];
+        let group_info = layout.group_infos[index as usize].as_ref().unwrap();
 
         for (binding_layout, raw_binding) in group_info.entries.iter().zip(group.contents.iter()) {
             let slot = group_info.binding_to_slot[binding_layout.binding as usize] as u32;

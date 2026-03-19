@@ -26,13 +26,23 @@ impl NativeTest {
         adapter_report: AdapterReport,
         adapter_index: usize,
     ) -> Self {
-        let backend = adapter_report.info.backend;
         let device_name = &adapter_report.info.name;
+        let backend = adapter_report.info.backend;
+        let driver = &adapter_report.info.driver;
+        let report_driver_as_backend = [
+            (wgpu::Backend::Vulkan, "MoltenVK"),
+            (wgpu::Backend::Vulkan, "KosmicKrisp"),
+        ];
+        let backend_str = if report_driver_as_backend.contains(&(backend, driver.as_ref())) {
+            driver.clone()
+        } else {
+            format!("{backend:?}")
+        };
 
         let test_info = TestInfo::from_configuration(&config, &adapter_report);
 
         let full_name = format!(
-            "[{running_msg}] [{backend:?}/{device_name}/{adapter_index}] {base_name}",
+            "[{running_msg}] [{backend_str}/{device_name}/{adapter_index}] {base_name}",
             running_msg = test_info.running_msg,
             base_name = config.name,
         );

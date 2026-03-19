@@ -80,7 +80,7 @@ async fn bgl_dedupe(ctx: TestingContext) {
         .device
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&bgl_1b],
+            bind_group_layouts: &[Some(&bgl_1b)],
             immediate_size: 0,
         });
 
@@ -144,7 +144,7 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
         .device
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&bgl_1],
+            bind_group_layouts: &[Some(&bgl_1)],
             immediate_size: 0,
         });
 

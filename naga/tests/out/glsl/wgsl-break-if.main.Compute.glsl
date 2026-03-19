@@ -68,8 +68,8 @@ void breakIfSeparateVariable() {
             }
         }
         loop_init_3 = false;
-        uint _e3 = counter;
-        counter = (_e3 + 1u);
+        uint _e2 = counter;
+        counter = (_e2 + 1u);
     }
     return;
 }

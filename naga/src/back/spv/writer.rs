@@ -3288,6 +3288,19 @@ impl Writer {
 
         //self.check(class.required_capabilities())?;
 
+        if global_variable
+            .memory_decorations
+            .contains(crate::MemoryDecorations::COHERENT)
+        {
+            self.decorate(id, Decoration::Coherent, &[]);
+        }
+        if global_variable
+            .memory_decorations
+            .contains(crate::MemoryDecorations::VOLATILE)
+        {
+            self.decorate(id, Decoration::Volatile, &[]);
+        }
+
         if self.flags.contains(WriterFlags::DEBUG) {
             if let Some(ref name) = global_variable.name {
                 self.debugs.push(Instruction::name(id, name));

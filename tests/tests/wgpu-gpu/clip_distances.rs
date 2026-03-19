@@ -8,7 +8,17 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 
 #[gpu_test]
 static CLIP_DISTANCES: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::CLIP_DISTANCES))
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::CLIP_DISTANCES)
+            // https://github.com/gfx-rs/wgpu/issues/9184
+            .expect_fail(
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline")
+                    .panic("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
+            ),
+    )
     .run_async(clip_distances);
 
 async fn clip_distances(ctx: TestingContext) {
