@@ -12,13 +12,13 @@ for a mode guided tutorial, which will also teach you the basics of graphics pro
 All the standalone examples are separate crates and include all boilerplate inside the example itself. They can
 be cloned out of the repository to serve as a starting point for your own projects and are fully commented.
 
-| Name   | Description | Platforms |
-|--------|-------------|-----------|
-| ---    | Introductory Examples | --- |
+| Name                                             | Description                                                                                                   | Platforms   |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ----------- |
+| ---                                              | Introductory Examples                                                                                         | ---         |
 | [1. hello compute](standalone/01_hello_compute/) | Simplest example and shows how to run a compute shader on a given set of input data and get the results back. | Native-Only |
-| [2. hello window](standalone/02_hello_window/) | Shows how to create a window and render into it. | Native-Only |
-| --- | Special Examples | --- |
-| [custom backend](standalone/custom_backend/) | Shows how to implement and use custom wgpu context | All |
+| [2. hello window](standalone/02_hello_window/)   | Shows how to create a window and render into it.                                                              | Native-Only |
+| ---                                              | Special Examples                                                                                              | ---         |
+| [custom backend](standalone/custom_backend/)     | Shows how to implement and use custom wgpu context                                                            | All         |
 
 You can also use [`cargo-generate`](https://github.com/cargo-generate/cargo-generate) to easily use these as a basis for your own projects.
 
