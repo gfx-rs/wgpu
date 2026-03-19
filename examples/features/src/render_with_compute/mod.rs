@@ -1,6 +1,7 @@
 //! This renders to the screen with compute shaders. Note that due to limitations in Firefox,
 //! the wait will cause FPS to be capped at 10 when running on webgpu on Firefox. It is
-//! therefore not recommended to use this code.
+//! therefore not recommended to use this code, at least until
+//! <https://bugzilla.mozilla.org/show_bug.cgi?id=1870699> (and possibly further work) is resolved.
 
 use std::time::Instant;
 
