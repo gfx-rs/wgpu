@@ -4867,6 +4867,7 @@ dependencies = [
  "bytemuck",
  "js-sys",
  "log",
+ "macro_rules_attribute",
  "raw-window-handle",
  "serde",
  "serde_json",
