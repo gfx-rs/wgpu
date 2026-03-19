@@ -380,6 +380,8 @@ impl Display for TypeContext<'_> {
                 };
                 match *base_inner {
                     crate::TypeInner::Struct { .. } => {
+                        // Buffers in a binding array are pointers declared as `device T*`, so members use `->`.
+                        // Textures and samplers stay as plain values inside the wrapper.
                         write!(
                             out,
                             "device {ARGUMENT_BUFFER_WRAPPER_STRUCT}<device {base_tyname}*>*"
@@ -637,6 +639,7 @@ fn needs_array_length(ty: Handle<crate::Type>, arena: &crate::UniqueArena<crate:
             size: crate::ArraySize::Dynamic,
             ..
         } => true,
+        crate::TypeInner::BindingArray { base, .. } => needs_array_length(base, arena),
         _ => false,
     }
 }
@@ -1583,11 +1586,28 @@ impl<W: Write> Writer<W> {
         context: &ExpressionContext,
     ) -> BackendResult {
         let global = &context.module.global_variables[handle];
+        let element_struct_members = |ty: Handle<crate::Type>| match context.module.types[ty].inner
+        {
+            crate::TypeInner::Struct { ref members, .. } => Some(members.as_slice()),
+            _ => None,
+        };
         let (offset, array_ty) = match context.module.types[global.ty].inner {
             crate::TypeInner::Struct { ref members, .. } => match members.last() {
                 Some(&crate::StructMember { offset, ty, .. }) => (offset, ty),
                 None => return Err(Error::GenericValidation("Struct has no members".into())),
             },
+            crate::TypeInner::BindingArray { base, .. } => {
+                let Some(members) = element_struct_members(base) else {
+                    return Err(Error::GenericValidation(
+                        "binding_array element must be a struct with a runtime-sized array field"
+                            .into(),
+                    ));
+                };
+                match members.last() {
+                    Some(&crate::StructMember { offset, ty, .. }) => (offset, ty),
+                    None => return Err(Error::GenericValidation("Struct has no members".into())),
+                }
+            }
             crate::TypeInner::Array {
                 size: crate::ArraySize::Dynamic,
                 ..
@@ -2858,25 +2878,12 @@ impl<W: Write> Writer<W> {
                 unreachable!()
             }
             crate::Expression::ArrayLength(expr) => {
-                // Find the global to which the array belongs.
-                let global = match context.function.expressions[expr] {
-                    crate::Expression::AccessIndex { base, .. } => {
-                        match context.function.expressions[base] {
-                            crate::Expression::GlobalVariable(handle) => handle,
-                            ref ex => {
-                                return Err(Error::GenericValidation(format!(
-                                    "Expected global variable in AccessIndex, got {ex:?}"
-                                )))
-                            }
-                        }
-                    }
-                    crate::Expression::GlobalVariable(handle) => handle,
-                    ref ex => {
-                        return Err(Error::GenericValidation(format!(
-                            "Unexpected expression in ArrayLength, got {ex:?}"
-                        )))
-                    }
-                };
+                let global = context.function.originating_global(expr).ok_or_else(|| {
+                    Error::GenericValidation(format!(
+                        "Could not find global variable for ArrayLength operand {:?}",
+                        context.function.expressions[expr]
+                    ))
+                })?;
 
                 if !is_scoped {
                     write!(self.out, "(")?;
