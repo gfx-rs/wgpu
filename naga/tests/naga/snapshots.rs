@@ -424,7 +424,13 @@ fn convert_snapshots_wgsl() {
         let mut frontend = naga::front::wgsl::Frontend::new_with_options((&params.wgsl_in).into());
         match frontend.parse(&source) {
             Ok(mut module) => check_targets(&input, &mut module, Some(&source)),
-            Err(e) => panic!("{}", e.emit_to_string_with_path(&source, DIR_IN)),
+            Err(e) => panic!(
+                "{}",
+                e.emit_to_string_with_path(
+                    &source,
+                    &input.input_path(DIR_IN).display().to_string()
+                )
+            ),
         }
     }
 }
