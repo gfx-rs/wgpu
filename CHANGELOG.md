@@ -42,6 +42,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Bug Fixes
+
+#### General
+
+- Fix limit comparison logic for `max_inter_stage_shader_variables` By @ErichDonGubler in [9264](https://github.com/gfx-rs/wgpu/pull/9264).
+
 ## v29.0.0 (2026-03-18)
 
 ### Major Changes
