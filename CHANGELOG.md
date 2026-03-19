@@ -42,6 +42,8 @@ Bottom level categories:
 
 ## Unreleased
 
+## v29.0.0 (2026-03-18)
+
 ### Major Changes
 
 #### `Surface::get_current_texture` now returns `CurrentSurfaceTexture` enum

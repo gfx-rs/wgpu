@@ -17,7 +17,7 @@
 //!
 //! We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) which has information on useful architecture patterns, debugging tips, and more getting started information.
 //!
-//! There are examples for this version [available on GitHub](https://github.com/gfx-rs/wgpu/tree/v28/examples#readme).
+//! There are examples for this version [available on GitHub](https://github.com/gfx-rs/wgpu/tree/v29/examples#readme).
 //!
 //! The API is refcounted, so all handles are cloneable, and if you create a resource which references another,
 //! it will automatically keep dependent resources alive.
@@ -32,8 +32,8 @@
 //!
 //! [Learn Wgpu]: https://sotrh.github.io/learn-wgpu/
 //! [WebGPU Fundamentals]: https://webgpufundamentals.org/
-//! [render_coordinates]: https://raw.githubusercontent.com/gfx-rs/wgpu/refs/heads/v28/docs/render_coordinates.png
-//! [texture_coordinates]: https://raw.githubusercontent.com/gfx-rs/wgpu/refs/heads/v28/docs/texture_coordinates.png
+//! [render_coordinates]: https://raw.githubusercontent.com/gfx-rs/wgpu/refs/heads/v29/docs/render_coordinates.png
+//! [texture_coordinates]: https://raw.githubusercontent.com/gfx-rs/wgpu/refs/heads/v29/docs/texture_coordinates.png
 //!
 //! ## Extension Specifications
 //!
@@ -42,8 +42,8 @@
 //!
 //! 🧪EXPERIMENTAL🧪 APIs are subject to change and may allow undefined behavior if used incorrectly.
 //!
-//! - 🧪EXPERIMENTAL🧪 [Ray Tracing](https://github.com/gfx-rs/wgpu/blob/v28/docs/api-specs/ray_tracing.md).
-//! - 🧪EXPERIMENTAL🧪 [Mesh Shading](https://github.com/gfx-rs/wgpu/blob/v28/docs/api-specs/mesh_shading.md).
+//! - 🧪EXPERIMENTAL🧪 [Ray Tracing](https://github.com/gfx-rs/wgpu/blob/v29/docs/api-specs/ray_tracing.md).
+//! - 🧪EXPERIMENTAL🧪 [Mesh Shading](https://github.com/gfx-rs/wgpu/blob/v29/docs/api-specs/mesh_shading.md).
 //!
 //! ## Shader Support
 //!
