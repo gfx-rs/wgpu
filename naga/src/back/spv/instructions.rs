@@ -158,7 +158,7 @@ impl super::Instruction {
 
     pub(super) fn ext_inst_gl_op(
         set_id: Word,
-        op: spirv::GLOp,
+        op: spirv::GlslStd450Op,
         result_type_id: Word,
         id: Word,
         operands: &[Word],

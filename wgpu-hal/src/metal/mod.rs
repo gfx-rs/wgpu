@@ -459,14 +459,26 @@ impl Queue {
         timestamp_period: f32,
     ) -> Self {
         Self {
-            shared: Arc::new(QueueShared { raw }),
+            shared: Arc::new(QueueShared {
+                raw,
+                command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
+            }),
             timestamp_period,
         }
     }
 }
 
+#[derive(Debug)]
 pub struct QueueShared {
     raw: Retained<ProtocolObject<dyn MTLCommandQueue>>,
+    // Tracks command buffers created via `CommandEncoder::begin_encoding` that
+    // have not yet been submitted or discarded. Used to proactively fail
+    // before hitting Metal's `maxCommandBufferCount`.
+    //
+    // (In a few places we call `.commandBuffer{,WithUnretainedReferences}` directly
+    // to create command buffers for internal purposes. In those cases we always
+    // commit the buffer immediately, so we don't adjust the counter for them.)
+    command_buffer_created_not_submitted: atomic::AtomicUsize,
 }
 
 pub struct Device {
@@ -528,11 +540,14 @@ impl crate::Queue for Queue {
 
                 let raw = match command_buffers.last() {
                     Some(&cmd_buf) => cmd_buf.raw.clone(),
-                    None => self
-                        .shared
-                        .raw
-                        .commandBufferWithUnretainedReferences()
-                        .unwrap(),
+                    None => {
+                        // We do not bother adjusting `command_buffer_created_not_submitted`
+                        // because we immediately commit this buffer.
+                        self.shared
+                            .raw
+                            .commandBufferWithUnretainedReferences()
+                            .unwrap()
+                    }
                 };
                 raw.setLabel(Some(ns_string!("(wgpu internal) Signal")));
                 unsafe { raw.addCompletedHandler(block2::RcBlock::as_ptr(&block)) };
@@ -554,6 +569,14 @@ impl crate::Queue for Queue {
 
             for cmd_buffer in command_buffers {
                 cmd_buffer.raw.commit();
+                // One command buffer per `end_encoding` call moves from the
+                // "created but not yet submitted" bucket into the submitted
+                // set, so update the counter.
+                let previous = self
+                    .shared
+                    .command_buffer_created_not_submitted
+                    .fetch_sub(1, atomic::Ordering::AcqRel);
+                debug_assert!(previous > 0);
             }
 
             if let Some(raw) = extra_command_buffer {
@@ -568,6 +591,8 @@ impl crate::Queue for Queue {
         texture: SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
         autoreleasepool(|_| {
+            // We do not bother adjusting `command_buffer_created_not_submitted`
+            // because we immediately commit this buffer.
             let command_buffer = self.shared.raw.commandBuffer().unwrap();
             command_buffer.setLabel(Some(ns_string!("(wgpu internal) Present")));
 
@@ -1093,6 +1118,7 @@ unsafe impl Sync for CommandEncoder {}
 #[derive(Debug)]
 pub struct CommandBuffer {
     raw: Retained<ProtocolObject<dyn MTLCommandBuffer>>,
+    queue_shared: Arc<QueueShared>,
 }
 
 impl crate::DynCommandBuffer for CommandBuffer {}

@@ -171,6 +171,7 @@ pub fn print_results(
             delta.throughput_change_str
         )
         .unwrap();
+        stdout.reset().unwrap();
     }
     println!();
 }

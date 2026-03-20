@@ -3927,7 +3927,7 @@ impl dispatch::SurfaceInterface for CoreSurface {
                             err,
                             "Surface::get_current_texture_view",
                         );
-                        (None, crate::SurfaceStatus::Unknown, output_detail)
+                        (None, crate::SurfaceStatus::Validation, output_detail)
                     }
                     None => self
                         .context

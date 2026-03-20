@@ -12,8 +12,10 @@ use pp_rs::token::PreprocessorError;
 use thiserror::Error;
 
 use super::token::TokenValue;
+#[cfg(feature = "stderr")]
+use crate::error::ErrorWrite;
 use crate::{error::replace_control_chars, SourceLocation};
-use crate::{error::ErrorWrite, proc::ConstantEvaluatorError, Span};
+use crate::{proc::ConstantEvaluatorError, Span};
 
 fn join_with_comma(list: &[ExpectedToken]) -> String {
     let mut string = "".to_string();
@@ -165,30 +167,69 @@ pub struct ParseErrors {
 }
 
 impl ParseErrors {
+    #[cfg(feature = "stderr")]
     pub fn emit_to_writer(&self, writer: &mut impl ErrorWrite, source: &str) {
         self.emit_to_writer_with_path(writer, source, "glsl");
     }
 
+    #[cfg(feature = "stderr")]
     pub fn emit_to_writer_with_path(&self, writer: &mut impl ErrorWrite, source: &str, path: &str) {
         let path = path.to_string();
         let files = SimpleFile::new(path, replace_control_chars(source));
         let config = term::Config::default();
 
         for err in &self.errors {
-            let mut diagnostic = Diagnostic::error().with_message(err.kind.to_string());
+            let diagnostic = Self::make_diagnostic(err);
+            crate::error::emit_to_writer(writer, &config, &files, &diagnostic)
+                .expect("cannot write error");
+        }
+    }
 
-            if let Some(range) = err.meta.to_range() {
-                diagnostic = diagnostic.with_labels(vec![Label::primary((), range)]);
+    /// Emits a summary of the errors to standard error stream.
+    #[cfg(feature = "stderr")]
+    pub fn emit_to_stderr(&self, source: &str) {
+        self.emit_to_stderr_with_path(source, "glsl")
+    }
+
+    /// Emits a summary of the errors to standard error stream.
+    #[cfg(feature = "stderr")]
+    pub fn emit_to_stderr_with_path(&self, source: &str, path: &str) {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "termcolor")] {
+                let writer = term::termcolor::StandardStream::stderr(term::termcolor::ColorChoice::Auto);
+                self.emit_to_writer_with_path(&mut writer.lock(), source, path);
+            } else {
+                let writer = std::io::stderr();
+                self.emit_to_writer_with_path(&mut writer.lock(), source, path);
             }
-
-            term::emit(writer, &config, &files, &diagnostic).expect("cannot write error");
         }
     }
 
     pub fn emit_to_string(&self, source: &str) -> String {
+        self.emit_to_string_with_path(source, "glsl")
+    }
+
+    pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String {
+        let path = path.to_string();
+        let files = SimpleFile::new(path, replace_control_chars(source));
+        let config = term::Config::default();
+
         let mut writer = crate::error::DiagnosticBuffer::new();
-        self.emit_to_writer(writer.inner_mut(), source);
+        for err in &self.errors {
+            let diagnostic = Self::make_diagnostic(err);
+            writer
+                .emit_to_self(&config, &files, &diagnostic)
+                .expect("cannot write error");
+        }
         writer.into_string()
+    }
+
+    fn make_diagnostic(err: &Error) -> Diagnostic<()> {
+        let mut diagnostic = Diagnostic::error().with_message(err.kind.to_string());
+        if let Some(range) = err.meta.to_range() {
+            diagnostic = diagnostic.with_labels(vec![Label::primary((), range)]);
+        }
+        diagnostic
     }
 }
 
