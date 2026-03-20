@@ -356,8 +356,8 @@ webgpu:shader,validation,expression,access,array:early_eval_errors:case="overrid
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_zero_unsigned"
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_in_bounds"
 webgpu:shader,validation,expression,access,structure:*
-webgpu:shader,validation,expression,binary,add_sub_mul:scalar_vector_out_of_range:lhs="i32";*
-webgpu:shader,validation,expression,binary,add_sub_mul:scalar_vector_out_of_range:lhs="u32";*
+webgpu:shader,validation,expression,binary,add_sub_mul:*
+webgpu:shader,validation,expression,binary,bitwise_shift:invalid_types:*
 webgpu:shader,validation,expression,binary,bitwise_shift:partial_eval_errors:*
 webgpu:shader,validation,expression,binary,bitwise_shift:scalar_vector:*
 webgpu:shader,validation,expression,binary,bitwise_shift:shift_left_abstract:*
@@ -368,6 +368,7 @@ webgpu:shader,validation,expression,binary,parse:*
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:array_override:op="%26%26";a_val=1;b_val=1
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:invalid_types:*
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:scalar_vector:op="%26%26";lhs="bool";rhs="bool"
+webgpu:shader,validation,expression,call,builtin,abs:*
 webgpu:shader,validation,expression,call,builtin,acos:*
 webgpu:shader,validation,expression,call,builtin,acosh:*
 webgpu:shader,validation,expression,call,builtin,all:*
@@ -382,12 +383,17 @@ webgpu:shader,validation,expression,call,builtin,barriers:*
 webgpu:shader,validation,expression,call,builtin,ceil:*
 webgpu:shader,validation,expression,call,builtin,cos:*
 webgpu:shader,validation,expression,call,builtin,cosh:*
+webgpu:shader,validation,expression,call,builtin,countLeadingZeros:*
+webgpu:shader,validation,expression,call,builtin,countOneBits:*
+webgpu:shader,validation,expression,call,builtin,countTrailingZeros:*
 webgpu:shader,validation,expression,call,builtin,degrees:*
 webgpu:shader,validation,expression,call,builtin,derivatives:*
 webgpu:shader,validation,expression,call,builtin,distance:values:stage="constant";type="f32"
 webgpu:shader,validation,expression,call,builtin,dot:*
 webgpu:shader,validation,expression,call,builtin,exp:*
 webgpu:shader,validation,expression,call,builtin,exp2:*
+webgpu:shader,validation,expression,call,builtin,firstLeadingBit:*
+webgpu:shader,validation,expression,call,builtin,firstTrailingBit:*
 webgpu:shader,validation,expression,call,builtin,floor:*
 webgpu:shader,validation,expression,call,builtin,fract:*
 webgpu:shader,validation,expression,call,builtin,length:*
@@ -398,8 +404,10 @@ webgpu:shader,validation,expression,call,builtin,min:*
 webgpu:shader,validation,expression,call,builtin,normalize:*
 webgpu:shader,validation,expression,call,builtin,pow:*
 webgpu:shader,validation,expression,call,builtin,radians:*
+webgpu:shader,validation,expression,call,builtin,reverseBits:*
 webgpu:shader,validation,expression,call,builtin,round:*
 webgpu:shader,validation,expression,call,builtin,saturate:*
+webgpu:shader,validation,expression,call,builtin,select:*
 webgpu:shader,validation,expression,call,builtin,sign:*
 webgpu:shader,validation,expression,call,builtin,sin:*
 webgpu:shader,validation,expression,call,builtin,sinh:*
@@ -418,7 +426,9 @@ webgpu:shader,validation,expression,call,builtin,textureStore:*
 webgpu:shader,validation,expression,call,builtin,trunc:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:*
 webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:*
+webgpu:shader,validation,expression,matrix,*
 webgpu:shader,validation,expression,overload_resolution:*
+webgpu:shader,validation,expression,unary,*
 webgpu:shader,validation,extension,clip_distances:*
 webgpu:shader,validation,extension,dual_source_blending:*
 webgpu:shader,validation,extension,pointer_composite_access:*
@@ -451,6 +461,8 @@ webgpu:shader,validation,statement,const_assert:*
 webgpu:shader,validation,statement,continuing:*
 webgpu:shader,validation,statement,discard:*
 webgpu:shader,validation,statement,if:*
+webgpu:shader,validation,statement,increment_decrement:*
+webgpu:shader,validation,statement,phony:*
 webgpu:shader,validation,statement,return:*
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="break_if"
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="break"
@@ -463,5 +475,6 @@ webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="l
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="loop6"
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="loop8"
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="switch1"
+webgpu:shader,validation,statement,switch:*
 webgpu:shader,validation,statement,while:*
 webgpu:util,texture,texture_ok:*
