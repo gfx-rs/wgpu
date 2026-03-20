@@ -343,8 +343,6 @@ Migrated from the `max_inter_stage_shader_components` limit to `max_inter_stage_
 
 - Make ordered texture and buffer uses hal specific. By @NiklasEi in [#8924](https://github.com/gfx-rs/wgpu/pull/8924).
 
-### General
-
 ### Bug Fixes
 
 #### General
