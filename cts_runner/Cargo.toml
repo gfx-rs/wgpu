@@ -20,6 +20,7 @@ deno_url.workspace = true
 deno_web.workspace = true
 deno_webidl.workspace = true
 deno_webgpu.workspace = true
+log.workspace = true
 pico-args.workspace = true
 tokio = { workspace = true, features = ["full"] }
 termcolor.workspace = true

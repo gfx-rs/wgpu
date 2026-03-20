@@ -874,17 +874,26 @@ impl crate::Device for super::Device {
         //
         // Immediates are implemented as root constants.
         //
-        // Each bind group layout will be one table entry of the root signature.
-        // We have the additional restriction that SRV/CBV/UAV and samplers need to be
-        // separated, so each set layout will actually occupy up to 2 entries!
-        // SRV/CBV/UAV tables are added to the signature first, then Sampler tables,
-        // and finally dynamic uniform descriptors.
+        // Each bind group layout might use one SRV/CBV/UAV descriptor table.
+        // With resources in the bind group layout using:
+        //  - 1 CBV per non-dynamic uniform buffer
+        //  - 1 SRV per acceleration structure
+        //  - 1 SRV for all samplers in a bind group
+        //  - 1 SRV per texture
+        //  - 1 SRV per read-only storage buffer
+        //  - 1 UAV per storage texture
+        //  - 1 UAV per read-write storage buffer
+        //  - 3 SRVs & 1 CBV per external texture
         //
-        // Uniform buffers with dynamic offsets are implemented as root descriptors.
+        // Each dynamic uniform buffer takes up a CBV root descriptor.
         // This is easier than trying to patch up the offset on the shader side.
         //
-        // Storage buffers with dynamic offsets are part of a descriptor table and
-        // the dynamic offsets are passed via root constants.
+        // Each dynamic storage buffer is an SRV or UAV in the descriptor table
+        // and its dynamic offsets are passed via root constants.
+        //
+        // All samplers go into a single sampler descriptor table.
+        //
+        // 3 additional root constants are used to populate built-in (shader) inputs.
         //
         // Root signature layout:
         // Root Constants: Parameter=0, Space=0

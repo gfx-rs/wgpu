@@ -269,6 +269,9 @@ pub struct GlobalVariable<'a> {
     pub ty: Option<TemplateElaboratedIdent<'a>>,
     pub init: Option<Handle<Expression<'a>>>,
     pub doc_comments: Vec<&'a str>,
+
+    /// Memory decorations for this variable (`@coherent`, `@volatile`).
+    pub memory_decorations: crate::MemoryDecorations,
 }
 
 #[derive(Debug)]

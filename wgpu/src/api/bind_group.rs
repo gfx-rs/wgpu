@@ -81,6 +81,15 @@ pub enum BindingResource<'a> {
     ///   built using `build_acceleration_structures` a validation error is generated otherwise this is a part of the
     ///   safety section of `build_acceleration_structures_unsafe_tlas` and so undefined behavior occurs.
     AccelerationStructure(&'a Tlas),
+    /// Binding is backed by an array of top level acceleration structures.
+    ///
+    /// Corresponds to [`wgt::BindingType::AccelerationStructure`] with [`BindGroupLayoutEntry::count`] set to Some.
+    ///
+    /// # Validation
+    /// The same validation rules apply as for [`BindingResource::AccelerationStructure`], for each element.
+    ///
+    /// Note: backend support may vary; this is primarily intended for native backends.
+    AccelerationStructureArray(&'a [&'a Tlas]),
     /// Binding is backed by an external texture.
     ///
     /// [`Features::EXTERNAL_TEXTURE`] must be supported to use this feature.

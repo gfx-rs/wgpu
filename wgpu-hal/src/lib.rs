@@ -794,6 +794,16 @@ pub trait Adapter: WasmNotSendSync {
     ///
     /// [`PresentationTimestamp`]: wgt::PresentationTimestamp
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
+
+    /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
+    /// If a usage is ordered, then if the buffer state doesn't change between draw calls,
+    /// there are no barriers needed for synchronization.
+    fn get_ordered_buffer_usages(&self) -> wgt::BufferUses;
+
+    /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
+    /// If a usage is ordered, then if the buffer state doesn't change between draw calls,
+    /// there are no barriers needed for synchronization.
+    fn get_ordered_texture_usages(&self) -> wgt::TextureUses;
 }
 
 /// A connection to a GPU and a pool of resources to use with it.

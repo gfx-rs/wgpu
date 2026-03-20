@@ -207,10 +207,6 @@ float4x3 ZeroValuefloat4x3() {
     return (float4x3)0;
 }
 
-float3x4 ZeroValuefloat3x4() {
-    return (float3x4)0;
-}
-
 void arithmetic()
 {
     int prevent_const_eval = (int)0;
@@ -281,15 +277,15 @@ void arithmetic()
         float2 rem4_1 = naga_mod((2.0).xx, (1.0).xx);
         float2 rem5_1 = naga_mod((2.0).xx, (1.0).xx);
     }
-    float3x3 add = (ZeroValuefloat3x3() + ZeroValuefloat3x3());
-    float3x3 sub = (ZeroValuefloat3x3() - ZeroValuefloat3x3());
+    float3x3 add = float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0));
+    float3x3 sub = float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0));
     float3x3 mul_scalar0_ = mul(1.0, ZeroValuefloat3x3());
     float3x3 mul_scalar1_ = mul(ZeroValuefloat3x3(), 2.0);
     float3 mul_vector0_ = mul((1.0).xxxx, ZeroValuefloat4x3());
     float4 mul_vector1_ = mul(ZeroValuefloat4x3(), (2.0).xxx);
-    float3x3 mul_ = mul(ZeroValuefloat3x4(), ZeroValuefloat4x3());
-    int _e175 = prevent_const_eval;
-    wgpu_7437_ = asint(asuint(_e175) + asuint(int(-2147483647 - 1)));
+    float3x3 mul_ = float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0));
+    int _e205 = prevent_const_eval;
+    wgpu_7437_ = asint(asuint(_e205) + asuint(int(-2147483647 - 1)));
     return;
 }
 

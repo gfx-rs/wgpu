@@ -31,7 +31,8 @@ fn staging_belt_random_test() {
                 offset,
                 wgpu::BufferSize::new(size).unwrap(),
             );
-            slice[0] = 1; // token amount of actual writing, just in case it makes a difference
+            // token amount of actual writing, just in case it makes a difference
+            slice.slice(..1).copy_from_slice(&[1]);
         }
 
         belt.finish();

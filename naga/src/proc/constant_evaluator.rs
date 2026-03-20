@@ -609,6 +609,19 @@ macro_rules! match_literal_vector {
     };
 }
 
+fn float_length<F>(e: &[F]) -> Option<F>
+where
+    F: core::ops::Mul<F> + num_traits::Float + iter::Sum,
+{
+    if e.len() == 1 {
+        // Avoids possible overflow in squaring
+        Some(e[0].abs())
+    } else {
+        let result = e.iter().map(|&ei| ei * ei).sum::<F>().sqrt();
+        result.is_finite().then_some(result)
+    }
+}
+
 #[derive(Debug)]
 enum Behavior<'a> {
     Wgsl(WgslRestrictions<'a>),
@@ -861,6 +874,8 @@ pub enum ConstantEvaluatorError {
     InvalidMathArg,
     #[error("{0:?} built-in function expects {1:?} arguments but {2:?} were supplied")]
     InvalidMathArgCount(crate::MathFunction, usize, usize),
+    #[error("{0} built-in function argument is out of valid range")]
+    InvalidMathArgValue(String),
     #[error("Cannot apply relational function to type")]
     InvalidRelationalArg(RelationalFunction),
     #[error("value of `low` is greater than `high` for clamp built-in function")]
@@ -1510,13 +1525,27 @@ impl<'a> ConstantEvaluator<'a> {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.cos()]) })
             }
             crate::MathFunction::Cosh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.cosh()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    let result = e.cosh();
+                    if result.is_finite() {
+                        Ok([result])
+                    } else {
+                        Err(ConstantEvaluatorError::Overflow("cosh".into()))
+                    }
+                })
             }
             crate::MathFunction::Sin => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.sin()]) })
             }
             crate::MathFunction::Sinh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.sinh()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    let result = e.sinh();
+                    if result.is_finite() {
+                        Ok([result])
+                    } else {
+                        Err(ConstantEvaluatorError::Overflow("sinh".into()))
+                    }
+                })
             }
             crate::MathFunction::Tan => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.tan()]) })
@@ -1525,10 +1554,22 @@ impl<'a> ConstantEvaluator<'a> {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.tanh()]) })
             }
             crate::MathFunction::Acos => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.acos()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    if e.abs() <= One::one() {
+                        Ok([e.acos()])
+                    } else {
+                        Err(ConstantEvaluatorError::InvalidMathArgValue("acos".into()))
+                    }
+                })
             }
             crate::MathFunction::Asin => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.asin()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    if e.abs() <= One::one() {
+                        Ok([e.asin()])
+                    } else {
+                        Err(ConstantEvaluatorError::InvalidMathArgValue("asin".into()))
+                    }
+                })
             }
             crate::MathFunction::Atan => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.atan()]) })
@@ -1538,20 +1579,38 @@ impl<'a> ConstantEvaluator<'a> {
                     Ok([y.atan2(x)])
                 })
             }
-            crate::MathFunction::Asinh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.asinh()]) })
-            }
-            crate::MathFunction::Acosh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.acosh()]) })
-            }
+            crate::MathFunction::Asinh => component_wise_float(self, span, [arg], |e| match e {
+                Float::Abstract([e]) => Ok(Float::Abstract([libm::asinh(e)])),
+                Float::F32([e]) => Ok(Float::F32([(e as f64).asinh() as f32])),
+                Float::F16([e]) => Ok(Float::F16([e.asinh()])),
+            }),
+            crate::MathFunction::Acosh => component_wise_float(self, span, [arg], |e| match e {
+                Float::Abstract([e]) if e >= One::one() => Ok(Float::Abstract([libm::acosh(e)])),
+                Float::F32([e]) if e >= One::one() => Ok(Float::F32([(e as f64).acosh() as f32])),
+                Float::F16([e]) if e >= One::one() => Ok(Float::F16([e.acosh()])),
+                _ => Err(ConstantEvaluatorError::InvalidMathArgValue("acosh".into())),
+            }),
             crate::MathFunction::Atanh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.atanh()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    if e.abs() < One::one() {
+                        Ok([e.atanh()])
+                    } else {
+                        Err(ConstantEvaluatorError::InvalidMathArgValue("atanh".into()))
+                    }
+                })
             }
             crate::MathFunction::Radians => {
                 component_wise_float!(self, span, [arg], |e1| { Ok([e1.to_radians()]) })
             }
             crate::MathFunction::Degrees => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.to_degrees()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    let result = e.to_degrees();
+                    if result.is_finite() {
+                        Ok([result])
+                    } else {
+                        Err(ConstantEvaluatorError::Overflow("degrees".into()))
+                    }
+                })
             }
 
             // decomposition
@@ -1605,20 +1664,61 @@ impl<'a> ConstantEvaluator<'a> {
 
             // exponent
             crate::MathFunction::Exp => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.exp()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    let result = e.exp();
+                    if result.is_finite() {
+                        Ok([result])
+                    } else {
+                        Err(ConstantEvaluatorError::Overflow("exp".into()))
+                    }
+                })
             }
             crate::MathFunction::Exp2 => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.exp2()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    let result = e.exp2();
+                    if result.is_finite() {
+                        Ok([result])
+                    } else {
+                        Err(ConstantEvaluatorError::Overflow("exp2".into()))
+                    }
+                })
             }
             crate::MathFunction::Log => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.ln()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    if e > Zero::zero() {
+                        Ok([e.ln()])
+                    } else {
+                        Err(ConstantEvaluatorError::InvalidMathArgValue("log".into()))
+                    }
+                })
             }
             crate::MathFunction::Log2 => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.log2()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    if e > Zero::zero() {
+                        Ok([e.log2()])
+                    } else {
+                        Err(ConstantEvaluatorError::InvalidMathArgValue("log2".into()))
+                    }
+                })
             }
             crate::MathFunction::Pow => {
                 component_wise_float!(self, span, [arg, arg1.unwrap()], |e1, e2| {
-                    Ok([e1.powf(e2)])
+                    // 0.pow(0) is an error since exp2(0 * log2(0)) is NaN.
+                    // https://www.w3.org/TR/WGSL/#pow-builtin
+                    if e1 < Zero::zero()
+                        || e1.is_one() && e2.is_infinite()
+                        || e1.is_infinite() && e2.is_zero()
+                        || e1.is_zero() && e2.is_zero()
+                    {
+                        Err(ConstantEvaluatorError::InvalidMathArgValue("pow".into()))
+                    } else {
+                        let result = e1.powf(e2);
+                        if result.is_finite() {
+                            Ok([result])
+                        } else {
+                            Err(ConstantEvaluatorError::Overflow("pow".into()))
+                        }
+                    }
                 })
             }
 
@@ -1654,7 +1754,13 @@ impl<'a> ConstantEvaluator<'a> {
                 })
             }
             crate::MathFunction::Sqrt => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.sqrt()]) })
+                component_wise_float!(self, span, [arg], |e| {
+                    if e >= Zero::zero() {
+                        Ok([e.sqrt()])
+                    } else {
+                        Err(ConstantEvaluatorError::InvalidMathArgValue("sqrt".into()))
+                    }
+                })
             }
             crate::MathFunction::InverseSqrt => {
                 component_wise_float(self, span, [arg], |e| match e {
@@ -1718,6 +1824,22 @@ impl<'a> ConstantEvaluator<'a> {
                     return Err(ConstantEvaluatorError::InvalidMathArg);
                 }
 
+                fn float_dot_checked<P>(a: &[P], b: &[P]) -> Result<P, ConstantEvaluatorError>
+                where
+                    P: num_traits::Float,
+                {
+                    let result = a
+                        .iter()
+                        .zip(b.iter())
+                        .map(|(&aa, &bb)| aa * bb)
+                        .fold(P::zero(), |acc, x| acc + x);
+                    if result.is_finite() {
+                        Ok(result)
+                    } else {
+                        Err(ConstantEvaluatorError::Overflow("in dot built-in".into()))
+                    }
+                }
+
                 fn int_dot_checked<P>(a: &[P], b: &[P]) -> Result<P, ConstantEvaluatorError>
                 where
                     P: num_traits::PrimInt + num_traits::CheckedAdd + num_traits::CheckedMul,
@@ -1748,7 +1870,7 @@ impl<'a> ConstantEvaluator<'a> {
                 }
 
                 let result = match_literal_vector!(match (e1, e2) => Literal {
-                    Float => |e1, e2| { e1.iter().zip(e2.iter()).map(|(&aa, &bb)| aa * bb).sum() },
+                    Float => |e1, e2| { float_dot_checked(e1, e2)? },
                     AbstractInt => |e1, e2 | { int_dot_checked(e1, e2)? },
                     I32 => |e1, e2| { int_dot_wrapping(e1, e2) },
                     U32 => |e1, e2| { int_dot_wrapping(e1, e2) },
@@ -1759,21 +1881,10 @@ impl<'a> ConstantEvaluator<'a> {
                 // https://www.w3.org/TR/WGSL/#length-builtin
                 let e1 = self.extract_vec(arg, true)?;
 
-                fn float_length<F>(e: &[F]) -> F
-                where
-                    F: core::ops::Mul<F>,
-                    F: num_traits::Float + iter::Sum,
-                {
-                    if e.len() == 1 {
-                        // Avoids possible overflow in squaring
-                        e[0].abs()
-                    } else {
-                        e.iter().map(|&ei| ei * ei).sum::<F>().sqrt()
-                    }
-                }
-
                 let result = match_literal_vector!(match e1 => Literal {
-                    Float => |e1| { float_length(e1) },
+                    Float => |e1| {
+                        float_length(e1).ok_or_else(|| ConstantEvaluatorError::Overflow("length".into()))?
+                    },
                 })?;
                 self.register_evaluated_expr(Expression::Literal(result), span)
             }
@@ -1811,21 +1922,30 @@ impl<'a> ConstantEvaluator<'a> {
                 // https://www.w3.org/TR/WGSL/#normalize-builtin
                 let e1 = self.extract_vec(arg, true)?;
 
-                fn float_normalize<F>(e: &[F]) -> ArrayVec<F, { crate::VectorSize::MAX }>
+                fn float_normalize<F>(
+                    e: &[F],
+                ) -> Result<ArrayVec<F, { crate::VectorSize::MAX }>, ConstantEvaluatorError>
                 where
                     F: core::ops::Mul<F>,
                     F: num_traits::Float + iter::Sum,
                 {
-                    let len = e.iter().map(|&ei| ei * ei).sum::<F>().sqrt();
+                    let len = match float_length(e) {
+                        Some(len) if !len.is_zero() => Ok(len),
+                        Some(_) => Err(ConstantEvaluatorError::InvalidMathArgValue(
+                            "normalize".into(),
+                        )),
+                        None => Err(ConstantEvaluatorError::Overflow("normalize".into())),
+                    }?;
+
                     let mut out = ArrayVec::new();
                     for &ei in e {
                         out.push(ei / len);
                     }
-                    out
+                    Ok(out)
                 }
 
                 let result = match_literal_vector!(match e1 => LiteralVector {
-                    Float => |e1| { float_normalize(e1) },
+                    Float => |e1| { float_normalize(e1)? },
                 })?;
                 result.register_as_evaluated_expr(self, span)
             }
@@ -2667,14 +2787,20 @@ impl<'a> ConstantEvaluator<'a> {
                                 _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                             })
                         }
-                        (Literal::F16(a), Literal::F16(b)) => Literal::F16(match op {
-                            BinaryOperator::Add => a + b,
-                            BinaryOperator::Subtract => a - b,
-                            BinaryOperator::Multiply => a * b,
-                            BinaryOperator::Divide => a / b,
-                            BinaryOperator::Modulo => a % b,
-                            _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
-                        }),
+                        (Literal::F16(a), Literal::F16(b)) => {
+                            let result = match op {
+                                BinaryOperator::Add => a + b,
+                                BinaryOperator::Subtract => a - b,
+                                BinaryOperator::Multiply => a * b,
+                                BinaryOperator::Divide => a / b,
+                                BinaryOperator::Modulo => a % b,
+                                _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                            };
+                            if !result.is_finite() {
+                                return Err(ConstantEvaluatorError::Overflow(format!("{op:?}")));
+                            }
+                            Literal::F16(result)
+                        }
                         (Literal::AbstractInt(a), Literal::AbstractInt(b)) => {
                             Literal::AbstractInt(match op {
                                 BinaryOperator::Add => a.checked_add(b).ok_or_else(|| {
@@ -2707,14 +2833,18 @@ impl<'a> ConstantEvaluator<'a> {
                             })
                         }
                         (Literal::AbstractFloat(a), Literal::AbstractFloat(b)) => {
-                            Literal::AbstractFloat(match op {
+                            let result = match op {
                                 BinaryOperator::Add => a + b,
                                 BinaryOperator::Subtract => a - b,
                                 BinaryOperator::Multiply => a * b,
                                 BinaryOperator::Divide => a / b,
                                 BinaryOperator::Modulo => a % b,
                                 _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
-                            })
+                            };
+                            if !result.is_finite() {
+                                return Err(ConstantEvaluatorError::Overflow(format!("{op:?}")));
+                            }
+                            Literal::AbstractFloat(result)
                         }
                         (Literal::Bool(a), Literal::Bool(b)) => Literal::Bool(match op {
                             BinaryOperator::LogicalAnd => a && b,
@@ -2776,32 +2906,24 @@ impl<'a> ConstantEvaluator<'a> {
                     left_components,
                     self.expressions,
                     self.types,
-                );
+                )
+                .collect::<Vec<_>>();
                 let right_flattened = crate::proc::flatten_compose(
                     right_ty,
                     right_components,
                     self.expressions,
                     self.types,
-                );
+                )
+                .collect::<Vec<_>>();
 
-                // `flatten_compose` doesn't return an `ExactSizeIterator`, so
-                // make a reasonable guess of the capacity we'll need.
-                let mut flattened = Vec::with_capacity(left_components.len());
-                flattened.extend(left_flattened.zip(right_flattened));
-
-                match (&self.types[left_ty].inner, &self.types[right_ty].inner) {
-                    (
-                        &TypeInner::Vector {
-                            size: left_size, ..
-                        },
-                        &TypeInner::Vector {
-                            size: right_size, ..
-                        },
-                    ) if left_size == right_size => {
-                        self.binary_op_vector(op, left_size, &flattened, left_ty, span)?
-                    }
-                    _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
-                }
+                self.binary_op_compose(
+                    op,
+                    &left_flattened,
+                    &right_flattened,
+                    left_ty,
+                    right_ty,
+                    span,
+                )?
             }
             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
         };
@@ -2827,11 +2949,105 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
+    fn binary_op_compose(
+        &mut self,
+        op: BinaryOperator,
+        left_components: &[Handle<Expression>],
+        right_components: &[Handle<Expression>],
+        left_ty: Handle<Type>,
+        right_ty: Handle<Type>,
+        span: Span,
+    ) -> Result<Expression, ConstantEvaluatorError> {
+        match (&self.types[left_ty].inner, &self.types[right_ty].inner) {
+            // Binary operation on vector-vector
+            (
+                &TypeInner::Vector {
+                    size: left_size, ..
+                },
+                &TypeInner::Vector {
+                    size: right_size, ..
+                },
+            ) if left_size == right_size => self.binary_op_vector(
+                op,
+                left_size,
+                left_components,
+                right_components,
+                left_ty,
+                span,
+            ),
+            // Binary operation on vector-matrix
+            (
+                &TypeInner::Vector { size, .. },
+                &TypeInner::Matrix {
+                    columns,
+                    rows,
+                    scalar,
+                },
+            ) if op == BinaryOperator::Multiply && size == rows => self.multiply_vector_matrix(
+                left_components,
+                right_components,
+                columns,
+                scalar,
+                span,
+            ),
+            // Binary operation on matrix-vector
+            (
+                &TypeInner::Matrix {
+                    columns,
+                    rows,
+                    scalar,
+                },
+                &TypeInner::Vector { size, .. },
+            ) if op == BinaryOperator::Multiply && size == columns => {
+                self.multiply_matrix_vector(left_components, right_components, rows, scalar, span)
+            }
+            // Binary operation on matrix-matrix
+            (
+                &TypeInner::Matrix {
+                    columns: left_columns,
+                    rows: left_rows,
+                    scalar,
+                },
+                &TypeInner::Matrix {
+                    columns: right_columns,
+                    rows: right_rows,
+                    ..
+                },
+            ) => match op {
+                BinaryOperator::Add | BinaryOperator::Subtract
+                    if left_columns == right_columns && left_rows == right_rows =>
+                {
+                    let components = left_components
+                        .iter()
+                        .zip(right_components)
+                        .map(|(&left, &right)| self.binary_op(op, left, right, span))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    Ok(Expression::Compose {
+                        ty: left_ty,
+                        components,
+                    })
+                }
+                BinaryOperator::Multiply if left_columns == right_rows => self
+                    .multiply_matrix_matrix(
+                        left_components,
+                        right_components,
+                        left_rows,
+                        right_columns,
+                        scalar,
+                        span,
+                    ),
+                _ => Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+            },
+            _ => Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+        }
+    }
+
     fn binary_op_vector(
         &mut self,
         op: BinaryOperator,
         size: crate::VectorSize,
-        components: &[(Handle<Expression>, Handle<Expression>)],
+        left_components: &[Handle<Expression>],
+        right_components: &[Handle<Expression>],
         left_ty: Handle<Type>,
         span: Span,
     ) -> Result<Expression, ConstantEvaluatorError> {
@@ -2872,12 +3088,165 @@ impl<'a> ConstantEvaluator<'a> {
             }
         };
 
-        let components = components
+        let components = left_components
             .iter()
-            .map(|&(left, right)| self.binary_op(op, left, right, span))
+            .zip(right_components)
+            .map(|(&left, &right)| self.binary_op(op, left, right, span))
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Expression::Compose { ty, components })
+    }
+
+    fn multiply_vector_matrix(
+        &mut self,
+        vec_components: &[Handle<Expression>],
+        mat_components: &[Handle<Expression>],
+        mat_columns: crate::VectorSize,
+        scalar: crate::Scalar,
+        span: Span,
+    ) -> Result<Expression, ConstantEvaluatorError> {
+        let ty = self.types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Vector {
+                    size: mat_columns,
+                    scalar,
+                },
+            },
+            span,
+        );
+        let components = mat_components
+            .iter()
+            .map(|&column| {
+                let Expression::Compose { ref components, .. } = self.expressions[column] else {
+                    unreachable!()
+                };
+                self.dot_exprs(
+                    vec_components.iter().cloned(),
+                    components.clone().into_iter(),
+                    span,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Expression::Compose { ty, components })
+    }
+
+    fn multiply_matrix_vector(
+        &mut self,
+        mat_components: &[Handle<Expression>],
+        vec_components: &[Handle<Expression>],
+        mat_rows: crate::VectorSize,
+        scalar: crate::Scalar,
+        span: Span,
+    ) -> Result<Expression, ConstantEvaluatorError> {
+        let ty = self.types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Vector {
+                    size: mat_rows,
+                    scalar,
+                },
+            },
+            span,
+        );
+
+        let flatten = self.flatten_matrix(mat_components);
+        let nr = mat_rows as usize;
+        let components = (0..nr)
+            .map(|r| {
+                let row = flatten.iter().skip(r).step_by(nr).cloned();
+                self.dot_exprs(row, vec_components.iter().cloned(), span)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Expression::Compose { ty, components })
+    }
+
+    fn multiply_matrix_matrix(
+        &mut self,
+        left_components: &[Handle<Expression>],
+        right_components: &[Handle<Expression>],
+        left_rows: crate::VectorSize,
+        right_columns: crate::VectorSize,
+        scalar: crate::Scalar,
+        span: Span,
+    ) -> Result<Expression, ConstantEvaluatorError> {
+        let left_nc = left_components.len();
+        let left_nr = left_rows as usize;
+        let right_nc = right_columns as usize;
+        let right_nr = left_nc;
+
+        let mut result = Vec::with_capacity(right_nc);
+        let result_ty = self.types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Matrix {
+                    columns: right_columns,
+                    rows: left_rows,
+                    scalar,
+                },
+            },
+            span,
+        );
+        let result_column_ty = self.types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Vector {
+                    size: left_rows,
+                    scalar,
+                },
+            },
+            span,
+        );
+
+        let left_flattened = self.flatten_matrix(left_components);
+        let right_flattened = self.flatten_matrix(right_components);
+        for c in 0..right_nc {
+            let result_column = (0..left_nr)
+                .map(|r| {
+                    let row = left_flattened.iter().skip(r).step_by(left_nr);
+                    let column = right_flattened.iter().skip(c * right_nr).take(right_nr);
+                    self.dot_exprs(row.cloned(), column.cloned(), span)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let expr = Expression::Compose {
+                ty: result_column_ty,
+                components: result_column,
+            };
+            let handle = self.register_evaluated_expr(expr, span)?;
+            result.push(handle);
+        }
+        Ok(Expression::Compose {
+            ty: result_ty,
+            components: result,
+        })
+    }
+
+    fn flatten_matrix(&self, columns: &[Handle<Expression>]) -> ArrayVec<Handle<Expression>, 16> {
+        let mut flattened = ArrayVec::<_, 16>::new();
+        for &column in columns {
+            let Expression::Compose { ref components, .. } = self.expressions[column] else {
+                unreachable!()
+            };
+            flattened.extend(components.iter().cloned());
+        }
+        flattened
+    }
+
+    fn dot_exprs(
+        &mut self,
+        left: impl Iterator<Item = Handle<Expression>>,
+        right: impl Iterator<Item = Handle<Expression>>,
+        span: Span,
+    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        let mut acc = None;
+        for (l, r) in left.zip(right) {
+            let result = self.binary_op(BinaryOperator::Multiply, l, r, span)?;
+            match acc.as_mut() {
+                Some(acc) => *acc = self.binary_op(BinaryOperator::Add, *acc, result, span)?,
+                None => acc = Some(result),
+            }
+        }
+        Ok(acc.unwrap())
     }
 
     fn relational(
@@ -3534,8 +3903,8 @@ mod tests {
     use alloc::{vec, vec::Vec};
 
     use crate::{
-        Arena, Constant, Expression, Literal, ScalarKind, Type, TypeInner, UnaryOperator,
-        UniqueArena, VectorSize,
+        Arena, BinaryOperator, Constant, Expression, FastHashMap, Handle, Literal, ScalarKind,
+        Type, TypeInner, UnaryOperator, UniqueArena, VectorSize,
     };
 
     use super::{Behavior, ConstantEvaluator, ExpressionKindTracker, WgslRestrictions};
@@ -3670,6 +4039,265 @@ mod tests {
                 assert!(components_iter.next().is_none());
             }
             _ => panic!("Expected vector"),
+        }
+    }
+
+    #[test]
+    fn matrix_op() {
+        let mut helper = MatrixTestHelper::new();
+
+        for nc in 2..=4 {
+            for nr in 2..=4 {
+                // Validates multiplication on vector-matrix.
+                // vecR(0, 1, .., r) * matCxR(0, 1, .., nc * nr)
+                let evaluated = helper.eval_vector_multiply_matrix(nc, nr);
+                let expected = (0..nc)
+                    .map(|c| (0..nr).map(|r| (r * (c * nr + r)) as f32).sum())
+                    .collect::<Vec<f32>>();
+                assert_eq!(evaluated, expected);
+
+                // Validates multiplication on matrix-vector.
+                // matCxR(0, 1, .., nc * nr) * vecC(0, 1, .., nc)
+                let evaluated = helper.eval_matrix_multiply_vector(nc, nr);
+                let expected = (0..nr)
+                    .map(|r| (0..nc).map(|c| (c * (c * nr + r)) as f32).sum())
+                    .collect::<Vec<f32>>();
+                assert_eq!(evaluated, expected);
+
+                for k in 2..=4 {
+                    // Validates multiplication on matrix-matrix.
+                    // matKxR(0, 1, .., k * nr) * matCxK(0, 1, .., nc * k)
+                    let evaluated = helper.eval_matrix_multiply_matrix(nr, nc, k);
+                    let expected = (0..nc)
+                        .flat_map(|c| {
+                            (0..nr).map(move |r| {
+                                (0..k).map(|v| ((v * nr + r) * (c * k + v)) as f32).sum()
+                            })
+                        })
+                        .collect::<Vec<f32>>();
+                    assert_eq!(evaluated, expected);
+                }
+            }
+        }
+    }
+
+    /// Test fixture providing pre-built f32 vector and matrix constant
+    /// expressions with sequential element values, used to evaluate and verify
+    /// matrix operations.
+    struct MatrixTestHelper {
+        types: UniqueArena<Type>,
+        expressions: Arena<Expression>,
+        /// Vector expressions from [0, 1] to [0, 1, 2, 3].
+        vec_exprs: FastHashMap<usize, Handle<Expression>>,
+        /// Matrix expressions from [0, .., 3] to [0, .., 15].
+        mat_exprs: FastHashMap<(usize, usize), Handle<Expression>>,
+    }
+
+    impl MatrixTestHelper {
+        fn new() -> Self {
+            let mut types = UniqueArena::new();
+            let mut expressions = Arena::new();
+            let span = crate::Span::default();
+
+            let (mut vec_tys, mut mat_tys) = (FastHashMap::default(), FastHashMap::default());
+            for c in 2..=4 {
+                let vec_ty = types.insert(
+                    Type {
+                        name: None,
+                        inner: TypeInner::Vector {
+                            size: Self::int_to_vector_size(c),
+                            scalar: crate::Scalar::F32,
+                        },
+                    },
+                    span,
+                );
+                vec_tys.insert(c, vec_ty);
+                for r in 2..=4 {
+                    let mat_ty = types.insert(
+                        Type {
+                            name: None,
+                            inner: TypeInner::Matrix {
+                                columns: Self::int_to_vector_size(c),
+                                rows: Self::int_to_vector_size(r),
+                                scalar: crate::Scalar::F32,
+                            },
+                        },
+                        span,
+                    );
+                    mat_tys.insert((c, r), mat_ty);
+                }
+            }
+
+            let mut lit_exprs = FastHashMap::default();
+            for i in 0..16 {
+                let expr = expressions.append(Expression::Literal(Literal::F32(i as f32)), span);
+                lit_exprs.insert(i, expr);
+            }
+
+            let mut vec_exprs = FastHashMap::default();
+            for c in 2..=4 {
+                let expr = expressions.append(
+                    Expression::Compose {
+                        ty: *vec_tys.get(&c).unwrap(),
+                        components: (0..c)
+                            .map(|i| *lit_exprs.get(&i).unwrap())
+                            .collect::<Vec<_>>(),
+                    },
+                    span,
+                );
+                vec_exprs.insert(c, expr);
+            }
+
+            let mut mat_exprs = FastHashMap::default();
+            for c in 2..=4 {
+                for r in 2..=4 {
+                    let mut columns = Vec::with_capacity(c);
+                    for cc in 0..c {
+                        let start = cc * r;
+                        let expr = expressions.append(
+                            Expression::Compose {
+                                ty: *vec_tys.get(&r).unwrap(),
+                                components: (start..start + r)
+                                    .map(|i| *lit_exprs.get(&i).unwrap())
+                                    .collect::<Vec<_>>(),
+                            },
+                            span,
+                        );
+                        columns.push(expr);
+                    }
+
+                    let expr = expressions.append(
+                        Expression::Compose {
+                            ty: *mat_tys.get(&(c, r)).unwrap(),
+                            components: columns,
+                        },
+                        span,
+                    );
+                    mat_exprs.insert((c, r), expr);
+                }
+            }
+
+            Self {
+                types,
+                expressions,
+                vec_exprs,
+                mat_exprs,
+            }
+        }
+
+        /// Evaluates vec[0..nr] * mat[0..nc*nr] and returns the result as f32s.
+        fn eval_vector_multiply_matrix(&mut self, nc: usize, nr: usize) -> Vec<f32> {
+            let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&self.expressions);
+            let mut solver = ConstantEvaluator {
+                behavior: Behavior::Wgsl(WgslRestrictions::Const(None)),
+                types: &mut self.types,
+                constants: &Arena::new(),
+                overrides: &Arena::new(),
+                expressions: &mut self.expressions,
+                expression_kind_tracker,
+                layouter: &mut crate::proc::Layouter::default(),
+            };
+
+            let result = solver
+                .try_eval_and_append(
+                    Expression::Binary {
+                        op: BinaryOperator::Multiply,
+                        left: *self.vec_exprs.get(&nr).unwrap(),
+                        right: *self.mat_exprs.get(&(nc, nr)).unwrap(),
+                    },
+                    Default::default(),
+                )
+                .unwrap();
+            self.flatten(result)
+        }
+
+        /// Evaluates mat[0..nc*nr] * vec[0..nc] and returns the result as f32s.
+        fn eval_matrix_multiply_vector(&mut self, nc: usize, nr: usize) -> Vec<f32> {
+            let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&self.expressions);
+            let mut solver = ConstantEvaluator {
+                behavior: Behavior::Wgsl(WgslRestrictions::Const(None)),
+                types: &mut self.types,
+                constants: &Arena::new(),
+                overrides: &Arena::new(),
+                expressions: &mut self.expressions,
+                expression_kind_tracker,
+                layouter: &mut crate::proc::Layouter::default(),
+            };
+
+            let result = solver
+                .try_eval_and_append(
+                    Expression::Binary {
+                        op: BinaryOperator::Multiply,
+                        left: *self.mat_exprs.get(&(nc, nr)).unwrap(),
+                        right: *self.vec_exprs.get(&nc).unwrap(),
+                    },
+                    Default::default(),
+                )
+                .unwrap();
+            self.flatten(result)
+        }
+
+        /// Evaluates mat[0..k*l_nr] * mat[0..r_nc*k] and returns the result as
+        /// f32s.
+        fn eval_matrix_multiply_matrix(&mut self, l_nr: usize, r_nc: usize, k: usize) -> Vec<f32> {
+            let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&self.expressions);
+            let mut solver = ConstantEvaluator {
+                behavior: Behavior::Wgsl(WgslRestrictions::Const(None)),
+                types: &mut self.types,
+                constants: &Arena::new(),
+                overrides: &Arena::new(),
+                expressions: &mut self.expressions,
+                expression_kind_tracker,
+                layouter: &mut crate::proc::Layouter::default(),
+            };
+
+            let result = solver
+                .try_eval_and_append(
+                    Expression::Binary {
+                        op: BinaryOperator::Multiply,
+                        left: *self.mat_exprs.get(&(k, l_nr)).unwrap(),
+                        right: *self.mat_exprs.get(&(r_nc, k)).unwrap(),
+                    },
+                    Default::default(),
+                )
+                .unwrap();
+            self.flatten(result)
+        }
+
+        fn flatten(&self, expr: Handle<Expression>) -> Vec<f32> {
+            let Expression::Compose {
+                ref components,
+                ref ty,
+            } = self.expressions[expr]
+            else {
+                unreachable!()
+            };
+
+            match self.types[*ty].inner {
+                TypeInner::Vector { .. } => components
+                    .iter()
+                    .map(|&comp| {
+                        let Expression::Literal(Literal::F32(v)) = self.expressions[comp] else {
+                            unreachable!()
+                        };
+                        v
+                    })
+                    .collect(),
+                TypeInner::Matrix { .. } => components
+                    .iter()
+                    .flat_map(|&comp| self.flatten(comp))
+                    .collect(),
+                _ => unreachable!(),
+            }
+        }
+
+        fn int_to_vector_size(int: usize) -> VectorSize {
+            match int {
+                2 => VectorSize::Bi,
+                3 => VectorSize::Tri,
+                4 => VectorSize::Quad,
+                _ => unreachable!(),
+            }
         }
     }
 
@@ -4105,7 +4733,7 @@ mod tests {
         let solved_add = solver
             .try_eval_and_append(
                 Expression::Binary {
-                    op: crate::BinaryOperator::Add,
+                    op: BinaryOperator::Add,
                     left: zero_splat,
                     right: five_splat,
                 },

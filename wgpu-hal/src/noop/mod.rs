@@ -179,6 +179,7 @@ pub const CAPABILITIES: crate::Capabilities = {
             max_uniform_buffers_per_shader_stage: ALLOC_MAX_U32,
             max_binding_array_elements_per_shader_stage: ALLOC_MAX_U32,
             max_binding_array_sampler_elements_per_shader_stage: ALLOC_MAX_U32,
+            max_binding_array_acceleration_structure_elements_per_shader_stage: ALLOC_MAX_U32,
             max_uniform_buffer_binding_size: ALLOC_MAX_U64,
             max_storage_buffer_binding_size: ALLOC_MAX_U64,
             max_vertex_buffers: ALLOC_MAX_U32,
@@ -285,6 +286,16 @@ impl crate::Adapter for Context {
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         wgt::PresentationTimestamp::INVALID_TIMESTAMP
+    }
+
+    fn get_ordered_buffer_usages(&self) -> wgt::BufferUses {
+        wgt::BufferUses::INCLUSIVE | wgt::BufferUses::MAP_WRITE
+    }
+
+    fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
+        wgt::TextureUses::INCLUSIVE
+            | wgt::TextureUses::COLOR_TARGET
+            | wgt::TextureUses::DEPTH_STENCIL_WRITE
     }
 }
 

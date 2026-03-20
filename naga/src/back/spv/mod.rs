@@ -1157,7 +1157,8 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::BUFFER_BINDING_ARRAY
         | Caps::STORAGE_TEXTURE_BINDING_ARRAY
         | Caps::STORAGE_BUFFER_BINDING_ARRAY
-        | Caps::CLIP_DISTANCE
+        | Caps::ACCELERATION_STRUCTURE_BINDING_ARRAY
+        | Caps::CLIP_DISTANCES
         // No cull distance
         | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
         | Caps::MULTIVIEW
@@ -1190,4 +1191,6 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::PER_VERTEX
         // No RAY_TRACING_PIPELINE
         | Caps::DRAW_INDEX
+        | Caps::MEMORY_DECORATION_COHERENT
+        | Caps::MEMORY_DECORATION_VOLATILE
 }

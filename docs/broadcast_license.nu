@@ -13,6 +13,7 @@ let crates = [
     "wgpu-core/platform-deps/windows-linux-android",
     "wgpu-hal",
     "wgpu-info",
+    "wgpu-naga-bridge",
     "wgpu-types",
     "naga",
     "naga-cli",

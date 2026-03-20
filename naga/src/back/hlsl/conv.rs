@@ -153,7 +153,7 @@ impl crate::BuiltIn {
         Ok(match self {
             Self::Position { .. } => "SV_Position",
             // vertex
-            Self::ClipDistance => "SV_ClipDistance",
+            Self::ClipDistances => "SV_ClipDistance",
             Self::CullDistance => "SV_CullDistance",
             Self::InstanceIndex => "SV_InstanceID",
             Self::VertexIndex => "SV_VertexID",

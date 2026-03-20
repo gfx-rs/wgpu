@@ -401,6 +401,11 @@ pub enum AddressSpace {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum BuiltIn {
+    // This must be at the top so that it gets sorted to the top. PrimitiveIndex is considered a non SV
+    // by FXC so it must appear before any other SVs.
+    /// Read in fragment shaders, written in mesh shaders, read in any and closest hit shaders.
+    PrimitiveIndex,
+
     /// Written in vertex/mesh shaders, read in fragment shaders
     Position { invariant: bool },
     /// Read in task, mesh, vertex, and fragment shaders
@@ -411,7 +416,7 @@ pub enum BuiltIn {
     /// Read in vertex shaders
     BaseVertex,
     /// Written in vertex & mesh shaders
-    ClipDistance,
+    ClipDistances,
     /// Written in vertex & mesh shaders
     CullDistance,
     /// Read in vertex, any- and closest-hit shaders
@@ -429,8 +434,6 @@ pub enum BuiltIn {
     PointCoord,
     /// Read in fragment shaders
     FrontFacing,
-    /// Read in fragment shaders, written in mesh shaders, read in any and closest hit shaders.
-    PrimitiveIndex,
     /// Read in fragment shaders
     Barycentric { perspective: bool },
     /// Read in fragment shaders
@@ -724,6 +727,22 @@ bitflags::bitflags! {
         const STORE = 0x2;
         /// Storage can be used as a target for atomic ops.
         const ATOMIC = 0x4;
+    }
+}
+
+bitflags::bitflags! {
+    /// Memory decorations for global variables.
+    #[cfg_attr(feature = "serialize", derive(Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(Deserialize))]
+    #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+    #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    pub struct MemoryDecorations: u8 {
+        /// Reads and writes are automatically visible to other invocations
+        /// without explicit barriers.
+        const COHERENT = 0x1;
+        /// The variable may be modified by something external to the shader,
+        /// preventing certain compiler optimizations.
+        const VOLATILE = 0x2;
     }
 }
 
@@ -1170,6 +1189,13 @@ pub struct GlobalVariable {
     ///
     /// This refers to an [`Expression`] in [`Module::global_expressions`].
     pub init: Option<Handle<Expression>>,
+    /// Memory decorations for this variable.
+    ///
+    /// These are meaningful for storage address space variables in SPIR-V,
+    /// where they map to SPIR-V memory decorations on the variable.
+    ///
+    /// In WGSL, these can be set with attributes like `@coherent` or `@volatile`.
+    pub memory_decorations: MemoryDecorations,
 }
 
 /// Variable defined at function level.

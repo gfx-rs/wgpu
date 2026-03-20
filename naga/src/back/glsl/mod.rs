@@ -626,7 +626,7 @@ pub fn supported_capabilities() -> valid::Capabilities {
     Caps::IMMEDIATES
         | Caps::FLOAT64
         | Caps::PRIMITIVE_INDEX
-        | Caps::CLIP_DISTANCE
+        | Caps::CLIP_DISTANCES
         | Caps::MULTIVIEW
         | Caps::EARLY_DEPTH_TEST
         | Caps::MULTISAMPLED_SHADING
@@ -642,4 +642,6 @@ pub fn supported_capabilities() -> valid::Capabilities {
         | Caps::SHADER_FLOAT16_IN_FLOAT32
         | Caps::SHADER_BARYCENTRICS
         | Caps::DRAW_INDEX
+        | Caps::MEMORY_DECORATION_COHERENT
+        | Caps::MEMORY_DECORATION_VOLATILE
 }

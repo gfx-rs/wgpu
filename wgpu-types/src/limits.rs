@@ -38,12 +38,17 @@ macro_rules! with_limits {
         $macro_name!(max_storage_textures_per_shader_stage, Ordering::Less);
         $macro_name!(max_uniform_buffers_per_shader_stage, Ordering::Less);
         $macro_name!(max_binding_array_elements_per_shader_stage, Ordering::Less);
+        $macro_name!(
+            max_binding_array_acceleration_structure_elements_per_shader_stage,
+            Ordering::Less
+        );
         $macro_name!(max_uniform_buffer_binding_size, Ordering::Less);
         $macro_name!(max_storage_buffer_binding_size, Ordering::Less);
         $macro_name!(max_vertex_buffers, Ordering::Less);
         $macro_name!(max_buffer_size, Ordering::Less);
         $macro_name!(max_vertex_attributes, Ordering::Less);
         $macro_name!(max_vertex_buffer_array_stride, Ordering::Less);
+        $macro_name!(max_inter_stage_shader_variables, Ordering::Less);
         $macro_name!(min_uniform_buffer_offset_alignment, Ordering::Greater);
         $macro_name!(min_storage_buffer_offset_alignment, Ordering::Greater);
         $macro_name!(max_color_attachments, Ordering::Less);
@@ -155,6 +160,10 @@ pub struct Limits {
     ///
     /// This "defaults" to 0. However if binding arrays are supported, all devices can support 500,000. Higher is "better".
     pub max_binding_array_elements_per_shader_stage: u32,
+    /// Amount of individual acceleration structures within binding arrays that can be accessed in a single shader stage.
+    ///
+    /// This "defaults" to 0. Higher is "better".
+    pub max_binding_array_acceleration_structure_elements_per_shader_stage: u32,
     /// Amount of individual samplers within binding arrays that can be accessed in a single shader stage.
     ///
     /// This "defaults" to 0. However if binding arrays are supported, all devices can support 1,000. Higher is "better".
@@ -224,7 +233,7 @@ pub struct Limits {
     ///
     /// Expect the size to be:
     /// - Vulkan: 128-256 bytes
-    /// - DX12: 256 bytes
+    /// - DX12: 128 bytes
     /// - Metal: 4096 bytes
     /// - OpenGL doesn't natively support immediates, and are emulated with uniforms,
     ///   so this number is less useful but likely 256.
@@ -318,6 +327,7 @@ impl Limits {
     ///     max_storage_textures_per_shader_stage: 4,
     ///     max_uniform_buffers_per_shader_stage: 12,
     ///     max_binding_array_elements_per_shader_stage: 0,
+    ///     max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
     ///     max_binding_array_sampler_elements_per_shader_stage: 0,
     ///     max_uniform_buffer_binding_size: 64 << 10, // (64 KiB)
     ///     max_storage_buffer_binding_size: 128 << 20, // (128 MiB)
@@ -376,6 +386,7 @@ impl Limits {
             max_storage_textures_per_shader_stage: 4,
             max_uniform_buffers_per_shader_stage: 12,
             max_binding_array_elements_per_shader_stage: 0,
+            max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
             max_binding_array_sampler_elements_per_shader_stage: 0,
             max_uniform_buffer_binding_size: 64 << 10, // (64 KiB)
             max_storage_buffer_binding_size: 128 << 20, // (128 MiB)
@@ -438,6 +449,7 @@ impl Limits {
     ///     max_storage_textures_per_shader_stage: 4,
     ///     max_uniform_buffers_per_shader_stage: 12,
     ///     max_binding_array_elements_per_shader_stage: 0,
+    ///     max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
     ///     max_binding_array_sampler_elements_per_shader_stage: 0,
     ///     max_uniform_buffer_binding_size: 16 << 10, // * (16 KiB)
     ///     max_storage_buffer_binding_size: 128 << 20, // (128 MiB)
@@ -516,6 +528,7 @@ impl Limits {
     ///     max_storage_textures_per_shader_stage: 0, // +
     ///     max_uniform_buffers_per_shader_stage: 11, // +
     ///     max_binding_array_elements_per_shader_stage: 0,
+    ///     max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
     ///     max_binding_array_sampler_elements_per_shader_stage: 0,
     ///     max_uniform_buffer_binding_size: 16 << 10, // * (16 KiB)
     ///     max_storage_buffer_binding_size: 0, // * +

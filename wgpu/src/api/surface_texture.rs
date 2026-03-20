@@ -1,5 +1,3 @@
-use core::{error, fmt};
-
 use crate::*;
 
 /// Surface texture that can be rendered to.
@@ -12,9 +10,6 @@ use crate::*;
 pub struct SurfaceTexture {
     /// Accessible view of the frame.
     pub texture: Texture,
-    /// `true` if the acquired buffer can still be used for rendering,
-    /// but should be recreated for maximum performance.
-    pub suboptimal: bool,
     pub(crate) presented: bool,
     pub(crate) detail: dispatch::DispatchSurfaceOutputDetail,
 }
@@ -53,44 +48,43 @@ impl Drop for SurfaceTexture {
     }
 }
 
-/// Result of an unsuccessful call to [`Surface::get_current_texture`].
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum SurfaceError {
+/// Result of a call to [`Surface::get_current_texture`].
+///
+/// See variant documentation for how to handle each case.
+#[derive(Debug)]
+pub enum CurrentSurfaceTexture {
+    /// Successfully acquired a surface texture with no issues.
+    Success(SurfaceTexture),
+    /// Successfully acquired a surface texture, but texture no longer matches the properties of the underlying surface.
+    /// It's highly recommended to call [`Surface::configure`] again for optimal performance.
+    Suboptimal(SurfaceTexture),
     /// A timeout was encountered while trying to acquire the next frame.
+    ///
+    /// Applications should skip the current frame and try again later.
     Timeout,
     /// The window is occluded (e.g. minimized or behind another window).
     ///
-    /// Try again once the window is no longer occluded.
+    /// Applications should skip the current frame and try again once the window
+    /// is no longer occluded.
     Occluded,
-    /// The underlying surface has changed, and therefore the swap chain must be updated.
+    /// The underlying surface has changed, and therefore the surface configuration is outdated.
     ///
-    /// Reconfigure your surface and try again.
+    /// Call [`Surface::configure()`] and try again.
     Outdated,
-    /// The swap chain has been lost and needs to be recreated.
+    /// The surface has been lost and needs to be recreated.
     ///
-    /// Reconfigure your surface and try again.
+    /// If the device as a whole is lost (see [`set_device_lost_callback()`][crate::Device::set_device_lost_callback]), then
+    /// you need to recreate the device and all resources.
+    /// Otherwise, call [`Instance::create_surface()`] to recreate the surface,
+    /// then [`Surface::configure()`], and try again.
     Lost,
-    /// There is no more memory left to allocate a new frame.
-    OutOfMemory,
-    /// Acquiring a texture failed with a generic error. Check error callbacks for more information.
-    Other,
+    /// A validation error inside [`Surface::get_current_texture()`] was raised
+    /// and caught by an [error scope](crate::Device::push_error_scope) or
+    /// [`on_uncaptured_error()`][crate::Device::on_uncaptured_error].
+    ///
+    /// Applications should attend to the validation error and try again.
+    Validation,
 }
-static_assertions::assert_impl_all!(SurfaceError: Send, Sync);
-
-impl fmt::Display for SurfaceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", match self {
-            Self::Timeout => "A timeout was encountered while trying to acquire the next frame",
-            Self::Occluded => "The window is occluded (e.g. minimized or behind another window)",
-            Self::Outdated => "The underlying surface has changed, and therefore the swap chain must be updated",
-            Self::Lost =>  "The swap chain has been lost and needs to be recreated",
-            Self::OutOfMemory => "There is no more memory left to allocate a new frame",
-            Self::Other => "Acquiring a texture failed with a generic error. Check error callbacks for more information",
-        })
-    }
-}
-
-impl error::Error for SurfaceError {}
 
 fn thread_panicking() -> bool {
     cfg_if::cfg_if! {

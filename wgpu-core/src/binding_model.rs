@@ -327,6 +327,7 @@ pub enum BindingTypeMaxCountErrorKind {
     UniformBuffers,
     BindingArrayElements,
     BindingArraySamplerElements,
+    BindingArrayAccelerationStructureElements,
     AccelerationStructures,
 }
 
@@ -353,6 +354,9 @@ impl BindingTypeMaxCountErrorKind {
             }
             BindingTypeMaxCountErrorKind::BindingArraySamplerElements => {
                 "max_binding_array_sampler_elements_per_shader_stage"
+            }
+            BindingTypeMaxCountErrorKind::BindingArrayAccelerationStructureElements => {
+                "max_binding_array_acceleration_structure_elements_per_shader_stage"
             }
             BindingTypeMaxCountErrorKind::AccelerationStructures => {
                 "max_acceleration_structures_per_shader_stage"
@@ -433,6 +437,7 @@ pub(crate) struct BindingTypeMaxCountValidator {
     acceleration_structures: PerStageBindingTypeCounter,
     binding_array_elements: PerStageBindingTypeCounter,
     binding_array_sampler_elements: PerStageBindingTypeCounter,
+    binding_array_acceleration_structure_elements: PerStageBindingTypeCounter,
     has_bindless_array: bool,
 }
 
@@ -444,9 +449,16 @@ impl BindingTypeMaxCountValidator {
             self.binding_array_elements.add(binding.visibility, count);
             self.has_bindless_array = true;
 
-            if let wgt::BindingType::Sampler(_) = binding.ty {
-                self.binding_array_sampler_elements
-                    .add(binding.visibility, count);
+            match binding.ty {
+                wgt::BindingType::Sampler(_) => {
+                    self.binding_array_sampler_elements
+                        .add(binding.visibility, count);
+                }
+                wgt::BindingType::AccelerationStructure { .. } => {
+                    self.binding_array_acceleration_structure_elements
+                        .add(binding.visibility, count);
+                }
+                _ => {}
             }
         } else {
             match binding.ty {
@@ -513,6 +525,8 @@ impl BindingTypeMaxCountValidator {
             .merge(&other.binding_array_elements);
         self.binding_array_sampler_elements
             .merge(&other.binding_array_sampler_elements);
+        self.binding_array_acceleration_structure_elements
+            .merge(&other.binding_array_acceleration_structure_elements);
     }
 
     pub(crate) fn validate(&self, limits: &wgt::Limits) -> Result<(), BindingTypeMaxCountError> {
@@ -560,6 +574,11 @@ impl BindingTypeMaxCountValidator {
             limits.max_binding_array_sampler_elements_per_shader_stage,
             BindingTypeMaxCountErrorKind::BindingArraySamplerElements,
         )?;
+        self.binding_array_acceleration_structure_elements
+            .validate(
+                limits.max_binding_array_acceleration_structure_elements_per_shader_stage,
+                BindingTypeMaxCountErrorKind::BindingArrayAccelerationStructureElements,
+            )?;
         self.acceleration_structures.validate(
             limits.max_acceleration_structures_per_shader_stage,
             BindingTypeMaxCountErrorKind::AccelerationStructures,
@@ -600,9 +619,11 @@ pub struct BindGroupEntry<
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
+    [TLAS]: ToOwned,
     <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
     <[S] as ToOwned>::Owned: fmt::Debug,
     <[TV] as ToOwned>::Owned: fmt::Debug,
+    <[TLAS] as ToOwned>::Owned: fmt::Debug,
 {
     /// Slot for which binding provides resource. Corresponds to an entry of the same
     /// binding index in the [`BindGroupLayoutDescriptor`].
@@ -640,9 +661,11 @@ pub struct BindGroupDescriptor<
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
+    [TLAS]: ToOwned,
     <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
     <[S] as ToOwned>::Owned: fmt::Debug,
     <[TV] as ToOwned>::Owned: fmt::Debug,
+    <[TLAS] as ToOwned>::Owned: fmt::Debug,
     [BindGroupEntry<'a, B, S, TV, TLAS, ET>]: ToOwned,
     <[BindGroupEntry<'a, B, S, TV, TLAS, ET>] as ToOwned>::Owned: fmt::Debug,
 {
@@ -835,17 +858,51 @@ impl WebGpuError for CreatePipelineLayoutError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ImmediateUploadError {
-    #[error("Provided immediate data written to offset {offset}..{end_offset} overruns the immediate data range with a size of {size}")]
-    TooLarge {
-        offset: u32,
-        end_offset: u32,
-        size: u32,
+    #[error(
+        "Start offset {start_offset} overruns the immediate data range with a size of {immediate_size}"
+    )]
+    StartOffsetOverrun {
+        start_offset: u32,
+        immediate_size: u32,
     },
     #[error(
-        "Provided immediate data offset {0} does not respect `IMMEDIATE_DATA_ALIGNMENT` ({ida})",
+        "Provided immediate data start offset {0} does not respect \
+        `IMMEDIATE_DATA_ALIGNMENT` ({ida})",
         ida = wgt::IMMEDIATE_DATA_ALIGNMENT
     )]
-    Unaligned(u32),
+    StartOffsetUnaligned(u32),
+    #[error(
+        "Provided immediate data byte size {0} does not respect \
+        `IMMEDIATE_DATA_ALIGNMENT` ({ida})",
+        ida = wgt::IMMEDIATE_DATA_ALIGNMENT
+    )]
+    SizeUnaligned(u32),
+    #[error(
+        "Provided immediate data start offset {} + size {} overruns the immediate data range \
+        with a size of {}",
+        start_offset,
+        size,
+        immediate_size
+    )]
+    EndOffsetOverrun {
+        start_offset: u32,
+        size: u32,
+        immediate_size: u32,
+    },
+    #[error("Start index {start_index} overruns the value data range with {data_size} element(s)")]
+    ValueStartIndexOverrun { start_index: u32, data_size: usize },
+    #[error(
+        "Start index {} + count of {} overruns the value data range \
+        with {} element(s)",
+        start_index,
+        count,
+        data_size
+    )]
+    ValueEndIndexOverrun {
+        start_index: u32,
+        count: u32,
+        data_size: usize,
+    },
 }
 
 impl WebGpuError for ImmediateUploadError {
@@ -947,23 +1004,35 @@ impl PipelineLayout {
     pub(crate) fn validate_immediates_ranges(
         &self,
         offset: u32,
-        end_offset: u32,
+        size_bytes: u32,
     ) -> Result<(), ImmediateUploadError> {
         // Don't need to validate size against the immediate data size limit here,
         // as immediate data ranges are already validated to be within bounds,
         // and we validate that they are within the ranges.
 
         if !offset.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
-            return Err(ImmediateUploadError::Unaligned(offset));
+            return Err(ImmediateUploadError::StartOffsetUnaligned(offset));
         }
 
-        if end_offset > self.immediate_size {
-            return Err(ImmediateUploadError::TooLarge {
-                offset,
-                end_offset,
-                size: self.immediate_size,
+        if !size_bytes.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
+            return Err(ImmediateUploadError::SizeUnaligned(offset));
+        }
+
+        if offset > self.immediate_size {
+            return Err(ImmediateUploadError::StartOffsetOverrun {
+                start_offset: offset,
+                immediate_size: self.immediate_size,
             });
         }
+
+        if size_bytes > self.immediate_size - offset {
+            return Err(ImmediateUploadError::EndOffsetOverrun {
+                start_offset: offset,
+                size: size_bytes,
+                immediate_size: self.immediate_size,
+            });
+        }
+
         Ok(())
     }
 }
@@ -1007,9 +1076,11 @@ pub enum BindingResource<
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
+    [TLAS]: ToOwned,
     <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
     <[S] as ToOwned>::Owned: fmt::Debug,
     <[TV] as ToOwned>::Owned: fmt::Debug,
+    <[TLAS] as ToOwned>::Owned: fmt::Debug,
 {
     Buffer(BufferBinding<B>),
     #[cfg_attr(
@@ -1030,6 +1101,11 @@ pub enum BindingResource<
     )]
     TextureViewArray(Cow<'a, [TV]>),
     AccelerationStructure(TLAS),
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(deserialize = "<[TLAS] as ToOwned>::Owned: Deserialize<'de>"))
+    )]
+    AccelerationStructureArray(Cow<'a, [TLAS]>),
     ExternalTexture(ET),
 }
 

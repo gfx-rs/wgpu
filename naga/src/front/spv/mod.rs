@@ -189,6 +189,8 @@ bitflags::bitflags! {
     struct DecorationFlags: u32 {
         const NON_READABLE = 0x1;
         const NON_WRITABLE = 0x2;
+        const COHERENT = 0x4;
+        const VOLATILE = 0x8;
     }
 }
 
@@ -202,6 +204,17 @@ impl DecorationFlags {
             access &= !crate::StorageAccess::STORE;
         }
         access
+    }
+
+    fn to_memory_decorations(self) -> crate::MemoryDecorations {
+        let mut decorations = crate::MemoryDecorations::empty();
+        if self.contains(DecorationFlags::COHERENT) {
+            decorations |= crate::MemoryDecorations::COHERENT;
+        }
+        if self.contains(DecorationFlags::VOLATILE) {
+            decorations |= crate::MemoryDecorations::VOLATILE;
+        }
+        decorations
     }
 }
 
@@ -812,6 +825,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             }
             spirv::Decoration::NonWritable => {
                 dec.flags |= DecorationFlags::NON_WRITABLE;
+            }
+            spirv::Decoration::Coherent => {
+                dec.flags |= DecorationFlags::COHERENT;
+            }
+            spirv::Decoration::Volatile => {
+                dec.flags |= DecorationFlags::VOLATILE;
             }
             spirv::Decoration::ColMajor => {
                 dec.matrix_major = Some(Majority::Column);
@@ -3007,6 +3026,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     space,
                     ty,
                     init,
+                    memory_decorations: dec.flags.to_memory_decorations(),
                 };
                 (Variable::Global, var)
             }
@@ -3054,6 +3074,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     binding: None,
                     ty,
                     init: None,
+                    memory_decorations: crate::MemoryDecorations::empty(),
                 };
 
                 let inner = Variable::Input(crate::FunctionArgument {
@@ -3114,6 +3135,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     binding: None,
                     ty,
                     init,
+                    memory_decorations: crate::MemoryDecorations::empty(),
                 };
                 let inner = Variable::Output(crate::FunctionResult { ty, binding });
                 (inner, var)

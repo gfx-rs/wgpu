@@ -26,7 +26,8 @@ use crate::device::trace;
 use crate::{
     api_log,
     binding_model::{
-        self, BindGroup, BindGroupLateBufferBindingInfo, BindGroupLayout, BindGroupLayoutEntryError,
+        self, BindGroup, BindGroupLateBufferBindingInfo, BindGroupLayout,
+        BindGroupLayoutEntryError, CreateBindGroupError, CreateBindGroupLayoutError,
     },
     command, conv,
     device::{
@@ -41,7 +42,7 @@ use crate::{
     },
     instance::{Adapter, RequestDeviceError},
     lock::{rank, Mutex, RwLock},
-    pipeline,
+    pipeline::{self, ColorStateError},
     pool::ResourcePool,
     present,
     resource::{
@@ -260,6 +261,16 @@ pub struct Device {
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelCapabilities,
+    /// Buffer uses listed here, are expected to be ordered by the underlying hardware.
+    /// If a usage is ordered, then if the buffer state doesn't change between draw calls,
+    /// there are no barriers needed for synchronization.
+    /// See the implementations of [`hal::Adapter::get_ordered_buffer_usages`] for hardware specific info
+    pub(crate) ordered_buffer_usages: wgt::BufferUses,
+    /// Texture uses listed here, are expected to be ordered by the underlying hardware.
+    /// If a usage is ordered, then if the buffer state doesn't change between draw calls,
+    /// there are no barriers needed for synchronization.
+    /// See the implementations of [`hal::Adapter::get_ordered_texture_usages`] for hardware specific info
+    pub(crate) ordered_texture_usages: wgt::TextureUses,
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
     pub(crate) usage_scopes: UsageScopePool,
@@ -297,7 +308,8 @@ impl Drop for Device {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
 
-        // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
+        // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this
+        // point.
         let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.empty_bgl anymore after this point.
         let empty_bgl = unsafe { ManuallyDrop::take(&mut self.empty_bgl) };
@@ -433,6 +445,9 @@ impl Device {
             }
         };
 
+        let ordered_buffer_usages = adapter.raw.adapter.get_ordered_buffer_usages();
+        let ordered_texture_usages = adapter.raw.adapter.get_ordered_texture_usages();
+
         let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
 
         let command_allocator = command::CommandAllocator::new();
@@ -527,7 +542,10 @@ impl Device {
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
             device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
-            trackers: Mutex::new(rank::DEVICE_TRACKERS, DeviceTracker::new()),
+            trackers: Mutex::new(
+                rank::DEVICE_TRACKERS,
+                DeviceTracker::new(ordered_buffer_usages, ordered_texture_usages),
+            ),
             tracker_indices: TrackerIndexAllocators::new(),
             bgl_pool: ResourcePool::new(),
             #[cfg(feature = "trace")]
@@ -536,6 +554,8 @@ impl Device {
             limits: desc.required_limits.clone(),
             features: desc.required_features,
             downlevel,
+            ordered_buffer_usages,
+            ordered_texture_usages,
             instance_flags,
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
@@ -880,10 +900,11 @@ impl Device {
             }
         };
 
-        // Maintain all finished submissions on the queue, updating the relevant user closures and collecting if the queue is empty.
+        // Maintain all finished submissions on the queue, updating the relevant user closures and
+        // collecting if the queue is empty.
         //
-        // We don't use the result of the wait here, as we want to progress forward as far as possible
-        // and the wait could have been for submissions that finished long ago.
+        // We don't use the result of the wait here, as we want to progress forward as far as
+        // possible and the wait could have been for submissions that finished long ago.
         let mut queue_empty = false;
         if let Some(queue) = self.get_queue() {
             let queue_result = queue.maintain(current_finished_submission, &snatch_guard);
@@ -896,10 +917,13 @@ impl Device {
             // DEADLOCK PREVENTION: We must drop `snatch_guard` before `queue` goes out of scope.
             //
             // `Queue::drop` acquires the snatch guard. If we still hold it when `queue` is dropped
-            // at the end of this block, we would deadlock. This can happen in the following scenario:
+            // at the end of this block, we would deadlock. This can happen in the following
+            // scenario:
             //
-            // - Thread A calls `Device::maintain` while Thread B holds the last strong ref to the queue.
-            // - Thread A calls `self.get_queue()`, obtaining a new strong ref, and enters this branch.
+            // - Thread A calls `Device::maintain` while Thread B holds the last strong ref to the
+            //   queue.
+            // - Thread A calls `self.get_queue()`, obtaining a new strong ref, and enters this
+            //   branch.
             // - Thread B drops its strong ref, making Thread A's ref the last one.
             // - When `queue` goes out of scope here, `Queue::drop` runs and tries to acquire the
             //   snatch guard — but Thread A (this thread) still holds it, causing a deadlock.
@@ -908,14 +932,20 @@ impl Device {
             drop(snatch_guard);
         };
 
-        // Based on the queue empty status, and the current finished submission index, determine the result of the poll.
+        // Based on the queue empty status, and the current finished submission index, determine
+        // the result of the poll.
         let result = if queue_empty {
             if let Some(wait_submission_index) = wait_submission_index {
-                // Assert to ensure that if we received a queue empty status, the fence shows the correct value.
-                // This is defensive, as this should never be hit.
+                // Assert to ensure that if we received a queue empty status, the fence shows the
+                // correct value. This is defensive, as this should never be hit.
                 assert!(
                     current_finished_submission >= wait_submission_index,
-                    "If the queue is empty, the current submission index ({current_finished_submission}) should be at least the wait submission index ({wait_submission_index})"
+                    concat!(
+                        "If the queue is empty, the current submission index ",
+                        "({}) should be at least the wait submission index ({})",
+                    ),
+                    current_finished_submission,
+                    wait_submission_index,
                 );
             }
 
@@ -2531,7 +2561,7 @@ impl Device {
     pub fn create_bind_group_layout(
         self: &Arc<Self>,
         desc: &binding_model::BindGroupLayoutDescriptor,
-    ) -> Result<Arc<BindGroupLayout>, binding_model::CreateBindGroupLayoutError> {
+    ) -> Result<Arc<BindGroupLayout>, CreateBindGroupLayoutError> {
         self.check_is_valid()?;
 
         let entry_map = bgl::EntryMap::from_entries(&desc.entries)?;
@@ -2556,7 +2586,7 @@ impl Device {
         label: &crate::Label,
         entry_map: bgl::EntryMap,
         origin: bgl::Origin,
-    ) -> Result<Arc<BindGroupLayout>, binding_model::CreateBindGroupLayoutError> {
+    ) -> Result<Arc<BindGroupLayout>, CreateBindGroupLayoutError> {
         #[derive(PartialEq)]
         enum WritableStorage {
             Yes,
@@ -2565,12 +2595,10 @@ impl Device {
 
         for entry in entry_map.values() {
             if entry.binding >= self.limits.max_bindings_per_bind_group {
-                return Err(
-                    binding_model::CreateBindGroupLayoutError::InvalidBindingIndex {
-                        binding: entry.binding,
-                        maximum: self.limits.max_bindings_per_bind_group,
-                    },
-                );
+                return Err(CreateBindGroupLayoutError::InvalidBindingIndex {
+                    binding: entry.binding,
+                    maximum: self.limits.max_bindings_per_bind_group,
+                });
             }
 
             use wgt::BindingType as Bt;
@@ -2616,7 +2644,7 @@ impl Device {
                     sample_type: TextureSampleType::Float { filterable: true },
                     ..
                 } => {
-                    return Err(binding_model::CreateBindGroupLayoutError::Entry {
+                    return Err(CreateBindGroupLayoutError::Entry {
                         binding: entry.binding,
                         error:
                             BindGroupLayoutEntryError::SampleTypeFloatFilterableBindingMultisampled,
@@ -2628,7 +2656,7 @@ impl Device {
                     ..
                 } => {
                     if multisampled && view_dimension != TextureViewDimension::D2 {
-                        return Err(binding_model::CreateBindGroupLayoutError::Entry {
+                        return Err(CreateBindGroupLayoutError::Entry {
                             binding: entry.binding,
                             error: BindGroupLayoutEntryError::Non2DMultisampled(view_dimension),
                         });
@@ -2648,7 +2676,7 @@ impl Device {
 
                     match view_dimension {
                         TextureViewDimension::Cube | TextureViewDimension::CubeArray => {
-                            return Err(binding_model::CreateBindGroupLayoutError::Entry {
+                            return Err(CreateBindGroupLayoutError::Entry {
                                 binding: entry.binding,
                                 error: BindGroupLayoutEntryError::StorageTextureCube,
                             })
@@ -2659,7 +2687,7 @@ impl Device {
                         wgt::StorageTextureAccess::Atomic
                             if !self.features.contains(wgt::Features::TEXTURE_ATOMIC) =>
                         {
-                            return Err(binding_model::CreateBindGroupLayoutError::Entry {
+                            return Err(CreateBindGroupLayoutError::Entry {
                                 binding: entry.binding,
                                 error: BindGroupLayoutEntryError::StorageTextureAtomic,
                             });
@@ -2669,7 +2697,7 @@ impl Device {
 
                     let format_features =
                         self.describe_format_features(format).map_err(|error| {
-                            binding_model::CreateBindGroupLayoutError::Entry {
+                            CreateBindGroupLayoutError::Entry {
                                 binding: entry.binding,
                                 error: BindGroupLayoutEntryError::MissingFeatures(error),
                             }
@@ -2683,11 +2711,13 @@ impl Device {
                     };
 
                     if !format_features.flags.contains(required_feature_flag) {
-                        return Err(binding_model::CreateBindGroupLayoutError::UnsupportedStorageTextureAccess {
-                            binding: entry.binding,
-                            access,
-                            format,
-                        });
+                        return Err(
+                            CreateBindGroupLayoutError::UnsupportedStorageTextureAccess {
+                                binding: entry.binding,
+                                access,
+                                format,
+                            },
+                        );
                     }
 
                     (
@@ -2708,23 +2738,25 @@ impl Device {
                 }
                 Bt::AccelerationStructure { vertex_return } => {
                     self.require_features(wgt::Features::EXPERIMENTAL_RAY_QUERY)
-                        .map_err(|e| binding_model::CreateBindGroupLayoutError::Entry {
+                        .map_err(|e| CreateBindGroupLayoutError::Entry {
                             binding: entry.binding,
                             error: e.into(),
                         })?;
                     if vertex_return {
                         self.require_features(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)
-                            .map_err(|e| binding_model::CreateBindGroupLayoutError::Entry {
+                            .map_err(|e| CreateBindGroupLayoutError::Entry {
                                 binding: entry.binding,
                                 error: e.into(),
                             })?;
                     }
-
-                    (None, WritableStorage::No)
+                    (
+                        Some(wgt::Features::ACCELERATION_STRUCTURE_BINDING_ARRAY),
+                        WritableStorage::No,
+                    )
                 }
                 Bt::ExternalTexture => {
                     self.require_features(wgt::Features::EXTERNAL_TEXTURE)
-                        .map_err(|e| binding_model::CreateBindGroupLayoutError::Entry {
+                        .map_err(|e| CreateBindGroupLayoutError::Entry {
                             binding: entry.binding,
                             error: e.into(),
                         })?;
@@ -2736,16 +2768,16 @@ impl Device {
             if entry.count.is_some() {
                 required_features |= array_feature
                     .ok_or(BindGroupLayoutEntryError::ArrayUnsupported)
-                    .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
+                    .map_err(|error| CreateBindGroupLayoutError::Entry {
                         binding: entry.binding,
                         error,
                     })?;
             }
 
             if entry.visibility.contains_unknown_bits() {
-                return Err(
-                    binding_model::CreateBindGroupLayoutError::InvalidVisibility(entry.visibility),
-                );
+                return Err(CreateBindGroupLayoutError::InvalidVisibility(
+                    entry.visibility,
+                ));
             }
 
             if entry.visibility.contains(wgt::ShaderStages::VERTEX) {
@@ -2768,13 +2800,13 @@ impl Device {
 
             self.require_features(required_features)
                 .map_err(BindGroupLayoutEntryError::MissingFeatures)
-                .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
+                .map_err(|error| CreateBindGroupLayoutError::Entry {
                     binding: entry.binding,
                     error,
                 })?;
             self.require_downlevel_flags(required_downlevel_flags)
                 .map_err(BindGroupLayoutEntryError::MissingDownlevelFlags)
-                .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
+                .map_err(|error| CreateBindGroupLayoutError::Entry {
                     binding: entry.binding,
                     error,
                 })?;
@@ -2797,7 +2829,7 @@ impl Device {
         // definitely going to violate limits too, lets catch it now.
         count_validator
             .validate(&self.limits)
-            .map_err(binding_model::CreateBindGroupLayoutError::TooManyBindings)?;
+            .map_err(CreateBindGroupLayoutError::TooManyBindings)?;
 
         // Validate that binding arrays don't conflict with dynamic offsets.
         count_validator.validate_binding_arrays()?;
@@ -2830,8 +2862,7 @@ impl Device {
         late_buffer_binding_sizes: &mut FastHashMap<u32, wgt::BufferSize>,
         used: &mut BindGroupStates,
         snatch_guard: &'a SnatchGuard<'a>,
-    ) -> Result<hal::BufferBinding<'a, dyn hal::DynBuffer>, binding_model::CreateBindGroupError>
-    {
+    ) -> Result<hal::BufferBinding<'a, dyn hal::DynBuffer>, CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
         let (binding_ty, dynamic, min_size) = match decl.ty {
@@ -2890,11 +2921,7 @@ impl Device {
             // Requested size not specified
             None => None,
             // Requested zero size
-            Some(None) => {
-                return Err(binding_model::CreateBindGroupError::BindingZeroSize(
-                    buffer.error_ident(),
-                ))
-            }
+            Some(None) => return Err(CreateBindGroupError::BindingZeroSize(buffer.error_ident())),
         };
         let (bb, bind_size) = buffer.binding(bb.offset, req_size, snatch_guard)?;
 
@@ -2970,7 +2997,7 @@ impl Device {
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         sampler: &'a Arc<Sampler>,
-    ) -> Result<&'a dyn hal::DynSampler, binding_model::CreateBindGroupError> {
+    ) -> Result<&'a dyn hal::DynSampler, CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
         used.samplers.insert_single(sampler.clone());
@@ -3021,8 +3048,7 @@ impl Device {
         used: &mut BindGroupStates,
         used_texture_ranges: &mut Vec<TextureInitTrackerAction>,
         snatch_guard: &'a SnatchGuard<'a>,
-    ) -> Result<hal::TextureBinding<'a, dyn hal::DynTextureView>, binding_model::CreateBindGroupError>
-    {
+    ) -> Result<hal::TextureBinding<'a, dyn hal::DynTextureView>, CreateBindGroupError> {
         view.same_device(self)?;
 
         let internal_use = self.texture_use_parameters(
@@ -3061,7 +3087,7 @@ impl Device {
         decl: &wgt::BindGroupLayoutEntry,
         tlas: &'a Arc<Tlas>,
         snatch_guard: &'a SnatchGuard<'a>,
-    ) -> Result<&'a dyn hal::DynAccelerationStructure, binding_model::CreateBindGroupError> {
+    ) -> Result<&'a dyn hal::DynAccelerationStructure, CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
         used.acceleration_structures.insert_single(tlas.clone());
@@ -3099,7 +3125,7 @@ impl Device {
         snatch_guard: &'a SnatchGuard,
     ) -> Result<
         hal::ExternalTextureBinding<'a, dyn hal::DynBuffer, dyn hal::DynTextureView>,
-        binding_model::CreateBindGroupError,
+        CreateBindGroupError,
     > {
         use crate::binding_model::CreateBindGroupError as Error;
 
@@ -3157,7 +3183,7 @@ impl Device {
         snatch_guard: &'a SnatchGuard,
     ) -> Result<
         hal::ExternalTextureBinding<'a, dyn hal::DynBuffer, dyn hal::DynTextureView>,
-        binding_model::CreateBindGroupError,
+        CreateBindGroupError,
     > {
         use crate::binding_model::CreateBindGroupError as Error;
 
@@ -3206,7 +3232,7 @@ impl Device {
     pub fn create_bind_group(
         self: &Arc<Self>,
         desc: binding_model::ResolvedBindGroupDescriptor,
-    ) -> Result<Arc<BindGroup>, binding_model::CreateBindGroupError> {
+    ) -> Result<Arc<BindGroup>, CreateBindGroupError> {
         use crate::binding_model::{CreateBindGroupError as Error, ResolvedBindingResource as Br};
 
         let layout = desc.layout;
@@ -3362,6 +3388,26 @@ impl Device {
                     hal_tlas_s.push(tlas);
                     (res_index, 1)
                 }
+                Br::AccelerationStructureArray(ref tlas_array) => {
+                    // Feature validation for TLAS binding arrays happens at bind group layout
+                    // creation time (mirroring other binding-array resource types). By the time we
+                    // get here, `decl.count` has already been validated against device features.
+                    let num_bindings = tlas_array.len();
+                    Self::check_array_binding(self.features, decl.count, num_bindings)?;
+
+                    let res_index = hal_tlas_s.len();
+                    for tlas in tlas_array.iter() {
+                        let tlas = self.create_tlas_binding(
+                            &mut used,
+                            binding,
+                            decl,
+                            tlas,
+                            &snatch_guard,
+                        )?;
+                        hal_tlas_s.push(tlas);
+                    }
+                    (res_index, num_bindings)
+                }
                 Br::ExternalTexture(ref et) => {
                     let et = self.create_external_texture_binding(
                         binding,
@@ -3449,7 +3495,7 @@ impl Device {
         features: wgt::Features,
         count: Option<NonZeroU32>,
         num_bindings: usize,
-    ) -> Result<(), binding_model::CreateBindGroupError> {
+    ) -> Result<(), CreateBindGroupError> {
         use super::binding_model::CreateBindGroupError as Error;
 
         if let Some(count) = count {
@@ -3484,7 +3530,7 @@ impl Device {
         decl: &wgt::BindGroupLayoutEntry,
         view: &TextureView,
         expected: &'static str,
-    ) -> Result<wgt::TextureUses, binding_model::CreateBindGroupError> {
+    ) -> Result<wgt::TextureUses, CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
         if view
             .desc
@@ -3526,7 +3572,9 @@ impl Device {
                     // unfilterable if filterable feature is explicitly enabled (only hit
                     // if wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES is
                     // enabled)
-                    (Tst::Float { filterable: true }, Tst::Float { .. }) if view.format_features.flags.contains(wgt::TextureFormatFeatureFlags::FILTERABLE) => {}
+                    (Tst::Float { filterable: true }, Tst::Float { .. })
+                        if view.format_features.flags
+                            .contains(wgt::TextureFormatFeatureFlags::FILTERABLE) => {}
                     _ => {
                         return Err(Error::InvalidTextureSampleType {
                             binding,
@@ -3911,7 +3959,8 @@ impl Device {
                     continue;
                 };
 
-                // `bind_group_layouts` might contain duplicate entries, so we need to ignore the result.
+                // `bind_group_layouts` might contain duplicate entries, so we need to ignore the
+                // result.
                 let _ = bgl
                     .exclusive_pipeline
                     .set(binding_model::ExclusivePipeline::Compute(Arc::downgrade(
@@ -4136,9 +4185,7 @@ impl Device {
                     // values (larger than 15), because WebGPU requires that it be validated
                     // on the device timeline.
                     if cs.write_mask.contains_unknown_bits() {
-                        break 'error Some(pipeline::ColorStateError::InvalidWriteMask(
-                            cs.write_mask,
-                        ));
+                        break 'error Some(ColorStateError::InvalidWriteMask(cs.write_mask));
                     }
 
                     let format_features = self.describe_format_features(cs.format)?;
@@ -4146,17 +4193,13 @@ impl Device {
                         .allowed_usages
                         .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
                     {
-                        break 'error Some(pipeline::ColorStateError::FormatNotRenderable(
-                            cs.format,
-                        ));
+                        break 'error Some(ColorStateError::FormatNotRenderable(cs.format));
                     }
                     if cs.blend.is_some() && !format_features.flags.contains(Tfff::BLENDABLE) {
-                        break 'error Some(pipeline::ColorStateError::FormatNotBlendable(
-                            cs.format,
-                        ));
+                        break 'error Some(ColorStateError::FormatNotBlendable(cs.format));
                     }
                     if !hal::FormatAspects::from(cs.format).contains(hal::FormatAspects::COLOR) {
-                        break 'error Some(pipeline::ColorStateError::FormatNotColor(cs.format));
+                        break 'error Some(ColorStateError::FormatNotColor(cs.format));
                     }
 
                     if desc.multisample.count > 1
@@ -4164,7 +4207,7 @@ impl Device {
                             .flags
                             .sample_count_supported(desc.multisample.count)
                     {
-                        break 'error Some(pipeline::ColorStateError::InvalidSampleCount(
+                        break 'error Some(ColorStateError::InvalidSampleCount(
                             desc.multisample.count,
                             cs.format,
                             cs.format
@@ -4187,10 +4230,10 @@ impl Device {
                                         dual_source_blending = true;
                                     } else {
                                         break 'error Some(
-                                            pipeline::ColorStateError::BlendFactorOnUnsupportedTarget {
+                                            ColorStateError::BlendFactorOnUnsupportedTarget {
                                                 factor,
                                                 target: i as u32,
-                                            }
+                                            },
                                         );
                                     }
                                 }
@@ -4199,12 +4242,10 @@ impl Device {
                                     .contains(&component.operation)
                                     && factor != wgt::BlendFactor::One
                                 {
-                                    break 'error Some(
-                                        pipeline::ColorStateError::InvalidMinMaxBlendFactor {
-                                            factor,
-                                            target: i as u32,
-                                        },
-                                    );
+                                    break 'error Some(ColorStateError::InvalidMinMaxBlendFactor {
+                                        factor,
+                                        target: i as u32,
+                                    });
                                 }
                             }
                         }
@@ -4216,6 +4257,14 @@ impl Device {
                     return Err(pipeline::CreateRenderPipelineError::ColorState(i as u8, e));
                 }
             }
+        }
+
+        if dual_source_blending && color_targets.len() > 1 {
+            return Err(
+                pipeline::CreateRenderPipelineError::DualSourceBlendingWithMultipleColorTargets {
+                    count: color_targets.len(),
+                },
+            );
         }
 
         validation::validate_color_attachment_bytes_per_sample(
@@ -4541,7 +4590,7 @@ impl Device {
                             |pipeline| {
                                 pipeline::CreateRenderPipelineError::ColorState(
                                     *i as u8,
-                                    pipeline::ColorStateError::IncompatibleFormat {
+                                    ColorStateError::IncompatibleFormat {
                                         pipeline,
                                         shader: output.ty,
                                     },
@@ -4728,7 +4777,8 @@ impl Device {
                     continue;
                 };
 
-                // `bind_group_layouts` might contain duplicate entries, so we need to ignore the result.
+                // `bind_group_layouts` might contain duplicate entries, so we need to ignore the
+                // result.
                 let _ = bgl
                     .exclusive_pipeline
                     .set(binding_model::ExclusivePipeline::Render(Arc::downgrade(
@@ -4741,7 +4791,8 @@ impl Device {
     }
 
     /// # Safety
-    /// The `data` field on `desc` must have previously been returned from [`crate::global::Global::pipeline_cache_get_data`]
+    /// The `data` field on `desc` must have previously been returned from
+    /// [`crate::global::Global::pipeline_cache_get_data`]
     pub unsafe fn create_pipeline_cache(
         self: &Arc<Self>,
         desc: &pipeline::PipelineCacheDescriptor,
@@ -5113,7 +5164,8 @@ impl Device {
                     Err(WaitIdleError::Timeout) if cfg!(target_arch = "wasm32") => {
                         // On wasm, you cannot actually successfully wait for the surface.
                         // However WebGL does not actually require you do this, so ignoring
-                        // the failure is totally fine. See https://github.com/gfx-rs/wgpu/issues/7363
+                        // the failure is totally fine. See
+                        // https://github.com/gfx-rs/wgpu/issues/7363
                     }
                     Err(e) => {
                         break 'error e.into();
@@ -5213,7 +5265,12 @@ impl Device {
     }
 
     pub(crate) fn new_usage_scope(&self) -> UsageScope<'_> {
-        UsageScope::new_pooled(&self.usage_scopes, &self.tracker_indices)
+        UsageScope::new_pooled(
+            &self.usage_scopes,
+            &self.tracker_indices,
+            self.ordered_buffer_usages,
+            self.ordered_texture_usages,
+        )
     }
 
     pub fn get_hal_counters(&self) -> wgt::HalCounters {

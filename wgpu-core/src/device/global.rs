@@ -885,6 +885,13 @@ impl Global {
                     BindingResource::AccelerationStructure(ref tlas) => {
                         ResolvedBindingResource::AccelerationStructure(resolve_tlas(tlas)?)
                     }
+                    BindingResource::AccelerationStructureArray(ref tlas_array) => {
+                        let tlas_array = tlas_array
+                            .iter()
+                            .map(resolve_tlas)
+                            .collect::<Result<Vec<_>, _>>()?;
+                        ResolvedBindingResource::AccelerationStructureArray(Cow::Owned(tlas_array))
+                    }
                     BindingResource::ExternalTexture(ref et) => {
                         ResolvedBindingResource::ExternalTexture(resolve_external_texture(et)?)
                     }
@@ -1531,18 +1538,20 @@ impl Global {
             #[cfg(feature = "trace")]
             let trace_desc = desc.clone().into_trace();
 
-            let pipeline = match device.create_render_pipeline(desc) {
-                Ok(pair) => pair,
-                Err(e) => break 'error e,
-            };
+            let res = device.create_render_pipeline(desc);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateGeneralRenderPipeline {
-                    id: pipeline.to_trace(),
+                    id: res.as_ref().ok().map(IntoTrace::to_trace),
                     desc: trace_desc,
                 });
             }
+
+            let pipeline = match res {
+                Ok(pair) => pair,
+                Err(e) => break 'error e,
+            };
 
             let id = fid.assign(Fallible::Valid(pipeline));
             api_log!("Device::create_render_pipeline -> {id:?}");
@@ -1680,18 +1689,20 @@ impl Global {
             #[cfg(feature = "trace")]
             let trace_desc = desc.clone().into_trace();
 
-            let pipeline = match device.create_compute_pipeline(desc) {
-                Ok(pair) => pair,
-                Err(e) => break 'error e,
-            };
+            let res = device.create_compute_pipeline(desc);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateComputePipeline {
-                    id: pipeline.to_trace(),
+                    id: res.as_ref().ok().map(IntoTrace::to_trace),
                     desc: trace_desc,
                 });
             }
+
+            let pipeline = match res {
+                Ok(pair) => pair,
+                Err(e) => break 'error e,
+            };
 
             let id = fid.assign(Fallible::Valid(pipeline));
             api_log!("Device::create_compute_pipeline -> {id:?}");

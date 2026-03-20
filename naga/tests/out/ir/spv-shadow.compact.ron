@@ -267,6 +267,7 @@
             )),
             ty: 5,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("sampler_shadow"),
@@ -277,6 +278,7 @@
             )),
             ty: 13,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("u_globals"),
@@ -287,6 +289,7 @@
             )),
             ty: 8,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("s_lights"),
@@ -299,6 +302,7 @@
             )),
             ty: 12,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("in_position_fs"),
@@ -306,6 +310,7 @@
             binding: None,
             ty: 3,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("in_normal_fs"),
@@ -313,6 +318,7 @@
             binding: None,
             ty: 1,
             init: None,
+            memory_decorations: (""),
         ),
         (
             name: Some("out_color_fs"),
@@ -320,6 +326,7 @@
             binding: None,
             ty: 3,
             init: None,
+            memory_decorations: (""),
         ),
     ],
     global_expressions: [
