@@ -125,7 +125,7 @@
             immediate_size: 0,
         )),
         CreateComputePipeline(
-            id: PointerId(0x10),
+            id: Some(PointerId(0x10)),
             desc: (
                 label: None,
                 layout: Some(PointerId(0x10)),

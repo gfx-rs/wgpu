@@ -1950,6 +1950,8 @@ fn missing_bindings2() {
 
 #[test]
 fn invalid_blend_src() {
+    use naga::valid::{TypeError, ValidationError, VaryingError};
+
     // Missing capability or enable directive
     check_extension_validation! {
         Capabilities::DUAL_SOURCE_BLENDING,
@@ -1971,11 +1973,8 @@ fn invalid_blend_src() {
 
 "###,
         Err(
-            naga::valid::ValidationError::EntryPoint {
-                stage: naga::ShaderStage::Fragment,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::UnsupportedCapability(Capabilities::DUAL_SOURCE_BLENDING),
-                ),
+            ValidationError::Type {
+                source: TypeError::MissingCapability(Capabilities::DUAL_SOURCE_BLENDING),
                 ..
             },
         )
@@ -1989,11 +1988,11 @@ fn invalid_blend_src() {
         fn main(@location(0) @blend_src(0) input: f32) -> vec4f { return vec4f(0.0); }
         ":
         Err(
-            naga::valid::ValidationError::EntryPoint {
+            ValidationError::EntryPoint {
                 stage: naga::ShaderStage::Fragment,
                 source: naga::valid::EntryPointError::Argument(
                     0,
-                    naga::valid::VaryingError::InvalidInputAttributeInStage("blend_src", naga::ShaderStage::Fragment),
+                    VaryingError::BlendSrcNotOnStructMember,
                 ),
                 ..
             },
@@ -2013,10 +2012,10 @@ fn invalid_blend_src() {
         fn main() -> VertexOutput { return VertexOutput(vec4(0.0), vec4(1.0)); }
         ":
         Err(
-            naga::valid::ValidationError::EntryPoint {
+            ValidationError::EntryPoint {
                 stage: naga::ShaderStage::Vertex,
                 source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::InvalidAttributeInStage("blend_src", naga::ShaderStage::Vertex),
+                    VaryingError::InvalidAttributeInStage("blend_src", naga::ShaderStage::Vertex),
                 ),
                 ..
             },
@@ -2036,10 +2035,12 @@ fn invalid_blend_src() {
         fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
         ":
         Err(
-            naga::valid::ValidationError::EntryPoint {
-                stage: naga::ShaderStage::Fragment,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::InvalidBlendSrcIndex { location: 0, blend_src: 2 },
+            ValidationError::Type {
+                source: TypeError::InvalidBlendSrc(
+                    VaryingError::InvalidBlendSrcIndex {
+                        location: 0,
+                        blend_src: 2,
+                    }
                 ),
                 ..
             },
@@ -2047,7 +2048,7 @@ fn invalid_blend_src() {
         Capabilities::DUAL_SOURCE_BLENDING
     }
 
-    // Using a location other than 1 on blend_src
+    // Using a location other than 0 on blend_src
     check_validation! {
         "
         enable dual_source_blending;
@@ -2059,10 +2060,12 @@ fn invalid_blend_src() {
         fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
         ":
         Err(
-            naga::valid::ValidationError::EntryPoint {
-                stage: naga::ShaderStage::Fragment,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::InvalidBlendSrcIndex { location: 1, blend_src: 1 },
+            ValidationError::Type {
+                source: TypeError::InvalidBlendSrc(
+                    VaryingError::InvalidBlendSrcIndex {
+                        location: 1,
+                        blend_src: 1,
+                    }
                 ),
                 ..
             },
@@ -2082,10 +2085,9 @@ fn invalid_blend_src() {
         fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
         ":
         Err(
-            naga::valid::ValidationError::EntryPoint {
-                stage: naga::ShaderStage::Fragment,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::BindingCollisionBlendSrc { blend_src: 1 },
+            ValidationError::Type {
+                source: TypeError::InvalidBlendSrc(
+                    VaryingError::BindingCollisionBlendSrc { blend_src: 1 }
                 ),
                 ..
             },
@@ -2105,10 +2107,11 @@ fn invalid_blend_src() {
         fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
         ":
         Err(
-            naga::valid::ValidationError::EntryPoint {
-                stage: naga::ShaderStage::Fragment,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::IncompleteBlendSrcUsage,
+            ValidationError::Type {
+                source: TypeError::InvalidBlendSrc(
+                    VaryingError::IncompleteBlendSrcUsage {
+                        present_blend_src: 0,
+                    }
                 ),
                 ..
             },
@@ -2121,16 +2124,17 @@ fn invalid_blend_src() {
         "
             enable dual_source_blending;
             struct FragmentOutput {
-                @location(0) @blend_src(0) output0: vec4<f32>,
+                @location(0) @blend_src(1) output0: vec4<f32>,
             }
             @fragment
             fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0)); }
             ":
         Err(
-            naga::valid::ValidationError::EntryPoint {
-                stage: naga::ShaderStage::Fragment,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::IncompleteBlendSrcUsage,
+            ValidationError::Type {
+                source: TypeError::InvalidBlendSrc(
+                    VaryingError::IncompleteBlendSrcUsage{
+                        present_blend_src: 1,
+                    }
                 ),
                 ..
             },
@@ -2150,10 +2154,70 @@ fn invalid_blend_src() {
             fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), 1.0); }
             ":
         Err(
-            naga::valid::ValidationError::EntryPoint {
-                stage: naga::ShaderStage::Fragment,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::BlendSrcOutputTypeMismatch { blend_src_0_type: _, blend_src_1_type: _ },
+            ValidationError::Type {
+                source: TypeError::InvalidBlendSrc(
+                    VaryingError::BlendSrcOutputTypeMismatch { .. }
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // Multiple entrypoints (regression test for https://github.com/gfx-rs/wgpu/issues/9111)
+    check_validation! {
+        "
+            enable dual_source_blending;
+            struct FragmentOutput {
+                @location(0) @blend_src(0) output0: vec4<f32>,
+                @location(0) @blend_src(1) output1: vec4<f32>,
+            }
+            @fragment
+            fn fs1() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
+            @fragment
+            fn fs2() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
+            ":
+        Ok(_),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // @blend_src struct with no entry point should still be validated at the type level.
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(0) @blend_src(0) output0: vec4<f32>,
+        }
+        ":
+        Err(
+            ValidationError::Type {
+                source: TypeError::InvalidBlendSrc(
+                    VaryingError::IncompleteBlendSrcUsage {
+                        present_blend_src: 0,
+                    }
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // First member has @location(1) without @blend_src, followed by two @blend_src members.
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(1) output0: vec4<f32>,
+            @location(0) @blend_src(0) output1: vec4<f32>,
+            @location(0) @blend_src(1) output2: vec4<f32>,
+        }
+        @fragment
+        fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0), vec4(2.0)); }
+        ":
+        Err(
+            ValidationError::Type {
+                source: TypeError::InvalidBlendSrc(
+                    VaryingError::InvalidBlendSrcWithOtherBindings { location: 1 }
                 ),
                 ..
             },
@@ -4248,7 +4312,7 @@ fn subgroup_invalid_broadcast() {
 fn invalid_clip_distances() {
     // Missing capability or enable directive
     check_extension_validation! {
-        Capabilities::CLIP_DISTANCE,
+        Capabilities::CLIP_DISTANCES,
         r#"
             @vertex
             fn vs_main() -> @builtin(clip_distances) array<f32, 8> {
@@ -4268,7 +4332,7 @@ fn invalid_clip_distances() {
         Err(naga::valid::ValidationError::EntryPoint {
             stage: naga::ShaderStage::Vertex,
             source: naga::valid::EntryPointError::Result(
-                naga::valid::VaryingError::UnsupportedCapability(Capabilities::CLIP_DISTANCE)
+                naga::valid::VaryingError::UnsupportedCapability(Capabilities::CLIP_DISTANCES)
             ),
             ..
         })
@@ -4292,11 +4356,11 @@ fn invalid_clip_distances() {
         Err(naga::valid::ValidationError::EntryPoint {
             stage: naga::ShaderStage::Vertex,
             source: naga::valid::EntryPointError::Result(
-                naga::valid::VaryingError::InvalidBuiltInType(naga::ir::BuiltIn::ClipDistance, _)
+                naga::valid::VaryingError::InvalidBuiltInType(naga::ir::BuiltIn::ClipDistances, _)
             ),
             ..
         }),
-        naga::valid::Capabilities::CLIP_DISTANCE
+        naga::valid::Capabilities::CLIP_DISTANCES
     }
 }
 

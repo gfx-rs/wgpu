@@ -448,7 +448,7 @@ impl BlockContext<'_> {
         let restricted_id = self.gen_id();
         block.body.push(Instruction::ext_inst_gl_op(
             self.writer.gl450_ext_inst_id,
-            spirv::GLOp::UMin,
+            spirv::GlslStd450Op::UMin,
             type_id,
             restricted_id,
             &[input_id, limit_id],
@@ -582,7 +582,7 @@ impl BlockContext<'_> {
         let restricted_coordinates_id = self.gen_id();
         block.body.push(Instruction::ext_inst_gl_op(
             self.writer.gl450_ext_inst_id,
-            spirv::GLOp::UMin,
+            spirv::GlslStd450Op::UMin,
             coordinates.type_id,
             restricted_coordinates_id,
             &[coordinates.value_id, coordinate_limit_id],
@@ -925,7 +925,7 @@ impl BlockContext<'_> {
             let clamped_coords_id = self.gen_id();
             block.body.push(Instruction::ext_inst_gl_op(
                 self.writer.gl450_ext_inst_id,
-                spirv::GLOp::NClamp,
+                spirv::GlslStd450Op::NClamp,
                 vec2f_type_id,
                 clamped_coords_id,
                 &[coordinates.value_id, margin_left_id, margin_right_id],

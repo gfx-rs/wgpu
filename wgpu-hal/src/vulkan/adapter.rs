@@ -3045,6 +3045,18 @@ impl crate::Adapter for super::Adapter {
             wgt::PresentationTimestamp::INVALID_TIMESTAMP
         }
     }
+
+    fn get_ordered_buffer_usages(&self) -> wgt::BufferUses {
+        wgt::BufferUses::INCLUSIVE | wgt::BufferUses::MAP_WRITE
+    }
+
+    // Vulkan makes very few execution ordering guarantees
+    // see https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#synchronization-implicit
+    // We just don't want to insert barriers between inclusive uses
+    // See https://github.com/gfx-rs/wgpu/issues/8853
+    fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
+        wgt::TextureUses::INCLUSIVE
+    }
 }
 
 fn is_format_16bit_norm_supported(instance: &ash::Instance, phd: vk::PhysicalDevice) -> bool {

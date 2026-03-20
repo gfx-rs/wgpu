@@ -256,7 +256,11 @@ static BIND_GROUP_NONFILTERING_LAYOUT_MIPMAP_SAMPLER: GpuTestConfiguration =
 
 #[gpu_test]
 static BIND_GROUP_WITH_MAX_BINDING_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().limits(wgpu::Limits::downlevel_defaults()))
+    .parameters(
+        TestParameters::default()
+            .limits(wgpu::Limits::downlevel_defaults())
+            .expect_fail(FailureCase::kosmic_krisp()), // https://github.com/gfx-rs/wgpu/issues/9187
+    )
     .run_async(|ctx| async move {
         let (device, queue) = ctx
             .adapter

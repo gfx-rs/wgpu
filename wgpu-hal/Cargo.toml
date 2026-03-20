@@ -346,9 +346,6 @@ naga = { workspace = true, features = ["wgsl-in", "termcolor"] }
 winit.workspace = true                                           # for "halmark" example
 
 ### Platform: Windows + MacOS + Linux for "raw-gles" example ###
-[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos")))'.dev-dependencies]
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos", target_env = "ohos")))'.dev-dependencies]
 glutin-winit = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
 glutin = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
-# temporary compatibility for glutin-winit
-rwh_05.workspace = true
-winit = { workspace = true, features = ["rwh_05"] }

@@ -23,7 +23,10 @@ use crate::{
         self,
         dxgi::{factory::DxgiAdapter, result::HResult},
     },
-    dx12::{dcomp::DCompLib, shader_compilation, FeatureLevel, ShaderModel, SurfaceTarget},
+    dx12::{
+        dcomp::DCompLib, device_creation::DeviceFactory, shader_compilation, FeatureLevel,
+        ShaderModel, SurfaceTarget,
+    },
 };
 
 impl Drop for super::Adapter {
@@ -62,6 +65,7 @@ impl super::Adapter {
     pub(super) fn expose(
         adapter: DxgiAdapter,
         library: &Arc<D3D12Lib>,
+        device_factory: &Arc<DeviceFactory>,
         dcomp_lib: &Arc<DCompLib>,
         instance_flags: wgt::InstanceFlags,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
@@ -86,7 +90,7 @@ impl super::Adapter {
         // Create the device so that we can get the capabilities.
         let res = {
             profiling::scope!("ID3D12Device::create_device");
-            library.create_device(&adapter, Direct3D::D3D_FEATURE_LEVEL_11_0)
+            device_factory.create_device(library, &adapter, Direct3D::D3D_FEATURE_LEVEL_11_0)
         };
         if let Some(telemetry) = telemetry {
             if let Err(err) = res {
@@ -1307,6 +1311,18 @@ impl crate::Adapter for super::Adapter {
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         wgt::PresentationTimestamp(self.presentation_timer.get_timestamp_ns())
+    }
+
+    fn get_ordered_buffer_usages(&self) -> wgt::BufferUses {
+        wgt::BufferUses::INCLUSIVE | wgt::BufferUses::MAP_WRITE
+    }
+
+    // Don't put barriers between inclusive uses
+    // DX12 implicitly orders renderpasses on the same resources.
+    fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
+        wgt::TextureUses::INCLUSIVE
+            | wgt::TextureUses::COLOR_TARGET
+            | wgt::TextureUses::DEPTH_STENCIL_WRITE
     }
 }
 

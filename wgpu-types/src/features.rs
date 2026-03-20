@@ -1,3 +1,20 @@
+//! # Features
+//!
+//! Types identifying optional features of WebGPU and wgpu. Availability varies
+//! by hardware and can be checked when requesting an adapter and device.
+//!
+//! The `wgpu` Rust API always uses the `Features` bit flag type to represent a
+//! set of features. However, the WebGPU-defined JavaScript API uses
+//! `kebab-case` feature name strings, so some utilities are provided for
+//! working with those names. See [`Features::as_str`] and [`<Features as
+//! FromStr>::from_str`].
+//!
+//! The [`bitflags`] crate names flags by stringifying the
+//! `SCREAMING_SNAKE_CASE` identifier. These names are returned by
+//! [`Features::iter_names`] and parsed by [`Features::from_name`].
+//! [`bitflags`] does not currently support customized flag naming.
+//! See <https://github.com/bitflags/bitflags/issues/470>.
+
 use crate::{link_to_wgpu_docs, link_to_wgpu_item, VertexFormat};
 #[cfg(feature = "serde")]
 use alloc::fmt;
@@ -9,6 +26,7 @@ use bitflags::Bits;
 use bitflags::Flags;
 #[cfg(feature = "serde")]
 use core::mem::size_of;
+use core::str::FromStr;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -137,7 +155,8 @@ macro_rules! bitflags_array {
             $(#[$bit_outer:meta])*
             $vis:vis struct $inner_name:ident $lower_inner_name:ident {
                 $(
-                    $(#[$inner:ident $($args:tt)*])*
+                    $(#[doc $($args:tt)*])*
+                    #[name($str_name:literal $(, $alias:literal)*)]
                     const $Flag:tt = $value:expr;
                 )*
             }
@@ -148,7 +167,7 @@ macro_rules! bitflags_array {
                 $(#[$bit_outer])*
                 $vis struct $inner_name: $T {
                     $(
-                        $(#[$inner $($args)*])*
+                        $(#[doc $($args)*])*
                         const $Flag = $value;
                     )*
                 }
@@ -456,8 +475,12 @@ macro_rules! bitflags_array {
                 Self { $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)* }
             }
 
-            /// Takes in a name and returns Self if it matches or none if the name does not match
-            /// the name of any of the flags. Name is capitalisation dependent.
+            /// Takes in a bitflags flag name (in `SCREAMING_SNAKE_CASE`) and returns Self
+            /// if it matches or none if the name does not match the name of any of the
+            /// flags. Name is capitalisation dependent.
+            ///
+            /// [`impl FromStr`] can be used to recognize kebab-case names, like are used in
+            /// the WebGPU spec.
             pub fn from_name(name: &str) -> Option<Self> {
                 match name {
                     $(
@@ -482,13 +505,25 @@ macro_rules! bitflags_array {
             }
 
             /// Returns an iterator over the set flags and their names.
+            ///
+            /// These are bitflags names in `SCREAMING_SNAKE_CASE`.
             pub const fn iter_names(&self) -> bitflags::iter::IterNames<$name> {
                 bitflags::iter::IterNames::__private_const_new($name::FLAGS, *self, *self)
             }
 
+            /// If the argument is a single [`Features`] flag, returns the corresponding
+            /// `kebab-case` feature name, otherwise `None`.
+            #[must_use]
+            pub fn as_str(&self) -> Option<&'static str> {
+                Some(match *self {
+                    $($(Self::$Flag => $str_name,)*)*
+                    _ => return None,
+                })
+            }
+
             $(
                 $(
-                    $(#[$inner $($args)*])*
+                    $(#[doc $($args)*])*
                     // We need this for structs with only a member.
                     #[allow(clippy::needless_update)]
                     pub const $Flag: Self = Self {
@@ -497,6 +532,19 @@ macro_rules! bitflags_array {
                     };
                 )*
             )*
+        }
+
+        // Parses kebab-case feature names (i.e. the names given in the spec, for features
+        // in FeaturesWebGPU, and otherwise the `wgpu-` prefixed names).
+        impl FromStr for $name {
+            type Err = ();
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Ok(match s {
+                    $($($str_name $(| $alias)* => Self::$Flag,)*)*
+                    _ => return Err(()),
+                })
+            }
         }
 
         $(
@@ -570,6 +618,7 @@ bitflags_array! {
         /// This is a native only feature.
         ///
         /// [VK_EXT_shader_atomic_float]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_EXT_shader_atomic_float.html
+        #[name("wgpu-shader-float32-atomic")]
         const SHADER_FLOAT32_ATOMIC = 1 << 0;
 
         // The features starting with a ? are features that might become part of the spec or
@@ -596,6 +645,7 @@ bitflags_array! {
         /// - Metal
         ///
         /// This is a native only feature.
+        #[name("wgpu-texture-format-16-bit-norm", "texture-format-16-bit-norm")]
         const TEXTURE_FORMAT_16BIT_NORM = 1 << 1;
         /// Enables ASTC HDR family of compressed textures.
         ///
@@ -611,6 +661,7 @@ bitflags_array! {
         /// - OpenGL
         ///
         /// This is a native only feature.
+        #[name("wgpu-texture-compression-astc-hdr", "texture-compression-astc-hdr")]
         const TEXTURE_COMPRESSION_ASTC_HDR = 1 << 2;
         /// Enables device specific texture format features.
         ///
@@ -623,6 +674,7 @@ bitflags_array! {
         /// This extension does not enable additional formats.
         ///
         /// This is a native only feature.
+        #[name("wgpu-texture-adapter-specific-format-features", "texture-adapter-specific-format-features")]
         const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 1 << 3;
 
         // API:
@@ -644,6 +696,7 @@ bitflags_array! {
         #[doc = link_to_wgpu_docs!(["`RenderPass::end_pipeline_statistics_query`"]: "struct.RenderPass.html#method.end_pipeline_statistics_query")]
         #[doc = link_to_wgpu_docs!(["`CommandEncoder::resolve_query_set`"]: "struct.CommandEncoder.html#method.resolve_query_set")]
         /// [`PipelineStatisticsTypes`]: super::PipelineStatisticsTypes
+        #[name("wgpu-pipeline-statistics-query", "pipeline-statistics-query")]
         const PIPELINE_STATISTICS_QUERY = 1 << 4;
         /// Allows for timestamp queries directly on command encoders.
         ///
@@ -661,6 +714,7 @@ bitflags_array! {
         /// This is a native only feature.
         ///
         #[doc = link_to_wgpu_docs!(["`CommandEncoder::write_timestamp`"]: "struct.CommandEncoder.html#method.write_timestamp")]
+        #[name("wgpu-timestamp-query-inside-encoders")]
         const TIMESTAMP_QUERY_INSIDE_ENCODERS = 1 << 5;
         /// Allows for timestamp queries directly on command encoders.
         ///
@@ -682,6 +736,7 @@ bitflags_array! {
         ///
         #[doc = link_to_wgpu_docs!(["`RenderPass::write_timestamp`"]: "struct.RenderPass.html#method.write_timestamp")]
         #[doc = link_to_wgpu_docs!(["`ComputePass::write_timestamp`"]: "struct.ComputePass.html#method.write_timestamp")]
+        #[name("wgpu-timestamp-query-inside-passes", "timestamp-query-inside-passes")]
         const TIMESTAMP_QUERY_INSIDE_PASSES = 1 << 6;
         /// Webgpu only allows the MAP_READ and MAP_WRITE buffer usage to be matched with
         /// COPY_DST and COPY_SRC respectively. This removes this requirement.
@@ -696,6 +751,7 @@ bitflags_array! {
         /// - Metal
         ///
         /// This is a native only feature.
+        #[name("wgpu-mappable-primary-buffers", "mappable-primary-buffers")]
         const MAPPABLE_PRIMARY_BUFFERS = 1 << 7;
         /// Allows the user to create uniform arrays of textures in shaders:
         ///
@@ -719,6 +775,7 @@ bitflags_array! {
         /// - Vulkan
         ///
         /// This is a native only feature.
+        #[name("wgpu-texture-binding-array", "texture-binding-array")]
         const TEXTURE_BINDING_ARRAY = 1 << 8;
         /// Allows the user to create arrays of buffers in shaders:
         ///
@@ -740,6 +797,7 @@ bitflags_array! {
         /// - Vulkan
         ///
         /// This is a native only feature.
+        #[name("wgpu-buffer-binding-array", "buffer-binding-array")]
         const BUFFER_BINDING_ARRAY = 1 << 9;
         /// Allows the user to create uniform arrays of storage buffers or textures in shaders,
         /// if resp. [`Features::BUFFER_BINDING_ARRAY`] or [`Features::TEXTURE_BINDING_ARRAY`]
@@ -753,6 +811,7 @@ bitflags_array! {
         /// - Vulkan
         ///
         /// This is a native only feature.
+        #[name("wgpu-storage-resource-binding-array", "storage-resource-binding-array")]
         const STORAGE_RESOURCE_BINDING_ARRAY = 1 << 10;
         /// Allows shaders to index sampled texture and storage buffer resource arrays with dynamically non-uniform values:
         ///
@@ -778,6 +837,7 @@ bitflags_array! {
         /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderSampledImageArrayNonUniformIndexing & shaderStorageBufferArrayNonUniformIndexing feature)
         ///
         /// This is a native only feature.
+        #[name("wgpu-sampled-texture-and-storage-buffer-array-non-uniform-indexing", "sampled-texture-and-storage-buffer-array-non-uniform-indexing")]
         const SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 1 << 11;
         /// Allows shaders to index storage texture resource arrays with dynamically non-uniform values:
         ///
@@ -789,6 +849,7 @@ bitflags_array! {
         /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderStorageTextureArrayNonUniformIndexing feature)
         ///
         /// This is a native only feature.
+        #[name("wgpu-storage-texture-array-non-uniform-indexing", "storage-texture-array-non-uniform-indexing")]
         const STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 1 << 12;
         /// Allows the user to create bind groups containing arrays with less bindings than the BindGroupLayout.
         ///
@@ -797,6 +858,7 @@ bitflags_array! {
         /// - DX12
         ///
         /// This is a native only feature.
+        #[name("wgpu-partially-bound-binding-array", "partially-bound-binding-array")]
         const PARTIALLY_BOUND_BINDING_ARRAY = 1 << 13;
         /// Allows the user to call [`RenderPass::multi_draw_indirect_count`] and [`RenderPass::multi_draw_indexed_indirect_count`].
         ///
@@ -814,6 +876,7 @@ bitflags_array! {
         #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indexed_indirect`"]: "struct.RenderPass.html#method.multi_draw_indexed_indirect")]
         #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indirect_count`"]: "struct.RenderPass.html#method.multi_draw_indirect_count")]
         #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indexed_indirect_count`"]: "struct.RenderPass.html#method.multi_draw_indexed_indirect_count")]
+        #[name("wgpu-multi-draw-indirect-count", "multi-draw-indirect-count")]
         const MULTI_DRAW_INDIRECT_COUNT = 1 << 15;
         /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
         /// of [`SamplerBorderColor::Zero`].
@@ -828,6 +891,7 @@ bitflags_array! {
         ///
         /// [`AddressMode::ClampToBorder`]: super::AddressMode::ClampToBorder
         /// [`SamplerBorderColor::Zero`]: super::SamplerBorderColor::Zero
+        #[name("wgpu-address-mode-clamp-to-zero", "address-mode-clamp-to-zero")]
         const ADDRESS_MODE_CLAMP_TO_ZERO = 1 << 17;
         /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
         /// other than [`SamplerBorderColor::Zero`].
@@ -842,6 +906,7 @@ bitflags_array! {
         ///
         /// [`AddressMode::ClampToBorder`]: super::AddressMode::ClampToBorder
         /// [`SamplerBorderColor::Zero`]: super::SamplerBorderColor::Zero
+        #[name("wgpu-address-mode-clamp-to-border", "address-mode-clamp-to-border")]
         const ADDRESS_MODE_CLAMP_TO_BORDER = 1 << 18;
         /// Allows the user to set [`PolygonMode::Line`] in [`PrimitiveState::polygon_mode`]
         ///
@@ -856,6 +921,7 @@ bitflags_array! {
         ///
         /// [`PrimitiveState::polygon_mode`]: super::PrimitiveState
         /// [`PolygonMode::Line`]: super::PolygonMode::Line
+        #[name("wgpu-polygon-mode-line", "polygon-mode-line")]
         const POLYGON_MODE_LINE = 1 << 19;
         /// Allows the user to set [`PolygonMode::Point`] in [`PrimitiveState::polygon_mode`]
         ///
@@ -868,6 +934,7 @@ bitflags_array! {
         ///
         /// [`PrimitiveState::polygon_mode`]: super::PrimitiveState
         /// [`PolygonMode::Point`]: super::PolygonMode::Point
+        #[name("wgpu-polygon-mode-point", "polygon-mode-point")]
         const POLYGON_MODE_POINT = 1 << 20;
         /// Allows the user to set a overestimation-conservative-rasterization in [`PrimitiveState::conservative`]
         ///
@@ -880,6 +947,7 @@ bitflags_array! {
         /// This is a native only feature.
         ///
         /// [`PrimitiveState::conservative`]: super::PrimitiveState::conservative
+        #[name("wgpu-conservative-rasterization", "conservative-rasterization")]
         const CONSERVATIVE_RASTERIZATION = 1 << 21;
         /// Enables bindings of writable storage buffers and textures visible to vertex shaders.
         ///
@@ -889,6 +957,7 @@ bitflags_array! {
         /// - All
         ///
         /// This is a native only feature.
+        #[name("wgpu-vertex-writable-storage", "vertex-writable-storage")]
         const VERTEX_WRITABLE_STORAGE = 1 << 22;
         /// Enables clear to zero for textures.
         ///
@@ -896,6 +965,7 @@ bitflags_array! {
         /// - All
         ///
         /// This is a native only feature.
+        #[name("wgpu-clear-texture", "clear-texture")]
         const CLEAR_TEXTURE = 1 << 23;
         /// Enables multiview render passes and `builtin(view_index)` in vertex/mesh shaders.
         ///
@@ -906,6 +976,7 @@ bitflags_array! {
         /// - OpenGL (web only)
         ///
         /// This is a native only feature.
+        #[name("wgpu-multiview", "multiview")]
         const MULTIVIEW = 1 << 26;
         /// Enables using 64-bit types for vertex attributes.
         ///
@@ -914,6 +985,7 @@ bitflags_array! {
         /// Supported Platforms: N/A
         ///
         /// This is a native only feature.
+        #[name("wgpu-vertex-attribute-64-bit", "vertex-attribute-64-bit")]
         const VERTEX_ATTRIBUTE_64BIT = 1 << 27;
         /// Enables image atomic fetch add, and, xor, or, min, and max for R32Uint and R32Sint textures.
         ///
@@ -923,6 +995,7 @@ bitflags_array! {
         /// - Metal (with MSL 3.1+)
         ///
         /// This is a native only feature.
+        #[name("wgpu-texture-atomic")]
         const TEXTURE_ATOMIC = 1 << 28;
         /// Allows for creation of textures of format [`TextureFormat::NV12`]
         ///
@@ -933,6 +1006,7 @@ bitflags_array! {
         /// This is a native only feature.
         ///
         /// [`TextureFormat::NV12`]: super::TextureFormat::NV12
+        #[name("wgpu-texture-format-nv12")]
         const TEXTURE_FORMAT_NV12 = 1 << 29;
         /// Allows for creation of textures of format [`TextureFormat::P010`]
         ///
@@ -943,6 +1017,7 @@ bitflags_array! {
         /// This is a native only feature.
         ///
         /// [`TextureFormat::P010`]: super::TextureFormat::P010
+        #[name("wgpu-texture-format-p010")]
         const TEXTURE_FORMAT_P010 = 1 << 30;
 
         /// Allows for the creation and usage of `ExternalTexture`s, and bind
@@ -959,6 +1034,7 @@ bitflags_array! {
         /// Supported platforms:
         /// - DX12
         /// - Metal
+        #[name("wgpu-external-texture", "external-texture")]
         const EXTERNAL_TEXTURE = 1 << 31;
 
         // Shader:
@@ -973,6 +1049,7 @@ bitflags_array! {
         /// - Vulkan
         ///
         /// This is a native-only feature.
+        #[name("wgpu-ray-query")]
         const EXPERIMENTAL_RAY_QUERY = 1 << 32;
         /// Enables 64-bit floating point types in SPIR-V shaders.
         ///
@@ -983,6 +1060,7 @@ bitflags_array! {
         /// - Vulkan
         ///
         /// This is a native only feature.
+        #[name("wgpu-shader-f64", "shader-f64")]
         const SHADER_F64 = 1 << 33;
         /// Allows shaders to use i16. Not currently supported in `naga`, only available through `spirv-passthrough`.
         ///
@@ -990,6 +1068,7 @@ bitflags_array! {
         /// - Vulkan
         ///
         /// This is a native only feature.
+        #[name("wgpu-shader-i16", "shader-i16")]
         const SHADER_I16 = 1 << 34;
 
         // Bit 35 (formerly SHADER_PRIMITIVE_INDEX) is available.
@@ -1021,6 +1100,7 @@ bitflags_array! {
         /// This is a native only feature.
         ///
         /// [`EarlyDepthTest`]: https://docs.rs/naga/latest/naga/ir/enum.EarlyDepthTest.html
+        #[name("wgpu-shader-early-depth-test", "shader-early-depth-test")]
         const SHADER_EARLY_DEPTH_TEST = 1 << 36;
         /// Allows shaders to use i64 and u64.
         ///
@@ -1030,6 +1110,7 @@ bitflags_array! {
         /// - Metal (with MSL 2.3+)
         ///
         /// This is a native only feature.
+        #[name("wgpu-shader-int64")]
         const SHADER_INT64 = 1 << 37;
         /// Allows compute and fragment shaders to use the subgroup operation
         /// built-ins and perform subgroup operations (except barriers).
@@ -1039,7 +1120,14 @@ bitflags_array! {
         /// - DX12
         /// - Metal
         ///
-        /// This is a native only feature.
+        /// The `subgroups` feature has been added to WebGPU, but there may be
+        /// differences between the standard and the `wgpu` implementation,
+        /// so it remains a native-only feature in wgpu for now.
+        /// See <https://github.com/gfx-rs/wgpu/issues/5555>.
+        ///
+        /// Because it is expected to move to the WebGPU feature set in the
+        /// not-too-distant future, the name omits the `wgpu-` prefix.
+        #[name("subgroups")]
         const SUBGROUP = 1 << 38;
         /// Allows vertex shaders to use the subgroup operation built-ins and
         /// perform subgroup operations (except barriers).
@@ -1048,6 +1136,7 @@ bitflags_array! {
         /// - Vulkan
         ///
         /// This is a native only feature.
+        #[name("wgpu-subgroup-vertex")]
         const SUBGROUP_VERTEX = 1 << 39;
         /// Allows compute shaders to use the subgroup barrier.
         ///
@@ -1058,6 +1147,7 @@ bitflags_array! {
         /// - Metal
         ///
         /// This is a native only feature.
+        #[name("wgpu-subgroup-barrier")]
         const SUBGROUP_BARRIER = 1 << 40;
         /// Allows the use of pipeline cache objects
         ///
@@ -1067,6 +1157,7 @@ bitflags_array! {
         /// Unimplemented Platforms:
         /// - DX12
         /// - Metal
+        #[name("wgpu-pipeline-cache")]
         const PIPELINE_CACHE = 1 << 41;
         /// Allows shaders to use i64 and u64 atomic min and max.
         ///
@@ -1076,6 +1167,7 @@ bitflags_array! {
         /// - Metal (with MSL 2.4+)
         ///
         /// This is a native only feature.
+        #[name("wgpu-shader-int64-atomic-min-max")]
         const SHADER_INT64_ATOMIC_MIN_MAX = 1 << 42;
         /// Allows shaders to use all i64 and u64 atomic operations.
         ///
@@ -1084,6 +1176,7 @@ bitflags_array! {
         /// - DX12 (with SM 6.6+)
         ///
         /// This is a native only feature.
+        #[name("wgpu-shader-int64-atomic-all-ops")]
         const SHADER_INT64_ATOMIC_ALL_OPS = 1 << 43;
         /// Allows using the [VK_GOOGLE_display_timing] Vulkan extension.
         ///
@@ -1100,6 +1193,7 @@ bitflags_array! {
         ///
         /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
         #[doc = link_to_wgpu_docs!(["`Surface::as_hal()`"]: "struct.Surface.html#method.as_hal")]
+        #[name("wgpu-vulkan-google-display-timing")]
         const VULKAN_GOOGLE_DISPLAY_TIMING = 1 << 44;
 
         /// Allows using the [VK_KHR_external_memory_win32] Vulkan extension.
@@ -1110,6 +1204,7 @@ bitflags_array! {
         /// This is a native only feature.
         ///
         /// [VK_KHR_external_memory_win32]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_external_memory_win32.html
+        #[name("wgpu-vulkan-external-memory-win32")]
         const VULKAN_EXTERNAL_MEMORY_WIN32 = 1 << 45;
 
         /// Enables R64Uint image atomic min and max.
@@ -1120,6 +1215,7 @@ bitflags_array! {
         /// - Metal (with MSL 3.1+)
         ///
         /// This is a native only feature.
+        #[name("wgpu-texture-int64-atomic")]
         const TEXTURE_INT64_ATOMIC = 1 << 46;
 
         /// Allows uniform buffers to be bound as binding arrays.
@@ -1137,6 +1233,7 @@ bitflags_array! {
         /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s `shaderUniformBufferArrayNonUniformIndexing` feature)
         ///
         /// This is a native only feature.
+        #[name("wgpu-uniform-buffer-binding-arrays", "uniform-buffer-binding-arrays")]
         const UNIFORM_BUFFER_BINDING_ARRAYS = 1 << 47;
 
         /// Enables mesh shaders and task shaders in mesh shader pipelines. This extension does NOT imply support for
@@ -1163,6 +1260,7 @@ bitflags_array! {
         ///
         /// [`Device::create_shader_module_trusted`]: https://docs.rs/wgpu/latest/wgpu/struct.Device.html#method.create_shader_module_trusted
         /// [`ShaderRuntimeChecks::unchecked()`]: crate::ShaderRuntimeChecks::unchecked
+        #[name("wgpu-mesh-shader")]
         const EXPERIMENTAL_MESH_SHADER = 1 << 48;
 
         /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
@@ -1178,6 +1276,7 @@ bitflags_array! {
         /// This is a native only feature
         ///
         /// [`AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN`]: super::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN
+        #[name("wgpu-ray-hit-vertex-return")]
         const EXPERIMENTAL_RAY_HIT_VERTEX_RETURN = 1 << 49;
 
         /// Enables multiview in mesh shader pipelines
@@ -1190,6 +1289,7 @@ bitflags_array! {
         /// - Metal
         ///
         /// This is a native only feature.
+        #[name("wgpu-mesh-shader-multiview")]
         const EXPERIMENTAL_MESH_SHADER_MULTIVIEW = 1 << 50;
 
         /// Allows usage of additional vertex formats in [BlasTriangleGeometrySizeDescriptor::vertex_format]
@@ -1199,6 +1299,7 @@ bitflags_array! {
         /// - DX12
         ///
         /// [BlasTriangleGeometrySizeDescriptor::vertex_format]: super::BlasTriangleGeometrySizeDescriptor
+        #[name("wgpu-extended-acceleration-structure-vertex-formats")]
         const EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS = 1 << 51;
 
         /// Enables creating shaders from passthrough with reflection info (unsafe)
@@ -1217,6 +1318,7 @@ bitflags_array! {
         /// [this comment](https://github.com/gfx-rs/wgpu/issues/3103#issuecomment-2833058367).
         ///
         #[doc = link_to_wgpu_docs!(["`Device::create_shader_module_passthrough`"]: "struct.Device.html#method.create_shader_module_passthrough")]
+        #[name("wgpu-passthrough-shaders", "passthrough-shaders")]
         const PASSTHROUGH_SHADERS = 1 << 52;
 
         /// Enables shader barycentric coordinates.
@@ -1227,6 +1329,7 @@ bitflags_array! {
         /// - Metal (with MSL 2.2+)
         ///
         /// This is a native only feature.
+        #[name("wgpu-shader-barycentrics")]
         const SHADER_BARYCENTRICS = 1 << 53;
 
         /// Enables using multiview where not all texture array layers are rendered to in a single render pass/render pipeline. Making
@@ -1238,6 +1341,7 @@ bitflags_array! {
         ///
         ///
         /// While metal supports this in theory, the behavior of `view_index` differs from vulkan and dx12 so the feature isn't exposed.
+        #[name("wgpu-selective-multiview")]
         const SELECTIVE_MULTIVIEW = 1 << 54;
 
         /// Enables the use of point-primitive outputs from mesh shaders. Making use of this feature also requires enabling
@@ -1248,6 +1352,7 @@ bitflags_array! {
         /// - Metal
         ///
         /// This is a native only feature.
+        #[name("wgpu-mesh-shader-points")]
         const EXPERIMENTAL_MESH_SHADER_POINTS = 1 << 55;
 
         /// Enables creating texture arrays that are also multisampled.
@@ -1257,6 +1362,7 @@ bitflags_array! {
         ///
         /// Supported platforms:
         /// - Vulkan (except VK_KHR_portability_subset if multisampleArrayImage is not available)
+        #[name("wgpu-multisample-array")]
         const MULTISAMPLE_ARRAY = 1 << 56;
 
         /// Enables cooperative matrix operations (also known as tensor cores on NVIDIA GPUs
@@ -1276,6 +1382,7 @@ bitflags_array! {
         /// - Vulkan (with [VK_KHR_cooperative_matrix](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_cooperative_matrix.html), if 8x8 f32 is supported)
         ///
         /// This is a native only feature.
+        #[name("wgpu-cooperative-matrix")]
         const EXPERIMENTAL_COOPERATIVE_MATRIX = 1 << 57;
 
         /// Enables shader per-vertex attributes.
@@ -1284,6 +1391,7 @@ bitflags_array! {
         /// - Vulkan (with VK_KHR_fragment_shader_barycentric)
         ///
         /// This is a native only feature.
+        #[name("wgpu-shader-per-vertex")]
         const SHADER_PER_VERTEX = 1 << 58;
 
         /// Enables shader `draw_index` builtin.
@@ -1297,6 +1405,7 @@ bitflags_array! {
         /// - Metal
         ///
         /// This is a native only feature.
+        #[name("wgpu-shader-draw-index")]
         const SHADER_DRAW_INDEX = 1 << 59;
         /// Allows the user to create arrays of acceleration structures in shaders:
         ///
@@ -1310,6 +1419,7 @@ bitflags_array! {
         /// - Vulkan
         ///
         /// This is a native only feature.
+        #[name("wgpu-acceleration-structure-binding-array")]
         const ACCELERATION_STRUCTURE_BINDING_ARRAY = 1 << 60;
 
         /// Enables the `@coherent` memory decoration on storage buffer variables.
@@ -1321,6 +1431,7 @@ bitflags_array! {
         /// - GLES (ES 3.1+ / GL 4.3+)
         ///
         /// This is a native only feature.
+        #[name("wgpu-memory-decoration-coherent")]
         const MEMORY_DECORATION_COHERENT = 1 << 61;
 
         /// Enables the `@volatile` memory decoration on storage buffer variables.
@@ -1330,6 +1441,7 @@ bitflags_array! {
         /// - GLES (ES 3.1+ / GL 4.3+)
         ///
         /// This is a native only feature.
+        #[name("wgpu-memory-decoration-volatile")]
         const MEMORY_DECORATION_VOLATILE = 1 << 62;
 
         // Adding a new feature? Bit 35 (formerly SHADER_PRIMITIVE_INDEX) is available.
@@ -1364,6 +1476,7 @@ bitflags_array! {
         /// - WebGPU
         ///
         /// This is a web and native feature.
+        #[name("depth-clip-control")]
         const DEPTH_CLIP_CONTROL = WEBGPU_FEATURE_DEPTH_CLIP_CONTROL;
 
         /// Allows for explicit creation of textures of format [`TextureFormat::Depth32FloatStencil8`]
@@ -1378,6 +1491,7 @@ bitflags_array! {
         /// This is a web and native feature.
         ///
         /// [`TextureFormat::Depth32FloatStencil8`]: super::TextureFormat::Depth32FloatStencil8
+        #[name("depth32float-stencil8")]
         const DEPTH32FLOAT_STENCIL8 = WEBGPU_FEATURE_DEPTH32FLOAT_STENCIL8;
 
         /// Enables BCn family of compressed textures. All BCn textures use 4x4 pixel blocks
@@ -1397,6 +1511,7 @@ bitflags_array! {
         /// - WebGPU
         ///
         /// This is a web and native feature.
+        #[name("texture-compression-bc")]
         const TEXTURE_COMPRESSION_BC = WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC;
 
 
@@ -1411,6 +1526,7 @@ bitflags_array! {
         /// - WebGPU
         ///
         /// This is a web and native feature.
+        #[name("texture-compression-bc-sliced-3d")]
         const TEXTURE_COMPRESSION_BC_SLICED_3D = WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC_SLICED_3D;
 
         /// Enables ETC family of compressed textures. All ETC textures use 4x4 pixel blocks.
@@ -1428,6 +1544,7 @@ bitflags_array! {
         /// - WebGPU
         ///
         /// This is a web and native feature.
+        #[name("texture-compression-etc2")]
         const TEXTURE_COMPRESSION_ETC2 = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ETC2;
 
         /// Enables ASTC family of compressed textures. ASTC textures use pixel blocks varying from 4x4 to 12x12.
@@ -1448,6 +1565,7 @@ bitflags_array! {
         /// - WebGPU
         ///
         /// This is a web and native feature.
+        #[name("texture-compression-astc")]
         const TEXTURE_COMPRESSION_ASTC = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC;
 
 
@@ -1466,6 +1584,7 @@ bitflags_array! {
         /// - DX12
         ///
         /// This is a web and native feature.
+        #[name("texture-compression-astc-sliced-3d")]
         const TEXTURE_COMPRESSION_ASTC_SLICED_3D = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC_SLICED_3D;
 
         /// Enables use of Timestamp Queries. These queries tell the current gpu timestamp when
@@ -1497,6 +1616,7 @@ bitflags_array! {
         #[doc = link_to_wgpu_docs!(["`ComputePassDescriptor::timestamp_writes`"]: "struct.ComputePassDescriptor.html#structfield.timestamp_writes")]
         #[doc = link_to_wgpu_docs!(["`CommandEncoder::resolve_query_set`"]: "struct.CommandEncoder.html#method.resolve_query_set")]
         #[doc = link_to_wgpu_docs!(["`Queue::get_timestamp_period`"]: "struct.Queue.html#method.get_timestamp_period")]
+        #[name("timestamp-query")]
         const TIMESTAMP_QUERY = WEBGPU_FEATURE_TIMESTAMP_QUERY;
 
         /// Allows non-zero value for the `first_instance` member in indirect draw calls.
@@ -1517,6 +1637,7 @@ bitflags_array! {
         /// - OpenGL ES / WebGL
         ///
         /// This is a web and native feature.
+        #[name("indirect-first-instance")]
         const INDIRECT_FIRST_INSTANCE = WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE;
 
         /// Allows shaders to use 16-bit floating point types. You may use them uniform buffers,
@@ -1532,6 +1653,7 @@ bitflags_array! {
         /// - WebGPU
         ///
         /// This is a web and native feature.
+        #[name("shader-f16")]
         const SHADER_F16 = WEBGPU_FEATURE_SHADER_F16;
 
         /// Allows for usage of textures of format [`TextureFormat::Rg11b10Ufloat`] as a render target
@@ -1545,6 +1667,7 @@ bitflags_array! {
         /// This is a web and native feature.
         ///
         /// [`TextureFormat::Rg11b10Ufloat`]: super::TextureFormat::Rg11b10Ufloat
+        #[name("rg11b10ufloat-renderable")]
         const RG11B10UFLOAT_RENDERABLE = WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE;
 
         /// Allows the [`TextureUsages::STORAGE_BINDING`] usage on textures with format [`TextureFormat::Bgra8Unorm`]
@@ -1559,6 +1682,7 @@ bitflags_array! {
         ///
         /// [`TextureFormat::Bgra8Unorm`]: super::TextureFormat::Bgra8Unorm
         /// [`TextureUsages::STORAGE_BINDING`]: super::TextureUsages::STORAGE_BINDING
+        #[name("bgra8unorm-storage")]
         const BGRA8UNORM_STORAGE = WEBGPU_FEATURE_BGRA8UNORM_STORAGE;
 
 
@@ -1572,6 +1696,7 @@ bitflags_array! {
         /// - WebGPU
         ///
         /// This is a web and native feature.
+        #[name("float32-filterable")]
         const FLOAT32_FILTERABLE = WEBGPU_FEATURE_FLOAT32_FILTERABLE;
 
         /// Allows textures with formats "r32float", "rg32float", and "rgba32float" to be blendable.
@@ -1579,6 +1704,7 @@ bitflags_array! {
         /// Supported Platforms:
         /// - Vulkan
         /// - WebGPU
+        #[name("float32-blendable")]
         const FLOAT32_BLENDABLE = WEBGPU_FEATURE_FLOAT32_BLENDABLE;
 
         /// Allows two outputs from a shader to be used for blending.
@@ -1594,6 +1720,7 @@ bitflags_array! {
         /// - WebGPU
         ///
         /// This is a web and native feature.
+        #[name("dual-source-blending")]
         const DUAL_SOURCE_BLENDING = WEBGPU_FEATURE_DUAL_SOURCE_BLENDING;
 
         /// Allows the use of `@builtin(clip_distances)` in WGSL.
@@ -1605,6 +1732,7 @@ bitflags_array! {
         /// - WebGPU
         ///
         /// This is a web and native feature.
+        #[name("clip-distances")]
         const CLIP_DISTANCES = WEBGPU_FEATURE_CLIP_DISTANCES;
 
         /// Allows the use of immediate data: small, fast bits of memory that can be updated
@@ -1637,6 +1765,7 @@ bitflags_array! {
         #[doc = link_to_wgpu_item!(struct PipelineLayoutDescriptor)]
         #[doc = link_to_wgpu_docs!(["`RenderPass::set_immediates`"]: "struct.RenderPass.html#method.set_immediates")]
         /// [`Limits::max_immediate_size`]: super::Limits
+        #[name("immediates")]
         const IMMEDIATES = WEBGPU_FEATURE_IMMEDIATES;
 
         /// Enables `builtin(primitive_index)` in fragment shaders.
@@ -1651,7 +1780,10 @@ bitflags_array! {
         /// - Metal (some)
         /// - OpenGL (some)
         ///
-        /// This is a web and native feature.
+        /// This is a web and native feature. `primitive-index` is its
+        /// WebGPU-defined name, and `shader-primitive-index` is accepted to
+        /// remain compatible with previous wgpu behavior.
+        #[name("primitive-index", "shader-primitive-index")]
         const PRIMITIVE_INDEX = WEBGPU_FEATURE_PRIMITIVE_INDEX;
     }
 }
@@ -1710,6 +1842,7 @@ impl Features {
 #[cfg(test)]
 mod tests {
     use crate::{Features, FeaturesWGPU, FeaturesWebGPU};
+    use bitflags::{Flag, Flags};
 
     #[cfg(feature = "serde")]
     #[test]
@@ -1770,26 +1903,97 @@ mod tests {
             assert_eq!(Features::from_bits_retain(bits), *feature.value());
         }
 
-        let bits = Features::all().bits();
-        assert_eq!(Features::from_bits_truncate(bits), Features::all());
+        let bits = FeaturesWebGPU::all().bits();
+        assert_eq!(
+            FeaturesWebGPU::from_bits_truncate(bits),
+            FeaturesWebGPU::all()
+        );
 
-        let bits = Features::empty().bits();
-        assert_eq!(Features::from_bits_truncate(bits), Features::empty());
+        let bits = FeaturesWebGPU::empty().bits();
+        assert_eq!(
+            FeaturesWebGPU::from_bits_truncate(bits),
+            FeaturesWebGPU::empty()
+        );
 
-        for feature in Features::FLAGS {
+        for feature in FeaturesWebGPU::FLAGS {
             let bits = feature.value().bits();
-            assert_eq!(Features::from_bits_truncate(bits), *feature.value());
+            assert_eq!(FeaturesWebGPU::from_bits_truncate(bits), *feature.value());
         }
 
-        let bits = Features::all().bits();
-        assert_eq!(Features::from_bits(bits).unwrap(), Features::all());
+        let bits = FeaturesWGPU::all().bits();
+        assert_eq!(FeaturesWGPU::from_bits(bits).unwrap(), FeaturesWGPU::all());
 
-        let bits = Features::empty().bits();
-        assert_eq!(Features::from_bits(bits).unwrap(), Features::empty());
+        let bits = FeaturesWGPU::empty().bits();
+        assert_eq!(
+            FeaturesWGPU::from_bits(bits).unwrap(),
+            FeaturesWGPU::empty()
+        );
 
-        for feature in Features::FLAGS {
+        for feature in FeaturesWGPU::FLAGS {
             let bits = feature.value().bits();
-            assert_eq!(Features::from_bits(bits).unwrap(), *feature.value());
+            assert_eq!(FeaturesWGPU::from_bits(bits).unwrap(), *feature.value());
+        }
+    }
+
+    #[test]
+    fn features_names() {
+        for feature in Features::FLAGS.iter().map(Flag::value).copied() {
+            let Some(name) = feature.as_str() else {
+                panic!("`.as_str()` for {feature:?} returned `None`");
+            };
+            assert_eq!(name.parse(), Ok(feature));
+
+            // Native-only features that are accepted without `wgpu-` prefix for backwards compatibility
+            let prefix_backcompat_features = [
+                Features::TEXTURE_FORMAT_16BIT_NORM,
+                Features::TEXTURE_COMPRESSION_ASTC_HDR,
+                Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                Features::PIPELINE_STATISTICS_QUERY,
+                Features::TIMESTAMP_QUERY_INSIDE_PASSES,
+                Features::MAPPABLE_PRIMARY_BUFFERS,
+                Features::TEXTURE_BINDING_ARRAY,
+                Features::BUFFER_BINDING_ARRAY,
+                Features::STORAGE_RESOURCE_BINDING_ARRAY,
+                Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+                Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+                Features::UNIFORM_BUFFER_BINDING_ARRAYS,
+                Features::PARTIALLY_BOUND_BINDING_ARRAY,
+                Features::MULTI_DRAW_INDIRECT_COUNT,
+                Features::ADDRESS_MODE_CLAMP_TO_ZERO,
+                Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+                Features::POLYGON_MODE_LINE,
+                Features::POLYGON_MODE_POINT,
+                Features::CONSERVATIVE_RASTERIZATION,
+                Features::VERTEX_WRITABLE_STORAGE,
+                Features::CLEAR_TEXTURE,
+                Features::MULTIVIEW,
+                Features::VERTEX_ATTRIBUTE_64BIT,
+                Features::EXTERNAL_TEXTURE,
+                Features::SHADER_F64,
+                Features::SHADER_I16,
+                Features::SHADER_EARLY_DEPTH_TEST,
+                Features::PASSTHROUGH_SHADERS,
+            ];
+
+            if feature == Features::SUBGROUP {
+                // Standard-track feature that does not have `wgpu-` prefix
+                assert_eq!(name.parse(), Ok(feature));
+            } else if feature & Features::all_native_mask() != Features::empty() {
+                let stripped_name = name.strip_prefix("wgpu-").unwrap_or_else(|| {
+                    panic!("Native feature `{name}` should have `wgpu-` prefix")
+                });
+                let expected = if prefix_backcompat_features.contains(&feature) {
+                    Ok(feature)
+                } else {
+                    Err(())
+                };
+                assert_eq!(stripped_name.parse(), expected);
+            }
+
+            // Special backcompat case
+            if feature == Features::PRIMITIVE_INDEX {
+                assert_eq!("shader-primitive-index".parse(), Ok(feature));
+            }
         }
     }
 

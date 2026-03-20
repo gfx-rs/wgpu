@@ -447,7 +447,7 @@ pub struct Adapter {
 }
 
 pub struct Queue {
-    raw: Arc<Mutex<Retained<ProtocolObject<dyn MTLCommandQueue>>>>,
+    shared: Arc<QueueShared>,
     timestamp_period: f32,
 }
 
@@ -460,14 +460,26 @@ impl Queue {
         timestamp_period: f32,
     ) -> Self {
         Self {
-            raw: Arc::new(Mutex::new(raw)),
+            shared: Arc::new(QueueShared {
+                raw,
+                command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
+            }),
             timestamp_period,
         }
     }
+}
 
-    pub fn as_raw(&self) -> &Arc<Mutex<Retained<ProtocolObject<dyn MTLCommandQueue>>>> {
-        &self.raw
-    }
+#[derive(Debug)]
+pub struct QueueShared {
+    raw: Retained<ProtocolObject<dyn MTLCommandQueue>>,
+    // Tracks command buffers created via `CommandEncoder::begin_encoding` that
+    // have not yet been submitted or discarded. Used to proactively fail
+    // before hitting Metal's `maxCommandBufferCount`.
+    //
+    // (In a few places we call `.commandBuffer{,WithUnretainedReferences}` directly
+    // to create command buffers for internal purposes. In those cases we always
+    // commit the buffer immediately, so we don't adjust the counter for them.)
+    command_buffer_created_not_submitted: atomic::AtomicUsize,
 }
 
 pub struct Device {
@@ -530,8 +542,12 @@ impl crate::Queue for Queue {
                 let raw = match command_buffers.last() {
                     Some(&cmd_buf) => cmd_buf.raw.clone(),
                     None => {
-                        let queue = self.raw.lock();
-                        queue.commandBufferWithUnretainedReferences().unwrap()
+                        // We do not bother adjusting `command_buffer_created_not_submitted`
+                        // because we immediately commit this buffer.
+                        self.shared
+                            .raw
+                            .commandBufferWithUnretainedReferences()
+                            .unwrap()
                     }
                 };
                 raw.setLabel(Some(ns_string!("(wgpu internal) Signal")));
@@ -554,6 +570,14 @@ impl crate::Queue for Queue {
 
             for cmd_buffer in command_buffers {
                 cmd_buffer.raw.commit();
+                // One command buffer per `end_encoding` call moves from the
+                // "created but not yet submitted" bucket into the submitted
+                // set, so update the counter.
+                let previous = self
+                    .shared
+                    .command_buffer_created_not_submitted
+                    .fetch_sub(1, atomic::Ordering::AcqRel);
+                debug_assert!(previous > 0);
             }
 
             if let Some(raw) = extra_command_buffer {
@@ -567,9 +591,10 @@ impl crate::Queue for Queue {
         _surface: &Surface,
         texture: SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
-        let queue = &self.raw.lock();
         autoreleasepool(|_| {
-            let command_buffer = queue.commandBuffer().unwrap();
+            // We do not bother adjusting `command_buffer_created_not_submitted`
+            // because we immediately commit this buffer.
+            let command_buffer = self.shared.raw.commandBuffer().unwrap();
             command_buffer.setLabel(Some(ns_string!("(wgpu internal) Present")));
 
             // https://developer.apple.com/documentation/quartzcore/cametallayer/1478157-presentswithtransaction?language=objc
@@ -1073,7 +1098,7 @@ struct CommandState {
 
 pub struct CommandEncoder {
     shared: Arc<AdapterShared>,
-    raw_queue: Arc<Mutex<Retained<ProtocolObject<dyn MTLCommandQueue>>>>,
+    queue_shared: Arc<QueueShared>,
     raw_cmd_buf: Option<Retained<ProtocolObject<dyn MTLCommandBuffer>>>,
     state: CommandState,
     temp: Temp,
@@ -1083,7 +1108,6 @@ pub struct CommandEncoder {
 impl fmt::Debug for CommandEncoder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CommandEncoder")
-            .field("raw_queue", &self.raw_queue)
             .field("raw_cmd_buf", &self.raw_cmd_buf)
             .finish()
     }
@@ -1095,6 +1119,7 @@ unsafe impl Sync for CommandEncoder {}
 #[derive(Debug)]
 pub struct CommandBuffer {
     raw: Retained<ProtocolObject<dyn MTLCommandBuffer>>,
+    queue_shared: Arc<QueueShared>,
 }
 
 impl crate::DynCommandBuffer for CommandBuffer {}

@@ -663,6 +663,10 @@ impl super::Adapter {
             // that's the only way to get gl_InstanceID to work correctly.
             features.set(wgt::Features::INDIRECT_FIRST_INSTANCE, supported);
         }
+        private_caps.set(
+            super::PrivateCapabilities::MULTISAMPLED_RENDER_TO_TEXTURE,
+            extensions.contains("GL_EXT_multisampled_render_to_texture"),
+        );
 
         // GLSL ES 3.10+ / GLSL 4.30+ natively support coherent/volatile qualifiers
         // on storage buffers. These were introduced alongside storage buffer support.
@@ -1280,6 +1284,17 @@ impl crate::Adapter for super::Adapter {
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         wgt::PresentationTimestamp::INVALID_TIMESTAMP
+    }
+
+    fn get_ordered_buffer_usages(&self) -> wgt::BufferUses {
+        wgt::BufferUses::INCLUSIVE | wgt::BufferUses::MAP_WRITE
+    }
+
+    // Don't put barriers between inclusive uses
+    fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
+        wgt::TextureUses::INCLUSIVE
+            | wgt::TextureUses::COLOR_TARGET
+            | wgt::TextureUses::DEPTH_STENCIL_WRITE
     }
 }
 

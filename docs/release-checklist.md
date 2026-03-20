@@ -14,7 +14,7 @@ Anyone in the @gfx-rs/wgpu team can perform these steps.
 
 Approx 1 Week Before:
 
-- Determine if `glow` (@groves), `metal-rs` (@gfx-rs/wgpu) or any other dependant crates will need a release. If so, coordinate with their maintainers.
+- Determine if `glow` (@groves), `rspirv` (@gfx-rs/wgpu) or any other dependant crates will need a release. If so, coordinate with their maintainers.
 - Go through the changelog:
   - Re-categorize miscategorized items.
   - Edit major changes so a user can easily understand what they need to do.
@@ -27,16 +27,21 @@ Day of Release:
 - Bump the wgpu dependency numbers in the following places:
   - `Cargo.toml`
   - `examples/standalone/*`
+  - `examples/bug-repro/*`
 - Grep for the previous version to ensure various documentation links are updated.
   - For example, if the previous version was v24.0.0, grep for `v24` and `24.0`
-- Ensure `glow` and `metal` are updated to the latest version if needed.
+- Ensure `glow` and `rspirv` are updated to the latest version if needed.
 - Add a new header for the changelog with the release version and date.
 - Create a PR with all of the version changes and changelog updates.
-- Once the PR is CI clean, (force) merge it.
+- While waiting on the PR, do a dry run of publishing.
+  ```bash
+    cargo publish --dry-run --workspace --all-features --exclude deno_webgpu
+  ```
+- Once the PR is CI clean and publish worked, (force) merge it.
 - Checkout `trunk` with the merged PR.
 - Publish! These commands can be pasted directly into your terminal in a single command, and they will publish everything.
   ```bash
-    cargo publish --workspace --exclude deno_webgpu
+    cargo publish --workspace --all-features --exclude deno_webgpu
   ```
 - If there were any newly published crates, ensure `github:gfx-rs/wgpu` is added as an owner of that crate.
 - Create a new tag called `vX.Y.Z` and push it to the repo.
