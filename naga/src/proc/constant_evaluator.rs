@@ -609,6 +609,19 @@ macro_rules! match_literal_vector {
     };
 }
 
+fn float_length<F>(e: &[F]) -> Option<F>
+where
+    F: core::ops::Mul<F> + num_traits::Float + iter::Sum,
+{
+    if e.len() == 1 {
+        // Avoids possible overflow in squaring
+        Some(e[0].abs())
+    } else {
+        let result = e.iter().map(|&ei| ei * ei).sum::<F>().sqrt();
+        result.is_finite().then_some(result)
+    }
+}
+
 #[derive(Debug)]
 enum Behavior<'a> {
     Wgsl(WgslRestrictions<'a>),
@@ -1461,7 +1474,7 @@ impl<'a> ConstantEvaluator<'a> {
         }
 
         // NOTE: We try to match the declaration order of `MathFunction` here.
-        return match fun {
+        match fun {
             // comparison
             crate::MathFunction::Abs => {
                 component_wise_scalar(self, span, [arg], |args| match args {
@@ -1971,19 +1984,6 @@ impl<'a> ConstantEvaluator<'a> {
             | crate::MathFunction::Unpack4xU8 => Err(ConstantEvaluatorError::NotImplemented(
                 format!("{fun:?} built-in function"),
             )),
-        };
-
-        fn float_length<F>(e: &[F]) -> Option<F>
-        where
-            F: core::ops::Mul<F> + num_traits::Float + iter::Sum,
-        {
-            if e.len() == 1 {
-                // Avoids possible overflow in squaring
-                Some(e[0].abs())
-            } else {
-                let result = e.iter().map(|&ei| ei * ei).sum::<F>().sqrt();
-                result.is_finite().then_some(result)
-            }
         }
     }
 
