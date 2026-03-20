@@ -47,12 +47,14 @@ Bottom level categories:
 #### Metal
 
 - Unconditionally enable `Features::CLIP_DISTANCES`. By @ErichDonGubler in [#9270](https://github.com/gfx-rs/wgpu/pull/9270).
+- Added full support for mesh shaders, including in WGSL shaders. By @inner-daemons in [#8739](https://github.com/gfx-rs/wgpu/pull/8739).
 
 ### Changes
 
 #### General
 
 - `Features::CLIP_DISTANCE`, `naga::Capabilities::CLIP_DISTANCE`, and `naga::BuiltIn::ClipDistance` have been renamed to `CLIP_DISTANCES` and `ClipDistances` (viz., pluralized) as appropriate, to match the WebGPU spec. By @ErichDonGubler in [#9267](https://github.com/gfx-rs/wgpu/pull/9267).
+- Added more granular limits for mesh shaders. By @inner-daemons in [#8739](https://github.com/gfx-rs/wgpu/pull/8739).
 
 #### Validation
 
@@ -315,7 +317,6 @@ Migrated from the `max_inter_stage_shader_components` limit to `max_inter_stage_
 - The various "max resources per stage" limits are now capped at 100, so that their total remains below `max_bindings_per_bind_group`, as required by WebGPU. By @andyleiserson in [#9118](https://github.com/gfx-rs/wgpu/pull/9118).
 - The `max_uniform_buffer_binding_size` and `max_storage_buffer_binding_size` limits are now `u64` instead of `u32`, to match WebGPU. By @wingertge in [#9146](https://github.com/gfx-rs/wgpu/pull/9146).
 - The main 3 native backends now report their limits properly. By @teoxoy in [#9196](https://github.com/gfx-rs/wgpu/pull/9196).
-- Added more granular limits for mesh shaders. By @inner-daemons in [#8739](https://github.com/gfx-rs/wgpu/pull/8739).
 
 #### naga
 
@@ -341,10 +342,6 @@ Migrated from the `max_inter_stage_shader_components` limit to `max_inter_stage_
 - Make ordered texture and buffer uses hal specific. By @NiklasEi in [#8924](https://github.com/gfx-rs/wgpu/pull/8924).
 
 ### General
-
-#### Metal
-
-- Added full support for mesh shaders, including in WGSL shaders. By @inner-daemons in #8739.
 
 ### Bug Fixes
 
