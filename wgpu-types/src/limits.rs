@@ -48,6 +48,7 @@ macro_rules! with_limits {
         $macro_name!(max_buffer_size, Ordering::Less);
         $macro_name!(max_vertex_attributes, Ordering::Less);
         $macro_name!(max_vertex_buffer_array_stride, Ordering::Less);
+        $macro_name!(max_inter_stage_shader_variables, Ordering::Less);
         $macro_name!(min_uniform_buffer_offset_alignment, Ordering::Greater);
         $macro_name!(min_storage_buffer_offset_alignment, Ordering::Greater);
         $macro_name!(max_color_attachments, Ordering::Less);

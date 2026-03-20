@@ -12,7 +12,11 @@ use std::{
     time::Instant,
 };
 use wgpu_types::Dx12BackendOptions;
-use winit::window::WindowButtons;
+use winit::{
+    application::ApplicationHandler,
+    event_loop::{ActiveEventLoop, ControlFlow},
+    window::{Window, WindowButtons},
+};
 
 const DESIRED_MAX_LATENCY: u32 = 2;
 
@@ -1141,57 +1145,79 @@ cfg_if::cfg_if! {
     }
 }
 
+struct App {
+    example: Option<Example<Api>>,
+    window: Option<Window>,
+}
+
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.window.is_some() {
+            return;
+        }
+        let window = event_loop
+            .create_window(
+                Window::default_attributes()
+                    .with_title("hal-ray-traced-triangle")
+                    .with_inner_size(winit::dpi::PhysicalSize {
+                        width: 512,
+                        height: 512,
+                    })
+                    .with_resizable(false)
+                    .with_enabled_buttons(WindowButtons::CLOSE),
+            )
+            .unwrap();
+        let example = Example::<Api>::init(&window).expect("Selected backend is not supported");
+        self.window = Some(window);
+        self.example = Some(example);
+    }
+
+    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        self.example.take().unwrap().exit();
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: winit::window::WindowId,
+        event: winit::event::WindowEvent,
+    ) {
+        event_loop.set_control_flow(ControlFlow::Poll);
+
+        match event {
+            winit::event::WindowEvent::CloseRequested => {
+                event_loop.exit();
+            }
+            winit::event::WindowEvent::KeyboardInput { event, .. }
+                if event.physical_key
+                    == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =>
+            {
+                event_loop.exit();
+            }
+            winit::event::WindowEvent::RedrawRequested => {
+                let ex = self.example.as_mut().unwrap();
+                ex.render();
+            }
+            _ => {
+                self.example.as_mut().unwrap().update(event);
+            }
+        }
+    }
+}
+
 fn main() {
     env_logger::init();
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
-    let window = winit::window::WindowBuilder::new()
-        .with_title("hal-ray-traced-triangle")
-        .with_inner_size(winit::dpi::PhysicalSize {
-            width: 512,
-            height: 512,
-        })
-        .with_resizable(false)
-        .with_enabled_buttons(WindowButtons::CLOSE)
-        .build(&event_loop)
-        .unwrap();
-
-    let example_result = Example::<Api>::init(&window);
-    let mut example = Some(example_result.expect("Selected backend is not supported"));
-
-    event_loop
-        .run(move |event, target| {
-            let _ = &window; // force ownership by the closure
-            target.set_control_flow(winit::event_loop::ControlFlow::Poll);
-            match event {
-                winit::event::Event::WindowEvent { event, .. } => match event {
-                    winit::event::WindowEvent::CloseRequested => {
-                        target.exit();
-                    }
-                    winit::event::WindowEvent::KeyboardInput { event, .. }
-                        if event.physical_key
-                            == winit::keyboard::PhysicalKey::Code(
-                                winit::keyboard::KeyCode::Escape,
-                            ) =>
-                    {
-                        target.exit();
-                    }
-                    winit::event::WindowEvent::RedrawRequested => {
-                        let ex = example.as_mut().unwrap();
-                        ex.render();
-                    }
-                    _ => {
-                        example.as_mut().unwrap().update(event);
-                    }
-                },
-                winit::event::Event::LoopExiting => {
-                    example.take().unwrap().exit();
-                }
-                winit::event::Event::AboutToWait => {
-                    window.request_redraw();
-                }
-                _ => {}
-            }
-        })
-        .unwrap();
+    let mut app = App {
+        example: None,
+        window: None,
+    };
+    event_loop.run_app(&mut app).unwrap();
 }

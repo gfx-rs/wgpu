@@ -416,7 +416,7 @@ pub enum BuiltIn {
     /// Read in vertex shaders
     BaseVertex,
     /// Written in vertex & mesh shaders
-    ClipDistance,
+    ClipDistances,
     /// Written in vertex & mesh shaders
     CullDistance,
     /// Read in vertex, any- and closest-hit shaders

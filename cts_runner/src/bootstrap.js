@@ -242,11 +242,11 @@ webgpu.GPUAdapter.prototype.requestDevice = function(desc) {
         // an option to enable it anyways to allow running some CTS tests that
         // do pass.
         if (!desc) {
-            desc = { requiredFeatures: ['external-texture'] };
+            desc = { requiredFeatures: ['wgpu-external-texture'] };
         } else if (!desc.requiredFeatures) {
-            desc.requiredFeatures = ['external-texture'];
+            desc.requiredFeatures = ['wgpu-external-texture'];
         } else {
-            desc.requiredFeatures.push('external-texture');
+            desc.requiredFeatures.push('wgpu-external-texture');
         }
     }
 

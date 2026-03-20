@@ -97,8 +97,8 @@ impl ir::MathFunction {
             Mf::Distance => {
                 regular!(2, SCALAR|VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Scalar).into()
             }
-            Mf::Length => regular!(1, SCALAR|VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Scalar).into(),
-            Mf::Normalize => regular!(1, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED).into(),
+            Mf::Length => regular!(1, SCALAR|VECN of FLOAT -> Scalar).into(),
+            Mf::Normalize => regular!(1, VECN of FLOAT).into(),
             Mf::FaceForward => regular!(3, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED).into(),
             Mf::Reflect => regular!(2, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED).into(),
             Mf::Refract => refract().into(),

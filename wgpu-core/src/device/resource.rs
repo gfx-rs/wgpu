@@ -4245,6 +4245,14 @@ impl Device {
             }
         }
 
+        if dual_source_blending && color_targets.len() > 1 {
+            return Err(
+                pipeline::CreateRenderPipelineError::DualSourceBlendingWithMultipleColorTargets {
+                    count: color_targets.len(),
+                },
+            );
+        }
+
         validation::validate_color_attachment_bytes_per_sample(
             color_targets.iter().flatten().map(|cs| cs.format),
             self.limits.max_color_attachment_bytes_per_sample,

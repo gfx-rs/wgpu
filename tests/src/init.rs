@@ -64,8 +64,7 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
                     wgpu::GlFenceBehavior::Normal
                 },
                 ..Default::default()
-            }
-            .with_env(),
+            },
             // Allow the noop backend to be used in tests. This will not be used unless
             // WGPU_GPU_TESTS_USE_NOOP_BACKEND env var is set, because wgpu-info will not
             // enumerate the noop backend.
@@ -75,7 +74,8 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
             noop: wgpu::NoopBackendOptions {
                 enable: !cfg!(target_arch = "wasm32"),
             },
-        },
+        }
+        .with_env(),
         #[cfg(not(all(
             target_arch = "wasm32",
             any(target_os = "emscripten", feature = "webgl")

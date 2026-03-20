@@ -700,14 +700,12 @@ fn set_immediates(
     size_bytes: u32,
     values_offset: Option<u32>,
 ) -> Result<(), RenderBundleErrorInner> {
-    let end_offset = offset + size_bytes;
-
     let pipeline_state = state.pipeline()?;
 
     pipeline_state
         .pipeline
         .layout
-        .validate_immediates_ranges(offset, end_offset)?;
+        .validate_immediates_ranges(offset, size_bytes)?;
 
     state.commands.push(ArcRenderCommand::SetImmediate {
         offset,

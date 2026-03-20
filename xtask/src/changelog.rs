@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use std::{cmp, sync::OnceLock};
 
 use pico_args::Arguments;
 use regex_lite::Regex;
@@ -131,12 +131,20 @@ fn hunks_in_a_released_section<'a>(changelog_contents: &str, diff: &'a str) -> V
             let lines_until_first_change = hunk_contents
                 .lines()
                 .take_while(|l| l.starts_with(' '))
-                .count() as u64;
+                .count()
+                // NOTE: First line is the one-based index in the header, assume there's at least
+                // one line and ignore it.
+                .checked_sub(1)
+                .unwrap() as u64;
 
             let first_hunk_change_start_offset =
                 post_change_hunk_start_offset + lines_until_first_change;
 
-            first_hunk_change_start_offset >= changelog_first_release_section_line_num
+            match first_hunk_change_start_offset.cmp(&changelog_first_release_section_line_num) {
+                cmp::Ordering::Greater => true,
+                cmp::Ordering::Equal => hunk_contents.lines().any(|l| l.starts_with('+')),
+                _ => false,
+            }
         })
         .collect::<Vec<_>>();
 
@@ -568,5 +576,82 @@ index a6bf3614a..5c2dcdc4e 100644
 ",
             ]
         }
+    }
+
+    #[test]
+    fn deletion_up_to_released() {
+        assert_released_section_changes! {
+        "\
+<!-- Some explanatory comment -->
+
+## Unreleased
+
+WHADDUP FOLKS
+
+## Released
+
+- Blah blah blah.
+",
+        "\
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -4,8 +4,6 @@
+\u{0020}
+ WHADDUP FOLKS
+\u{0020}
+-HERE'S SOME STUFF THAT'S GONNA GET DELETED
+-
+ ## Released
+\u{0020}
+ - Blah blah blah.
+",
+            [],
+        }
+    }
+
+    #[test]
+    fn change_of_release_section() {
+        assert_released_section_changes! {
+        "\
+<!-- Some explanatory comment -->
+
+## Unreleased
+
+WHADDUP FOLKS
+
+## Released (hee hee hee)
+
+- Blah blah blah.
+",
+        "\
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -4,6 +4,6 @@
+\u{0020}
+ WHADDUP FOLKS
+\u{0020}
+-## Released
++## Released (hee hee hee)
+\u{0020}
+ - Blah blah blah.
+",
+            [
+                "\
+@@ -4,6 +4,6 @@
+\u{0020}
+ WHADDUP FOLKS
+\u{0020}
+-## Released
++## Released (hee hee hee)
+\u{0020}
+ - Blah blah blah.
+",
+            ],
+        }
+    }
+
+    #[test]
+    fn deletion_of_released_section() {
+        // TODO: https://github.com/gfx-rs/wgpu/issues/9245
     }
 }
