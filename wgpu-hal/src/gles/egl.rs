@@ -14,6 +14,8 @@ const EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR: i32 = 0x0001;
 const EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT: i32 = 0x30BF;
 const EGL_PLATFORM_WAYLAND_KHR: u32 = 0x31D8;
 const EGL_PLATFORM_X11_KHR: u32 = 0x31D5;
+const EGL_PLATFORM_XCB_EXT: u32 = 0x31DC;
+const EGL_PLATFORM_XCB_SCREEN_EXT: u32 = 0x31DE;
 const EGL_PLATFORM_ANGLE_ANGLE: u32 = 0x3202;
 const EGL_PLATFORM_ANGLE_NATIVE_PLATFORM_TYPE_ANGLE: u32 = 0x348F;
 const EGL_PLATFORM_ANGLE_DEBUG_LAYERS_ENABLED: u32 = 0x3451;
@@ -812,7 +814,27 @@ impl crate::Instance for Instance {
                 .map_err(instance_err("failed to get Angle display"))?;
                 (display, WindowKind::AngleX11)
             }
-            (Some(Rdh::Xcb(_xcb_display_handle)), Some(_egl)) => todo!("xcb"),
+            (Some(Rdh::Xcb(xcb_display_handle)), Some(egl))
+                if client_ext_str.contains("EGL_EXT_platform_xcb") =>
+            {
+                log::debug!("Using XCB platform");
+                let display_attributes = [
+                    EGL_PLATFORM_XCB_SCREEN_EXT as khronos_egl::Attrib,
+                    xcb_display_handle.screen as khronos_egl::Attrib,
+                    khronos_egl::ATTRIB_NONE,
+                ];
+                let display = unsafe {
+                    egl.get_platform_display(
+                        EGL_PLATFORM_XCB_EXT,
+                        xcb_display_handle
+                            .connection
+                            .map_or(khronos_egl::DEFAULT_DISPLAY, ptr::NonNull::as_ptr),
+                        &display_attributes,
+                    )
+                }
+                .map_err(instance_err("failed to get XCB display"))?;
+                (display, WindowKind::X11)
+            }
             x if client_ext_str.contains("EGL_MESA_platform_surfaceless") => {
                 log::debug!(
                     "No (or unknown) windowing system ({x:?}) present. Using surfaceless platform"
