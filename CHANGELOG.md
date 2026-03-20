@@ -48,6 +48,10 @@ Bottom level categories:
 
 - Unconditionally enable `Features::CLIP_DISTANCES`. By @ErichDonGubler in [#9270](https://github.com/gfx-rs/wgpu/pull/9270).
 
+#### DX12
+
+- Added support for mesh shaders in naga's HLSL writer, completing DX12 support for mesh shaders. By @inner-daemons in #8752.
+
 ### Changes
 
 #### General
@@ -340,10 +344,6 @@ Migrated from the `max_inter_stage_shader_components` limit to `max_inter_stage_
 - Make ordered texture and buffer uses hal specific. By @NiklasEi in [#8924](https://github.com/gfx-rs/wgpu/pull/8924).
 
 ### General
-
-#### DX12
-
-- Added support for mesh shaders in naga's HLSL writer, completing DX12 support for mesh shaders. By @inner-daemons in #8752.
 
 ### Bug Fixes
 
