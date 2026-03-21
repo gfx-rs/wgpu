@@ -2696,6 +2696,19 @@ impl<'a> ConstantEvaluator<'a> {
                     return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
                 }
 
+                if matches!(
+                    (left_value, op),
+                    (
+                        Literal::Bool(_),
+                        BinaryOperator::Less
+                            | BinaryOperator::LessEqual
+                            | BinaryOperator::Greater
+                            | BinaryOperator::GreaterEqual
+                    )
+                ) {
+                    return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
+                }
+
                 let literal = match op {
                     BinaryOperator::Equal => Literal::Bool(left_value == right_value),
                     BinaryOperator::NotEqual => Literal::Bool(left_value != right_value),
@@ -2849,6 +2862,8 @@ impl<'a> ConstantEvaluator<'a> {
                         (Literal::Bool(a), Literal::Bool(b)) => Literal::Bool(match op {
                             BinaryOperator::LogicalAnd => a && b,
                             BinaryOperator::LogicalOr => a || b,
+                            BinaryOperator::And => a & b,
+                            BinaryOperator::InclusiveOr => a | b,
                             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                         }),
                         _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
