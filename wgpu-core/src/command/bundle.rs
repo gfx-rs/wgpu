@@ -346,6 +346,7 @@ impl RenderBundleEncoder {
             texture_memory_init_actions: Vec::new(),
             next_dynamic_offset: 0,
             binder: Binder::new(),
+            immediate_slots_set: 0,
         };
 
         let indices = &state.device.tracker_indices;
@@ -772,6 +773,7 @@ fn set_immediates(
         size_bytes,
         values_offset,
     });
+    state.immediate_slots_set |= crate::immediates::slots_for_range(offset, size_bytes);
     Ok(())
 }
 
@@ -1434,6 +1436,7 @@ struct State {
     texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     next_dynamic_offset: usize,
     binder: Binder,
+    immediate_slots_set: u16,
 }
 
 impl State {
@@ -1510,6 +1513,14 @@ impl State {
                         buffer_format: index_format,
                     });
                 }
+            }
+
+            let required = pipeline.pipeline.immediate_slots_required;
+            if required & !self.immediate_slots_set != 0 {
+                return Err(DrawError::MissingImmediateData {
+                    required,
+                    set: self.immediate_slots_set,
+                });
             }
 
             Ok(())

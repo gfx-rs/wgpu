@@ -300,6 +300,7 @@ pub struct Interface {
     limits: wgt::Limits,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
+    pub(crate) immediate_slots_required: u16,
 }
 
 #[derive(Debug)]
@@ -1254,6 +1255,8 @@ impl Interface {
             resource_mapping.insert(var_handle, handle);
         }
 
+        let immediate_slots_required = crate::immediates::slots_for_module(module);
+
         let mut entry_points = FastHashMap::default();
         entry_points.reserve(module.entry_points.len());
         for (index, entry_point) in module.entry_points.iter().enumerate() {
@@ -1323,6 +1326,7 @@ impl Interface {
             limits,
             resources,
             entry_points,
+            immediate_slots_required,
         }
     }
 

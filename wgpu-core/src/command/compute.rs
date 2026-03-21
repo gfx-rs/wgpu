@@ -129,6 +129,8 @@ pub enum DispatchError {
     InvalidGroupSize { current: [u32; 3], limit: u32 },
     #[error(transparent)]
     BindingSizeTooSmall(#[from] LateMinBufferBindingSizeMismatch),
+    #[error("Not all immediate data slots required by the pipeline have been set (required: 0x{required:04X}, set: 0x{set:04X})")]
+    MissingImmediateData { required: u16, set: u16 },
 }
 
 impl WebGpuError for DispatchError {
@@ -265,6 +267,8 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
 
     immediates: Vec<u32>,
 
+    immediate_slots_set: u16,
+
     intermediate_trackers: Tracker,
 }
 
@@ -273,6 +277,13 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         if let Some(pipeline) = self.pipeline.as_ref() {
             self.pass.binder.check_compatibility(pipeline.as_ref())?;
             self.pass.binder.check_late_buffer_bindings()?;
+            let required = pipeline.immediate_slots_required;
+            if required & !self.immediate_slots_set != 0 {
+                return Err(DispatchError::MissingImmediateData {
+                    required,
+                    set: self.immediate_slots_set,
+                });
+            }
             Ok(())
         } else {
             Err(DispatchError::MissingPipeline(pass::MissingPipeline))
@@ -625,6 +636,8 @@ pub(super) fn encode_compute_pass(
 
         immediates: Vec::new(),
 
+        immediate_slots_set: 0,
+
         intermediate_trackers: Tracker::new(
             device.ordered_buffer_usages,
             device.ordered_texture_usages,
@@ -741,6 +754,7 @@ pub(super) fn encode_compute_pass(
                     },
                 )
                 .map_pass_err(scope)?;
+                state.immediate_slots_set |= crate::immediates::slots_for_range(offset, size_bytes);
             }
             ArcComputeCommand::Dispatch(groups) => {
                 let scope = PassErrorScope::Dispatch { indirect: false };

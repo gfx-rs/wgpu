@@ -3958,12 +3958,18 @@ impl Device {
                 },
             )?;
 
+        let immediate_slots_required = shader_module
+            .interface
+            .as_ref()
+            .map_or(0, |iface| iface.immediate_slots_required);
+
         let pipeline = pipeline::ComputePipeline {
             raw: ManuallyDrop::new(raw),
             layout: pipeline_layout,
             device: self.clone(),
             _shader_module: shader_module,
             late_sized_buffer_groups,
+            immediate_slots_required,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.compute_pipelines.clone()),
         };
@@ -4762,6 +4768,12 @@ impl Device {
             shader_modules
         };
 
+        let immediate_slots_required = shader_modules
+            .iter()
+            .filter_map(|sm| sm.interface.as_ref())
+            .map(|i| i.immediate_slots_required)
+            .fold(0u16, core::ops::BitOr::bitor);
+
         let pipeline = pipeline::RenderPipeline {
             raw: ManuallyDrop::new(raw),
             layout: pipeline_layout,
@@ -4773,6 +4785,7 @@ impl Device {
             strip_index_format: desc.primitive.strip_index_format,
             vertex_steps,
             late_sized_buffer_groups,
+            immediate_slots_required,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.render_pipelines.clone()),
             is_mesh,

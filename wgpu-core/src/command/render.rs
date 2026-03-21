@@ -529,6 +529,8 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
 
     pass: pass::PassState<'scope, 'snatch_guard, 'cmd_enc>,
 
+    immediate_slots_set: u16,
+
     active_occlusion_query: Option<(Arc<QuerySet>, u32)>,
     active_pipeline_statistics_query: Option<(Arc<QuerySet>, u32)>,
 }
@@ -579,6 +581,13 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
             if (family == DrawCommandFamily::DrawMeshTasks) != pipeline.is_mesh {
                 return Err(DrawError::WrongPipelineType {
                     wanted_mesh_pipeline: !pipeline.is_mesh,
+                });
+            }
+            let required = pipeline.immediate_slots_required;
+            if required & !self.immediate_slots_set != 0 {
+                return Err(DrawError::MissingImmediateData {
+                    required,
+                    set: self.immediate_slots_set,
                 });
             }
             Ok(())
@@ -1966,6 +1975,8 @@ pub(super) fn encode_render_pass(
                 string_offset: 0,
             },
 
+            immediate_slots_set: 0,
+
             active_occlusion_query: None,
             active_pipeline_statistics_query: None,
         };
@@ -2042,6 +2053,8 @@ pub(super) fn encode_render_pass(
                         |_| {},
                     )
                     .map_pass_err(scope)?;
+                    state.immediate_slots_set |=
+                        crate::immediates::slots_for_range(offset, size_bytes);
                 }
                 ArcRenderCommand::SetScissor(rect) => {
                     let scope = PassErrorScope::SetScissorRect;
@@ -3157,6 +3170,7 @@ fn execute_bundle(
         state.pass.scope.merge_render_bundle(&bundle.used)?;
     };
     state.reset_bundle();
+    state.immediate_slots_set = 0;
     Ok(())
 }
 

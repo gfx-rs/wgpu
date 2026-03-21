@@ -70,6 +70,8 @@ pub enum DrawError {
         highest_view_index: u32,
         max_multiviews: u32,
     },
+    #[error("Not all immediate data slots required by the pipeline have been set (required: 0x{required:04X}, set: 0x{set:04X})")]
+    MissingImmediateData { required: u16, set: u16 },
 }
 
 impl WebGpuError for DrawError {
