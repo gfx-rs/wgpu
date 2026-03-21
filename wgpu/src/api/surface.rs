@@ -89,7 +89,7 @@ impl Surface<'_> {
     ///
     /// # Panics
     ///
-    /// - A old [`SurfaceTexture`] is still alive referencing an old surface.
+    /// - An old [`SurfaceTexture`] is still alive referencing an old surface.
     /// - Texture format requested is unsupported on the surface.
     /// - `config.width` or `config.height` is zero.
     pub fn configure(&self, device: &Device, config: &SurfaceConfiguration) {
