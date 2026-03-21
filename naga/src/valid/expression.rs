@@ -1127,7 +1127,7 @@ impl super::Validator {
                 if matches!(op, Bo::ShiftLeft | Bo::ShiftRight) {
                     Self::validate_constant_shift_amounts(left_inner, right, module, function)?;
                 }
-                // For integer division or remainer, check if the constant divisor is zero
+                // For integer division or remainder, check if the constant divisor is zero
                 if matches!(op, Bo::Divide | Bo::Modulo) {
                     Self::validate_constant_divisor(left_inner, right, module, function)?;
                 }
