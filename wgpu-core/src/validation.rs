@@ -301,6 +301,7 @@ pub struct Interface {
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
     pub(crate) immediate_slots_required: u16,
+    pub(crate) immediate_size: u32,
 }
 
 #[derive(Debug)]
@@ -1256,6 +1257,7 @@ impl Interface {
         }
 
         let immediate_slots_required = crate::immediates::slots_for_module(module);
+        let immediate_size = crate::immediates::size_for_module(module);
 
         let mut entry_points = FastHashMap::default();
         entry_points.reserve(module.entry_points.len());
@@ -1327,6 +1329,7 @@ impl Interface {
             resources,
             entry_points,
             immediate_slots_required,
+            immediate_size,
         }
     }
 

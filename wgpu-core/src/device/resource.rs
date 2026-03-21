@@ -3809,6 +3809,7 @@ impl Device {
     fn create_derived_pipeline_layout(
         self: &Arc<Self>,
         mut derived_group_layouts: Box<ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>>,
+        immediate_size: u32,
     ) -> Result<Arc<binding_model::PipelineLayout>, pipeline::ImplicitLayoutError> {
         while derived_group_layouts
             .last()
@@ -3849,7 +3850,7 @@ impl Device {
         let layout_desc = binding_model::ResolvedPipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: Cow::Owned(bind_group_layouts),
-            immediate_size: 0, //TODO?
+            immediate_size,
         };
 
         let layout = self.create_pipeline_layout_impl(&layout_desc, true)?;
@@ -3911,7 +3912,11 @@ impl Device {
         let pipeline_layout = match binding_layout_source {
             validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
             validation::BindingLayoutSource::Derived(entries) => {
-                self.create_derived_pipeline_layout(entries)?
+                let immediate_size = shader_module
+                    .interface
+                    .as_ref()
+                    .map_or(0, |i| i.immediate_size);
+                self.create_derived_pipeline_layout(entries, immediate_size)?
             }
         };
 
@@ -4635,7 +4640,26 @@ impl Device {
         let pipeline_layout = match binding_layout_source {
             validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
             validation::BindingLayoutSource::Derived(entries) => {
-                self.create_derived_pipeline_layout(entries)?
+                let immediate_size = {
+                    let immediate_size_of = |sm: &pipeline::ShaderModule| {
+                        sm.interface.as_ref().map(|i| i.immediate_size)
+                    };
+                    let vertex = match desc.vertex {
+                        pipeline::RenderPipelineVertexProcessor::Vertex(ref v) => {
+                            immediate_size_of(&v.stage.module)
+                        }
+                        pipeline::RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => task
+                            .as_ref()
+                            .and_then(|t| immediate_size_of(&t.stage.module))
+                            .max(immediate_size_of(&mesh.stage.module)),
+                    };
+                    let fragment = desc
+                        .fragment
+                        .as_ref()
+                        .and_then(|f| immediate_size_of(&f.stage.module));
+                    vertex.max(fragment).unwrap_or(0)
+                };
+                self.create_derived_pipeline_layout(entries, immediate_size)?
             }
         };
 
