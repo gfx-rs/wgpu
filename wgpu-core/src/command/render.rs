@@ -611,6 +611,7 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         self.pipeline = None;
         self.index.reset();
         self.vertex = Default::default();
+        self.immediate_slots_set = 0;
     }
 }
 
@@ -3170,7 +3171,6 @@ fn execute_bundle(
         state.pass.scope.merge_render_bundle(&bundle.used)?;
     };
     state.reset_bundle();
-    state.immediate_slots_set = 0;
     Ok(())
 }
 

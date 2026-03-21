@@ -657,11 +657,6 @@ fn set_pipeline(
         .commands
         .push(ArcRenderCommand::SetPipeline(pipeline.clone()));
 
-    // If this pipeline uses immediates, zero out their values.
-    if let Some(cmd) = pipeline_state.zero_immediates() {
-        state.commands.push(cmd);
-    }
-
     state.pipeline = Some(pipeline_state);
 
     state
@@ -1369,9 +1364,6 @@ struct PipelineState {
     /// How this pipeline's vertex shader traverses each vertex buffer, indexed
     /// by vertex buffer slot number.
     steps: Vec<VertexStep>,
-
-    /// Size of the immediate data ranges this pipeline uses. Copied from the pipeline layout.
-    immediate_size: u32,
 }
 
 impl PipelineState {
@@ -1379,22 +1371,7 @@ impl PipelineState {
         Self {
             pipeline: pipeline.clone(),
             steps: pipeline.vertex_steps.to_vec(),
-            immediate_size: pipeline.layout.immediate_size,
         }
-    }
-
-    /// Return a sequence of commands to zero the immediate data ranges this
-    /// pipeline uses. If no initialization is necessary, return `None`.
-    fn zero_immediates(&self) -> Option<ArcRenderCommand> {
-        if self.immediate_size == 0 {
-            return None;
-        }
-
-        Some(ArcRenderCommand::SetImmediate {
-            offset: 0,
-            size_bytes: self.immediate_size,
-            values_offset: None,
-        })
     }
 }
 
