@@ -2709,20 +2709,20 @@ impl<'a> ConstantEvaluator<'a> {
                             BinaryOperator::Add => a.wrapping_add(b),
                             BinaryOperator::Subtract => a.wrapping_sub(b),
                             BinaryOperator::Multiply => a.wrapping_mul(b),
-                            BinaryOperator::Divide => {
+                            BinaryOperator::Divide => a.checked_div(b).ok_or_else(|| {
                                 if b == 0 {
-                                    return Err(ConstantEvaluatorError::DivisionByZero);
+                                    ConstantEvaluatorError::DivisionByZero
                                 } else {
-                                    a.wrapping_div(b)
+                                    ConstantEvaluatorError::Overflow("division".into())
                                 }
-                            }
-                            BinaryOperator::Modulo => {
+                            })?,
+                            BinaryOperator::Modulo => a.checked_rem(b).ok_or_else(|| {
                                 if b == 0 {
-                                    return Err(ConstantEvaluatorError::RemainderByZero);
+                                    ConstantEvaluatorError::RemainderByZero
                                 } else {
-                                    a.wrapping_rem(b)
+                                    ConstantEvaluatorError::Overflow("remainder".into())
                                 }
-                            }
+                            })?,
                             BinaryOperator::And => a & b,
                             BinaryOperator::ExclusiveOr => a ^ b,
                             BinaryOperator::InclusiveOr => a | b,
