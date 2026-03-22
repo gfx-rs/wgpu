@@ -68,6 +68,10 @@ Bottom level categories:
 
 - Fixed overflow detection and argument domain validation for `acosh`, `length`, `normalize`, and `pow` in constant evaluation. By @ecoricemon in [#9249](https://github.com/gfx-rs/wgpu/pull/9249).
 
+#### Metal
+
+- Added guards to avoid calling some feature detection methods that are not implemented on `CaptureMTLDevice`. By @andyleiserson in [#9284](https://github.com/gfx-rs/wgpu/pull/9284).
+
 ## v29.0.0 (2026-03-18)
 
 ### Major Changes
