@@ -72,6 +72,7 @@ Bottom level categories:
 - Added more granular limits for mesh shaders. By @inner-daemons in [#8739](https://github.com/gfx-rs/wgpu/pull/8739).
 - Added new `InvalidWorkgroupSizeError`, which is now used by `DrawError::InvalidGroupSize` and `StageError::InvalidWorkgroupSize`. By @andyleiserson in [#9357](https://github.com/gfx-rs/wgpu/pull/9357).
 - Zero-size `Queue::write_buffer` now returns an error if the offset is invalid or the buffer lacks `COPY_DST`. By @39ali in [#9374](https://github.com/gfx-rs/wgpu/pull/9374).
+- `Buffer::get_mapped_range` and variants now return `Result<_, MapRangeError>>` instead of panicking, in line with WebGPU spec. By @atlv24 in [#9281](https://github.com/gfx-rs/wgpu/pull/9281).
 
 #### Validation
 

@@ -212,7 +212,7 @@ async fn run_test(ctx: TestingContext, layer_mask: u32, sample_count: u32) {
         .await
         .unwrap();
 
-    let data = slice.get_mapped_range();
+    let data = slice.get_mapped_range().unwrap();
     let each_texture_size = (TEXTURE_SIZE * TEXTURE_SIZE) as usize;
     assert_eq!(data.len(), each_texture_size * num_layers as usize);
     for view_idx in 0..num_layers as usize {

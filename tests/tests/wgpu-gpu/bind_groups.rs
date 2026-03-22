@@ -382,7 +382,7 @@ static BIND_GROUP_WITH_MAX_BINDING_INDEX: GpuTestConfiguration = GpuTestConfigur
         device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
         assert_eq!(
-            &*readback.slice(..).get_mapped_range(),
+            &*readback.slice(..).get_mapped_range().unwrap(),
             &test_value.to_le_bytes()
         );
     });

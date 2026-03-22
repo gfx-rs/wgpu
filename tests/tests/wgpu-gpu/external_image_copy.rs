@@ -332,7 +332,7 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                     .await
                     .unwrap();
 
-                let buffer = readback_buffer.slice(..).get_mapped_range();
+                let buffer = readback_buffer.slice(..).get_mapped_range().unwrap();
 
                 // 64 because of 256 byte alignment / 4.
                 let gpu_image = image::RgbaImage::from_vec(64, 3, buffer.to_vec()).unwrap();

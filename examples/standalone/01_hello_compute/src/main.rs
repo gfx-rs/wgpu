@@ -245,7 +245,7 @@ fn main() {
     device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
     // We can now read the data from the buffer.
-    let data = buffer_slice.get_mapped_range();
+    let data = buffer_slice.get_mapped_range().unwrap();
     // Convert the data back to f32 via an aligned copy.
     let result: Vec<f32> = bytemuck::allocation::pod_collect_to_vec(&data);
 
