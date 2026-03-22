@@ -142,7 +142,7 @@ A task shader entry point must return a `vec3<u32>` value decorated with `@built
 The output of a task shader is set to zero if it violates either of the limits `max_task_mesh_workgroup_total_count` or `max_task_mesh_workgroups_per_dimension`.
 
 Each task shader workgroup dispatches an independent mesh shader grid: in mesh shader invocations, `@builtin` values like `workgroup_id` and `global_invocation_id` describe the position of the workgroup and invocation within that grid;
-and `@builtin(num_workgroups)` matches the task shader workgroup's return value. Mesh shaders dispatched for other task shader workgroups are not included in the count. If it is necessary for a mesh shader to know which task shader workgroup dispatched it, the task shader can include its own workgroup id in the task payload.
+and `@builtin(num_workgroups)` matches the task shader workgroup's return value. If this output violates any limits, it may be zeroed or cause undefined behavior, depending on the compilation options. Mesh shaders dispatched for other task shader workgroups are not included in the count. If it is necessary for a mesh shader to know which task shader workgroup dispatched it, the task shader can include its own workgroup id in the task payload.
 
 Task shaders can use compute and subgroup builtin inputs, in addition to `view_index` and `draw_id`.
 
