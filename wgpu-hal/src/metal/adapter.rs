@@ -983,8 +983,12 @@ impl super::CapabilitiesQuery {
                     || device.supportsFamily(MTLGPUFamily::Apple7)
                     || device.supportsFamily(MTLGPUFamily::Mac2)),
             // https://developer.apple.com/documentation/metal/mtldevice/hasunifiedmemory
-            has_unified_memory: if available!(macos = 15.0, ios = 13.0, tvos = 13.0, visionos = 1.0)
-            {
+            has_unified_memory: if available!(
+                macos = 10.15,
+                ios = 13.0,
+                tvos = 13.0,
+                visionos = 1.0
+            ) {
                 Some(device.hasUnifiedMemory())
             } else {
                 None
