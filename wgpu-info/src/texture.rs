@@ -78,7 +78,6 @@ fn test_compute_render_extent() {
 
 pub fn max_texture_format_string_size() -> usize {
     wgpu::TextureFormat::exhaust()
-        .into_iter()
         .map(|f| texture_format_name(f).len())
         .max()
         .unwrap()

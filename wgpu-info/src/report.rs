@@ -33,7 +33,6 @@ impl GpuReport {
             let limits = adapter.limits();
             let downlevel_caps = adapter.get_downlevel_capabilities();
             let texture_format_features = wgpu::TextureFormat::exhaust()
-                .into_iter()
                 .map(|format| (format, adapter.get_texture_format_features(format)))
                 .collect();
 
