@@ -909,7 +909,7 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                 let mut aabb_entries =
                     Vec::<hal::AccelerationStructureAABBs<dyn hal::DynBuffer>>::new();
 
-                for (i, mesh) in aabb_geometries.iter().enumerate() {
+                for (i, aabb) in aabb_geometries.iter().enumerate() {
                     let size_desc = match &blas.sizes {
                         wgt::BlasGeometrySizeDescriptors::AABBs { descriptors } => descriptors,
                         _ => {
@@ -925,33 +925,33 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                     }
                     let size_desc = &size_desc[i];
 
-                    if size_desc.flags != mesh.size.flags {
+                    if size_desc.flags != aabb.size.flags {
                         return Err(BuildAccelerationStructureError::IncompatibleBlasFlags(
                             blas.error_ident(),
                             size_desc.flags,
-                            mesh.size.flags,
+                            aabb.size.flags,
                         ));
                     }
 
-                    if size_desc.stride != mesh.size.stride {
+                    if size_desc.stride != aabb.size.stride {
                         return Err(BuildAccelerationStructureError::DifferentBlasAabbStride(
                             blas.error_ident(),
                             size_desc.stride,
-                            mesh.size.stride,
+                            aabb.size.stride,
                         ));
                     }
 
-                    if size_desc.primitive_count < mesh.size.primitive_count {
+                    if size_desc.primitive_count < aabb.size.primitive_count {
                         return Err(
                             BuildAccelerationStructureError::IncompatibleBlasAabbPrimitiveCount(
                                 blas.error_ident(),
                                 size_desc.primitive_count,
-                                mesh.size.primitive_count,
+                                aabb.size.primitive_count,
                             ),
                         );
                     }
 
-                    if mesh.primitive_offset % 8 != 0 {
+                    if aabb.primitive_offset % 8 != 0 {
                         return Err(
                             BuildAccelerationStructureError::UnalignedAabbPrimitiveOffset(
                                 blas.error_ident(),
@@ -959,14 +959,14 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                         );
                     }
 
-                    let aabb_buffer = mesh.aabb_buffer.clone();
+                    let aabb_buffer = aabb.aabb_buffer.clone();
                     let aabb_pending = state.tracker.buffers.set_single(
                         &aabb_buffer,
                         BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     );
                     let aabb_raw = {
-                        let aabb_raw = mesh.aabb_buffer.as_ref().try_raw(state.snatch_guard)?;
-                        let aabb_buffer = &mesh.aabb_buffer;
+                        let aabb_raw = aabb.aabb_buffer.as_ref().try_raw(state.snatch_guard)?;
+                        let aabb_buffer = &aabb.aabb_buffer;
                         aabb_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
 
                         if let Some(barrier) = aabb_pending.map(|pending| {
@@ -975,8 +975,8 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                             input_barriers.push(barrier);
                         }
 
-                        let required_end = mesh.primitive_offset as u64
-                            + mesh.size.primitive_count as u64 * mesh.size.stride;
+                        let required_end = aabb.primitive_offset as u64
+                            + aabb.size.primitive_count as u64 * aabb.size.stride;
                         if aabb_buffer.size < required_end {
                             return Err(BuildAccelerationStructureError::InsufficientBufferSize(
                                 aabb_buffer.error_ident(),
@@ -988,7 +988,7 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                         state.buffer_memory_init_actions.extend(
                             aabb_buffer.initialization_status.read().create_action(
                                 aabb_buffer,
-                                mesh.primitive_offset as u64..required_end,
+                                aabb.primitive_offset as u64..required_end,
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
                         );
@@ -997,10 +997,10 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
 
                     aabb_entries.push(hal::AccelerationStructureAABBs {
                         buffer: Some(aabb_raw),
-                        offset: mesh.primitive_offset,
-                        count: mesh.size.primitive_count,
-                        stride: mesh.size.stride,
-                        flags: mesh.size.flags,
+                        offset: aabb.primitive_offset,
+                        count: aabb.size.primitive_count,
+                        stride: aabb.size.stride,
+                        flags: aabb.size.flags,
                     });
                 }
 
