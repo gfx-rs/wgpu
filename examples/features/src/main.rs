@@ -93,6 +93,12 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgpu: true,
     },
     ExampleDesc {
+        name: "render_with_compute",
+        function: wgpu_examples::render_with_compute::main,
+        webgl: false,
+        webgpu: true,
+    },
+    ExampleDesc {
         name: "repeated_compute",
         function: wgpu_examples::repeated_compute::main,
         webgl: false, // No compute

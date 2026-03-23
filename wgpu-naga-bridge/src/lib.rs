@@ -112,7 +112,7 @@ pub fn features_to_naga_capabilities(
         features.contains(wgt::Features::DUAL_SOURCE_BLENDING),
     );
     caps.set(
-        Caps::CLIP_DISTANCE,
+        Caps::CLIP_DISTANCES,
         features.contains(wgt::Features::CLIP_DISTANCES),
     );
     caps.set(

@@ -3071,9 +3071,9 @@ impl Writer {
                     // vertex
                     Bi::BaseInstance => BuiltIn::BaseInstance,
                     Bi::BaseVertex => BuiltIn::BaseVertex,
-                    Bi::ClipDistance => {
+                    Bi::ClipDistances => {
                         self.require_any(
-                            "`clip_distance` built-in",
+                            "`clip_distances` built-in",
                             &[spirv::Capability::ClipDistance],
                         )?;
                         BuiltIn::ClipDistance

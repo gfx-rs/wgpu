@@ -246,7 +246,7 @@ impl ImplementedEnableExtension {
         match self {
             Self::F16 => C::SHADER_FLOAT16,
             Self::DualSourceBlending => C::DUAL_SOURCE_BLENDING,
-            Self::ClipDistances => C::CLIP_DISTANCE,
+            Self::ClipDistances => C::CLIP_DISTANCES,
             Self::WgpuMeshShader => C::MESH_SHADER,
             Self::WgpuRayQuery => C::RAY_QUERY,
             Self::WgpuRayQueryVertexReturn => C::RAY_HIT_VERTEX_POSITION,

@@ -56,6 +56,7 @@ webgpu:api,operation,vertex_state,correctness:setVertexBuffer_offset_and_attribu
 
 webgpu:api,validation,buffer,create:*
 webgpu:api,validation,buffer,destroy:*
+webgpu:api,validation,capability_checks,features,clip_distances:*
 webgpu:api,validation,capability_checks,limits,maxBindGroups:setBindGroup,*
 webgpu:api,validation,capability_checks,limits,maxBindingsPerBindGroup:validate,*
 webgpu:api,validation,capability_checks,limits,maxBufferSize:*
@@ -343,8 +344,8 @@ fails-if(dx12,vulkan) webgpu:shader,execution,shader_io,fragment_builtins:inputs
 webgpu:shader,execution,shader_io,fragment_builtins:primitive_index,*
 webgpu:shader,execution,shader_io,fragment_builtins:subgroup_invocation_id:*
 webgpu:shader,execution,shader_io,fragment_builtins:subgroup_size:*
+webgpu:shader,execution,shader_io,vertex_builtins:outputs,clip_distances:*
 webgpu:shader,execution,statement,compound:*
-
 webgpu:shader,validation,const_assert,const_assert:*
 webgpu:shader,validation,decl,assignment_statement:*
 webgpu:shader,validation,decl,compound_statement:*
@@ -368,6 +369,7 @@ webgpu:shader,validation,expression,binary,short_circuiting_and_or:array_overrid
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:invalid_types:*
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:scalar_vector:op="%26%26";lhs="bool";rhs="bool"
 webgpu:shader,validation,expression,call,builtin,acos:*
+webgpu:shader,validation,expression,call,builtin,acosh:*
 webgpu:shader,validation,expression,call,builtin,all:*
 webgpu:shader,validation,expression,call,builtin,any:*
 webgpu:shader,validation,expression,call,builtin,arrayLength:*
@@ -387,11 +389,13 @@ webgpu:shader,validation,expression,call,builtin,exp:*
 webgpu:shader,validation,expression,call,builtin,exp2:*
 webgpu:shader,validation,expression,call,builtin,floor:*
 webgpu:shader,validation,expression,call,builtin,fract:*
-webgpu:shader,validation,expression,call,builtin,length:scalar:stage="constant";type="f32"
+webgpu:shader,validation,expression,call,builtin,length:*
 webgpu:shader,validation,expression,call,builtin,log:*
 webgpu:shader,validation,expression,call,builtin,log2:*
 webgpu:shader,validation,expression,call,builtin,max:*
 webgpu:shader,validation,expression,call,builtin,min:*
+webgpu:shader,validation,expression,call,builtin,normalize:*
+webgpu:shader,validation,expression,call,builtin,pow:*
 webgpu:shader,validation,expression,call,builtin,radians:*
 webgpu:shader,validation,expression,call,builtin,round:*
 webgpu:shader,validation,expression,call,builtin,saturate:*

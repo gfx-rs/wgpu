@@ -40,6 +40,7 @@ These examples use a common framework to handle wgpu init, window creation, and 
 - `shadow` - Likely by far the most complex example (certainly the largest in lines of code) of the official wgpu examples. `shadow` demonstrates basic scene rendering with the main attraction being lighting and shadows (as the name implies). It is recommended that any user looking into lighting be very familiar with the basic concepts of not only rendering with wgpu but also the primary mathematical ideas of computer graphics.
 - `multiple-render-targets` - Demonstrates how to render to two texture targets simultaneously from fragment shader.
 - `render_to_texture` - Renders to an image texture offscreen, demonstrating both off-screen rendering as well as how to add a sort of resolution-agnostic screenshot feature to an engine. This example either outputs an image file of your naming (pass command line arguments after specifying a `--` like `cargo run --bin wgpu-examples -- render_to_texture "test.png"`) or adds an `img` element containing the image to the page in WASM.
+- `render_with_compute` - Renders an image using compute shaders.
 - `ray_cube_fragment` - Demonstrates using ray queries with a fragment shader.
 - `ray_scene` - Demonstrates using ray queries and model loading
 - `ray_shadows` - Demonstrates a simple use of ray queries - high quality shadows - uses a light set with immediates to raytrace through an untransformed scene and detect whether there is something obstructing the light.
