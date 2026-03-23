@@ -74,5 +74,6 @@ web-sys = { workspace = true, optional = true, default-features = false, feature
 
 [dev-dependencies]
 exhaust.workspace = true
+hashbrown.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true

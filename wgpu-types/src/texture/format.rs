@@ -2002,11 +2002,9 @@ pub struct TextureFormatFeatures {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
-    use exhaust::Exhaust;
-
     use super::*;
+    use exhaust::Exhaust;
+    use hashbrown::HashSet;
 
     #[test]
     fn texture_format_serialize() {
@@ -2614,7 +2612,7 @@ mod tests {
     #[test]
     fn is_depth_stencil_format() {
         // the only valid formats
-        let depth_stencil_formats = HashSet::from([
+        let depth_stencil_formats: HashSet<TextureFormat> = HashSet::from([
             TextureFormat::Stencil8,
             TextureFormat::Depth16Unorm,
             TextureFormat::Depth24Plus,
@@ -2654,7 +2652,7 @@ mod tests {
     #[test]
     fn has_color_aspect() {
         // the only valid formats (without Astc)
-        let valid_formats = HashSet::from([
+        let valid_formats: HashSet<TextureFormat> = HashSet::from([
             TextureFormat::R8Unorm,
             TextureFormat::R8Snorm,
             TextureFormat::R8Uint,
@@ -2729,12 +2727,10 @@ mod tests {
             if let TextureFormat::Astc { .. } = format {
                 // can't add all `Astc` cases to the list above...
                 assert!(format.has_color_aspect(), "{:?} failed", format);
+            } else if valid_formats.contains(&format) {
+                assert!(format.has_color_aspect(), "{:?} failed", format);
             } else {
-                if valid_formats.contains(&format) {
-                    assert!(format.has_color_aspect(), "{:?} failed", format);
-                } else {
-                    assert!(!format.has_color_aspect(), "{:?} failed", format);
-                }
+                assert!(!format.has_color_aspect(), "{:?} failed", format);
             }
         }
     }
@@ -2743,7 +2739,7 @@ mod tests {
     #[test]
     fn has_depth_aspect() {
         // the only valid formats
-        let valid_formats = HashSet::from([
+        let valid_formats: HashSet<TextureFormat> = HashSet::from([
             TextureFormat::Depth16Unorm,
             TextureFormat::Depth24Plus,
             TextureFormat::Depth24PlusStencil8,
@@ -2764,7 +2760,7 @@ mod tests {
     #[test]
     fn has_stencil_aspect() {
         // the only valid formats
-        let valid_formats = HashSet::from([
+        let valid_formats: HashSet<TextureFormat> = HashSet::from([
             TextureFormat::Stencil8,
             TextureFormat::Depth24PlusStencil8,
             TextureFormat::Depth32FloatStencil8,
