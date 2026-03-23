@@ -994,7 +994,7 @@ impl crate::Device for super::Device {
                                     conv::map_binding_access(&ty),
                                 );
 
-                                // Argument encoder reports the required size and alignment 
+                                // Argument encoder reports the required size and alignment
                                 // of the pointer-array buffer.
                                 let encoder = device
                                     .newArgumentEncoderWithArguments(&NSArray::from_retained_slice(

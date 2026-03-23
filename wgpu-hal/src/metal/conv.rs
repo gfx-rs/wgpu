@@ -366,13 +366,10 @@ pub fn map_resource_usage(ty: &wgt::BindingType) -> MTLResourceUsage {
         },
         wgt::BindingType::Sampler(..) => MTLResourceUsage::empty(),
         wgt::BindingType::Buffer { ty, .. } => match ty {
-            wgt::BufferBindingType::Uniform => MTLResourceUsage::Read,
-            wgt::BufferBindingType::Storage { read_only } => {
-                if *read_only {
-                    MTLResourceUsage::Read
-                } else {
-                    MTLResourceUsage::Read | MTLResourceUsage::Write
-                }
+            wgt::BufferBindingType::Uniform
+            | wgt::BufferBindingType::Storage { read_only: true } => MTLResourceUsage::Read,
+            wgt::BufferBindingType::Storage { read_only: false } => {
+                MTLResourceUsage::Read | MTLResourceUsage::Write
             }
         },
         _ => unreachable!(),
@@ -381,14 +378,10 @@ pub fn map_resource_usage(ty: &wgt::BindingType) -> MTLResourceUsage {
 
 pub fn map_binding_access(ty: &wgt::BufferBindingType) -> MTLBindingAccess {
     match ty {
-        wgt::BufferBindingType::Uniform => MTLBindingAccess::ReadOnly,
-        wgt::BufferBindingType::Storage { read_only } => {
-            if *read_only {
-                MTLBindingAccess::ReadOnly
-            } else {
-                MTLBindingAccess::ReadWrite
-            }
+        wgt::BufferBindingType::Uniform | wgt::BufferBindingType::Storage { read_only: true } => {
+            MTLBindingAccess::ReadOnly
         }
+        wgt::BufferBindingType::Storage { read_only: false } => MTLBindingAccess::ReadWrite,
     }
 }
 
