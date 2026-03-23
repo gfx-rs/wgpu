@@ -41,13 +41,13 @@ use core::ptr;
 // Some more general handling of pointers is needed to be implemented here.
 const ATOMIC_REFERENCE: &str = "&";
 
-const RT_NAMESPACE: &str = "metal::raytracing";
-const RAY_QUERY_TYPE: &str = "_RayQuery";
-const RAY_QUERY_FIELD_INTERSECTOR: &str = "intersector";
-const RAY_QUERY_FIELD_INTERSECTION: &str = "intersection";
-const RAY_QUERY_MODERN_SUPPORT: bool = false; //TODO
-const RAY_QUERY_FIELD_READY: &str = "ready";
-const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
+pub(super) const RT_NAMESPACE: &str = "metal::raytracing";
+pub(super) const RAY_QUERY_TYPE: &str = "_RayQuery";
+pub(super) const RAY_QUERY_FIELD_INTERSECTOR: &str = "intersector";
+pub(super) const RAY_QUERY_FIELD_INTERSECTION: &str = "intersection";
+pub(super) const RAY_QUERY_MODERN_SUPPORT: bool = false; //TODO
+pub(super) const RAY_QUERY_FIELD_READY: &str = "ready";
+pub(super) const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
 
 pub(crate) const ATOMIC_COMP_EXCH_FUNCTION: &str = "naga_atomic_compare_exchange_weak_explicit";
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
@@ -782,21 +782,21 @@ struct TexelAddress {
 }
 
 pub(super) struct ExpressionContext<'a> {
-    function: &'a crate::Function,
+    pub(super) function: &'a crate::Function,
     origin: FunctionOrigin,
-    info: &'a valid::FunctionInfo,
-    module: &'a crate::Module,
-    mod_info: &'a valid::ModuleInfo,
-    pipeline_options: &'a PipelineOptions,
-    lang_version: (u8, u8),
-    policies: index::BoundsCheckPolicies,
+    pub(super) info: &'a valid::FunctionInfo,
+    pub(super) module: &'a crate::Module,
+    pub(super) mod_info: &'a valid::ModuleInfo,
+    pub(super) pipeline_options: &'a PipelineOptions,
+    pub(super) lang_version: (u8, u8),
+    pub(super) policies: index::BoundsCheckPolicies,
 
     /// The set of expressions used as indices in `ReadZeroSkipWrite`-policy
     /// accesses. These may need to be cached in temporary variables. See
     /// `index::find_checked_indexes` for details.
-    guarded_indices: HandleSet<crate::Expression>,
+    pub(super) guarded_indices: HandleSet<crate::Expression>,
     /// See [`Writer::gen_force_bounded_loop_statements`] for details.
-    force_loop_bounding: bool,
+    pub(super) force_loop_bounding: bool,
 }
 
 impl<'a> ExpressionContext<'a> {
@@ -874,9 +874,9 @@ impl<'a> ExpressionContext<'a> {
     }
 }
 
-struct StatementContext<'a> {
-    expression: ExpressionContext<'a>,
-    result_struct: Option<&'a str>,
+pub(super) struct StatementContext<'a> {
+    pub(super) expression: ExpressionContext<'a>,
+    pub(super) result_struct: Option<&'a str>,
 }
 
 impl<W: Write> Writer<W> {
@@ -3570,7 +3570,7 @@ impl<W: Write> Writer<W> {
         }
     }
 
-    fn start_baking_expression(
+    pub(super) fn start_baking_expression(
         &mut self,
         handle: Handle<crate::Expression>,
         context: &ExpressionContext,
@@ -4093,127 +4093,7 @@ impl<W: Write> Writer<W> {
                     self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
                 }
                 crate::Statement::RayQuery { query, ref fun } => {
-                    if context.expression.lang_version < (2, 4) {
-                        return Err(Error::UnsupportedRayTracing);
-                    }
-
-                    match *fun {
-                        crate::RayQueryFunction::Initialize {
-                            acceleration_structure,
-                            descriptor,
-                        } => {
-                            //TODO: how to deal with winding?
-                            write!(self.out, "{level}")?;
-                            self.put_expression(query, &context.expression, true)?;
-                            writeln!(self.out, ".{RAY_QUERY_FIELD_INTERSECTOR}.assume_geometry_type({RT_NAMESPACE}::geometry_type::triangle);")?;
-                            {
-                                let f_opaque = back::RayFlag::CULL_OPAQUE.bits();
-                                let f_no_opaque = back::RayFlag::CULL_NO_OPAQUE.bits();
-                                write!(self.out, "{level}")?;
-                                self.put_expression(query, &context.expression, true)?;
-                                write!(
-                                    self.out,
-                                    ".{RAY_QUERY_FIELD_INTERSECTOR}.set_opacity_cull_mode(("
-                                )?;
-                                self.put_expression(descriptor, &context.expression, true)?;
-                                write!(self.out, ".flags & {f_opaque}) != 0 ? {RT_NAMESPACE}::opacity_cull_mode::opaque : (")?;
-                                self.put_expression(descriptor, &context.expression, true)?;
-                                write!(self.out, ".flags & {f_no_opaque}) != 0 ? {RT_NAMESPACE}::opacity_cull_mode::non_opaque : ")?;
-                                writeln!(self.out, "{RT_NAMESPACE}::opacity_cull_mode::none);")?;
-                            }
-                            {
-                                let f_opaque = back::RayFlag::OPAQUE.bits();
-                                let f_no_opaque = back::RayFlag::NO_OPAQUE.bits();
-                                write!(self.out, "{level}")?;
-                                self.put_expression(query, &context.expression, true)?;
-                                write!(self.out, ".{RAY_QUERY_FIELD_INTERSECTOR}.force_opacity((")?;
-                                self.put_expression(descriptor, &context.expression, true)?;
-                                write!(self.out, ".flags & {f_opaque}) != 0 ? {RT_NAMESPACE}::forced_opacity::opaque : (")?;
-                                self.put_expression(descriptor, &context.expression, true)?;
-                                write!(self.out, ".flags & {f_no_opaque}) != 0 ? {RT_NAMESPACE}::forced_opacity::non_opaque : ")?;
-                                writeln!(self.out, "{RT_NAMESPACE}::forced_opacity::none);")?;
-                            }
-                            {
-                                let flag = back::RayFlag::TERMINATE_ON_FIRST_HIT.bits();
-                                write!(self.out, "{level}")?;
-                                self.put_expression(query, &context.expression, true)?;
-                                write!(
-                                    self.out,
-                                    ".{RAY_QUERY_FIELD_INTERSECTOR}.accept_any_intersection(("
-                                )?;
-                                self.put_expression(descriptor, &context.expression, true)?;
-                                writeln!(self.out, ".flags & {flag}) != 0);")?;
-                            }
-
-                            write!(self.out, "{level}")?;
-                            self.put_expression(query, &context.expression, true)?;
-                            write!(self.out, ".{RAY_QUERY_FIELD_INTERSECTION} = ")?;
-                            self.put_expression(query, &context.expression, true)?;
-                            write!(
-                                self.out,
-                                ".{RAY_QUERY_FIELD_INTERSECTOR}.intersect({RT_NAMESPACE}::ray("
-                            )?;
-                            self.put_expression(descriptor, &context.expression, true)?;
-                            write!(self.out, ".origin, ")?;
-                            self.put_expression(descriptor, &context.expression, true)?;
-                            write!(self.out, ".dir, ")?;
-                            self.put_expression(descriptor, &context.expression, true)?;
-                            write!(self.out, ".tmin, ")?;
-                            self.put_expression(descriptor, &context.expression, true)?;
-                            write!(self.out, ".tmax), ")?;
-                            self.put_expression(acceleration_structure, &context.expression, true)?;
-                            write!(self.out, ", ")?;
-                            self.put_expression(descriptor, &context.expression, true)?;
-                            write!(self.out, ".cull_mask);")?;
-
-                            write!(self.out, "{level}")?;
-                            self.put_expression(query, &context.expression, true)?;
-                            writeln!(self.out, ".{RAY_QUERY_FIELD_READY} = true;")?;
-                        }
-                        crate::RayQueryFunction::Proceed { result } => {
-                            write!(self.out, "{level}")?;
-                            let name = Baked(result).to_string();
-                            self.start_baking_expression(result, &context.expression, &name)?;
-                            self.named_expressions.insert(result, name);
-                            self.put_expression(query, &context.expression, true)?;
-                            writeln!(self.out, ".{RAY_QUERY_FIELD_READY};")?;
-                            if RAY_QUERY_MODERN_SUPPORT {
-                                write!(self.out, "{level}")?;
-                                self.put_expression(query, &context.expression, true)?;
-                                writeln!(self.out, ".?.next();")?;
-                            }
-                        }
-                        crate::RayQueryFunction::GenerateIntersection { hit_t } => {
-                            if RAY_QUERY_MODERN_SUPPORT {
-                                write!(self.out, "{level}")?;
-                                self.put_expression(query, &context.expression, true)?;
-                                write!(self.out, ".?.commit_bounding_box_intersection(")?;
-                                self.put_expression(hit_t, &context.expression, true)?;
-                                writeln!(self.out, ");")?;
-                            } else {
-                                log::warn!("Ray Query GenerateIntersection is not yet supported");
-                            }
-                        }
-                        crate::RayQueryFunction::ConfirmIntersection => {
-                            if RAY_QUERY_MODERN_SUPPORT {
-                                write!(self.out, "{level}")?;
-                                self.put_expression(query, &context.expression, true)?;
-                                writeln!(self.out, ".?.commit_triangle_intersection();")?;
-                            } else {
-                                log::warn!("Ray Query ConfirmIntersection is not yet supported");
-                            }
-                        }
-                        crate::RayQueryFunction::Terminate => {
-                            if RAY_QUERY_MODERN_SUPPORT {
-                                write!(self.out, "{level}")?;
-                                self.put_expression(query, &context.expression, true)?;
-                                writeln!(self.out, ".?.abort();")?;
-                            }
-                            write!(self.out, "{level}")?;
-                            self.put_expression(query, &context.expression, true)?;
-                            writeln!(self.out, ".{RAY_QUERY_FIELD_READY} = false;")?;
-                        }
-                    }
+                    self.write_ray_query_stmt(level, context, query, fun)?;
                 }
                 crate::Statement::SubgroupBallot { result, predicate } => {
                     write!(self.out, "{level}")?;

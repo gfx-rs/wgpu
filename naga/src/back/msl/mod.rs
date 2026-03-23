@@ -81,6 +81,7 @@ mod keywords;
 mod mesh_shader;
 pub mod sampler;
 mod writer;
+mod ray;
 
 pub use writer::Writer;
 
