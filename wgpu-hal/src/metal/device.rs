@@ -93,8 +93,16 @@ fn create_bindless_id_buffer(
         .unwrap()
 }
 
-fn bindless_ids_mut(buffer: &ProtocolObject<dyn MTLBuffer>, count: u32) -> &mut [MTLResourceID] {
-    unsafe { core::slice::from_raw_parts_mut(buffer.contents().cast().as_ptr(), count as usize) }
+fn bindless_id_table_mut(
+    buffer: &ProtocolObject<dyn MTLBuffer>,
+    count: u32,
+) -> *mut [MTLResourceID] {
+    let ptr = buffer
+        .contents()
+        .cast::<u8>()
+        .as_ptr()
+        .cast::<MTLResourceID>();
+    core::ptr::slice_from_raw_parts_mut(ptr, count as usize)
 }
 
 const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> naga::back::msl::VertexFormat {
@@ -947,8 +955,9 @@ impl crate::Device for super::Device {
                             | wgt::BindingType::StorageTexture { .. } => {
                                 let argument_buffer =
                                     create_bindless_id_buffer(&self.shared.device, count);
-                                let resource_ids =
-                                    bindless_ids_mut(argument_buffer.as_ref(), count);
+                                let resource_ids = unsafe {
+                                    &mut *bindless_id_table_mut(argument_buffer.as_ref(), count)
+                                };
                                 let start = entry.resource_index as usize;
                                 let end = start + count as usize;
                                 let textures = &desc.textures[start..end];
@@ -970,8 +979,9 @@ impl crate::Device for super::Device {
                             wgt::BindingType::Sampler { .. } => {
                                 let argument_buffer =
                                     create_bindless_id_buffer(&self.shared.device, count);
-                                let resource_ids =
-                                    bindless_ids_mut(argument_buffer.as_ref(), count);
+                                let resource_ids = unsafe {
+                                    &mut *bindless_id_table_mut(argument_buffer.as_ref(), count)
+                                };
                                 let start = entry.resource_index as usize;
                                 let end = start + count as usize;
                                 let samplers = &desc.samplers[start..end];
@@ -1042,8 +1052,9 @@ impl crate::Device for super::Device {
                             wgt::BindingType::AccelerationStructure { .. } => {
                                 let argument_buffer =
                                     create_bindless_id_buffer(&self.shared.device, count);
-                                let resource_ids =
-                                    bindless_ids_mut(argument_buffer.as_ref(), count);
+                                let resource_ids = unsafe {
+                                    &mut *bindless_id_table_mut(argument_buffer.as_ref(), count)
+                                };
                                 let start = entry.resource_index as usize;
                                 let end = start + count as usize;
                                 let acceleration_structures =
