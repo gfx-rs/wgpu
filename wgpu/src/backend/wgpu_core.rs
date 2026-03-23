@@ -2827,6 +2827,17 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                     });
                     wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
                 }
+                crate::BlasGeometries::AabbGeometries(ref aabb_geometries) => {
+                    let iter =
+                        aabb_geometries
+                            .iter()
+                            .map(|ag| wgc::ray_tracing::BlasAabbGeometry {
+                                aabb_buffer: ag.aabb_buffer.inner.as_core().id,
+                                size: ag.size,
+                                primitive_offset: ag.primitive_offset,
+                            });
+                    wgc::ray_tracing::BlasGeometries::AabbGeometries(Box::new(iter))
+                }
             };
             wgc::ray_tracing::BlasBuildEntry {
                 blas_id: e.blas.inner.as_core().id,

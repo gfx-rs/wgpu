@@ -44,6 +44,10 @@ Bottom level categories:
 
 ### Added/New Features
 
+#### General
+
+- BLAS support for procedural AABB geometry (`BlasGeometrySizeDescriptors::AABBs`, `BlasAabbGeometry`, and related descriptors).
+
 #### Metal
 
 - Unconditionally enable `Features::CLIP_DISTANCES`. By @ErichDonGubler in [#9270](https://github.com/gfx-rs/wgpu/pull/9270).

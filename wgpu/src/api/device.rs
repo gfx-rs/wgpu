@@ -658,6 +658,9 @@ impl Device {
     ///       may be queried with [`Features::allowed_vertex_formats_for_blas`]).
     ///     - Both or neither of `geo_desc.index_format` and `geo_desc.index_count` must be provided.
     ///
+    /// If `sizes` is [`BlasGeometrySizeDescriptors::AABBs`], each entry's [`BlasAABBGeometrySizeDescriptor::stride`]
+    /// must be at least [`AABB_GEOMETRY_MIN_STRIDE`] and a multiple of 8.
+    ///
     /// [`Features::EXPERIMENTAL_RAY_QUERY`]: wgt::Features::EXPERIMENTAL_RAY_QUERY
     /// [`Features::allowed_vertex_formats_for_blas`]: wgt::Features::allowed_vertex_formats_for_blas
     #[must_use]

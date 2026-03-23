@@ -117,6 +117,49 @@ impl Device {
                     )
                 }
             }
+            wgt::BlasGeometrySizeDescriptors::AABBs { descriptors } => {
+                if descriptors.len() as u32 > self.limits.max_blas_geometry_count {
+                    return Err(CreateBlasError::TooManyGeometries(
+                        self.limits.max_blas_geometry_count,
+                        descriptors.len() as u32,
+                    ));
+                }
+
+                let mut entries =
+                    Vec::<hal::AccelerationStructureAABBs<dyn hal::DynBuffer>>::with_capacity(
+                        descriptors.len(),
+                    );
+                for desc in descriptors {
+                    if desc.stride < wgt::AABB_GEOMETRY_MIN_STRIDE || desc.stride % 8 != 0 {
+                        return Err(CreateBlasError::InvalidAabbStride(
+                            desc.stride,
+                            wgt::AABB_GEOMETRY_MIN_STRIDE,
+                        ));
+                    }
+                    if desc.primitive_count > self.limits.max_blas_primitive_count {
+                        return Err(CreateBlasError::TooManyPrimitives(
+                            self.limits.max_blas_primitive_count,
+                            desc.primitive_count,
+                        ));
+                    }
+
+                    entries.push(hal::AccelerationStructureAABBs::<dyn hal::DynBuffer> {
+                        buffer: Some(self.zero_buffer.as_ref()),
+                        offset: 0,
+                        count: desc.primitive_count,
+                        stride: desc.stride,
+                        flags: desc.flags,
+                    });
+                }
+                unsafe {
+                    self.raw().get_acceleration_structure_build_sizes(
+                        &hal::GetAccelerationStructureBuildSizesDescriptor {
+                            entries: &hal::AccelerationStructureEntries::AABBs(entries),
+                            flags: blas_desc.flags,
+                        },
+                    )
+                }
+            }
         };
 
         let raw = unsafe {
