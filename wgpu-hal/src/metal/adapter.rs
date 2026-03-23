@@ -990,9 +990,9 @@ impl super::CapabilitiesQuery {
             // https://developer.apple.com/documentation/metal/mtldevice/hasunifiedmemory
             has_unified_memory: if available!(macos = 15.0, ios = 13.0, tvos = 13.0, visionos = 1.0)
             {
-                // On Xcode frame capture this call causes a crash, fall back to feature table.
                 if Self::is_capture_mtl_device(device) {
-                    Some(family_check && device.supportsFamily(MTLGPUFamily::Apple6))
+                    // `hasUnifiedMemory` can fault under Xcode frame capture, report as unknown.
+                    None
                 } else {
                     Some(device.hasUnifiedMemory())
                 }
@@ -1137,7 +1137,7 @@ impl super::CapabilitiesQuery {
         );
         features.set(
             F::BUFFER_BINDING_ARRAY,
-            self.msl_version >= MTLLanguageVersion::Version3_0
+            self.msl_version >= MTLLanguageVersion::Version2_0
                 && self
                     .argument_buffers
                     .unwrap_or(MTLArgumentBuffersTier::Tier1)
