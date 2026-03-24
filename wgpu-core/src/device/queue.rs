@@ -541,8 +541,6 @@ pub enum QueueSubmitError {
     Queue(#[from] DeviceError),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
-    #[error(transparent)]
-    Unmap(#[from] BufferAccessError),
     #[error("{0} is still mapped")]
     BufferStillMapped(ResourceErrorIdent),
     #[error(transparent)]
@@ -557,7 +555,6 @@ impl WebGpuError for QueueSubmitError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
             Self::Queue(e) => e.webgpu_error_type(),
-            Self::Unmap(e) => e.webgpu_error_type(),
             Self::CommandEncoder(e) => e.webgpu_error_type(),
             Self::ValidateAsActionsError(e) => e.webgpu_error_type(),
             Self::InvalidResource(e) => e.webgpu_error_type(),
