@@ -760,7 +760,7 @@ jobs:
 
       # Miri is *only* available on nightly.
       - name: Install nightly toolchain
-      
+
         run: |
           rustup toolchain install nightly --no-self-update --profile=minimal --component miri
           rustup override set nightly
@@ -780,7 +780,6 @@ jobs:
           # it is ones that are both important and cheap.
           # Consider expanding it to include some API tests with the noop backend.
           cargo miri test --package=wgpu --no-default-features -- write_only
-
 
   fmt:
     # runtime is normally 15 seconds
