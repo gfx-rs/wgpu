@@ -32,7 +32,7 @@ struct Output {
     metal::float3 normal;
 };
 
-RayIntersection ray_query_get_intersection_true(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data, metal::raytracing::world_space_data> intersector) {
+RayIntersection ray_query_get_intersection_true(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector) {
     RayIntersection intersection = RayIntersection {};
     metal::raytracing::intersection_type ty = intersector.get_committed_intersection_type();
     if (ty == metal::raytracing::intersection_type::triangle) {
@@ -51,17 +51,17 @@ RayIntersection ray_query_get_intersection_true(metal::raytracing::intersection_
         intersection.object_to_world = intersector.get_committed_user_instance_id();
         intersection.world_to_object = intersector.get_committed_user_instance_id();
     }
-return intersection;
+    return intersection;
 }
 RayIntersection query_loop(
     metal::float3 pos,
     metal::float3 dir,
     metal::raytracing::instance_acceleration_structure acs
 ) {
-    metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data, metal::raytracing::world_space_data> rq_1 = {};
+    metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> rq_1 = {};
     RayDesc _e8 = RayDesc {4u, 255u, 0.1, 100.0, pos, dir};
     {
-        RayDesc desc = _e8;
+        metal::raytracing::RayDesc desc = _e8;
         intersection_params params;
         intersection_params.set_opacity_cull_mode(
             (desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (
@@ -112,7 +112,7 @@ metal::float3 get_torus_normal(
     return;
 }
 
-RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data, metal::raytracing::world_space_data> intersector) {
+RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector) {
     RayIntersection intersection = RayIntersection {};
     metal::raytracing::intersection_type ty = intersector.get_candidate_intersection_type();
     if (ty == metal::raytracing::intersection_type::triangle) {
@@ -130,18 +130,18 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
         intersection.object_to_world = intersector.get_candidate_user_instance_id();
         intersection.world_to_object = intersector.get_candidate_user_instance_id();
     }
-return intersection;
+    return intersection;
 }
 
 [[max_total_threads_per_threadgroup(1)]] kernel void main_candidate(
   metal::raytracing::instance_acceleration_structure acc_struct [[user(fake0)]]
 ) {
-    metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data, metal::raytracing::world_space_data> rq = {};
+    metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> rq = {};
     metal::float3 pos_2 = metal::float3(0.0);
     metal::float3 dir_2 = metal::float3(0.0, 1.0, 0.0);
     RayDesc _e12 = RayDesc {4u, 255u, 0.1, 100.0, pos_2, dir_2};
     {
-        RayDesc desc = _e12;
+        metal::raytracing::RayDesc desc = _e12;
         intersection_params params;
         intersection_params.set_opacity_cull_mode(
             (desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (

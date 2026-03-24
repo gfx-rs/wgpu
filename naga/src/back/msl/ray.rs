@@ -6,7 +6,7 @@ use crate::{Handle, back::{self, Baked, msl::{BackendResult, Error, Writer, writ
 pub(super) const RT_NAMESPACE: &'static str = "metal::raytracing";
 
 pub(super) fn metal_intersector_ty() -> String {
-    format!("{RT_NAMESPACE}::intersection_query<{RT_NAMESPACE}::instancing, {RT_NAMESPACE}::triangle_data, {RT_NAMESPACE}::world_space_data>")
+    format!("{RT_NAMESPACE}::intersection_query<{RT_NAMESPACE}::instancing, {RT_NAMESPACE}::triangle_data>")
 }
 
 pub(super) const INTERSECTION_FUNCTION_NAME: &'static str = "ray_query_get_intersection";
@@ -58,7 +58,7 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "{level}{level}intersection.object_to_world = intersector.get_{ty}_user_instance_id();")?;
         writeln!(self.out, "{level}{level}intersection.world_to_object = intersector.get_{ty}_user_instance_id();")?;
         writeln!(self.out, "{level}}}")?;
-        writeln!(self.out, "return intersection;")?;
+        writeln!(self.out, "{level}return intersection;")?;
         writeln!(self.out, "}}")?;
 
         Ok(())
@@ -81,7 +81,7 @@ impl<W: Write> Writer<W> {
 
                 let inner_level = level.next();
 
-                write!(self.out, "{inner_level}RayDesc desc = ")?;
+                write!(self.out, "{inner_level}{RT_NAMESPACE}::RayDesc desc = ")?;
                 self.put_expression(descriptor, &context.expression, false)?;
                 writeln!(self.out, ";")?;
 
