@@ -42,6 +42,11 @@ macro_rules! with_limits {
             max_binding_array_acceleration_structure_elements_per_shader_stage,
             Ordering::Less
         );
+        $macro_name!(
+            max_binding_array_sampler_elements_per_shader_stage,
+            Ordering::Less
+        );
+
         $macro_name!(max_uniform_buffer_binding_size, Ordering::Less);
         $macro_name!(max_storage_buffer_binding_size, Ordering::Less);
         $macro_name!(max_vertex_buffers, Ordering::Less);
@@ -79,6 +84,7 @@ macro_rules! with_limits {
         $macro_name!(max_blas_primitive_count, Ordering::Less);
         $macro_name!(max_blas_geometry_count, Ordering::Less);
         $macro_name!(max_tlas_instance_count, Ordering::Less);
+        $macro_name!(max_acceleration_structures_per_shader_stage, Ordering::Less);
 
         $macro_name!(max_multiview_view_count, Ordering::Less);
     };
@@ -594,6 +600,78 @@ impl Limits {
         }
     }
 
+    /// Sets each limit to `i32::MAX` (or 1, in the case of lower-is-better limits).
+    ///
+    /// These values do not reflect the capabilities of any actual device. They are
+    /// used by the noop backend, and by the test that makes sure `with_limits!` is
+    /// exhaustive.
+    #[must_use]
+    pub const fn unlimited() -> Self {
+        /// Guaranteed to be no bigger than isize::MAX which is the maximum size of an allocation,
+        /// except on 16-bit platforms which we certainly don’t fit in.
+        const ALLOC_MAX_U32: u32 = i32::MAX as u32;
+        /// Guaranteed to be no bigger than isize::MAX which is the maximum size of an allocation,
+        /// except on 16-bit platforms which we certainly don’t fit in.
+        const ALLOC_MAX_U64: u64 = i32::MAX as u64;
+
+        Self {
+            max_texture_dimension_1d: ALLOC_MAX_U32,
+            max_texture_dimension_2d: ALLOC_MAX_U32,
+            max_texture_dimension_3d: ALLOC_MAX_U32,
+            max_texture_array_layers: ALLOC_MAX_U32,
+            max_bind_groups: ALLOC_MAX_U32,
+            max_bindings_per_bind_group: ALLOC_MAX_U32,
+            max_dynamic_uniform_buffers_per_pipeline_layout: ALLOC_MAX_U32,
+            max_dynamic_storage_buffers_per_pipeline_layout: ALLOC_MAX_U32,
+            max_sampled_textures_per_shader_stage: ALLOC_MAX_U32,
+            max_samplers_per_shader_stage: ALLOC_MAX_U32,
+            max_storage_buffers_per_shader_stage: ALLOC_MAX_U32,
+            max_storage_textures_per_shader_stage: ALLOC_MAX_U32,
+            max_uniform_buffers_per_shader_stage: ALLOC_MAX_U32,
+            max_binding_array_elements_per_shader_stage: ALLOC_MAX_U32,
+            max_binding_array_sampler_elements_per_shader_stage: ALLOC_MAX_U32,
+            max_binding_array_acceleration_structure_elements_per_shader_stage: ALLOC_MAX_U32,
+            max_uniform_buffer_binding_size: ALLOC_MAX_U64,
+            max_storage_buffer_binding_size: ALLOC_MAX_U64,
+            max_vertex_buffers: ALLOC_MAX_U32,
+            max_buffer_size: ALLOC_MAX_U64,
+            max_vertex_attributes: ALLOC_MAX_U32,
+            max_vertex_buffer_array_stride: ALLOC_MAX_U32,
+            max_inter_stage_shader_variables: ALLOC_MAX_U32,
+            min_uniform_buffer_offset_alignment: 1,
+            min_storage_buffer_offset_alignment: 1,
+            max_color_attachments: ALLOC_MAX_U32,
+            max_color_attachment_bytes_per_sample: ALLOC_MAX_U32,
+            max_compute_workgroup_storage_size: ALLOC_MAX_U32,
+            max_compute_invocations_per_workgroup: ALLOC_MAX_U32,
+            max_compute_workgroup_size_x: ALLOC_MAX_U32,
+            max_compute_workgroup_size_y: ALLOC_MAX_U32,
+            max_compute_workgroup_size_z: ALLOC_MAX_U32,
+            max_compute_workgroups_per_dimension: ALLOC_MAX_U32,
+            max_immediate_size: ALLOC_MAX_U32,
+            max_non_sampler_bindings: ALLOC_MAX_U32,
+
+            max_task_mesh_workgroup_total_count: ALLOC_MAX_U32,
+            max_task_mesh_workgroups_per_dimension: ALLOC_MAX_U32,
+            max_task_invocations_per_workgroup: ALLOC_MAX_U32,
+            max_task_invocations_per_dimension: ALLOC_MAX_U32,
+            max_mesh_invocations_per_workgroup: ALLOC_MAX_U32,
+            max_mesh_invocations_per_dimension: ALLOC_MAX_U32,
+            max_task_payload_size: ALLOC_MAX_U32,
+            max_mesh_output_vertices: ALLOC_MAX_U32,
+            max_mesh_output_primitives: ALLOC_MAX_U32,
+            max_mesh_output_layers: ALLOC_MAX_U32,
+            max_mesh_multiview_view_count: ALLOC_MAX_U32,
+
+            max_blas_primitive_count: ALLOC_MAX_U32,
+            max_blas_geometry_count: ALLOC_MAX_U32,
+            max_tlas_instance_count: ALLOC_MAX_U32,
+            max_acceleration_structures_per_shader_stage: ALLOC_MAX_U32,
+
+            max_multiview_view_count: ALLOC_MAX_U32,
+        }
+    }
+
     /// Modify the current limits to use the resolution limits of the other.
     ///
     /// This is useful because the swapchain might need to be larger than any other image in the application.
@@ -990,4 +1068,62 @@ pub enum ShaderModel {
     Sm4,
     /// WebGPU supports shader module 5.
     Sm5,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::{format, string::String, vec::Vec};
+
+    fn side_by_side(left: &str, right: &str) -> String {
+        let left_lines: Vec<&str> = left.lines().map(str::trim).collect();
+        let right_lines: Vec<&str> = right.lines().map(str::trim).collect();
+        let max_lines = left_lines.len().max(right_lines.len());
+        let diffs: Vec<(&str, &str)> = (0..max_lines)
+            .map(|i| {
+                let l = *left_lines.get(i).unwrap_or(&"");
+                let r = *right_lines.get(i).unwrap_or(&"");
+                (l, r)
+            })
+            .filter(|(l, r)| l != r)
+            .collect();
+        let left_width = diffs.iter().map(|(l, _)| l.len()).max().unwrap_or(0);
+        let mut out = String::new();
+        for (l, r) in &diffs {
+            out += &format!("{:<width$}  |  {}\n", l, r, width = left_width);
+        }
+        out
+    }
+
+    #[test]
+    fn with_limits_exhaustive() {
+        // Check that all limits are included in `with_limits!`, by using it to
+        // replicate `Limits::unlimited()`.
+        let mut limits = Limits::default();
+
+        macro_rules! set_to_max {
+            ($name:ident, $ordering:expr) => {
+                if $ordering == Ordering::Less {
+                    limits.$name = i32::MAX as _;
+                } else {
+                    limits.$name = 1;
+                }
+            };
+        }
+
+        with_limits!(set_to_max);
+
+        assert_eq!(
+            limits,
+            Limits::unlimited(),
+            "with_limits! did not replicate Limits::unlimited():\n{}",
+            side_by_side(
+                &format!("with_limits!\n------------\n{:#?}", limits),
+                &format!(
+                    "Limits::unlimited()\n-------------------\n{:#?}",
+                    Limits::unlimited()
+                ),
+            )
+        );
+    }
 }
