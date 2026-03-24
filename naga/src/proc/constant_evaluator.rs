@@ -2696,6 +2696,19 @@ impl<'a> ConstantEvaluator<'a> {
                     return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
                 }
 
+                if matches!(
+                    (left_value, op),
+                    (
+                        Literal::Bool(_),
+                        BinaryOperator::Less
+                            | BinaryOperator::LessEqual
+                            | BinaryOperator::Greater
+                            | BinaryOperator::GreaterEqual
+                    )
+                ) {
+                    return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
+                }
+
                 let literal = match op {
                     BinaryOperator::Equal => Literal::Bool(left_value == right_value),
                     BinaryOperator::NotEqual => Literal::Bool(left_value != right_value),
@@ -2709,20 +2722,20 @@ impl<'a> ConstantEvaluator<'a> {
                             BinaryOperator::Add => a.wrapping_add(b),
                             BinaryOperator::Subtract => a.wrapping_sub(b),
                             BinaryOperator::Multiply => a.wrapping_mul(b),
-                            BinaryOperator::Divide => {
+                            BinaryOperator::Divide => a.checked_div(b).ok_or_else(|| {
                                 if b == 0 {
-                                    return Err(ConstantEvaluatorError::DivisionByZero);
+                                    ConstantEvaluatorError::DivisionByZero
                                 } else {
-                                    a.wrapping_div(b)
+                                    ConstantEvaluatorError::Overflow("division".into())
                                 }
-                            }
-                            BinaryOperator::Modulo => {
+                            })?,
+                            BinaryOperator::Modulo => a.checked_rem(b).ok_or_else(|| {
                                 if b == 0 {
-                                    return Err(ConstantEvaluatorError::RemainderByZero);
+                                    ConstantEvaluatorError::RemainderByZero
                                 } else {
-                                    a.wrapping_rem(b)
+                                    ConstantEvaluatorError::Overflow("remainder".into())
                                 }
-                            }
+                            })?,
                             BinaryOperator::And => a & b,
                             BinaryOperator::ExclusiveOr => a ^ b,
                             BinaryOperator::InclusiveOr => a | b,
@@ -2849,6 +2862,8 @@ impl<'a> ConstantEvaluator<'a> {
                         (Literal::Bool(a), Literal::Bool(b)) => Literal::Bool(match op {
                             BinaryOperator::LogicalAnd => a && b,
                             BinaryOperator::LogicalOr => a || b,
+                            BinaryOperator::And => a & b,
+                            BinaryOperator::InclusiveOr => a | b,
                             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                         }),
                         _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),

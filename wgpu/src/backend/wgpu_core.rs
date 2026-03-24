@@ -80,7 +80,8 @@ impl ContextWgpuCore {
 
     #[cfg(wgpu_core)]
     pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
-        self.0.enumerate_adapters(backends)
+        self.0
+            .enumerate_adapters(backends, false /* no limit bucketing */)
     }
 
     pub unsafe fn create_adapter_from_hal<A: hal::Api>(
@@ -864,6 +865,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                 compatible_surface: options
                     .compatible_surface
                     .map(|surface| surface.inner.as_core().id),
+                apply_limit_buckets: false,
             },
             wgt::Backends::all(),
             None,
