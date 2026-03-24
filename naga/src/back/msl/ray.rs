@@ -23,7 +23,6 @@ impl<W: Write> Writer<W> {
                 //TODO: how to deal with winding?
 
                 // put everything in a block so it doesn't interfere
-
                 writeln!(self.out, "{level}{{")?;
 
                 let inner_level = level.next();
