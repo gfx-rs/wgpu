@@ -27,7 +27,7 @@ pub(super) const INTERSECTION_FUNCTION_NAME: &str = "ray_query_get_intersection"
 
 impl<W: Write> Writer<W> {
     /// Writes a function to get the current intersection from the ray query
-    /// 
+    ///
     /// Like other backends, this is needed to have a single branch for constructing
     /// the parts of the intersection that need to be checked whether they do or don't
     /// hit.
@@ -106,7 +106,6 @@ impl<W: Write> Writer<W> {
         }
         writeln!(self.out, "{level}}}")?;
 
-
         // If the ray hit anything at all, call all methods that require that.
         writeln!(
             self.out,
@@ -167,7 +166,20 @@ impl<W: Write> Writer<W> {
 
                 let inner_level = level.next();
 
-                write!(self.out, "{inner_level}RayDesc desc = ")?;
+                let naga_ray_desc_ty = TypeContext {
+                    handle: context
+                        .expression
+                        .module
+                        .special_types
+                        .ray_desc
+                        .expect("ray desc is required as an argument so should be there"),
+                    gctx: context.expression.module.to_ctx(),
+                    names: &self.names,
+                    access: crate::StorageAccess::empty(),
+                    first_time: false,
+                };
+
+                write!(self.out, "{inner_level}{naga_ray_desc_ty} desc = ")?;
                 self.put_expression(descriptor, &context.expression, false)?;
                 writeln!(self.out, ";")?;
 
