@@ -18,6 +18,7 @@ use crate::{
 
 pub(super) const RT_NAMESPACE: &str = "metal::raytracing";
 
+/// The ray query type, needs to be a function so it can format the constants.
 pub(super) fn metal_intersector_ty() -> String {
     format!("{RT_NAMESPACE}::intersection_query<{RT_NAMESPACE}::instancing, {RT_NAMESPACE}::triangle_data>")
 }
@@ -25,6 +26,11 @@ pub(super) fn metal_intersector_ty() -> String {
 pub(super) const INTERSECTION_FUNCTION_NAME: &str = "ray_query_get_intersection";
 
 impl<W: Write> Writer<W> {
+    /// Writes a function to get the current intersection from the ray query
+    /// 
+    /// Like other backends, this is needed to have a single branch for constructing
+    /// the parts of the intersection that need to be checked whether they do or don't
+    /// hit.
     pub(super) fn write_rq_get_intersection_function(
         &mut self,
         module: &crate::Module,
@@ -52,11 +58,13 @@ impl<W: Write> Writer<W> {
             "{intersection} {INTERSECTION_FUNCTION_NAME}_{committed}({} intersector) {{",
             metal_intersector_ty()
         )?;
+        // Initialize the intersection to its default values (which should be zero).
         writeln!(
             self.out,
             "{level}{intersection} intersection = {intersection} {{}};"
         )?;
         writeln!(self.out, "{level}{RT_NAMESPACE}::intersection_type ty = intersector.get_{ty}_intersection_type();")?;
+        // If the ray hit a triangle, call all methods that require that and set the intersection type.
         writeln!(
             self.out,
             "{level}if (ty == {RT_NAMESPACE}::intersection_type::triangle) {{"
@@ -77,6 +85,8 @@ impl<W: Write> Writer<W> {
             self.out,
             "{level}{level}intersection.front_face = intersector.is_{ty}_triangle_front_facing();"
         )?;
+        // Otherwise, if the ray hit an AABB (called a bounding box in metal) set the intersection type
+        // (which depends on whether this is a committed or candidate intersection).
         writeln!(
             self.out,
             "{level}}} else if (ty == {RT_NAMESPACE}::intersection_type::bounding_box) {{"
@@ -87,9 +97,17 @@ impl<W: Write> Writer<W> {
                 "{level}{level}intersection.kind = {};",
                 crate::RayQueryIntersection::Generated as u32
             )?;
+        } else {
+            writeln!(
+                self.out,
+                "{level}{level}intersection.kind = {};",
+                crate::RayQueryIntersection::Aabb as u32
+            )?;
         }
         writeln!(self.out, "{level}}}")?;
 
+
+        // If the ray hit anything at all, call all methods that require that.
         writeln!(
             self.out,
             "{level}if (ty != {RT_NAMESPACE}::intersection_type::none) {{"
@@ -105,7 +123,7 @@ impl<W: Write> Writer<W> {
             self.out,
             "{level}{level}intersection.instance_index = intersector.get_{ty}_instance_id();"
         )?;
-        // TODO
+        // Metal does not appear to support obtaining the intersection offset from a ray query.
         //writeln!(self.out, "{level}{level}intersection.sbt_record_offset = intersector.get_{ty}_user_instance_id();")?;
         writeln!(
             self.out,
@@ -135,14 +153,16 @@ impl<W: Write> Writer<W> {
             return Err(Error::UnsupportedRayTracing);
         }
 
+        // TODO: check for misuse.
         match *fun {
             crate::RayQueryFunction::Initialize {
                 acceleration_structure,
                 descriptor,
             } => {
-                //TODO: how to deal with winding?
+                //TODO: how to deal with winding? Is it by default the same as the other APIs?
 
-                // put everything in a block so it doesn't interfere
+                // Put everything in a block so that the variable names
+                // do not conflict with user variable names
                 writeln!(self.out, "{level}{{")?;
 
                 let inner_level = level.next();
@@ -158,7 +178,7 @@ impl<W: Write> Writer<W> {
                 )?;
 
                 {
-                    // determine whether or not to cull
+                    // Determine whether or not to cull opaque/non-opaques
                     let f_opaque = back::RayFlag::CULL_OPAQUE.bits();
                     let f_no_opaque = back::RayFlag::CULL_NO_OPAQUE.bits();
                     writeln!(
@@ -171,6 +191,7 @@ impl<W: Write> Writer<W> {
                     )?;
                 }
                 {
+                    // Determine whether to force a particular opacity
                     let f_opaque = back::RayFlag::OPAQUE.bits();
                     let f_no_opaque = back::RayFlag::NO_OPAQUE.bits();
                     writeln!(self.out, "{inner_level}params.force_opacity(
@@ -193,6 +214,9 @@ impl<W: Write> Writer<W> {
                 )?;
 
                 write!(self.out, "{inner_level}")?;
+                // A ray query can by initialized in metal by either using a "non-default constructor"
+                // or by calling reset. Ray queries cannot be assigned to in metal, so reset needs to
+                // be called.
                 self.put_expression(query, &context.expression, true)?;
                 write!(self.out, ".reset(ray,")?;
                 self.put_expression(acceleration_structure, &context.expression, true)?;
@@ -204,7 +228,6 @@ impl<W: Write> Writer<W> {
                 let name = Baked(result).to_string();
                 self.start_baking_expression(result, &context.expression, &name)?;
                 self.named_expressions.insert(result, name);
-                // next returns bool
                 self.put_expression(query, &context.expression, true)?;
                 writeln!(self.out, ".next();")?;
             }
@@ -223,6 +246,8 @@ impl<W: Write> Writer<W> {
             crate::RayQueryFunction::Terminate => {
                 write!(self.out, "{level}")?;
                 self.put_expression(query, &context.expression, true)?;
+                // Terminate appears to map to abort in spirv-cross, but metal only documents
+                // the existance of this method, not what it does.
                 writeln!(self.out, ".abort();")?;
             }
         }
