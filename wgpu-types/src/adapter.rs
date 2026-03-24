@@ -1,7 +1,7 @@
-use alloc::string::String;
+use alloc::{borrow::Cow, string::String};
 use core::{fmt, mem};
 
-use crate::{link_to_wgpu_docs, Backend, Backends};
+use crate::{link_to_wgc_docs, link_to_wgpu_docs, Backend, Backends};
 
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
@@ -29,7 +29,8 @@ pub enum FeatureLevel {
 /// Options for requesting adapter.
 ///
 /// Corresponds to [WebGPU `GPURequestAdapterOptions`](
-/// https://gpuweb.github.io/gpuweb/#dictdef-gpurequestadapteroptions).
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpurequestadapteroptions),
+/// with some wgpu extensions.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -43,6 +44,16 @@ pub struct RequestAdapterOptions<S> {
     /// create the surface, only guarantees that the adapter can present to said surface.
     /// For WebGL, this is strictly required, as an adapter can not be created without a surface.
     pub compatible_surface: Option<S>,
+    /// Requests that the returned adapter's limits are mapped to one of several pre-defined
+    /// buckets, as described in [limit bucketing]. If your application exposes `wgpu` to untrusted
+    /// content (e.g. a web browser), this can reduce the potential for fingerprinting via adapter
+    /// characteristics.
+    ///
+    /// To be effective, control of this option must not be available to the untrusted content.
+    /// Instead, set this option unconditionally in trusted code.
+    ///
+    #[doc = link_to_wgc_docs!(["limit bucketing"]: "limits/index.html#Limit-bucketing")]
+    pub apply_limit_buckets: bool,
 }
 
 impl<S> Default for RequestAdapterOptions<S> {
@@ -51,6 +62,7 @@ impl<S> Default for RequestAdapterOptions<S> {
             power_preference: PowerPreference::default(),
             force_fallback_adapter: false,
             compatible_surface: None,
+            apply_limit_buckets: false,
         }
     }
 }
@@ -101,6 +113,28 @@ pub enum DeviceType {
     VirtualGpu,
     /// Cpu / Software Rendering.
     Cpu,
+}
+
+/// Information about the applied limit bucket, present in the `limit_bucket` field
+/// of [`AdapterInfo`] when limit bucketing is requested.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct AdapterLimitBucketInfo {
+    /// The name of the assigned bucket.
+    ///
+    /// No guarantee is made about the format or stability of the bucket names.
+    /// This should only be used for diagnostic purposes.
+    pub name: Cow<'static, str>,
+
+    /// The adapter's original limits, before bucketing was applied.
+    pub raw_limits: crate::Limits,
+    /// The adapter's original features, before bucketing was applied.
+    pub raw_features: crate::Features,
+
+    /// The adapter's original subgroup_min_size, before bucketing was applied.
+    pub raw_subgroup_min_size: u32,
+    /// The adapter's original subgroup_max_size, before bucketing was applied.
+    pub raw_subgroup_max_size: u32,
 }
 
 //TODO: convert `vendor` and `device` to `u32`
@@ -177,6 +211,32 @@ pub struct AdapterInfo {
     pub subgroup_max_size: u32,
     /// If true, adding [`TextureUsages::TRANSIENT`] to a texture will decrease memory usage.
     pub transient_saves_memory: bool,
+
+    /// If limit bucketing was requested, contains the name of the applied
+    /// bucket and the original capabilities of the adapter.
+    pub limit_bucket: Option<AdapterLimitBucketInfo>,
+}
+
+impl AdapterInfo {
+    /// Create a new `AdapterInfo` with the given device type and backend.
+    ///
+    /// All other info fields are not populated.
+    pub const fn new(device_type: DeviceType, backend: Backend) -> Self {
+        Self {
+            name: String::new(),
+            vendor: 0,
+            device: 0,
+            device_type,
+            device_pci_bus_id: String::new(),
+            driver: String::new(),
+            driver_info: String::new(),
+            backend,
+            subgroup_min_size: crate::MINIMUM_SUBGROUP_MIN_SIZE,
+            subgroup_max_size: crate::MAXIMUM_SUBGROUP_MAX_SIZE,
+            transient_saves_memory: false,
+            limit_bucket: None,
+        }
+    }
 }
 
 /// Error when [`Instance::request_adapter()`] fails.

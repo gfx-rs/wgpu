@@ -1,4 +1,5 @@
-use objc2::{available, runtime::AnyObject, runtime::ProtocolObject};
+use objc2::runtime::{AnyObject, ProtocolObject, Sel};
+use objc2::{available, sel};
 use objc2_foundation::{NSOperatingSystemVersion, NSProcessInfo};
 use objc2_metal::{
     MTLArgumentBuffersTier, MTLCounterSamplingPoint, MTLDevice, MTLFeatureSet, MTLGPUFamily,
@@ -13,6 +14,16 @@ use core::sync::atomic;
 use crate::metal::QueueShared;
 
 use super::{OsFeatures, TimestampQuerySupport};
+
+/// Check if a device's class has a given method in its method table.
+///
+/// This mirrors the check that `objc2` performs internally (in debug builds)
+/// before sending a message. We use it to skip method calls that would panic
+/// on proxy objects like Apple's `CaptureMTLDevice`, which forwards messages
+/// at runtime but doesn't declare the methods in its class.
+fn device_class_responds_to(device: &ProtocolObject<dyn MTLDevice>, sel: Sel) -> bool {
+    AnyObject::class(device.as_ref()).responds_to(sel)
+}
 
 /// Maximum number of command buffers for `MTLCommandQueue`s that we create.
 ///
@@ -716,6 +727,7 @@ impl super::CapabilitiesQuery {
             texture_cube_array: Self::supports_any(device, TEXTURE_CUBE_ARRAY_SUPPORT),
             supports_float_filtering: os_type == super::OsType::Macos
                 || (available!(macos = 11.0, ios = 14.0, tvos = 16.0, visionos = 1.0)
+                    && device_class_responds_to(device, sel!(supports32BitFloatFiltering))
                     && device.supports32BitFloatFiltering()),
             format_depth24_stencil8: os_type == super::OsType::Macos
                 && device.isDepth24Stencil8PixelFormatSupported(),
@@ -988,7 +1000,12 @@ impl super::CapabilitiesQuery {
                     || device.supportsFamily(MTLGPUFamily::Apple7)
                     || device.supportsFamily(MTLGPUFamily::Mac2)),
             // https://developer.apple.com/documentation/metal/mtldevice/hasunifiedmemory
-            has_unified_memory: if available!(macos = 15.0, ios = 13.0, tvos = 13.0, visionos = 1.0)
+            has_unified_memory: if available!(
+                macos = 10.15,
+                ios = 13.0,
+                tvos = 13.0,
+                visionos = 1.0
+            ) && device_class_responds_to(device, sel!(hasUnifiedMemory))
             {
                 if Self::is_capture_mtl_device(device) {
                     // `hasUnifiedMemory` can fault under Xcode frame capture, report as unknown.
@@ -1067,11 +1084,13 @@ impl super::CapabilitiesQuery {
                 tvos = 18.0,
                 visionos = 2.0,
             ) {
-                // On Xcode frame capture this call causes a crash, fall back to feature table.
                 if Self::is_capture_mtl_device(device) {
                     metal4 || (family_check && device.supportsFamily(MTLGPUFamily::Apple6))
                 } else {
-                    device.supportsRaytracing() && device.supportsRaytracingFromRender()
+                    device_class_responds_to(device, sel!(supportsRaytracing))
+                        && device.supportsRaytracing()
+                        && device_class_responds_to(device, sel!(supportsRaytracingFromRender))
+                        && device.supportsRaytracingFromRender()
                 }
             } else {
                 false

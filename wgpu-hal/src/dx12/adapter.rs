@@ -208,6 +208,7 @@ impl super::Adapter {
             subgroup_min_size: features1.WaveLaneCountMin,
             subgroup_max_size: features1.WaveLaneCountMax,
             transient_saves_memory: false,
+            limit_bucket: None,
         };
 
         let mut options = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS::default();

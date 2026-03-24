@@ -2090,6 +2090,14 @@ impl super::Instance {
                 .contains(vk::MemoryPropertyFlags::LAZILY_ALLOCATED)
         });
 
+        let device_type = match phd_capabilities.properties.device_type {
+            vk::PhysicalDeviceType::OTHER => wgt::DeviceType::Other,
+            vk::PhysicalDeviceType::INTEGRATED_GPU => wgt::DeviceType::IntegratedGpu,
+            vk::PhysicalDeviceType::DISCRETE_GPU => wgt::DeviceType::DiscreteGpu,
+            vk::PhysicalDeviceType::VIRTUAL_GPU => wgt::DeviceType::VirtualGpu,
+            vk::PhysicalDeviceType::CPU => wgt::DeviceType::Cpu,
+            _ => wgt::DeviceType::Other,
+        };
         let info = wgt::AdapterInfo {
             name: {
                 phd_capabilities
@@ -2102,14 +2110,6 @@ impl super::Instance {
             },
             vendor: phd_capabilities.properties.vendor_id,
             device: phd_capabilities.properties.device_id,
-            device_type: match phd_capabilities.properties.device_type {
-                vk::PhysicalDeviceType::OTHER => wgt::DeviceType::Other,
-                vk::PhysicalDeviceType::INTEGRATED_GPU => wgt::DeviceType::IntegratedGpu,
-                vk::PhysicalDeviceType::DISCRETE_GPU => wgt::DeviceType::DiscreteGpu,
-                vk::PhysicalDeviceType::VIRTUAL_GPU => wgt::DeviceType::VirtualGpu,
-                vk::PhysicalDeviceType::CPU => wgt::DeviceType::Cpu,
-                _ => wgt::DeviceType::Other,
-            },
             device_pci_bus_id: phd_capabilities
                 .pci_bus_info
                 .filter(|info| info.pci_bus != 0 || info.pci_device != 0)
@@ -2138,7 +2138,6 @@ impl super::Instance {
                     .unwrap_or("?")
                     .to_owned()
             },
-            backend: wgt::Backend::Vulkan,
             subgroup_min_size: phd_capabilities
                 .subgroup_size_control
                 .map(|subgroup_size| subgroup_size.min_subgroup_size)
@@ -2148,6 +2147,7 @@ impl super::Instance {
                 .map(|subgroup_size| subgroup_size.max_subgroup_size)
                 .unwrap_or(wgt::MAXIMUM_SUBGROUP_MAX_SIZE),
             transient_saves_memory: supports_lazily_allocated,
+            ..wgt::AdapterInfo::new(device_type, wgt::Backend::Vulkan)
         };
         let mut workarounds = super::Workarounds::empty();
         {

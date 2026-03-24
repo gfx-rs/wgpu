@@ -47,13 +47,9 @@ mod request_adapter_error {
 
     fn adapter_error(desc: wgpu::InstanceDescriptor) -> String {
         let instance = wgpu::Instance::new(desc);
-        pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::default(),
-            force_fallback_adapter: false,
-            compatible_surface: None,
-        }))
-        .unwrap_err()
-        .to_string()
+        pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+            .unwrap_err()
+            .to_string()
     }
 
     #[test]
