@@ -20,9 +20,6 @@ webgpu:api,validation,compute_pipeline:overrides,workgroup_size,limits:* // 0%
 webgpu:api,validation,createBindGroup:buffer,resource_state:* // 0%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,createBindGroup:external_texture,* // 0%, no external external texture in deno
 webgpu:api,validation,createBindGroup:texture,resource_state:* // crash, https://github.com/gfx-rs/wgpu/issues/7881
-webgpu:api,validation,createBindGroupLayout:visibility,VERTEX_shader_stage_buffer_type:* // 25%, writable storage buffers not allowed in VERTEX
-webgpu:api,validation,createBindGroupLayout:visibility,VERTEX_shader_stage_storage_texture_access:* // 25%, write-access storage textures not allowed in VERTEX
-webgpu:api,validation,createBindGroupLayout:visibility:* // 25%, missing per-stage storage limits
 webgpu:api,validation,createView:texture_state:* // 0%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_ranges:* // ***, https://github.com/gfx-rs/wgpu/issues/8118
 webgpu:api,validation,encoding,cmds,debug:* // 92%, https://github.com/gfx-rs/wgpu/issues/8039
@@ -46,12 +43,10 @@ webgpu:api,validation,queue,destroyed,* // 71%, writeBuffer/writeTexture return 
 webgpu:api,validation,queue,writeBuffer:ranges:* // 0%, missing OperationError for invalid ranges
 webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,depth_stencil_read_only_write_state:* // fails on dx12
 webgpu:api,validation,render_pass,render_pass_descriptor:depth_stencil_attachment,loadOp_storeOp_match_depthReadOnly_stencilReadOnly:* // 33%, missing validation: depth/stencil load/store ops provided for missing texture format aspects
-webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,color_target_count:*
 webgpu:api,validation,render_pipeline,fragment_state:pipeline_output_targets,blend:* // 95%, blend factors reading source alpha require vec4
 webgpu:api,validation,render_pipeline,fragment_state:pipeline_output_targets:* // 3%, color target without shader output requires writeMask=0
 webgpu:api,validation,render_pipeline,inter_stage:* // 15%, inter-stage type validation gaps and interpolation default handling
 webgpu:api,validation,render_pipeline,misc:external_texture:* // 0%, no external texture in deno
-webgpu:api,validation,render_pipeline,misc:storage_texture,format:* // 8%, similar to compute pipeline issue
 webgpu:api,validation,render_pipeline,multisample_state:* // 60%, https://github.com/gfx-rs/wgpu/issues/8779
 webgpu:api,validation,render_pipeline,overrides:* // 17%, missing validation: invalid pipeline constant identifiers silently ignored
 webgpu:api,validation,render_pipeline,vertex_state:max_vertex_attribute_limit:* // 0%, empty vertex buffers not counted, GPUInternalError no message
@@ -72,7 +67,6 @@ webgpu:shader,validation,decl,var:* // 99%, https://github.com/gfx-rs/wgpu/issue
 webgpu:shader,validation,expression,access,array:* // 97%, runtime indexing with compile-time-known values, https://github.com/gfx-rs/wgpu/issues/4390
 webgpu:shader,validation,expression,access,matrix:* // 93%, runtime OOB matrix access with literal indices incorrectly rejected
 webgpu:shader,validation,expression,access,vector:* // 52%, https://github.com/gfx-rs/wgpu/issues/4390, and missing swizzle validation
-webgpu:shader,validation,expression,binary,div_rem:* // 86%, https://github.com/gfx-rs/wgpu/issues/5474
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:* // 92%, https://github.com/gfx-rs/wgpu/issues/8440
 webgpu:shader,validation,expression,call,builtin,atomics:* // 86%, atomics in vertex shaders, invalid address spaces/access modes
 webgpu:shader,validation,expression,call,builtin,bitcast:* // 57%, bitcast const-eval unimplemented; size validation missing; f16 vector validation incorrect
@@ -125,10 +119,9 @@ webgpu:shader,validation,expression,call,builtin,unpack4xI8:* // 75%, missing co
 webgpu:shader,validation,expression,call,builtin,unpack4xU8:* // 75%, missing const eval (#4507)
 webgpu:shader,validation,expression,early_evaluation:* // 67%, mixed override/runtime composite evaluation
 webgpu:shader,validation,expression,precedence:* // 76%, https://github.com/gfx-rs/wgpu/issues/4536
-webgpu:shader,validation,extension,dual_source_blending:blend_src_usage:* // 61%, @blend_src validation gaps
-webgpu:shader,validation,extension,readonly_and_readwrite_storage_textures:* // 0%, CTS bug https://github.com/gpuweb/cts/pull/4567
+webgpu:shader,validation,extension,readonly_and_readwrite_storage_textures:* // 50%, interaction w/ texture_formats_tier1, https://github.com/gfx-rs/wgpu/issues/8962#issuecomment-3819427894
 webgpu:shader,validation,functions,alias_analysis:* // 2%, https://github.com/gfx-rs/wgpu/issues/7650
-webgpu:shader,validation,functions,restrictions:* // 81%, texture_external
+webgpu:shader,validation,functions,restrictions:*
 webgpu:shader,validation,parse,attribute:* // 93%, group index validation at shader module creation
 webgpu:shader,validation,parse,blankspace:* // 95%, null in comments, https://github.com/gfx-rs/wgpu/issues/8877
 webgpu:shader,validation,parse,comments:* // 93%, unterminated block comments, https://github.com/gfx-rs/wgpu/issues/8877
@@ -136,17 +129,14 @@ webgpu:shader,validation,parse,diagnostic:* // 50%, https://github.com/gfx-rs/wg
 webgpu:shader,validation,parse,literal:* // 96%, https://github.com/gfx-rs/wgpu/issues/7046
 webgpu:shader,validation,parse,must_use:* // 97%, https://github.com/gfx-rs/wgpu/issues/8876
 webgpu:shader,validation,parse,shadow_builtins:* // 83%, function param shadowing parser issue; determinant const-eval; texture_external capability missing
-webgpu:shader,validation,shader_io,align:* // 98%, https://github.com/gfx-rs/wgpu/issues/8892
-webgpu:shader,validation,shader_io,binding:* // 95%, https://github.com/gfx-rs/wgpu/issues/8892
-webgpu:shader,validation,shader_io,builtins:* // 50%, trailing comma not accepted
-webgpu:shader,validation,shader_io,group:* // 95%, https://github.com/gfx-rs/wgpu/issues/8892
-webgpu:shader,validation,shader_io,id:* // 94%, https://github.com/gfx-rs/wgpu/issues/8892, @id on const
-webgpu:shader,validation,shader_io,interpolate:* // 91%, https://github.com/gfx-rs/wgpu/issues/8892
+webgpu:shader,validation,shader_io,align:*
+webgpu:shader,validation,shader_io,id:* // 97%, @id on const
+webgpu:shader,validation,shader_io,interpolate:*
 webgpu:shader,validation,shader_io,layout_constraints:* // 99%, struct alignment not inferred from @align on members
 webgpu:shader,validation,shader_io,locations:stage_inout:* // 66%, invalid usage @location in compute shaders
 webgpu:shader,validation,shader_io,pipeline_stage:* // 92%, stage attributes incorrectly accepted on var<private> and var<storage>
-webgpu:shader,validation,shader_io,size:* // 92%, https://github.com/gfx-rs/wgpu/issues/8892, large size validation, runtime-sized array
-webgpu:shader,validation,shader_io,workgroup_size:* // 83%, https://github.com/gfx-rs/wgpu/issues/8892, type mixing, attribute placement
+webgpu:shader,validation,shader_io,size:* // 94%, large size validation, runtime-sized array
+webgpu:shader,validation,shader_io,workgroup_size:* // 88%, type mixing, attribute placement
 webgpu:shader,validation,statement,continue:* // 90%, continue bypassing declaration used in continuing block, https://github.com/gfx-rs/wgpu/issues/7650
 webgpu:shader,validation,statement,for:* // 93%, phony/increment in for-loop init/cont, empty loop behavior
 webgpu:shader,validation,statement,loop:* // 92%, https://github.com/gfx-rs/wgpu/issues/7650

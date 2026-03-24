@@ -113,6 +113,8 @@ webgpu:api,validation,createBindGroupLayout:maximum_binding_limit:*
 webgpu:api,validation,createBindGroupLayout:multisampled_validation:*
 webgpu:api,validation,createBindGroupLayout:storage_texture,formats:*
 webgpu:api,validation,createBindGroupLayout:storage_texture,layout_dimension:*
+webgpu:api,validation,createBindGroupLayout:visibility,*
+webgpu:api,validation,createBindGroupLayout:visibility:*
 webgpu:api,validation,createPipelineLayout:*
 webgpu:api,validation,createSampler:*
 webgpu:api,validation,createTexture:*
@@ -262,6 +264,7 @@ webgpu:api,validation,render_pipeline,misc:basic:*
 fails-if(vulkan) webgpu:api,validation,render_pipeline,misc:external_texture:*
 webgpu:api,validation,render_pipeline,misc:no_attachment:*
 webgpu:api,validation,render_pipeline,misc:pipeline_layout,device_mismatch:*
+webgpu:api,validation,render_pipeline,misc:storage_texture,format:*
 webgpu:api,validation,render_pipeline,misc:vertex_state_only:*
 webgpu:api,validation,render_pipeline,primitive_state:*
 webgpu:api,validation,render_pipeline,resource_compatibility:*
@@ -366,6 +369,7 @@ webgpu:shader,validation,expression,binary,bitwise_shift:shift_left_concrete:*
 webgpu:shader,validation,expression,binary,bitwise_shift:shift_right_abstract:*
 webgpu:shader,validation,expression,binary,bitwise_shift:shift_right_concrete:*
 webgpu:shader,validation,expression,binary,comparison:*
+webgpu:shader,validation,expression,binary,div_rem:*
 webgpu:shader,validation,expression,binary,parse:*
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:array_override:op="%26%26";a_val=1;b_val=1
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:invalid_types:*
@@ -446,9 +450,12 @@ webgpu:shader,validation,parse,requires:*
 webgpu:shader,validation,parse,semicolon:*
 webgpu:shader,validation,parse,shadow_builtins:function_param:*
 webgpu:shader,validation,parse,source:*
+webgpu:shader,validation,shader_io,binding:*
+webgpu:shader,validation,shader_io,builtins:*
 webgpu:shader,validation,shader_io,entry_point:*
 // Uses external texture bindings
 fails-if(vulkan) webgpu:shader,validation,shader_io,group_and_binding:*
+webgpu:shader,validation,shader_io,group:*
 webgpu:shader,validation,shader_io,invariant:*
 webgpu:shader,validation,shader_io,locations:duplicates:*
 webgpu:shader,validation,shader_io,locations:location_fp16:*
