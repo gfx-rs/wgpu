@@ -408,9 +408,10 @@ enum TraceRayVertexReturnState {
     /// Trace ray calls have been found, at least
     /// one uses an acceleration structure that
     /// does not have the flag enabling vertex return.
-    // Don't yet have vertex return builtins to return.
-    // this error for.
-    #[expect(unused)]
+    #[expect(
+        unused,
+        reason = "Don't yet have vertex return builtins to return this error for."
+    )]
     NoVertexReturn(crate::Span),
     /// Trace ray calls have been found, all
     /// acceleration structures have the flag enabling

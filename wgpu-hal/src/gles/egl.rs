@@ -817,8 +817,10 @@ impl crate::Instance for Instance {
                 log::debug!(
                     "No (or unknown) windowing system ({x:?}) present. Using surfaceless platform"
                 );
-                #[allow(clippy::unnecessary_literal_unwrap)]
-                // This is only a literal on Emscripten
+                #[allow(
+                    clippy::unnecessary_literal_unwrap,
+                    reason = "this is only a literal on Emscripten"
+                )]
                 // TODO: This extension is also supported on EGL 1.4 with EGL_EXT_platform_base: https://registry.khronos.org/EGL/extensions/MESA/EGL_MESA_platform_surfaceless.txt
                 let egl = egl1_5.expect("Failed to get EGL 1.5 for surfaceless");
                 let display = unsafe {

@@ -2353,9 +2353,7 @@ impl Blas {
                 match map_res {
                     Ok(mapping) => {
                         if !mapping.is_coherent {
-                            // Clippy complains about this because it might not be intended, but
-                            // this is intentional.
-                            #[expect(clippy::single_range_in_vec_init)]
+                            #[expect(clippy::single_range_in_vec_init, reason = "intentional")]
                             self.device.raw().invalidate_mapped_ranges(
                                 compaction_buffer,
                                 &[0..size_of::<wgpu_types::BufferAddress>() as wgt::BufferAddress],
