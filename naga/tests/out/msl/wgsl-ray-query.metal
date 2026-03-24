@@ -34,7 +34,7 @@ struct Output {
 
 RayIntersection ray_query_get_intersection_true(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data, metal::raytracing::world_space_data> intersector) {
     RayIntersection intersection = RayIntersection {};
-    intersection_type ty = intersector.get_committed_intersection_type();
+    metal::raytracing::intersection_type ty = intersector.get_committed_intersection_type();
     if (ty == metal::raytracing::intersection_type::triangle) {
         intersection.kind = 1;
         intersection.barycentrics = intersector.get_committed_triangle_barycentric_coord();
@@ -46,12 +46,13 @@ RayIntersection ray_query_get_intersection_true(metal::raytracing::intersection_
         intersection.t = intersector.get_committed_distance();
         intersection.instance_custom_data = intersector.get_committed_user_instance_id();
         intersection.instance_index = intersector.get_committed_instance_id();
-        intersection.sbt_record_offset = intersector.get_committed_user_instance_id();
         intersection.geometry_index = intersector.get_committed_geometry_id();
         intersection.primitive_index = intersector.get_committed_primitive_id();
         intersection.object_to_world = intersector.get_committed_user_instance_id();
         intersection.world_to_object = intersector.get_committed_user_instance_id();
     }
+return intersection;
+}
 RayIntersection query_loop(
     metal::float3 pos,
     metal::float3 dir,
@@ -113,7 +114,7 @@ metal::float3 get_torus_normal(
 
 RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data, metal::raytracing::world_space_data> intersector) {
     RayIntersection intersection = RayIntersection {};
-    intersection_type ty = intersector.get_candidate_intersection_type();
+    metal::raytracing::intersection_type ty = intersector.get_candidate_intersection_type();
     if (ty == metal::raytracing::intersection_type::triangle) {
         intersection.kind = 1;
         intersection.t = intersector.get_candidate_triangle_distance();
@@ -124,12 +125,13 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
     if (ty != metal::raytracing::intersection_type::none) {
         intersection.instance_custom_data = intersector.get_candidate_user_instance_id();
         intersection.instance_index = intersector.get_candidate_instance_id();
-        intersection.sbt_record_offset = intersector.get_candidate_user_instance_id();
         intersection.geometry_index = intersector.get_candidate_geometry_id();
         intersection.primitive_index = intersector.get_candidate_primitive_id();
         intersection.object_to_world = intersector.get_candidate_user_instance_id();
         intersection.world_to_object = intersector.get_candidate_user_instance_id();
     }
+return intersection;
+}
 
 [[max_total_threads_per_threadgroup(1)]] kernel void main_candidate(
   metal::raytracing::instance_acceleration_structure acc_struct [[user(fake0)]]

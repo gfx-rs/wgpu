@@ -31,7 +31,7 @@ impl<W: Write> Writer<W> {
         let level = back::Level(1);
         writeln!(self.out, "{intersection} {INTERSECTION_FUNCTION_NAME}_{committed}({} intersector) {{", metal_intersector_ty())?;
         writeln!(self.out, "{level}{intersection} intersection = {intersection} {{}};")?;
-        writeln!(self.out, "{level}intersection_type ty = intersector.get_{ty}_intersection_type();")?;
+        writeln!(self.out, "{level}{RT_NAMESPACE}::intersection_type ty = intersector.get_{ty}_intersection_type();")?;
         writeln!(self.out, "{level}if (ty == {RT_NAMESPACE}::intersection_type::triangle) {{")?;
         writeln!(self.out, "{level}{level}intersection.kind = {};", crate::RayQueryIntersection::Triangle as u32)?;
         if !committed {
