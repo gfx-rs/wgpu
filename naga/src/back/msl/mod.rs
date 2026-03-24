@@ -79,9 +79,9 @@ use crate::{arena::Handle, back::TaskDispatchLimits, ir, proc::index, valid::Mod
 
 mod keywords;
 mod mesh_shader;
+mod ray;
 pub mod sampler;
 mod writer;
-mod ray;
 
 pub use writer::Writer;
 

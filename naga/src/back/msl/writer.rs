@@ -14,8 +14,9 @@ use num_traits::real::Real as _;
 use half::f16;
 
 use super::{
-    sampler as sm, Error, LocationMode, Options, PipelineOptions, TranslationInfo, NAMESPACE,
-    WRAPPED_ARRAY_FIELD, ray::RT_NAMESPACE};
+    ray::RT_NAMESPACE, sampler as sm, Error, LocationMode, Options, PipelineOptions,
+    TranslationInfo, NAMESPACE, WRAPPED_ARRAY_FIELD,
+};
 use crate::{
     arena::{Handle, HandleSet},
     back::{
@@ -520,7 +521,7 @@ pub(super) enum WrappedFunction {
     },
     RayQueryGetIntersection {
         committed: bool,
-    }
+    },
 }
 
 pub struct Writer<W> {
@@ -2894,15 +2895,16 @@ impl<W: Write> Writer<W> {
             crate::Expression::RayQueryVertexPositions { .. } => {
                 unimplemented!()
             }
-            crate::Expression::RayQueryGetIntersection {
-                query,
-                committed,
-            } => {
+            crate::Expression::RayQueryGetIntersection { query, committed } => {
                 if context.lang_version < (2, 4) {
                     return Err(Error::UnsupportedRayTracing);
                 }
 
-                write!(self.out, "{}_{committed}(", super::ray::INTERSECTION_FUNCTION_NAME)?;
+                write!(
+                    self.out,
+                    "{}_{committed}(",
+                    super::ray::INTERSECTION_FUNCTION_NAME
+                )?;
                 self.put_expression(query, context, true)?;
                 write!(self.out, ")")?;
             }

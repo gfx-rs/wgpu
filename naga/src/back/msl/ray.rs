@@ -1,7 +1,20 @@
+use alloc::{
+    format,
+    string::{String, ToString},
+};
 use core::fmt::Write;
-use alloc::{string::{ToString, String}, format};
 
-use crate::{Handle, back::{self, Baked, msl::{BackendResult, Error, Writer, writer::{StatementContext, TypeContext, WrappedFunction}}}};
+use crate::{
+    back::{
+        self,
+        msl::{
+            writer::{StatementContext, TypeContext, WrappedFunction},
+            BackendResult, Error, Writer,
+        },
+        Baked,
+    },
+    Handle,
+};
 
 pub(super) const RT_NAMESPACE: &'static str = "metal::raytracing";
 
@@ -12,49 +25,96 @@ pub(super) fn metal_intersector_ty() -> String {
 pub(super) const INTERSECTION_FUNCTION_NAME: &'static str = "ray_query_get_intersection";
 
 impl<W: Write> Writer<W> {
-    pub(super) fn write_rq_get_intersection_function(&mut self, module: &crate::Module, committed: bool) -> BackendResult {
-        let wrapped = WrappedFunction::RayQueryGetIntersection {
-            committed
-        };
+    pub(super) fn write_rq_get_intersection_function(
+        &mut self,
+        module: &crate::Module,
+        committed: bool,
+    ) -> BackendResult {
+        let wrapped = WrappedFunction::RayQueryGetIntersection { committed };
         if !self.wrapped_functions.insert(wrapped) {
             return Ok(());
         }
-        
+
         let ty = if committed { "committed" } else { "candidate" };
         let intersection = TypeContext {
-            handle: module.special_types.ray_intersection.expect("intersection ty should be there for intersection function"),
+            handle: module
+                .special_types
+                .ray_intersection
+                .expect("intersection ty should be there for intersection function"),
             gctx: module.to_ctx(),
             names: &self.names,
             access: crate::StorageAccess::empty(),
             first_time: false,
         };
         let level = back::Level(1);
-        writeln!(self.out, "{intersection} {INTERSECTION_FUNCTION_NAME}_{committed}({} intersector) {{", metal_intersector_ty())?;
-        writeln!(self.out, "{level}{intersection} intersection = {intersection} {{}};")?;
+        writeln!(
+            self.out,
+            "{intersection} {INTERSECTION_FUNCTION_NAME}_{committed}({} intersector) {{",
+            metal_intersector_ty()
+        )?;
+        writeln!(
+            self.out,
+            "{level}{intersection} intersection = {intersection} {{}};"
+        )?;
         writeln!(self.out, "{level}{RT_NAMESPACE}::intersection_type ty = intersector.get_{ty}_intersection_type();")?;
-        writeln!(self.out, "{level}if (ty == {RT_NAMESPACE}::intersection_type::triangle) {{")?;
-        writeln!(self.out, "{level}{level}intersection.kind = {};", crate::RayQueryIntersection::Triangle as u32)?;
+        writeln!(
+            self.out,
+            "{level}if (ty == {RT_NAMESPACE}::intersection_type::triangle) {{"
+        )?;
+        writeln!(
+            self.out,
+            "{level}{level}intersection.kind = {};",
+            crate::RayQueryIntersection::Triangle as u32
+        )?;
         if !committed {
-            writeln!(self.out, "{level}{level}intersection.t = intersector.get_candidate_triangle_distance();")?;
+            writeln!(
+                self.out,
+                "{level}{level}intersection.t = intersector.get_candidate_triangle_distance();"
+            )?;
         }
         writeln!(self.out, "{level}{level}intersection.barycentrics = intersector.get_{ty}_triangle_barycentric_coord();")?;
-        writeln!(self.out, "{level}{level}intersection.front_face = intersector.is_{ty}_triangle_front_facing();")?;
-        writeln!(self.out, "{level}}} else if (ty == {RT_NAMESPACE}::intersection_type::bounding_box) {{")?;
+        writeln!(
+            self.out,
+            "{level}{level}intersection.front_face = intersector.is_{ty}_triangle_front_facing();"
+        )?;
+        writeln!(
+            self.out,
+            "{level}}} else if (ty == {RT_NAMESPACE}::intersection_type::bounding_box) {{"
+        )?;
         if committed {
-            writeln!(self.out, "{level}{level}intersection.kind = {};", crate::RayQueryIntersection::Generated as u32)?;
+            writeln!(
+                self.out,
+                "{level}{level}intersection.kind = {};",
+                crate::RayQueryIntersection::Generated as u32
+            )?;
         }
         writeln!(self.out, "{level}}}")?;
 
-        writeln!(self.out, "{level}if (ty != {RT_NAMESPACE}::intersection_type::none) {{")?;
+        writeln!(
+            self.out,
+            "{level}if (ty != {RT_NAMESPACE}::intersection_type::none) {{"
+        )?;
         if committed {
-            writeln!(self.out, "{level}{level}intersection.t = intersector.get_committed_distance();")?;
+            writeln!(
+                self.out,
+                "{level}{level}intersection.t = intersector.get_committed_distance();"
+            )?;
         }
         writeln!(self.out, "{level}{level}intersection.instance_custom_data = intersector.get_{ty}_user_instance_id();")?;
-        writeln!(self.out, "{level}{level}intersection.instance_index = intersector.get_{ty}_instance_id();")?;
+        writeln!(
+            self.out,
+            "{level}{level}intersection.instance_index = intersector.get_{ty}_instance_id();"
+        )?;
         // TODO
         //writeln!(self.out, "{level}{level}intersection.sbt_record_offset = intersector.get_{ty}_user_instance_id();")?;
-        writeln!(self.out, "{level}{level}intersection.geometry_index = intersector.get_{ty}_geometry_id();")?;
-        writeln!(self.out, "{level}{level}intersection.primitive_index = intersector.get_{ty}_primitive_id();")?;
+        writeln!(
+            self.out,
+            "{level}{level}intersection.geometry_index = intersector.get_{ty}_geometry_id();"
+        )?;
+        writeln!(
+            self.out,
+            "{level}{level}intersection.primitive_index = intersector.get_{ty}_primitive_id();"
+        )?;
         writeln!(self.out, "{level}{level}intersection.object_to_world = intersector.get_{ty}_object_to_world_transform();")?;
         writeln!(self.out, "{level}{level}intersection.world_to_object = intersector.get_{ty}_world_to_object_transform();")?;
         writeln!(self.out, "{level}}}")?;
@@ -64,7 +124,13 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    pub(super) fn write_ray_query_stmt(&mut self, level: back::Level, context: &StatementContext, query: Handle<crate::Expression>, fun: &crate::RayQueryFunction) -> BackendResult {
+    pub(super) fn write_ray_query_stmt(
+        &mut self,
+        level: back::Level,
+        context: &StatementContext,
+        query: Handle<crate::Expression>,
+        fun: &crate::RayQueryFunction,
+    ) -> BackendResult {
         if context.expression.lang_version < (2, 4) {
             return Err(Error::UnsupportedRayTracing);
         }
@@ -86,10 +152,13 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, ";")?;
 
                 // Set up intersection parameters
-                writeln!(self.out, "{inner_level}{RT_NAMESPACE}::intersection_params params;")?;
+                writeln!(
+                    self.out,
+                    "{inner_level}{RT_NAMESPACE}::intersection_params params;"
+                )?;
 
                 {
-                    // determine whether or not to cull 
+                    // determine whether or not to cull
                     let f_opaque = back::RayFlag::CULL_OPAQUE.bits();
                     let f_no_opaque = back::RayFlag::CULL_NO_OPAQUE.bits();
                     writeln!(
@@ -112,7 +181,10 @@ impl<W: Write> Writer<W> {
                 }
                 {
                     let flag = back::RayFlag::TERMINATE_ON_FIRST_HIT.bits();
-                    writeln!(self.out, "{inner_level}params.accept_any_intersection((desc.flags & {flag}) != 0);")?;
+                    writeln!(
+                        self.out,
+                        "{inner_level}params.accept_any_intersection((desc.flags & {flag}) != 0);"
+                    )?;
                 }
 
                 write!(
