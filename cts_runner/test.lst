@@ -12,6 +12,8 @@ unittests:*
 
 webgpu:api,operation,adapter,requestAdapter:*
 webgpu:api,operation,buffers,createBindGroup:buffer_binding_resource:*
+webgpu:api,operation,buffers,map:mapAsync,read,*
+webgpu:api,operation,buffers,map:mapAsync,write,*
 webgpu:api,operation,command_buffer,basic:*
 webgpu:api,operation,command_buffer,copyBufferToBuffer:*
 fails-if(vulkan) webgpu:api,operation,command_buffer,copyTextureToTexture:copy_depth_stencil:format="depth16unorm"

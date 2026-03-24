@@ -6,6 +6,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
         EMPTY_BUFFER,
         MAP_OFFSET,
+        MAP_WITHOUT_SUBMIT,
         MINIMUM_BUFFER_BINDING_SIZE_LAYOUT,
         MINIMUM_BUFFER_BINDING_SIZE_DISPATCH,
         CLEAR_OFFSET_OUTSIDE_RESOURCE_BOUNDS,
@@ -182,6 +183,48 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
         for byte in &view[48..] {
             assert_eq!(*byte, 0);
         }
+    });
+
+/// Mapping a buffer should see data previously written to the buffer, even if there was no
+/// intervening submit.
+///
+/// Regression test for [#5173](https://github.com/gfx-rs/wgpu/issues/5173).
+#[gpu_test]
+static MAP_WITHOUT_SUBMIT: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_async(|ctx| async move {
+        let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 12,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: true,
+        });
+
+        {
+            let data = (0..12).map(|i| (i % 255) as u8).collect::<Vec<u8>>();
+            let mut mapped = buffer.slice(0..12).get_mapped_range_mut().unwrap();
+            assert!(mapped.len() == 12);
+            mapped.copy_from_slice(&data);
+        }
+
+        buffer.unmap();
+
+        buffer
+            .slice(0..12)
+            .map_async(wgpu::MapMode::Read, Result::unwrap);
+
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
+
+        {
+            let mapped = buffer.slice(0..12).get_mapped_range().unwrap();
+            assert!(mapped.len() == 12);
+            for (i, elt) in mapped.iter().enumerate() {
+                assert_eq!(*elt, (i % 255) as u8);
+            }
+        }
+
+        buffer.unmap();
     });
 
 /// The WebGPU algorithm [validating shader binding][vsb] requires

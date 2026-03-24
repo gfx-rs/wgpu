@@ -348,9 +348,13 @@ pub(crate) struct EncoderInFlight {
 ///
 /// Instead, `Device::pending_writes` owns one of these values, which
 /// has its own hal command encoder and resource lists. The commands
-/// accumulated here are automatically submitted to the queue the next
-/// time the user submits a wgpu command buffer, ahead of the user's
-/// commands.
+/// accumulated here are automatically submitted to the queue at the
+/// sooner of:
+///
+/// 1. The user's next wgpu command buffer submission. (Pending writes
+///    are inserted ahead of the user's commands.)
+/// 2. The next `mapAsync` request for a buffer that has pending
+///    writes.
 ///
 /// Important:
 /// When locking pending_writes be sure that tracker is not locked
@@ -1239,6 +1243,24 @@ impl Queue {
                 iter::once(regions),
             );
         }
+
+        Ok(())
+    }
+
+    /// Flush `PendingWrites` if it contains a write to `buffer`.
+    pub fn flush_writes_for_buffer(
+        &self,
+        buffer: &Arc<Buffer>,
+        snatch_guard: SnatchGuard,
+    ) -> Result<(), BufferAccessError> {
+        let (submission, _index) = self.allocate_submission(snatch_guard);
+
+        let pending_writes = self.pending_writes.lock();
+        if !pending_writes.contains_buffer(buffer) {
+            return Ok(());
+        }
+
+        submission.submit(pending_writes)?;
 
         Ok(())
     }

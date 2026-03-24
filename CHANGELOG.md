@@ -160,6 +160,7 @@ By @andyleiserson in [#9321](https://github.com/gfx-rs/wgpu/pull/9321).
 
 - Fix `SYNC-HAZARD-WRITE-AFTER-PRESENT` on Vulkan when a surface texture is presented without being rendered to. By @inner-daemons and @atlv24 in [#9361](https://github.com/gfx-rs/wgpu/pull/9361).
 - Fix incorrect checks for dynamic binding bounds when calling an encoder's `set_bind_group` in passes and bundles. By @ErichDonGubler in [#9308](https://github.com/gfx-rs/wgpu/pull/9308).
+- Writes from `Queue::write_buffer` are now flushed by calls to `Buffer::map_async` for that same buffer, to prevent reading stale data. `on_submitted_work_done` also now flushes pending writes. By @andyleiserson in [#9307](https://github.com/gfx-rs/wgpu/pull/9307).
 
 #### naga
 
