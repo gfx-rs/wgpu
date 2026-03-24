@@ -191,6 +191,20 @@ pub(crate) struct LifetimeTracker {
     /// must happen _after_ all mapped buffer callbacks are mapped, so we defer them
     /// here until the next time the device is maintained.
     work_done_closures: SmallVec<[SubmittedWorkDoneClosure; 1]>,
+
+    /// Surface textures waiting for a presentation to complete.
+    ///
+    /// Each entry holds the [`SubmissionIndex`] that was active when
+    /// [`present`][LifetimeTracker::track_present] was called, together with
+    /// the texture whose lifetime must extend until the presentation is done.
+    /// A presentation is considered complete once a real queue submission with
+    /// index **strictly greater** than the recorded index has finished (i.e.
+    /// something was submitted *after* the present and that work completed).
+    ///
+    /// In the absence of any subsequent submission the queue drop path calls
+    /// [`drain_pending_presents`][LifetimeTracker::drain_pending_presents]
+    /// after a full [`wait_for_idle`][hal::Queue::wait_for_idle].
+    pending_presents: Vec<(SubmissionIndex, Arc<Texture>)>,
 }
 
 impl LifetimeTracker {
@@ -200,12 +214,45 @@ impl LifetimeTracker {
             ready_to_map: Vec::new(),
             ready_to_compact: Vec::new(),
             work_done_closures: SmallVec::new(),
+            pending_presents: Vec::new(),
         }
     }
 
-    /// Return true if there are no queue submissions still in flight.
+    /// Return true if there are no queue submissions still in flight and no
+    /// presentations are waiting to be confirmed complete.
     pub fn queue_empty(&self) -> bool {
-        self.active.is_empty()
+        self.active.is_empty() && self.pending_presents.is_empty()
+    }
+
+    /// Return the submission index of the oldest pending presentation, if any.
+    ///
+    /// Used by [`Queue::wait_for_present`] to decide whether to wait on a
+    /// fence or call [`wait_for_idle`][hal::Queue::wait_for_idle].
+    ///
+    /// [`Queue::wait_for_present`]: super::queue::Queue::wait_for_present
+    pub fn oldest_pending_present_index(&self) -> Option<SubmissionIndex> {
+        self.pending_presents.first().map(|(idx, _)| *idx)
+    }
+
+    /// Keep `texture` alive until a submission after `index` completes.
+    ///
+    /// Call this immediately after a successful HAL present, passing the
+    /// `active_submission_index` that was current at the time of the present.
+    /// The texture is released by [`triage_submissions`][Self::triage_submissions]
+    /// once `last_done > index`, or explicitly via
+    /// [`drain_pending_presents`][Self::drain_pending_presents].
+    pub fn track_present(&mut self, index: SubmissionIndex, texture: Arc<Texture>) {
+        self.pending_presents.push((index, texture));
+    }
+
+    /// Release all pending present textures unconditionally.
+    ///
+    /// This must only be called after the queue is known to be fully idle
+    /// (e.g. after [`wait_for_idle`][hal::Queue::wait_for_idle]), since there
+    /// may not have been a subsequent submission to trigger normal release via
+    /// [`triage_submissions`][Self::triage_submissions].
+    pub fn drain_pending_presents(&mut self) {
+        self.pending_presents.clear();
     }
 
     /// Start tracking resources associated with a new queue submission.
@@ -321,6 +368,13 @@ impl LifetimeTracker {
             }
             work_done_closures.extend(a.work_done_closures);
         }
+
+        // Release surface textures whose presentations are now complete.
+        // A presentation is complete once a submission with index strictly
+        // greater than the recorded present index has finished.
+        self.pending_presents
+            .retain(|(present_index, _)| last_done <= *present_index);
+
         work_done_closures
     }
 

@@ -125,7 +125,7 @@ impl Player {
                 panic!("Unexpected Action::Init: has to be the first action only")
             }
             Action::ConfigureSurface { .. }
-            | Action::Present(_)
+            | Action::Present(..)
             | Action::DiscardSurfaceTexture(_) => {
                 panic!("Unexpected Surface action: winit feature is not enabled")
             }

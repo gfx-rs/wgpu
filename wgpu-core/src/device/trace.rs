@@ -152,7 +152,7 @@ pub enum Action<'a, R: ReferenceType> {
         id: R::Texture,
         parent: R::Surface,
     },
-    Present(R::Surface),
+    Present(crate::SubmissionIndex, R::Surface),
     DiscardSurfaceTexture(R::Surface),
     CreateBindGroupLayout(
         PointerId<markers::BindGroupLayout>,

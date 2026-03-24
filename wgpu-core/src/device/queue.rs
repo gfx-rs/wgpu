@@ -19,10 +19,10 @@ use crate::device::trace::{Action, IntoTrace};
 use crate::{
     api_log,
     command::{
-        extract_texture_selector, validate_linear_texture_data, validate_texture_buffer_copy,
-        validate_texture_copy_dst_format, validate_texture_copy_range, ClearError,
-        CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
-        TransferError,
+        clear_texture, extract_texture_selector, validate_linear_texture_data,
+        validate_texture_buffer_copy, validate_texture_copy_dst_format,
+        validate_texture_copy_range, ClearError, CommandAllocator, CommandBuffer, CommandEncoder,
+        CommandEncoderError, CopySide, TransferError,
     },
     device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
@@ -142,6 +142,40 @@ impl Queue {
             queue_empty,
         )
     }
+
+    /// Wait for a presentation with the given `present_index` to complete.
+    ///
+    /// A presentation is complete once a real queue submission with an index
+    /// strictly greater than `present_index` has finished executing on the GPU.
+    /// If such a submission has already been issued, this waits for its fence.
+    /// Otherwise — no subsequent submission has been made — the whole queue is
+    /// drained via [`wait_for_idle`][hal::Queue::wait_for_idle].
+    pub(crate) fn wait_for_present(
+        &self,
+        present_index: SubmissionIndex,
+    ) -> Result<(), DeviceError> {
+        let last_successful = self
+            .device
+            .last_successful_submission_index
+            .load(Ordering::Acquire);
+
+        if last_successful > present_index {
+            // A submission made after the present has completed (or is in
+            // flight); wait for the fence to reach that index.
+            let fence = self.device.fence.read();
+            unsafe {
+                self.device
+                    .raw()
+                    .wait(fence.as_ref(), last_successful, None)
+                    .map(|_| ())
+                    .map_err(|e| self.device.handle_hal_error(e))
+            }
+        } else {
+            // No submission has been made after the present yet; drain the
+            // entire queue so we know the present is complete.
+            unsafe { self.raw().wait_for_idle() }.map_err(|e| self.device.handle_hal_error(e))
+        }
+    }
 }
 
 crate::impl_resource_type!(Queue);
@@ -158,80 +192,27 @@ impl Drop for Queue {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
 
+        // Wait for all GPU work — submissions *and* any pending presentations —
+        // to complete before releasing resources.
+        match unsafe { self.raw.wait_for_idle() } {
+            Ok(()) => {}
+            Err(hal::DeviceError::Lost) => {
+                self.device.handle_hal_error(hal::DeviceError::Lost);
+            }
+            Err(e) => {
+                panic!("Unexpected error while waiting for queue idle on drop: {e:?}");
+            }
+        }
+
+        // Drain pending present textures: the GPU is now idle so all
+        // presentations have completed regardless of whether a subsequent
+        // submission was ever made.
+        self.lock_life().drain_pending_presents();
+
         let last_successful_submission_index = self
             .device
             .last_successful_submission_index
             .load(Ordering::Acquire);
-
-        let fence = self.device.fence.read();
-
-        // Try waiting on the last submission using the following sequence of timeouts
-        let timeouts_in_ms = [100, 200, 400, 800, 1600, 3200];
-
-        for (i, timeout_ms) in timeouts_in_ms.into_iter().enumerate() {
-            let is_last_iter = i == timeouts_in_ms.len() - 1;
-
-            api_log!(
-                "Waiting on last submission. try: {}/{}. timeout: {}ms",
-                i + 1,
-                timeouts_in_ms.len(),
-                timeout_ms
-            );
-
-            let wait_res = unsafe {
-                self.device.raw().wait(
-                    fence.as_ref(),
-                    last_successful_submission_index,
-                    #[cfg(not(target_arch = "wasm32"))]
-                    Some(core::time::Duration::from_millis(timeout_ms)),
-                    #[cfg(target_arch = "wasm32")]
-                    Some(core::time::Duration::ZERO), // WebKit and Chromium don't support a non-0 timeout
-                )
-            };
-            // Note: If we don't panic below we are in UB land (destroying resources while they are still in use by the GPU).
-            match wait_res {
-                Ok(true) => break,
-                Ok(false) => {
-                    // It's fine that we timed out on WebGL; GL objects can be deleted early as they
-                    // will be kept around by the driver if GPU work hasn't finished.
-                    // Moreover, the way we emulate read mappings on WebGL allows us to execute map_buffer earlier than on other
-                    // backends since getBufferSubData is synchronous with respect to the other previously enqueued GL commands.
-                    // Relying on this behavior breaks the clean abstraction wgpu-hal tries to maintain and
-                    // we should find ways to improve this. See https://github.com/gfx-rs/wgpu/issues/6538.
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        break;
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        if is_last_iter {
-                            panic!(
-                                "We timed out while waiting on the last successful submission to complete!"
-                            );
-                        }
-                    }
-                }
-                Err(e) => match e {
-                    hal::DeviceError::OutOfMemory => {
-                        if is_last_iter {
-                            panic!(
-                                "We ran into an OOM error while waiting on the last successful submission to complete!"
-                            );
-                        }
-                    }
-                    hal::DeviceError::Lost => {
-                        self.device.handle_hal_error(e); // will lose the device
-                        break;
-                    }
-                    hal::DeviceError::Unexpected => {
-                        panic!(
-                            "We ran into an unexpected error while waiting on the last successful submission to complete!"
-                        );
-                    }
-                },
-            }
-        }
-        drop(fence);
 
         let snatch_guard = self.device.snatchable_lock.read();
         let (submission_closures, mapping_closures, blas_compact_ready_closures, queue_empty) =
@@ -829,7 +810,7 @@ impl Queue {
                     .collect::<Vec<core::ops::Range<u32>>>()
                 {
                     let mut trackers = self.device.trackers.lock();
-                    crate::command::clear_texture(
+                    clear_texture(
                         &dst,
                         TextureInitRange {
                             mip_range: destination.mip_level..(destination.mip_level + 1),
@@ -1086,7 +1067,7 @@ impl Queue {
                     .collect::<Vec<core::ops::Range<u32>>>()
                 {
                     let mut trackers = self.device.trackers.lock();
-                    crate::command::clear_texture(
+                    clear_texture(
                         &dst,
                         TextureInitRange {
                             mip_range: destination.mip_level..(destination.mip_level + 1),
@@ -1184,6 +1165,145 @@ impl Queue {
                 error,
             });
         }
+    }
+
+    /// If a surface texture was acquired but never submitted in a command buffer,
+    /// clear it and transition it to the `PRESENT` state so the HAL present call
+    /// succeeds.  Both operations are skipped when the texture has already been
+    /// properly handled by a prior [`Queue::submit`] call.
+    pub(crate) fn prepare_surface_texture_for_present(
+        &self,
+        texture: &Arc<Texture>,
+    ) -> Result<(), DeviceError> {
+        // Fast path: if every mip/layer has been initialized the texture was
+        // submitted (render passes initialized and transitioned it) — skip.
+        {
+            let status = texture.initialization_status.read();
+            let is_uninitialized = status
+                .mips
+                .first()
+                .is_some_and(|mip| mip.check(0..1).is_some());
+            if !is_uninitialized {
+                return Ok(());
+            }
+        }
+
+        let device = &self.device;
+
+        // Hold a read snatch guard so we can safely access the texture's raw
+        // throughout this function.
+        let snatch_guard = device.snatchable_lock.read();
+
+        {
+            let mut pending_writes = self.pending_writes.lock();
+
+            {
+                // Step 1: Clear via render pass.  This also records the
+                // UNINITIALIZED → COLOR_TARGET barrier in `encoder` and
+                // updates the device tracker to COLOR_TARGET.
+                let encoder = pending_writes.activate();
+                let mut trackers = device.trackers.lock();
+                clear_texture(
+                    texture,
+                    TextureInitRange {
+                        mip_range: 0..1,
+                        layer_range: 0..1,
+                    },
+                    encoder,
+                    &mut trackers.textures,
+                    &device.alignments,
+                    device.zero_buffer.as_ref(),
+                    &snatch_guard,
+                    device.instance_flags,
+                )
+                .map_err(|e| match e {
+                    ClearError::Device(e) => e,
+                    _ => DeviceError::Lost,
+                })?;
+                // `encoder` borrow ends here; `trackers` dropped below.
+
+                // Step 2: Transition COLOR_TARGET → PRESENT.  Collect the
+                // pending transitions as plain values (no lifetime on the
+                // tracker) so we can drop `trackers` before recording them.
+                let pending_present: Vec<track::PendingTransition<wgt::TextureUses>> = trackers
+                    .textures
+                    .set_single(
+                        texture,
+                        texture.full_range.clone(),
+                        wgt::TextureUses::PRESENT,
+                    )
+                    .collect();
+
+                drop(trackers);
+
+                let raw_texture = texture
+                    .try_raw(&snatch_guard)
+                    .map_err(|_| DeviceError::Lost)?;
+                let present_barriers: Vec<hal::TextureBarrier<'_, dyn hal::DynTexture>> =
+                    pending_present
+                        .into_iter()
+                        .map(|pt| pt.into_hal(raw_texture))
+                        .collect();
+
+                unsafe {
+                    pending_writes
+                        .command_encoder
+                        .as_mut()
+                        .transition_textures(&present_barriers);
+                }
+                // `present_barriers` dropped here, releasing the reference to
+                // `raw_texture` (and through it to `snatch_guard`).
+            }
+
+            // Step 3: Mark the texture's content as initialized (it was just cleared).
+            texture.initialization_status.write().mips[0].drain(0..1);
+
+            // Step 4: Finalize the pending-writes encoder.
+            let encoder_in_flight =
+                pending_writes.pre_submit(&device.command_allocator, device, self)?;
+
+            // Step 5: Assign a fresh submission index for the mini-submit.
+            let mini_index = {
+                let mut indices = device.command_indices.write();
+                indices.active_submission_index += 1;
+                indices.active_submission_index
+            };
+
+            // Step 6: Submit.  Fence lock must be acquired after snatch lock.
+            let hal_cmd_bufs = encoder_in_flight
+                .as_ref()
+                .map(|e| e.inner.list.iter().map(|b| b.as_ref()).collect::<Vec<_>>())
+                .unwrap_or_default();
+
+            let raw_surface_tex = match texture.inner.get(&snatch_guard) {
+                Some(TextureInner::Surface { raw }) => raw.as_ref(),
+                _ => return Err(DeviceError::Lost),
+            };
+
+            {
+                let mut fence = device.fence.write();
+                unsafe {
+                    self.raw().submit(
+                        &hal_cmd_bufs,
+                        &[raw_surface_tex],
+                        (fence.as_mut(), mini_index),
+                    )
+                }
+                .map_err(|e| device.handle_hal_error(e))?;
+            }
+
+            device
+                .last_successful_submission_index
+                .store(mini_index, Ordering::Release);
+
+            // Step 7: Track the submission so the command buffer is kept alive
+            // until the GPU finishes with it.
+            if let Some(encoder) = encoder_in_flight {
+                self.lock_life().track_submission(mini_index, vec![encoder]);
+            }
+        }
+
+        Ok(())
     }
 
     pub fn submit(

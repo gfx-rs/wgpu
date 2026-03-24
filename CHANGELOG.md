@@ -57,6 +57,7 @@ Bottom level categories:
 #### General
 
 - `Features::CLIP_DISTANCE`, `naga::Capabilities::CLIP_DISTANCE`, and `naga::BuiltIn::ClipDistance` have been renamed to `CLIP_DISTANCES` and `ClipDistances` (viz., pluralized) as appropriate, to match the WebGPU spec. By @ErichDonGubler in [#9267](https://github.com/gfx-rs/wgpu/pull/9267).
+- `Surface::present` has been moved to `Queue::present`. By @inner-daemons in [#9222](https://github.com/gfx-rs/wgpu/pull/9222).
 
 #### Validation
 
@@ -67,6 +68,7 @@ Bottom level categories:
 #### General
 
 - Fix limit comparison logic for `max_inter_stage_shader_variables` By @ErichDonGubler in [9264](https://github.com/gfx-rs/wgpu/pull/9264).
+- Fix several bugs related to surface presentation, including presenting without rendering and dropping queue after presenting. By @inner-daemons in [#9222](https://github.com/gfx-rs/wgpu/pull/9222).
 
 #### naga
 

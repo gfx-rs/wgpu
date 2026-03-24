@@ -614,7 +614,6 @@ pub struct CoreTlas {
 pub struct CoreSurfaceOutputDetail {
     context: ContextWgpuCore,
     surface_id: wgc::id::SurfaceId,
-    error_sink: ErrorSink,
 }
 
 type ErrorSink = Arc<Mutex<ErrorSinkRaw>>;
@@ -2138,6 +2137,18 @@ impl dispatch::QueueInterface for CoreQueue {
             }
             .into(),
         )
+    }
+
+    fn present(&self, detail: &dispatch::DispatchSurfaceOutputDetail) -> u64 {
+        let detail = detail.as_core();
+        match self.context.0.queue_present(self.id, detail.surface_id) {
+            Ok((_status, index)) => index,
+            Err(err) => {
+                self.context
+                    .handle_error_nolabel(&self.error_sink, err, "Queue::present");
+                0
+            }
+        }
     }
 }
 
@@ -3901,7 +3912,6 @@ impl dispatch::SurfaceInterface for CoreSurface {
         let output_detail = CoreSurfaceOutputDetail {
             context: self.context.clone(),
             surface_id: self.id,
-            error_sink: error_sink.clone(),
         }
         .into();
 
@@ -3947,16 +3957,6 @@ impl Drop for CoreSurface {
 }
 
 impl dispatch::SurfaceOutputDetailInterface for CoreSurfaceOutputDetail {
-    fn present(&self) {
-        match self.context.0.surface_present(self.surface_id) {
-            Ok(_status) => (),
-            Err(err) => {
-                self.context
-                    .handle_error_nolabel(&self.error_sink, err, "Surface::present");
-            }
-        }
-    }
-
     fn texture_discard(&self) {
         match self.context.0.surface_texture_discard(self.surface_id) {
             Ok(_status) => (),

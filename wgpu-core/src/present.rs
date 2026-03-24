@@ -9,18 +9,21 @@ When this texture is presented, we remove it from the device tracker as well as
 extract it from the hub.
 !*/
 
-use alloc::{sync::Arc, vec::Vec};
-use core::mem::ManuallyDrop;
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use core::{mem::ManuallyDrop, sync::atomic::Ordering};
 
 #[cfg(feature = "trace")]
 use crate::device::trace::{Action, IntoTrace};
 use crate::{
     conv,
-    device::{Device, DeviceError, MissingDownlevelFlags, WaitIdleError},
+    device::{
+        queue::Queue, Device, DeviceError, DeviceMismatch, MissingDownlevelFlags, WaitIdleError,
+    },
     global::Global,
     hal_label, id,
     instance::Surface,
-    resource,
+    resource::{self, Labeled},
+    SubmissionIndex,
 };
 
 use thiserror::Error;
@@ -151,6 +154,124 @@ pub struct SurfaceOutput<T = id::TextureId> {
     pub texture: Option<T>,
 }
 
+impl Queue {
+    pub fn present(&self, surface: &Surface) -> Result<(Status, SubmissionIndex), SurfaceError> {
+        self.present_impl(surface, surface.presentation.lock().as_mut())
+    }
+    /// Present a surface texture and return the submission index that was
+    /// active at the time of the present.
+    ///
+    /// The returned [`SubmissionIndex`] can be passed to
+    /// [`Queue::wait_for_present`] to wait for the presentation to complete.
+    /// The surface texture is kept alive internally until a subsequent queue
+    /// submission (with index strictly greater than the returned value)
+    /// finishes, or until the queue is dropped.
+    fn present_impl(
+        &self,
+        surface: &Surface,
+        presentation: Option<&mut Presentation>,
+    ) -> Result<(Status, SubmissionIndex), SurfaceError> {
+        profiling::scope!("Queue::present");
+
+        self.device.check_is_valid()?;
+
+        let present = match presentation {
+            Some(present) => present,
+            None => return Err(SurfaceError::NotConfigured),
+        };
+
+        let texture = present
+            .acquired_texture
+            .take()
+            .ok_or(SurfaceError::AlreadyAcquired)?;
+
+        let device = &self.device;
+
+        // If the texture was acquired but never rendered to / submitted, clear
+        // it and transition it to the PRESENT state before presenting.
+        self.prepare_surface_texture_for_present(&texture)?;
+
+        let mut exclusive_snatch_guard = device.snatchable_lock.write();
+        let inner = texture.inner.snatch(&mut exclusive_snatch_guard);
+        drop(exclusive_snatch_guard);
+
+        let result = match inner {
+            None => return Err(SurfaceError::TextureDestroyed),
+            Some(resource::TextureInner::Surface { raw }) => {
+                let raw_surface = surface.raw(device.backend()).unwrap();
+                let _fence_lock = device.fence.write();
+                unsafe { self.raw().present(raw_surface, raw) }
+            }
+            _ => unreachable!(),
+        };
+
+        // Assign a fresh submission index to this present so it is distinct
+        // from any prior real queue submission.  This means:
+        //
+        //   - Waiting for the *submission* index (N) will not accidentally
+        //     trigger present resolution — the present is at N+1, which is
+        //     strictly after N.
+        //   - Waiting for the *present* index (N+1) will correctly block
+        //     until the GPU is done with the presentation.
+        //
+        // We also update `last_successful_submission_index` so that the normal
+        // `Device::maintain` wait-validity check does not reject a poll for
+        // this index.
+        let present_index = {
+            let mut indices = device.command_indices.write();
+            indices.active_submission_index += 1;
+            indices.active_submission_index
+        };
+
+        match result {
+            Ok(()) => {
+                device
+                    .last_successful_submission_index
+                    .store(present_index, Ordering::Release);
+                self.lock_life().track_present(present_index, texture);
+                Ok((Status::Good, present_index))
+            }
+            Err(err) => match err {
+                hal::SurfaceError::Timeout => {
+                    device
+                        .last_successful_submission_index
+                        .store(present_index, Ordering::Release);
+                    self.lock_life().track_present(present_index, texture);
+                    Ok((Status::Timeout, present_index))
+                }
+                hal::SurfaceError::Occluded => {
+                    device
+                        .last_successful_submission_index
+                        .store(present_index, Ordering::Release);
+                    self.lock_life().track_present(present_index, texture);
+                    Ok((Status::Occluded, present_index))
+                }
+                hal::SurfaceError::Lost => {
+                    device
+                        .last_successful_submission_index
+                        .store(present_index, Ordering::Release);
+                    self.lock_life().track_present(present_index, texture);
+                    Ok((Status::Lost, present_index))
+                }
+                hal::SurfaceError::Device(err) => {
+                    Err(SurfaceError::from(device.handle_hal_error(err)))
+                }
+                hal::SurfaceError::Outdated => {
+                    device
+                        .last_successful_submission_index
+                        .store(present_index, Ordering::Release);
+                    self.lock_life().track_present(present_index, texture);
+                    Ok((Status::Outdated, present_index))
+                }
+                hal::SurfaceError::Other(msg) => {
+                    log::error!("present error: {msg}");
+                    Err(SurfaceError::Invalid)
+                }
+            },
+        }
+    }
+}
+
 impl Surface {
     pub fn get_current_texture(&self) -> Result<ResolvedSurfaceOutput, SurfaceError> {
         profiling::scope!("Surface::get_current_texture");
@@ -273,58 +394,6 @@ impl Surface {
         Ok(ResolvedSurfaceOutput { status, texture })
     }
 
-    pub fn present(&self) -> Result<Status, SurfaceError> {
-        profiling::scope!("Surface::present");
-
-        let mut presentation = self.presentation.lock();
-        let present = match presentation.as_mut() {
-            Some(present) => present,
-            None => return Err(SurfaceError::NotConfigured),
-        };
-
-        let device = &present.device;
-
-        device.check_is_valid()?;
-        let queue = device.get_queue().unwrap();
-
-        let texture = present
-            .acquired_texture
-            .take()
-            .ok_or(SurfaceError::AlreadyAcquired)?;
-
-        let mut exclusive_snatch_guard = device.snatchable_lock.write();
-        let inner = texture.inner.snatch(&mut exclusive_snatch_guard);
-        drop(exclusive_snatch_guard);
-
-        let result = match inner {
-            None => return Err(SurfaceError::TextureDestroyed),
-            Some(resource::TextureInner::Surface { raw }) => {
-                let raw_surface = self.raw(device.backend()).unwrap();
-                let raw_queue = queue.raw();
-                let _fence_lock = device.fence.write();
-                unsafe { raw_queue.present(raw_surface, raw) }
-            }
-            _ => unreachable!(),
-        };
-
-        match result {
-            Ok(()) => Ok(Status::Good),
-            Err(err) => match err {
-                hal::SurfaceError::Timeout => Ok(Status::Timeout),
-                hal::SurfaceError::Occluded => Ok(Status::Occluded),
-                hal::SurfaceError::Lost => Ok(Status::Lost),
-                hal::SurfaceError::Device(err) => {
-                    Err(SurfaceError::from(device.handle_hal_error(err)))
-                }
-                hal::SurfaceError::Outdated => Ok(Status::Outdated),
-                hal::SurfaceError::Other(msg) => {
-                    log::error!("present error: {msg}");
-                    Err(SurfaceError::Invalid)
-                }
-            },
-        }
-    }
-
     pub fn discard(&self) -> Result<(), SurfaceError> {
         profiling::scope!("Surface::discard");
 
@@ -395,17 +464,68 @@ impl Global {
         })
     }
 
-    pub fn surface_present(&self, surface_id: id::SurfaceId) -> Result<Status, SurfaceError> {
+    pub fn queue_present(
+        &self,
+        queue_id: id::QueueId,
+        surface_id: id::SurfaceId,
+    ) -> Result<(Status, SubmissionIndex), SurfaceError> {
+        let queue = self.hub.queues.get(queue_id);
         let surface = self.surfaces.get(surface_id);
 
-        #[cfg(feature = "trace")]
-        if let Some(present) = surface.presentation.lock().as_ref() {
-            if let Some(ref mut trace) = *present.device.trace.lock() {
-                trace.add(Action::Present(surface.to_trace()));
+        let mut present_lock = surface.presentation.lock();
+
+        if let Some(ref presentation) = *present_lock {
+            let same_device = Arc::ptr_eq(&presentation.device, &queue.device);
+
+            if !same_device {
+                return Err(SurfaceError::Device(DeviceError::DeviceMismatch(Box::new(
+                    DeviceMismatch {
+                        res: queue.error_ident(),
+                        res_device: queue.device.error_ident(),
+                        target: None,
+                        target_device: presentation.device.error_ident(),
+                    },
+                ))));
             }
         }
 
-        surface.present()
+        let result = queue.present_impl(&surface, present_lock.as_mut());
+
+        #[cfg(feature = "trace")]
+        if let Ok((_, present_index)) = &result {
+            if let Some(ref presentation) = *present_lock {
+                if let Some(ref mut trace) = *presentation.device.trace.lock() {
+                    trace.add(Action::Present(*present_index, surface.to_trace()));
+                }
+            }
+        }
+
+        result
+    }
+
+    /// TODO: is this needed by deno?
+    pub fn surface_present(&self, surface_id: id::SurfaceId) -> Result<Status, SurfaceError> {
+        let surface = self.surfaces.get(surface_id);
+
+        let mut present_lock = surface.presentation.lock();
+
+        let queue = {
+            let present = present_lock.as_ref().ok_or(SurfaceError::NotConfigured)?;
+            present.device.get_queue().unwrap()
+        };
+
+        let result = queue.present_impl(&surface, present_lock.as_mut());
+
+        #[cfg(feature = "trace")]
+        if let Ok((_, present_index)) = &result {
+            if let Some(ref present) = *present_lock {
+                if let Some(ref mut trace) = *present.device.trace.lock() {
+                    trace.add(Action::Present(*present_index, surface.to_trace()));
+                }
+            }
+        }
+
+        result.map(|(status, _)| status)
     }
 
     pub fn surface_texture_discard(&self, surface_id: id::SurfaceId) -> Result<(), SurfaceError> {

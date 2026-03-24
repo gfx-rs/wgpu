@@ -1251,6 +1251,10 @@ pub trait Queue: WasmNotSendSync {
         texture: <Self::A as Api>::SurfaceTexture,
     ) -> Result<(), SurfaceError>;
     unsafe fn get_timestamp_period(&self) -> f32;
+    /// Block until all queue operations have completed.
+    ///
+    /// This is useful for waiting on presentations, which in vulkan don't have fences.
+    unsafe fn wait_for_idle(&self) -> Result<(), DeviceError>;
 }
 
 /// Encoder and allocation pool for `CommandBuffer`s.

@@ -201,10 +201,10 @@ fn main() {
                                 );
                                 self.player.get_surface_texture(id, surface);
                             }
-                            Some(trace::Action::Present(_id)) => {
+                            Some(trace::Action::Present(_id, _surface_id)) => {
                                 self.frame_count += 1;
                                 log::debug!("Presenting frame {}", self.frame_count);
-                                surface.present().unwrap();
+                                self.queue.present(surface).unwrap();
                                 break;
                             }
                             Some(trace::Action::DiscardSurfaceTexture(_id)) => {

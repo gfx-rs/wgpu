@@ -1,5 +1,5 @@
 [package]
-name = "wgpu-bug-repro-01-texture-atomic-bug"
+name = "wgpu-bug-repro-02-present-bugs"
 edition = "2021"
 rust-version = "1.87"
 publish = false

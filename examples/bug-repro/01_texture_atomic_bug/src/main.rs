@@ -335,6 +335,6 @@ impl State {
         }
 
         self.queue.submit([enc.finish()]);
-        frame.present();
+        self.queue.present(frame);
     }
 }

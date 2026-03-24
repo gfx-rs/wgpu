@@ -1,7 +1,7 @@
 use alloc::boxed::Box;
 use core::ops::{Deref, RangeBounds};
 
-use crate::{api::DeferredCommandBufferActions, *};
+use crate::{api::DeferredCommandBufferActions, api::SurfaceTexture, *};
 
 /// Handle to a command queue on a device.
 ///
@@ -341,6 +341,21 @@ impl Queue {
     ) -> Option<impl Deref<Target = A::Queue> + WasmNotSendSync> {
         let queue = self.inner.as_core_opt()?;
         unsafe { queue.context.queue_as_hal::<A>(queue) }
+    }
+
+    /// Schedule a surface texture to be presented on the owning surface.
+    ///
+    /// Needs to be called after any work on the texture is scheduled via [`Queue::submit`].
+    ///
+    /// # Platform dependent behavior
+    ///
+    /// On Wayland, `present` will attach a `wl_buffer` to the underlying `wl_surface` and commit the new surface
+    /// state. If it is desired to do things such as request a frame callback, scale the surface using the viewporter
+    /// or synchronize other double buffered state, then these operations should be done before the call to `present`.
+    pub fn present(&self, mut surface_texture: SurfaceTexture) -> SubmissionIndex {
+        surface_texture.presented = true;
+        let index = self.inner.present(&surface_texture.detail);
+        SubmissionIndex { index }
     }
 
     /// Compact a BLAS, it must have had [`Blas::prepare_compaction_async`] called on it and had the

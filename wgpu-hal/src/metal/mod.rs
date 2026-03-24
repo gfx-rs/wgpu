@@ -604,6 +604,16 @@ impl crate::Queue for Queue {
     unsafe fn get_timestamp_period(&self) -> f32 {
         self.timestamp_period
     }
+
+    unsafe fn wait_for_idle(&self) -> Result<(), crate::DeviceError> {
+        autoreleasepool(|_| {
+            let cmd_buf = self.shared.raw.commandBuffer().unwrap();
+            cmd_buf.setLabel(Some(ns_string!("(wgpu internal) wait_for_idle")));
+            cmd_buf.commit();
+            cmd_buf.waitUntilCompleted();
+        });
+        Ok(())
+    }
 }
 
 #[derive(Debug)]

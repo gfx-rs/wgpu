@@ -1653,6 +1653,26 @@ impl crate::Queue for Queue {
         let frequency = unsafe { self.raw.GetTimestampFrequency() }.expect("GetTimestampFrequency");
         (1_000_000_000.0 / frequency as f64) as f32
     }
+
+    unsafe fn wait_for_idle(&self) -> Result<(), crate::DeviceError> {
+        let mut device = Default::default();
+        unsafe {
+            self.raw
+                .GetDevice::<Direct3D12::ID3D12Device>(&mut device)
+                .into_device_result("Queue::wait_for_idle GetDevice")?;
+        }
+        let device = device.unwrap();
+
+        let fence: Direct3D12::ID3D12Fence =
+            unsafe { device.CreateFence(0, Direct3D12::D3D12_FENCE_FLAG_NONE) }
+                .into_device_result("Queue::wait_for_idle CreateFence")?;
+        unsafe { self.raw.Signal(&fence, 1) }.into_device_result("Queue::wait_for_idle Signal")?;
+        let event = Event::create(false, false)?;
+        unsafe { fence.SetEventOnCompletion(1, event.0) }
+            .into_device_result("Queue::wait_for_idle SetEventOnCompletion")?;
+        unsafe { Threading::WaitForSingleObject(event.0, Threading::INFINITE) };
+        Ok(())
+    }
 }
 #[derive(Debug)]
 pub struct DxilPassthroughShader {

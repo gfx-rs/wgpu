@@ -928,6 +928,28 @@ impl Device {
             // - When `queue` goes out of scope here, `Queue::drop` runs and tries to acquire the
             //   snatch guard — but Thread A (this thread) still holds it, causing a deadlock.
             drop(snatch_guard);
+
+            // If this was a wait request, resolve any pending presentations
+            // whose index is at or before the wait target.  Only those
+            // presents are part of the operation being waited on; presents
+            // with a higher index (made *after* the target) must not cause
+            // an unintended stall.
+            //
+            // `wait_for_present` either waits for the next real fence signal
+            // (if a submission after the present already exists) or falls
+            // back to a full queue idle when no subsequent submission has
+            // been made.
+            if let Some(wait_target) = wait_submission_index {
+                if let Some(present_index) = queue.lock_life().oldest_pending_present_index() {
+                    if present_index <= wait_target {
+                        if let Err(e) = queue.wait_for_present(present_index) {
+                            let hal_error: WaitIdleError = e.into();
+                            return (user_closures, Err(hal_error));
+                        }
+                        queue_empty = queue.lock_life().queue_empty();
+                    }
+                }
+            }
         } else {
             drop(snatch_guard);
         };

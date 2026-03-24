@@ -249,7 +249,7 @@ impl ApplicationHandler for App {
 
                     queue.submit(Some(encoder.finish()));
                     viewport.desc.window.pre_present_notify();
-                    frame.present();
+                    queue.present(frame);
                 }
             }
             WindowEvent::Occluded(is_occluded) => {

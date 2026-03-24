@@ -2738,6 +2738,11 @@ impl dispatch::QueueInterface for WebQueue {
     ) -> (Option<u64>, dispatch::DispatchBlas) {
         unimplemented!("Raytracing not implemented for web")
     }
+
+    fn present(&self, _detail: &dispatch::DispatchSurfaceOutputDetail) -> u64 {
+        // Swapchain is presented automatically on the web.
+        0
+    }
 }
 impl Drop for WebQueue {
     fn drop(&mut self) {
@@ -3945,10 +3950,6 @@ impl Drop for WebSurface {
 }
 
 impl dispatch::SurfaceOutputDetailInterface for WebSurfaceOutputDetail {
-    fn present(&self) {
-        // Swapchain is presented automatically on the web.
-    }
-
     fn texture_discard(&self) {
         // Can't really discard the texture on the web.
     }

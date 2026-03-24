@@ -110,7 +110,7 @@ impl Surface<'_> {
     ///
     /// In order to present the [`SurfaceTexture`] returned by this method,
     /// first a [`Queue::submit`] needs to be done with some work rendering to this texture.
-    /// Then [`SurfaceTexture::present`] needs to be called.
+    /// Then [`Queue::present`] needs to be called.
     ///
     /// If a [`SurfaceTexture`] referencing this surface is alive when [`Surface::configure()`]
     /// is called, the configure call will panic.
