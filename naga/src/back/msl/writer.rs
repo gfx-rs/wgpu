@@ -41,7 +41,6 @@ use core::ptr;
 // Some more general handling of pointers is needed to be implemented here.
 const ATOMIC_REFERENCE: &str = "&";
 
-pub(super) const RT_NAMESPACE: &str = "metal::raytracing";
 pub(super) const RAY_QUERY_TYPE: &str = "_RayQuery";
 pub(super) const RAY_QUERY_FIELD_INTERSECTOR: &str = "intersector";
 pub(super) const RAY_QUERY_FIELD_INTERSECTION: &str = "intersection";
