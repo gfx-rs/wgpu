@@ -16,13 +16,13 @@ use crate::{
     Handle,
 };
 
-pub(super) const RT_NAMESPACE: &'static str = "metal::raytracing";
+pub(super) const RT_NAMESPACE: &str = "metal::raytracing";
 
 pub(super) fn metal_intersector_ty() -> String {
     format!("{RT_NAMESPACE}::intersection_query<{RT_NAMESPACE}::instancing, {RT_NAMESPACE}::triangle_data>")
 }
 
-pub(super) const INTERSECTION_FUNCTION_NAME: &'static str = "ray_query_get_intersection";
+pub(super) const INTERSECTION_FUNCTION_NAME: &str = "ray_query_get_intersection";
 
 impl<W: Write> Writer<W> {
     pub(super) fn write_rq_get_intersection_function(
