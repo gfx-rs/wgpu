@@ -51,12 +51,15 @@ impl<W: Write> Writer<W> {
         }
         writeln!(self.out, "{level}{level}intersection.instance_custom_data = intersector.get_{ty}_user_instance_id();")?;
         writeln!(self.out, "{level}{level}intersection.instance_index = intersector.get_{ty}_instance_id();")?;
-        writeln!(self.out, "{level}{level}intersection.sbt_record_offset = intersector.get_{ty}_user_instance_id();")?;
+        // TODO
+        //writeln!(self.out, "{level}{level}intersection.sbt_record_offset = intersector.get_{ty}_user_instance_id();")?;
         writeln!(self.out, "{level}{level}intersection.geometry_index = intersector.get_{ty}_geometry_id();")?;
         writeln!(self.out, "{level}{level}intersection.primitive_index = intersector.get_{ty}_primitive_id();")?;
         writeln!(self.out, "{level}{level}intersection.object_to_world = intersector.get_{ty}_user_instance_id();")?;
         writeln!(self.out, "{level}{level}intersection.world_to_object = intersector.get_{ty}_user_instance_id();")?;
         writeln!(self.out, "{level}}}")?;
+        writeln!(self.out, "return intersection;")?;
+        writeln!(self.out, "}}")?;
 
         Ok(())
     }
