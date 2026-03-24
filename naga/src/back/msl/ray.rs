@@ -86,7 +86,7 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, ";")?;
 
                 // Set up intersection parameters
-                writeln!(self.out, "{inner_level}intersection_params params;")?;
+                writeln!(self.out, "{inner_level}{RT_NAMESPACE}::intersection_params params;")?;
 
                 {
                     // determine whether or not to cull 
@@ -94,7 +94,7 @@ impl<W: Write> Writer<W> {
                     let f_no_opaque = back::RayFlag::CULL_NO_OPAQUE.bits();
                     writeln!(
                         self.out,
-                        "{inner_level}intersection_params.set_opacity_cull_mode(
+                        "{inner_level}params.set_opacity_cull_mode(
 {inner_level}    (desc.flags & {f_opaque}) != 0 ? {RT_NAMESPACE}::opacity_cull_mode::opaque : (
 {inner_level}        (desc.flags & {f_no_opaque}) != 0 ? {RT_NAMESPACE}::opacity_cull_mode::non_opaque : {RT_NAMESPACE}::opacity_cull_mode::none
 {inner_level}    )
@@ -104,7 +104,7 @@ impl<W: Write> Writer<W> {
                 {
                     let f_opaque = back::RayFlag::OPAQUE.bits();
                     let f_no_opaque = back::RayFlag::NO_OPAQUE.bits();
-                    writeln!(self.out, "{inner_level}intersection_params.force_opacity(
+                    writeln!(self.out, "{inner_level}params.force_opacity(
 {inner_level}    (desc.flags & {f_opaque}) != 0 ? {RT_NAMESPACE}::forced_opacity::opaque : (
 {inner_level}        (desc.flags & {f_no_opaque}) != 0 ? {RT_NAMESPACE}::forced_opacity::non_opaque : {RT_NAMESPACE}::forced_opacity::none
 {inner_level}    )
@@ -112,7 +112,7 @@ impl<W: Write> Writer<W> {
                 }
                 {
                     let flag = back::RayFlag::TERMINATE_ON_FIRST_HIT.bits();
-                    writeln!(self.out, "{inner_level}intersection_params.accept_any_intersection((desc.flags & {flag}) != 0);")?;
+                    writeln!(self.out, "{inner_level}params.accept_any_intersection((desc.flags & {flag}) != 0);")?;
                 }
 
                 write!(

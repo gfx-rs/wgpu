@@ -56,18 +56,18 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
     RayDesc _e12 = RayDesc {4u, 255u, 0.1, 100.0, pos, dir};
     {
         RayDesc desc = _e12;
-        intersection_params params;
-        intersection_params.set_opacity_cull_mode(
+        metal::raytracing::intersection_params params;
+        params.set_opacity_cull_mode(
             (desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (
                 (desc.flags & 128) != 0 ? metal::raytracing::opacity_cull_mode::non_opaque : metal::raytracing::opacity_cull_mode::none
             )
         );
-        intersection_params.force_opacity(
+        params.force_opacity(
             (desc.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (
                 (desc.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none
             )
         );
-        intersection_params.accept_any_intersection((desc.flags & 4) != 0);
+        params.accept_any_intersection((desc.flags & 4) != 0);
         metal::raytracing::ray ray = metal::raytracing::ray(desc.origin, desc.dir, desc.tmin, desc.tmax);        rq_1.reset(ray,acc_struct, desc.cull_mask, params);
     }
     RayIntersection intersection = ray_query_get_intersection_false(rq_1);
