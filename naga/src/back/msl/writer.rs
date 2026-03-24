@@ -15,8 +15,7 @@ use half::f16;
 
 use super::{
     sampler as sm, Error, LocationMode, Options, PipelineOptions, TranslationInfo, NAMESPACE,
-    WRAPPED_ARRAY_FIELD,
-};
+    WRAPPED_ARRAY_FIELD, ray::RT_NAMESPACE};
 use crate::{
     arena::{Handle, HandleSet},
     back::{
@@ -4385,10 +4384,6 @@ impl<W: Write> Writer<W> {
             }
         }
 
-        if uses_ray_query {
-            self.put_ray_query_type()?;
-        }
-
         if options
             .bounds_check_policies
             .contains(index::BoundsCheckPolicy::ReadZeroSkipWrite)
@@ -4458,32 +4453,6 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "{tab}{tab}return T {{}};")?;
         writeln!(self.out, "{tab}}}")?;
         writeln!(self.out, "}};")?;
-        Ok(())
-    }
-
-    fn put_ray_query_type(&mut self) -> BackendResult {
-        let tab = back::INDENT;
-        writeln!(self.out, "struct {RAY_QUERY_TYPE} {{")?;
-        let full_type = format!("{RT_NAMESPACE}::intersector<{RT_NAMESPACE}::instancing, {RT_NAMESPACE}::triangle_data, {RT_NAMESPACE}::world_space_data>");
-        writeln!(self.out, "{tab}{full_type} {RAY_QUERY_FIELD_INTERSECTOR};")?;
-        writeln!(
-            self.out,
-            "{tab}{full_type}::result_type {RAY_QUERY_FIELD_INTERSECTION};"
-        )?;
-        writeln!(self.out, "{tab}bool {RAY_QUERY_FIELD_READY} = false;")?;
-        writeln!(self.out, "}};")?;
-        writeln!(self.out, "constexpr {NAMESPACE}::uint {RAY_QUERY_FUN_MAP_INTERSECTION}(const {RT_NAMESPACE}::intersection_type ty) {{")?;
-        let v_triangle = back::RayIntersectionType::Triangle as u32;
-        let v_bbox = back::RayIntersectionType::BoundingBox as u32;
-        writeln!(
-            self.out,
-            "{tab}return ty=={RT_NAMESPACE}::intersection_type::triangle ? {v_triangle} : "
-        )?;
-        writeln!(
-            self.out,
-            "{tab}{tab}ty=={RT_NAMESPACE}::intersection_type::bounding_box ? {v_bbox} : 0;"
-        )?;
-        writeln!(self.out, "}}")?;
         Ok(())
     }
 
