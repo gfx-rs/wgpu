@@ -40,10 +40,6 @@ use core::ptr;
 // Some more general handling of pointers is needed to be implemented here.
 const ATOMIC_REFERENCE: &str = "&";
 
-pub(super) const RAY_QUERY_TYPE: &str = "_RayQuery";
-pub(super) const RAY_QUERY_FIELD_INTERSECTION: &str = "intersection";
-pub(super) const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
-
 pub(crate) const ATOMIC_COMP_EXCH_FUNCTION: &str = "naga_atomic_compare_exchange_weak_explicit";
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
@@ -373,7 +369,7 @@ impl Display for TypeContext<'_> {
                 if vertex_return {
                     unimplemented!("metal does not support vertex ray hit return")
                 }
-                write!(out, "{RAY_QUERY_TYPE}")
+                write!(out, "{}", super::ray::metal_intersector_ty())
             }
             crate::TypeInner::BindingArray { base, .. } => {
                 let base_tyname = Self {
@@ -522,6 +518,9 @@ pub(super) enum WrappedFunction {
         intermediate: crate::CooperativeSize,
         scalar: crate::Scalar,
     },
+    RayQueryGetIntersection {
+        committed: bool,
+    }
 }
 
 pub struct Writer<W> {
@@ -2897,40 +2896,15 @@ impl<W: Write> Writer<W> {
             }
             crate::Expression::RayQueryGetIntersection {
                 query,
-                committed: _,
+                committed,
             } => {
                 if context.lang_version < (2, 4) {
                     return Err(Error::UnsupportedRayTracing);
                 }
 
-                let ty = context.module.special_types.ray_intersection.unwrap();
-                let type_name = &self.names[&NameKey::Type(ty)];
-                write!(self.out, "{type_name} {{{RAY_QUERY_FUN_MAP_INTERSECTION}(")?;
+                write!(self.out, "{}_{committed}(", super::ray::INTERSECTION_FUNCTION_NAME)?;
                 self.put_expression(query, context, true)?;
-                write!(self.out, ".{RAY_QUERY_FIELD_INTERSECTION}.type)")?;
-                let fields = [
-                    "distance",
-                    "user_instance_id", // req Metal 2.4
-                    "instance_id",
-                    "", // SBT offset
-                    "geometry_id",
-                    "primitive_id",
-                    "triangle_barycentric_coord",
-                    "triangle_front_facing",
-                    "",                          // padding
-                    "object_to_world_transform", // req Metal 2.4
-                    "world_to_object_transform", // req Metal 2.4
-                ];
-                for field in fields {
-                    write!(self.out, ", ")?;
-                    if field.is_empty() {
-                        write!(self.out, "{{}}")?;
-                    } else {
-                        self.put_expression(query, context, true)?;
-                        write!(self.out, ".{RAY_QUERY_FIELD_INTERSECTION}.{field}")?;
-                    }
-                }
-                write!(self.out, "}}")?;
+                write!(self.out, ")")?;
             }
             crate::Expression::CooperativeLoad { ref data, .. } => {
                 if context.lang_version < (2, 3) {
@@ -6514,6 +6488,9 @@ template <typename A>
                 crate::Expression::CooperativeMultiplyAdd { a, b, c: _ } => {
                     let space = crate::AddressSpace::Private;
                     self.write_wrapped_cooperative_multiply_add(module, func_ctx, space, a, b)?;
+                }
+                crate::Expression::RayQueryGetIntersection { committed, .. } => {
+                    self.write_rq_get_intersection_function(module, committed)?;
                 }
                 _ => {}
             }
