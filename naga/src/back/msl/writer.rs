@@ -41,10 +41,7 @@ use core::ptr;
 const ATOMIC_REFERENCE: &str = "&";
 
 pub(super) const RAY_QUERY_TYPE: &str = "_RayQuery";
-pub(super) const RAY_QUERY_FIELD_INTERSECTOR: &str = "intersector";
 pub(super) const RAY_QUERY_FIELD_INTERSECTION: &str = "intersection";
-pub(super) const RAY_QUERY_MODERN_SUPPORT: bool = false; //TODO
-pub(super) const RAY_QUERY_FIELD_READY: &str = "ready";
 pub(super) const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
 
 pub(crate) const ATOMIC_COMP_EXCH_FUNCTION: &str = "naga_atomic_compare_exchange_weak_explicit";
@@ -4357,24 +4354,6 @@ impl<W: Write> Writer<W> {
             .entry_points
             .iter()
             .any(|e| e.stage == crate::ShaderStage::Task && e.task_payload.is_some());
-
-        let mut uses_ray_query = false;
-        for (_, ty) in module.types.iter() {
-            match ty.inner {
-                crate::TypeInner::AccelerationStructure { .. } => {
-                    if options.lang_version < (2, 4) {
-                        return Err(Error::UnsupportedRayTracing);
-                    }
-                }
-                crate::TypeInner::RayQuery { .. } => {
-                    if options.lang_version < (2, 4) {
-                        return Err(Error::UnsupportedRayTracing);
-                    }
-                    uses_ray_query = true;
-                }
-                _ => (),
-            }
-        }
 
         if module.special_types.ray_desc.is_some()
             || module.special_types.ray_intersection.is_some()
