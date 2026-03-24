@@ -1413,7 +1413,7 @@ struct State {
     texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     next_dynamic_offset: usize,
     binder: Binder,
-    immediate_slots_set: u16,
+    immediate_slots_set: u64,
 }
 
 impl State {

@@ -300,7 +300,7 @@ pub struct Interface {
     limits: wgt::Limits,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
-    pub(crate) immediate_slots_required: u16,
+    pub(crate) immediate_slots_required: u64,
     pub(crate) immediate_size: u32,
 }
 

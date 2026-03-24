@@ -129,8 +129,8 @@ pub enum DispatchError {
     InvalidGroupSize { current: [u32; 3], limit: u32 },
     #[error(transparent)]
     BindingSizeTooSmall(#[from] LateMinBufferBindingSizeMismatch),
-    #[error("Not all immediate data slots required by the pipeline have been set (required: 0x{required:04X}, set: 0x{set:04X})")]
-    MissingImmediateData { required: u16, set: u16 },
+    #[error("Not all immediate data slots required by the pipeline have been set (required: 0x{required:016X}, set: 0x{set:016X})")]
+    MissingImmediateData { required: u64, set: u64 },
 }
 
 impl WebGpuError for DispatchError {
@@ -267,7 +267,7 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
 
     immediates: Vec<u32>,
 
-    immediate_slots_set: u16,
+    immediate_slots_set: u64,
 
     intermediate_trackers: Tracker,
 }

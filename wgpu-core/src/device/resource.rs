@@ -4796,7 +4796,7 @@ impl Device {
             .iter()
             .filter_map(|sm| sm.interface.as_ref())
             .map(|i| i.immediate_slots_required)
-            .fold(0u16, core::ops::BitOr::bitor);
+            .fold(0u64, core::ops::BitOr::bitor);
 
         let pipeline = pipeline::RenderPipeline {
             raw: ManuallyDrop::new(raw),

@@ -1,7 +1,7 @@
 /// Returns the bitmask of slots covered by a `set_immediates(offset, size_bytes)` call.
-pub(crate) fn slots_for_range(offset: u32, size_bytes: u32) -> u16 {
-    // u32 upcast to avoid overflow panic on n = 16
-    let bits_below = |n: u32| ((1u32 << n.min(16)) - 1) as u16;
+pub(crate) fn slots_for_range(offset: u32, size_bytes: u32) -> u64 {
+    // u128 upcast to avoid overflow panic on n = 64
+    let bits_below = |n: u32| ((1u128 << n.min(64)) - 1) as u64;
     let lo = offset / 4;
     let hi = (offset + size_bytes).div_ceil(4);
     bits_below(hi) - bits_below(lo)
@@ -13,10 +13,10 @@ pub(crate) fn slots_for_range(offset: u32, size_bytes: u32) -> u16 {
 /// For structs, gaps between members are padding and those slots need not be set.
 /// For scalars, vectors, and matrices, all slots in the span are required
 /// (the spec only defines padding exemptions at the struct-member level).
-pub(crate) fn slots_for_type(ty: &naga::TypeInner, gctx: naga::proc::GlobalCtx) -> u16 {
+pub(crate) fn slots_for_type(ty: &naga::TypeInner, gctx: naga::proc::GlobalCtx) -> u64 {
     match *ty {
         naga::TypeInner::Struct { ref members, .. } => {
-            let mut mask: u16 = 0;
+            let mut mask: u64 = 0;
             for member in members {
                 let member_size = gctx.types[member.ty].inner.size(gctx);
                 mask |= slots_for_range(member.offset, member_size);
@@ -41,7 +41,7 @@ fn immediate_type(module: &naga::Module) -> Option<&naga::TypeInner> {
 
 /// Returns the required immediate slot bitmask for a naga module.
 /// Zero if the module has no `var<immediate>`.
-pub(crate) fn slots_for_module(module: &naga::Module) -> u16 {
+pub(crate) fn slots_for_module(module: &naga::Module) -> u64 {
     immediate_type(module).map_or(0, |ty| slots_for_type(ty, module.to_ctx()))
 }
 
@@ -56,7 +56,7 @@ pub(crate) fn size_for_module(module: &naga::Module) -> u32 {
 mod tests {
     use super::slots_for_module;
 
-    fn immediate_slots(wgsl: &str) -> u16 {
+    fn immediate_slots(wgsl: &str) -> u64 {
         slots_for_module(&naga::front::wgsl::parse_str(wgsl).unwrap())
     }
 
