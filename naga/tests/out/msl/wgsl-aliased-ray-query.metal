@@ -41,8 +41,8 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
         intersection.instance_index = intersector.get_candidate_instance_id();
         intersection.geometry_index = intersector.get_candidate_geometry_id();
         intersection.primitive_index = intersector.get_candidate_primitive_id();
-        intersection.object_to_world = intersector.get_candidate_user_instance_id();
-        intersection.world_to_object = intersector.get_candidate_user_instance_id();
+        intersection.object_to_world = intersector.get_candidate_object_to_world_transform();
+        intersection.world_to_object = intersector.get_candidate_world_to_object_transform();
     }
     return intersection;
 }
@@ -55,7 +55,7 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
     metal::float3 dir = metal::float3(0.0, 1.0, 0.0);
     RayDesc _e12 = RayDesc {4u, 255u, 0.1, 100.0, pos, dir};
     {
-        metal::raytracing::RayDesc desc = _e12;
+        RayDesc desc = _e12;
         intersection_params params;
         intersection_params.set_opacity_cull_mode(
             (desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (

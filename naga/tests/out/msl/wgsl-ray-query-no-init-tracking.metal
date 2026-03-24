@@ -48,8 +48,8 @@ RayIntersection ray_query_get_intersection_true(metal::raytracing::intersection_
         intersection.instance_index = intersector.get_committed_instance_id();
         intersection.geometry_index = intersector.get_committed_geometry_id();
         intersection.primitive_index = intersector.get_committed_primitive_id();
-        intersection.object_to_world = intersector.get_committed_user_instance_id();
-        intersection.world_to_object = intersector.get_committed_user_instance_id();
+        intersection.object_to_world = intersector.get_committed_object_to_world_transform();
+        intersection.world_to_object = intersector.get_committed_world_to_object_transform();
     }
     return intersection;
 }
@@ -61,7 +61,7 @@ RayIntersection query_loop(
     metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> rq_1 = {};
     RayDesc _e8 = RayDesc {4u, 255u, 0.1, 100.0, pos, dir};
     {
-        metal::raytracing::RayDesc desc = _e8;
+        RayDesc desc = _e8;
         intersection_params params;
         intersection_params.set_opacity_cull_mode(
             (desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (
@@ -127,8 +127,8 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
         intersection.instance_index = intersector.get_candidate_instance_id();
         intersection.geometry_index = intersector.get_candidate_geometry_id();
         intersection.primitive_index = intersector.get_candidate_primitive_id();
-        intersection.object_to_world = intersector.get_candidate_user_instance_id();
-        intersection.world_to_object = intersector.get_candidate_user_instance_id();
+        intersection.object_to_world = intersector.get_candidate_object_to_world_transform();
+        intersection.world_to_object = intersector.get_candidate_world_to_object_transform();
     }
     return intersection;
 }
@@ -141,7 +141,7 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
     metal::float3 dir_2 = metal::float3(0.0, 1.0, 0.0);
     RayDesc _e12 = RayDesc {4u, 255u, 0.1, 100.0, pos_2, dir_2};
     {
-        metal::raytracing::RayDesc desc = _e12;
+        RayDesc desc = _e12;
         intersection_params params;
         intersection_params.set_opacity_cull_mode(
             (desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (

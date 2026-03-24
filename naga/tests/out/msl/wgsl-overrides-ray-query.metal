@@ -20,7 +20,7 @@ constant float o = 2.0;
     metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> rq = {};
     RayDesc desc = RayDesc {4u, 255u, 34.0, 38.0, metal::float3(46.0), metal::float3(58.0, 62.0, 74.0)};
     {
-        metal::raytracing::RayDesc desc = desc;
+        RayDesc desc = desc;
         intersection_params params;
         intersection_params.set_opacity_cull_mode(
             (desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (

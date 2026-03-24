@@ -55,8 +55,8 @@ impl<W: Write> Writer<W> {
         //writeln!(self.out, "{level}{level}intersection.sbt_record_offset = intersector.get_{ty}_user_instance_id();")?;
         writeln!(self.out, "{level}{level}intersection.geometry_index = intersector.get_{ty}_geometry_id();")?;
         writeln!(self.out, "{level}{level}intersection.primitive_index = intersector.get_{ty}_primitive_id();")?;
-        writeln!(self.out, "{level}{level}intersection.object_to_world = intersector.get_{ty}_user_instance_id();")?;
-        writeln!(self.out, "{level}{level}intersection.world_to_object = intersector.get_{ty}_user_instance_id();")?;
+        writeln!(self.out, "{level}{level}intersection.object_to_world = intersector.get_{ty}_object_to_world_transform();")?;
+        writeln!(self.out, "{level}{level}intersection.world_to_object = intersector.get_{ty}_world_to_object_transform();")?;
         writeln!(self.out, "{level}}}")?;
         writeln!(self.out, "{level}return intersection;")?;
         writeln!(self.out, "}}")?;
@@ -81,7 +81,7 @@ impl<W: Write> Writer<W> {
 
                 let inner_level = level.next();
 
-                write!(self.out, "{inner_level}{RT_NAMESPACE}::RayDesc desc = ")?;
+                write!(self.out, "{inner_level}RayDesc desc = ")?;
                 self.put_expression(descriptor, &context.expression, false)?;
                 writeln!(self.out, ";")?;
 
