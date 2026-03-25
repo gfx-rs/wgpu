@@ -71,6 +71,7 @@ Bottom level categories:
 #### General
 
 - Fix limit comparison logic for `max_inter_stage_shader_variables` By @ErichDonGubler in [#9264](https://github.com/gfx-rs/wgpu/pull/9264).
+- Fix incorrect checks for dynamic binding bounds when calling an encoder's `set_bind_group` in passes and bundles. By @ErichDonGubler in [#9308](https://github.com/gfx-rs/wgpu/pull/9308).
 
 #### naga
 

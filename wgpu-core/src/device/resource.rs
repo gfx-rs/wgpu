@@ -3423,6 +3423,9 @@ impl Device {
                 return Err(Error::DuplicateBinding(a.binding));
             }
         }
+
+        dynamic_binding_info.sort_by_key(|i| i.binding_idx);
+
         let hal_desc = hal::BindGroupDescriptor {
             label: desc.label.to_hal(self.instance_flags),
             layout: layout.raw(),
