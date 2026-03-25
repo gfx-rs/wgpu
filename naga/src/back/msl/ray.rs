@@ -259,7 +259,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{level}")?;
                 self.put_expression(query, &context.expression, true)?;
                 // Terminate appears to map to abort in spirv-cross, but metal only documents
-                // the existance of this method, not what it does.
+                // the existence of this method, not what it does.
                 writeln!(self.out, ".abort();")?;
             }
         }
