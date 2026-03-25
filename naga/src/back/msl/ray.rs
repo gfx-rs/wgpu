@@ -220,7 +220,7 @@ impl<W: Write> Writer<W> {
                     )?;
                 }
 
-                write!(
+                writeln!(
                     self.out,
                     "{inner_level}{RT_NAMESPACE}::ray ray = {RT_NAMESPACE}::ray(desc.origin, desc.dir, desc.tmin, desc.tmax);"
                 )?;

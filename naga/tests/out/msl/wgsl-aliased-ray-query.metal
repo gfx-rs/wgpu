@@ -69,7 +69,8 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
             )
         );
         params.accept_any_intersection((desc.flags & 4) != 0);
-        metal::raytracing::ray ray = metal::raytracing::ray(desc.origin, desc.dir, desc.tmin, desc.tmax);        rq_1.reset(ray,acc_struct, desc.cull_mask, params);
+        metal::raytracing::ray ray = metal::raytracing::ray(desc.origin, desc.dir, desc.tmin, desc.tmax);
+        rq_1.reset(ray,acc_struct, desc.cull_mask, params);
     }
     RayIntersection intersection = ray_query_get_intersection_false(rq_1);
     if (intersection.kind == 3u) {

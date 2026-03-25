@@ -33,7 +33,8 @@ constant float o = 2.0;
             )
         );
         params.accept_any_intersection((desc.flags & 4) != 0);
-        metal::raytracing::ray ray = metal::raytracing::ray(desc.origin, desc.dir, desc.tmin, desc.tmax);        rq.reset(ray,acc_struct, desc.cull_mask, params);
+        metal::raytracing::ray ray = metal::raytracing::ray(desc.origin, desc.dir, desc.tmin, desc.tmax);
+        rq.reset(ray,acc_struct, desc.cull_mask, params);
     }
     uint2 loop_bound = uint2(4294967295u);
     while(true) {
