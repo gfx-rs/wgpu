@@ -121,6 +121,7 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
         intersection.barycentrics = intersector.get_candidate_triangle_barycentric_coord();
         intersection.front_face = intersector.is_candidate_triangle_front_facing();
     } else if (ty == metal::raytracing::intersection_type::bounding_box) {
+        intersection.kind = 3;
     }
     if (ty != metal::raytracing::intersection_type::none) {
         intersection.instance_custom_data = intersector.get_candidate_user_instance_id();
