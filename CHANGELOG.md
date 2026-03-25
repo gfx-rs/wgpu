@@ -54,7 +54,7 @@ Bottom level categories:
 
 #### DX12
 
-- Added support for mesh shaders in naga's HLSL writer, completing DX12 support for mesh shaders. By @inner-daemons in #8752.
+- Added support for mesh shaders in naga's HLSL writer, completing DX12 support for mesh shaders. By @inner-daemons in [#8752](https://github.com/gfx-rs/wgpu/pull/8752).
 
 ### Changes
 
@@ -64,13 +64,13 @@ Bottom level categories:
 
 #### Validation
 
-- Add clip distances validation for `maxInterStageShaderVariables`. By @ErichDonGubler in [8762](https://github.com/gfx-rs/wgpu/pull/8762). This may break some existing programs, but it compiles with the WebGPU spec.
+- Add clip distances validation for `maxInterStageShaderVariables`. By @ErichDonGubler in [#8762](https://github.com/gfx-rs/wgpu/pull/8762). This may break some existing programs, but it compiles with the WebGPU spec.
 
 ### Bug Fixes
 
 #### General
 
-- Fix limit comparison logic for `max_inter_stage_shader_variables` By @ErichDonGubler in [9264](https://github.com/gfx-rs/wgpu/pull/9264).
+- Fix limit comparison logic for `max_inter_stage_shader_variables` By @ErichDonGubler in [#9264](https://github.com/gfx-rs/wgpu/pull/9264).
 
 #### naga
 
