@@ -4306,7 +4306,10 @@ impl<W: Write> Writer<W> {
             &super::keywords::RESERVED_SET,
             proc::KeywordSet::empty(),
             proc::CaseInsensitiveKeywordSet::empty(),
-            &[CLAMPED_LOD_LOAD_PREFIX],
+            &[
+                CLAMPED_LOD_LOAD_PREFIX,
+                super::ray::INTERSECTION_FUNCTION_NAME,
+            ],
             &mut self.names,
         );
         self.wrapped_functions.clear();
