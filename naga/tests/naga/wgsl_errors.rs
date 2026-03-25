@@ -590,13 +590,13 @@ fn struct_member_size_too_low() {
     check(
         r#"
             struct Bar {
-                @size(0) data: array<f32>
+                @size(0) data: array<f32, 1>
             }
         "#,
         r#"error: struct member size must be at least 4
   ┌─ wgsl:3:23
   │
-3 │                 @size(0) data: array<f32>
+3 │                 @size(0) data: array<f32, 1>
   │                       ^ must be at least 4
 
 "#,
@@ -4396,7 +4396,7 @@ fn max_type_size_large_array() {
     // The total size of an array is not resolved until validation. Type aliases
     // don't get spans so the error isn't very helpful.
     check_validation! {
-        "alias LargeArray = array<u32, (1 << 28) + 1>;":
+        "alias LargeArray = array<u32, 1 << 29>;":
         Err(naga::valid::ValidationError::Layouter(
                 naga::proc::LayoutError {
                     inner: naga::proc::LayoutErrorInner::TooLarge,
@@ -4412,9 +4412,9 @@ fn max_type_size_array_of_arrays() {
     // during lowering. Anonymous types don't get spans so this error isn't very
     // helpful.
     check(
-        "alias ArrayOfArrays = array<array<u32, (1 << 28) + 1>, 22>;",
+        "alias ArrayOfArrays = array<array<u32, 1 << 29>, 22>;",
         r#"error: type is too large
- = note: the maximum size is 1073741824 bytes
+ = note: the maximum size is 2147483647 bytes
 
 "#,
     );
@@ -4441,7 +4441,7 @@ fn max_type_size_override_array() {
         .validate(&module)
         .expect("module should validate");
 
-    let overrides = hashbrown::HashMap::from([(String::from("SIZE"), f64::from((1 << 28) + 1))]);
+    let overrides = hashbrown::HashMap::from([(String::from("SIZE"), f64::from(1 << 29))]);
     let err = naga::back::pipeline_constants::process_overrides(&module, &info, None, &overrides)
         .unwrap_err();
     let naga::back::pipeline_constants::PipelineConstantError::ValidationError(err) = err else {
@@ -4463,16 +4463,16 @@ fn max_type_size_array_in_struct() {
     check(
         r#"
             struct ContainsLargeArray {
-                arr: array<u32, (1 << 28) + 1>,
+                arr: array<u32, 1 << 29>,
             }
         "#,
         r#"error: struct member is too large
   ┌─ wgsl:3:17
   │
-3 │                 arr: array<u32, (1 << 28) + 1>,
+3 │                 arr: array<u32, 1 << 29>,
   │                 ^^^ this member exceeds the maximum size
   │
-  = note: the maximum size is 1073741824 bytes
+  = note: the maximum size is 2147483647 bytes
 
 "#,
     );
@@ -4485,20 +4485,20 @@ fn max_type_size_two_arrays_in_struct() {
     check(
         r#"
             struct TwoArrays {
-                arr1: array<u32, 1 << 27>,
-                arr2: array<u32, (1 << 27) + 1>,
+                arr1: array<u32, 1 << 28>,
+                arr2: array<u32, 1 << 28>,
             }
         "#,
         "error: type is too large
   ┌─ wgsl:2:13
   │\x20\x20
 2 │ ╭             struct TwoArrays {
-3 │ │                 arr1: array<u32, 1 << 27>,
-4 │ │                 arr2: array<u32, (1 << 27) + 1>,
+3 │ │                 arr1: array<u32, 1 << 28>,
+4 │ │                 arr2: array<u32, 1 << 28>,
 5 │ │             }
   │ ╰─────────────^ this type exceeds the maximum size
   │\x20\x20
-  = note: the maximum size is 1073741824 bytes
+  = note: the maximum size is 2147483647 bytes
 
 ",
     );
@@ -4513,7 +4513,7 @@ fn max_type_size_array_of_structs() {
             struct NotVeryBigStruct {
                 data: u32,
             }
-            alias BigArrayOfStructs = array<NotVeryBigStruct, (1 << 28) + 1>;
+            alias BigArrayOfStructs = array<NotVeryBigStruct, 1 << 29>;
         "#:
         Err(naga::valid::ValidationError::Layouter(
                 naga::proc::LayoutError {
