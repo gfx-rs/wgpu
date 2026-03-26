@@ -149,6 +149,7 @@ var<uniform> gen_data: GenData;
 
 struct GenVertexOutput {
     @location(0)
+    @interpolate(flat)
     index: u32,
     @builtin(position)
     position: vec4<f32>,

@@ -1,7 +1,7 @@
 #version 450
 
 layout(location = 0) in vec2 tex_coord;
-layout(location = 1) in int index;
+layout(location = 1) flat in int index;
 
 layout(location = 0) out vec4 o_color;
 

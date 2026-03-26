@@ -193,7 +193,7 @@ const SHADER2: &str = "
 
     struct VertexOutput {
         @builtin(position) position: vec4f,
-        @location(0) index: u32,
+        @location(0) @interpolate(flat) index: u32,
     }
 
     @vertex fn vertex(
@@ -204,7 +204,7 @@ const SHADER2: &str = "
     }
 
     @fragment fn fragment(
-        @location(0) ix: u32,
+        @location(0) @interpolate(flat) ix: u32,
      ) -> @location(0) vec4f {
         result[ix + 4u] = immediates.fragment_constants[ix];
         return vec4f();

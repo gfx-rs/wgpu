@@ -8,7 +8,7 @@ struct VertexInput {
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) tex_coord: vec2<f32>,
-    @location(1) index: i32,
+    @location(1) @interpolate(flat) index: i32,
 }
 
 @vertex
@@ -22,7 +22,7 @@ fn vert_main(vertex: VertexInput) -> VertexOutput {
 
 struct FragmentInput {
     @location(0) tex_coord: vec2<f32>,
-    @location(1) index: i32,
+    @location(1) @interpolate(flat) index: i32,
 }
 
 @group(0) @binding(0)
