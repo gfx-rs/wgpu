@@ -3,7 +3,6 @@
 This document describes what is considered a security vulnerability in wgpu and
 how vulnerabilities should be reported.
 
-
 ## Vulnerability Definition
 
 WebGPU introduces a different threat model than is sometimes applied to
@@ -37,7 +36,6 @@ environments using wgpu. Associated vulnerabilities may be assigned lower
 severity than vulnerabilities that apply to a wgpu-based WebGPU implementation
 exposed to JavaScript.
 
-
 ## Supported Versions
 
 The wgpu project maintains security support for serious vulnerabilities in the
@@ -56,7 +54,6 @@ The version of wgpu that is active can be found in the Firefox repositories:
 
 We welcome reports of security vulnerabilities in any of these released
 versions or in the latest code on the `trunk` branch.
-
 
 ## Reporting a Vulnerability
 

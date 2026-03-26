@@ -891,6 +891,7 @@ impl Parser {
             ty,
             init,
             doc_comments: Vec::new(),
+            memory_decorations: crate::MemoryDecorations::empty(),
         })
     }
 
@@ -1849,6 +1850,7 @@ impl Parser {
         let mut mesh_output = ParsedAttribute::default();
 
         let mut must_use: ParsedAttribute<Span> = ParsedAttribute::default();
+        let mut memory_decorations = crate::MemoryDecorations::empty();
 
         let mut dependencies = FastIndexSet::default();
         let mut ctx = ExpressionContext {
@@ -2017,6 +2019,12 @@ impl Parser {
                 "must_use" => {
                     must_use.set(name_span, name_span)?;
                 }
+                "coherent" => {
+                    memory_decorations |= crate::MemoryDecorations::COHERENT;
+                }
+                "volatile" => {
+                    memory_decorations |= crate::MemoryDecorations::VOLATILE;
+                }
                 _ => return Err(Box::new(Error::UnknownAttribute(name_span))),
             }
         }
@@ -2116,6 +2124,7 @@ impl Parser {
                 let mut var = self.variable_decl(lexer, &mut ctx)?;
                 var.binding = binding.take();
                 var.doc_comments = doc_comments;
+                var.memory_decorations = memory_decorations;
                 Some(ast::GlobalDeclKind::Var(var))
             }
             (Token::Word("fn"), _) => {

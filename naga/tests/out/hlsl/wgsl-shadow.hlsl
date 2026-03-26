@@ -118,8 +118,8 @@ float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
             const float _e23 = fetch_shadow(_e19, mul(in_.world_position, light.proj));
             float3 light_dir = normalize((light.pos.xyz - in_.world_position.xyz));
             float diffuse = max(0.0, dot(normal_1, light_dir));
-            float3 _e37 = color;
-            color = (_e37 + ((_e23 * diffuse) * light.color.xyz));
+            float3 _e33 = color;
+            color = (_e33 + ((_e23 * diffuse) * light.color.xyz));
         }
     }
     float3 _e42 = color;
@@ -157,8 +157,8 @@ float4 fs_main_without_storage(FragmentInput_fs_main_without_storage fragmentinp
             const float _e23 = fetch_shadow(_e19, mul(in_1.world_position, light_1.proj));
             float3 light_dir_1 = normalize((light_1.pos.xyz - in_1.world_position.xyz));
             float diffuse_1 = max(0.0, dot(normal_2, light_dir_1));
-            float3 _e37 = color_1;
-            color_1 = (_e37 + ((_e23 * diffuse_1) * light_1.color.xyz));
+            float3 _e33 = color_1;
+            color_1 = (_e33 + ((_e23 * diffuse_1) * light_1.color.xyz));
         }
     }
     float3 _e42 = color_1;

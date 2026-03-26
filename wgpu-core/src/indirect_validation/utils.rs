@@ -15,7 +15,7 @@ pub(crate) struct UniqueIndex<'a, I: Iterator<Item = usize>> {
 
 impl<'a, I: Iterator<Item = usize>> UniqueIndex<'a, I> {
     fn new(inner: I, scratch: &'a mut UniqueIndexScratch) -> Self {
-        scratch.0.clear();
+        scratch.0.make_empty();
         Self { inner, scratch }
     }
 }

@@ -102,10 +102,10 @@ bitflags::bitflags! {
         const STORAGE_TEXTURE_BINDING_ARRAY = 1 << 5;
         /// Support for binding arrays of storage buffers.
         const STORAGE_BUFFER_BINDING_ARRAY = 1 << 6;
-        /// Support for [`BuiltIn::ClipDistance`].
+        /// Support for [`BuiltIn::ClipDistances`].
         ///
-        /// [`BuiltIn::ClipDistance`]: crate::BuiltIn::ClipDistance
-        const CLIP_DISTANCE = 1 << 7;
+        /// [`BuiltIn::ClipDistances`]: crate::BuiltIn::ClipDistances
+        const CLIP_DISTANCES = 1 << 7;
         /// Support for [`BuiltIn::CullDistance`].
         ///
         /// [`BuiltIn::CullDistance`]: crate::BuiltIn::CullDistance
@@ -208,6 +208,12 @@ bitflags::bitflags! {
         const RAY_TRACING_PIPELINE = 1 << 38;
         /// Support for draw index builtin
         const DRAW_INDEX = 1 << 39;
+        /// Support for binding arrays of acceleration structures.
+        const ACCELERATION_STRUCTURE_BINDING_ARRAY = 1 << 40;
+        /// Support for the `@coherent` memory decoration on storage buffers.
+        const MEMORY_DECORATION_COHERENT = 1 << 41;
+        /// Support for the `@volatile` memory decoration on storage buffers.
+        const MEMORY_DECORATION_VOLATILE = 1 << 42;
     }
 }
 
@@ -223,7 +229,7 @@ impl Capabilities {
             Self::DUAL_SOURCE_BLENDING => Some(Ext::DualSourceBlending),
             // NOTE: `SHADER_FLOAT16_IN_FLOAT32` _does not_ require the `f16` extension
             Self::SHADER_FLOAT16 => Some(Ext::F16),
-            Self::CLIP_DISTANCE => Some(Ext::ClipDistances),
+            Self::CLIP_DISTANCES => Some(Ext::ClipDistances),
             Self::MESH_SHADER => Some(Ext::WgpuMeshShader),
             Self::RAY_QUERY => Some(Ext::WgpuRayQuery),
             Self::RAY_HIT_VERTEX_POSITION => Some(Ext::WgpuRayQueryVertexReturn),
@@ -355,7 +361,6 @@ pub struct Validator {
     types: Vec<r#type::TypeInfo>,
     layouter: Layouter,
     location_mask: BitSet,
-    blend_src_mask: BitSet,
     ep_resource_bindings: FastHashSet<crate::ResourceBinding>,
     switch_values: FastHashSet<crate::SwitchValue>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
@@ -403,9 +408,10 @@ enum TraceRayVertexReturnState {
     /// Trace ray calls have been found, at least
     /// one uses an acceleration structure that
     /// does not have the flag enabling vertex return.
-    // Don't yet have vertex return builtins to return.
-    // this error for.
-    #[expect(unused)]
+    #[expect(
+        unused,
+        reason = "Don't yet have vertex return builtins to return this error for."
+    )]
     NoVertexReturn(crate::Span),
     /// Trace ray calls have been found, all
     /// acceleration structures have the flag enabling
@@ -602,7 +608,6 @@ impl Validator {
             types: Vec::new(),
             layouter: Layouter::default(),
             location_mask: BitSet::new(),
-            blend_src_mask: BitSet::new(),
             ep_resource_bindings: FastHashSet::default(),
             switch_values: FastHashSet::default(),
             valid_expression_list: Vec::new(),
@@ -631,8 +636,7 @@ impl Validator {
     pub fn reset(&mut self) {
         self.types.clear();
         self.layouter.clear();
-        self.location_mask.clear();
-        self.blend_src_mask.clear();
+        self.location_mask.make_empty();
         self.ep_resource_bindings.clear();
         self.switch_values.clear();
         self.valid_expression_list.clear();

@@ -699,6 +699,18 @@ impl<'a, W: Write> Writer<'a, W> {
 
         if let crate::AddressSpace::Storage { access } = global.space {
             self.write_storage_access(access)?;
+            if global
+                .memory_decorations
+                .contains(crate::MemoryDecorations::COHERENT)
+            {
+                write!(self.out, "coherent ")?;
+            }
+            if global
+                .memory_decorations
+                .contains(crate::MemoryDecorations::VOLATILE)
+            {
+                write!(self.out, "volatile ")?;
+            }
         }
 
         if let Some(storage_qualifier) = glsl_storage_qualifier(global.space) {
@@ -1072,7 +1084,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             }
                         }
                     }
-                    crate::BuiltIn::ClipDistance => {
+                    crate::BuiltIn::ClipDistances => {
                         // Re-declare `gl_ClipDistance` with number of clip planes.
                         let TypeInner::Array { size, .. } = self.module.types[ty].inner else {
                             unreachable!();

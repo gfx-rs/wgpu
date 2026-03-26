@@ -309,7 +309,7 @@ impl<W: Write> Writer<W> {
             } => {
                 needed.dual_source_blending = true;
             }
-            crate::Binding::BuiltIn(crate::BuiltIn::ClipDistance) => {
+            crate::Binding::BuiltIn(crate::BuiltIn::ClipDistances) => {
                 needed.clip_distances = true;
             }
             crate::Binding::BuiltIn(crate::BuiltIn::PrimitiveIndex) => {
@@ -1972,6 +1972,19 @@ impl<W: Write> Writer<W> {
                 Attribute::Binding(binding.binding),
             ])?;
             writeln!(self.out)?;
+        }
+
+        if global
+            .memory_decorations
+            .contains(crate::MemoryDecorations::COHERENT)
+        {
+            write!(self.out, "@coherent ")?;
+        }
+        if global
+            .memory_decorations
+            .contains(crate::MemoryDecorations::VOLATILE)
+        {
+            write!(self.out, "@volatile ")?;
         }
 
         // First write global name and address space if supported

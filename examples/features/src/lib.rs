@@ -1,4 +1,4 @@
-#![allow(clippy::arc_with_non_send_sync)] // False positive on wasm
+#![allow(clippy::arc_with_non_send_sync, reason = "False positive on wasm")]
 #![warn(clippy::allow_attributes)]
 
 pub mod framework;
@@ -26,6 +26,7 @@ pub mod ray_scene;
 pub mod ray_shadows;
 pub mod ray_traced_triangle;
 pub mod render_to_texture;
+pub mod render_with_compute;
 pub mod repeated_compute;
 pub mod shadow;
 pub mod skybox;

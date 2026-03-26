@@ -497,12 +497,12 @@ OpLine %3 94 32
 OpLine %3 94 23
 %204 = OpExtInst  %4  %1 FMax %48 %203
 OpLine %3 96 9
-%205 = OpFMul  %4  %196 %204
-%206 = OpCompositeExtract  %6  %191 2
-%207 = OpVectorShuffle  %11  %206 %206 0 1 2
-%208 = OpVectorTimesScalar  %11  %207 %205
-%209 = OpLoad  %11  %150
-%210 = OpFAdd  %11  %209 %208
+%205 = OpLoad  %11  %150
+%206 = OpFMul  %4  %196 %204
+%207 = OpCompositeExtract  %6  %191 2
+%208 = OpVectorShuffle  %11  %207 %207 0 1 2
+%209 = OpVectorTimesScalar  %11  %208 %206
+%210 = OpFAdd  %11  %205 %209
 OpLine %3 96 9
 OpStore %150 %210
 OpBranch %187
@@ -605,12 +605,12 @@ OpLine %3 113 32
 OpLine %3 113 23
 %280 = OpExtInst  %4  %1 FMax %48 %279
 OpLine %3 114 9
-%281 = OpFMul  %4  %272 %280
-%282 = OpCompositeExtract  %6  %267 2
-%283 = OpVectorShuffle  %11  %282 %282 0 1 2
-%284 = OpVectorTimesScalar  %11  %283 %281
-%285 = OpLoad  %11  %235
-%286 = OpFAdd  %11  %285 %284
+%281 = OpLoad  %11  %235
+%282 = OpFMul  %4  %272 %280
+%283 = OpCompositeExtract  %6  %267 2
+%284 = OpVectorShuffle  %11  %283 %283 0 1 2
+%285 = OpVectorTimesScalar  %11  %284 %282
+%286 = OpFAdd  %11  %281 %285
 OpLine %3 114 9
 OpStore %235 %286
 OpBranch %263

@@ -34,7 +34,7 @@ use crate::{
     dispatch::{self, BlasCompactCallback, BufferMappedRangeInterface},
     BindingResource, Blas, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage,
     CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations,
-    ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas,
+    ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas, WriteOnly,
 };
 use crate::{dispatch::DispatchAdapter, util::Mutex};
 
@@ -80,7 +80,8 @@ impl ContextWgpuCore {
 
     #[cfg(wgpu_core)]
     pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
-        self.0.enumerate_adapters(backends)
+        self.0
+            .enumerate_adapters(backends, false /* no limit bucketing */)
     }
 
     pub unsafe fn create_adapter_from_hal<A: hal::Api>(
@@ -864,6 +865,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                 compatible_surface: options
                     .compatible_surface
                     .map(|surface| surface.inner.as_core().id),
+                apply_limit_buckets: false,
             },
             wgt::Backends::all(),
             None,
@@ -1193,6 +1195,21 @@ impl dispatch::DeviceInterface for CoreDevice {
         }
         let mut remaining_arrayed_buffer_bindings = &arrayed_buffer_bindings[..];
 
+        let mut arrayed_acceleration_structures = Vec::new();
+        if self
+            .features
+            .contains(Features::ACCELERATION_STRUCTURE_BINDING_ARRAY)
+        {
+            // Gather all the TLAS IDs used by TLAS arrays first (same pattern as other arrayed resources).
+            for entry in desc.entries.iter() {
+                if let BindingResource::AccelerationStructureArray(array) = entry.resource {
+                    arrayed_acceleration_structures
+                        .extend(array.iter().map(|tlas| tlas.inner.as_core().id));
+                }
+            }
+        }
+        let mut remaining_arrayed_acceleration_structures = &arrayed_acceleration_structures[..];
+
         let entries = desc
             .entries
             .iter()
@@ -1235,6 +1252,12 @@ impl dispatch::DeviceInterface for CoreDevice {
                         bm::BindingResource::AccelerationStructure(
                             acceleration_structure.inner.as_core().id,
                         )
+                    }
+                    BindingResource::AccelerationStructureArray(array) => {
+                        let slice = &remaining_arrayed_acceleration_structures[..array.len()];
+                        remaining_arrayed_acceleration_structures =
+                            &remaining_arrayed_acceleration_structures[array.len()..];
+                        bm::BindingResource::AccelerationStructureArray(Borrowed(slice))
                     }
                     BindingResource::ExternalTexture(external_texture) => {
                         bm::BindingResource::ExternalTexture(external_texture.inner.as_core().id)
@@ -3906,7 +3929,7 @@ impl dispatch::SurfaceInterface for CoreSurface {
                             err,
                             "Surface::get_current_texture_view",
                         );
-                        (None, crate::SurfaceStatus::Unknown, output_detail)
+                        (None, crate::SurfaceStatus::Validation, output_detail)
                     }
                     None => self
                         .context
@@ -3952,13 +3975,14 @@ impl Drop for CoreSurfaceOutputDetail {
 }
 
 impl dispatch::QueueWriteBufferInterface for CoreQueueWriteBuffer {
-    fn slice(&self) -> &[u8] {
-        panic!()
+    #[inline]
+    fn len(&self) -> usize {
+        self.mapping.len()
     }
 
     #[inline]
-    fn slice_mut(&mut self) -> &mut [u8] {
-        self.mapping.slice_mut()
+    unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]> {
+        unsafe { self.mapping.write_slice() }
     }
 }
 impl Drop for CoreQueueWriteBuffer {
@@ -3971,13 +3995,18 @@ impl Drop for CoreQueueWriteBuffer {
 
 impl dispatch::BufferMappedRangeInterface for CoreBufferMappedRange {
     #[inline]
-    fn slice(&self) -> &[u8] {
+    fn len(&self) -> usize {
+        self.size
+    }
+
+    #[inline]
+    unsafe fn read_slice(&self) -> &[u8] {
         unsafe { slice::from_raw_parts(self.ptr.as_ptr(), self.size) }
     }
 
     #[inline]
-    fn slice_mut(&mut self) -> &mut [u8] {
-        unsafe { slice::from_raw_parts_mut(self.ptr.as_ptr(), self.size) }
+    unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]> {
+        unsafe { WriteOnly::new(NonNull::slice_from_raw_parts(self.ptr, self.size)) }
     }
 
     #[cfg(webgpu)]

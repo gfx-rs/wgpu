@@ -14,7 +14,7 @@ use wgc::{
     binding_model::BindingResource,
     command::{ArcCommand, ArcReferences, BasePass, Command, PointerReferences},
     device::trace::{self, DataKind, DataLoader},
-    id::PointerId,
+    id::{Marker, PointerId},
 };
 
 pub struct Player {
@@ -84,6 +84,28 @@ impl Default for Player {
             samplers: HashMap::new(),
             blas_s: HashMap::new(),
             tlas_s: HashMap::new(),
+        }
+    }
+}
+
+fn process_result<T: Marker, U>(
+    op: &str,
+    map: &mut HashMap<PointerId<T>, U>,
+    id: Option<PointerId<T>>,
+    value: Result<U, impl std::error::Error>,
+) {
+    match (id, value) {
+        (Some(id), Ok(value)) => {
+            map.insert(id, value);
+        }
+        (Some(_), Err(err)) => {
+            panic!("{op} succeeded when recording, but failed on playback: {err}");
+        }
+        (None, Ok(_)) => {
+            panic!("{op} failed when recording, but succeeded on playback");
+        }
+        (None, Err(err)) => {
+            panic!("{op} failed when recording, and failed on playback: {err}");
         }
     }
 }
@@ -323,10 +345,13 @@ impl Player {
             }
             Action::CreateComputePipeline { id, desc } => {
                 let resolved_desc = self.resolve_compute_pipeline_descriptor(desc);
-                let pipeline = device
-                    .create_compute_pipeline(resolved_desc)
-                    .expect("create_compute_pipeline error");
-                self.compute_pipelines.insert(id, pipeline);
+                let pipeline = device.create_compute_pipeline(resolved_desc);
+                process_result(
+                    "create_compute_pipeline",
+                    &mut self.compute_pipelines,
+                    id,
+                    pipeline,
+                );
             }
             Action::DestroyComputePipeline(id) => {
                 self.compute_pipelines
@@ -338,10 +363,13 @@ impl Player {
                 // pipeline descriptor that can represent either a conventional
                 // pipeline or a mesh shading pipeline.
                 let resolved_desc = self.resolve_render_pipeline_descriptor(desc);
-                let pipeline = device
-                    .create_render_pipeline(resolved_desc)
-                    .expect("create_render_pipeline error");
-                self.render_pipelines.insert(id, pipeline);
+                let pipeline = device.create_render_pipeline(resolved_desc);
+                process_result(
+                    "create_render_pipeline",
+                    &mut self.render_pipelines,
+                    id,
+                    pipeline,
+                );
             }
             Action::DestroyRenderPipeline(id) => {
                 self.render_pipelines
@@ -780,6 +808,16 @@ impl Player {
                     BindingResource::AccelerationStructure(tlas_id) => {
                         let tlas = self.resolve_tlas_id(tlas_id);
                         wgc::binding_model::ResolvedBindingResource::AccelerationStructure(tlas)
+                    }
+                    BindingResource::AccelerationStructureArray(tlas_ids) => {
+                        let resolved_tlas: Vec<_> = tlas_ids
+                            .to_vec()
+                            .into_iter()
+                            .map(|id| self.resolve_tlas_id(id))
+                            .collect();
+                        wgc::binding_model::ResolvedBindingResource::AccelerationStructureArray(
+                            Cow::Owned(resolved_tlas),
+                        )
                     }
                     BindingResource::ExternalTexture(external_texture_id) => {
                         let external_texture =

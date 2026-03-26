@@ -72,8 +72,8 @@ void main() {
             float _e23 = fetch_shadow(_e19, (light.proj * in_.world_position));
             vec3 light_dir = normalize((light.pos.xyz - in_.world_position.xyz));
             float diffuse = max(0.0, dot(normal_1, light_dir));
-            vec3 _e37 = color;
-            color = (_e37 + ((_e23 * diffuse) * light.color.xyz));
+            vec3 _e33 = color;
+            color = (_e33 + ((_e23 * diffuse) * light.color.xyz));
         }
     }
     vec3 _e42 = color;

@@ -641,6 +641,10 @@ jobs:
         with:
           target-dir: "target/llvm-cov-target/debug"
 
+      - name: (Windows) Install Agility SDK
+        if: matrix.os == 'windows-2022'
+        uses: ./.github/actions/install-agility-sdk
+
       - name: (Windows) Install Mesa
         if: matrix.os == 'windows-2022'
         uses: ./.github/actions/install-mesa
@@ -743,6 +747,40 @@ jobs:
 
           cargo --locked test --doc
 
+  miri:
+    # runtime is normally 2 minutes
+    timeout-minutes: 10
+
+    name: Miri (limited scope)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      # Miri is *only* available on nightly.
+      - name: Install nightly toolchain
+
+        run: |
+          rustup toolchain install nightly --no-self-update --profile=minimal --component miri
+          rustup override set nightly
+          cargo -V
+
+      - name: Caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: miri-${{ env.CACHE_SUFFIX }}
+
+      - name: Run Miri on selected tests
+        shell: bash
+        run: |
+          set -e
+
+          # Note: this is a *smaller* set of tests than `cargo xtask miri` runs;
+          # it is ones that are both important and cheap.
+          # Consider expanding it to include some API tests with the noop backend.
+          cargo miri test --package=wgpu --no-default-features -- write_only
+
   fmt:
     # runtime is normally 15 seconds
     timeout-minutes: 2
@@ -758,6 +796,15 @@ jobs:
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
+
+      # NOTE: Keep this above the others, because this will fail if there are _any_ changes to
+      # files, even ones this step doesn't modify.
+      - name: "Format `**/*.{md,js,html,yml}` files"
+        uses: creyD/prettier_action@v4.6
+        with:
+          prettier_version: 3.8.1
+          prettier_options: --check --write .
+          dry: true
 
       - name: Run `cargo fmt`
         run: |

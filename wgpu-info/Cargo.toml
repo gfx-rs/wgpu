@@ -14,12 +14,13 @@ rust-version.workspace = true
 anyhow.workspace = true
 bitflags.workspace = true
 env_logger.workspace = true
+exhaust.workspace = true
 hashbrown = { workspace = true, features = ["serde"] }
 pico-args.workspace = true
 pollster.workspace = true
 serde = { workspace = true, features = ["default"] }
 serde_json.workspace = true
-wgpu.workspace = true
+wgpu = { workspace = true, features = ["exhaust"] }
 
 [lints.clippy]
 disallowed_types = "allow"

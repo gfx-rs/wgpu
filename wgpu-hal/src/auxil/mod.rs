@@ -55,19 +55,7 @@ pub mod db {
 /// offset at some intermediate point, internally, as i32.
 pub const MAX_I32_BINDING_SIZE: u32 = (1 << 31) - 1;
 
-pub fn map_naga_stage(stage: naga::ShaderStage) -> wgt::ShaderStages {
-    match stage {
-        naga::ShaderStage::Vertex => wgt::ShaderStages::VERTEX,
-        naga::ShaderStage::Fragment => wgt::ShaderStages::FRAGMENT,
-        naga::ShaderStage::Compute => wgt::ShaderStages::COMPUTE,
-        naga::ShaderStage::Task => wgt::ShaderStages::TASK,
-        naga::ShaderStage::Mesh => wgt::ShaderStages::MESH,
-        naga::ShaderStage::RayGeneration => wgt::ShaderStages::RAY_GENERATION,
-        naga::ShaderStage::AnyHit => wgt::ShaderStages::ANY_HIT,
-        naga::ShaderStage::ClosestHit => wgt::ShaderStages::CLOSEST_HIT,
-        naga::ShaderStage::Miss => wgt::ShaderStages::MISS,
-    }
-}
+pub use wgpu_naga_bridge::map_naga_stage;
 
 impl crate::CopyExtent {
     pub fn map_extent_to_copy_size(extent: &wgt::Extent3d, dim: wgt::TextureDimension) -> Self {
@@ -131,18 +119,11 @@ impl crate::TextureCopy {
     }
 }
 
-/// Clamp the limits in `limits` to honor HAL-imposed maximums and WebGPU
-/// alignment requirements.
-///
-/// Other limits are left unchanged.
+/// Adjust `limits` to honor HAL-imposed maximums and comply with WebGPU's
+/// adapter capability guarantees.
 #[cfg_attr(not(any_backend), allow(dead_code))]
-pub(crate) fn apply_hal_limits(mut limits: wgt::Limits) -> wgt::Limits {
-    // The Metal backend maintains two copies of many limit values (one as
-    // `wgt::Limits` and one as `metal::PrivateCapabilities`). In order to avoid
-    // confusing discrepancies between the two, some of the logic here is
-    // duplicated in the initialization of `metal::PrivateCapabilities`.
-    // See <https://github.com/gfx-rs/wgpu/issues/8715>.
-
+pub(crate) fn adjust_raw_limits(mut limits: wgt::Limits) -> wgt::Limits {
+    // Apply hal limits.
     limits.max_bind_groups = limits.max_bind_groups.min(crate::MAX_BIND_GROUPS as u32);
     limits.max_vertex_buffers = limits
         .max_vertex_buffers
@@ -151,49 +132,100 @@ pub(crate) fn apply_hal_limits(mut limits: wgt::Limits) -> wgt::Limits {
         .max_color_attachments
         .min(crate::MAX_COLOR_ATTACHMENTS as u32);
 
-    // Vulkan and DX12 sometimes report large values for the "max resources per stage"
-    // limits. WebGPU requires that consuming the maximum number of resources of every type
-    // in every stage cannot exceed `max_bindings_per_bind_group`. To ensure this, we clamp
-    // per-stage limit at an equal division of `max_bindings_per_bind_group`.
-    //
-    // It is not expected that this clamping adjusts limits that are in a range where an
-    // application might reach them. (The main dilemma here being how WebGPU will eventually
-    // apply these or other limits to bindless. wgpu has separate `binding_array` limits for
-    // its native-only extension; those are not touched here.)
-    //
+    // Adjust limits according to WebGPU adapter capability guarantees.
     // See <https://gpuweb.github.io/gpuweb/#adapter-capability-guarantees>.
-    const BINDING_TYPE_AND_STAGE_COUNT: u32 = 10;
-    let max_bindings = limits.max_bindings_per_bind_group / BINDING_TYPE_AND_STAGE_COUNT;
-    let mut did_clamp = false;
-    let mut clamp = |limit: &mut u32| {
-        if *limit > max_bindings {
-            *limit = max_bindings;
-            did_clamp = true;
-        }
-    };
-    clamp(&mut limits.max_dynamic_uniform_buffers_per_pipeline_layout);
-    clamp(&mut limits.max_dynamic_storage_buffers_per_pipeline_layout);
-    clamp(&mut limits.max_sampled_textures_per_shader_stage);
-    clamp(&mut limits.max_samplers_per_shader_stage);
-    clamp(&mut limits.max_storage_buffers_per_shader_stage);
-    clamp(&mut limits.max_storage_textures_per_shader_stage);
-    clamp(&mut limits.max_uniform_buffers_per_shader_stage);
-    if did_clamp
-        && limits.max_bindings_per_bind_group < wgt::Limits::defaults().max_bindings_per_bind_group
-    {
-        // This is the "adjusted limits that are in a range where an application might reach
-        // them" case. (In reality, even something quite a bit less than the default
-        // `max_bindings_per_bind_group` of 1000 ought to be sufficient.)
-        log::warn!(
-            "Unexpected adjustment of per-stage resource limits to fit within max_bindings_per_bind_group."
-        );
-    }
 
-    // Round some limits down to the WebGPU alignment requirement, to avoid
-    // suggesting values that won't work. (In particular, the CTS queries limits
-    // and then tests the exact limit value.)
-    limits.max_storage_buffer_binding_size &= u64::from(!(wgt::STORAGE_BINDING_SIZE_ALIGNMENT - 1));
+    // WebGPU requires maxBindingsPerBindGroup to be at least the sum of all
+    // per-stage limits multiplied with the maximum shader stages per pipeline.
+    //
+    // Since backends already report their maximum maxBindingsPerBindGroup,
+    // we need to lower all per-stage limits to satisfy this guarantee.
+    const MAX_SHADER_STAGES_PER_PIPELINE: u32 = 2;
+    let max_per_stage_resources =
+        limits.max_bindings_per_bind_group / MAX_SHADER_STAGES_PER_PIPELINE;
+
+    cap_limits_to_be_under_the_sum_limit(
+        [
+            &mut limits.max_sampled_textures_per_shader_stage,
+            &mut limits.max_uniform_buffers_per_shader_stage,
+            &mut limits.max_storage_textures_per_shader_stage,
+            &mut limits.max_storage_buffers_per_shader_stage,
+            &mut limits.max_samplers_per_shader_stage,
+            &mut limits.max_acceleration_structures_per_shader_stage,
+        ],
+        max_per_stage_resources,
+    );
+
+    // Not required by the spec but dynamic buffers count
+    // towards non-dynamic buffer limits as well.
+    limits.max_dynamic_uniform_buffers_per_pipeline_layout = limits
+        .max_dynamic_uniform_buffers_per_pipeline_layout
+        .min(limits.max_uniform_buffers_per_shader_stage);
+    limits.max_dynamic_storage_buffers_per_pipeline_layout = limits
+        .max_dynamic_storage_buffers_per_pipeline_layout
+        .min(limits.max_storage_buffers_per_shader_stage);
+
+    limits.min_uniform_buffer_offset_alignment = limits.min_uniform_buffer_offset_alignment.max(32);
+    limits.min_storage_buffer_offset_alignment = limits.min_storage_buffer_offset_alignment.max(32);
+
+    limits.max_uniform_buffer_binding_size = limits
+        .max_uniform_buffer_binding_size
+        .min(limits.max_buffer_size);
+    limits.max_storage_buffer_binding_size = limits
+        .max_storage_buffer_binding_size
+        .min(limits.max_buffer_size);
+
+    limits.max_storage_buffer_binding_size &= !(u64::from(wgt::STORAGE_BINDING_SIZE_ALIGNMENT) - 1);
     limits.max_vertex_buffer_array_stride &= !(wgt::VERTEX_ALIGNMENT as u32 - 1);
 
+    let x = limits.max_compute_workgroup_size_x;
+    let y = limits.max_compute_workgroup_size_y;
+    let z = limits.max_compute_workgroup_size_z;
+    let m = limits.max_compute_invocations_per_workgroup;
+    limits.max_compute_workgroup_size_x = x.min(m);
+    limits.max_compute_workgroup_size_y = y.min(m);
+    limits.max_compute_workgroup_size_z = z.min(m);
+    limits.max_compute_invocations_per_workgroup = m.min(x.saturating_mul(y).saturating_mul(z));
+
     limits
+}
+
+/// Evenly allocates space to each limit,
+/// capping them only if strictly necessary.
+pub fn cap_limits_to_be_under_the_sum_limit<const N: usize>(
+    mut limits: [&mut u32; N],
+    sum_limit: u32,
+) {
+    limits.sort();
+
+    let mut rem_limit = sum_limit;
+    let mut divisor = limits.len() as u32;
+    for limit_to_adjust in limits {
+        let limit = rem_limit / divisor;
+        *limit_to_adjust = (*limit_to_adjust).min(limit);
+        rem_limit -= *limit_to_adjust;
+        divisor -= 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cap_limits_to_be_under_the_sum_limit() {
+        test([3, 3, 3], 3, [1, 1, 1]);
+        test([3, 2, 1], 3, [1, 1, 1]);
+        test([1, 2, 3], 6, [1, 2, 3]);
+        test([1, 2, 3], 3, [1, 1, 1]);
+        test([1, 8, 100], 6, [1, 2, 3]);
+        test([2, 80, 80], 6, [2, 2, 2]);
+        test([2, 80, 80], 12, [2, 5, 5]);
+
+        #[track_caller]
+        fn test<const N: usize>(mut input: [u32; N], limit: u32, output: [u32; N]) {
+            cap_limits_to_be_under_the_sum_limit(input.each_mut(), limit);
+            assert_eq!(input, output);
+        }
+    }
 }

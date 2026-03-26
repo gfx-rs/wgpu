@@ -193,12 +193,12 @@ pub enum Action<'a, R: ReferenceType> {
     },
     DestroyShaderModule(PointerId<markers::ShaderModule>),
     CreateComputePipeline {
-        id: PointerId<markers::ComputePipeline>,
+        id: Option<PointerId<markers::ComputePipeline>>,
         desc: TraceComputePipelineDescriptor<'a>,
     },
     DestroyComputePipeline(PointerId<markers::ComputePipeline>),
     CreateGeneralRenderPipeline {
-        id: PointerId<markers::RenderPipeline>,
+        id: Option<PointerId<markers::RenderPipeline>>,
         desc: TraceGeneralRenderPipelineDescriptor<'a>,
     },
     DestroyRenderPipeline(PointerId<markers::RenderPipeline>),

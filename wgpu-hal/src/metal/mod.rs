@@ -13,11 +13,13 @@ end of the VS buffer table.
 
 !*/
 
-// `MTLFeatureSet` is superseded by `MTLGpuFamily`.
-// However, `MTLGpuFamily` is only supported starting MacOS 10.15, whereas our minimum target is MacOS 10.13,
-// See https://github.com/gpuweb/gpuweb/issues/1069 for minimum spec.
-// TODO: Eventually all deprecated features should be abstracted and use new api when available.
-#[allow(deprecated)]
+#[allow(
+    deprecated,
+    reason = "MTLFeatureSet` is superseded by `MTLGpuFamily`.
+        However, `MTLGpuFamily` is only supported starting MacOS 10.15, whereas our minimum target is MacOS 10.13,
+        See https://github.com/gpuweb/gpuweb/issues/1069 for minimum spec.
+        TODO: Eventually all deprecated features should be abstracted and use new api when available."
+)]
 mod adapter;
 mod command;
 mod conv;
@@ -26,11 +28,7 @@ mod library_from_metallib;
 mod surface;
 mod time;
 
-use alloc::{
-    string::{String, ToString as _},
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{string::ToString as _, sync::Arc, vec::Vec};
 use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
 
 use bitflags::bitflags;
@@ -119,7 +117,7 @@ crate::impl_dyn_resource!(
 /// Provides availability information about Mac APIs.
 ///
 /// This may include Metal features that depend only on software support.
-/// Features with varying hardware support are in [`PrivateCapabilities`]
+/// Features with varying hardware support are in [`CapabilitiesQuery`]
 ///
 /// When feature detection is only needed once, it may also be done inline.
 struct OsFeatures;
@@ -151,16 +149,18 @@ impl crate::Instance for Instance {
 
     unsafe fn create_surface(
         &self,
-        _display_handle: raw_window_handle::RawDisplayHandle,
+        display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Surface, crate::InstanceError> {
-        let layer = match window_handle {
-            raw_window_handle::RawWindowHandle::AppKit(handle) => unsafe {
-                raw_window_metal::Layer::from_ns_view(handle.ns_view)
-            },
-            raw_window_handle::RawWindowHandle::UiKit(handle) => unsafe {
-                raw_window_metal::Layer::from_ui_view(handle.ui_view)
-            },
+        let layer = match (display_handle, window_handle) {
+            (
+                raw_window_handle::RawDisplayHandle::AppKit(_),
+                raw_window_handle::RawWindowHandle::AppKit(handle),
+            ) => unsafe { raw_window_metal::Layer::from_ns_view(handle.ns_view) },
+            (
+                raw_window_handle::RawDisplayHandle::UiKit(_),
+                raw_window_handle::RawWindowHandle::UiKit(handle),
+            ) => unsafe { raw_window_metal::Layer::from_ui_view(handle.ui_view) },
             _ => {
                 return Err(crate::InstanceError::new(format!(
                     "window handle {window_handle:?} is not a Metal-compatible handle"
@@ -182,35 +182,8 @@ impl crate::Instance for Instance {
         _surface_hint: Option<&Surface>,
     ) -> Vec<crate::ExposedAdapter<Api>> {
         let devices = objc2_metal::MTLCopyAllDevices();
-        let mut adapters: Vec<crate::ExposedAdapter<Api>> = devices
-            .into_iter()
-            .map(|dev| {
-                let name = dev.name().to_string();
-                let shared = AdapterShared::new(dev);
-                crate::ExposedAdapter {
-                    info: wgt::AdapterInfo {
-                        name,
-                        vendor: 0,
-                        device: 0,
-                        device_type: shared.private_caps.device_type(),
-                        device_pci_bus_id: String::new(),
-                        driver: String::new(),
-                        driver_info: String::new(),
-                        backend: wgt::Backend::Metal,
-                        // These are hardcoded based on typical values for Metal devices
-                        //
-                        // See <https://github.com/gpuweb/gpuweb/blob/main/proposals/subgroups.md#adapter-info>
-                        // for more information.
-                        subgroup_min_size: 4,
-                        subgroup_max_size: 64,
-                        transient_saves_memory: shared.private_caps.supports_memoryless_storage,
-                    },
-                    features: shared.private_caps.features(),
-                    capabilities: shared.private_caps.capabilities(),
-                    adapter: Adapter::new(Arc::new(shared)),
-                }
-            })
-            .collect();
+        let mut adapters: Vec<crate::ExposedAdapter<Api>> =
+            devices.into_iter().map(AdapterShared::expose).collect();
         adapters.sort_by_key(|ad| {
             (
                 ad.adapter.shared.private_caps.low_power,
@@ -239,11 +212,8 @@ bitflags!(
     }
 );
 
-// TODO(https://github.com/gfx-rs/wgpu/issues/8715): Eliminate duplication with
-// `wgt::Limits`. Keeping multiple sets of limits creates a risk of confusion.
 #[allow(dead_code)]
-#[derive(Clone, Debug)]
-struct PrivateCapabilities {
+struct CapabilitiesQuery {
     msl_version: MTLLanguageVersion,
     fragment_rw_storage: bool,
     read_write_texture_tier: MTLReadWriteTextureTier,
@@ -309,18 +279,11 @@ struct PrivateCapabilities {
     format_depth32float_none: bool,
     format_bgr10a2_all: bool,
     format_bgr10a2_no_write: bool,
-    max_buffers_per_stage: ResourceIndex,
-    max_vertex_buffers: ResourceIndex,
-    max_textures_per_stage: ResourceIndex,
-    max_samplers_per_stage: ResourceIndex,
+    max_textures_per_stage: (ResourceIndex, ResourceIndex),
     max_binding_array_elements: ResourceIndex,
     max_sampler_binding_array_elements: ResourceIndex,
     buffer_alignment: u64,
-
-    /// Platform-reported maximum buffer size
-    ///
-    /// This value is clamped to `u32::MAX` for `wgt::Limits`, so you probably
-    /// shouldn't be looking at this copy.
+    constant_buffer_offset_alignment: u32,
     max_buffer_size: u64,
     max_texture_size: u64,
     max_texture_3d_size: u64,
@@ -328,7 +291,7 @@ struct PrivateCapabilities {
     max_fragment_input_components: u64,
     max_color_render_targets: u8,
     max_color_attachment_bytes_per_sample: u8,
-    max_varying_components: u32,
+    max_inter_stage_shader_variables: u32,
     max_threads_per_group: u32,
     max_total_threadgroup_memory: u32,
     sample_count_mask: crate::TextureFormatCapabilities,
@@ -353,6 +316,42 @@ struct PrivateCapabilities {
     shader_barycentrics: bool,
     supports_memoryless_storage: bool,
     supports_raytracing: bool,
+}
+
+#[derive(Debug)]
+struct PrivateCapabilities {
+    msl_version: MTLLanguageVersion,
+    low_power: bool,
+    headless: bool,
+    has_unified_memory: Option<bool>,
+    timestamp_query_support: TimestampQuerySupport,
+    supports_memoryless_storage: bool,
+    mesh_shaders: bool,
+}
+
+#[derive(Debug)]
+struct PrivateTextureFormatCapabilities {
+    read_write_texture_tier: MTLReadWriteTextureTier,
+    sample_count_mask: crate::TextureFormatCapabilities,
+    int64_atomics: bool,
+    msaa_desktop: bool,
+    msaa_apple3: bool,
+    msaa_apple7: bool,
+    format_r32float_all: bool,
+    format_rgba8_srgb_all: bool,
+    format_rgb10a2_uint_write: bool,
+    format_rgb10a2_unorm_all: bool,
+    format_rg11b10_all: bool,
+    format_rg32float_all: bool,
+    format_rgba32float_all: bool,
+    format_depth16unorm: bool,
+    format_depth16unorm_filter: bool,
+    format_depth32float_filter: bool,
+    format_depth24_stencil8: bool,
+    format_bc: bool,
+    format_eac_etc: bool,
+    format_astc: bool,
+    format_astc_hdr: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -381,6 +380,7 @@ struct AdapterShared {
     device: Retained<ProtocolObject<dyn MTLDevice>>,
     disabilities: PrivateDisabilities,
     private_caps: PrivateCapabilities,
+    private_texture_format_caps: PrivateTextureFormatCapabilities,
     settings: Settings,
     presentation_timer: time::PresentationTimer,
 }
@@ -389,16 +389,46 @@ unsafe impl Send for AdapterShared {}
 unsafe impl Sync for AdapterShared {}
 
 impl AdapterShared {
-    fn new(device: Retained<ProtocolObject<dyn MTLDevice>>) -> Self {
-        let private_caps = PrivateCapabilities::new(&device);
+    fn new(
+        device: Retained<ProtocolObject<dyn MTLDevice>>,
+        capabilities_query: &CapabilitiesQuery,
+    ) -> Self {
+        let private_caps = capabilities_query.private_capabilities();
+        let private_texture_format_caps = capabilities_query.private_texture_format_capabilities();
         log::debug!("{private_caps:#?}");
+        log::debug!("{private_texture_format_caps:#?}");
 
         Self {
             disabilities: PrivateDisabilities::new(&device),
             private_caps,
+            private_texture_format_caps,
             device,
             settings: Settings::default(),
             presentation_timer: time::PresentationTimer::new(),
+        }
+    }
+
+    fn expose(device: Retained<ProtocolObject<dyn MTLDevice>>) -> crate::ExposedAdapter<Api> {
+        let name = device.name().to_string();
+        let capabilities_query = CapabilitiesQuery::new(&device);
+        let shared = AdapterShared::new(device, &capabilities_query);
+        let features = capabilities_query.features();
+        let capabilities = capabilities_query.capabilities();
+        crate::ExposedAdapter {
+            info: wgt::AdapterInfo {
+                name,
+                // These are hardcoded based on typical values for Metal devices
+                //
+                // See <https://github.com/gpuweb/gpuweb/blob/main/proposals/subgroups.md#adapter-info>
+                // for more information.
+                subgroup_min_size: 4,
+                subgroup_max_size: 64,
+                transient_saves_memory: shared.private_caps.supports_memoryless_storage,
+                ..wgt::AdapterInfo::new(shared.private_caps.device_type(), wgt::Backend::Metal)
+            },
+            features,
+            capabilities,
+            adapter: Adapter::new(Arc::new(shared)),
         }
     }
 }
@@ -408,7 +438,7 @@ pub struct Adapter {
 }
 
 pub struct Queue {
-    raw: Arc<Mutex<Retained<ProtocolObject<dyn MTLCommandQueue>>>>,
+    shared: Arc<QueueShared>,
     timestamp_period: f32,
 }
 
@@ -421,14 +451,26 @@ impl Queue {
         timestamp_period: f32,
     ) -> Self {
         Self {
-            raw: Arc::new(Mutex::new(raw)),
+            shared: Arc::new(QueueShared {
+                raw,
+                command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
+            }),
             timestamp_period,
         }
     }
+}
 
-    pub fn as_raw(&self) -> &Arc<Mutex<Retained<ProtocolObject<dyn MTLCommandQueue>>>> {
-        &self.raw
-    }
+#[derive(Debug)]
+pub struct QueueShared {
+    raw: Retained<ProtocolObject<dyn MTLCommandQueue>>,
+    // Tracks command buffers created via `CommandEncoder::begin_encoding` that
+    // have not yet been submitted or discarded. Used to proactively fail
+    // before hitting Metal's `maxCommandBufferCount`.
+    //
+    // (In a few places we call `.commandBuffer{,WithUnretainedReferences}` directly
+    // to create command buffers for internal purposes. In those cases we always
+    // commit the buffer immediately, so we don't adjust the counter for them.)
+    command_buffer_created_not_submitted: atomic::AtomicUsize,
 }
 
 pub struct Device {
@@ -491,8 +533,12 @@ impl crate::Queue for Queue {
                 let raw = match command_buffers.last() {
                     Some(&cmd_buf) => cmd_buf.raw.clone(),
                     None => {
-                        let queue = self.raw.lock();
-                        queue.commandBufferWithUnretainedReferences().unwrap()
+                        // We do not bother adjusting `command_buffer_created_not_submitted`
+                        // because we immediately commit this buffer.
+                        self.shared
+                            .raw
+                            .commandBufferWithUnretainedReferences()
+                            .unwrap()
                     }
                 };
                 raw.setLabel(Some(ns_string!("(wgpu internal) Signal")));
@@ -515,6 +561,14 @@ impl crate::Queue for Queue {
 
             for cmd_buffer in command_buffers {
                 cmd_buffer.raw.commit();
+                // One command buffer per `end_encoding` call moves from the
+                // "created but not yet submitted" bucket into the submitted
+                // set, so update the counter.
+                let previous = self
+                    .shared
+                    .command_buffer_created_not_submitted
+                    .fetch_sub(1, atomic::Ordering::AcqRel);
+                debug_assert!(previous > 0);
             }
 
             if let Some(raw) = extra_command_buffer {
@@ -528,9 +582,10 @@ impl crate::Queue for Queue {
         _surface: &Surface,
         texture: SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
-        let queue = &self.raw.lock();
         autoreleasepool(|_| {
-            let command_buffer = queue.commandBuffer().unwrap();
+            // We do not bother adjusting `command_buffer_created_not_submitted`
+            // because we immediately commit this buffer.
+            let command_buffer = self.shared.raw.commandBuffer().unwrap();
             command_buffer.setLabel(Some(ns_string!("(wgpu internal) Present")));
 
             // https://developer.apple.com/documentation/quartzcore/cametallayer/1478157-presentswithtransaction?language=objc
@@ -735,7 +790,6 @@ struct ImmediateDataInfo {
 pub struct PipelineLayout {
     bind_group_infos: [Option<BindGroupLayoutInfo>; crate::MAX_BIND_GROUPS],
     immediates_infos: MultiStageData<Option<ImmediateDataInfo>>,
-    total_counters: MultiStageResourceCounters,
     total_immediates: u32,
     per_stage_map: MultiStageResources,
 }
@@ -1025,7 +1079,7 @@ struct CommandState {
     /// [`ResourceBinding`]: naga::ResourceBinding
     storage_buffer_length_map: FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
 
-    vertex_buffer_size_map: FastHashMap<u64, wgt::BufferSize>,
+    vertex_buffer_size_map: FastHashMap<u32, wgt::BufferSize>,
 
     immediates: Vec<u32>,
 
@@ -1035,7 +1089,7 @@ struct CommandState {
 
 pub struct CommandEncoder {
     shared: Arc<AdapterShared>,
-    raw_queue: Arc<Mutex<Retained<ProtocolObject<dyn MTLCommandQueue>>>>,
+    queue_shared: Arc<QueueShared>,
     raw_cmd_buf: Option<Retained<ProtocolObject<dyn MTLCommandBuffer>>>,
     state: CommandState,
     temp: Temp,
@@ -1045,7 +1099,6 @@ pub struct CommandEncoder {
 impl fmt::Debug for CommandEncoder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CommandEncoder")
-            .field("raw_queue", &self.raw_queue)
             .field("raw_cmd_buf", &self.raw_cmd_buf)
             .finish()
     }
@@ -1057,6 +1110,7 @@ unsafe impl Sync for CommandEncoder {}
 #[derive(Debug)]
 pub struct CommandBuffer {
     raw: Retained<ProtocolObject<dyn MTLCommandBuffer>>,
+    queue_shared: Arc<QueueShared>,
 }
 
 impl crate::DynCommandBuffer for CommandBuffer {}

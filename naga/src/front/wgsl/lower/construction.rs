@@ -451,7 +451,7 @@ impl<'source> Lowerer<'source, '_> {
                     spans,
                 },
                 Constructor::PartialMatrix { columns, rows },
-            ) => {
+            ) if components.len() == columns as usize => {
                 let consensus_scalar = ctx
                     .automatic_conversion_consensus(
                         Some(crate::Scalar::ABSTRACT_FLOAT),
@@ -460,7 +460,17 @@ impl<'source> Lowerer<'source, '_> {
                     .map_err(|index| {
                         Error::InvalidConstructorComponentType(spans[index], index as i32)
                     })?;
-                ctx.convert_slice_to_common_leaf_scalar(&mut components, consensus_scalar)?;
+
+                let component_ty = crate::TypeInner::Vector {
+                    size: rows,
+                    scalar: consensus_scalar,
+                };
+                ctx.try_automatic_conversions_slice(
+                    &mut components,
+                    &Tr::Value(component_ty),
+                    ty_span,
+                )?;
+
                 let ty = ctx.ensure_type_exists(crate::TypeInner::Matrix {
                     columns,
                     rows,
@@ -475,12 +485,12 @@ impl<'source> Lowerer<'source, '_> {
                 Constructor::Type((
                     ty,
                     &crate::TypeInner::Matrix {
-                        columns: _,
+                        columns,
                         rows,
                         scalar,
                     },
                 )),
-            ) => {
+            ) if components.len() == columns as usize => {
                 let component_ty = crate::TypeInner::Vector { size: rows, scalar };
                 ctx.try_automatic_conversions_slice(
                     &mut components,

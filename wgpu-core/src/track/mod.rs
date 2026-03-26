@@ -112,6 +112,7 @@ use crate::{
 };
 
 use alloc::{sync::Arc, vec::Vec};
+use bitflags::Flags;
 use core::{fmt, mem, ops};
 
 use thiserror::Error;
@@ -321,8 +322,6 @@ pub(crate) trait ResourceUses:
 
     /// Turn the resource into a pile of bits.
     fn bits(self) -> u16;
-    /// Returns true if the all the uses are ordered.
-    fn all_ordered(self) -> bool;
     /// Returns true if any of the uses are exclusive.
     fn any_exclusive(self) -> bool;
 }
@@ -337,10 +336,10 @@ fn invalid_resource_state<T: ResourceUses>(state: T) -> bool {
 
 /// Returns true if the transition from one state to another does not require
 /// a barrier.
-fn skip_barrier<T: ResourceUses>(old_state: T, new_state: T) -> bool {
+fn skip_barrier<F: Flags>(old_state: F, ordered_uses_mask: F, new_state: F) -> bool {
     // If the state didn't change and all the usages are ordered, the hardware
     // will guarantee the order of accesses, so we do not need to issue a barrier at all
-    old_state == new_state && old_state.all_ordered()
+    old_state.bits() == new_state.bits() && ordered_uses_mask.contains(old_state)
 }
 
 #[derive(Clone, Debug, Error)]
@@ -538,6 +537,8 @@ impl UsageScope<'static> {
     pub fn new_pooled<'d>(
         pool: &'d UsageScopePool,
         tracker_indices: &TrackerIndexAllocators,
+        ordered_buffer_usages: wgt::BufferUses,
+        ordered_texture_usages: wgt::TextureUses,
     ) -> UsageScope<'d> {
         let pooled = pool.lock().pop().unwrap_or_default();
 
@@ -548,7 +549,9 @@ impl UsageScope<'static> {
         };
 
         scope.buffers.set_size(tracker_indices.buffers.size());
+        scope.buffers.set_ordered_uses_mask(ordered_buffer_usages);
         scope.textures.set_size(tracker_indices.textures.size());
+        scope.textures.set_ordered_uses_mask(ordered_texture_usages);
         scope
     }
 }
@@ -602,10 +605,13 @@ pub(crate) struct DeviceTracker {
 }
 
 impl DeviceTracker {
-    pub fn new() -> Self {
+    pub fn new(
+        ordered_buffer_usages: wgt::BufferUses,
+        ordered_texture_usages: wgt::TextureUses,
+    ) -> Self {
         Self {
-            buffers: DeviceBufferTracker::new(),
-            textures: DeviceTextureTracker::new(),
+            buffers: DeviceBufferTracker::new(ordered_buffer_usages),
+            textures: DeviceTextureTracker::new(ordered_texture_usages),
         }
     }
 }
@@ -645,10 +651,13 @@ pub(crate) struct Tracker {
 }
 
 impl Tracker {
-    pub fn new() -> Self {
+    pub fn new(
+        ordered_buffer_usages: wgt::BufferUses,
+        ordered_texture_usages: wgt::TextureUses,
+    ) -> Self {
         Self {
-            buffers: BufferTracker::new(),
-            textures: TextureTracker::new(),
+            buffers: BufferTracker::new(ordered_buffer_usages),
+            textures: TextureTracker::new(ordered_texture_usages),
             blas_s: BlasTracker::new(),
             tlas_s: StatelessTracker::new(),
             views: StatelessTracker::new(),

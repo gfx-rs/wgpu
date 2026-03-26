@@ -209,12 +209,11 @@ impl TypeContext<'_> {
         ty.inner.scalar()
     }
 
-    fn vertex_input_dimension(&self) -> u32 {
+    fn vector_size(&self) -> Option<crate::VectorSize> {
         let ty = &self.gctx.types[self.handle];
         match ty.inner {
-            crate::TypeInner::Scalar(_) => 1,
-            crate::TypeInner::Vector { size, .. } => size as u32,
-            _ => unreachable!(),
+            crate::TypeInner::Vector { size, .. } => Some(size),
+            _ => None,
         }
     }
 }
@@ -428,8 +427,16 @@ impl TypedGlobalVariable<'_> {
             first_time: false,
         };
 
-        let (space, access, reference) = match var.space.to_msl_name() {
+        let (coherent, space, access, reference) = match var.space.to_msl_name() {
             Some(space) if self.reference => {
+                let coherent = if var
+                    .memory_decorations
+                    .contains(crate::MemoryDecorations::COHERENT)
+                {
+                    "coherent "
+                } else {
+                    ""
+                };
                 let access = if var.space.needs_access_qualifier()
                     && !self.usage.intersects(valid::GlobalUse::WRITE)
                 {
@@ -437,14 +444,15 @@ impl TypedGlobalVariable<'_> {
                 } else {
                     ""
                 };
-                (space, access, "&")
+                (coherent, space, access, "&")
             }
-            _ => ("", "", ""),
+            _ => ("", "", "", ""),
         };
 
         Ok(write!(
             out,
-            "{}{}{}{}{}{} {}",
+            "{}{}{}{}{}{}{} {}",
+            coherent,
             space,
             if space.is_empty() { "" } else { " " },
             ty_name,
@@ -1483,6 +1491,35 @@ impl<W: Write> Writer<W> {
         write!(self.out, ", ")?;
         self.put_expression(value, &context.expression, true)?;
         writeln!(self.out, ");")?;
+
+        // Workaround for Apple Metal TBDR driver bug: fragment shader atomic
+        // texture writes randomly drop unless followed by a standard texture
+        // write. Insert a dead-code write behind an unprovable condition so
+        // the compiler emits proper memory safety barriers.
+        // See: https://projects.blender.org/blender/blender/commit/aa95220576706122d79c91c7f5c522e6c7416425
+        let value_ty = context.expression.resolve_type(value);
+        let zero_value = match (value_ty.scalar_kind(), value_ty.scalar_width()) {
+            (Some(crate::ScalarKind::Sint), _) => "int4(0)",
+            (_, Some(8)) => "ulong4(0uL)",
+            _ => "uint4(0u)",
+        };
+        let coord_ty = context.expression.resolve_type(address.coordinate);
+        let x = if matches!(coord_ty, crate::TypeInner::Scalar(_)) {
+            ""
+        } else {
+            ".x"
+        };
+        write!(self.out, "{level}if (")?;
+        self.put_expression(address.coordinate, &context.expression, true)?;
+        write!(self.out, "{x} == -99999) {{ ")?;
+        self.put_expression(image, &context.expression, false)?;
+        write!(self.out, ".write({zero_value}, ")?;
+        self.put_cast_to_uint_scalar_or_vector(address.coordinate, &context.expression)?;
+        if let Some(array_index) = address.array_index {
+            write!(self.out, ", ")?;
+            self.put_expression(array_index, &context.expression, true)?;
+        }
+        writeln!(self.out, "); }}")?;
 
         Ok(())
     }
@@ -2591,9 +2628,13 @@ impl<W: Write> Writer<W> {
 
                         write!(self.out, "(-1), ")?;
                         self.put_expression(arg, context, true)?;
-                        write!(self.out, " == 0 || ")?;
-                        self.put_expression(arg, context, true)?;
-                        write!(self.out, " == -1)")?;
+                        write!(self.out, " == 0")?;
+                        if scalar.kind == crate::ScalarKind::Sint {
+                            write!(self.out, " || ")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, " == -1")?;
+                        }
+                        write!(self.out, ")")?;
                     }
                     Mf::Unpack2x16float => {
                         write!(self.out, "float2(as_type<half2>(")?;
@@ -4878,7 +4919,8 @@ template <typename A>
     fn write_unpacking_function(
         &mut self,
         format: back::msl::VertexFormat,
-    ) -> Result<(String, u32, u32), Error> {
+    ) -> Result<(String, u32, Option<crate::VectorSize>, crate::Scalar), Error> {
+        use crate::{Scalar, VectorSize};
         use back::msl::VertexFormat::*;
         match format {
             Uint8 => {
@@ -4886,7 +4928,7 @@ template <typename A>
                 writeln!(self.out, "uint {name}(metal::uchar b0) {{")?;
                 writeln!(self.out, "{}return uint(b0);", back::INDENT)?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 1, 1))
+                Ok((name, 1, None, Scalar::U32))
             }
             Uint8x2 => {
                 let name = self.namer.call("unpackUint8x2");
@@ -4897,7 +4939,7 @@ template <typename A>
                 )?;
                 writeln!(self.out, "{}return metal::uint2(b0, b1);", back::INDENT)?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 2, 2))
+                Ok((name, 2, Some(VectorSize::Bi), Scalar::U32))
             }
             Uint8x4 => {
                 let name = self.namer.call("unpackUint8x4");
@@ -4914,14 +4956,14 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 4, 4))
+                Ok((name, 4, Some(VectorSize::Quad), Scalar::U32))
             }
             Sint8 => {
                 let name = self.namer.call("unpackSint8");
                 writeln!(self.out, "int {name}(metal::uchar b0) {{")?;
                 writeln!(self.out, "{}return int(as_type<char>(b0));", back::INDENT)?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 1, 1))
+                Ok((name, 1, None, Scalar::I32))
             }
             Sint8x2 => {
                 let name = self.namer.call("unpackSint8x2");
@@ -4937,7 +4979,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 2, 2))
+                Ok((name, 2, Some(VectorSize::Bi), Scalar::I32))
             }
             Sint8x4 => {
                 let name = self.namer.call("unpackSint8x4");
@@ -4957,7 +4999,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 4, 4))
+                Ok((name, 4, Some(VectorSize::Quad), Scalar::I32))
             }
             Unorm8 => {
                 let name = self.namer.call("unpackUnorm8");
@@ -4968,7 +5010,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 1, 1))
+                Ok((name, 1, None, Scalar::F32))
             }
             Unorm8x2 => {
                 let name = self.namer.call("unpackUnorm8x2");
@@ -4984,7 +5026,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 2, 2))
+                Ok((name, 2, Some(VectorSize::Bi), Scalar::F32))
             }
             Unorm8x4 => {
                 let name = self.namer.call("unpackUnorm8x4");
@@ -5004,7 +5046,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 4, 4))
+                Ok((name, 4, Some(VectorSize::Quad), Scalar::F32))
             }
             Snorm8 => {
                 let name = self.namer.call("unpackSnorm8");
@@ -5015,7 +5057,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 1, 1))
+                Ok((name, 1, None, Scalar::F32))
             }
             Snorm8x2 => {
                 let name = self.namer.call("unpackSnorm8x2");
@@ -5031,7 +5073,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 2, 2))
+                Ok((name, 2, Some(VectorSize::Bi), Scalar::F32))
             }
             Snorm8x4 => {
                 let name = self.namer.call("unpackSnorm8x4");
@@ -5051,7 +5093,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 4, 4))
+                Ok((name, 4, Some(VectorSize::Quad), Scalar::F32))
             }
             Uint16 => {
                 let name = self.namer.call("unpackUint16");
@@ -5066,7 +5108,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 2, 1))
+                Ok((name, 2, None, Scalar::U32))
             }
             Uint16x2 => {
                 let name = self.namer.call("unpackUint16x2");
@@ -5084,7 +5126,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 4, 2))
+                Ok((name, 4, Some(VectorSize::Bi), Scalar::U32))
             }
             Uint16x4 => {
                 let name = self.namer.call("unpackUint16x4");
@@ -5108,7 +5150,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 8, 4))
+                Ok((name, 8, Some(VectorSize::Quad), Scalar::U32))
             }
             Sint16 => {
                 let name = self.namer.call("unpackSint16");
@@ -5123,7 +5165,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 2, 1))
+                Ok((name, 2, None, Scalar::I32))
             }
             Sint16x2 => {
                 let name = self.namer.call("unpackSint16x2");
@@ -5141,7 +5183,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 4, 2))
+                Ok((name, 4, Some(VectorSize::Bi), Scalar::I32))
             }
             Sint16x4 => {
                 let name = self.namer.call("unpackSint16x4");
@@ -5165,7 +5207,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 8, 4))
+                Ok((name, 8, Some(VectorSize::Quad), Scalar::I32))
             }
             Unorm16 => {
                 let name = self.namer.call("unpackUnorm16");
@@ -5180,7 +5222,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 2, 1))
+                Ok((name, 2, None, Scalar::F32))
             }
             Unorm16x2 => {
                 let name = self.namer.call("unpackUnorm16x2");
@@ -5198,7 +5240,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 4, 2))
+                Ok((name, 4, Some(VectorSize::Bi), Scalar::F32))
             }
             Unorm16x4 => {
                 let name = self.namer.call("unpackUnorm16x4");
@@ -5222,7 +5264,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 8, 4))
+                Ok((name, 8, Some(VectorSize::Quad), Scalar::F32))
             }
             Snorm16 => {
                 let name = self.namer.call("unpackSnorm16");
@@ -5237,7 +5279,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 2, 1))
+                Ok((name, 2, None, Scalar::F32))
             }
             Snorm16x2 => {
                 let name = self.namer.call("unpackSnorm16x2");
@@ -5254,7 +5296,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 4, 2))
+                Ok((name, 4, Some(VectorSize::Bi), Scalar::F32))
             }
             Snorm16x4 => {
                 let name = self.namer.call("unpackSnorm16x4");
@@ -5276,7 +5318,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 8, 4))
+                Ok((name, 8, Some(VectorSize::Quad), Scalar::F32))
             }
             Float16 => {
                 let name = self.namer.call("unpackFloat16");
@@ -5291,7 +5333,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 2, 1))
+                Ok((name, 2, None, Scalar::F32))
             }
             Float16x2 => {
                 let name = self.namer.call("unpackFloat16x2");
@@ -5309,7 +5351,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 4, 2))
+                Ok((name, 4, Some(VectorSize::Bi), Scalar::F32))
             }
             Float16x4 => {
                 let name = self.namer.call("unpackFloat16x4");
@@ -5333,7 +5375,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 8, 4))
+                Ok((name, 8, Some(VectorSize::Quad), Scalar::F32))
             }
             Float32 => {
                 let name = self.namer.call("unpackFloat32");
@@ -5350,7 +5392,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 4, 1))
+                Ok((name, 4, None, Scalar::F32))
             }
             Float32x2 => {
                 let name = self.namer.call("unpackFloat32x2");
@@ -5372,7 +5414,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 8, 2))
+                Ok((name, 8, Some(VectorSize::Bi), Scalar::F32))
             }
             Float32x3 => {
                 let name = self.namer.call("unpackFloat32x3");
@@ -5399,7 +5441,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 12, 3))
+                Ok((name, 12, Some(VectorSize::Tri), Scalar::F32))
             }
             Float32x4 => {
                 let name = self.namer.call("unpackFloat32x4");
@@ -5431,7 +5473,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 16, 4))
+                Ok((name, 16, Some(VectorSize::Quad), Scalar::F32))
             }
             Uint32 => {
                 let name = self.namer.call("unpackUint32");
@@ -5448,7 +5490,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 4, 1))
+                Ok((name, 4, None, Scalar::U32))
             }
             Uint32x2 => {
                 let name = self.namer.call("unpackUint32x2");
@@ -5470,7 +5512,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 8, 2))
+                Ok((name, 8, Some(VectorSize::Bi), Scalar::U32))
             }
             Uint32x3 => {
                 let name = self.namer.call("unpackUint32x3");
@@ -5497,7 +5539,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 12, 3))
+                Ok((name, 12, Some(VectorSize::Tri), Scalar::U32))
             }
             Uint32x4 => {
                 let name = self.namer.call("unpackUint32x4");
@@ -5529,7 +5571,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 16, 4))
+                Ok((name, 16, Some(VectorSize::Quad), Scalar::U32))
             }
             Sint32 => {
                 let name = self.namer.call("unpackSint32");
@@ -5546,7 +5588,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 4, 1))
+                Ok((name, 4, None, Scalar::I32))
             }
             Sint32x2 => {
                 let name = self.namer.call("unpackSint32x2");
@@ -5568,7 +5610,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 8, 2))
+                Ok((name, 8, Some(VectorSize::Bi), Scalar::I32))
             }
             Sint32x3 => {
                 let name = self.namer.call("unpackSint32x3");
@@ -5595,7 +5637,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 12, 3))
+                Ok((name, 12, Some(VectorSize::Tri), Scalar::I32))
             }
             Sint32x4 => {
                 let name = self.namer.call("unpackSint32x4");
@@ -5627,7 +5669,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 16, 4))
+                Ok((name, 16, Some(VectorSize::Quad), Scalar::I32))
             }
             Unorm10_10_10_2 => {
                 let name = self.namer.call("unpackUnorm10_10_10_2");
@@ -5655,7 +5697,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 4, 4))
+                Ok((name, 4, Some(VectorSize::Quad), Scalar::F32))
             }
             Unorm8x4Bgra => {
                 let name = self.namer.call("unpackUnorm8x4Bgra");
@@ -5675,7 +5717,7 @@ template <typename A>
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
-                Ok((name, 4, 4))
+                Ok((name, 4, Some(VectorSize::Quad), Scalar::F32))
             }
         }
     }
@@ -6624,8 +6666,8 @@ template <typename A>
         // their attributes.
         struct AttributeMappingResolved {
             ty_name: String,
-            dimension: u32,
-            ty_is_int: bool,
+            dimension: Option<crate::VectorSize>,
+            scalar: crate::Scalar,
             name: String,
         }
         let mut am_resolved = FastHashMap::<u32, AttributeMappingResolved>::default();
@@ -6645,7 +6687,8 @@ template <typename A>
         struct UnpackingFunction {
             name: String,
             byte_count: u32,
-            dimension: u32,
+            dimension: Option<crate::VectorSize>,
+            scalar: crate::Scalar,
         }
         let mut unpacking_functions = FastHashMap::<VertexFormat, UnpackingFunction>::default();
 
@@ -6698,9 +6741,11 @@ template <typename A>
                     if unpacking_functions.contains_key(&attribute.format) {
                         continue;
                     }
-                    let (name, byte_count, dimension) =
+                    let (name, byte_count, dimension, scalar) =
                         match self.write_unpacking_function(attribute.format) {
-                            Ok((name, byte_count, dimension)) => (name, byte_count, dimension),
+                            Ok((name, byte_count, dimension, scalar)) => {
+                                (name, byte_count, dimension, scalar)
+                            }
                             _ => {
                                 continue;
                             }
@@ -6711,6 +6756,7 @@ template <typename A>
                             name,
                             byte_count,
                             dimension,
+                            scalar,
                         },
                     );
                 }
@@ -7076,8 +7122,8 @@ template <typename A>
                             location,
                             AttributeMappingResolved {
                                 ty_name: ty_name.to_string(),
-                                dimension: ty_name.vertex_input_dimension(),
-                                ty_is_int: ty_name.scalar().is_some_and(scalar_is_int),
+                                dimension: ty_name.vector_size(),
+                                scalar: ty_name.scalar().unwrap(),
                                 name: name.to_string(),
                             },
                         );
@@ -7148,10 +7194,10 @@ template <typename A>
                         };
                         let resolved = options.resolve_local_binding(binding, out_mode)?;
                         write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
+                        resolved.try_fmt(&mut self.out)?;
                         if let Some(array_len) = array_len {
                             write!(self.out, " [{array_len}]")?;
                         }
-                        resolved.try_fmt(&mut self.out)?;
                         writeln!(self.out, ";")?;
                     }
 
@@ -7610,8 +7656,11 @@ template <typename A>
                         // pad out the unpack value from a vec4(0, 0, 0, 1) of matching
                         // scalar type. Otherwise, if attribute dimension is < unpack
                         // dimension, then we need to explicitly truncate the result.
-
                         let needs_padding_or_truncation = am.dimension.cmp(&func.dimension);
+
+                        // We need an extra type conversion if the shader type does not
+                        // match the type returned from the unpacking function.
+                        let needs_conversion = am.scalar != func.scalar;
 
                         if needs_padding_or_truncation != Ordering::Equal {
                             // Emit a comment flagging that a conversion is happening,
@@ -7632,35 +7681,48 @@ template <typename A>
                         }
 
                         // Emit call to unpacking function
-                        write!(self.out, "{func_name}({elem_name}.data[{offset}]",)?;
+                        if needs_conversion {
+                            put_numeric_type(&mut self.out, am.scalar, func.dimension.as_slice())?;
+                            write!(self.out, "(")?;
+                        }
+                        write!(self.out, "{func_name}({elem_name}.data[{offset}]")?;
                         for i in (offset + 1)..(offset + func.byte_count) {
                             write!(self.out, ", {elem_name}.data[{i}]")?;
                         }
                         write!(self.out, ")")?;
+                        if needs_conversion {
+                            write!(self.out, ")")?;
+                        }
 
                         match needs_padding_or_truncation {
                             Ordering::Greater => {
                                 // Padding
-                                let zero_value = if am.ty_is_int { "0" } else { "0.0" };
-                                let one_value = if am.ty_is_int { "1" } else { "1.0" };
-                                for i in func.dimension..am.dimension {
+                                let ty_is_int = scalar_is_int(am.scalar);
+                                let zero_value = if ty_is_int { "0" } else { "0.0" };
+                                let one_value = if ty_is_int { "1" } else { "1.0" };
+                                for i in func.dimension.map_or(1, u8::from)
+                                    ..am.dimension.map_or(1, u8::from)
+                                {
                                     write!(
                                         self.out,
                                         ", {}",
                                         if i == 3 { one_value } else { zero_value }
                                     )?;
                                 }
-                                write!(self.out, ")")?;
                             }
                             Ordering::Less => {
                                 // Truncate to the first `am.dimension` components
                                 write!(
                                     self.out,
                                     ".{}",
-                                    &"xyzw"[0..usize::try_from(am.dimension).unwrap()]
+                                    &"xyzw"[0..usize::from(am.dimension.map_or(1, u8::from))]
                                 )?;
                             }
                             Ordering::Equal => {}
+                        }
+
+                        if needs_padding_or_truncation == Ordering::Greater {
+                            write!(self.out, ")")?;
                         }
 
                         writeln!(self.out, ";")?;

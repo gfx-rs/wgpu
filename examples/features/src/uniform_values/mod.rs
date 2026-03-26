@@ -16,14 +16,15 @@
 //! The usage of the uniform buffer within the shader itself is pretty self-explanatory given
 //! some understanding of WGSL.
 
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 // We won't bring StorageBuffer into scope as that might be too easy to confuse
 // with actual GPU-allocated wgpu storage buffers.
 use encase::ShaderType;
-use wgpu::SurfaceError;
+use wgpu::CurrentSurfaceTexture;
 use winit::{
-    event::{Event, KeyEvent, WindowEvent},
-    event_loop::EventLoop,
+    application::ApplicationHandler,
+    event::{KeyEvent, WindowEvent},
+    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
     keyboard::{Key, NamedKey},
     window::Window,
 };
@@ -31,15 +32,25 @@ use winit::{
 const ZOOM_INCREMENT_FACTOR: f32 = 1.1;
 const CAMERA_POS_INCREMENT_FACTOR: f32 = 0.1;
 
+#[cfg(not(target_arch = "wasm32"))]
+fn spawn(f: impl Future<Output = ()> + 'static) {
+    pollster::block_on(f);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn spawn(f: impl Future<Output = ()> + 'static) {
+    wasm_bindgen_futures::spawn_local(f);
+}
+
 // (1)
 #[derive(Debug, ShaderType)]
-struct AppState {
+struct ShaderState {
     pub cursor_pos: glam::Vec2,
     pub zoom: f32,
     pub max_iterations: u32,
 }
 
-impl AppState {
+impl ShaderState {
     // Translating Rust structures to WGSL is always tricky and can prove
     // incredibly difficult to remember all the rules by which WGSL
     // lays out and formats structs in memory. It is also often extremely
@@ -75,9 +86,9 @@ impl AppState {
     }
 }
 
-impl Default for AppState {
+impl Default for ShaderState {
     fn default() -> Self {
-        AppState {
+        ShaderState {
             cursor_pos: glam::Vec2::ZERO,
             zoom: 1.0,
             max_iterations: 50,
@@ -86,6 +97,7 @@ impl Default for AppState {
 }
 
 struct WgpuContext {
+    pub instance: wgpu::Instance,
     pub window: Arc<Window>,
     pub surface: wgpu::Surface<'static>,
     pub surface_config: wgpu::SurfaceConfiguration,
@@ -97,16 +109,21 @@ struct WgpuContext {
 }
 
 impl WgpuContext {
-    async fn new(window: Arc<Window>) -> WgpuContext {
+    async fn new(
+        window: Arc<Window>,
+        display_handle: winit::event_loop::OwnedDisplayHandle,
+    ) -> WgpuContext {
         let size = window.inner_size();
 
-        let instance = wgpu::Instance::default();
+        let instance = wgpu::Instance::new(
+            wgpu::InstanceDescriptor::new_with_display_handle_from_env(Box::new(display_handle)),
+        );
         let surface = instance.create_surface(window.clone()).unwrap();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
+                ..Default::default()
             })
             .await
             .unwrap();
@@ -127,7 +144,7 @@ impl WgpuContext {
         // (2)
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size: size_of::<AppState>() as u64,
+            size: size_of::<ShaderState>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -197,6 +214,7 @@ impl WgpuContext {
 
         // (5)
         WgpuContext {
+            instance,
             window,
             surface,
             surface_config,
@@ -212,204 +230,298 @@ impl WgpuContext {
         self.surface_config.width = new_size.width;
         self.surface_config.height = new_size.height;
         self.surface.configure(&self.device, &self.surface_config);
-        self.window.request_redraw();
     }
 }
 
-async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
-    let mut wgpu_context = Some(WgpuContext::new(window.clone()).await);
-    // (6)
-    let mut state = Some(AppState::default());
-    let main_window_id = wgpu_context.as_ref().unwrap().window.id();
-    event_loop
-        .run(move |event, target| {
-            match event {
-                Event::LoopExiting => {
-                    wgpu_context = None;
-                    state = None;
+enum UniformAction {
+    Initialized(WgpuContext),
+}
+
+#[expect(clippy::large_enum_variant)]
+enum RunState {
+    Uninitialized,
+    Loading,
+    Running {
+        wgpu_ctx: WgpuContext,
+        // (6)
+        shader_state: ShaderState,
+    },
+}
+
+struct App {
+    proxy: EventLoopProxy<UniformAction>,
+    window: Option<Arc<Window>>,
+    state: RunState,
+}
+
+impl App {
+    fn new(event_loop: &EventLoop<UniformAction>) -> Self {
+        Self {
+            proxy: event_loop.create_proxy(),
+            window: None,
+            state: RunState::Uninitialized,
+        }
+    }
+}
+
+impl ApplicationHandler<UniformAction> for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if !matches!(self.state, RunState::Uninitialized) {
+            return;
+        }
+        self.state = RunState::Loading;
+
+        #[cfg_attr(
+            not(target_arch = "wasm32"),
+            expect(unused_mut, reason = "wasm32 re-assigns to specify canvas")
+        )]
+        let mut attributes = Window::default_attributes()
+            .with_title("Remember: Use U/D to change sample count!")
+            .with_inner_size(winit::dpi::LogicalSize::new(900, 900));
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            use winit::platform::web::WindowAttributesExtWebSys;
+            let canvas = web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .get_element_by_id("canvas")
+                .unwrap()
+                .dyn_into::<web_sys::HtmlCanvasElement>()
+                .unwrap();
+            attributes = attributes.with_canvas(Some(canvas));
+        }
+
+        let window = Arc::new(
+            event_loop
+                .create_window(attributes)
+                .expect("Failed to create window"),
+        );
+        self.window = Some(window.clone());
+
+        let display_handle = event_loop.owned_display_handle();
+        let proxy = self.proxy.clone();
+
+        spawn(async move {
+            let wgpu_ctx = WgpuContext::new(window, display_handle).await;
+            let _ = proxy.send_event(UniformAction::Initialized(wgpu_ctx));
+        });
+    }
+
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UniformAction) {
+        match event {
+            UniformAction::Initialized(wgpu_ctx) => {
+                self.state = RunState::Running {
+                    wgpu_ctx,
+                    shader_state: ShaderState::default(),
+                };
+                if let Some(window) = &self.window {
+                    window.request_redraw();
                 }
-                Event::WindowEvent { window_id, event } if window_id == main_window_id => {
-                    match event {
-                        WindowEvent::CloseRequested => {
-                            target.exit();
-                        }
-                        WindowEvent::KeyboardInput {
-                            event:
-                                KeyEvent {
-                                    logical_key, text, ..
-                                },
-                            ..
-                        } => {
-                            let state_mut = state.as_mut().unwrap();
-                            let wgpu_context_ref = wgpu_context.as_ref().unwrap();
+            }
+        }
+    }
 
-                            if let Key::Named(key) = logical_key {
-                                match key {
-                                    NamedKey::Escape => target.exit(),
-                                    NamedKey::ArrowUp => state_mut.translate_view(1, 1),
-                                    NamedKey::ArrowDown => state_mut.translate_view(-1, 1),
-                                    NamedKey::ArrowLeft => state_mut.translate_view(-1, 0),
-                                    NamedKey::ArrowRight => state_mut.translate_view(1, 0),
-                                    _ => {}
-                                }
-                            }
+    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        self.state = RunState::Uninitialized;
+    }
 
-                            if let Some(text) = text {
-                                if text == "u" {
-                                    state_mut.max_iterations += 3;
-                                } else if text == "d" {
-                                    state_mut.max_iterations -= 3;
-                                }
-                            };
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: winit::window::WindowId,
+        event: WindowEvent,
+    ) {
+        let RunState::Running {
+            wgpu_ctx,
+            shader_state,
+        } = &mut self.state
+        else {
+            return;
+        };
 
-                            wgpu_context_ref.window.request_redraw();
-                        }
-                        WindowEvent::MouseWheel { delta, .. } => {
-                            let change = match delta {
-                                winit::event::MouseScrollDelta::LineDelta(_, vertical) => vertical,
-                                winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                                    pos.y as f32 / 20.0
-                                }
-                            };
-                            let state_mut = state.as_mut().unwrap();
-                            let wgpu_context_ref = wgpu_context.as_ref().unwrap();
-                            // (7b)
-                            state_mut.zoom(change);
-                            wgpu_context_ref.window.request_redraw();
-                        }
-                        WindowEvent::Resized(new_size) => {
-                            let wgpu_context_mut = wgpu_context.as_mut().unwrap();
-                            wgpu_context_mut.resize(new_size);
-                            wgpu_context_mut.window.request_redraw();
-                        }
-                        WindowEvent::RedrawRequested => {
-                            let wgpu_context_ref = wgpu_context.as_ref().unwrap();
-                            let state_ref = state.as_ref().unwrap();
-                            match wgpu_context_ref.surface.get_current_texture() {
-                                Ok(frame) => {
-                                    let view = frame
-                                        .texture
-                                        .create_view(&wgpu::TextureViewDescriptor::default());
-
-                                    // (8)
-                                    wgpu_context_ref.queue.write_buffer(
-                                        &wgpu_context_ref.uniform_buffer,
-                                        0,
-                                        &state_ref.as_wgsl_bytes().expect(
-                                            "Error in encase translating AppState struct to WGSL bytes."
-                                        ),
-                                    );
-                                    let mut encoder =
-                                        wgpu_context_ref.device.create_command_encoder(
-                                            &wgpu::CommandEncoderDescriptor { label: None },
-                                        );
-                                    {
-                                        let mut render_pass = encoder.begin_render_pass(
-                                            &wgpu::RenderPassDescriptor {
-                                                label: None,
-                                                color_attachments: &[Some(
-                                                    wgpu::RenderPassColorAttachment {
-                                                        view: &view,
-                                                        depth_slice: None,
-                                                        resolve_target: None,
-                                                        ops: wgpu::Operations {
-                                                            load: wgpu::LoadOp::Clear(
-                                                                wgpu::Color::GREEN,
-                                                            ),
-                                                            store: wgpu::StoreOp::Store,
-                                                        },
-                                                    },
-                                                )],
-                                                depth_stencil_attachment: None,
-                                                occlusion_query_set: None,
-                                                timestamp_writes: None,
-                                                multiview_mask: None,
-                                            },
-                                        );
-                                        render_pass.set_pipeline(&wgpu_context_ref.pipeline);
-                                        // (9)
-                                        render_pass.set_bind_group(
-                                            0,
-                                            Some(&wgpu_context_ref.bind_group),
-                                            &[],
-                                        );
-                                        render_pass.draw(0..3, 0..1);
-                                    }
-                                    wgpu_context_ref.queue.submit(Some(encoder.finish()));
-                                    window.pre_present_notify();
-                                    frame.present();
-                                }
-                                Err(SurfaceError::Timeout | SurfaceError::Occluded) => {
-                                    window.request_redraw(); // try again later
-                                }
-                                Err(err) => {
-                                    // TODO: reconfigure the surface instead
-                                    panic!("get_current_texture: {err}");
-                                }
-                            }
-                        }
+        match event {
+            WindowEvent::CloseRequested => {
+                event_loop.exit();
+            }
+            WindowEvent::KeyboardInput {
+                event: KeyEvent {
+                    logical_key, text, ..
+                },
+                ..
+            } => {
+                if let Key::Named(key) = logical_key {
+                    match key {
+                        NamedKey::Escape => event_loop.exit(),
+                        NamedKey::ArrowUp => shader_state.translate_view(1, 1),
+                        NamedKey::ArrowDown => shader_state.translate_view(-1, 1),
+                        NamedKey::ArrowLeft => shader_state.translate_view(-1, 0),
+                        NamedKey::ArrowRight => shader_state.translate_view(1, 0),
                         _ => {}
                     }
                 }
-                _ => {}
+
+                if let Some(text) = text {
+                    if text == "u" {
+                        shader_state.max_iterations += 3;
+                    } else if text == "d" {
+                        shader_state.max_iterations = shader_state.max_iterations.saturating_sub(3);
+                    }
+                };
+
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
             }
-        })
-        .unwrap();
+            WindowEvent::MouseWheel { delta, .. } => {
+                let change = match delta {
+                    winit::event::MouseScrollDelta::LineDelta(_, vertical) => vertical,
+                    winit::event::MouseScrollDelta::PixelDelta(pos) => pos.y as f32 / 20.0,
+                };
+                // (7b)
+                shader_state.zoom(change);
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            WindowEvent::Resized(new_size) => {
+                wgpu_ctx.resize(new_size);
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            WindowEvent::RedrawRequested => {
+                let frame = match wgpu_ctx.surface.get_current_texture() {
+                    CurrentSurfaceTexture::Success(frame) => frame,
+                    CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => {
+                        if let Some(window) = &self.window {
+                            window.request_redraw();
+                        }
+                        return;
+                    }
+                    CurrentSurfaceTexture::Suboptimal(_) | CurrentSurfaceTexture::Outdated => {
+                        wgpu_ctx
+                            .surface
+                            .configure(&wgpu_ctx.device, &wgpu_ctx.surface_config);
+                        if let Some(window) = &self.window {
+                            window.request_redraw();
+                        }
+                        return;
+                    }
+                    CurrentSurfaceTexture::Validation => {
+                        unreachable!("No error scope registered, so validation errors will panic")
+                    }
+                    CurrentSurfaceTexture::Lost => {
+                        wgpu_ctx.surface = wgpu_ctx
+                            .instance
+                            .create_surface(wgpu_ctx.window.clone())
+                            .unwrap();
+                        wgpu_ctx
+                            .surface
+                            .configure(&wgpu_ctx.device, &wgpu_ctx.surface_config);
+                        if let Some(window) = &self.window {
+                            window.request_redraw();
+                        }
+                        return;
+                    }
+                };
+
+                let view = frame
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+
+                // (8)
+                wgpu_ctx.queue.write_buffer(
+                    &wgpu_ctx.uniform_buffer,
+                    0,
+                    &shader_state.as_wgsl_bytes().expect(
+                        "Error in encase translating ShaderState \
+                    struct to WGSL bytes.",
+                    ),
+                );
+                let mut encoder = wgpu_ctx
+                    .device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+                {
+                    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: None,
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &view,
+                            depth_slice: None,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        occlusion_query_set: None,
+                        timestamp_writes: None,
+                        multiview_mask: None,
+                    });
+                    render_pass.set_pipeline(&wgpu_ctx.pipeline);
+                    // (9)
+                    render_pass.set_bind_group(0, Some(&wgpu_ctx.bind_group), &[]);
+                    render_pass.draw(0..3, 0..1);
+                }
+                wgpu_ctx.queue.submit(Some(encoder.finish()));
+                if let Some(window) = &self.window {
+                    window.pre_present_notify();
+                }
+                frame.present();
+            }
+            WindowEvent::Occluded(is_occluded) => {
+                if !is_occluded {
+                    if let Some(window) = &self.window {
+                        window.request_redraw();
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 pub fn main() {
-    let event_loop = EventLoop::new().unwrap();
-    #[cfg_attr(
-        not(target_arch = "wasm32"),
-        expect(unused_mut, reason = "`wasm32` re-assigns to specify canvas")
-    )]
-    let mut builder = winit::window::WindowBuilder::new()
-        .with_title("Remember: Use U/D to change sample count!")
-        .with_inner_size(winit::dpi::LogicalSize::new(900, 900));
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        use wasm_bindgen::JsCast;
-        use winit::platform::web::WindowBuilderExtWebSys;
-        let canvas = web_sys::window()
-            .unwrap()
-            .document()
-            .unwrap()
-            .get_element_by_id("canvas")
-            .unwrap()
-            .dyn_into::<web_sys::HtmlCanvasElement>()
-            .unwrap();
-        builder = builder.with_canvas(Some(canvas));
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+            console_log::init().expect("could not initialize logger");
+        } else {
+            env_logger::builder().format_timestamp_nanos().init();
+        }
     }
-    let window = builder.build(&event_loop).unwrap();
 
-    let window = Arc::new(window);
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        env_logger::builder().format_timestamp_nanos().init();
-        pollster::block_on(run(event_loop, window));
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-        console_log::init().expect("could not initialize logger");
+    let event_loop = EventLoop::with_user_event().build().unwrap();
 
-        let document = web_sys::window()
-            .and_then(|win| win.document())
-            .expect("Failed to get document.");
-        let body = document.body().unwrap();
-        let controls_text = document
-            .create_element("p")
-            .expect("Failed to create controls text as element.");
-        controls_text.set_inner_html(
-            "Controls: <br/>
+    #[cfg_attr(target_arch = "wasm32", expect(unused_mut))]
+    let mut app = App::new(&event_loop);
+
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            use winit::platform::web::EventLoopExtWebSys;
+
+            let document = web_sys::window()
+                .and_then(|win| win.document())
+                .expect("Failed to get document.");
+            let body = document.body().unwrap();
+            let controls_text = document
+                .create_element("p")
+                .expect("Failed to create controls text as element.");
+            controls_text.set_inner_html(
+                "Controls: <br/>
 Up, Down, Left, Right: Move view, <br/>
 Scroll: Zoom, <br/>
 U, D: Increase / decrease sample count.",
-        );
-        body.append_child(&controls_text)
-            .expect("Failed to append controls text to body.");
+            );
+            body.append_child(&controls_text)
+                .expect("Failed to append controls text to body.");
 
-        wasm_bindgen_futures::spawn_local(run(event_loop, window));
+            event_loop.spawn_app(app);
+        } else {
+            event_loop.run_app(&mut app).unwrap();
+        }
     }
 }

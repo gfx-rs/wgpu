@@ -58,7 +58,7 @@ arbitrary = [
 ]
 spv-in = ["dep:petgraph", "petgraph/graphmap", "dep:spirv"]
 spv-out = ["dep:spirv"]
-wgsl-in = ["dep:hexf-parse", "dep:unicode-ident"]
+wgsl-in = ["dep:unicode-ident"]
 wgsl-out = []
 
 ## Enables outputting to HLSL (Microsoft's High-Level Shader Language).
@@ -101,7 +101,6 @@ thiserror.workspace = true
 serde = { workspace = true, features = ["alloc", "derive"], optional = true }
 petgraph = { workspace = true, optional = true }
 pp-rs = { workspace = true, optional = true }
-hexf-parse = { workspace = true, optional = true }
 unicode-ident = { workspace = true, optional = true }
 
 [build-dependencies]

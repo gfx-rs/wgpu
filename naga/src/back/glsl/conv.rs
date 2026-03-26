@@ -76,7 +76,7 @@ pub(in crate::back::glsl) const fn glsl_built_in(
         // vertex
         Bi::BaseInstance => "uint(gl_BaseInstance)",
         Bi::BaseVertex => "uint(gl_BaseVertex)",
-        Bi::ClipDistance => "gl_ClipDistance",
+        Bi::ClipDistances => "gl_ClipDistance",
         Bi::CullDistance => "gl_CullDistance",
         Bi::InstanceIndex => {
             if options.draw_parameters {

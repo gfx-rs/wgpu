@@ -64,8 +64,7 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
                     wgpu::GlFenceBehavior::Normal
                 },
                 ..Default::default()
-            }
-            .with_env(),
+            },
             // Allow the noop backend to be used in tests. This will not be used unless
             // WGPU_GPU_TESTS_USE_NOOP_BACKEND env var is set, because wgpu-info will not
             // enumerate the noop backend.
@@ -74,9 +73,22 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
             // will chose the noop on wasm32 for some reason.
             noop: wgpu::NoopBackendOptions {
                 enable: !cfg!(target_arch = "wasm32"),
+                ..Default::default()
             },
-        },
+        }
+        .with_env(),
+        #[cfg(not(all(
+            target_arch = "wasm32",
+            any(target_os = "emscripten", feature = "webgl")
+        )))]
         display: None,
+        // Wasm requires a canvas surface below, and create_surface() requires
+        // the `display` to be set even if it's "empty" on Web:
+        #[cfg(all(
+            target_arch = "wasm32",
+            any(target_os = "emscripten", feature = "webgl")
+        ))]
+        display: Some(Box::new(WebDisplayHandle)),
     })
 }
 
@@ -212,5 +224,26 @@ impl SurfaceGuard {
             .unwrap()
             .get_error()
             != web_sys::WebGl2RenderingContext::NO_ERROR
+    }
+}
+
+/// [`raw_window_handle::HasDisplayHandle`] implementation for Web that's [`Send`]+[`Sync`]
+/// because it doesn't own any pointers
+#[cfg(all(
+    target_arch = "wasm32",
+    any(target_os = "emscripten", feature = "webgl")
+))]
+#[derive(Debug)]
+struct WebDisplayHandle;
+
+#[cfg(all(
+    target_arch = "wasm32",
+    any(target_os = "emscripten", feature = "webgl")
+))]
+impl raw_window_handle::HasDisplayHandle for WebDisplayHandle {
+    fn display_handle(
+        &self,
+    ) -> Result<raw_window_handle::DisplayHandle<'_>, raw_window_handle::HandleError> {
+        Ok(raw_window_handle::DisplayHandle::web())
     }
 }

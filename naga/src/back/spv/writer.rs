@@ -3071,9 +3071,9 @@ impl Writer {
                     // vertex
                     Bi::BaseInstance => BuiltIn::BaseInstance,
                     Bi::BaseVertex => BuiltIn::BaseVertex,
-                    Bi::ClipDistance => {
+                    Bi::ClipDistances => {
                         self.require_any(
-                            "`clip_distance` built-in",
+                            "`clip_distances` built-in",
                             &[spirv::Capability::ClipDistance],
                         )?;
                         BuiltIn::ClipDistance
@@ -3287,6 +3287,19 @@ impl Writer {
         let class = map_storage_class(global_variable.space);
 
         //self.check(class.required_capabilities())?;
+
+        if global_variable
+            .memory_decorations
+            .contains(crate::MemoryDecorations::COHERENT)
+        {
+            self.decorate(id, Decoration::Coherent, &[]);
+        }
+        if global_variable
+            .memory_decorations
+            .contains(crate::MemoryDecorations::VOLATILE)
+        {
+            self.decorate(id, Decoration::Volatile, &[]);
+        }
 
         if self.flags.contains(WriterFlags::DEBUG) {
             if let Some(ref name) = global_variable.name {

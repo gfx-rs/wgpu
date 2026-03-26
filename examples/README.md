@@ -1,6 +1,6 @@
 > [!NOTE]  
 > These are the examples for the development version of wgpu. If you want to see the examples for the latest crates.io release
-> of wgpu, go to the [latest release branch](https://github.com/gfx-rs/wgpu/tree/v28/examples#readme).
+> of wgpu, go to the [latest release branch](https://github.com/gfx-rs/wgpu/tree/v29/examples#readme).
 
 # Examples
 
@@ -12,18 +12,18 @@ for a mode guided tutorial, which will also teach you the basics of graphics pro
 All the standalone examples are separate crates and include all boilerplate inside the example itself. They can
 be cloned out of the repository to serve as a starting point for your own projects and are fully commented.
 
-| Name   | Description | Platforms |
-|--------|-------------|-----------|
-| ---    | Introductory Examples | --- |
+| Name                                             | Description                                                                                                   | Platforms   |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ----------- |
+| ---                                              | Introductory Examples                                                                                         | ---         |
 | [1. hello compute](standalone/01_hello_compute/) | Simplest example and shows how to run a compute shader on a given set of input data and get the results back. | Native-Only |
-| [2. hello window](standalone/02_hello_window/) | Shows how to create a window and render into it. | Native-Only |
-| --- | Special Examples | --- |
-| [custom backend](standalone/custom_backend/) | Shows how to implement and use custom wgpu context | All |
+| [2. hello window](standalone/02_hello_window/)   | Shows how to create a window and render into it.                                                              | Native-Only |
+| ---                                              | Special Examples                                                                                              | ---         |
+| [custom backend](standalone/custom_backend/)     | Shows how to implement and use custom wgpu context                                                            | All         |
 
 You can also use [`cargo-generate`](https://github.com/cargo-generate/cargo-generate) to easily use these as a basis for your own projects.
 
 ```sh
-cargo generate gfx-rs/wgpu --branch v28
+cargo generate gfx-rs/wgpu --branch v29
 ```
 
 ## Framework Examples
@@ -40,6 +40,7 @@ These examples use a common framework to handle wgpu init, window creation, and 
 - `shadow` - Likely by far the most complex example (certainly the largest in lines of code) of the official wgpu examples. `shadow` demonstrates basic scene rendering with the main attraction being lighting and shadows (as the name implies). It is recommended that any user looking into lighting be very familiar with the basic concepts of not only rendering with wgpu but also the primary mathematical ideas of computer graphics.
 - `multiple-render-targets` - Demonstrates how to render to two texture targets simultaneously from fragment shader.
 - `render_to_texture` - Renders to an image texture offscreen, demonstrating both off-screen rendering as well as how to add a sort of resolution-agnostic screenshot feature to an engine. This example either outputs an image file of your naming (pass command line arguments after specifying a `--` like `cargo run --bin wgpu-examples -- render_to_texture "test.png"`) or adds an `img` element containing the image to the page in WASM.
+- `render_with_compute` - Renders an image using compute shaders.
 - `ray_cube_fragment` - Demonstrates using ray queries with a fragment shader.
 - `ray_scene` - Demonstrates using ray queries and model loading
 - `ray_shadows` - Demonstrates a simple use of ray queries - high quality shadows - uses a light set with immediates to raytrace through an untransformed scene and detect whether there is something obstructing the light.

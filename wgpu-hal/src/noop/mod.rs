@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 
-use alloc::{string::String, vec, vec::Vec};
+use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use core::{ptr, sync::atomic::Ordering, time::Duration};
 
 #[cfg(supports_64bit_atomics)]
@@ -17,7 +17,10 @@ pub use command::CommandBuffer;
 
 #[derive(Clone, Debug)]
 pub struct Api;
-pub struct Context;
+
+pub struct Context {
+    options: Arc<wgt::NoopBackendOptions>,
+}
 #[derive(Debug)]
 pub struct Encoder;
 #[derive(Debug)]
@@ -89,20 +92,9 @@ impl crate::Instance for Context {
     type A = Api;
 
     unsafe fn init(desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
-        let crate::InstanceDescriptor {
-            backend_options:
-                wgt::BackendOptions {
-                    noop: wgt::NoopBackendOptions { enable },
-                    ..
-                },
-            name: _,
-            flags: _,
-            memory_budget_thresholds: _,
-            telemetry: _,
-            display: _,
-        } = *desc;
-        if enable {
-            Ok(Context)
+        let options = Arc::new(desc.backend_options.noop.clone());
+        if options.enable {
+            Ok(Context { options })
         } else {
             Err(crate::InstanceError::new(String::from(
                 "noop backend disabled because NoopBackendOptions::enable is false",
@@ -114,17 +106,48 @@ impl crate::Instance for Context {
         _display_handle: raw_window_handle::RawDisplayHandle,
         _window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Context, crate::InstanceError> {
-        Ok(Context)
+        Ok(Context {
+            options: Arc::clone(&self.options),
+        })
     }
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&Context>,
     ) -> Vec<crate::ExposedAdapter<Api>> {
+        let device_type = self.options.device_type.unwrap_or(wgt::DeviceType::Other);
+        let subgroup_min_size = self
+            .options
+            .subgroup_min_size
+            .unwrap_or(wgt::MINIMUM_SUBGROUP_MIN_SIZE);
+        let subgroup_max_size = self
+            .options
+            .subgroup_max_size
+            .unwrap_or(wgt::MAXIMUM_SUBGROUP_MAX_SIZE);
+        let features = self.options.features.unwrap_or(wgt::Features::all());
+        let limits = self
+            .options
+            .limits
+            .clone()
+            .unwrap_or(CAPABILITIES.limits.clone());
+
+        let info = wgt::AdapterInfo {
+            subgroup_min_size,
+            subgroup_max_size,
+            ..adapter_info()
+        };
+
+        let capabilities = crate::Capabilities {
+            limits,
+            ..CAPABILITIES
+        };
+
         vec![crate::ExposedAdapter {
-            adapter: Context,
-            info: adapter_info(),
-            features: wgt::Features::all(),
-            capabilities: CAPABILITIES,
+            adapter: Context {
+                options: Arc::clone(&self.options),
+            },
+            info,
+            features,
+            capabilities,
         }]
     }
 }
@@ -136,16 +159,8 @@ impl crate::Instance for Context {
 pub fn adapter_info() -> wgt::AdapterInfo {
     wgt::AdapterInfo {
         name: String::from("noop wgpu backend"),
-        vendor: 0,
-        device: 0,
-        device_type: wgt::DeviceType::Cpu,
-        device_pci_bus_id: String::new(),
         driver: String::from("wgpu"),
-        driver_info: String::new(),
-        backend: wgt::Backend::Noop,
-        subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
-        subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
-        transient_saves_memory: false,
+        ..wgt::AdapterInfo::new(wgt::DeviceType::Cpu, wgt::Backend::Noop)
     }
 }
 
@@ -154,70 +169,8 @@ pub fn adapter_info() -> wgt::AdapterInfo {
 /// This is used in the test harness to construct capabilities
 /// of the noop backend without actually initializing wgpu.
 pub const CAPABILITIES: crate::Capabilities = {
-    /// Guaranteed to be no bigger than isize::MAX which is the maximum size of an allocation,
-    /// except on 16-bit platforms which we certainly don’t fit in.
-    const ALLOC_MAX_U32: u32 = i32::MAX as u32;
-    /// Guaranteed to be no bigger than isize::MAX which is the maximum size of an allocation,
-    /// except on 16-bit platforms which we certainly don’t fit in.
-    const ALLOC_MAX_U64: u64 = i32::MAX as u64;
-
     crate::Capabilities {
-        limits: wgt::Limits {
-            // All maximally permissive
-            max_texture_dimension_1d: ALLOC_MAX_U32,
-            max_texture_dimension_2d: ALLOC_MAX_U32,
-            max_texture_dimension_3d: ALLOC_MAX_U32,
-            max_texture_array_layers: ALLOC_MAX_U32,
-            max_bind_groups: ALLOC_MAX_U32,
-            max_bindings_per_bind_group: ALLOC_MAX_U32,
-            max_dynamic_uniform_buffers_per_pipeline_layout: ALLOC_MAX_U32,
-            max_dynamic_storage_buffers_per_pipeline_layout: ALLOC_MAX_U32,
-            max_sampled_textures_per_shader_stage: ALLOC_MAX_U32,
-            max_samplers_per_shader_stage: ALLOC_MAX_U32,
-            max_storage_buffers_per_shader_stage: ALLOC_MAX_U32,
-            max_storage_textures_per_shader_stage: ALLOC_MAX_U32,
-            max_uniform_buffers_per_shader_stage: ALLOC_MAX_U32,
-            max_binding_array_elements_per_shader_stage: ALLOC_MAX_U32,
-            max_binding_array_sampler_elements_per_shader_stage: ALLOC_MAX_U32,
-            max_uniform_buffer_binding_size: ALLOC_MAX_U64,
-            max_storage_buffer_binding_size: ALLOC_MAX_U64,
-            max_vertex_buffers: ALLOC_MAX_U32,
-            max_buffer_size: ALLOC_MAX_U64,
-            max_vertex_attributes: ALLOC_MAX_U32,
-            max_vertex_buffer_array_stride: ALLOC_MAX_U32,
-            max_inter_stage_shader_variables: ALLOC_MAX_U32,
-            min_uniform_buffer_offset_alignment: 1,
-            min_storage_buffer_offset_alignment: 1,
-            max_color_attachments: ALLOC_MAX_U32,
-            max_color_attachment_bytes_per_sample: ALLOC_MAX_U32,
-            max_compute_workgroup_storage_size: ALLOC_MAX_U32,
-            max_compute_invocations_per_workgroup: ALLOC_MAX_U32,
-            max_compute_workgroup_size_x: ALLOC_MAX_U32,
-            max_compute_workgroup_size_y: ALLOC_MAX_U32,
-            max_compute_workgroup_size_z: ALLOC_MAX_U32,
-            max_compute_workgroups_per_dimension: ALLOC_MAX_U32,
-            max_immediate_size: ALLOC_MAX_U32,
-            max_non_sampler_bindings: ALLOC_MAX_U32,
-
-            max_task_mesh_workgroup_total_count: ALLOC_MAX_U32,
-            max_task_mesh_workgroups_per_dimension: ALLOC_MAX_U32,
-            max_task_invocations_per_workgroup: ALLOC_MAX_U32,
-            max_task_invocations_per_dimension: ALLOC_MAX_U32,
-            max_mesh_invocations_per_workgroup: ALLOC_MAX_U32,
-            max_mesh_invocations_per_dimension: ALLOC_MAX_U32,
-            max_task_payload_size: ALLOC_MAX_U32,
-            max_mesh_output_vertices: ALLOC_MAX_U32,
-            max_mesh_output_primitives: ALLOC_MAX_U32,
-            max_mesh_output_layers: ALLOC_MAX_U32,
-            max_mesh_multiview_view_count: ALLOC_MAX_U32,
-
-            max_blas_primitive_count: ALLOC_MAX_U32,
-            max_blas_geometry_count: ALLOC_MAX_U32,
-            max_tlas_instance_count: ALLOC_MAX_U32,
-            max_acceleration_structures_per_shader_stage: ALLOC_MAX_U32,
-
-            max_multiview_view_count: ALLOC_MAX_U32,
-        },
+        limits: wgt::Limits::unlimited(),
         alignments: crate::Alignments {
             // All maximally permissive
             buffer_copy_offset: wgt::BufferSize::MIN,
@@ -268,8 +221,12 @@ impl crate::Adapter for Context {
         _memory_hints: &wgt::MemoryHints,
     ) -> DeviceResult<crate::OpenDevice<Api>> {
         Ok(crate::OpenDevice {
-            device: Context,
-            queue: Context,
+            device: Context {
+                options: Arc::clone(&self.options),
+            },
+            queue: Context {
+                options: Arc::clone(&self.options),
+            },
         })
     }
     unsafe fn texture_format_capabilities(
@@ -285,6 +242,16 @@ impl crate::Adapter for Context {
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         wgt::PresentationTimestamp::INVALID_TIMESTAMP
+    }
+
+    fn get_ordered_buffer_usages(&self) -> wgt::BufferUses {
+        wgt::BufferUses::INCLUSIVE | wgt::BufferUses::MAP_WRITE
+    }
+
+    fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
+        wgt::TextureUses::INCLUSIVE
+            | wgt::TextureUses::COLOR_TARGET
+            | wgt::TextureUses::DEPTH_STENCIL_WRITE
     }
 }
 

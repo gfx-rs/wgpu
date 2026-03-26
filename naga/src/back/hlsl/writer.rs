@@ -3,7 +3,10 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::{fmt, mem};
+use core::{
+    fmt::{self, Write as _},
+    mem,
+};
 
 use super::{
     help,
@@ -55,25 +58,26 @@ enum Index {
     Static(u32),
 }
 
-struct EpStructMember {
-    name: String,
-    ty: Handle<crate::Type>,
+pub(super) struct EpStructMember {
+    pub(super) name: String,
+    pub(super) ty: Handle<crate::Type>,
     // technically, this should always be `Some`
     // (we `debug_assert!` this in `write_interface_struct`)
-    binding: Option<crate::Binding>,
-    index: u32,
+    pub(super) binding: Option<crate::Binding>,
+    pub(super) index: u32,
 }
 
 /// Structure contains information required for generating
 /// wrapped structure of all entry points arguments
-struct EntryPointBinding {
+pub(super) struct EntryPointBinding {
     /// Name of the fake EP argument that contains the struct
     /// with all the flattened input data.
-    arg_name: String,
+    pub(super) arg_name: String,
     /// Generated structure name
-    ty_name: String,
+    pub(super) ty_name: String,
     /// Members of generated structure
-    members: Vec<EpStructMember>,
+    pub(super) members: Vec<EpStructMember>,
+    pub(super) local_invocation_index_name: Option<String>,
 }
 
 pub(super) struct EntryPointInterface {
@@ -81,11 +85,14 @@ pub(super) struct EntryPointInterface {
     /// struct with members sorted by binding.
     /// The `EntryPointBinding::members` array is sorted by index,
     /// so that we can walk it in `write_ep_arguments_initialization`.
-    input: Option<EntryPointBinding>,
+    pub(crate) input: Option<EntryPointBinding>,
     /// If `Some`, the output of an entry point is flattened.
     /// The `EntryPointBinding::members` array is sorted by binding,
     /// So that we can walk it in `Statement::Return` handler.
-    output: Option<EntryPointBinding>,
+    pub(crate) output: Option<EntryPointBinding>,
+    pub(crate) mesh_vertices: Option<EntryPointBinding>,
+    pub(crate) mesh_primitives: Option<EntryPointBinding>,
+    pub(crate) mesh_indices: Option<EntryPointBinding>,
 }
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord)]
@@ -106,9 +113,19 @@ impl InterfaceKey {
 }
 
 #[derive(Copy, Clone, PartialEq)]
-enum Io {
+pub(super) enum Io {
     Input,
     Output,
+    MeshVertices,
+    MeshPrimitives,
+}
+
+/// Argument list for nested entry points
+pub(super) struct NestedEntryPointArgs {
+    /// Arguments literally declared by the user
+    pub user_args: Vec<String>,
+    pub task_payload: Option<String>,
+    pub local_invocation_index: String,
 }
 
 const fn is_subgroup_builtin_binding(binding: &Option<crate::Binding>) -> bool {
@@ -150,6 +167,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             continue_ctx: back::continue_forward::ContinueCtx::default(),
             temp_access_chain: Vec::new(),
             need_bake_expressions: Default::default(),
+            function_task_payload_var: Default::default(),
         }
     }
 
@@ -170,6 +188,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.written_candidate_intersection = false;
         self.continue_ctx.clear();
         self.need_bake_expressions.clear();
+        self.function_task_payload_var.clear();
     }
 
     /// Generates statements to be inserted immediately before and at the very
@@ -301,6 +320,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> Result<super::ReflectionInfo, Error> {
         self.reset(module);
 
+        if module.uses_mesh_shaders() && self.options.shader_model < ShaderModel::V6_5 {
+            return Err(Error::ShaderModelTooLow(
+                "mesh shaders".to_string(),
+                ShaderModel::V6_5,
+            ));
+        }
+
         // Write special constants, if needed
         if let Some(ref bt) = self.options.special_constants_binding {
             writeln!(self.out, "struct {SPECIAL_CBUF_TYPE} {{")?;
@@ -414,13 +440,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         for index in ep_range.clone() {
             let ep = &module.entry_points[index];
             let ep_name = self.names[&NameKey::EntryPoint(index as u16)].clone();
-            let ep_io = self.write_ep_interface(
-                module,
-                &ep.function,
-                ep.stage,
-                &ep_name,
-                fragment_entry_point,
-            )?;
+            let ep_io = self.write_ep_interface(module, ep, &ep_name, fragment_entry_point)?;
             self.entry_point_io.insert(index, ep_io);
         }
 
@@ -465,7 +485,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
             self.write_wrapped_functions(module, &ctx)?;
 
-            self.write_function(module, name.as_str(), function, &ctx, info)?;
+            self.write_function(module, name.as_str(), function, &ctx, info, String::new())?;
 
             writeln!(self.out)?;
         }
@@ -511,18 +531,29 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
             self.write_wrapped_functions(module, &ctx)?;
 
+            // Mesh/task shaders have a wrapper entry point which is declared after the "main"
+            // user-written function. We therefore cannot always just document the next function.
+            let mut attribute_string = String::new();
             if ep.stage.compute_like() {
                 // HLSL is calling workgroup size "num threads"
                 let num_threads = ep.workgroup_size;
                 writeln!(
-                    self.out,
+                    attribute_string,
                     "[numthreads({}, {}, {})]",
                     num_threads[0], num_threads[1], num_threads[2]
                 )?;
             }
+            if let Some(ref info) = ep.mesh_info {
+                let topology_str = match info.topology {
+                    crate::MeshOutputTopology::Points => unreachable!(),
+                    crate::MeshOutputTopology::Lines => "line",
+                    crate::MeshOutputTopology::Triangles => "triangle",
+                };
+                writeln!(attribute_string, "[outputtopology(\"{topology_str}\")]")?;
+            }
 
             let name = self.names[&NameKey::EntryPoint(index as u16)].clone();
-            self.write_function(module, &name, &ep.function, &ctx, info)?;
+            self.write_function(module, &name, &ep.function, &ctx, info, attribute_string)?;
 
             if index < module.entry_points.len() - 1 {
                 writeln!(self.out)?;
@@ -569,12 +600,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
     //TODO: we could force fragment outputs to always go through `entry_point_io.output` path
     // if they are struct, so that the `stage` argument here could be omitted.
-    fn write_semantic(
+    pub(super) fn write_semantic(
         &mut self,
         binding: &Option<crate::Binding>,
         stage: Option<(ShaderStage, Io)>,
     ) -> BackendResult {
-        match *binding {
+        let is_per_primitive = match *binding {
             Some(crate::Binding::BuiltIn(builtin)) if !is_subgroup_builtin_binding(binding) => {
                 if builtin == crate::BuiltIn::ViewIndex
                     && self.options.shader_model < ShaderModel::V6_1
@@ -584,34 +615,49 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         ShaderModel::V6_1,
                     ));
                 }
-                let builtin_str = builtin.to_hlsl_str()?;
-                write!(self.out, " : {builtin_str}")?;
+                if let Some(builtin_str) = builtin.to_hlsl_str()? {
+                    write!(self.out, " : {builtin_str}")?;
+                }
+                false
             }
             Some(crate::Binding::Location {
-                blend_src: Some(1), ..
+                blend_src: Some(1),
+                per_primitive,
+                ..
             }) => {
                 write!(self.out, " : SV_Target1")?;
+                per_primitive
             }
-            Some(crate::Binding::Location { location, .. }) => {
+            Some(crate::Binding::Location {
+                location,
+                per_primitive,
+                ..
+            }) => {
                 if stage == Some((ShaderStage::Fragment, Io::Output)) {
                     write!(self.out, " : SV_Target{location}")?;
                 } else {
                     write!(self.out, " : {LOCATION_SEMANTIC}{location}")?;
                 }
+                per_primitive
             }
-            _ => {}
+            _ => false,
+        };
+        if is_per_primitive {
+            write!(self.out, " : primitive")?;
         }
 
         Ok(())
     }
 
-    fn write_interface_struct(
+    pub(super) fn write_interface_struct(
         &mut self,
         module: &Module,
         shader_stage: (ShaderStage, Io),
         struct_name: String,
+        var_name: Option<&str>,
         mut members: Vec<EpStructMember>,
     ) -> Result<EntryPointBinding, Error> {
+        let struct_name = self.namer.call(&struct_name);
         // Sort the members so that first come the user-defined varyings
         // in ascending locations, and then built-ins. This allows VS and FS
         // interfaces to match with regards to order.
@@ -619,10 +665,22 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         write!(self.out, "struct {struct_name}")?;
         writeln!(self.out, " {{")?;
+        let mut local_invocation_index_name = None;
+        let mut subgroup_id_used = false;
         for m in members.iter() {
             // Sanity check that each IO member is a built-in or is assigned a
             // location. Also see note about nesting in `write_ep_input_struct`.
             debug_assert!(m.binding.is_some());
+
+            match m.binding {
+                Some(crate::Binding::BuiltIn(crate::BuiltIn::SubgroupId)) => {
+                    subgroup_id_used = true;
+                }
+                Some(crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex)) => {
+                    local_invocation_index_name = Some(m.name.clone());
+                }
+                _ => (),
+            }
 
             if is_subgroup_builtin_binding(&m.binding) {
                 continue;
@@ -636,17 +694,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             self.write_semantic(&m.binding, Some(shader_stage))?;
             writeln!(self.out, ";")?;
         }
-        if members.iter().any(|arg| {
-            matches!(
-                arg.binding,
-                Some(crate::Binding::BuiltIn(crate::BuiltIn::SubgroupId))
-            )
-        }) {
-            writeln!(
-                self.out,
-                "{}uint __local_invocation_index : SV_GroupIndex;",
-                back::INDENT
-            )?;
+        if subgroup_id_used && local_invocation_index_name.is_none() {
+            let name = self.namer.call("local_invocation_index");
+            writeln!(self.out, "{}uint {name} : SV_GroupIndex;", back::INDENT)?;
+            local_invocation_index_name = Some(name);
         }
         writeln!(self.out, "}};")?;
         writeln!(self.out)?;
@@ -657,15 +708,18 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 // bring back the original order
                 members.sort_by_key(|m| m.index);
             }
-            Io::Output => {
+            Io::Output | Io::MeshVertices | Io::MeshPrimitives => {
                 // keep it sorted by binding
             }
         }
 
         Ok(EntryPointBinding {
-            arg_name: self.namer.call(struct_name.to_lowercase().as_str()),
+            arg_name: self
+                .namer
+                .call(var_name.unwrap_or(struct_name.to_lowercase().as_str())),
             ty_name: struct_name,
             members,
+            local_invocation_index_name,
         })
     }
 
@@ -713,7 +767,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
         }
 
-        self.write_interface_struct(module, (stage, Io::Input), struct_name, fake_members)
+        self.write_interface_struct(module, (stage, Io::Input), struct_name, None, fake_members)
     }
 
     /// Flatten all entry point results into a single struct.
@@ -789,7 +843,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             });
         }
 
-        self.write_interface_struct(module, (stage, Io::Output), struct_name, fake_members)
+        self.write_interface_struct(module, (stage, Io::Output), struct_name, None, fake_members)
     }
 
     /// Writes special interface structures for an entry point. The special structures have
@@ -798,11 +852,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     fn write_ep_interface(
         &mut self,
         module: &Module,
-        func: &crate::Function,
-        stage: ShaderStage,
+        ep: &crate::EntryPoint,
         ep_name: &str,
         frag_ep: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<EntryPointInterface, Error> {
+        let func = &ep.function;
+        let stage = ep.stage;
         Ok(EntryPointInterface {
             input: if !func.arguments.is_empty()
                 && (stage == ShaderStage::Fragment
@@ -820,6 +875,21 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Some(self.write_ep_output_struct(module, fr, stage, ep_name, frag_ep)?)
                 }
                 _ => None,
+            },
+            mesh_vertices: if let Some(ref info) = ep.mesh_info {
+                Some(self.write_ep_mesh_output_struct(module, ep_name, false, info)?)
+            } else {
+                None
+            },
+            mesh_primitives: if let Some(ref info) = ep.mesh_info {
+                Some(self.write_ep_mesh_output_struct(module, ep_name, true, info)?)
+            } else {
+                None
+            },
+            mesh_indices: if let Some(ref info) = ep.mesh_info {
+                Some(self.write_ep_mesh_output_indices(info.topology)?)
+            } else {
+                None
             },
         })
     }
@@ -845,8 +915,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Some(crate::Binding::BuiltIn(crate::BuiltIn::SubgroupId)) => {
                 write!(
                     self.out,
-                    "{}.__local_invocation_index / WaveGetLaneCount()",
-                    ep_input.arg_name
+                    "{}.{} / WaveGetLaneCount()",
+                    ep_input.arg_name,
+                    // When writing SubgroupId, we always guarantee that local_invocation_index_name is written
+                    ep_input.local_invocation_index_name.as_ref().unwrap()
                 )?;
             }
             _ => {
@@ -977,12 +1049,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_type(module, global.ty)?;
                 ""
             }
-            crate::AddressSpace::WorkGroup => {
+            crate::AddressSpace::WorkGroup | crate::AddressSpace::TaskPayload => {
                 write!(self.out, "groupshared ")?;
                 self.write_type(module, global.ty)?;
                 ""
             }
-            crate::AddressSpace::TaskPayload => unimplemented!(),
             crate::AddressSpace::Uniform => {
                 // constant buffer declarations are expected to be inlined, e.g.
                 // `cbuffer foo: register(b0) { field1: type1; }`
@@ -990,6 +1061,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 "b"
             }
             crate::AddressSpace::Storage { access } => {
+                if global
+                    .memory_decorations
+                    .contains(crate::MemoryDecorations::COHERENT)
+                {
+                    write!(self.out, "globallycoherent ")?;
+                }
                 let (prefix, register) = if access.contains(crate::StorageAccess::STORE) {
                     ("RW", "u")
                 } else {
@@ -1530,10 +1607,26 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         func: &crate::Function,
         func_ctx: &back::FunctionCtx<'_>,
         info: &valid::FunctionInfo,
+        header: String,
     ) -> BackendResult {
         // Function Declaration Syntax - https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-function-syntax
 
         self.update_expressions_to_bake(module, func, info);
+        let ep = match func_ctx.ty {
+            back::FunctionType::EntryPoint(idx) => Some(&module.entry_points[idx as usize]),
+            back::FunctionType::Function(_) => None,
+        };
+
+        let nested = matches!(
+            ep,
+            Some(crate::EntryPoint {
+                stage: ShaderStage::Task | ShaderStage::Mesh,
+                ..
+            })
+        );
+        if !nested {
+            write!(self.out, "{header}")?;
+        }
 
         if let Some(ref result) = func.result {
             // Write typedef if return type is an array
@@ -1581,39 +1674,84 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             write!(self.out, "void")?;
         }
 
+        let nested_name = if nested {
+            self.namer.call(&format!("_{name}"))
+        } else {
+            name.to_string()
+        };
+
         // Write function name
-        write!(self.out, " {name}(")?;
+        write!(self.out, " {nested_name}(")?;
 
         let need_workgroup_variables_initialization =
             self.need_workgroup_variables_initialization(func_ctx, module);
 
+        let mut any_args_written = false;
+        let mut separator = || {
+            if any_args_written {
+                ", "
+            } else {
+                any_args_written = true;
+                ""
+            }
+        };
+
+        let needs_local_invocation_index_name = need_workgroup_variables_initialization || nested;
+        let mut local_invocation_index_name = None;
+        // For nested entry points, collect arg names as we write them so that
+        // write_nested_function_outer can pass the exact same names to the call site.
+        let mut nested_wgsl_args: Vec<String> = Vec::new();
+        let mut nested_task_payload_name: Option<String> = None;
         // Write function arguments for non entry point functions
         match func_ctx.ty {
             back::FunctionType::Function(handle) => {
                 for (index, arg) in func.arguments.iter().enumerate() {
-                    if index != 0 {
-                        write!(self.out, ", ")?;
-                    }
-
+                    write!(self.out, "{}", separator())?;
                     self.write_function_argument(module, handle, arg, index)?;
+                }
+                // If this reads a task payload variable the variable needs to be passed as an `in` argument
+                for (var_handle, var) in module.global_variables.iter() {
+                    let uses = info[var_handle];
+                    if uses.contains(valid::GlobalUse::READ)
+                        && !uses.contains(valid::GlobalUse::WRITE)
+                        && var.space == crate::AddressSpace::TaskPayload
+                    {
+                        self.function_task_payload_var.insert(handle, var_handle);
+                        write!(self.out, "{}in ", separator())?;
+
+                        self.write_type(module, var.ty)?;
+                        let name = &self.names[&NameKey::GlobalVariable(var_handle)];
+                        write!(self.out, " {name}")?;
+                        break;
+                    }
                 }
             }
             back::FunctionType::EntryPoint(ep_index) => {
+                let ep = &module.entry_points[ep_index as usize];
                 if let Some(ref ep_input) =
                     self.entry_point_io.get(&(ep_index as usize)).unwrap().input
                 {
                     write!(self.out, "{} {}", ep_input.ty_name, ep_input.arg_name)?;
+                    separator();
+                    nested_wgsl_args.push(ep_input.arg_name.clone());
                 } else {
-                    let stage = module.entry_points[ep_index as usize].stage;
+                    let stage = ep.stage;
                     for (index, arg) in func.arguments.iter().enumerate() {
-                        if index != 0 {
-                            write!(self.out, ", ")?;
-                        }
+                        write!(self.out, "{}", separator())?;
                         self.write_type(module, arg.ty)?;
 
                         let argument_name =
                             &self.names[&NameKey::EntryPointArgument(ep_index, index as u32)];
 
+                        if arg.binding
+                            == Some(crate::Binding::BuiltIn(
+                                crate::BuiltIn::LocalInvocationIndex,
+                            ))
+                        {
+                            local_invocation_index_name = Some(argument_name.clone());
+                        }
+
+                        nested_wgsl_args.push(argument_name.clone());
                         write!(self.out, " {argument_name}")?;
                         if let TypeInner::Array { base, size, .. } = module.types[arg.ty].inner {
                             self.write_array_size(module, base, size)?;
@@ -1622,18 +1760,24 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_semantic(&arg.binding, Some((stage, Io::Input)))?;
                     }
                 }
-                if need_workgroup_variables_initialization {
-                    if self
-                        .entry_point_io
-                        .get(&(ep_index as usize))
-                        .unwrap()
-                        .input
-                        .is_some()
-                        || !func.arguments.is_empty()
-                    {
-                        write!(self.out, ", ")?;
+                if ep.stage == ShaderStage::Mesh {
+                    if let Some(var_handle) = ep.task_payload {
+                        let var = &module.global_variables[var_handle];
+                        write!(self.out, "{}in ", separator())?;
+                        self.write_type(module, var.ty)?;
+                        let arg_name = &self.names[&NameKey::GlobalVariable(var_handle)];
+                        write!(self.out, " {arg_name}")?;
+                        nested_task_payload_name = Some(arg_name.clone());
+                        if let TypeInner::Array { base, size, .. } = module.types[var.ty].inner {
+                            self.write_array_size(module, base, size)?;
+                        }
                     }
-                    write!(self.out, "uint3 __local_invocation_id : SV_GroupThreadID")?;
+                }
+                if needs_local_invocation_index_name && local_invocation_index_name.is_none() {
+                    let name = self.namer.call("local_invocation_index");
+                    write!(self.out, "{}uint {name}", separator())?;
+                    write!(self.out, " : SV_GroupIndex")?;
+                    local_invocation_index_name = Some(name);
                 }
             }
         }
@@ -1652,8 +1796,26 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         writeln!(self.out)?;
         writeln!(self.out, "{{")?;
 
-        if need_workgroup_variables_initialization {
-            self.write_workgroup_variables_initialization(func_ctx, module)?;
+        if need_workgroup_variables_initialization && !nested {
+            let back::FunctionType::EntryPoint(index) = func_ctx.ty else {
+                unreachable!();
+            };
+            writeln!(
+                self.out,
+                "{}if ({} == 0) {{",
+                back::INDENT,
+                // need_workgroup_variables_initialization forces this to be written
+                // if the user doesn't specify it (so this must be Some())
+                local_invocation_index_name.as_ref().unwrap(),
+            )?;
+            self.write_workgroup_variables_initialization(
+                func_ctx,
+                module,
+                module.entry_points[index as usize].stage,
+            )?;
+
+            writeln!(self.out, "{}}}", back::INDENT)?;
+            self.write_control_barrier(crate::Barrier::WORK_GROUP, back::Level(1))?;
         }
 
         if let back::FunctionType::EntryPoint(index) = func_ctx.ty {
@@ -1714,6 +1876,24 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
 
         writeln!(self.out, "}}")?;
+
+        if nested {
+            self.write_nested_function_outer(
+                module,
+                func_ctx,
+                &header,
+                name,
+                need_workgroup_variables_initialization,
+                &nested_name,
+                ep.unwrap(),
+                NestedEntryPointArgs {
+                    user_args: nested_wgsl_args,
+                    task_payload: nested_task_payload_name,
+                    // guaranteed to be set for nested functions (task/mesh shaders)
+                    local_invocation_index: local_invocation_index_name.unwrap(),
+                },
+            )?;
+        }
 
         self.named_expressions.clear();
 
@@ -1796,35 +1976,31 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.options.zero_initialize_workgroup_memory
             && func_ctx.ty.is_compute_like_entry_point(module)
             && module.global_variables.iter().any(|(handle, var)| {
-                !func_ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
+                !func_ctx.info[handle].is_empty() && var.space.is_workgroup_like()
             })
     }
 
-    fn write_workgroup_variables_initialization(
+    pub(super) fn write_workgroup_variables_initialization(
         &mut self,
         func_ctx: &back::FunctionCtx,
         module: &Module,
+        stage: ShaderStage,
     ) -> BackendResult {
-        let level = back::Level(1);
-
-        writeln!(
-            self.out,
-            "{level}if (all(__local_invocation_id == uint3(0u, 0u, 0u))) {{"
-        )?;
-
         let vars = module.global_variables.iter().filter(|&(handle, var)| {
-            !func_ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
+            // Read-only in mesh shaders
+            let task_needs_zero =
+                (var.space == crate::AddressSpace::TaskPayload) && stage == ShaderStage::Task;
+            !func_ctx.info[handle].is_empty()
+                && (var.space == crate::AddressSpace::WorkGroup || task_needs_zero)
         });
 
         for (handle, var) in vars {
             let name = &self.names[&NameKey::GlobalVariable(handle)];
-            write!(self.out, "{}{} = ", level.next(), name)?;
+            write!(self.out, "{}{} = ", back::Level(2), name)?;
             self.write_default_init(module, var.ty)?;
             writeln!(self.out, ";")?;
         }
-
-        writeln!(self.out, "{level}}}")?;
-        self.write_control_barrier(crate::Barrier::WORK_GROUP, level)
+        Ok(())
     }
 
     /// Helper method used to write switches
@@ -2434,6 +2610,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 result,
             } => {
                 write!(self.out, "{level}")?;
+
                 if let Some(expr) = result {
                     write!(self.out, "const ")?;
                     let name = Baked(expr).to_string();
@@ -2457,13 +2634,25 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
                 let func_name = &self.names[&NameKey::Function(function)];
                 write!(self.out, "{func_name}(")?;
-                for (index, argument) in arguments.iter().enumerate() {
-                    if index != 0 {
-                        write!(self.out, ", ")?;
+                let mut any_args_written = false;
+                let mut separator = || {
+                    if any_args_written {
+                        ", "
+                    } else {
+                        any_args_written = true;
+                        ""
                     }
+                };
+                for argument in arguments {
+                    write!(self.out, "{}", separator())?;
                     self.write_expr(module, *argument, func_ctx)?;
                 }
-                writeln!(self.out, ");")?
+                if let Some(&var) = self.function_task_payload_var.get(&function) {
+                    let name = &self.names[&NameKey::GlobalVariable(var)];
+                    // Pass it through directly, whether its an in variable to this function or the global variable
+                    write!(self.out, "{}{name}", separator())?;
+                }
+                writeln!(self.out, ");")?;
             }
             Statement::Atomic {
                 pointer,
@@ -4536,7 +4725,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         Ok(())
     }
 
-    fn write_control_barrier(
+    pub(super) fn write_control_barrier(
         &mut self,
         barrier: crate::Barrier,
         level: back::Level,

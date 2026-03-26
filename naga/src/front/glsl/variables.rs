@@ -62,6 +62,7 @@ impl Frontend {
                 binding: None,
                 ty,
                 init: None,
+                memory_decorations: crate::MemoryDecorations::empty(),
             },
             meta,
         );
@@ -188,7 +189,7 @@ impl Frontend {
                         stride: 4,
                     },
                     builtin: match name {
-                        "gl_ClipDistance" => BuiltIn::ClipDistance,
+                        "gl_ClipDistance" => BuiltIn::ClipDistances,
                         "gl_CullDistance" => BuiltIn::CullDistance,
                         _ => unreachable!(),
                     },
@@ -448,6 +449,7 @@ impl Frontend {
                         binding: None,
                         ty,
                         init,
+                        memory_decorations: crate::MemoryDecorations::empty(),
                     },
                     meta,
                 );
@@ -636,6 +638,7 @@ impl Frontend {
                         binding,
                         ty,
                         init,
+                        memory_decorations: crate::MemoryDecorations::empty(),
                     },
                     meta,
                 );

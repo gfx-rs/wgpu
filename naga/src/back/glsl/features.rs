@@ -618,7 +618,7 @@ impl<W> Writer<'_, W> {
         } else if let Some(binding) = binding {
             match *binding {
                 Binding::BuiltIn(built_in) => match built_in {
-                    crate::BuiltIn::ClipDistance => self.features.request(Features::CLIP_DISTANCE),
+                    crate::BuiltIn::ClipDistances => self.features.request(Features::CLIP_DISTANCE),
                     crate::BuiltIn::CullDistance => self.features.request(Features::CULL_DISTANCE),
                     crate::BuiltIn::SampleIndex => {
                         self.features.request(Features::SAMPLE_VARIABLES)

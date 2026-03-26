@@ -1,6 +1,6 @@
 use std::num::NonZeroU64;
 
-use wgpu::{BufferUsages, PollType};
+use wgpu::{util::DeviceExt, BufferUsages, PollType};
 use wgpu_test::{
     gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
@@ -12,6 +12,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         BIND_GROUP_NONFILTERING_LAYOUT_MIN_SAMPLER,
         BIND_GROUP_NONFILTERING_LAYOUT_MAG_SAMPLER,
         BIND_GROUP_NONFILTERING_LAYOUT_MIPMAP_SAMPLER,
+        BIND_GROUP_WITH_MAX_BINDING_INDEX,
     ]);
 }
 
@@ -252,3 +253,137 @@ static BIND_GROUP_NONFILTERING_LAYOUT_MIPMAP_SAMPLER: GpuTestConfiguration =
                 false,
             );
         });
+
+#[gpu_test]
+static BIND_GROUP_WITH_MAX_BINDING_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .limits(wgpu::Limits::downlevel_defaults())
+            .expect_fail(FailureCase::kosmic_krisp()), // https://github.com/gfx-rs/wgpu/issues/9187
+    )
+    .run_async(|ctx| async move {
+        let (device, queue) = ctx
+            .adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                required_limits: wgpu::Limits {
+                    max_bindings_per_bind_group: ctx.adapter.limits().max_bindings_per_bind_group,
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let max_binding_index = device.limits().max_bindings_per_bind_group - 1;
+        let src_binding_index = max_binding_index - 1;
+        let dst_binding_index = max_binding_index;
+
+        let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: src_binding_index,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: dst_binding_index,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
+        let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[Some(&bgl)],
+            immediate_size: 0,
+        });
+
+        let shader = format!(
+            "
+            @group(0) @binding({src_binding_index}) var<uniform> src: u32;
+            @group(0) @binding({dst_binding_index}) var<storage, read_write> dst: u32;
+            @compute @workgroup_size(1)
+            fn main() {{
+                dst = src;
+            }}"
+        );
+
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(shader.into()),
+        });
+
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&pl),
+            entry_point: Some("main"),
+            compilation_options: Default::default(),
+            module: &module,
+            cache: None,
+        });
+
+        let test_value = 123u32;
+
+        let src = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            usage: wgpu::BufferUsages::UNIFORM,
+            contents: &test_value.to_le_bytes(),
+        });
+        let dst = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 4,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let readback = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 4,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: src_binding_index,
+                    resource: wgpu::BindingResource::Buffer(src.as_entire_buffer_binding()),
+                },
+                wgpu::BindGroupEntry {
+                    binding: dst_binding_index,
+                    resource: wgpu::BindingResource::Buffer(dst.as_entire_buffer_binding()),
+                },
+            ],
+        });
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+            pass.set_bind_group(0, &bg, &[]);
+            pass.set_pipeline(&pipeline);
+            pass.dispatch_workgroups(1, 1, 1);
+        }
+        encoder.copy_buffer_to_buffer(&dst, 0, &readback, 0, 4);
+        queue.submit(Some(encoder.finish()));
+
+        readback.slice(..).map_async(wgpu::MapMode::Read, |_| ());
+        device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+
+        assert_eq!(
+            &*readback.slice(..).get_mapped_range(),
+            &test_value.to_le_bytes()
+        );
+    });

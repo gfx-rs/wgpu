@@ -29,7 +29,7 @@ use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{
     dispatch::{self, BlasCompactCallback},
-    Blas, SurfaceTargetUnsafe, Tlas,
+    Blas, SurfaceTargetUnsafe, Tlas, WriteOnly,
 };
 
 use defined_non_null_js_value::DefinedNonNullJsValue;
@@ -711,7 +711,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 15] = [
+const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 16] = [
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
         webgpu_sys::GpuFeatureName::DepthClipControl,
@@ -765,6 +765,10 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 15] = [
         webgpu_sys::GpuFeatureName::Float32Filterable,
     ),
     (
+        wgt::Features::FLOAT32_BLENDABLE,
+        webgpu_sys::GpuFeatureName::Float32Blendable,
+    ),
+    (
         wgt::Features::DUAL_SOURCE_BLENDING,
         webgpu_sys::GpuFeatureName::DualSourceBlending,
     ),
@@ -804,6 +808,7 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_uniform_buffers_per_shader_stage: limits.max_uniform_buffers_per_shader_stage(),
         max_binding_array_elements_per_shader_stage: 0,
         max_binding_array_sampler_elements_per_shader_stage: 0,
+        max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
         max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size() as u64,
         max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size() as u64,
         max_vertex_buffers: limits.max_vertex_buffers(),
@@ -866,6 +871,7 @@ fn map_adapter_info(adapter_info: &webgpu_sys::GpuAdapterInfo) -> wgt::AdapterIn
         subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
         subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
         transient_saves_memory: false,
+        limit_bucket: None,
     }
 }
 
@@ -2100,6 +2106,9 @@ impl dispatch::DeviceInterface for WebDevice {
                         panic!("Web backend does not support BINDING_INDEXING extension")
                     }
                     crate::BindingResource::AccelerationStructure(_) => {
+                        unimplemented!("Raytracing not implemented for web")
+                    }
+                    crate::BindingResource::AccelerationStructureArray(_) => {
                         unimplemented!("Raytracing not implemented for web")
                     }
                     crate::BindingResource::ExternalTexture(_) => {
@@ -3950,20 +3959,28 @@ impl Drop for WebSurfaceOutputDetail {
     }
 }
 
-impl dispatch::BufferMappedRangeInterface for WebBufferMappedRange {
-    #[inline]
-    fn slice(&self) -> &[u8] {
+impl WebBufferMappedRange {
+    fn get_temporary_mapping(&self) -> &[u8] {
         self.temporary_mapping
             .get_or_init(|| self.actual_mapping.to_vec())
-            .as_slice()
+    }
+}
+impl dispatch::BufferMappedRangeInterface for WebBufferMappedRange {
+    fn len(&self) -> usize {
+        self.get_temporary_mapping().len()
     }
 
     #[inline]
-    fn slice_mut(&mut self) -> &mut [u8] {
+    unsafe fn read_slice(&self) -> &[u8] {
+        self.get_temporary_mapping()
+    }
+
+    #[inline]
+    unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]> {
         self.temporary_mapping_modified = true;
-        self.temporary_mapping
-            .get_or_init(|| self.actual_mapping.to_vec());
-        self.temporary_mapping.get_mut().unwrap()
+        self.get_temporary_mapping();
+        let t: &mut Vec<u8> = self.temporary_mapping.get_mut().unwrap();
+        WriteOnly::from_mut(t)
     }
 
     #[inline]
@@ -3992,13 +4009,14 @@ impl Drop for WebBufferMappedRange {
 }
 
 impl dispatch::QueueWriteBufferInterface for WebQueueWriteBuffer {
-    fn slice(&self) -> &[u8] {
-        &self.inner
+    #[inline]
+    fn len(&self) -> usize {
+        self.inner.len()
     }
 
     #[inline]
-    fn slice_mut(&mut self) -> &mut [u8] {
-        &mut self.inner
+    unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]> {
+        WriteOnly::from_mut(&mut *self.inner)
     }
 }
 impl Drop for WebQueueWriteBuffer {

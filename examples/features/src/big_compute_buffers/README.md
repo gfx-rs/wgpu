@@ -1,6 +1,6 @@
 # big-compute-buffers
 
-*NOTE: `binding_array` is Vulkan only.*
+_NOTE: `binding_array` is Vulkan only._
 
 This example assumes you're familiar with the other GP-GPU compute examples in this repository, if you're not you should go look at those first.
 

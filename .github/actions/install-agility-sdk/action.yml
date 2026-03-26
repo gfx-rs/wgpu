@@ -1,0 +1,11 @@
+name: "Install Agility SDK"
+description: "Install the D3D12 Agility SDK and export its environment variables"
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      run: |
+        set -e
+
+        cargo xtask install-agility-sdk >> "$GITHUB_ENV"
+        echo WGPU_DX12_AGILITY_SDK_REQUIRE=1 >> "$GITHUB_ENV"

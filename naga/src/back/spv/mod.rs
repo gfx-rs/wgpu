@@ -970,14 +970,9 @@ pub struct Writer {
     debug_printf: Option<Word>,
     pub(crate) ray_query_initialization_tracking: bool,
 
-    /// Limits to the mesh shader dispatch group a task workgroup can dispatch.
-    ///
-    /// Metal for example limits to 1024 workgroups per task shader dispatch. Dispatching more is
-    /// undefined behavior, so this would validate that to dispatch zero workgroups.
+    /// See docs in [`Options`]
     task_dispatch_limits: Option<TaskDispatchLimits>,
-    /// If true, naga may generate checks that the primitive indices are valid in the output.
-    ///
-    /// Currently this validation is unimplemented.
+    /// See docs in [`Options`]
     mesh_shader_primitive_indices_clamp: bool,
 }
 
@@ -1084,8 +1079,15 @@ pub struct Options<'a> {
 
     pub debug_info: Option<DebugInfo<'a>>,
 
+    /// Limits to the mesh shader dispatch group a task workgroup can dispatch.
+    ///
+    /// Metal for example limits to 1024 workgroups per task shader dispatch. Dispatching more is
+    /// undefined behavior, so this would validate that to dispatch zero workgroups.
     pub task_dispatch_limits: Option<TaskDispatchLimits>,
 
+    /// If true, naga may generate checks that the primitive indices are valid in the output.
+    ///
+    /// Currently this validation is unimplemented.
     pub mesh_shader_primitive_indices_clamp: bool,
 }
 
@@ -1157,7 +1159,8 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::BUFFER_BINDING_ARRAY
         | Caps::STORAGE_TEXTURE_BINDING_ARRAY
         | Caps::STORAGE_BUFFER_BINDING_ARRAY
-        | Caps::CLIP_DISTANCE
+        | Caps::ACCELERATION_STRUCTURE_BINDING_ARRAY
+        | Caps::CLIP_DISTANCES
         // No cull distance
         | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
         | Caps::MULTIVIEW
@@ -1190,4 +1193,6 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::PER_VERTEX
         // No RAY_TRACING_PIPELINE
         | Caps::DRAW_INDEX
+        | Caps::MEMORY_DECORATION_COHERENT
+        | Caps::MEMORY_DECORATION_VOLATILE
 }
