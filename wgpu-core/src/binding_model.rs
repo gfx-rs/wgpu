@@ -1236,6 +1236,7 @@ pub struct BindGroup {
     pub(crate) used: BindGroupStates,
     pub(crate) used_buffer_ranges: Vec<BufferInitTrackerAction>,
     pub(crate) used_texture_ranges: Vec<TextureInitTrackerAction>,
+    /// INVARIANT: Sorted by binding index order.
     pub(crate) dynamic_binding_info: Vec<BindGroupDynamicBindingData>,
     /// Actual binding sizes for buffers that don't have `min_binding_size`
     /// specified in BGL. Listed in the order of iteration of `BGL.entries`.

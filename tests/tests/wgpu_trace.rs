@@ -20,7 +20,7 @@ fn trace_test(test_type: TestType) {
         wgt::instance::InstanceDescriptor {
             backends: wgt::Backends::NOOP,
             backend_options: wgt::BackendOptions {
-                noop: wgt::NoopBackendOptions { enable: true },
+                noop: wgt::NoopBackendOptions::enabled(),
                 ..Default::default()
             },
             ..wgt::instance::InstanceDescriptor::new_without_display_handle()

@@ -8,7 +8,6 @@ A simple example that uses a storage texture to compute an image of the Mandelbr
 cargo run --bin wgpu-examples storage_texture
 ```
 
-
 ## Example Output
 
 ![Example output](./example.png)

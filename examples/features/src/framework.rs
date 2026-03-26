@@ -53,7 +53,7 @@ pub trait Example: 'static + Sized {
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue);
 }
 
-// Initialize logging in platform dependant ways.
+// Initialize logging in platform dependent ways.
 fn init_logger() {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {

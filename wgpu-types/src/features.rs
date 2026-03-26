@@ -524,8 +524,7 @@ macro_rules! bitflags_array {
             $(
                 $(
                     $(#[doc $($args)*])*
-                    // We need this for structs with only a member.
-                    #[allow(clippy::needless_update)]
+                    #[allow(clippy::needless_update, reason = "only useless if there is 1 member")]
                     pub const $Flag: Self = Self {
                         $lower_inner_name: $inner_name::from_bits_truncate($value),
                         ..Self::empty()
@@ -549,8 +548,7 @@ macro_rules! bitflags_array {
 
         $(
             impl From<$inner_name> for Features {
-                // We need this for structs with only a member.
-                #[allow(clippy::needless_update)]
+                #[allow(clippy::needless_update, reason = "only useless if there is 1 member")]
                 fn from($lower_inner_name: $inner_name) -> Self {
                     Self {
                         $lower_inner_name,

@@ -190,6 +190,11 @@ std = [
 ## based on whether `std` is enabled or not.
 parking_lot = ["dep:parking_lot"]
 
+## Enables `exhaust` method for `TextureFormat` of `wgpu-types`.
+##
+## This is relevant for `wgpu-info`.
+exhaust = ["wgpu-types/exhaust"]
+
 #########################
 # Standard Dependencies #
 #########################

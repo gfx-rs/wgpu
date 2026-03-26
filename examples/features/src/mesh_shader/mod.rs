@@ -11,37 +11,6 @@ fn compile_wgsl(device: &wgpu::Device) -> wgpu::ShaderModule {
         )
     }
 }
-fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::ShaderModule {
-    let out_path = format!(
-        "{}/src/mesh_shader/shader.{stage_str}.cso",
-        env!("CARGO_MANIFEST_DIR")
-    );
-    let cmd = std::process::Command::new("dxc")
-        .args([
-            "-T",
-            &format!("{stage_str}_6_5"),
-            "-E",
-            entry,
-            &format!("{}/src/mesh_shader/shader.hlsl", env!("CARGO_MANIFEST_DIR")),
-            "-Fo",
-            &out_path,
-        ])
-        .output()
-        .unwrap();
-    if !cmd.status.success() {
-        panic!("DXC failed:\n{}", String::from_utf8(cmd.stderr).unwrap());
-    }
-    let file = std::fs::read(&out_path).unwrap();
-    std::fs::remove_file(out_path).unwrap();
-    unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-            label: None,
-            num_workgroups: (1, 1, 1),
-            dxil: Some(std::borrow::Cow::Owned(file)),
-            ..Default::default()
-        })
-    }
-}
 
 fn compile_msl(device: &wgpu::Device) -> wgpu::ShaderModule {
     unsafe {
@@ -67,7 +36,7 @@ fn get_shaders(device: &wgpu::Device, backend: wgpu::Backend) -> Shaders {
     // In the case that the platform does support mesh shaders, the dummy
     // shader is used to avoid requiring PASSTHROUGH_SHADERS.
     match backend {
-        wgpu::Backend::Vulkan => {
+        wgpu::Backend::Vulkan | wgpu::Backend::Dx12 => {
             let compiled = compile_wgsl(device);
             Shaders {
                 ts: compiled.clone(),
@@ -78,14 +47,6 @@ fn get_shaders(device: &wgpu::Device, backend: wgpu::Backend) -> Shaders {
                 fs_name: "fs_main",
             }
         }
-        wgpu::Backend::Dx12 => Shaders {
-            ts: compile_hlsl(device, "Task", "as"),
-            ms: compile_hlsl(device, "Mesh", "ms"),
-            fs: compile_hlsl(device, "Frag", "ps"),
-            ts_name: "main",
-            ms_name: "main",
-            fs_name: "main",
-        },
         wgpu::Backend::Metal => {
             let compiled = compile_msl(device);
             Shaders {

@@ -765,6 +765,7 @@ pub struct Device {
     compiler_container: Arc<shader_compilation::CompilerContainer>,
     shader_cache: Mutex<ShaderCache>,
     counters: Arc<wgt::HalCounters>,
+    limits: wgt::Limits,
 }
 
 impl Drop for Device {

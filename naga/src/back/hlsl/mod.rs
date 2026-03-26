@@ -146,6 +146,7 @@ it works for our purposes.
 mod conv;
 mod help;
 mod keywords;
+mod mesh_shader;
 mod ray;
 mod storage;
 mod writer;
@@ -155,7 +156,10 @@ use core::fmt::Error as FmtError;
 
 use thiserror::Error;
 
-use crate::{back, ir, proc};
+use crate::{
+    back::{self, TaskDispatchLimits},
+    ir, proc, Handle,
+};
 
 /// Direct3D 12 binding information for a global variable.
 ///
@@ -543,6 +547,17 @@ pub struct Options {
     /// If set, loops will have code injected into them, forcing the compiler
     /// to think the number of iterations is bounded.
     pub force_loop_bounding: bool,
+
+    /// Limits to the mesh shader dispatch group a task workgroup can dispatch.
+    ///
+    /// Metal for example limits to 1024 workgroups per task shader dispatch. Dispatching more is
+    /// undefined behavior, so this would validate that to dispatch zero workgroups.
+    pub task_dispatch_limits: Option<TaskDispatchLimits>,
+
+    /// If true, naga may generate checks that the primitive indices are valid in the output.
+    ///
+    /// Currently this validation is unimplemented.
+    pub mesh_shader_primitive_indices_clamp: bool,
     /// if set, ray queries will get a variable to track their state to prevent
     /// misuse.
     pub ray_query_initialization_tracking: bool,
@@ -563,6 +578,8 @@ impl Default for Options {
             zero_initialize_workgroup_memory: true,
             restrict_indexing: true,
             force_loop_bounding: true,
+            task_dispatch_limits: None,
+            mesh_shader_primitive_indices_clamp: true,
             ray_query_initialization_tracking: true,
         }
     }
@@ -759,6 +776,9 @@ pub struct Writer<'a, W> {
     /// [`AccessIndex`]: crate::Expression::AccessIndex
     temp_access_chain: Vec<storage::SubAccess>,
     need_bake_expressions: back::NeedBakeExpressions,
+
+    function_task_payload_var:
+        crate::FastHashMap<Handle<crate::Function>, Handle<crate::GlobalVariable>>,
 }
 
 pub fn supported_capabilities() -> crate::valid::Capabilities {
@@ -794,7 +814,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::TEXTURE_EXTERNAL
         | Caps::SHADER_FLOAT16_IN_FLOAT32
         | Caps::SHADER_BARYCENTRICS
-        // No MESH_SHADER
+        | Caps::MESH_SHADER
         // No MESH_SHADER_POINT_TOPOLOGY
         | Caps::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING
         // No BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING

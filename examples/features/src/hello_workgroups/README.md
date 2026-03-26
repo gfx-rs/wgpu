@@ -44,8 +44,8 @@ Note here that in this example, the term "dispatch grid" is used throughout to m
 
 Although with hello-compute and repeated-compute, we used a workgroup size of `(1)`, or rather, (1, 1, 1), and then each workgroup called from `dispatch_workgroups` made _an_ invocation, this isn't always the case. Each workgroup represents its own little grid of individual invocations tied together. This could be just one or practically any number in a 3d grid of invocations. The grid size of each workgroup and thus the number of invocations called per workgroup is determined by the `@workgroup_size` attribute you've seen in other compute shaders. To get the current invocation's location within a workgroup, add a `vec3<u32>` argument to the main function with the attribute `@builtin(local_invocation_id)`. We'll look at the compute shader grid of a dispatch of size (2, 2, 1) with workgroup sizes of (2, 2, 1) as well. Let `w` be the `workgroup_id` and `i` be the `local_invocation_id`.
 
-||||| 
-|------------------------|------------------------|------------------------|------------------------|
+|                        |                        |                        |                        |
+| ---------------------- | ---------------------- | ---------------------- | ---------------------- |
 | w(0, 0, 0), i(0, 0, 0) | w(0, 0, 0), i(1, 0, 0) | w(1, 0, 0), i(0, 0, 0) | w(1, 0, 0), i(1, 0, 0) |
 | w(0, 0, 0), i(0, 1, 0) | w(0, 0, 0), i(1, 1, 0) | w(1, 0, 0), i(0, 1, 0) | w(1, 0, 0), i(1, 1, 0) |
 | w(0, 1, 0), i(0, 0, 0) | w(0, 1, 0), i(1, 0, 0) | w(1, 1, 0), i(0, 0, 0) | w(1, 1, 0), i(1, 0, 0) |

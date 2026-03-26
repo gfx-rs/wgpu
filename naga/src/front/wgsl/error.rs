@@ -102,11 +102,10 @@ impl ParseError {
     }
 
     /// Emits a summary of the error to a string.
-    pub fn emit_to_string_with_path<P>(&self, source: &str, path: P) -> String
-    where
-        P: AsRef<std::path::Path>,
-    {
-        let path = path.as_ref().display().to_string();
+    ///
+    /// `path` gives the filename to attribute the error to in the
+    /// output; this function does not try to access the file.
+    pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String {
         let files = SimpleFile::new(path, replace_control_chars(source));
         let config = term::Config::default();
 
@@ -235,6 +234,7 @@ pub(crate) enum Error<'a> {
     InvalidAddrOfOperand(Span),
     InvalidAtomicPointer(Span),
     InvalidAtomicOperandType(Span),
+    InvalidAtomicAccess(Span),
     InvalidRayQueryPointer(Span),
     NotPointer(Span),
     NotReference(&'static str, Span),
@@ -822,6 +822,11 @@ impl<'a> Error<'a> {
             Error::InvalidAtomicOperandType(span) => ParseError {
                 message: "atomic operand type is inconsistent with the operation".to_string(),
                 labels: vec![(span, "atomic operand type is invalid".into())],
+                notes: vec![],
+            },
+            Error::InvalidAtomicAccess(span) => ParseError {
+                message: "atomic variables cannot be accessed directly; use atomic built-in functions".to_string(),
+                labels: vec![(span, "direct access to atomic variable is not allowed".into())],
                 notes: vec![],
             },
             Error::InvalidRayQueryPointer(span) => ParseError {

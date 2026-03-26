@@ -901,8 +901,15 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     ) -> Result<'source, Handle<ir::Expression>> {
         match expr {
             Typed::Reference(pointer) => {
-                let load = ir::Expression::Load { pointer };
                 let span = self.get_expression_span(pointer);
+
+                // Reject direct access to atomic variables that does not go
+                // through a built-in function.
+                if resolve_inner!(self, pointer).is_atomic_pointer(&self.module.types) {
+                    return Err(Box::new(Error::InvalidAtomicAccess(span)));
+                }
+
+                let load = ir::Expression::Load { pointer };
                 self.append_expression(load, span)
             }
             Typed::Plain(handle) => Ok(handle),

@@ -8,9 +8,9 @@ groupshared int wg_signed;
 groupshared AtomicStruct wg_struct;
 
 [numthreads(64, 1, 1)]
-void test_atomic_workgroup_uniform_load(uint3 workgroup_id : SV_GroupID, uint3 local_id : SV_GroupThreadID)
+void test_atomic_workgroup_uniform_load(uint3 workgroup_id : SV_GroupID, uint3 local_id : SV_GroupThreadID, uint local_invocation_index : SV_GroupIndex)
 {
-    if (all(local_id == uint3(0u, 0u, 0u))) {
+    if (local_invocation_index == 0) {
         wg_scalar = (uint)0;
         wg_signed = (int)0;
         wg_struct = (AtomicStruct)0;

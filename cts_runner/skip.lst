@@ -4,6 +4,7 @@
 // appear in this file in order -- including ones in comments.
 
 webgpu:api,validation,createPipelineLayout:immediate_data_size:* // immediates, https://github.com/gfx-rs/wgpu/issues/8556
+webgpu:api,validation,dispatch:* // linear indexing, https://github.com/gfx-rs/wgpu/issues/9296
 webgpu:api,validation,encoding,programmable,pipeline_immediate:* // immediates, https://github.com/gfx-rs/wgpu/issues/8556
 webgpu:api,validation,gpu_external_texture_expiration:* // external texture
 webgpu:api,validation,pipeline,immediates:pipeline_creation_immediate_size_mismatch:* // immediates, https://github.com/gfx-rs/wgpu/issues/8556

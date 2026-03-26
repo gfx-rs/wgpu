@@ -9,11 +9,13 @@ For the full description of the cooperative matrix feature (supported configurat
 ## Example specifics
 
 This example computes `C = A * B + C` where:
+
 - A is a 64×64 matrix
 - B is a 64×64 matrix
 - C is a 64×64 matrix (accumulator/result)
 
 The example:
+
 - Tiles the 64×64 matrices into cooperative matrix tiles (e.g. 8×8) and performs a tiled matmul
 - Uses a compute shader and compares GPU results against a CPU reference implementation
 
