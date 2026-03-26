@@ -42,15 +42,23 @@ Bottom level categories:
 
 ## Unreleased
 
+## v29.0.1 (2026-03-26)
+
+This release includes `wgpu-core`, `wgpu-hal` and `wgpu-types` version `29.0.1`. All other crates remain at their previous versions.
+
 ### Bug Fixes
 
 #### General
 
-- Fix limit comparison logic for `max_inter_stage_shader_variables` By @ErichDonGubler in [9264](https://github.com/gfx-rs/wgpu/pull/9264).
+- Fix limit comparison logic for `max_inter_stage_shader_variables`. By @ErichDonGubler in [#9264](https://github.com/gfx-rs/wgpu/pull/9264).
 
 #### Metal
 
 - Added guards to avoid calling some feature detection methods that are not implemented on `CaptureMTLDevice`. By @andyleiserson in [#9284](https://github.com/gfx-rs/wgpu/pull/9284).
+
+#### GLES / OpenGL
+
+- Fix texture height initialized incorrectly in `create_texture`. By @umajho in [#9302](https://github.com/gfx-rs/wgpu/pull/9302).
 
 #### Validation
 
