@@ -253,7 +253,7 @@ wayland-sys = { version = "0.31.3", features = [
 ], optional = true }
 
 [target.'cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))'.dependencies]
-drm = { version = "0.14.2", optional = true }
+drm = { version = "0.15", optional = true }
 
 #########################
 ### Platform: Windows ###

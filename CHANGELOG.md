@@ -3749,6 +3749,7 @@ By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
 #### Vulkan
 
 - Implemented basic ray-tracing api for acceleration structures, and ray-queries @daniel-keitel (started by @expenses) in [#3507](https://github.com/gfx-rs/wgpu/pull/3507)
+- Add support for RawWindowHandle::Drm on unix. By @rectalogic in [#9182](https://github.com/gfx-rs/wgpu/pull/9182).
 
 #### Hal
 
