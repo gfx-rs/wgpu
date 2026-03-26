@@ -43,9 +43,12 @@ const WRAPPED_ARRAY_FIELD: &str = "inner";
 const ATOMIC_REFERENCE: &str = "&";
 
 const RT_NAMESPACE: &str = "metal::raytracing";
-const RAY_QUERY_TYPE: &str = "metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data>";
-const RAY_QUERY_FUN_MAP_CANDIDATE_INTERSECTION: &str = "_map_candidate_intersection_type";
-const RAY_QUERY_FUN_MAP_COMMITTED_INTERSECTION: &str = "_map_committed_intersection_type";
+const RAY_QUERY_TYPE: &str = "_RayQuery";
+const RAY_QUERY_FIELD_INTERSECTOR: &str = "intersector";
+const RAY_QUERY_FIELD_INTERSECTION: &str = "intersection";
+const RAY_QUERY_MODERN_SUPPORT: bool = false; //TODO
+const RAY_QUERY_FIELD_READY: &str = "ready";
+const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
 
 pub(crate) const ATOMIC_COMP_EXCH_FUNCTION: &str = "naga_atomic_compare_exchange_weak_explicit";
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
@@ -2868,91 +2871,40 @@ impl<W: Write> Writer<W> {
             crate::Expression::RayQueryVertexPositions { .. } => {
                 unimplemented!()
             }
-            crate::Expression::RayQueryGetIntersection { query, committed } => {
+            crate::Expression::RayQueryGetIntersection {
+                query,
+                committed: _,
+            } => {
                 if context.lang_version < (2, 4) {
                     return Err(Error::UnsupportedRayTracing);
                 }
 
                 let ty = context.module.special_types.ray_intersection.unwrap();
                 let type_name = &self.names[&NameKey::Type(ty)];
-                write!(self.out, "{type_name} {{")?;
-                if committed {
-                    write!(self.out, "{RAY_QUERY_FUN_MAP_COMMITTED_INTERSECTION}(")?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_committed_intersection_type())")?;
+                write!(self.out, "{type_name} {{{RAY_QUERY_FUN_MAP_INTERSECTION}(")?;
+                self.put_expression(query, context, true)?;
+                write!(self.out, ".{RAY_QUERY_FIELD_INTERSECTION}.type)")?;
+                let fields = [
+                    "distance",
+                    "user_instance_id", // req Metal 2.4
+                    "instance_id",
+                    "", // SBT offset
+                    "geometry_id",
+                    "primitive_id",
+                    "triangle_barycentric_coord",
+                    "triangle_front_facing",
+                    "",                          // padding
+                    "object_to_world_transform", // req Metal 2.4
+                    "world_to_object_transform", // req Metal 2.4
+                ];
+                for field in fields {
                     write!(self.out, ", ")?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_committed_distance()")?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_committed_user_instance_id()")?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_committed_instance_id()")?;
-                    write!(self.out, ", {{}}, ")?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_committed_geometry_id()")?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_committed_primitive_id()")?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_committed_triangle_barycentric_coord()")?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".is_committed_triangle_front_facing()")?;
-                    write!(self.out, ", {{}}, ")?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_committed_object_to_world_transform()")?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_committed_world_to_object_transform()")?;
-                } else {
-                    write!(self.out, "{RAY_QUERY_FUN_MAP_CANDIDATE_INTERSECTION}(")?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_candidate_intersection_type())")?;
-                    write!(self.out, ", (")?;
-                    self.put_expression(query, context, true)?;
-                    write!(
-                        self.out,
-                        ".get_candidate_intersection_type() == {RT_NAMESPACE}::intersection_type::triangle ? "
-                    )?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_candidate_triangle_distance() : 0.0f), ")?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_candidate_user_instance_id()")?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_candidate_instance_id()")?;
-                    write!(self.out, ", {{}}, ")?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_candidate_geometry_id()")?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_candidate_primitive_id()")?;
-                    write!(self.out, ", (")?;
-                    self.put_expression(query, context, true)?;
-                    write!(
-                        self.out,
-                        ".get_candidate_intersection_type() == {RT_NAMESPACE}::intersection_type::triangle ? "
-                    )?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_candidate_triangle_barycentric_coord() : {NAMESPACE}::float2(0.0f)), (")?;
-                    self.put_expression(query, context, true)?;
-                    write!(
-                        self.out,
-                        ".get_candidate_intersection_type() == {RT_NAMESPACE}::intersection_type::triangle ? "
-                    )?;
-                    self.put_expression(query, context, true)?;
-                    write!(
-                        self.out,
-                        ".is_candidate_triangle_front_facing() : false), {{}}, "
-                    )?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_candidate_object_to_world_transform()")?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(query, context, true)?;
-                    write!(self.out, ".get_candidate_world_to_object_transform()")?;
+                    if field.is_empty() {
+                        write!(self.out, "{{}}")?;
+                    } else {
+                        self.put_expression(query, context, true)?;
+                        write!(self.out, ".{RAY_QUERY_FIELD_INTERSECTION}.{field}")?;
+                    }
                 }
                 write!(self.out, "}}")?;
             }
@@ -4111,9 +4063,57 @@ impl<W: Write> Writer<W> {
                             acceleration_structure,
                             descriptor,
                         } => {
+                            //TODO: how to deal with winding?
                             write!(self.out, "{level}")?;
                             self.put_expression(query, &context.expression, true)?;
-                            write!(self.out, ".reset({RT_NAMESPACE}::ray(")?;
+                            writeln!(self.out, ".{RAY_QUERY_FIELD_INTERSECTOR}.assume_geometry_type({RT_NAMESPACE}::geometry_type::triangle);")?;
+                            {
+                                let f_opaque = back::RayFlag::CULL_OPAQUE.bits();
+                                let f_no_opaque = back::RayFlag::CULL_NO_OPAQUE.bits();
+                                write!(self.out, "{level}")?;
+                                self.put_expression(query, &context.expression, true)?;
+                                write!(
+                                    self.out,
+                                    ".{RAY_QUERY_FIELD_INTERSECTOR}.set_opacity_cull_mode(("
+                                )?;
+                                self.put_expression(descriptor, &context.expression, true)?;
+                                write!(self.out, ".flags & {f_opaque}) != 0 ? {RT_NAMESPACE}::opacity_cull_mode::opaque : (")?;
+                                self.put_expression(descriptor, &context.expression, true)?;
+                                write!(self.out, ".flags & {f_no_opaque}) != 0 ? {RT_NAMESPACE}::opacity_cull_mode::non_opaque : ")?;
+                                writeln!(self.out, "{RT_NAMESPACE}::opacity_cull_mode::none);")?;
+                            }
+                            {
+                                let f_opaque = back::RayFlag::OPAQUE.bits();
+                                let f_no_opaque = back::RayFlag::NO_OPAQUE.bits();
+                                write!(self.out, "{level}")?;
+                                self.put_expression(query, &context.expression, true)?;
+                                write!(self.out, ".{RAY_QUERY_FIELD_INTERSECTOR}.force_opacity((")?;
+                                self.put_expression(descriptor, &context.expression, true)?;
+                                write!(self.out, ".flags & {f_opaque}) != 0 ? {RT_NAMESPACE}::forced_opacity::opaque : (")?;
+                                self.put_expression(descriptor, &context.expression, true)?;
+                                write!(self.out, ".flags & {f_no_opaque}) != 0 ? {RT_NAMESPACE}::forced_opacity::non_opaque : ")?;
+                                writeln!(self.out, "{RT_NAMESPACE}::forced_opacity::none);")?;
+                            }
+                            {
+                                let flag = back::RayFlag::TERMINATE_ON_FIRST_HIT.bits();
+                                write!(self.out, "{level}")?;
+                                self.put_expression(query, &context.expression, true)?;
+                                write!(
+                                    self.out,
+                                    ".{RAY_QUERY_FIELD_INTERSECTOR}.accept_any_intersection(("
+                                )?;
+                                self.put_expression(descriptor, &context.expression, true)?;
+                                writeln!(self.out, ".flags & {flag}) != 0);")?;
+                            }
+
+                            write!(self.out, "{level}")?;
+                            self.put_expression(query, &context.expression, true)?;
+                            write!(self.out, ".{RAY_QUERY_FIELD_INTERSECTION} = ")?;
+                            self.put_expression(query, &context.expression, true)?;
+                            write!(
+                                self.out,
+                                ".{RAY_QUERY_FIELD_INTERSECTOR}.intersect({RT_NAMESPACE}::ray("
+                            )?;
                             self.put_expression(descriptor, &context.expression, true)?;
                             write!(self.out, ".origin, ")?;
                             self.put_expression(descriptor, &context.expression, true)?;
@@ -4125,7 +4125,11 @@ impl<W: Write> Writer<W> {
                             self.put_expression(acceleration_structure, &context.expression, true)?;
                             write!(self.out, ", ")?;
                             self.put_expression(descriptor, &context.expression, true)?;
-                            writeln!(self.out, ".cull_mask);")?;
+                            write!(self.out, ".cull_mask);")?;
+
+                            write!(self.out, "{level}")?;
+                            self.put_expression(query, &context.expression, true)?;
+                            writeln!(self.out, ".{RAY_QUERY_FIELD_READY} = true;")?;
                         }
                         crate::RayQueryFunction::Proceed { result } => {
                             write!(self.out, "{level}")?;
@@ -4133,24 +4137,42 @@ impl<W: Write> Writer<W> {
                             self.start_baking_expression(result, &context.expression, &name)?;
                             self.named_expressions.insert(result, name);
                             self.put_expression(query, &context.expression, true)?;
-                            writeln!(self.out, ".next();")?;
+                            writeln!(self.out, ".{RAY_QUERY_FIELD_READY};")?;
+                            if RAY_QUERY_MODERN_SUPPORT {
+                                write!(self.out, "{level}")?;
+                                self.put_expression(query, &context.expression, true)?;
+                                writeln!(self.out, ".?.next();")?;
+                            }
                         }
                         crate::RayQueryFunction::GenerateIntersection { hit_t } => {
-                            write!(self.out, "{level}")?;
-                            self.put_expression(query, &context.expression, true)?;
-                            write!(self.out, ".commit_bounding_box_intersection(")?;
-                            self.put_expression(hit_t, &context.expression, true)?;
-                            writeln!(self.out, ");")?;
+                            if RAY_QUERY_MODERN_SUPPORT {
+                                write!(self.out, "{level}")?;
+                                self.put_expression(query, &context.expression, true)?;
+                                write!(self.out, ".?.commit_bounding_box_intersection(")?;
+                                self.put_expression(hit_t, &context.expression, true)?;
+                                writeln!(self.out, ");")?;
+                            } else {
+                                log::warn!("Ray Query GenerateIntersection is not yet supported");
+                            }
                         }
                         crate::RayQueryFunction::ConfirmIntersection => {
-                            write!(self.out, "{level}")?;
-                            self.put_expression(query, &context.expression, true)?;
-                            writeln!(self.out, ".commit_triangle_intersection();")?;
+                            if RAY_QUERY_MODERN_SUPPORT {
+                                write!(self.out, "{level}")?;
+                                self.put_expression(query, &context.expression, true)?;
+                                writeln!(self.out, ".?.commit_triangle_intersection();")?;
+                            } else {
+                                log::warn!("Ray Query ConfirmIntersection is not yet supported");
+                            }
                         }
                         crate::RayQueryFunction::Terminate => {
+                            if RAY_QUERY_MODERN_SUPPORT {
+                                write!(self.out, "{level}")?;
+                                self.put_expression(query, &context.expression, true)?;
+                                writeln!(self.out, ".?.abort();")?;
+                            }
                             write!(self.out, "{level}")?;
                             self.put_expression(query, &context.expression, true)?;
-                            writeln!(self.out, ".abort();")?;
+                            writeln!(self.out, ".{RAY_QUERY_FIELD_READY} = false;")?;
                         }
                     }
                 }
@@ -4515,35 +4537,25 @@ impl<W: Write> Writer<W> {
 
     fn put_ray_query_type(&mut self) -> BackendResult {
         let tab = back::INDENT;
-        let v_tri = crate::RayQueryIntersection::Triangle as u32;
-        let v_gen = crate::RayQueryIntersection::Generated as u32;
-        let v_aabb = crate::RayQueryIntersection::Aabb as u32;
-
+        writeln!(self.out, "struct {RAY_QUERY_TYPE} {{")?;
+        let full_type = format!("{RT_NAMESPACE}::intersector<{RT_NAMESPACE}::instancing, {RT_NAMESPACE}::triangle_data, {RT_NAMESPACE}::world_space_data>");
+        writeln!(self.out, "{tab}{full_type} {RAY_QUERY_FIELD_INTERSECTOR};")?;
         writeln!(
             self.out,
-            "constexpr {NAMESPACE}::uint {RAY_QUERY_FUN_MAP_CANDIDATE_INTERSECTION}(const {RT_NAMESPACE}::intersection_type ty) {{"
+            "{tab}{full_type}::result_type {RAY_QUERY_FIELD_INTERSECTION};"
+        )?;
+        writeln!(self.out, "{tab}bool {RAY_QUERY_FIELD_READY} = false;")?;
+        writeln!(self.out, "}};")?;
+        writeln!(self.out, "constexpr {NAMESPACE}::uint {RAY_QUERY_FUN_MAP_INTERSECTION}(const {RT_NAMESPACE}::intersection_type ty) {{")?;
+        let v_triangle = back::RayIntersectionType::Triangle as u32;
+        let v_bbox = back::RayIntersectionType::BoundingBox as u32;
+        writeln!(
+            self.out,
+            "{tab}return ty=={RT_NAMESPACE}::intersection_type::triangle ? {v_triangle} : "
         )?;
         writeln!(
             self.out,
-            "{tab}return ty=={RT_NAMESPACE}::intersection_type::triangle ? {v_tri} : "
-        )?;
-        writeln!(
-            self.out,
-            "{tab}{tab}ty=={RT_NAMESPACE}::intersection_type::bounding_box ? {v_aabb} : 0;"
-        )?;
-        writeln!(self.out, "}}")?;
-
-        writeln!(
-            self.out,
-            "constexpr {NAMESPACE}::uint {RAY_QUERY_FUN_MAP_COMMITTED_INTERSECTION}(const {RT_NAMESPACE}::intersection_type ty) {{"
-        )?;
-        writeln!(
-            self.out,
-            "{tab}return ty=={RT_NAMESPACE}::intersection_type::triangle ? {v_tri} : "
-        )?;
-        writeln!(
-            self.out,
-            "{tab}{tab}ty=={RT_NAMESPACE}::intersection_type::bounding_box ? {v_gen} : 0;"
+            "{tab}{tab}ty=={RT_NAMESPACE}::intersection_type::bounding_box ? {v_bbox} : 0;"
         )?;
         writeln!(self.out, "}}")?;
         Ok(())
