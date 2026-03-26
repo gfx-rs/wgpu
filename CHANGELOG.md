@@ -95,6 +95,10 @@ Bottom level categories:
 
 - Prefix `FeatureLevel` and `ShaderModel` enum variants with `V` instead of `_`. By @teoxoy in [#9337](https://github.com/gfx-rs/wgpu/pull/9337).
 
+#### naga
+
+- Switched from using an `intersector` to using an `intersection_query` on metal so AABBs and non-opaque triangles can be handled. By @Vecvec in [#9304](https://github.com/gfx-rs/wgpu/pull/9304).
+
 ### Bug Fixes
 
 #### General
