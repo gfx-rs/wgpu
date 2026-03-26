@@ -483,7 +483,7 @@ impl super::Validator {
 
                 let limit = resolve_index_limit(module, base, &resolver[base], true)?;
                 if index >= limit {
-                    return Err(ExpressionError::IndexOutOfBounds(base, limit));
+                    return Err(ExpressionError::IndexOutOfBounds(base, index));
                 }
                 ShaderStages::all()
             }
