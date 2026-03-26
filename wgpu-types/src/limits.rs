@@ -18,7 +18,6 @@ use crate::{Features, TextureFormat};
 macro_rules! with_limits {
     ($macro_name:ident) => {
         $macro_name!(max_texture_dimension_1d, Ordering::Less);
-        $macro_name!(max_texture_dimension_1d, Ordering::Less);
         $macro_name!(max_texture_dimension_2d, Ordering::Less);
         $macro_name!(max_texture_dimension_3d, Ordering::Less);
         $macro_name!(max_texture_array_layers, Ordering::Less);
