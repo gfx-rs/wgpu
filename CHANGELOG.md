@@ -70,7 +70,6 @@ Bottom level categories:
 
 #### General
 
-- Fix limit comparison logic for `max_inter_stage_shader_variables` By @ErichDonGubler in [#9264](https://github.com/gfx-rs/wgpu/pull/9264).
 - Fix incorrect checks for dynamic binding bounds when calling an encoder's `set_bind_group` in passes and bundles. By @ErichDonGubler in [#9308](https://github.com/gfx-rs/wgpu/pull/9308).
 
 #### naga
@@ -79,9 +78,24 @@ Bottom level categories:
 - Naga no longer allows derivative operations on `f16`. WGSL does not currently allow this, although [it may be added in the future](https://github.com/gpuweb/gpuweb/issues/5482). By @andyleiserson in [#9154](https://github.com/gfx-rs/wgpu/pull/9154).
 - Disallow direct access to atomic variables in WGSL front-end (e.g. `let x = myAtomic;`). By @ecoricemon in [#9262](https://github.com/gfx-rs/wgpu/pull/9262).
 
+## v29.0.1 (2026-03-26)
+
+This release includes `wgpu-core`, `wgpu-hal` and `wgpu-types` version `29.0.1`. All other crates remain at their previous versions.
+
+### Bug Fixes
+
+#### General
+
+- Fix limit comparison logic for `max_inter_stage_shader_variables`. By @ErichDonGubler in [#9264](https://github.com/gfx-rs/wgpu/pull/9264).
+
 #### Metal
 
 - Added guards to avoid calling some feature detection methods that are not implemented on `CaptureMTLDevice`. By @andyleiserson in [#9284](https://github.com/gfx-rs/wgpu/pull/9284).
+- Fix a regression where buffer limits were too conservative. This comes at the cost of non-compliant WebGPU limit validation. A future major release will keep the relaxed buffer limits on native while allowing WebGPU-mandated validation to be opted in. See [#9287](https://github.com/gfx-rs/wgpu/issues/9287).
+
+#### GLES / OpenGL
+
+- Fix texture height initialized incorrectly in `create_texture`. By @umajho in [#9302](https://github.com/gfx-rs/wgpu/pull/9302).
 
 #### Validation
 
