@@ -55,6 +55,7 @@ This release includes `wgpu-core`, `wgpu-hal` and `wgpu-types` version `29.0.1`.
 #### Metal
 
 - Added guards to avoid calling some feature detection methods that are not implemented on `CaptureMTLDevice`. By @andyleiserson in [#9284](https://github.com/gfx-rs/wgpu/pull/9284).
+- Fix a regression where buffer limits were too conservative. This comes at the cost of non-compliant WebGPU limit validation. A future major release will keep the relaxed buffer limits on native while allowing WebGPU-mandated validation to be opted in. See [#9287](https://github.com/gfx-rs/wgpu/issues/9287).
 
 #### GLES / OpenGL
 
