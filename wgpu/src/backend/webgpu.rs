@@ -1126,7 +1126,7 @@ impl ContextWebGpu {
                 .dyn_into()
                 .map_err(|_| crate::CreateSurfaceError {
                     inner: crate::CreateSurfaceErrorKind::Web(
-                        "canvas.getContext() failed: This is likely because WebGPU is disabled in this browser.".to_owned(),
+                        "canvas.getContext() failed: This is likely because WebGPU is disabled in this browser.".into(),
                     ),
                 })?;
 
