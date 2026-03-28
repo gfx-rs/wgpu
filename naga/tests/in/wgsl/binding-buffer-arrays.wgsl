@@ -2,7 +2,10 @@ struct UniformIndex {
     index: u32
 }
 
-struct Foo { x: u32, far: array<i32> }
+struct Inner {
+    y: u32,
+}
+struct Foo { x: u32, nested: Inner, far: array<i32> }
 @group(0) @binding(0)
 var<storage, read> storage_array: binding_array<Foo, 1>;
 @group(0) @binding(10)
@@ -22,6 +25,10 @@ fn main(fragment_in: FragmentIn) -> @location(0) u32 {
     u1 += storage_array[0].x;
     u1 += storage_array[uniform_index].x;
     u1 += storage_array[non_uniform_index].x;
+
+    u1 += storage_array[0].nested.y;
+    u1 += storage_array[uniform_index].nested.y;
+    u1 += storage_array[non_uniform_index].nested.y;
 
     u1 += arrayLength(&storage_array[0].far);
     u1 += arrayLength(&storage_array[uniform_index].far);

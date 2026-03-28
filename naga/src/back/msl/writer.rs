@@ -804,6 +804,35 @@ impl<'a> ExpressionContext<'a> {
         self.info[handle].ty.inner_with(&self.module.types)
     }
 
+    fn is_global_access_chain(&self, expr: Handle<crate::Expression>) -> bool {
+        let expressions = &self.function.expressions;
+        match expressions[expr] {
+            crate::Expression::Access { base, .. } => match expressions[base] {
+                crate::Expression::GlobalVariable(_) => true,
+                crate::Expression::Access { .. } => self.is_global_access_chain(base),
+                _ => false,
+            },
+            crate::Expression::AccessIndex { base, .. } => {
+                matches!(expressions[base], crate::Expression::GlobalVariable(_))
+            }
+            _ => false,
+        }
+    }
+
+    fn struct_member_needs_arrow(
+        &self,
+        base: Handle<crate::Expression>,
+        originating_global_ty: impl FnOnce(&crate::TypeInner) -> bool,
+    ) -> bool {
+        let originating_matches = match self.function.originating_global(base) {
+            Some(gv) => {
+                originating_global_ty(&self.module.types[self.module.global_variables[gv].ty].inner)
+            }
+            None => false,
+        };
+        originating_matches && self.is_global_access_chain(base)
+    }
+
     /// Return true if calls to `image`'s `read` and `write` methods should supply a level of detail.
     ///
     /// Only mipmapped images need to specify a level of detail. Since 1D
@@ -3220,20 +3249,17 @@ impl<W: Write> Writer<W> {
                         let base_ty = base_ty_handle.unwrap();
                         self.put_access_chain(base, policy, context)?;
                         let name = &self.names[&NameKey::StructMember(base_ty, index)];
-                        let originates_from_binding_array =
-                            context.function.originating_global(base).is_some_and(|gv| {
-                                matches!(
-                                    context.module.types[context.module.global_variables[gv].ty]
-                                        .inner,
-                                    crate::TypeInner::BindingArray { .. }
-                                )
-                            });
-
-                        if originates_from_binding_array {
-                            write!(self.out, "->{name}")?;
-                        } else {
-                            write!(self.out, ".{name}")?;
-                        }
+                        write!(
+                            self.out,
+                            "{}{name}",
+                            if context.struct_member_needs_arrow(base, |ty| {
+                                matches!(ty, crate::TypeInner::BindingArray { .. })
+                            }) {
+                                "->"
+                            } else {
+                                "."
+                            },
+                        )?;
                     }
                     crate::TypeInner::ValuePointer { .. } | crate::TypeInner::Vector { .. } => {
                         self.put_access_chain(base, policy, context)?;

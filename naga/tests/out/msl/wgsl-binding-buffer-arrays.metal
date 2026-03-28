@@ -17,9 +17,13 @@ struct _mslBufferSizes {
 struct UniformIndex {
     uint index;
 };
+struct Inner {
+    uint y;
+};
 typedef int type_2[1];
 struct Foo {
     uint x;
+    Inner nested;
     type_2 far;
 };
 template <typename T>
@@ -56,11 +60,20 @@ fragment main_Output main_(
     uint _e23 = uint(non_uniform_index) < 1 ? storage_array[non_uniform_index].inner->x : DefaultConstructible();
     u1_ = _e19 + _e23;
     uint _e25 = u1_;
-    u1_ = _e25 + (1 + (_buffer_sizes.size0 - 4 - 4) / 4);
-    uint _e31 = u1_;
-    u1_ = _e31 + (1 + (_buffer_sizes.size0 - 4 - 4) / 4);
-    uint _e37 = u1_;
-    u1_ = _e37 + (1 + (_buffer_sizes.size0 - 4 - 4) / 4);
-    uint _e43 = u1_;
-    return main_Output { _e43 };
+    uint _e30 = storage_array[0].inner->nested.y;
+    u1_ = _e25 + _e30;
+    uint _e32 = u1_;
+    uint _e37 = uint(uniform_index) < 1 ? storage_array[uniform_index].inner->nested.y : DefaultConstructible();
+    u1_ = _e32 + _e37;
+    uint _e39 = u1_;
+    uint _e44 = uint(non_uniform_index) < 1 ? storage_array[non_uniform_index].inner->nested.y : DefaultConstructible();
+    u1_ = _e39 + _e44;
+    uint _e46 = u1_;
+    u1_ = _e46 + (1 + (_buffer_sizes.size0 - 8 - 4) / 4);
+    uint _e52 = u1_;
+    u1_ = _e52 + (1 + (_buffer_sizes.size0 - 8 - 4) / 4);
+    uint _e58 = u1_;
+    u1_ = _e58 + (1 + (_buffer_sizes.size0 - 8 - 4) / 4);
+    uint _e64 = u1_;
+    return main_Output { _e64 };
 }

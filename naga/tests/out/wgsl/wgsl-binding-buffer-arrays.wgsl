@@ -2,8 +2,13 @@ struct UniformIndex {
     index: u32,
 }
 
+struct Inner {
+    y: u32,
+}
+
 struct Foo {
     x: u32,
+    nested: Inner,
     far: array<i32>,
 }
 
@@ -32,11 +37,20 @@ fn main(fragment_in: FragmentIn) -> @location(0) @interpolate(flat) u32 {
     let _e23 = storage_array[non_uniform_index].x;
     u1_ = (_e19 + _e23);
     let _e25 = u1_;
-    u1_ = (_e25 + arrayLength((&storage_array[0].far)));
-    let _e31 = u1_;
-    u1_ = (_e31 + arrayLength((&storage_array[uniform_index].far)));
-    let _e37 = u1_;
-    u1_ = (_e37 + arrayLength((&storage_array[non_uniform_index].far)));
-    let _e43 = u1_;
-    return _e43;
+    let _e30 = storage_array[0].nested.y;
+    u1_ = (_e25 + _e30);
+    let _e32 = u1_;
+    let _e37 = storage_array[uniform_index].nested.y;
+    u1_ = (_e32 + _e37);
+    let _e39 = u1_;
+    let _e44 = storage_array[non_uniform_index].nested.y;
+    u1_ = (_e39 + _e44);
+    let _e46 = u1_;
+    u1_ = (_e46 + arrayLength((&storage_array[0].far)));
+    let _e52 = u1_;
+    u1_ = (_e52 + arrayLength((&storage_array[uniform_index].far)));
+    let _e58 = u1_;
+    u1_ = (_e58 + arrayLength((&storage_array[non_uniform_index].far)));
+    let _e64 = u1_;
+    return _e64;
 }
