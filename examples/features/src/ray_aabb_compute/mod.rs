@@ -87,8 +87,6 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        const PRIMITIVE_COUNT: u32 = 3;
-
         let aabb_data = [
             GpuAabb {
                 min: [-3.5, -0.5, -0.5],
@@ -175,7 +173,7 @@ impl crate::framework::Example for Example {
 
         let aabb_stride = mem::size_of::<GpuAabb>() as wgpu::BufferAddress;
         let aabb_size_desc = wgpu::BlasAABBGeometrySizeDescriptor {
-            primitive_count: PRIMITIVE_COUNT,
+            primitive_count: aabb_data.len() as u32,
             stride: aabb_stride,
             flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
         };

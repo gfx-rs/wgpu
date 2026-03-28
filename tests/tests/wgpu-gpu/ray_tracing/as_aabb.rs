@@ -35,12 +35,11 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-// OPAQUE geometry so BLAS primitives are visible to `ray_query` in WGSL.
 fn aabb_size_desc(stride: BufferAddress, primitive_count: u32) -> BlasAABBGeometrySizeDescriptor {
     BlasAABBGeometrySizeDescriptor {
         primitive_count,
         stride,
-        flags: AccelerationStructureGeometryFlags::OPAQUE,
+        flags: AccelerationStructureGeometryFlags::empty(),
     }
 }
 
