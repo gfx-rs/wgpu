@@ -357,7 +357,7 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
     optional_features: wgpu::Features::default(),
     base_test_parameters: wgpu_test::TestParameters::default()
         // https://github.com/gfx-rs/wgpu/issues/9100
-        .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::METAL)),
+        .disable_mtl_shader_validation(),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,
 };
