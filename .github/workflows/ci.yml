@@ -334,6 +334,13 @@ jobs:
           # If we don't check this then errors inside `profiling::scope!()` will not be caught.
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --benches --all-features --features test-build-with-profiling
 
+          # Check wgpu-hal with main backends in isolation to catch missing feature/dependencies activations which may be overlooked when they are dragged in via other features.
+          # (best effort: in theory we'd need to test all combinations)
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features vulkan
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features gles
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features metal
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features dx12
+
           # build docs
           cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
 
