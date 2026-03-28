@@ -113,7 +113,7 @@ impl TestParameters {
     }
 
     /// Disable metal shader validation.
-    /// 
+    ///
     /// Metal shader validation can cause features (ray tracing specifically)
     /// to break. This disables it so it can be tested.
     pub fn disable_mtl_shader_validation(mut self) -> Self {
