@@ -193,9 +193,6 @@ pub enum BuildAccelerationStructureError {
     )]
     IncompatibleBlasAabbPrimitiveCount(ResourceErrorIdent, u32, u32),
 
-    #[error("Blas {0:?} AABB strides differ (creation: {1}, build: {2})")]
-    DifferentBlasAabbStride(ResourceErrorIdent, BufferAddress, BufferAddress),
-
     #[error("Blas {0:?} AABB primitive offset must be a multiple of 8")]
     UnalignedAabbPrimitiveOffset(ResourceErrorIdent),
 }
@@ -232,7 +229,6 @@ impl WebGpuError for BuildAccelerationStructureError {
             | Self::TlasDependentMissingVertexReturn(..)
             | Self::BlasGeometryKindMismatch(..)
             | Self::IncompatibleBlasAabbPrimitiveCount(..)
-            | Self::DifferentBlasAabbStride(..)
             | Self::UnalignedAabbPrimitiveOffset(..) => ErrorType::Validation,
         }
     }

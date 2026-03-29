@@ -933,14 +933,6 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                         ));
                     }
 
-                    if size_desc.stride != aabb.size.stride {
-                        return Err(BuildAccelerationStructureError::DifferentBlasAabbStride(
-                            blas.error_ident(),
-                            size_desc.stride,
-                            aabb.size.stride,
-                        ));
-                    }
-
                     if size_desc.primitive_count < aabb.size.primitive_count {
                         return Err(
                             BuildAccelerationStructureError::IncompatibleBlasAabbPrimitiveCount(

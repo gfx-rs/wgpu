@@ -26,7 +26,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.extend([
         AABB_BLAS_BUILD_AND_TRACE,
         AABB_INVALID_STRIDE_CREATE,
-        AABB_DIFFERENT_STRIDE_BUILD,
+        AABB_DIFFERENT_STRIDE_BUILD_ALLOWED,
         AABB_UNALIGNED_PRIMITIVE_OFFSET,
         AABB_GEOMETRY_KIND_MISMATCH,
         AABB_INSUFFICIENT_BUFFER,
@@ -197,7 +197,7 @@ fn aabb_invalid_stride_create(ctx: TestingContext) {
 }
 
 #[gpu_test]
-static AABB_DIFFERENT_STRIDE_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
+static AABB_DIFFERENT_STRIDE_BUILD_ALLOWED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
@@ -205,10 +205,10 @@ static AABB_DIFFERENT_STRIDE_BUILD: GpuTestConfiguration = GpuTestConfiguration:
             .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
             .enable_noop(),
     )
-    .run_sync(aabb_different_stride_build);
+    .run_sync(aabb_different_stride_build_allowed);
 
-/// Build stride must match the stride given at BLAS creation.
-fn aabb_different_stride_build(ctx: TestingContext) {
+/// Build stride may differ from the stride given at BLAS creation.
+fn aabb_different_stride_build_allowed(ctx: TestingContext) {
     let create_stride = AABB_GEOMETRY_MIN_STRIDE;
     let build_stride = create_stride + 8;
     let aabb_buf = ctx.device.create_buffer_init(&BufferInitDescriptor {
@@ -245,7 +245,8 @@ fn aabb_different_stride_build(ctx: TestingContext) {
         }],
         [],
     );
-    fail(&ctx.device, || encoder.finish(), None);
+    let cmd = encoder.finish();
+    ctx.queue.submit([cmd]);
 }
 
 #[gpu_test]
