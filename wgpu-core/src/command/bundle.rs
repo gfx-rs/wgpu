@@ -894,7 +894,7 @@ fn multi_draw_indirect(
 
     let vertex_limits = super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.steps);
 
-    let stride = super::get_stride_of_indirect_args(family);
+    let stride = super::get_src_stride_of_indirect_args(family);
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
