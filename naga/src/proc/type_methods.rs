@@ -422,8 +422,8 @@ impl crate::TypeInner {
         })
     }
 
-    /// If the type is a Vector or a Scalar return a tuple of the vector size (or None
-    /// for Scalars), and the scalar kind. Returns (None, None) for other types.
+    /// If the type is a scalar or vector (not a matrix), return a tuple of the vector
+    /// size (or `None` for scalars), and the scalar kind. Returns `None` for other types.
     pub const fn vector_size_and_scalar(
         &self,
     ) -> Option<(Option<crate::VectorSize>, crate::Scalar)> {

@@ -16,7 +16,7 @@ use wgt::{
 };
 
 use crate::{
-    device::bgl, resource::InvalidResourceError,
+    command::ColorAttachmentError, device::bgl, resource::InvalidResourceError,
     validation::shader_io_deductions::MaxFragmentShaderInputDeduction, FastHashMap, FastHashSet,
 };
 
@@ -1880,6 +1880,21 @@ impl Interface {
     }
 }
 
+pub fn check_color_attachment_count(
+    num_attachments: usize,
+    limit: u32,
+) -> Result<(), ColorAttachmentError> {
+    let limit = usize::try_from(limit).unwrap();
+    if num_attachments > limit {
+        return Err(ColorAttachmentError::TooMany {
+            given: num_attachments,
+            limit,
+        });
+    }
+
+    Ok(())
+}
+
 /// Validate a list of color attachment formats against `maxColorAttachmentBytesPerSample`.
 ///
 /// The color attachments can be from a render pass descriptor or a pipeline descriptor.
@@ -1888,7 +1903,7 @@ impl Interface {
 pub fn validate_color_attachment_bytes_per_sample(
     attachment_formats: impl IntoIterator<Item = wgt::TextureFormat>,
     limit: u32,
-) -> Result<(), crate::command::ColorAttachmentError> {
+) -> Result<(), ColorAttachmentError> {
     let mut total_bytes_per_sample: u32 = 0;
     for format in attachment_formats {
         let byte_cost = format.target_pixel_byte_cost().unwrap();
@@ -1899,12 +1914,10 @@ pub fn validate_color_attachment_bytes_per_sample(
     }
 
     if total_bytes_per_sample > limit {
-        return Err(
-            crate::command::ColorAttachmentError::TooManyBytesPerSample {
-                total: total_bytes_per_sample,
-                limit,
-            },
-        );
+        return Err(ColorAttachmentError::TooManyBytesPerSample {
+            total: total_bytes_per_sample,
+            limit,
+        });
     }
 
     Ok(())

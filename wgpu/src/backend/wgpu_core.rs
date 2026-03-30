@@ -80,7 +80,8 @@ impl ContextWgpuCore {
 
     #[cfg(wgpu_core)]
     pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
-        self.0.enumerate_adapters(backends)
+        self.0
+            .enumerate_adapters(backends, false /* no limit bucketing */)
     }
 
     pub unsafe fn create_adapter_from_hal<A: hal::Api>(
@@ -541,7 +542,7 @@ pub struct CoreCommandBuffer {
 #[derive(Debug)]
 pub struct CoreRenderBundleEncoder {
     pub(crate) context: ContextWgpuCore,
-    encoder: wgc::command::RenderBundleEncoder,
+    encoder: Box<wgc::command::RenderBundleEncoder>,
     id: crate::cmp::Identifier,
 }
 
@@ -864,6 +865,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                 compatible_surface: options
                     .compatible_surface
                     .map(|surface| surface.inner.as_core().id),
+                apply_limit_buckets: false,
             },
             wgt::Backends::all(),
             None,
@@ -1805,10 +1807,18 @@ impl dispatch::DeviceInterface for CoreDevice {
             sample_count: desc.sample_count,
             multiview: desc.multiview,
         };
-        let encoder = match wgc::command::RenderBundleEncoder::new(&descriptor, self.id) {
-            Ok(encoder) => encoder,
-            Err(e) => panic!("Error in Device::create_render_bundle_encoder: {e}"),
-        };
+        let (encoder, error) = self
+            .context
+            .0
+            .device_create_render_bundle_encoder(self.id, &descriptor);
+        if let Some(cause) = error {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                desc.label,
+                "Device::create_render_bundle_encoder",
+            );
+        }
 
         CoreRenderBundleEncoder {
             context: self.context.clone(),

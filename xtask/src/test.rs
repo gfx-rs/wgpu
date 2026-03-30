@@ -52,7 +52,7 @@ pub fn run_tests(
     let mut cargo_args = flatten_args(args, passthrough_args);
 
     // Re-add profile flags that were consumed during argument parsing
-    #[expect(clippy::manual_map)] // This is much clearer than using map()
+    #[expect(clippy::manual_map, reason = "This is much clearer than using map()")]
     let profile_arg = if is_release {
         Some(OsString::from("--release"))
     } else if let Some(ref p) = custom_profile {

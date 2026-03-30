@@ -6,7 +6,7 @@ fn main() {
         msl_out: { any(feature = "msl-out", all(target_vendor = "apple", feature = "msl-out-if-target-apple")) },
         spv_out: { feature = "spv-out" },
         wgsl_out: { feature = "wgsl-out" },
-        std: { any(test, feature = "wgsl-in", feature = "stderr", feature = "fs") },
+        std: { any(test, feature = "stderr", feature = "fs") },
         no_std: { not(std) },
     }
 }

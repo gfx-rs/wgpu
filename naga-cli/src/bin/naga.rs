@@ -577,6 +577,8 @@ fn run() -> anyhow::Result<()> {
     params.spv_out.task_dispatch_limits = args.task_limits.0;
     params.msl.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
     params.msl.task_dispatch_limits = args.task_limits.0;
+    params.hlsl.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
+    params.hlsl.task_dispatch_limits = args.task_limits.0;
 
     if args.bulk_validate {
         return bulk_validate(&args, &params);
@@ -771,7 +773,7 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
                 Err(ref e) => {
                     let message = anyhow!(
                         "Could not parse WGSL:\n{}",
-                        e.emit_to_string_with_path(&input, input_path)
+                        e.emit_to_string_with_path(&input, &input_path.display().to_string())
                     );
                     return Err(message);
                 }

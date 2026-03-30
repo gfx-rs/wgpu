@@ -1,6 +1,7 @@
 # hello_synchronization
 
-This example is 
+This example is
+
 1. A small demonstration of the importance of synchronization.
 2. How basic synchronization you can understand from the CPU is performed on the GPU.
 
@@ -19,7 +20,8 @@ That's rather vague (and it is by design) so let's break it down and make a comp
 There are two key differences though and one is that although Rust barriers don't enforce that atomic operations called before the barrier are visible after the barrier, WGSL barriers do. This is incredibly useful and important though and is demonstrated in this example.
 
 Another is that WGSL's synchronous functions only affect memory and atomic operations in a certain address space. This applies to the whole 'all atomic operations called before the function are visible after the function' thing. There are currently three different synchronization functions:
+
 - `storageBarrier` which works in the storage address space and is a simple barrier.
 - `workgroupBarrier` which works in the workgroup address space and is a simple barrier.
 - `workgroupUniformLoad` which also works in the workgroup address space and is more than just a barrier.
-Read up on all three [here](https://www.w3.org/TR/2023/WD-WGSL-20230629/#sync-builtin-functions).
+  Read up on all three [here](https://www.w3.org/TR/2023/WD-WGSL-20230629/#sync-builtin-functions).

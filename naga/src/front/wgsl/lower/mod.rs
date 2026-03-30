@@ -901,8 +901,15 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     ) -> Result<'source, Handle<ir::Expression>> {
         match expr {
             Typed::Reference(pointer) => {
-                let load = ir::Expression::Load { pointer };
                 let span = self.get_expression_span(pointer);
+
+                // Reject direct access to atomic variables that does not go
+                // through a built-in function.
+                if resolve_inner!(self, pointer).is_atomic_pointer(&self.module.types) {
+                    return Err(Box::new(Error::InvalidAtomicAccess(span)));
+                }
+
+                let load = ir::Expression::Load { pointer };
                 self.append_expression(load, span)
             }
             Typed::Plain(handle) => Ok(handle),
@@ -4596,6 +4603,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
             let member_size = if let Some(size_expr) = member.size {
                 let (size, span) = self.const_u32(size_expr, &mut ctx.as_const())?;
+                if let ir::TypeInner::Array {
+                    size: ir::ArraySize::Dynamic | ir::ArraySize::Pending(_),
+                    ..
+                } = ctx.module.types[ty].inner
+                {
+                    return Err(Box::new(Error::SizeAttributeRequiresFixedFootprint(span)));
+                }
                 if size < member_min_size {
                     return Err(Box::new(Error::SizeAttributeTooLow(span, member_min_size)));
                 } else {

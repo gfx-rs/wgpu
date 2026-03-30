@@ -156,6 +156,8 @@ pub enum ExpressionError {
         lhs_type: crate::TypeInner,
         rhs_expr: Handle<crate::Expression>,
     },
+    #[error("Division by zero")]
+    DivideByZero,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -319,6 +321,60 @@ impl super::Validator {
         }
     }
 
+    /// Return an error if a constant divisor in `right` evaluates to zero for
+    /// an integer division or remainder operation.
+    ///
+    /// This function promises to return an error in cases where (1) the
+    /// expression is well-typed, (2) `left_ty` is a concrete integer or a
+    /// vector, and (3) `right` is a const-expression that evaluates to zero.
+    /// It does not return an error in cases where the expression is not
+    /// well-typed (e.g. vector dimension mismatch), because those will be
+    /// rejected elsewhere.
+    fn validate_constant_divisor(
+        left_ty: &crate::TypeInner,
+        right: Handle<crate::Expression>,
+        module: &crate::Module,
+        function: &crate::Function,
+    ) -> Result<(), ExpressionError> {
+        fn contains_zero(
+            handle: Handle<crate::Expression>,
+            expressions: &crate::Arena<crate::Expression>,
+            module: &crate::Module,
+        ) -> bool {
+            match expressions[handle] {
+                crate::Expression::Literal(_) | crate::Expression::ZeroValue(_) => module
+                    .to_ctx()
+                    .get_const_val_from::<u32, _>(handle, expressions)
+                    .ok()
+                    .is_some_and(|v| v == 0),
+                crate::Expression::Splat { value, .. } => contains_zero(value, expressions, module),
+                crate::Expression::Compose { ref components, .. } => components
+                    .iter()
+                    .any(|&comp| contains_zero(comp, expressions, module)),
+                crate::Expression::Constant(c) => {
+                    contains_zero(module.constants[c].init, &module.global_expressions, module)
+                }
+                _ => false,
+            }
+        }
+
+        let Some((_, scalar)) = left_ty.vector_size_and_scalar() else {
+            return Ok(());
+        };
+        if !matches!(
+            scalar.kind,
+            crate::ScalarKind::Sint | crate::ScalarKind::Uint
+        ) {
+            return Ok(());
+        }
+
+        if contains_zero(right, &function.expressions, module) {
+            Err(ExpressionError::DivideByZero)
+        } else {
+            Ok(())
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn validate_expression(
         &self,
@@ -427,7 +483,7 @@ impl super::Validator {
 
                 let limit = resolve_index_limit(module, base, &resolver[base], true)?;
                 if index >= limit {
-                    return Err(ExpressionError::IndexOutOfBounds(base, limit));
+                    return Err(ExpressionError::IndexOutOfBounds(base, index));
                 }
                 ShaderStages::all()
             }
@@ -1071,6 +1127,10 @@ impl super::Validator {
                 if matches!(op, Bo::ShiftLeft | Bo::ShiftRight) {
                     Self::validate_constant_shift_amounts(left_inner, right, module, function)?;
                 }
+                // For integer division or remainder, check if the constant divisor is zero
+                if matches!(op, Bo::Divide | Bo::Modulo) {
+                    Self::validate_constant_divisor(left_inner, right, module, function)?;
+                }
                 ShaderStages::all()
             }
             E::Select {
@@ -1122,18 +1182,13 @@ impl super::Validator {
                 ShaderStages::all()
             }
             E::Derivative { expr, .. } => {
-                match resolver[expr] {
-                    Ti::Scalar(Sc {
-                        kind: Sk::Float, ..
-                    })
-                    | Ti::Vector {
-                        scalar:
-                            Sc {
-                                kind: Sk::Float, ..
-                            },
-                        ..
-                    } => {}
-                    _ => return Err(ExpressionError::InvalidDerivative),
+                let Some((_, scalar)) = resolver[expr].vector_size_and_scalar() else {
+                    return Err(ExpressionError::InvalidDerivative);
+                };
+                if scalar.kind != Sk::Float || scalar.width < 4 {
+                    // Derivatives are not supported for `f16`, although support may be added
+                    // in the future, see https://github.com/gpuweb/gpuweb/issues/5482.
+                    return Err(ExpressionError::InvalidDerivative);
                 }
                 ShaderStages::FRAGMENT
             }

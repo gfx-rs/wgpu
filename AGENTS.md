@@ -1,6 +1,7 @@
 # Global instructions
 
 ## Code Style
+
 - Limit the amount of comments you put in the code to a strict minimum. You should almost never add comments, except sometimes on non-trivial code, function definitions if the arguments aren't self-explanatory, and class definitions and their members.
 - Do not use emoji.
 
@@ -91,29 +92,28 @@ See `docs/big-picture.png` for an overview of the system.
 
 The major components are:
 
-* `wgpu-hal` implements a backend for each supported graphics API (Vulkan, DX12, Metal, GLES).
+- `wgpu-hal` implements a backend for each supported graphics API (Vulkan, DX12, Metal, GLES).
 
-* `wgpu-core` implements the WebGPU API, including resource management and validation.
+- `wgpu-core` implements the WebGPU API, including resource management and validation.
   It calls the platform graphics APIs via `wgpu-hal`, and uses `naga` for shader translation.
 
-* `wgpu` is the native Rust API. In addition to providing bindings to `wgpu-core`, the `wgpu`
+- `wgpu` is the native Rust API. In addition to providing bindings to `wgpu-core`, the `wgpu`
   crate can also be compiled to WASM and built against the "WebGPU" backend, where it uses
   whatever WebGPU implementation is provided by the WASM environment. `wgpu` is not used
   by Deno and Firefox.
 
-* `naga` is the shader translator. It reads shaders in WGSL, GLSL, or SPIR-V,
+- `naga` is the shader translator. It reads shaders in WGSL, GLSL, or SPIR-V,
   translates to Naga IR, and then writes shaders in GLSL, HLSL, MSL (Metal Shading Language), SPIR-V, or WGSL.
   It is responsible for validating that WGSL shaders are valid according to the WGSL language specification.
 
-* `wgpu-types` contains some type definitions that are applicable both to `wgpu-core` and to
+- `wgpu-types` contains some type definitions that are applicable both to `wgpu-core` and to
   the `wgpu` "WebGPU" backend.
 
-* `deno_webgpu` contains WebGPU bindings for the Deno Javascript runtime.
+- `deno_webgpu` contains WebGPU bindings for the Deno Javascript runtime.
   We also use Deno as a test environment for running the WebGPU CTS.
   Only make a change in the Deno bindings if you are sure that the issue
   doesn't apply to other clients (Firefox or `wgpu` Rust API). If it does
   apply to other clients, the issue should probably be fixed in `wgpu-core`.
-
 
 For a more detailed discussion of the `wgpu` architecture, refer to
 <https://github.com/gfx-rs/wgpu/wiki/Architecture>.
@@ -173,6 +173,7 @@ This is stuff that Claude wrote for itself. It can probably be improved.
    - Verify constant evaluation by checking the output file
 
 **Running Tests:**
+
 ```bash
 # Unit tests only
 cargo test -p naga --lib

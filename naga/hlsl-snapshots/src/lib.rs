@@ -50,6 +50,8 @@ pub struct Config {
     pub vertex: Vec<ConfigItem>,
     pub fragment: Vec<ConfigItem>,
     pub compute: Vec<ConfigItem>,
+    pub task: Vec<ConfigItem>,
+    pub mesh: Vec<ConfigItem>,
 }
 
 impl Config {
@@ -59,6 +61,8 @@ impl Config {
             vertex: Default::default(),
             fragment: Default::default(),
             compute: Default::default(),
+            task: Default::default(),
+            mesh: Default::default(),
         }
     }
 
@@ -85,8 +89,14 @@ impl Config {
             vertex,
             fragment,
             compute,
+            task,
+            mesh,
         } = self;
-        vertex.is_empty() && fragment.is_empty() && compute.is_empty()
+        vertex.is_empty()
+            && fragment.is_empty()
+            && compute.is_empty()
+            && task.is_empty()
+            && mesh.is_empty()
     }
 }
 
