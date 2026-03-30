@@ -11,9 +11,6 @@ skip-tree = [
 
     # glutin and tracy-client-sys use windows-sys 0.52, pulling older windows-targets
     { name = "windows-targets", version = "0.52" },
-
-    # winit uses an old version via android-activity → jni
-    { name = "windows-targets", version = "0.42" },
 ]
 skip = [
     # flume -> fastrand uses an old version only on wasm32
