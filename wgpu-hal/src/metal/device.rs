@@ -8,10 +8,10 @@ use objc2::{
     rc::{autoreleasepool, Retained},
     runtime::ProtocolObject,
 };
-use objc2_foundation::{ns_string, NSArray, NSError, NSRange, NSString, NSUInteger};
+use objc2_foundation::{ns_string, NSError, NSRange, NSString, NSUInteger};
 use objc2_metal::{
-    MTLAccelerationStructure, MTLAccelerationStructureInstanceOptions, MTLArgumentEncoder,
-    MTLBuffer, MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer, MTLCommandBufferStatus,
+    MTLAccelerationStructure, MTLAccelerationStructureInstanceOptions, MTLBuffer,
+    MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer, MTLCommandBufferStatus,
     MTLCompileOptions, MTLComputePipelineDescriptor, MTLComputePipelineState,
     MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode, MTLDepthStencilDescriptor,
     MTLDevice, MTLFunction, MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion,
@@ -79,18 +79,6 @@ fn create_depth_stencil_desc(
         desc.setBackFaceStencil(Some(&back_desc));
     }
     desc
-}
-
-fn create_bindless_id_buffer(
-    device: &Retained<ProtocolObject<dyn MTLDevice>>,
-    count: u32,
-) -> Retained<ProtocolObject<dyn MTLBuffer>> {
-    device
-        .newBufferWithLength_options(
-            8 * count as usize,
-            MTLResourceOptions::HazardTrackingModeUntracked | MTLResourceOptions::StorageModeShared,
-        )
-        .unwrap()
 }
 
 fn bindless_id_table_mut(
@@ -947,14 +935,20 @@ impl crate::Device for super::Device {
                         let stages = conv::map_render_stages(layout.visibility);
                         let uses = conv::map_resource_usage(&layout.ty);
 
-                        // One argument buffer per entry in the bind group. Textures, samplers, and
-                        // acceleration structures allocate a resource ID table inside the match. Storage
-                        // buffer arrays use Metal pointer-array encoding and only allocate encoder output.
-                        let argument_buffer = match layout.ty {
+                        // Create argument buffer for this array
+                        let argument_buffer = self
+                            .shared
+                            .device
+                            .newBufferWithLength_options(
+                                8 * count as usize,
+                                MTLResourceOptions::HazardTrackingModeUntracked
+                                    | MTLResourceOptions::StorageModeShared,
+                            )
+                            .unwrap();
+
+                        match layout.ty {
                             wgt::BindingType::Texture { .. }
                             | wgt::BindingType::StorageTexture { .. } => {
-                                let argument_buffer =
-                                    create_bindless_id_buffer(&self.shared.device, count);
                                 let resource_ids = unsafe {
                                     &mut *bindless_id_table_mut(argument_buffer.as_ref(), count)
                                 };
@@ -974,11 +968,8 @@ impl crate::Device for super::Device {
                                     use_info.visible_in_compute |=
                                         layout.visibility.contains(wgt::ShaderStages::COMPUTE);
                                 }
-                                argument_buffer
                             }
                             wgt::BindingType::Sampler { .. } => {
-                                let argument_buffer =
-                                    create_bindless_id_buffer(&self.shared.device, count);
                                 let resource_ids = unsafe {
                                     &mut *bindless_id_table_mut(argument_buffer.as_ref(), count)
                                 };
@@ -991,53 +982,18 @@ impl crate::Device for super::Device {
                                     // Samplers aren't resources like buffers and textures, so don't
                                     // need to be passed to useResource
                                 }
-                                argument_buffer
                             }
-                            wgt::BindingType::Buffer { ty, .. } => {
+                            wgt::BindingType::Buffer { .. } => {
                                 let start = entry.resource_index as usize;
                                 let end = start + count as usize;
                                 let buffers = &desc.buffers[start..end];
-                                let device = &self.shared.device;
-                                // Unbounded buffer pointer array at shader access mode.
-                                let argument_desc = conv::pointer_array_argument_descriptor(
-                                    count,
-                                    conv::map_binding_access(&ty),
-                                );
-
-                                // Argument encoder reports the required size and alignment
-                                // of the pointer-array buffer.
-                                let encoder = device
-                                    .newArgumentEncoderWithArguments(&NSArray::from_retained_slice(
-                                        &[argument_desc],
-                                    ))
-                                    .unwrap();
-                                let aligned_length = wgt::math::align_to(
-                                    encoder.encodedLength(),
-                                    encoder.alignment(),
-                                );
-                                let argument_buffer = device
-                                    .newBufferWithLength_options(
-                                        aligned_length,
-                                        MTLResourceOptions::HazardTrackingModeUntracked
-                                            | MTLResourceOptions::StorageModeShared,
-                                    )
-                                    .unwrap();
-                                unsafe {
-                                    encoder
-                                        .setArgumentBuffer_offset(Some(argument_buffer.as_ref()), 0)
-                                }
-
-                                // Encode each index into the `argument_buffer` as buffer pointer plus offset.
+                                let pointers = argument_buffer.contents().cast::<u64>();
                                 for (idx, source) in buffers.iter().enumerate() {
+                                    let addr = source.buffer.raw.gpuAddress() + source.offset;
                                     unsafe {
-                                        encoder.setBuffer_offset_atIndex(
-                                            Some(&source.buffer.raw),
-                                            source.offset as usize,
-                                            idx,
-                                        );
+                                        pointers.add(idx).write(addr);
                                     }
 
-                                    // Track each source buffer for the command encoder.
                                     let use_info = bg
                                         .resources_to_use
                                         .entry(source.buffer.as_raw().cast())
@@ -1047,11 +1003,8 @@ impl crate::Device for super::Device {
                                     use_info.visible_in_compute |=
                                         layout.visibility.contains(wgt::ShaderStages::COMPUTE);
                                 }
-                                argument_buffer
                             }
                             wgt::BindingType::AccelerationStructure { .. } => {
-                                let argument_buffer =
-                                    create_bindless_id_buffer(&self.shared.device, count);
                                 let resource_ids = unsafe {
                                     &mut *bindless_id_table_mut(argument_buffer.as_ref(), count)
                                 };
@@ -1074,12 +1027,11 @@ impl crate::Device for super::Device {
                                     use_info.visible_in_compute |=
                                         layout.visibility.contains(wgt::ShaderStages::COMPUTE);
                                 }
-                                argument_buffer
                             }
                             _ => {
                                 unimplemented!();
                             }
-                        };
+                        }
 
                         bg.buffers.push(super::BufferLikeResource::Buffer {
                             ptr: NonNull::from(&*argument_buffer),

@@ -4,9 +4,9 @@ use objc2_metal::{
     MTLAccelerationStructureBoundingBoxGeometryDescriptor, MTLAccelerationStructureDescriptor,
     MTLAccelerationStructureGeometryDescriptor, MTLAccelerationStructureInstanceDescriptorType,
     MTLAccelerationStructureTriangleGeometryDescriptor, MTLAccelerationStructureUsage,
-    MTLArgumentDescriptor, MTLAttributeFormat, MTLBindingAccess, MTLBlendFactor, MTLBlendOperation,
-    MTLBlitOption, MTLClearColor, MTLColorWriteMask, MTLCompareFunction, MTLCullMode, MTLDataType,
-    MTLIndexType, MTLInstanceAccelerationStructureDescriptor, MTLOrigin,
+    MTLAttributeFormat, MTLBlendFactor, MTLBlendOperation, MTLBlitOption, MTLClearColor,
+    MTLColorWriteMask, MTLCompareFunction, MTLCullMode, MTLIndexType,
+    MTLInstanceAccelerationStructureDescriptor, MTLOrigin,
     MTLPrimitiveAccelerationStructureDescriptor, MTLPrimitiveTopologyClass, MTLPrimitiveType,
     MTLRenderStages, MTLResourceUsage, MTLSamplerAddressMode, MTLSamplerBorderColor,
     MTLSamplerMinMagFilter, MTLSize, MTLStencilOperation, MTLStoreAction, MTLTextureType,
@@ -374,27 +374,6 @@ pub fn map_resource_usage(ty: &wgt::BindingType) -> MTLResourceUsage {
         },
         _ => unreachable!(),
     }
-}
-
-pub fn map_binding_access(ty: &wgt::BufferBindingType) -> MTLBindingAccess {
-    match ty {
-        wgt::BufferBindingType::Uniform | wgt::BufferBindingType::Storage { read_only: true } => {
-            MTLBindingAccess::ReadOnly
-        }
-        wgt::BufferBindingType::Storage { read_only: false } => MTLBindingAccess::ReadWrite,
-    }
-}
-
-pub fn pointer_array_argument_descriptor(
-    count: u32,
-    access: MTLBindingAccess,
-) -> Retained<MTLArgumentDescriptor> {
-    let desc = MTLArgumentDescriptor::new();
-    desc.setDataType(MTLDataType::Pointer);
-    desc.setIndex(0);
-    desc.setArrayLength(count as usize);
-    desc.setAccess(access);
-    desc
 }
 
 pub fn map_acceleration_structure_descriptor<'a>(
