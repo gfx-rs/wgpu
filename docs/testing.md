@@ -23,25 +23,25 @@ To run all tests, run `cargo xtask test` from the root of the repository.
 This is a table of contents, in the form of the repository's directory structure.
 
 - benches
-   - [benches](#benchmark-tests)
+  - [benches](#benchmark-tests)
 - [cts_runner](#webgpu-cts)
 - examples
-   - [features](#example-tests)
+  - [features](#example-tests)
 - naga
-   - tests
-      - [example_wgsl](#naga-example-tests)
-      - [snapshot](#naga-snapshot-tests)
-      - [spirv-capabilities](#naga-spirv-capabilities-test)
-      - [validation](#naga-validation)
-      - [wgsl_errors](#naga-wgsl-error-tests)
+  - tests
+    - [example_wgsl](#naga-example-tests)
+    - [snapshot](#naga-snapshot-tests)
+    - [spirv-capabilities](#naga-spirv-capabilities-test)
+    - [validation](#naga-validation)
+    - [wgsl_errors](#naga-wgsl-error-tests)
 - player
-   - [tests](#player-tests)
+  - [tests](#player-tests)
 - tests
-   - [compile](#wgpu-compile-tests)
-   - [dependency](#wgpu-dependency-tests)
-   - [gpu](#wgpu-gpu-tests)
-   - [trace](#wgpu-trace-tests)
-   - [validation](#wgpu-validation-tests)
+  - [compile](#wgpu-compile-tests)
+  - [dependency](#wgpu-dependency-tests)
+  - [gpu](#wgpu-gpu-tests)
+  - [trace](#wgpu-trace-tests)
+  - [validation](#wgpu-validation-tests)
 
 And where applicable [unit-tests](#unit-tests)
 are scatteredthroughout the codebase.
@@ -215,7 +215,7 @@ See also the [example tests](#example-tests) for additional GPU tests.
 - Run with `cargo nextest run --test wgpu_trace`
 - Use the standard `#[test]` harness.
 
-These tests are focused on testing the tracing functionality in `wgpu`.  They
+These tests are focused on testing the tracing functionality in `wgpu`. They
 use the a special `noop` backend which does not connect to a real GPU.
 
 ## `wgpu` Validation Tests

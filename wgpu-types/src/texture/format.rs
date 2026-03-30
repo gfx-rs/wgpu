@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(any(test, feature = "exhaust"), derive(exhaust::Exhaust))]
 pub enum AstcBlock {
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px).
     B4x4,
@@ -44,6 +45,7 @@ pub enum AstcBlock {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(any(test, feature = "exhaust"), derive(exhaust::Exhaust))]
 pub enum AstcChannel {
     /// 8 bit integer RGBA, [0, 255] converted to/from linear-color float [0, 1] in shader.
     ///
@@ -122,6 +124,7 @@ bitflags::bitflags! {
 /// [sRGB transfer function]: https://en.wikipedia.org/wiki/SRGB#Transfer_function_(%22gamma%22)
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(any(test, feature = "exhaust"), derive(exhaust::Exhaust))]
 pub enum TextureFormat {
     // Normal 8 bit formats
     /// Red channel only. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
@@ -2000,6 +2003,8 @@ pub struct TextureFormatFeatures {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use exhaust::Exhaust;
+    use hashbrown::HashSet;
 
     #[test]
     fn texture_format_serialize() {
@@ -2606,129 +2611,167 @@ mod tests {
     /// test if `TextureFormat::is_depth_stencil_format` is behaving correctly
     #[test]
     fn is_depth_stencil_format() {
-        let depth_stencil_formats = [
+        // the only valid formats
+        let depth_stencil_formats: HashSet<TextureFormat> = HashSet::from([
             TextureFormat::Stencil8,
             TextureFormat::Depth16Unorm,
             TextureFormat::Depth24Plus,
             TextureFormat::Depth24PlusStencil8,
             TextureFormat::Depth32Float,
             TextureFormat::Depth32FloatStencil8,
-        ];
+        ]);
 
-        for format in depth_stencil_formats {
-            assert!(format.is_depth_stencil_format());
-        }
-
-        // some non-depth-stencil-formats shouldn't be accepted
-        let non_depth_stencil_formats = [
-            TextureFormat::R8Unorm,
-            TextureFormat::Rgba8Unorm,
-            TextureFormat::Rg16Uint,
-            TextureFormat::NV12,
-        ];
-
-        for format in non_depth_stencil_formats {
-            assert!(!format.is_depth_stencil_format());
+        for format in TextureFormat::exhaust() {
+            if depth_stencil_formats.contains(&format) {
+                assert!(format.is_depth_stencil_format());
+            } else {
+                assert!(!format.is_depth_stencil_format());
+            }
         }
     }
 
     /// test if `TextureFormat::is_combined_depth_stencil_format` is behaving correctly
     #[test]
     fn is_combined_depth_stencil_format() {
+        // the only valid formats
         let valid_formats = [
             TextureFormat::Depth24PlusStencil8,
             TextureFormat::Depth32FloatStencil8,
         ];
 
-        for format in valid_formats {
-            assert!(format.is_combined_depth_stencil_format());
-        }
-
-        let some_invalid_formats = [
-            TextureFormat::Depth16Unorm,
-            TextureFormat::Depth24Plus,
-            TextureFormat::Stencil8,
-            TextureFormat::Rgba8UnormSrgb,
-            TextureFormat::Rgba8Unorm,
-        ];
-
-        for format in some_invalid_formats {
-            assert!(!format.is_combined_depth_stencil_format());
+        for format in TextureFormat::exhaust() {
+            if valid_formats.contains(&format) {
+                assert!(format.is_combined_depth_stencil_format());
+            } else {
+                assert!(!format.is_combined_depth_stencil_format());
+            }
         }
     }
 
     /// test if `TextureFormat::has_color_aspect` is behaving correctly
     #[test]
     fn has_color_aspect() {
-        let some_valid_formats = [
+        // the only valid formats (without Astc)
+        let valid_formats: HashSet<TextureFormat> = HashSet::from([
             TextureFormat::R8Unorm,
+            TextureFormat::R8Snorm,
+            TextureFormat::R8Uint,
+            TextureFormat::R8Sint,
+            TextureFormat::R16Uint,
+            TextureFormat::R16Sint,
+            TextureFormat::R16Unorm,
+            TextureFormat::R16Snorm,
+            TextureFormat::R16Float,
             TextureFormat::Rg8Unorm,
-            TextureFormat::Bc7RgbaUnorm,
+            TextureFormat::Rg8Snorm,
+            TextureFormat::Rg8Uint,
+            TextureFormat::Rg8Sint,
+            TextureFormat::R32Uint,
+            TextureFormat::R32Sint,
+            TextureFormat::R32Float,
+            TextureFormat::Rg16Uint,
+            TextureFormat::Rg16Sint,
+            TextureFormat::Rg16Unorm,
+            TextureFormat::Rg16Snorm,
+            TextureFormat::Rg16Float,
             TextureFormat::Rgba8Unorm,
-        ];
+            TextureFormat::Rgba8UnormSrgb,
+            TextureFormat::Rgba8Snorm,
+            TextureFormat::Rgba8Uint,
+            TextureFormat::Rgba8Sint,
+            TextureFormat::Bgra8Unorm,
+            TextureFormat::Bgra8UnormSrgb,
+            TextureFormat::Rgb9e5Ufloat,
+            TextureFormat::Rgb10a2Uint,
+            TextureFormat::Rgb10a2Unorm,
+            TextureFormat::Rg11b10Ufloat,
+            TextureFormat::R64Uint,
+            TextureFormat::Rg32Uint,
+            TextureFormat::Rg32Sint,
+            TextureFormat::Rg32Float,
+            TextureFormat::Rgba16Uint,
+            TextureFormat::Rgba16Sint,
+            TextureFormat::Rgba16Unorm,
+            TextureFormat::Rgba16Snorm,
+            TextureFormat::Rgba16Float,
+            TextureFormat::Rgba32Uint,
+            TextureFormat::Rgba32Sint,
+            TextureFormat::Rgba32Float,
+            TextureFormat::Bc1RgbaUnorm,
+            TextureFormat::Bc1RgbaUnormSrgb,
+            TextureFormat::Bc2RgbaUnorm,
+            TextureFormat::Bc2RgbaUnormSrgb,
+            TextureFormat::Bc3RgbaUnorm,
+            TextureFormat::Bc3RgbaUnormSrgb,
+            TextureFormat::Bc4RUnorm,
+            TextureFormat::Bc4RSnorm,
+            TextureFormat::Bc5RgUnorm,
+            TextureFormat::Bc5RgSnorm,
+            TextureFormat::Bc6hRgbUfloat,
+            TextureFormat::Bc6hRgbFloat,
+            TextureFormat::Bc7RgbaUnorm,
+            TextureFormat::Bc7RgbaUnormSrgb,
+            TextureFormat::Etc2Rgb8Unorm,
+            TextureFormat::Etc2Rgb8UnormSrgb,
+            TextureFormat::Etc2Rgb8A1Unorm,
+            TextureFormat::Etc2Rgb8A1UnormSrgb,
+            TextureFormat::Etc2Rgba8Unorm,
+            TextureFormat::Etc2Rgba8UnormSrgb,
+            TextureFormat::EacR11Unorm,
+            TextureFormat::EacR11Snorm,
+            TextureFormat::EacRg11Unorm,
+            TextureFormat::EacRg11Snorm,
+        ]);
 
-        for format in some_valid_formats {
-            assert!(format.has_color_aspect());
-        }
-
-        let some_invalid_formats = [
-            TextureFormat::NV12,
-            TextureFormat::Stencil8,
-            TextureFormat::Depth24PlusStencil8,
-        ];
-
-        for format in some_invalid_formats {
-            assert!(!format.has_color_aspect());
+        for format in TextureFormat::exhaust() {
+            if let TextureFormat::Astc { .. } = format {
+                // can't add all `Astc` cases to the list above...
+                assert!(format.has_color_aspect(), "{:?} failed", format);
+            } else if valid_formats.contains(&format) {
+                assert!(format.has_color_aspect(), "{:?} failed", format);
+            } else {
+                assert!(!format.has_color_aspect(), "{:?} failed", format);
+            }
         }
     }
 
     /// test if `TextureFormat::has_depth_aspect` is behaving correctly
     #[test]
     fn has_depth_aspect() {
-        let valid_formats = [
+        // the only valid formats
+        let valid_formats: HashSet<TextureFormat> = HashSet::from([
             TextureFormat::Depth16Unorm,
             TextureFormat::Depth24Plus,
             TextureFormat::Depth24PlusStencil8,
             TextureFormat::Depth32Float,
             TextureFormat::Depth32FloatStencil8,
-        ];
+        ]);
 
-        for format in valid_formats {
-            assert!(format.has_depth_aspect());
-        }
-
-        let some_invalid_formats = [
-            TextureFormat::Rgba8Unorm,
-            TextureFormat::Bc7RgbaUnorm,
-            TextureFormat::Stencil8,
-        ];
-
-        for format in some_invalid_formats {
-            assert!(!format.has_depth_aspect());
+        for format in TextureFormat::exhaust() {
+            if valid_formats.contains(&format) {
+                assert!(format.has_depth_aspect());
+            } else {
+                assert!(!format.has_depth_aspect());
+            }
         }
     }
 
     /// test if `TextureFormat::has_stencil_aspect` is behaving correctly
     #[test]
     fn has_stencil_aspect() {
-        let valid_formats = [
+        // the only valid formats
+        let valid_formats: HashSet<TextureFormat> = HashSet::from([
             TextureFormat::Stencil8,
             TextureFormat::Depth24PlusStencil8,
             TextureFormat::Depth32FloatStencil8,
-        ];
+        ]);
 
-        for format in valid_formats {
-            assert!(format.has_stencil_aspect());
-        }
-
-        let some_invalid_formats = [
-            TextureFormat::R8Unorm,
-            TextureFormat::Depth16Unorm,
-            TextureFormat::NV12,
-        ];
-
-        for format in some_invalid_formats {
-            assert!(!format.has_stencil_aspect());
+        for format in TextureFormat::exhaust() {
+            if valid_formats.contains(&format) {
+                assert!(format.has_stencil_aspect());
+            } else {
+                assert!(!format.has_stencil_aspect());
+            }
         }
     }
 }

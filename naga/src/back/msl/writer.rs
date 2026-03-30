@@ -2628,9 +2628,13 @@ impl<W: Write> Writer<W> {
 
                         write!(self.out, "(-1), ")?;
                         self.put_expression(arg, context, true)?;
-                        write!(self.out, " == 0 || ")?;
-                        self.put_expression(arg, context, true)?;
-                        write!(self.out, " == -1)")?;
+                        write!(self.out, " == 0")?;
+                        if scalar.kind == crate::ScalarKind::Sint {
+                            write!(self.out, " || ")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, " == -1")?;
+                        }
+                        write!(self.out, ")")?;
                     }
                     Mf::Unpack2x16float => {
                         write!(self.out, "float2(as_type<half2>(")?;

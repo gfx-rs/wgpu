@@ -16,6 +16,7 @@ publish = false
 
 [dependencies]
 naga = { workspace = true, features = [
+    "fs",
     "serialize",
     "deserialize",
     "glsl-in",

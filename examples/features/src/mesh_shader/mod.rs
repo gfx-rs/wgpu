@@ -4,7 +4,7 @@ fn get_shader(device: &wgpu::Device, backend: wgpu::Backend) -> wgpu::ShaderModu
     // In the case that the platform does support mesh shaders, the dummy
     // shader is used to avoid requiring PASSTHROUGH_SHADERS.
     match backend {
-        wgpu::Backend::Vulkan => {
+        wgpu::Backend::Vulkan | wgpu::Backend::Dx12 => {
             // Workgroup memory zero initialization can be expensive for mesh shaders
             unsafe {
                 device.create_shader_module_trusted(
@@ -16,7 +16,7 @@ fn get_shader(device: &wgpu::Device, backend: wgpu::Backend) -> wgpu::ShaderModu
                 )
             }
         }
-        wgpu::Backend::Dx12 | wgpu::Backend::Metal => unsafe {
+        wgpu::Backend::Metal => unsafe {
             device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
                 label: None,
                 entry_points: Cow::Borrowed(&[
@@ -33,7 +33,6 @@ fn get_shader(device: &wgpu::Device, backend: wgpu::Backend) -> wgpu::ShaderModu
                         workgroup_size: (0, 0, 0),
                     },
                 ]),
-                hlsl: Some(Cow::Borrowed(include_str!("shader.hlsl"))),
                 msl: Some(Cow::Borrowed(include_str!("shader.metal"))),
                 ..Default::default()
             })

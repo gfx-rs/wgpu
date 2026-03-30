@@ -13,11 +13,13 @@ end of the VS buffer table.
 
 !*/
 
-// `MTLFeatureSet` is superseded by `MTLGpuFamily`.
-// However, `MTLGpuFamily` is only supported starting MacOS 10.15, whereas our minimum target is MacOS 10.13,
-// See https://github.com/gpuweb/gpuweb/issues/1069 for minimum spec.
-// TODO: Eventually all deprecated features should be abstracted and use new api when available.
-#[allow(deprecated)]
+#[allow(
+    deprecated,
+    reason = "MTLFeatureSet` is superseded by `MTLGpuFamily`.
+        However, `MTLGpuFamily` is only supported starting MacOS 10.15, whereas our minimum target is MacOS 10.13,
+        See https://github.com/gpuweb/gpuweb/issues/1069 for minimum spec.
+        TODO: Eventually all deprecated features should be abstracted and use new api when available."
+)]
 mod adapter;
 mod command;
 mod conv;
@@ -26,11 +28,7 @@ mod library_from_metallib;
 mod surface;
 mod time;
 
-use alloc::{
-    string::{String, ToString as _},
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{string::ToString as _, sync::Arc, vec::Vec};
 use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
 
 use bitflags::bitflags;
@@ -419,13 +417,6 @@ impl AdapterShared {
         crate::ExposedAdapter {
             info: wgt::AdapterInfo {
                 name,
-                vendor: 0,
-                device: 0,
-                device_type: shared.private_caps.device_type(),
-                device_pci_bus_id: String::new(),
-                driver: String::new(),
-                driver_info: String::new(),
-                backend: wgt::Backend::Metal,
                 // These are hardcoded based on typical values for Metal devices
                 //
                 // See <https://github.com/gpuweb/gpuweb/blob/main/proposals/subgroups.md#adapter-info>
@@ -433,6 +424,7 @@ impl AdapterShared {
                 subgroup_min_size: 4,
                 subgroup_max_size: 64,
                 transient_saves_memory: shared.private_caps.supports_memoryless_storage,
+                ..wgt::AdapterInfo::new(shared.private_caps.device_type(), wgt::Backend::Metal)
             },
             features,
             capabilities,

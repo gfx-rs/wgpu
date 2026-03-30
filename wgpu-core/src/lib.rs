@@ -79,6 +79,7 @@ pub mod identity;
 mod indirect_validation;
 mod init_tracker;
 pub mod instance;
+pub mod limits;
 mod lock;
 pub mod pipeline;
 mod pipeline_cache;

@@ -1,7 +1,7 @@
 ---
 name: Other
 about: Strange things you want to tell us
-title: ''
+title: ""
 labels: question
-assignees: ''
+assignees: ""
 ---

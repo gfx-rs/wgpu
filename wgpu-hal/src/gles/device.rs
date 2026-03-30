@@ -866,7 +866,7 @@ impl crate::Device for super::Device {
                         )
                     } else if target == glow::TEXTURE_3D {
                         let mut width = desc.size.width;
-                        let mut height = desc.size.width;
+                        let mut height = desc.size.height;
                         let mut depth = desc.size.depth_or_array_layers;
                         for i in 0..desc.mip_level_count {
                             gl.tex_image_3d(
@@ -887,7 +887,7 @@ impl crate::Device for super::Device {
                         }
                     } else {
                         let mut width = desc.size.width;
-                        let mut height = desc.size.width;
+                        let mut height = desc.size.height;
                         for i in 0..desc.mip_level_count {
                             gl.tex_image_3d(
                                 target,
@@ -933,7 +933,7 @@ impl crate::Device for super::Device {
                         )
                     } else if target == glow::TEXTURE_CUBE_MAP {
                         let mut width = desc.size.width;
-                        let mut height = desc.size.width;
+                        let mut height = desc.size.height;
                         for i in 0..desc.mip_level_count {
                             for face in [
                                 glow::TEXTURE_CUBE_MAP_POSITIVE_X,
@@ -960,7 +960,7 @@ impl crate::Device for super::Device {
                         }
                     } else {
                         let mut width = desc.size.width;
-                        let mut height = desc.size.width;
+                        let mut height = desc.size.height;
                         for i in 0..desc.mip_level_count {
                             gl.tex_image_2d(
                                 target,

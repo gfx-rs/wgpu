@@ -1196,21 +1196,22 @@ impl Global {
         device_id: DeviceId,
         desc: &command::RenderBundleEncoderDescriptor,
     ) -> (
-        *mut command::RenderBundleEncoder,
+        Box<command::RenderBundleEncoder>,
         Option<command::CreateRenderBundleError>,
     ) {
         profiling::scope!("Device::create_render_bundle_encoder");
         api_log!("Device::device_create_render_bundle_encoder");
-        let (encoder, error) = match command::RenderBundleEncoder::new(desc, device_id) {
+        let device = self.hub.devices.get(device_id);
+        let (encoder, error) = match command::RenderBundleEncoder::new(desc, &device, device_id) {
             Ok(encoder) => (encoder, None),
             Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
         };
-        (Box::into_raw(Box::new(encoder)), error)
+        (Box::new(encoder), error)
     }
 
     pub fn render_bundle_encoder_finish(
         &self,
-        bundle_encoder: command::RenderBundleEncoder,
+        bundle_encoder: Box<command::RenderBundleEncoder>,
         desc: &command::RenderBundleDescriptor,
         id_in: Option<id::RenderBundleId>,
     ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
