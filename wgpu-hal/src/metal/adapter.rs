@@ -1007,12 +1007,7 @@ impl super::CapabilitiesQuery {
                 visionos = 1.0
             ) && device_class_responds_to(device, sel!(hasUnifiedMemory))
             {
-                if Self::is_capture_mtl_device(device) {
-                    // `hasUnifiedMemory` can fault under Xcode frame capture, report as unknown.
-                    None
-                } else {
-                    Some(device.hasUnifiedMemory())
-                }
+                Some(device.hasUnifiedMemory())
             } else {
                 None
             },
@@ -1084,6 +1079,7 @@ impl super::CapabilitiesQuery {
                 tvos = 18.0,
                 visionos = 2.0,
             ) {
+                // Special case for Xcode Capture, which misreports ray tracing support.
                 if Self::is_capture_mtl_device(device) {
                     metal4 || (family_check && device.supportsFamily(MTLGPUFamily::Apple6))
                 } else {
