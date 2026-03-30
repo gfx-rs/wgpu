@@ -36,7 +36,7 @@ pub use r#type::{Disalignment, ImmediateError, TypeError, TypeFlags, WidthError}
 use self::handles::InvalidHandleError;
 
 /// Maximum size of a type, in bytes.
-pub const MAX_TYPE_SIZE: u32 = 0x4000_0000; // 1GB
+pub const MAX_TYPE_SIZE: u32 = i32::MAX as u32;
 
 bitflags::bitflags! {
     /// Validation flags.

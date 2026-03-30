@@ -56,6 +56,10 @@ Bottom level categories:
 
 - Added support for mesh shaders in naga's HLSL writer, completing DX12 support for mesh shaders. By @inner-daemons in [#8752](https://github.com/gfx-rs/wgpu/pull/8752).
 
+#### Vulkan
+
+- Add support for RawWindowHandle::Drm on unix. By @rectalogic in [#9182](https://github.com/gfx-rs/wgpu/pull/9182).
+
 ### Changes
 
 #### General

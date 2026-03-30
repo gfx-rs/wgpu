@@ -119,7 +119,7 @@ cargo_metadata = "0.23"
 cfg_aliases = "0.2.1"
 cfg-if = "1"
 codespan-reporting = { version = "0.13", default-features = false }
-ctor = "0.6"
+ctor = "0.8"
 diff = "0.1"
 document-features = "0.2.10"
 encase = "0.12"

@@ -50,6 +50,9 @@ skip = [
     # deno uses an old version
     { name = "bit-vec", version = "0.8.0" },
     { name = "bit-set", version = "0.8.0" },
+
+    # drm uses an older version via drm-sys, and a newer version via rustix
+    { name = "linux-raw-sys", version = "0.9.4" },
 ]
 wildcards = "deny"
 allow-wildcard-paths = true

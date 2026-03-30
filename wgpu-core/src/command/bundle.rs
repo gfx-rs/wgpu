@@ -104,7 +104,10 @@ use crate::{
         bind::Binder, BasePass, BindGroupStateChange, ColorAttachmentError, DrawError,
         IdReferences, MapPassErr, PassErrorScope, RenderCommand, RenderCommandError, StateChange,
     },
-    device::{AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext},
+    device::{
+        AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
+        RenderPassContext,
+    },
     hub::Hub,
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
@@ -116,6 +119,7 @@ use crate::{
     resource_log,
     snatch::SnatchGuard,
     track::RenderBundleScope,
+    validation::{check_color_attachment_count, validate_color_attachment_bytes_per_sample},
     Label, LabelHelpers,
 };
 
@@ -166,55 +170,85 @@ pub struct RenderBundleEncoder {
     current_pipeline: StateChange<id::RenderPipelineId>,
 }
 
+/// Validate a render bundle descriptor
+///
+/// Returns a tuple (is_depth_read_only, is_stencil_read_only).
+fn validate_render_bundle_encoder_descriptor(
+    desc: &RenderBundleEncoderDescriptor,
+    device: &Arc<Device>,
+) -> Result<(bool, bool), CreateRenderBundleError> {
+    let mut have_attachment = false;
+
+    check_color_attachment_count(
+        desc.color_formats.len(),
+        device.limits.max_color_attachments,
+    )?;
+
+    for &format in desc.color_formats.iter().flatten() {
+        have_attachment = true;
+        let format_features = device.describe_format_features(format)?;
+        if !format.has_color_aspect() {
+            return Err(CreateRenderBundleError::FormatNotColor(format));
+        }
+        if !format_features
+            .allowed_usages
+            .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+        {
+            return Err(CreateRenderBundleError::FormatNotRenderable(format));
+        }
+    }
+
+    validate_color_attachment_bytes_per_sample(
+        desc.color_formats.iter().flatten().copied(),
+        device.limits.max_color_attachment_bytes_per_sample,
+    )?;
+
+    let (is_depth_read_only, is_stencil_read_only) = match desc.depth_stencil {
+        Some(ds) => {
+            have_attachment = true;
+            let has_depth = ds.format.has_depth_aspect();
+            let has_stencil = ds.format.has_stencil_aspect();
+            if !has_depth && !has_stencil {
+                return Err(CreateRenderBundleError::FormatNotDepthOrStencil(ds.format));
+            } else {
+                (
+                    !has_depth || ds.depth_read_only,
+                    !has_stencil || ds.stencil_read_only,
+                )
+            }
+        }
+        // There's no depth/stencil attachment, so these values just don't
+        // matter.  Choose the most accommodating value, to simplify
+        // validation.
+        None => (true, true),
+    };
+
+    if !have_attachment {
+        return Err(CreateRenderBundleError::NoAttachment);
+    }
+
+    Ok((is_depth_read_only, is_stencil_read_only))
+}
+
 impl RenderBundleEncoder {
     pub fn new(
         desc: &RenderBundleEncoderDescriptor,
+        device: &Arc<Device>,
         parent_id: id::DeviceId,
     ) -> Result<Self, CreateRenderBundleError> {
-        let (is_depth_read_only, is_stencil_read_only) = match desc.depth_stencil {
-            Some(ds) => {
-                let aspects = hal::FormatAspects::from(ds.format);
-                (
-                    !aspects.contains(hal::FormatAspects::DEPTH) || ds.depth_read_only,
-                    !aspects.contains(hal::FormatAspects::STENCIL) || ds.stencil_read_only,
-                )
-            }
-            // There's no depth/stencil attachment, so these values just don't
-            // matter.  Choose the most accommodating value, to simplify
-            // validation.
-            None => (true, true),
-        };
+        let (is_depth_read_only, is_stencil_read_only) =
+            validate_render_bundle_encoder_descriptor(desc, device)?;
 
-        // TODO: should be device.limits.max_color_attachments
-        let max_color_attachments = hal::MAX_COLOR_ATTACHMENTS;
-
-        //TODO: validate that attachment formats are renderable,
-        // have expected aspects, support multisampling.
         Ok(Self {
             base: BasePass::new(&desc.label),
             parent_id,
             context: RenderPassContext {
                 attachments: AttachmentData {
-                    colors: if desc.color_formats.len() > max_color_attachments {
-                        return Err(CreateRenderBundleError::ColorAttachment(
-                            ColorAttachmentError::TooMany {
-                                given: desc.color_formats.len(),
-                                limit: max_color_attachments,
-                            },
-                        ));
-                    } else {
-                        desc.color_formats.iter().cloned().collect()
-                    },
+                    colors: desc.color_formats.iter().cloned().collect(),
                     resolves: ArrayVec::new(),
                     depth_stencil: desc.depth_stencil.map(|ds| ds.format),
                 },
-                sample_count: {
-                    let sc = desc.sample_count;
-                    if sc == 0 || sc > 32 || !sc.is_power_of_two() {
-                        return Err(CreateRenderBundleError::InvalidSampleCount(sc));
-                    }
-                    sc
-                },
+                sample_count: desc.sample_count,
                 multiview_mask: desc.multiview,
             },
 
@@ -269,6 +303,29 @@ impl RenderBundleEncoder {
         let scope = PassErrorScope::Bundle;
 
         device.check_is_valid().map_pass_err(scope)?;
+
+        {
+            // Reconstruct and revalidate the encoder descriptor, because
+            // `RenderBundleEncoder` is serializable and could have been tampered.
+            let encoder_desc = RenderBundleEncoderDescriptor {
+                label: self.base.label.as_ref().map(Cow::from),
+                color_formats: Cow::Borrowed(&self.context.attachments.colors),
+                depth_stencil: self.context.attachments.depth_stencil.map(|format| {
+                    wgt::RenderBundleDepthStencil {
+                        format,
+                        depth_read_only: self.is_depth_read_only,
+                        stencil_read_only: self.is_stencil_read_only,
+                    }
+                }),
+                sample_count: self.context.sample_count,
+                multiview: self.context.multiview_mask,
+            };
+
+            validate_render_bundle_encoder_descriptor(&encoder_desc, device).expect(
+                "Invalid render bundle descriptor \
+                    should have been rejected by RenderBundleEncoder::new",
+            );
+        };
 
         let bind_group_guard = hub.bind_groups.read();
         let pipeline_guard = hub.render_pipelines.read();
@@ -883,15 +940,30 @@ fn multi_draw_indirect(
 pub enum CreateRenderBundleError {
     #[error(transparent)]
     ColorAttachment(#[from] ColorAttachmentError),
+    #[error("Format {0:?} does not have a color aspect")]
+    FormatNotColor(wgt::TextureFormat),
+    #[error("Color attachment format {0:?} is not renderable")]
+    FormatNotRenderable(wgt::TextureFormat),
+    #[error("Format {0:?} is not a depth/stencil format")]
+    FormatNotDepthOrStencil(wgt::TextureFormat),
+    #[error("Render bundle must have at least one attachment (color or depth/stencil)")]
+    NoAttachment,
     #[error("Invalid number of samples {0}")]
     InvalidSampleCount(u32),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
 }
 
 impl WebGpuError for CreateRenderBundleError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
             Self::ColorAttachment(e) => e.webgpu_error_type(),
-            Self::InvalidSampleCount(_) => ErrorType::Validation,
+            Self::FormatNotColor(_)
+            | Self::FormatNotRenderable(_)
+            | Self::FormatNotDepthOrStencil(_)
+            | Self::NoAttachment
+            | Self::InvalidSampleCount(_) => ErrorType::Validation,
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
         }
     }
 }
