@@ -1,7 +1,3 @@
-#ifdef GL_ES
-precision mediump float;
-#endif
-
 #if __VERSION__ >= 130
     out vec4 fragColor;
 #else

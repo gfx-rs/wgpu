@@ -400,12 +400,32 @@ static SPIRV_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::ne
     )
     .run_sync(spirv_test);
 
-fn glsl_vertex_source() -> Cow<'static, str> {
-    std::borrow::Cow::Borrowed(include_str!("shader.vert"))
+fn is_gles(ctx: &TestingContext) -> bool {
+    unsafe {
+        let Some(dev) = ctx.adapter.as_hal::<wgpu::hal::gles::Api>() else {
+            return false;
+        };
+        let version = dev.get_glsl_version();
+        matches!(version, naga::back::glsl::Version::Embedded { .. })
+    }
 }
 
-fn glsl_fragment_source() -> Cow<'static, str> {
-    std::borrow::Cow::Borrowed(include_str!("shader.frag"))
+fn glsl_vertex_source(ctx: &TestingContext) -> Cow<'static, str> {
+    let version_string = if is_gles(ctx) {
+        "#version 300 es\n#precision mediump float;\n"
+    } else {
+        "#version 330 core\n"
+    };
+    std::borrow::Cow::Owned(format!("{version_string}{}", include_str!("shader.vert")))
+}
+
+fn glsl_fragment_source(ctx: &TestingContext) -> Cow<'static, str> {
+    let version_string = if is_gles(ctx) {
+        "#version 300 es\n#precision mediump float;\n"
+    } else {
+        "#version 330 core\n"
+    };
+    std::borrow::Cow::Owned(format!("{version_string}{}", include_str!("shader.frag")))
 }
 
 fn glsl_test(ctx: TestingContext) {
@@ -416,7 +436,7 @@ fn glsl_test(ctx: TestingContext) {
                     name: "vs_main".into(),
                     workgroup_size: (0, 0, 0),
                 }]),
-                glsl: Some(glsl_vertex_source()),
+                glsl: Some(glsl_vertex_source(&ctx)),
                 ..Default::default()
             })
     };
@@ -427,7 +447,7 @@ fn glsl_test(ctx: TestingContext) {
                     name: "fs_main".into(),
                     workgroup_size: (0, 0, 0),
                 }]),
-                glsl: Some(glsl_fragment_source()),
+                glsl: Some(glsl_fragment_source(&ctx)),
                 ..Default::default()
             })
     };
@@ -481,7 +501,7 @@ fn all_passthrough_shaders_binary(ctx: TestingContext) {
         dxil: Some(dxil_vertex_source(test_hash)),
         #[cfg(not(target_arch = "wasm32"))]
         metallib: Some(metallib_source(test_hash)),
-        glsl: Some(glsl_vertex_source()),
+        glsl: Some(glsl_vertex_source(&ctx)),
         wgsl: Some(wgsl_source()),
         ..Default::default()
     };
@@ -493,7 +513,7 @@ fn all_passthrough_shaders_binary(ctx: TestingContext) {
         }]),
         #[cfg(not(target_arch = "wasm32"))]
         dxil: Some(dxil_fragment_source(test_hash)),
-        glsl: Some(glsl_fragment_source()),
+        glsl: Some(glsl_fragment_source(&ctx)),
         ..desc
     };
     let fragment = unsafe { ctx.device.create_shader_module_passthrough(desc) };
@@ -517,7 +537,7 @@ fn all_passthrough_shader_source(ctx: TestingContext) {
         spirv: Some(spirv_source(test_hash)),
         hlsl: Some(hlsl_source()),
         msl: Some(metal_source()),
-        glsl: Some(glsl_vertex_source()),
+        glsl: Some(glsl_vertex_source(&ctx)),
         wgsl: Some(wgsl_source()),
         ..Default::default()
     };
@@ -527,7 +547,7 @@ fn all_passthrough_shader_source(ctx: TestingContext) {
             name: "fs_main".into(),
             workgroup_size: (0, 0, 0),
         }]),
-        glsl: Some(glsl_fragment_source()),
+        glsl: Some(glsl_fragment_source(&ctx)),
         ..desc
     };
     let fragment = unsafe { ctx.device.create_shader_module_passthrough(desc) };
@@ -551,7 +571,7 @@ fn explicit_layout_validation(ctx: TestingContext) {
         spirv: Some(spirv_source(test_hash)),
         hlsl: Some(hlsl_source()),
         msl: Some(metal_source()),
-        glsl: Some(glsl_vertex_source()),
+        glsl: Some(glsl_vertex_source(&ctx)),
         wgsl: Some(wgsl_source()),
         ..Default::default()
     };
@@ -561,7 +581,7 @@ fn explicit_layout_validation(ctx: TestingContext) {
             name: "fs_main".into(),
             workgroup_size: (0, 0, 0),
         }]),
-        glsl: Some(glsl_fragment_source()),
+        glsl: Some(glsl_fragment_source(&ctx)),
         ..desc
     };
     let fragment = unsafe { ctx.device.create_shader_module_passthrough(desc) };
@@ -573,7 +593,7 @@ fn explicit_layout_validation(ctx: TestingContext) {
             layout: None,
             vertex: VertexState {
                 module: &vertex,
-                entry_point: Some("main"),
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
@@ -582,7 +602,7 @@ fn explicit_layout_validation(ctx: TestingContext) {
             multisample: MultisampleState::default(),
             fragment: Some(FragmentState {
                 module: &fragment,
-                entry_point: Some("fragment_main"),
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,

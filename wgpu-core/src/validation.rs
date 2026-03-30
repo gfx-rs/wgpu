@@ -306,8 +306,11 @@ pub struct PassthroughInterface {
     pub entry_point_names: HashSet<String>,
 }
 
+// Most shaders will use a standard interface which is very large.
+// Passthrough shaders have a much smaller interface. No reason to
+// box the standard interface though.
+#[expect(clippy::large_enum_variant)]
 #[derive(Debug)]
-#[allow(clippy::large_enum_variant)]
 pub enum ShaderMetaData {
     Interface(Interface),
     Passthrough(PassthroughInterface),

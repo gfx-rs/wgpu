@@ -99,7 +99,7 @@ impl Default for ShaderRuntimeChecks {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PassthroughShaderEntryPoint<'a> {
-    /// The name of the entry point. Unused for GLSL or DXIL
+    /// The name of the entry point. Only used in validation and for GLSL or DXIL.
     pub name: Cow<'a, str>,
     /// Number of workgroups in each dimension x, y and z. Only used for metal with
     /// compute-like shader stages.
