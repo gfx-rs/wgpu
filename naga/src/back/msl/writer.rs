@@ -387,11 +387,11 @@ impl Display for TypeContext<'_> {
 }
 
 pub(super) struct TypedGlobalVariable<'a> {
-    pub(super) module: &'a crate::Module,
-    pub(super) names: &'a FastHashMap<NameKey, String>,
-    pub(super) handle: Handle<crate::GlobalVariable>,
-    pub(super) usage: valid::GlobalUse,
-    pub(super) reference: bool,
+    pub module: &'a crate::Module,
+    pub names: &'a FastHashMap<NameKey, String>,
+    pub handle: Handle<crate::GlobalVariable>,
+    pub usage: valid::GlobalUse,
+    pub reference: bool,
 }
 
 struct TypedGlobalVariableParts {
