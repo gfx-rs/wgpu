@@ -719,6 +719,18 @@ pub(crate) enum ExclusivePipeline {
     Compute(Weak<ComputePipeline>),
 }
 
+impl From<&Arc<RenderPipeline>> for ExclusivePipeline {
+    fn from(pipeline: &Arc<RenderPipeline>) -> Self {
+        Self::Render(Arc::downgrade(pipeline))
+    }
+}
+
+impl From<&Arc<ComputePipeline>> for ExclusivePipeline {
+    fn from(pipeline: &Arc<ComputePipeline>) -> Self {
+        Self::Compute(Arc::downgrade(pipeline))
+    }
+}
+
 impl fmt::Display for ExclusivePipeline {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -799,15 +811,13 @@ impl BindGroupLayout {
         }
     }
 
-    fn empty(device: &Arc<Device>) -> Arc<Self> {
-        let exclusive_pipeline = crate::OnceCellOrLock::new();
-        exclusive_pipeline.set(ExclusivePipeline::None).unwrap();
+    fn empty(device: &Arc<Device>, exclusive_pipeline: ExclusivePipeline) -> Arc<Self> {
         Arc::new(Self {
             raw: RawBindGroupLayout::RefDeviceEmptyBGL,
             device: device.clone(),
             entries: bgl::EntryMap::default(),
             origin: bgl::Origin::Derived,
-            exclusive_pipeline,
+            exclusive_pipeline: crate::OnceCellOrLock::from(exclusive_pipeline),
             binding_count_validator: BindingTypeMaxCountValidator::default(),
             label: String::new(),
         })
@@ -971,9 +981,10 @@ impl PipelineLayout {
         self.raw.as_ref()
     }
 
-    pub fn get_bind_group_layout(
+    pub(crate) fn get_bind_group_layout(
         self: &Arc<Self>,
         index: u32,
+        exclusive_pipeline_for_empty_bgl: ExclusivePipeline,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
         let max_bind_groups = self.device.limits.max_bind_groups;
         if index >= max_bind_groups {
@@ -987,7 +998,9 @@ impl PipelineLayout {
             .get(index as usize)
             .cloned()
             .flatten()
-            .unwrap_or_else(|| BindGroupLayout::empty(&self.device)))
+            .unwrap_or_else(|| {
+                BindGroupLayout::empty(&self.device, exclusive_pipeline_for_empty_bgl)
+            }))
     }
 
     pub(crate) fn get_bgl_entry(
