@@ -142,9 +142,21 @@ impl Global {
                         BlasGeometries::AabbGeometries(aabb_geometries) => {
                             let aabb_geo = aabb_geometries
                                 .map(|ag| {
+                                    let aabb_buffer_id = self.resolve_buffer_id(ag.aabb_buffer)?;
+                                    if ag.stride < wgt::AABB_GEOMETRY_MIN_STRIDE
+                                        || ag.stride % 8 != 0
+                                    {
+                                        return Err(
+                                            BuildAccelerationStructureError::InvalidAabbStride(
+                                                aabb_buffer_id.error_ident(),
+                                                ag.stride,
+                                            ),
+                                        );
+                                    }
                                     Ok(ArcBlasAabbGeometry {
                                         size: ag.size.clone(),
-                                        aabb_buffer: self.resolve_buffer_id(ag.aabb_buffer)?,
+                                        stride: ag.stride,
+                                        aabb_buffer: aabb_buffer_id,
                                         primitive_offset: ag.primitive_offset,
                                     })
                                 })
@@ -968,7 +980,7 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                         }
 
                         let required_end = aabb.primitive_offset as u64
-                            + aabb.size.primitive_count as u64 * aabb.size.stride;
+                            + aabb.size.primitive_count as u64 * aabb.stride;
                         if aabb_buffer.size < required_end {
                             return Err(BuildAccelerationStructureError::InsufficientBufferSize(
                                 aabb_buffer.error_ident(),
@@ -991,7 +1003,7 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                         buffer: Some(aabb_raw),
                         offset: aabb.primitive_offset,
                         count: aabb.size.primitive_count,
-                        stride: aabb.size.stride,
+                        stride: aabb.stride,
                         flags: aabb.size.flags,
                     });
                 }

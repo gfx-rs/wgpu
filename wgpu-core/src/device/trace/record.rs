@@ -392,6 +392,7 @@ impl IntoTrace for crate::ray_tracing::OwnedBlasAabbGeometry<ArcReferences> {
     fn into_trace(self) -> Self::Output {
         crate::ray_tracing::OwnedBlasAabbGeometry {
             size: self.size,
+            stride: self.stride,
             aabb_buffer: self.aabb_buffer.into_trace(),
             primitive_offset: self.primitive_offset,
         }

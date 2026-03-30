@@ -195,6 +195,9 @@ pub enum BuildAccelerationStructureError {
 
     #[error("Blas {0:?} AABB primitive offset must be a multiple of 8")]
     UnalignedAabbPrimitiveOffset(ResourceErrorIdent),
+
+    #[error("Blas {0:?} AABB stride is invalid (must be >= {1} and a multiple of 8)")]
+    InvalidAabbStride(ResourceErrorIdent, BufferAddress),
 }
 
 impl WebGpuError for BuildAccelerationStructureError {
@@ -229,7 +232,8 @@ impl WebGpuError for BuildAccelerationStructureError {
             | Self::TlasDependentMissingVertexReturn(..)
             | Self::BlasGeometryKindMismatch(..)
             | Self::IncompatibleBlasAabbPrimitiveCount(..)
-            | Self::UnalignedAabbPrimitiveOffset(..) => ErrorType::Validation,
+            | Self::UnalignedAabbPrimitiveOffset(..)
+            | Self::InvalidAabbStride(..) => ErrorType::Validation,
         }
     }
 }
@@ -275,6 +279,7 @@ pub struct BlasTriangleGeometry<'a> {
 #[derive(Debug)]
 pub struct BlasAabbGeometry<'a> {
     pub size: &'a wgt::BlasAABBGeometrySizeDescriptor,
+    pub stride: BufferAddress,
     pub aabb_buffer: BufferId,
     pub primitive_offset: u32,
 }
@@ -359,6 +364,7 @@ pub type TraceBlasTriangleGeometry = OwnedBlasTriangleGeometry<IdReferences>;
 #[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
 pub struct OwnedBlasAabbGeometry<R: ReferenceType> {
     pub size: wgt::BlasAABBGeometrySizeDescriptor,
+    pub stride: BufferAddress,
     pub aabb_buffer: R::Buffer,
     pub primitive_offset: u32,
 }

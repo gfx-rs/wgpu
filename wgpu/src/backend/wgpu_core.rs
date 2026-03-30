@@ -2835,6 +2835,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                             .iter()
                             .map(|ag| wgc::ray_tracing::BlasAabbGeometry {
                                 aabb_buffer: ag.aabb_buffer.inner.as_core().id,
+                                stride: ag.stride,
                                 size: ag.size,
                                 primitive_offset: ag.primitive_offset,
                             });

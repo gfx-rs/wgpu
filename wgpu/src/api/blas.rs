@@ -126,11 +126,13 @@ static_assertions::assert_impl_all!(BlasTriangleGeometry<'_>: WasmNotSendSync);
 /// Definition for an axis-aligned bounding box geometry group for a bottom level acceleration structure.
 ///
 /// Buffer data must contain `size.primitive_count` primitives at `primitive_offset`, each `size.stride` bytes,
-/// with `stride` at least [`AABB_GEOMETRY_MIN_STRIDE`] and a multiple of 8. The same `stride` must be used at
-/// [`Device::create_blas`](crate::Device::create_blas) and here.
+/// with `stride` at least [`AABB_GEOMETRY_MIN_STRIDE`] and a multiple of 8.
 pub struct BlasAabbGeometry<'a> {
     /// Sub descriptor for the size defining attributes of this geometry.
     pub size: &'a BlasAABBGeometrySizeDescriptor,
+    /// Stride in bytes between consecutive AABB primitives in the buffer (at least
+    /// [`AABB_GEOMETRY_MIN_STRIDE`], and must be a multiple of 8).
+    pub stride: wgt::BufferAddress,
     /// Buffer containing packed AABB primitives (layout determined by `size.stride`).
     pub aabb_buffer: &'a Buffer,
     /// Byte offset to the first AABB primitive (must be a multiple of 8).

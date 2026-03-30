@@ -25,9 +25,8 @@ struct AabbPrimitive {
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.extend([
         AABB_BLAS_BUILD_AND_TRACE,
-        AABB_INVALID_STRIDE_CREATE,
-        AABB_DIFFERENT_STRIDE_BUILD_ALLOWED,
         AABB_UNALIGNED_PRIMITIVE_OFFSET,
+        AABB_INVALID_STRIDE,
         AABB_GEOMETRY_KIND_MISMATCH,
         AABB_INSUFFICIENT_BUFFER,
         AABB_PRIMITIVE_COUNT_EXCEEDS_CREATION,
@@ -35,10 +34,9 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-fn aabb_size_desc(stride: BufferAddress, primitive_count: u32) -> BlasAABBGeometrySizeDescriptor {
+fn aabb_size_desc(primitive_count: u32) -> BlasAABBGeometrySizeDescriptor {
     BlasAABBGeometrySizeDescriptor {
         primitive_count,
-        stride,
         flags: AccelerationStructureGeometryFlags::empty(),
     }
 }
@@ -54,7 +52,6 @@ static AABB_BLAS_BUILD_AND_TRACE: GpuTestConfiguration = GpuTestConfiguration::n
     .run_sync(aabb_blas_build_and_trace);
 
 fn aabb_blas_build_and_trace(ctx: TestingContext) {
-    let stride = AABB_GEOMETRY_MIN_STRIDE;
     let aabb_data = AabbPrimitive {
         min: [-1.0, -1.0, 2.0],
         max: [1.0, 1.0, 4.0],
@@ -66,7 +63,7 @@ fn aabb_blas_build_and_trace(ctx: TestingContext) {
         usage: BufferUsages::BLAS_INPUT,
     });
 
-    let blas_size = aabb_size_desc(stride, 1);
+    let blas_size = aabb_size_desc(1);
     let blas = ctx.device.create_blas(
         &CreateBlasDescriptor {
             label: Some("AABB BLAS"),
@@ -101,6 +98,7 @@ fn aabb_blas_build_and_trace(ctx: TestingContext) {
             blas: &blas,
             geometry: BlasGeometries::AabbGeometries(vec![BlasAabbGeometry {
                 size: &blas_size,
+                stride: size_of::<AabbPrimitive>() as BufferAddress,
                 aabb_buffer: &aabb_buf,
                 primitive_offset: 0,
             }]),
@@ -161,95 +159,6 @@ fn aabb_blas_build_and_trace(ctx: TestingContext) {
 }
 
 #[gpu_test]
-static AABB_INVALID_STRIDE_CREATE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .test_features_limits()
-            .limits(acceleration_structure_limits())
-            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
-            .enable_noop(),
-    )
-    .run_sync(aabb_invalid_stride_create);
-
-/// Create a BLAS with AABB stride below the minimum.
-fn aabb_invalid_stride_create(ctx: TestingContext) {
-    let bad_stride = 16u64;
-    fail(
-        &ctx.device,
-        || {
-            let _ = ctx.device.create_blas(
-                &CreateBlasDescriptor {
-                    label: Some("bad stride"),
-                    flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-                    update_mode: AccelerationStructureUpdateMode::Build,
-                },
-                BlasGeometrySizeDescriptors::AABBs {
-                    descriptors: vec![BlasAABBGeometrySizeDescriptor {
-                        primitive_count: 1,
-                        stride: bad_stride,
-                        flags: AccelerationStructureGeometryFlags::OPAQUE,
-                    }],
-                },
-            );
-        },
-        None,
-    );
-}
-
-#[gpu_test]
-static AABB_DIFFERENT_STRIDE_BUILD_ALLOWED: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .test_features_limits()
-            .limits(acceleration_structure_limits())
-            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
-            .enable_noop(),
-    )
-    .run_sync(aabb_different_stride_build_allowed);
-
-/// Build stride may differ from the stride given at BLAS creation.
-fn aabb_different_stride_build_allowed(ctx: TestingContext) {
-    let create_stride = AABB_GEOMETRY_MIN_STRIDE;
-    let build_stride = create_stride + 8;
-    let aabb_buf = ctx.device.create_buffer_init(&BufferInitDescriptor {
-        label: None,
-        contents: &[0u8; 64],
-        usage: BufferUsages::BLAS_INPUT,
-    });
-
-    let create_desc = aabb_size_desc(create_stride, 1);
-    let build_desc = aabb_size_desc(build_stride, 1);
-
-    let blas = ctx.device.create_blas(
-        &CreateBlasDescriptor {
-            label: Some("BLAS"),
-            flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: AccelerationStructureUpdateMode::Build,
-        },
-        BlasGeometrySizeDescriptors::AABBs {
-            descriptors: vec![create_desc],
-        },
-    );
-
-    let mut encoder = ctx
-        .device
-        .create_command_encoder(&CommandEncoderDescriptor::default());
-    encoder.build_acceleration_structures(
-        [&BlasBuildEntry {
-            blas: &blas,
-            geometry: BlasGeometries::AabbGeometries(vec![BlasAabbGeometry {
-                size: &build_desc,
-                aabb_buffer: &aabb_buf,
-                primitive_offset: 0,
-            }]),
-        }],
-        [],
-    );
-    let cmd = encoder.finish();
-    ctx.queue.submit([cmd]);
-}
-
-#[gpu_test]
 static AABB_UNALIGNED_PRIMITIVE_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -262,13 +171,13 @@ static AABB_UNALIGNED_PRIMITIVE_OFFSET: GpuTestConfiguration = GpuTestConfigurat
 
 /// `primitive_offset` must be a multiple of 8.
 fn aabb_unaligned_primitive_offset(ctx: TestingContext) {
-    let stride = AABB_GEOMETRY_MIN_STRIDE;
+    let stride = size_of::<AabbPrimitive>() as BufferAddress;
     let aabb_buf = ctx.device.create_buffer_init(&BufferInitDescriptor {
         label: None,
-        contents: &[0u8; 64],
+        contents: &[0u8; 4 + size_of::<AabbPrimitive>()],
         usage: BufferUsages::BLAS_INPUT,
     });
-    let blas_size = aabb_size_desc(stride, 1);
+    let blas_size = aabb_size_desc(1);
     let blas = ctx.device.create_blas(
         &CreateBlasDescriptor {
             label: Some("BLAS"),
@@ -288,8 +197,60 @@ fn aabb_unaligned_primitive_offset(ctx: TestingContext) {
             blas: &blas,
             geometry: BlasGeometries::AabbGeometries(vec![BlasAabbGeometry {
                 size: &blas_size,
+                stride,
                 aabb_buffer: &aabb_buf,
                 primitive_offset: 4,
+            }]),
+        }],
+        [],
+    );
+    fail(&ctx.device, || encoder.finish(), None);
+}
+
+#[gpu_test]
+static AABB_INVALID_STRIDE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .limits(acceleration_structure_limits())
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
+    )
+    .run_sync(aabb_invalid_stride);
+
+/// AABB `stride` must be at least `AABB_GEOMETRY_MIN_STRIDE` and a multiple of 8.
+fn aabb_invalid_stride(ctx: TestingContext) {
+    let aabb_buf = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::bytes_of(&AabbPrimitive {
+            min: [-1.0, -1.0, -1.0],
+            max: [1.0, 1.0, 1.0],
+        }),
+        usage: BufferUsages::BLAS_INPUT,
+    });
+    let blas_size = aabb_size_desc(1);
+    let blas = ctx.device.create_blas(
+        &CreateBlasDescriptor {
+            label: Some("BLAS"),
+            flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: AccelerationStructureUpdateMode::Build,
+        },
+        BlasGeometrySizeDescriptors::AABBs {
+            descriptors: vec![blas_size.clone()],
+        },
+    );
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default());
+    encoder.build_acceleration_structures(
+        [&BlasBuildEntry {
+            blas: &blas,
+            geometry: BlasGeometries::AabbGeometries(vec![BlasAabbGeometry {
+                size: &blas_size,
+                stride: AABB_GEOMETRY_MIN_STRIDE + 1,
+                aabb_buffer: &aabb_buf,
+                primitive_offset: 0,
             }]),
         }],
         [],
@@ -315,14 +276,17 @@ fn aabb_geometry_kind_mismatch(ctx: TestingContext) {
         contents: &[0; size_of::<[[f32; 3]; 3]>()],
         usage: BufferUsages::BLAS_INPUT,
     });
-    let stride = AABB_GEOMETRY_MIN_STRIDE;
+    let stride = size_of::<AabbPrimitive>() as BufferAddress;
     let aabb_buf = ctx.device.create_buffer_init(&BufferInitDescriptor {
         label: None,
-        contents: &[0u8; 32],
+        contents: bytemuck::bytes_of(&AabbPrimitive {
+            min: [-1.0, -1.0, -1.0],
+            max: [1.0, 1.0, 1.0],
+        }),
         usage: BufferUsages::BLAS_INPUT,
     });
 
-    let aabb_blas_size = aabb_size_desc(stride, 1);
+    let aabb_blas_size = aabb_size_desc(1);
     let aabb_blas = ctx.device.create_blas(
         &CreateBlasDescriptor {
             label: Some("AABB BLAS"),
@@ -384,6 +348,7 @@ fn aabb_geometry_kind_mismatch(ctx: TestingContext) {
             blas: &tri_blas,
             geometry: BlasGeometries::AabbGeometries(vec![BlasAabbGeometry {
                 size: &aabb_blas_size,
+                stride,
                 aabb_buffer: &aabb_buf,
                 primitive_offset: 0,
             }]),
@@ -406,13 +371,13 @@ static AABB_INSUFFICIENT_BUFFER: GpuTestConfiguration = GpuTestConfiguration::ne
 
 /// The AABB buffer must cover `primitive_offset + primitive_count * stride`.
 fn aabb_insufficient_buffer(ctx: TestingContext) {
-    let stride = AABB_GEOMETRY_MIN_STRIDE;
+    let stride = size_of::<AabbPrimitive>() as BufferAddress;
     let small_buf = ctx.device.create_buffer_init(&BufferInitDescriptor {
         label: None,
         contents: &[0u8; 16],
         usage: BufferUsages::BLAS_INPUT,
     });
-    let blas_size = aabb_size_desc(stride, 1);
+    let blas_size = aabb_size_desc(1);
     let blas = ctx.device.create_blas(
         &CreateBlasDescriptor {
             label: Some("BLAS"),
@@ -432,6 +397,7 @@ fn aabb_insufficient_buffer(ctx: TestingContext) {
             blas: &blas,
             geometry: BlasGeometries::AabbGeometries(vec![BlasAabbGeometry {
                 size: &blas_size,
+                stride,
                 aabb_buffer: &small_buf,
                 primitive_offset: 0,
             }]),
@@ -454,14 +420,23 @@ static AABB_PRIMITIVE_COUNT_EXCEEDS_CREATION: GpuTestConfiguration = GpuTestConf
 
 /// Build cannot request more AABB primitives than the BLAS was created for.
 fn aabb_primitive_count_exceeds_creation(ctx: TestingContext) {
-    let stride = AABB_GEOMETRY_MIN_STRIDE;
+    let stride = size_of::<AabbPrimitive>() as BufferAddress;
     let aabb_buf = ctx.device.create_buffer_init(&BufferInitDescriptor {
         label: None,
-        contents: &vec![0u8; (stride * 2) as usize],
+        contents: &bytemuck::cast_slice(&[
+            AabbPrimitive {
+                min: [-1.0, -1.0, -1.0],
+                max: [1.0, 1.0, 1.0],
+            },
+            AabbPrimitive {
+                min: [-1.0, -1.0, -1.0],
+                max: [1.0, 1.0, 1.0],
+            },
+        ]),
         usage: BufferUsages::BLAS_INPUT,
     });
-    let create_desc = aabb_size_desc(stride, 1);
-    let build_desc = aabb_size_desc(stride, 2);
+    let create_desc = aabb_size_desc(1);
+    let build_desc = aabb_size_desc(2);
 
     let blas = ctx.device.create_blas(
         &CreateBlasDescriptor {
@@ -482,6 +457,7 @@ fn aabb_primitive_count_exceeds_creation(ctx: TestingContext) {
             blas: &blas,
             geometry: BlasGeometries::AabbGeometries(vec![BlasAabbGeometry {
                 size: &build_desc,
+                stride,
                 aabb_buffer: &aabb_buf,
                 primitive_offset: 0,
             }]),
@@ -504,20 +480,20 @@ static AABB_FLAGS_MISMATCH: GpuTestConfiguration = GpuTestConfiguration::new()
 
 /// Per-geometry flags at build time must match those at creation.
 fn aabb_flags_mismatch(ctx: TestingContext) {
-    let stride = AABB_GEOMETRY_MIN_STRIDE;
     let aabb_buf = ctx.device.create_buffer_init(&BufferInitDescriptor {
         label: None,
-        contents: &[0u8; 32],
+        contents: bytemuck::bytes_of(&AabbPrimitive {
+            min: [-1.0, -1.0, -1.0],
+            max: [1.0, 1.0, 1.0],
+        }),
         usage: BufferUsages::BLAS_INPUT,
     });
     let create_desc = BlasAABBGeometrySizeDescriptor {
         primitive_count: 1,
-        stride,
         flags: AccelerationStructureGeometryFlags::OPAQUE,
     };
     let build_desc = BlasAABBGeometrySizeDescriptor {
         primitive_count: 1,
-        stride,
         flags: AccelerationStructureGeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION,
     };
 
@@ -540,6 +516,7 @@ fn aabb_flags_mismatch(ctx: TestingContext) {
             blas: &blas,
             geometry: BlasGeometries::AabbGeometries(vec![BlasAabbGeometry {
                 size: &build_desc,
+                stride: size_of::<AabbPrimitive>() as BufferAddress,
                 aabb_buffer: &aabb_buf,
                 primitive_offset: 0,
             }]),

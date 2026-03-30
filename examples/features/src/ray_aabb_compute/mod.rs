@@ -171,10 +171,8 @@ impl crate::framework::Example for Example {
             usage: wgpu::BufferUsages::BLAS_INPUT | wgpu::BufferUsages::STORAGE,
         });
 
-        let aabb_stride = mem::size_of::<GpuAabb>() as wgpu::BufferAddress;
         let aabb_size_desc = wgpu::BlasAABBGeometrySizeDescriptor {
             primitive_count: aabb_data.len() as u32,
-            stride: aabb_stride,
             flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
         };
 
@@ -300,6 +298,7 @@ impl crate::framework::Example for Example {
                 blas: &blas,
                 geometry: wgpu::BlasGeometries::AabbGeometries(vec![wgpu::BlasAabbGeometry {
                     size: &aabb_size_desc,
+                    stride: mem::size_of::<GpuAabb>() as wgpu::BufferAddress,
                     aabb_buffer: &aabb_buf,
                     primitive_offset: 0,
                 }]),

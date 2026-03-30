@@ -35,9 +35,6 @@ pub struct BlasTriangleGeometrySizeDescriptor {
 pub struct BlasAABBGeometrySizeDescriptor {
     /// Number of AABB primitives in this geometry.
     pub primitive_count: u32,
-    /// Stride in bytes between consecutive AABB primitives in the build buffer (at least
-    /// [`AABB_GEOMETRY_MIN_STRIDE`], and must be a multiple of 8).
-    pub stride: crate::BufferAddress,
     /// Flags for the geometry.
     pub flags: AccelerationStructureGeometryFlags,
 }

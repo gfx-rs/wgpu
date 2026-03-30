@@ -22,7 +22,7 @@ use crate::{
     LabelHelpers,
 };
 use hal::AccelerationStructureTriangleIndices;
-use wgt::Features;
+use wgt::{Features, AABB_GEOMETRY_MIN_STRIDE};
 
 impl Device {
     pub fn create_blas(
@@ -130,12 +130,6 @@ impl Device {
                         descriptors.len(),
                     );
                 for desc in descriptors {
-                    if desc.stride < wgt::AABB_GEOMETRY_MIN_STRIDE || desc.stride % 8 != 0 {
-                        return Err(CreateBlasError::InvalidAabbStride(
-                            desc.stride,
-                            wgt::AABB_GEOMETRY_MIN_STRIDE,
-                        ));
-                    }
                     if desc.primitive_count > self.limits.max_blas_primitive_count {
                         return Err(CreateBlasError::TooManyPrimitives(
                             self.limits.max_blas_primitive_count,
@@ -147,7 +141,7 @@ impl Device {
                         buffer: Some(self.zero_buffer.as_ref()),
                         offset: 0,
                         count: desc.primitive_count,
-                        stride: desc.stride,
+                        stride: AABB_GEOMETRY_MIN_STRIDE,
                         flags: desc.flags,
                     });
                 }

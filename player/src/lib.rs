@@ -1339,6 +1339,7 @@ impl Player {
     ) -> wgc::ray_tracing::OwnedBlasAabbGeometry<ArcReferences> {
         wgc::ray_tracing::OwnedBlasAabbGeometry {
             size: geometry.size,
+            stride: geometry.stride,
             aabb_buffer: self.resolve_buffer_id(geometry.aabb_buffer),
             primitive_offset: geometry.primitive_offset,
         }
