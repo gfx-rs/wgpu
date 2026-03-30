@@ -36,11 +36,7 @@ struct Shaders {
     ms_name: &'static str,
     fs_name: &'static str,
 }
-fn get_shaders(
-    device: &wgpu::Device,
-    backend: wgpu::Backend,
-    info: &MeshPipelineTestInfo,
-) -> Shaders {
+fn get_shaders(device: &wgpu::Device, info: &MeshPipelineTestInfo) -> Shaders {
     if info.divergent && info.use_task {
         unreachable!();
     }
@@ -98,7 +94,6 @@ struct MeshPipelineTestInfo {
 }
 
 fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
-    let backend = ctx.adapter.get_info().backend;
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
 
@@ -109,7 +104,7 @@ fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
         ts_name,
         ms_name,
         fs_name,
-    } = get_shaders(device, backend, &info);
+    } = get_shaders(device, &info);
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
@@ -182,7 +177,6 @@ pub enum DrawType {
 }
 
 fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestInfo) {
-    let backend = ctx.adapter.get_info().backend;
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
 
@@ -193,7 +187,7 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestIn
         ts_name,
         ms_name,
         fs_name,
-    } = get_shaders(device, backend, &info);
+    } = get_shaders(device, &info);
     let frag = fs.unwrap();
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,

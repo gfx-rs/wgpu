@@ -21,7 +21,7 @@ struct Shaders {
     fs_name: &'static str,
 }
 
-fn get_shaders(device: &wgpu::Device, backend: wgpu::Backend) -> Shaders {
+fn get_shaders(device: &wgpu::Device) -> Shaders {
     let compiled = compile_wgsl(device);
     Shaders {
         ts: compiled.clone(),
@@ -39,7 +39,7 @@ pub struct Example {
 impl crate::framework::Example for Example {
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        adapter: &wgpu::Adapter,
+        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
@@ -50,7 +50,7 @@ impl crate::framework::Example for Example {
             ts_name,
             ms_name,
             fs_name,
-        } = get_shaders(device, adapter.get_info().backend);
+        } = get_shaders(device);
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],

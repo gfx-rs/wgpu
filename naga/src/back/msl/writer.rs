@@ -8220,7 +8220,7 @@ mod workgroup_mem_init {
                 })
         }
 
-        pub(in super::super) fn write_workgroup_variables_initialization(
+        pub fn write_workgroup_variables_initialization(
             &mut self,
             module: &crate::Module,
             module_info: &valid::ModuleInfo,
