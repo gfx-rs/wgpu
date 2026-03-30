@@ -28,7 +28,11 @@ mod library_from_metallib;
 mod surface;
 mod time;
 
-use alloc::{string::ToString as _, sync::Arc, vec::Vec};
+use alloc::{
+    string::{String, ToString as _},
+    sync::Arc,
+    vec::Vec,
+};
 use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
 
 use bitflags::bitflags;
