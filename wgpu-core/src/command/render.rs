@@ -1189,7 +1189,15 @@ impl RenderPassInfo {
                     .flags
                     .contains(wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL)
             {
-                wgt::TextureUses::DEPTH_STENCIL_READ | wgt::TextureUses::RESOURCE
+                // If the texture supports TEXTURE_BINDING, it can be used as a shader
+                // resource and a read-only depth attachment simultaneously. But if it
+                // doesn't support TEXTURE_BINDING, don't attempt to transition it to a
+                // shader resource state, because DX12 will raise an error.
+                if view.desc.usage.contains(TextureUsages::TEXTURE_BINDING) {
+                    wgt::TextureUses::DEPTH_STENCIL_READ | wgt::TextureUses::RESOURCE
+                } else {
+                    wgt::TextureUses::DEPTH_STENCIL_READ
+                }
             } else {
                 wgt::TextureUses::DEPTH_STENCIL_WRITE
             };
