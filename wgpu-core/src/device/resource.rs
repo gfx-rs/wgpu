@@ -3950,11 +3950,7 @@ impl Device {
 
                 // `bind_group_layouts` might contain duplicate entries, so we need to ignore the
                 // result.
-                let _ = bgl
-                    .exclusive_pipeline
-                    .set(binding_model::ExclusivePipeline::Compute(Arc::downgrade(
-                        &pipeline,
-                    )));
+                let _ = bgl.exclusive_pipeline.set((&pipeline).into());
             }
         }
 
@@ -4759,11 +4755,7 @@ impl Device {
 
                 // `bind_group_layouts` might contain duplicate entries, so we need to ignore the
                 // result.
-                let _ = bgl
-                    .exclusive_pipeline
-                    .set(binding_model::ExclusivePipeline::Render(Arc::downgrade(
-                        &pipeline,
-                    )));
+                let _ = bgl.exclusive_pipeline.set((&pipeline).into());
             }
         }
 

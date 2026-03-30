@@ -309,7 +309,7 @@ impl ComputePipeline {
         self: &Arc<Self>,
         index: u32,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
-        self.layout.get_bind_group_layout(index)
+        self.layout.get_bind_group_layout(index, self.into())
     }
 }
 
@@ -848,6 +848,6 @@ impl RenderPipeline {
         self: &Arc<Self>,
         index: u32,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
-        self.layout.get_bind_group_layout(index)
+        self.layout.get_bind_group_layout(index, self.into())
     }
 }
