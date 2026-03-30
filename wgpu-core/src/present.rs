@@ -155,9 +155,6 @@ pub struct SurfaceOutput<T = id::TextureId> {
 }
 
 impl Queue {
-    pub fn present(&self, surface: &Surface) -> Result<(Status, SubmissionIndex), SurfaceError> {
-        self.present_impl(surface, surface.presentation.lock().as_mut())
-    }
     /// Present a surface texture and return the submission index that was
     /// active at the time of the present.
     ///
@@ -166,14 +163,28 @@ impl Queue {
     /// The surface texture is kept alive internally until a subsequent queue
     /// submission (with index strictly greater than the returned value)
     /// finishes, or until the queue is dropped.
-    fn present_impl(
-        &self,
-        surface: &Surface,
-        presentation: Option<&mut Presentation>,
-    ) -> Result<(Status, SubmissionIndex), SurfaceError> {
+    pub fn present(&self, surface: &Surface) -> Result<(Status, SubmissionIndex), SurfaceError> {
         profiling::scope!("Queue::present");
 
         self.device.check_is_valid()?;
+
+        let mut presentation_lock = surface.presentation.lock();
+        let presentation = presentation_lock.as_mut();
+
+        if let Some(presentation) = presentation.as_ref() {
+            let same_device = Arc::ptr_eq(&presentation.device, &self.device);
+
+            if !same_device {
+                return Err(SurfaceError::Device(DeviceError::DeviceMismatch(Box::new(
+                    DeviceMismatch {
+                        res: self.error_ident(),
+                        res_device: self.device.error_ident(),
+                        target: None,
+                        target_device: presentation.device.error_ident(),
+                    },
+                ))));
+            }
+        }
 
         let present = match presentation {
             Some(present) => present,
@@ -472,28 +483,11 @@ impl Global {
         let queue = self.hub.queues.get(queue_id);
         let surface = self.surfaces.get(surface_id);
 
-        let mut present_lock = surface.presentation.lock();
-
-        if let Some(ref presentation) = *present_lock {
-            let same_device = Arc::ptr_eq(&presentation.device, &queue.device);
-
-            if !same_device {
-                return Err(SurfaceError::Device(DeviceError::DeviceMismatch(Box::new(
-                    DeviceMismatch {
-                        res: queue.error_ident(),
-                        res_device: queue.device.error_ident(),
-                        target: None,
-                        target_device: presentation.device.error_ident(),
-                    },
-                ))));
-            }
-        }
-
-        let result = queue.present_impl(&surface, present_lock.as_mut());
+        let result = queue.present(&surface);
 
         #[cfg(feature = "trace")]
         if let Ok((_, present_index)) = &result {
-            if let Some(ref presentation) = *present_lock {
+            if let Some(presentation) = surface.presentation.lock().as_ref() {
                 if let Some(ref mut trace) = *presentation.device.trace.lock() {
                     trace.add(Action::Present(*present_index, surface.to_trace()));
                 }
@@ -507,18 +501,17 @@ impl Global {
     pub fn surface_present(&self, surface_id: id::SurfaceId) -> Result<Status, SurfaceError> {
         let surface = self.surfaces.get(surface_id);
 
-        let mut present_lock = surface.presentation.lock();
-
         let queue = {
-            let present = present_lock.as_ref().ok_or(SurfaceError::NotConfigured)?;
+            let lock = surface.presentation.lock();
+            let present = lock.as_ref().ok_or(SurfaceError::NotConfigured)?;
             present.device.get_queue().unwrap()
         };
 
-        let result = queue.present_impl(&surface, present_lock.as_mut());
+        let result = queue.present(&surface);
 
         #[cfg(feature = "trace")]
         if let Ok((_, present_index)) = &result {
-            if let Some(ref present) = *present_lock {
+            if let Some(present) = surface.presentation.lock().as_ref() {
                 if let Some(ref mut trace) = *present.device.trace.lock() {
                     trace.add(Action::Present(*present_index, surface.to_trace()));
                 }
