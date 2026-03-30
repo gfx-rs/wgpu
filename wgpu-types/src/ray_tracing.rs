@@ -31,7 +31,6 @@ pub struct BlasTriangleGeometrySizeDescriptor {
 /// Descriptor for size-defining attributes of one AABB geometry group in a bottom level acceleration structure.
 ///
 /// Each primitive is one axis-aligned bounding box, typically stored as two `vec3<f32>` min/max corners.
-/// The buffer layout is given by [`BlasAABBGeometrySizeDescriptor::stride`] in bytes (minimum 24).
 pub struct BlasAABBGeometrySizeDescriptor {
     /// Number of AABB primitives in this geometry.
     pub primitive_count: u32,
@@ -39,7 +38,7 @@ pub struct BlasAABBGeometrySizeDescriptor {
     pub flags: AccelerationStructureGeometryFlags,
 }
 
-/// Minimum [`BlasAABBGeometrySizeDescriptor::stride`] for AABB geometry (24 bytes: two `vec3<f32>`).
+/// Minimum stride for AABB geometry (24 bytes: two `vec3<f32>`).
 pub const AABB_GEOMETRY_MIN_STRIDE: crate::BufferAddress = 24;
 
 #[derive(Clone, Debug)]

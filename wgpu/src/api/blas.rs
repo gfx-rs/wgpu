@@ -16,7 +16,7 @@ static_assertions::assert_impl_all!(BlasTriangleGeometrySizeDescriptor: Send, Sy
 pub type BlasAABBGeometrySizeDescriptor = wgt::BlasAABBGeometrySizeDescriptor;
 static_assertions::assert_impl_all!(BlasAABBGeometrySizeDescriptor: Send, Sync);
 
-/// Minimum [`BlasAABBGeometrySizeDescriptor::stride`] for AABB geometry (24 bytes).
+/// Minimum stride for AABB geometry (24 bytes: two `vec3<f32>`).
 pub use wgt::AABB_GEOMETRY_MIN_STRIDE;
 
 /// Descriptor for the size defining attributes, for a bottom level acceleration structure.
@@ -264,6 +264,8 @@ pub enum ContextBlasGeometries<'a> {
 pub struct ContextBlasAabbGeometry<'a> {
     #[expect(dead_code)]
     pub(crate) size: &'a BlasAABBGeometrySizeDescriptor,
+    #[expect(dead_code)]
+    pub(crate) stride: wgt::BufferAddress,
     #[expect(dead_code)]
     pub(crate) aabb_buffer: &'a dispatch::DispatchBuffer,
     #[expect(dead_code)]
