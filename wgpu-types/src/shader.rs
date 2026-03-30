@@ -109,6 +109,9 @@ pub struct PassthroughShaderEntryPoint<'a> {
 /// Descriptor for a shader module given by any of several sources.
 /// These shaders are passed through directly to the underlying api.
 /// At least one shader type that may be used by the backend must be `Some` or a panic is raised.
+///
+/// Note that you shouldn't expect this to work with bindings except on SPIR-V, and even on SPIR-V
+/// there will be some caveats.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
