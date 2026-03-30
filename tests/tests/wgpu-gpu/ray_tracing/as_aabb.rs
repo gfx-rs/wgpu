@@ -423,7 +423,7 @@ fn aabb_primitive_count_exceeds_creation(ctx: TestingContext) {
     let stride = size_of::<AabbPrimitive>() as BufferAddress;
     let aabb_buf = ctx.device.create_buffer_init(&BufferInitDescriptor {
         label: None,
-        contents: &bytemuck::cast_slice(&[
+        contents: bytemuck::cast_slice(&[
             AabbPrimitive {
                 min: [-1.0, -1.0, -1.0],
                 max: [1.0, 1.0, 1.0],
