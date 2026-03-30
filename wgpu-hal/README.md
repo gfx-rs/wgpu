@@ -12,10 +12,10 @@ applications and engines.
 
 The `wgpu_hal` crate's main design choices:
 
-- Our traits are meant to be *portable*: proper use
+- Our traits are meant to be _portable_: proper use
   should get equivalent results regardless of the backend.
 
-- Our traits' contracts are *unsafe*: implementations perform minimal
+- Our traits' contracts are _unsafe_: implementations perform minimal
   validation, if any, and incorrect use will often cause undefined behavior.
   This allows us to minimize the overhead we impose over the underlying
   graphics system. If you need safety, the [`wgpu-core`] crate provides a
@@ -24,39 +24,39 @@ The `wgpu_hal` crate's main design choices:
   use via FFI; the [`wgpu`] crate provides more idiomatic Rust bindings for
   `wgpu-core`.) Or, you can do your own validation.
 
-- In the same vein, returned errors *only cover cases the user can't
-  anticipate*, like running out of memory or losing the device. Any errors
+- In the same vein, returned errors _only cover cases the user can't
+  anticipate_, like running out of memory or losing the device. Any errors
   that the user could reasonably anticipate are their responsibility to
   avoid. For example, `wgpu_hal` returns no error for mapping a buffer that's
   not mappable: as the buffer creator, the user should already know if they
   can map it.
 
-- We use *static dispatch*. The traits are not
+- We use _static dispatch_. The traits are not
   generally object-safe. You must select a specific backend type
   like [`vulkan::Api`] or [`metal::Api`], and then use that
   according to the main traits, or call backend-specific methods.
 
-- We use *idiomatic Rust parameter passing*,
+- We use _idiomatic Rust parameter passing_,
   taking objects by reference, returning them by value, and so on,
   unlike `wgpu-core`, which refers to objects by ID.
 
-- We map buffer contents *persistently*. This means that the buffer
+- We map buffer contents _persistently_. This means that the buffer
   can remain mapped on the CPU while the GPU reads or writes to it.
   You must explicitly indicate when data might need to be
   transferred between CPU and GPU, if `wgpu_hal` indicates that the
   mapping is not coherent (that is, automatically synchronized
   between the two devices).
 
-- You must record *explicit barriers* between different usages of a
+- You must record _explicit barriers_ between different usages of a
   resource. For example, if a buffer is written to by a compute
   shader, and then used as and index buffer to a draw call, you
   must use [`CommandEncoder::transition_buffers`] between those two
   operations.
 
-- Pipeline layouts are *explicitly specified* when setting bind
+- Pipeline layouts are _explicitly specified_ when setting bind
   group. Incompatible layouts disturb groups bound at higher indices.
 
-- The API *accepts collections as iterators*, to avoid forcing the user to
+- The API _accepts collections as iterators_, to avoid forcing the user to
   store data in particular containers. The implementation doesn't guarantee
   that any of the iterators are drained, unless stated otherwise by the
   function documentation. For this reason, we recommend that iterators don't
@@ -117,4 +117,3 @@ page still applies to this API, with the exception of API tracing/replay
 functionality, which is only available in `wgpu-core`.
 
 [wiki-debug]: https://github.com/gfx-rs/wgpu/wiki/Debugging-wgpu-Applications
-

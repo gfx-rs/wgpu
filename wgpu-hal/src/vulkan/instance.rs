@@ -892,6 +892,10 @@ impl crate::Instance for super::Instance {
                 let connection = display.connection.expect("Pointer to X-Server is not set.");
                 self.create_surface_from_xcb(connection.as_ptr(), handle.window.get())
             }
+            #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+            (Rwh::Drm(handle), Rdh::Drm(display)) => {
+                self.create_surface_from_drm_plane(display.fd, handle.plane)
+            }
             (Rwh::AndroidNdk(handle), _) => {
                 self.create_surface_android(handle.a_native_window.as_ptr())
             }

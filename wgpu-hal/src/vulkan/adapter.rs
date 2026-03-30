@@ -618,9 +618,10 @@ impl PhysicalDeviceFeatures {
                 None
             },
             shader_draw_parameters: if device_api_version >= vk::API_VERSION_1_1 {
+                let needed = requested_features.contains(wgt::Features::SHADER_DRAW_INDEX);
                 Some(
                     vk::PhysicalDeviceShaderDrawParametersFeatures::default()
-                        .shader_draw_parameters(true),
+                        .shader_draw_parameters(needed),
                 )
             } else {
                 None

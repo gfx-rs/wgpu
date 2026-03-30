@@ -327,8 +327,13 @@ fn push_job_for_each_hlsl_config_item(
         vertex,
         fragment,
         compute,
+        task,
+        mesh,
     } = hlsl_snapshots::Config::from_path(path.with_extension("ron"))?;
-    for shader in [vertex, fragment, compute].into_iter().flatten() {
+    for shader in [vertex, fragment, compute, task, mesh]
+        .into_iter()
+        .flatten()
+    {
         // Let each job closure stand on its own.
         let mut validator = validator.clone();
         let path = path.to_owned();

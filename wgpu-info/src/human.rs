@@ -1,11 +1,12 @@
 use std::io;
 
 use bitflags::Flags;
+use exhaust::Exhaust;
 use wgpu::AdapterInfo;
 
 use crate::{
     report::{AdapterReport, GpuReport},
-    texture::{self, TEXTURE_FORMAT_LIST},
+    texture,
 };
 
 trait FlagsExt: Flags {
@@ -288,7 +289,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
 
     write!(output, "\t\t {texture_format_whitespace}")?;
     wgpu::TextureUsages::println_table_header(output)?;
-    for format in TEXTURE_FORMAT_LIST {
+    for format in wgpu::TextureFormat::exhaust() {
         let features = texture_format_features[&format];
         let format_name = texture::texture_format_name(format);
         write!(output, "\t\t{format_name:>max_format_name_size$}")?;
@@ -316,7 +317,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     write!(output, "\t\t {texture_format_whitespace}")?;
     wgpu::TextureFormatFeatureFlags::println_table_header(output)?;
 
-    for format in TEXTURE_FORMAT_LIST {
+    for format in wgpu::TextureFormat::exhaust() {
         let features = texture_format_features[&format];
         let format_name = texture::texture_format_name(format);
 

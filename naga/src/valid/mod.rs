@@ -36,7 +36,7 @@ pub use r#type::{Disalignment, ImmediateError, TypeError, TypeFlags, WidthError}
 use self::handles::InvalidHandleError;
 
 /// Maximum size of a type, in bytes.
-pub const MAX_TYPE_SIZE: u32 = 0x4000_0000; // 1GB
+pub const MAX_TYPE_SIZE: u32 = i32::MAX as u32;
 
 bitflags::bitflags! {
     /// Validation flags.
@@ -408,9 +408,10 @@ enum TraceRayVertexReturnState {
     /// Trace ray calls have been found, at least
     /// one uses an acceleration structure that
     /// does not have the flag enabling vertex return.
-    // Don't yet have vertex return builtins to return.
-    // this error for.
-    #[expect(unused)]
+    #[expect(
+        unused,
+        reason = "Don't yet have vertex return builtins to return this error for."
+    )]
     NoVertexReturn(crate::Span),
     /// Trace ray calls have been found, all
     /// acceleration structures have the flag enabling

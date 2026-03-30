@@ -54,7 +54,7 @@ use crate::{
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     timestamp_normalization::TIMESTAMP_NORMALIZATION_BUFFER_USES,
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
-    validation,
+    validation::{self, check_color_attachment_count},
     weak_vec::WeakVec,
     FastHashMap, LabelHelpers, OnceCellOrLock,
 };
@@ -3423,6 +3423,9 @@ impl Device {
                 return Err(Error::DuplicateBinding(a.binding));
             }
         }
+
+        dynamic_binding_info.sort_by_key(|i| i.binding_idx);
+
         let hal_desc = hal::BindGroupDescriptor {
             label: desc.label.to_hal(self.instance_flags),
             layout: layout.raw(),
@@ -3968,22 +3971,13 @@ impl Device {
 
         let mut shader_binding_sizes = FastHashMap::default();
 
-        let num_attachments = desc.fragment.as_ref().map(|f| f.targets.len()).unwrap_or(0);
-        let max_attachments = self.limits.max_color_attachments as usize;
-        if num_attachments > max_attachments {
-            return Err(pipeline::CreateRenderPipelineError::ColorAttachment(
-                command::ColorAttachmentError::TooMany {
-                    given: num_attachments,
-                    limit: max_attachments,
-                },
-            ));
-        }
-
         let color_targets = desc
             .fragment
             .as_ref()
             .map_or(&[][..], |fragment| &fragment.targets);
         let depth_stencil_state = desc.depth_stencil.as_ref();
+
+        check_color_attachment_count(color_targets.len(), self.limits.max_color_attachments)?;
 
         {
             let cts: ArrayVec<_, { hal::MAX_COLOR_ATTACHMENTS }> =
@@ -4843,7 +4837,7 @@ impl Device {
         format_features
     }
 
-    fn describe_format_features(
+    pub(crate) fn describe_format_features(
         &self,
         format: TextureFormat,
     ) -> Result<wgt::TextureFormatFeatures, MissingFeatures> {

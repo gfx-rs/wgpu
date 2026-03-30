@@ -10,4 +10,4 @@ coverage:
         if_ci_failed: success
 comment: false
 github_checks:
-    annotations: false
+  annotations: false

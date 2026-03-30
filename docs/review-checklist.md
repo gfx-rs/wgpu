@@ -50,11 +50,13 @@ satisfying way to address in a more robust way.
 ### IR changes
 
 If your change adds or removes `Handle`s from the IR:
+
 - [ ] Did you update handle validation in `valid::handles`?
 - [ ] Did you update the compactor in `compact`?
 - [ ] Did you update `back::pipeline_constants::adjust_expr`?
 
 If your change adds a new operation:
+
 - [ ] Did you update the typifier in `proc::typifier`?
 - [ ] Did you update the validator in `valid::expression`?
 - [ ] If the operation can be used in constant expressions, did you

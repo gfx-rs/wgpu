@@ -94,6 +94,7 @@ vulkan = [
     "dep:arrayvec",
     "dep:ash",
     "dep:bytemuck",
+    "dep:drm",
     "dep:gpu-descriptor",
     "dep:hashbrown",
     "dep:libc",
@@ -250,6 +251,9 @@ wayland-sys = { version = "0.31.3", features = [
     "dlopen",
     "egl",
 ], optional = true }
+
+[target.'cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))'.dependencies]
+drm = { version = "0.15", optional = true }
 
 #########################
 ### Platform: Windows ###

@@ -1,4 +1,5 @@
 # wgpu
+
 <img align="right" width="20%" src="logo.png">
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/gfx-rs/wgpu/ci.yml?branch=trunk&logo=github&label=CI)](https://github.com/gfx-rs/wgpu/actions)
@@ -15,6 +16,7 @@ See our examples online at <https://wgpu.rs/examples/>. You can see the Rust sou
 ### Learning `wgpu`
 
 If you are new to `wgpu` and graphics programming, we recommend starting with [Learn Wgpu].
+
 <!-- Note, "Learn Wgpu" is using the capitalization style in their header, NOT our styling -->
 
 Additionally, [WebGPU Fundamentals] is a tutorial for WebGPU which is very similar to our API, minus differences between Rust and Javascript.
@@ -24,21 +26,20 @@ Additionally, [WebGPU Fundamentals] is a tutorial for WebGPU which is very simil
 
 ### Wiki
 
-We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) which has information on useful architecture patterns, debugging tips, and more getting started information. 
+We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) which has information on useful architecture patterns, debugging tips, and more getting started information.
 
-### Need Help? Want to Contribute? 
+### Need Help? Want to Contribute?
 
 The wgpu community uses Matrix and Discord to discuss.
 
 - [![`#wgpu:matrix.org`](https://img.shields.io/static/v1?label=wgpu-devs&message=%23wgpu&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu:matrix.org) - discussion of wgpu's development.
 - [![`#wgpu-users:matrix.org`](https://img.shields.io/static/v1?label=wgpu-users&message=%23wgpu-users&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu-users:matrix.org) - discussion of using the library and the surrounding ecosystem.
 - [![#wgpu on the Rust Gamedev Discord](https://img.shields.io/discord/676678179678715904?logo=discord&logoColor=E0E3FF&label=%23wgpu&color=5865F2)
-](https://discord.gg/X3MYBNXUMJ) - Dedicated support channel on the Rust Gamedev Discord.
-
+  ](https://discord.gg/X3MYBNXUMJ) - Dedicated support channel on the Rust Gamedev Discord.
 
 ### Other Languages
 
-To use wgpu in C or dozens of other languages, look at [wgpu-native](https://github.com/gfx-rs/wgpu-native). These are C bindings to wgpu and has an up-to-date list of libraries bringing support to other languages. 
+To use wgpu in C or dozens of other languages, look at [wgpu-native](https://github.com/gfx-rs/wgpu-native). These are C bindings to wgpu and has an up-to-date list of libraries bringing support to other languages.
 
 [Learn WebGPU (for C++)] is a good resource for learning how to use wgpu-native from C++.
 
@@ -47,9 +48,9 @@ To use wgpu in C or dozens of other languages, look at [wgpu-native](https://git
 
 ## Quick Links
 
-| Docs                  | Examples                  | Changelog               |
-|:---------------------:|:-------------------------:|:-----------------------:|
-| [v29][rel-docs]       | [v29][rel-examples]       | [v29][rel-change]       |
+|         Docs          |         Examples          |        Changelog        |
+| :-------------------: | :-----------------------: | :---------------------: |
+|    [v29][rel-docs]    |    [v29][rel-examples]    |    [v29][rel-change]    |
 | [`trunk`][trunk-docs] | [`trunk`][trunk-examples] | [`trunk`][trunk-change] |
 
 Contributors are welcome! See [CONTRIBUTING.md][contrib] for more information.
@@ -64,13 +65,13 @@ Contributors are welcome! See [CONTRIBUTING.md][contrib] for more information.
 
 ## Supported Platforms
 
-| API    | Windows            | Linux/Android      | macOS/iOS          | Web (wasm)         |
-| ------ | ------------------ | ------------------ | ------------------ | ------------------ |
-| Vulkan |         ✅         |         ✅         |         🌋         |                    |
-| Metal  |                    |                    |         ✅         |                    |
-| DX12   |         ✅         |                    |                    |                    |
-| OpenGL |    🆗 (GL 3.3+)    |  🆗 (GL ES 3.0+)   |         📐         |    🆗 (WebGL2)     |
-| WebGPU |                    |                    |                    |         ✅         |
+| API    | Windows      | Linux/Android   | macOS/iOS | Web (wasm)  |
+| ------ | ------------ | --------------- | --------- | ----------- |
+| Vulkan | ✅           | ✅              | 🌋        |             |
+| Metal  |              |                 | ✅        |             |
+| DX12   | ✅           |                 |           |             |
+| OpenGL | 🆗 (GL 3.3+) | 🆗 (GL ES 3.0+) | 📐        | 🆗 (WebGL2) |
+| WebGPU |              |                 |           | ✅          |
 
 ✅ = First Class Support  
 🆗 = Downlevel/Best Effort Support  
@@ -113,14 +114,15 @@ It is enforced on CI (in "/.github/workflows/ci.yml") with the `WGPU_MSRV`, `COR
 This version can only be upgraded in breaking releases, though we release a breaking version every three months.
 
 The following rules apply:
+
 - The `wgpu-core` crate should never require an MSRV ahead of Firefox's MSRV for nightly builds, as
-determined by the value of `MINIMUM_RUST_VERSION` in [`python/mozboot/mozboot/util.py`][moz-msrv].
+  determined by the value of `MINIMUM_RUST_VERSION` in [`python/mozboot/mozboot/util.py`][moz-msrv].
 - The `wgpu` crate should never require an MSRV ahead of Servo's MSRV, as determined by the value of
-their rust-version declaration in [`Cargo.toml`][servo-msrv]
+  their rust-version declaration in [`Cargo.toml`][servo-msrv]
 - The repository MSRV should never require an MSRV higher than `stable - 3`. For example, if stable is
-at 1.97, the repository MSRV should be no higher than 1.94. This is to allow people who are using a decently-updated
-OS-provided rust to be able to build our repository. Consider cross checking with [NixOS][nixos-msrv], though this
-is not required.
+  at 1.97, the repository MSRV should be no higher than 1.94. This is to allow people who are using a decently-updated
+  OS-provided rust to be able to build our repository. Consider cross checking with [NixOS][nixos-msrv], though this
+  is not required.
 
 [moz-msrv]: https://searchfox.org/mozilla-central/source/python/mozboot/mozboot/util.py
 [servo-msrv]: https://github.com/servo/servo/blob/main/Cargo.toml#L23
@@ -165,4 +167,3 @@ Exactly which WGSL features `wgpu` supports depends on how you are using it:
 [wgsl spec]: https://gpuweb.github.io/gpuweb/wgsl/
 [naga]: https://github.com/gfx-rs/wgpu/tree/trunk/naga/
 [naga bugs]: https://github.com/gfx-rs/wgpu/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22naga%22
-

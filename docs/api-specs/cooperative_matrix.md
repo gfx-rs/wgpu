@@ -90,7 +90,6 @@ You **must**:
 ### `wgpu` feature
 
 - Using cooperative matrices requires enabling:
-
   - `Features::EXPERIMENTAL_COOPERATIVE_MATRIX`
 
 This feature may be restricted to certain backends and hardware.
@@ -132,7 +131,6 @@ Returns all cooperative matrix configurations supported by the adapter/backend.
 ### Structures
 
 - `CooperativeMatrixProperties`
-
   - `m_size: naga::CooperativeSize`
   - `n_size: naga::CooperativeSize`
   - `k_size: naga::CooperativeSize`
@@ -171,7 +169,6 @@ A cooperative matrix is a value type parameterized by:
 - tile size (M×N),
 - scalar element type `T`, and
 - role `R` indicating how the matrix participates in the multiply-accumulate:
-
   - `A`: left operand
   - `B`: right operand
   - `C`: accumulator / result
@@ -206,17 +203,14 @@ properties returned at runtime; shaders must not use arbitrary combinations.
 ### Roles and semantics
 
 - `A` role:
-
   - Treated as the left operand in the multiplication. Has shape M×K.
   - Participates as `A` in `A * B + C`.
 
 - `B` role:
-
   - Treated as the right operand in the multiplication. Has shape K×N.
   - Participates as `B` in `A * B + C`.
 
 - `C` role:
-
   - Treated as accumulator and result. Has shape M×N.
   - Participates as `C` in `A * B + C`.
 
@@ -317,7 +311,6 @@ underlying scalar type semantics (e.g. IEEE-754 for floats).
 Cooperative matrix operations are **collective**:
 
 - All invocations in the relevant execution group must execute each cooperative operation in uniform control flow:
-
   - Using `coopLoad`, `coopStore`, or `coopMultiplyAdd` in divergent control flow (e.g. some lanes taking
     a branch, others not) is undefined behavior.
   - The exact execution group may be a workgroup, a SIMD-group / subgroup, or another backend-specific
@@ -330,7 +323,6 @@ Cooperative matrix operations are **collective**:
 For portable code:
 
 - Choose a workgroup size that is known to be supported efficiently on your target backends, for example:
-
   - `@workgroup_size(8, 8, 1)` to operate on an 8×8 tile, or
   - a multiple of the tile size where each subgroup handles a tile.
 

@@ -355,9 +355,11 @@ For changelogs after v0.14, see [the wgpu changelog](../CHANGELOG.md).
 ## v0.10.1 (2023-06-21)
 
 SPV-OUT
+
 - Backport #2389 (Use `IndexSet` instead of `HashSet` for iterated sets (capabilities/extensions)) by @eddyb, @jimblandy in https://github.com/gfx-rs/naga/pull/2391
 
 SPV-IN
+
 - Backport #2290 (Convert conditional backedges to `break if`) by @eddyb in https://github.com/gfx-rs/naga/pull/2387
 
 ## v0.10 (2022-10-05)
@@ -370,17 +372,21 @@ SPV-IN
 - Fix compiler warning by @Gordon-F in https://github.com/gfx-rs/naga/pull/2074
 
 API
+
 - Implement `Clone` for `Module` by @daxpedda in https://github.com/gfx-rs/naga/pull/2013
 - Remove the glsl-validate feature by @JCapucho in https://github.com/gfx-rs/naga/pull/2045
 
 DOCS
+
 - Document arithmetic binary operation type rules. by @jimblandy in https://github.com/gfx-rs/naga/pull/2051
 
 VALIDATOR
+
 - Add `emit_to_{stderr,string}` helpers to validation error by @nolanderc in https://github.com/gfx-rs/naga/pull/2012
 - Check regular functions don't have bindings by @JCapucho in https://github.com/gfx-rs/naga/pull/2050
 
 WGSL-IN
+
 - Update reserved WGSL keywords by @norepimorphism in https://github.com/gfx-rs/naga/pull/2009
 - Implement lexical scopes by @JCapucho in https://github.com/gfx-rs/naga/pull/2024
 - Rename `Scope` to `Rule`, since we now have lexical scope. by @jimblandy in https://github.com/gfx-rs/naga/pull/2042
@@ -392,23 +398,27 @@ WGSL-IN
 - Fix line endings on wgsl reserved words list. by @jimblandy in https://github.com/gfx-rs/naga/pull/2059
 
 GLSL-IN
+
 - Add support for .length() by @SpaceCat-Chan in https://github.com/gfx-rs/naga/pull/2017
 - Fix missing stores for local declarations by @adeline-sparks in https://github.com/gfx-rs/naga/pull/2029
 - Migrate to `SymbolTable` by @JCapucho in https://github.com/gfx-rs/naga/pull/2044
 - Update initializer list type when parsing by @JCapucho in https://github.com/gfx-rs/naga/pull/2066
 
 SPV-OUT
+
 - Don't decorate varyings with interpolation modes at pipeline start/end by @nical in https://github.com/gfx-rs/naga/pull/2038
 - Decorate integer builtins as Flat in the spirv writer by @nical in https://github.com/gfx-rs/naga/pull/2035
 - Properly combine the fixes for #2035 and #2038. by @jimblandy in https://github.com/gfx-rs/naga/pull/2041
 - Don't emit no-op `OpBitCast` instructions. by @jimblandy in https://github.com/gfx-rs/naga/pull/2043
 
 HLSL-OUT
+
 - Use the namer to sanitise entrypoint input/output struct names by @expenses in https://github.com/gfx-rs/naga/pull/2001
 - Handle Unpack2x16float in hlsl by @expenses in https://github.com/gfx-rs/naga/pull/2002
 - Add support for push constants by @JCapucho in https://github.com/gfx-rs/naga/pull/2005
 
 DOT-OUT
+
 - Improvements by @JCapucho in https://github.com/gfx-rs/naga/pull/1987
 
 ## v0.9 (2022-06-30)
@@ -581,7 +591,7 @@ MSL-OUT
 - Fix not unary operator for integer scalars ([#1760](https://github.com/gfx-rs/naga/pull/1760)) **@vincentisambart**
 - Add bounds checks for `ImageLoad` and `ImageStore` ([#1730](https://github.com/gfx-rs/naga/pull/1730)) **@jimblandy**
 - Fix resource bindings for non-structures ([#1718](https://github.com/gfx-rs/naga/pull/1718)) **@kvark**
-- Always check whether _buffer_sizes arg is needed ([#1717](https://github.com/gfx-rs/naga/pull/1717)) **@jimblandy**
+- Always check whether \_buffer_sizes arg is needed ([#1717](https://github.com/gfx-rs/naga/pull/1717)) **@jimblandy**
 - WGSL storage address space should always correspond to MSL device address space ([#1711](https://github.com/gfx-rs/naga/pull/1711)) **@wtholliday**
 - Mitigation for MSL atomic bounds check ([#1703](https://github.com/gfx-rs/naga/pull/1703)) **@glalonde**
 
@@ -627,14 +637,12 @@ GLSL-OUT
 - Skip unsized types if unused ([#1649](https://github.com/gfx-rs/naga/pull/1649)) **@kvark**
 - Write struct and array initializers ([#1644](https://github.com/gfx-rs/naga/pull/1644)) **@JCapucho**
 
-
 ## v0.8.5 (2022-01-25)
 
 MSL-OUT
 
 - Make VS-output positions invariant on even more systems ([#1697](https://github.com/gfx-rs/naga/pull/1697)) **@cwfitzgerald**
 - Improve support for point primitives ([#1696](https://github.com/gfx-rs/naga/pull/1696)) **@kvark**
-
 
 ## v0.8.4 (2022-01-24)
 
@@ -647,7 +655,6 @@ GLSL-OUT
 - Fix `floatBitsToUint` spelling ([#1688](https://github.com/gfx-rs/naga/pull/1688)) **@cwfitzgerald**
 - Call proper memory barrier functions ([#1680](https://github.com/gfx-rs/naga/pull/1680)) **@francesco-cattoglio**
 
-
 ## v0.8.3 (2022-01-20)
 
 - Don't pin `indexmap` version ([#1666](https://github.com/gfx-rs/naga/pull/1666)) **@a1phyr**
@@ -659,7 +666,6 @@ MSL-OUT
 GLSL-OUT
 
 - Fix sampler association ([#1671](https://github.com/gfx-rs/naga/pull/1671)) **@JCapucho**
-
 
 ## v0.8.2 (2022-01-11)
 
@@ -684,7 +690,6 @@ MSL-OUT
 - Fix `texture1d` accesses ([#1647](https://github.com/gfx-rs/naga/pull/1647)) **@jimblandy**
 - Fix data packing functions ([#1637](https://github.com/gfx-rs/naga/pull/1637)) **@phoekz**
 
-
 ## v0.8.1 (2021-12-29)
 
 API
@@ -706,250 +711,267 @@ GLSL-OUT
 - Fix conflicting names for globals ([#1616](https://github.com/gfx-rs/naga/pull/1616)) **@Gordon-F**
 - Fix `fma` function ([#1580](https://github.com/gfx-rs/naga/pull/1580)) **@parasyte**
 
-
 ## v0.8 (2021-12-18)
-  - development release for wgpu-0.12
-  - lots of fixes in all parts
-  - validator:
-    - now gated by `validate` feature
-    - nicely detailed error messages with spans
-  - API:
-    - image gather operations
-  - WGSL-in:
-    - remove `[[block]]` attribute
-    - `elseif` is removed in favor of `else if`
-  - MSL-out:
-    - full out-of-bounds checking
+
+- development release for wgpu-0.12
+- lots of fixes in all parts
+- validator:
+  - now gated by `validate` feature
+  - nicely detailed error messages with spans
+- API:
+  - image gather operations
+- WGSL-in:
+  - remove `[[block]]` attribute
+  - `elseif` is removed in favor of `else if`
+- MSL-out:
+  - full out-of-bounds checking
 
 ## v0.7.3 (2021-12-14)
-  - API:
-    - `view_index` builtin
-  - GLSL-out:
-    - reflect textures without samplers
-  - SPV-out:
-    - fix incorrect pack/unpack
+
+- API:
+  - `view_index` builtin
+- GLSL-out:
+  - reflect textures without samplers
+- SPV-out:
+  - fix incorrect pack/unpack
 
 ## v0.7.2 (2021-12-01)
-  - validator:
-    - check stores for proper pointer class
-  - HLSL-out:
-    - fix stores into `mat3`
-    - respect array strides
-  - SPV-out:
-    - fix multi-word constants
-  - WGSL-in:
-    - permit names starting with underscores
-  - SPV-in:
-    - cull unused builtins
-    - support empty debug labels
-  - GLSL-in:
-    - don't panic on invalid integer operations
+
+- validator:
+  - check stores for proper pointer class
+- HLSL-out:
+  - fix stores into `mat3`
+  - respect array strides
+- SPV-out:
+  - fix multi-word constants
+- WGSL-in:
+  - permit names starting with underscores
+- SPV-in:
+  - cull unused builtins
+  - support empty debug labels
+- GLSL-in:
+  - don't panic on invalid integer operations
 
 ## v0.7.1 (2021-10-12)
-  - implement casts from and to booleans in the backends
+
+- implement casts from and to booleans in the backends
 
 ## v0.7 (2021-10-07)
-  - development release for wgpu-0.11
-  - API:
-    - bit extraction and packing functions
-    - hyperbolic trigonometry functions
-    - validation is gated by a cargo feature
-    - `view_index` builtin
-    - separate bounds checking policies for locals/buffers/textures
-  - IR:
-    - types and constants are guaranteed to be unique
-  - WGSL-in:
-    - new hex literal parser
-    - updated list of reserved words
-    - rewritten logic for resolving references and pointers
-    - `switch` can use unsigned selectors
-  - GLSL-in:
-    - better support for texture sampling
-    - better logic for auto-splatting scalars
-  - GLSL-out:
-    - fixed storage buffer layout
-    - fix module operator
-  - HLSL-out:
-    - fixed texture queries
-  - SPV-in:
-    - control flow handling is rewritten from scratch
-  - SPV-out:
-    - fully covered out-of-bounds checking
-    - option to emit point size
-    - option to clamp output depth
+
+- development release for wgpu-0.11
+- API:
+  - bit extraction and packing functions
+  - hyperbolic trigonometry functions
+  - validation is gated by a cargo feature
+  - `view_index` builtin
+  - separate bounds checking policies for locals/buffers/textures
+- IR:
+  - types and constants are guaranteed to be unique
+- WGSL-in:
+  - new hex literal parser
+  - updated list of reserved words
+  - rewritten logic for resolving references and pointers
+  - `switch` can use unsigned selectors
+- GLSL-in:
+  - better support for texture sampling
+  - better logic for auto-splatting scalars
+- GLSL-out:
+  - fixed storage buffer layout
+  - fix module operator
+- HLSL-out:
+  - fixed texture queries
+- SPV-in:
+  - control flow handling is rewritten from scratch
+- SPV-out:
+  - fully covered out-of-bounds checking
+  - option to emit point size
+  - option to clamp output depth
 
 ## v0.6.3 (2021-09-08)
-  - Reduced heap allocations when generating WGSL, HLSL, and GLSL
-  - WGSL-in:
-    - support module-scope `let` type inference
-  - SPV-in:
-    - fix depth sampling with projection
-  - HLSL-out:
-    - fix local struct construction
-  - GLSL-out:
-    - fix `select()` order
-  - SPV-out:
-    - allow working around Adreno issue with `OpName`
+
+- Reduced heap allocations when generating WGSL, HLSL, and GLSL
+- WGSL-in:
+  - support module-scope `let` type inference
+- SPV-in:
+  - fix depth sampling with projection
+- HLSL-out:
+  - fix local struct construction
+- GLSL-out:
+  - fix `select()` order
+- SPV-out:
+  - allow working around Adreno issue with `OpName`
 
 ## v0.6.2 (2021-09-01)
-  - SPV-out fixes:
-    - requested capabilities for 1D and cube images, storage formats
-    - handling `break` and `continue` in a `switch` statement
-    - avoid generating duplicate `OpTypeImage` types
-  - HLSL-out fixes:
-    - fix output struct member names
-  - MSL-out fixes:
-    - fix packing of fields in interface structs
-  - GLSL-out fixes:
-    - fix non-fallthrough `switch` cases
-  - GLSL-in fixes:
-    - avoid infinite loop on invalid statements
+
+- SPV-out fixes:
+  - requested capabilities for 1D and cube images, storage formats
+  - handling `break` and `continue` in a `switch` statement
+  - avoid generating duplicate `OpTypeImage` types
+- HLSL-out fixes:
+  - fix output struct member names
+- MSL-out fixes:
+  - fix packing of fields in interface structs
+- GLSL-out fixes:
+  - fix non-fallthrough `switch` cases
+- GLSL-in fixes:
+  - avoid infinite loop on invalid statements
 
 ## v0.6.1 (2021-08-24)
-  - HLSL-out fixes:
-    - array arguments
-    - pointers to array arguments
-    - switch statement
-    - rewritten interface matching
-  - SPV-in fixes:
-    - array storage texture stores
-    - tracking sampling across function parameters
-    - updated petgraph dependencies
-  - MSL-out:
-    - gradient sampling
-  - GLSL-out:
-    - modulo operator on floats
+
+- HLSL-out fixes:
+  - array arguments
+  - pointers to array arguments
+  - switch statement
+  - rewritten interface matching
+- SPV-in fixes:
+  - array storage texture stores
+  - tracking sampling across function parameters
+  - updated petgraph dependencies
+- MSL-out:
+  - gradient sampling
+- GLSL-out:
+  - modulo operator on floats
 
 ## v0.6 (2021-08-18)
-  - development release for wgpu-0.10
-  - API:
-    - atomic types and functions
-    - storage access is moved from global variables to the storage class and storage texture type
-    - new built-ins: `primitive_index` and `num_workgroups`
-    - support for multi-sampled depth images
-  - WGSL:
-    - `select()` order of true/false is swapped
-  - HLSL backend is vastly improved and now usable
-  - GLSL frontend is heavily reworked
+
+- development release for wgpu-0.10
+- API:
+  - atomic types and functions
+  - storage access is moved from global variables to the storage class and storage texture type
+  - new built-ins: `primitive_index` and `num_workgroups`
+  - support for multi-sampled depth images
+- WGSL:
+  - `select()` order of true/false is swapped
+- HLSL backend is vastly improved and now usable
+- GLSL frontend is heavily reworked
 
 ## v0.5 (2021-06-18)
-  - development release for wgpu-0.9
-  - API:
-    - barriers
-    - dynamic indexing of matrices and arrays is only allowed on variables
-    - validator now accepts a list of IR capabilities to allow
-    - improved documentation
-  - Infrastructure:
-    - much richer test suite, focused around consuming or emitting WGSL
-    - lazy testing on large shader corpuses
-    - the binary is moved to a sub-crate "naga-cli"
-  - Frontends:
-    - GLSL frontend:
-      - rewritten from scratch and effectively revived, no longer depends on `pomelo`
-      - only supports 440/450/460 versions for now
-      - has optional support for codespan messages
-    - SPIRV frontend has improved CFG resolution (still with issues unresolved)
-    - WGSL got better error messages, workgroup memory support
-  - Backends:
-    - general: better expression naming and emitting
-    - new HLSL backend (in progress)
-    - MSL:
-      - support `ArraySize` expression
-      - better texture sampling instructions
-    - GLSL:
-      - multisampling on GLES
-    - WGSL is vastly improved and now usable
+
+- development release for wgpu-0.9
+- API:
+  - barriers
+  - dynamic indexing of matrices and arrays is only allowed on variables
+  - validator now accepts a list of IR capabilities to allow
+  - improved documentation
+- Infrastructure:
+  - much richer test suite, focused around consuming or emitting WGSL
+  - lazy testing on large shader corpuses
+  - the binary is moved to a sub-crate "naga-cli"
+- Frontends:
+  - GLSL frontend:
+    - rewritten from scratch and effectively revived, no longer depends on `pomelo`
+    - only supports 440/450/460 versions for now
+    - has optional support for codespan messages
+  - SPIRV frontend has improved CFG resolution (still with issues unresolved)
+  - WGSL got better error messages, workgroup memory support
+- Backends:
+  - general: better expression naming and emitting
+  - new HLSL backend (in progress)
+  - MSL:
+    - support `ArraySize` expression
+    - better texture sampling instructions
+  - GLSL:
+    - multisampling on GLES
+  - WGSL is vastly improved and now usable
 
 ## v0.4.2 (2021-05-28)
-  - SPIR-V frontend:
-    - fix image stores
-    - fix matrix stride check
-  - SPIR-V backend:
-    - fix auto-deriving the capabilities
-  - GLSL backend:
-    - support sample interpolation
-    - write out swizzled vector accesses
+
+- SPIR-V frontend:
+  - fix image stores
+  - fix matrix stride check
+- SPIR-V backend:
+  - fix auto-deriving the capabilities
+- GLSL backend:
+  - support sample interpolation
+  - write out swizzled vector accesses
 
 ## v0.4.1 (2021-05-14)
-  - numerous additions and improvements to SPIR-V frontend:
-    - int8, in16, int64
-    - null constant initializers for structs and matrices
-    - `OpArrayLength`, `OpCopyMemory`, `OpInBoundsAccessChain`, `OpLogicalXxxEqual`
-    - outer product
-    - fix struct size alignment
-    - initialize built-ins with default values
-    - fix read-only decorations on struct members
-  - fix struct size alignment in WGSL
-  - fix `fwidth` in WGSL
-  - fix scalars arrays in GLSL backend
+
+- numerous additions and improvements to SPIR-V frontend:
+  - int8, in16, int64
+  - null constant initializers for structs and matrices
+  - `OpArrayLength`, `OpCopyMemory`, `OpInBoundsAccessChain`, `OpLogicalXxxEqual`
+  - outer product
+  - fix struct size alignment
+  - initialize built-ins with default values
+  - fix read-only decorations on struct members
+- fix struct size alignment in WGSL
+- fix `fwidth` in WGSL
+- fix scalars arrays in GLSL backend
 
 ## v0.4 (2021-04-29)
-  - development release for wgpu-0.8
-  - API:
-    - expressions are explicitly emitted with `Statement::Emit`
-    - entry points have inputs in arguments and outputs in the result type
-    - `input`/`output` storage classes are gone, but `push_constant` is added
-    - `Interpolation` is moved into `Binding::Location` variant
-    - real pointer semantics with required `Expression::Load`
-    - `TypeInner::ValuePointer` is added
-    - image query expressions are added
-    - new `Statement::ImageStore`
-    - all function calls are `Statement::Call`
-    - `GlobalUse` is moved out into processing
-    - `Header` is removed
-    - entry points are an array instead of a map
-    - new `Swizzle` and `Splat` expressions
-    - interpolation qualifiers are extended and required
-    - struct member layout is based on the byte offsets
-  - Infrastructure:
-    - control flow uniformity analysis
-    - texture-sampler combination gathering
-    - `CallGraph` processor is moved out into `glsl` backend
-    - `Interface` is removed, instead the analysis produces `ModuleInfo` with all the derived info
-    - validation of statement tree, expressions, and constants
-    - code linting is more strict for matches
-  - new GraphViz `dot` backend for pretty visualization of the IR
-  - Metal support for inlined samplers
-  - `convert` example is transformed into the default binary target named `naga`
-  - lots of frontend and backend fixes
+
+- development release for wgpu-0.8
+- API:
+  - expressions are explicitly emitted with `Statement::Emit`
+  - entry points have inputs in arguments and outputs in the result type
+  - `input`/`output` storage classes are gone, but `push_constant` is added
+  - `Interpolation` is moved into `Binding::Location` variant
+  - real pointer semantics with required `Expression::Load`
+  - `TypeInner::ValuePointer` is added
+  - image query expressions are added
+  - new `Statement::ImageStore`
+  - all function calls are `Statement::Call`
+  - `GlobalUse` is moved out into processing
+  - `Header` is removed
+  - entry points are an array instead of a map
+  - new `Swizzle` and `Splat` expressions
+  - interpolation qualifiers are extended and required
+  - struct member layout is based on the byte offsets
+- Infrastructure:
+  - control flow uniformity analysis
+  - texture-sampler combination gathering
+  - `CallGraph` processor is moved out into `glsl` backend
+  - `Interface` is removed, instead the analysis produces `ModuleInfo` with all the derived info
+  - validation of statement tree, expressions, and constants
+  - code linting is more strict for matches
+- new GraphViz `dot` backend for pretty visualization of the IR
+- Metal support for inlined samplers
+- `convert` example is transformed into the default binary target named `naga`
+- lots of frontend and backend fixes
 
 ## v0.3.2 (2021-02-15)
-  - fix logical expression types
-  - fix _FragDepth_ semantics
-  - spv-in:
-    - derive block status of structures
-  - spv-out:
-    - add lots of missing math functions
-    - implement discard
+
+- fix logical expression types
+- fix _FragDepth_ semantics
+- spv-in:
+  - derive block status of structures
+- spv-out:
+  - add lots of missing math functions
+  - implement discard
 
 ## v0.3.1 (2021-01-31)
-  - wgsl:
-    - support constant array sizes
-  - spv-out:
-    - fix block decorations on nested structures
-    - fix fixed-size arrays
-    - fix matrix decorations inside structures
-    - implement read-only decorations
+
+- wgsl:
+  - support constant array sizes
+- spv-out:
+  - fix block decorations on nested structures
+  - fix fixed-size arrays
+  - fix matrix decorations inside structures
+  - implement read-only decorations
 
 ## v0.3 (2021-01-30)
-  - development release for wgpu-0.7
-  - API:
-    - math functions
-    - type casts
-    - updated storage classes
-    - updated image sub-types
-    - image sampling/loading options
-    - storage images
-    - interpolation qualifiers
-    - early and conservative depth
-  - Processors:
-    - name manager
-    - automatic layout
-    - termination analysis
-    - validation of types, constants, variables, and entry points
+
+- development release for wgpu-0.7
+- API:
+  - math functions
+  - type casts
+  - updated storage classes
+  - updated image sub-types
+  - image sampling/loading options
+  - storage images
+  - interpolation qualifiers
+  - early and conservative depth
+- Processors:
+  - name manager
+  - automatic layout
+  - termination analysis
+  - validation of types, constants, variables, and entry points
 
 ## v0.2 (2020-08-17)
-  - development release for wgpu-0.6
+
+- development release for wgpu-0.6
 
 ## v0.1 (2020-02-26)
-  - initial release
+
+- initial release
