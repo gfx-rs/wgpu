@@ -142,21 +142,10 @@ impl Global {
                         BlasGeometries::AabbGeometries(aabb_geometries) => {
                             let aabb_geo = aabb_geometries
                                 .map(|ag| {
-                                    let aabb_buffer_id = self.resolve_buffer_id(ag.aabb_buffer)?;
-                                    if ag.stride < wgt::AABB_GEOMETRY_MIN_STRIDE
-                                        || ag.stride % 8 != 0
-                                    {
-                                        return Err(
-                                            BuildAccelerationStructureError::InvalidAabbStride(
-                                                aabb_buffer_id.error_ident(),
-                                                ag.stride,
-                                            ),
-                                        );
-                                    }
                                     Ok(ArcBlasAabbGeometry {
                                         size: ag.size.clone(),
                                         stride: ag.stride,
-                                        aabb_buffer: aabb_buffer_id,
+                                        aabb_buffer: self.resolve_buffer_id(ag.aabb_buffer)?,
                                         primitive_offset: ag.primitive_offset,
                                     })
                                 })
@@ -961,6 +950,13 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                                 blas.error_ident(),
                             ),
                         );
+                    }
+
+                    if aabb.stride < wgt::AABB_GEOMETRY_MIN_STRIDE || aabb.stride % 8 != 0 {
+                        return Err(BuildAccelerationStructureError::InvalidAabbStride(
+                            blas.error_ident(),
+                            aabb.stride,
+                        ));
                     }
 
                     let aabb_buffer = aabb.aabb_buffer.clone();
