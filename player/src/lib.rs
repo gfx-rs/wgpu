@@ -1136,7 +1136,7 @@ impl Player {
                 size,
             } => C::SetVertexBuffer {
                 slot,
-                buffer: self.resolve_buffer_id(buffer),
+                buffer: buffer.map(|buffer| self.resolve_buffer_id(buffer)),
                 offset,
                 size,
             },

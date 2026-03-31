@@ -4037,15 +4037,28 @@ impl Device {
         let mut validated_stages = wgt::ShaderStages::empty();
 
         let mut vertex_steps;
-        let mut vertex_buffers;
+        let mut hal_vertex_buffer_layouts;
         let mut total_attributes;
         let mut dual_source_blending = false;
         let mut has_depth_attachment = false;
         if let pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) = desc.vertex {
+            if vertex.buffers.len() > self.limits.max_vertex_buffers as usize {
+                return Err(pipeline::CreateRenderPipelineError::TooManyVertexBuffers {
+                    given: vertex.buffers.len() as u32,
+                    limit: self.limits.max_vertex_buffers,
+                });
+            }
+
             vertex_steps = Vec::with_capacity(vertex.buffers.len());
-            vertex_buffers = Vec::with_capacity(vertex.buffers.len());
+            hal_vertex_buffer_layouts = Vec::with_capacity(vertex.buffers.len());
             total_attributes = 0;
             for (i, vb_state) in vertex.buffers.iter().enumerate() {
+                let Some(vb_state) = vb_state else {
+                    vertex_steps.push(None);
+                    hal_vertex_buffer_layouts.push(None);
+                    continue;
+                };
+
                 // https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-gpuvertexbufferlayout
 
                 if vb_state.array_stride > self.limits.max_vertex_buffer_array_stride as u64 {
@@ -4101,18 +4114,20 @@ impl Device {
 
                     last_stride = last_stride.max(attribute_stride);
                 }
-                vertex_steps.push(pipeline::VertexStep {
+
+                vertex_steps.push(Some(pipeline::VertexStep {
                     stride: vb_state.array_stride,
                     last_stride,
                     mode: vb_state.step_mode,
-                });
-                if vb_state.attributes.is_empty() {
-                    continue;
-                }
-                vertex_buffers.push(hal::VertexBufferLayout {
-                    array_stride: vb_state.array_stride,
-                    step_mode: vb_state.step_mode,
-                    attributes: vb_state.attributes.as_ref(),
+                }));
+                hal_vertex_buffer_layouts.push(if vb_state.attributes.is_empty() {
+                    None
+                } else {
+                    Some(hal::VertexBufferLayout {
+                        array_stride: vb_state.array_stride,
+                        step_mode: vb_state.step_mode,
+                        attributes: vb_state.attributes.as_ref(),
+                    })
                 });
 
                 for attribute in vb_state.attributes.iter() {
@@ -4147,12 +4162,6 @@ impl Device {
                 total_attributes += vb_state.attributes.len();
             }
 
-            if vertex_buffers.len() > self.limits.max_vertex_buffers as usize {
-                return Err(pipeline::CreateRenderPipelineError::TooManyVertexBuffers {
-                    given: vertex_buffers.len() as u32,
-                    limit: self.limits.max_vertex_buffers,
-                });
-            }
             if total_attributes > self.limits.max_vertex_attributes as usize {
                 return Err(
                     pipeline::CreateRenderPipelineError::TooManyVertexAttributes {
@@ -4163,7 +4172,7 @@ impl Device {
             }
         } else {
             vertex_steps = Vec::new();
-            vertex_buffers = Vec::new();
+            hal_vertex_buffer_layouts = Vec::new();
         };
 
         if desc.primitive.strip_index_format.is_some() && !desc.primitive.topology.is_strip() {
@@ -4721,7 +4730,7 @@ impl Device {
                 layout: pipeline_layout.raw(),
                 vertex_processor: match vertex_stage {
                     Some(vertex_stage) => hal::VertexProcessor::Standard {
-                        vertex_buffers: &vertex_buffers,
+                        vertex_buffers: &hal_vertex_buffer_layouts,
                         vertex_stage,
                     },
                     None => hal::VertexProcessor::Mesh {

@@ -2461,7 +2461,7 @@ pub struct VertexBufferLayout<'a> {
 pub enum VertexProcessor<'a, M: DynShaderModule + ?Sized> {
     Standard {
         /// The format of any vertex buffers used with this pipeline.
-        vertex_buffers: &'a [VertexBufferLayout<'a>],
+        vertex_buffers: &'a [Option<VertexBufferLayout<'a>>],
         /// The vertex stage for this pipeline.
         vertex_stage: ProgrammableStage<'a, M>,
     },

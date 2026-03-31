@@ -722,7 +722,7 @@ fn set_vertex_buffer(
     state: &mut State,
     buffer_guard: &crate::storage::Storage<Fallible<Buffer>>,
     slot: u32,
-    buffer_id: id::Id<id::markers::Buffer>,
+    buffer_id: Option<id::Id<id::markers::Buffer>>,
     offset: u64,
     size: Option<NonZeroU64>,
 ) -> Result<(), RenderBundleErrorInner> {
@@ -735,29 +735,53 @@ fn set_vertex_buffer(
         .into());
     }
 
-    let buffer = buffer_guard.get(buffer_id).get()?;
+    if let Some(buffer_id) = buffer_id {
+        let buffer = buffer_guard.get(buffer_id).get()?;
 
-    state
-        .trackers
-        .buffers
-        .merge_single(&buffer, wgt::BufferUses::VERTEX)?;
+        state
+            .trackers
+            .buffers
+            .merge_single(&buffer, wgt::BufferUses::VERTEX)?;
 
-    buffer.same_device(&state.device)?;
-    buffer.check_usage(wgt::BufferUsages::VERTEX)?;
+        buffer.same_device(&state.device)?;
+        buffer.check_usage(wgt::BufferUsages::VERTEX)?;
 
-    if !offset.is_multiple_of(wgt::VERTEX_ALIGNMENT) {
-        return Err(RenderCommandError::UnalignedVertexBuffer { slot, offset }.into());
+        if !offset.is_multiple_of(wgt::VERTEX_ALIGNMENT) {
+            return Err(RenderCommandError::UnalignedVertexBuffer { slot, offset }.into());
+        }
+        let end = offset + buffer.resolve_binding_size(offset, size)?;
+
+        state
+            .buffer_memory_init_actions
+            .extend(buffer.initialization_status.read().create_action(
+                &buffer,
+                offset..end.get(),
+                MemoryInitKind::NeedsInitializedMemory,
+            ));
+        state.vertex[slot as usize] = Some(VertexState::new(buffer, offset..end.get()));
+    } else {
+        if offset != 0 {
+            return Err(RenderCommandError::from(
+                crate::binding_model::BindingError::UnbindingVertexBufferOffsetNotZero {
+                    slot,
+                    offset,
+                },
+            )
+            .into());
+        }
+        if let Some(size) = size {
+            return Err(RenderCommandError::from(
+                crate::binding_model::BindingError::UnbindingVertexBufferSizeNotZero {
+                    slot,
+                    size: size.get(),
+                },
+            )
+            .into());
+        }
+
+        state.vertex[slot as usize] = None;
     }
-    let end = offset + buffer.resolve_binding_size(offset, size)?;
 
-    state
-        .buffer_memory_init_actions
-        .extend(buffer.initialization_status.read().create_action(
-            &buffer,
-            offset..end.get(),
-            MemoryInitKind::NeedsInitializedMemory,
-        ));
-    state.vertex[slot as usize] = Some(VertexState::new(buffer, offset..end.get()));
     Ok(())
 }
 
@@ -1111,7 +1135,7 @@ impl RenderBundle {
                     offset,
                     size,
                 } => {
-                    let buffer = buffer.try_raw(snatch_guard)?;
+                    let buffer = buffer.as_ref().unwrap().try_raw(snatch_guard)?;
                     // SAFETY: The binding size was checked against the buffer size
                     // in `set_vertex_buffer` and again in `VertexState::flush`.
                     let bb = hal::BufferBinding::new_unchecked(buffer, *offset, *size);
@@ -1357,7 +1381,7 @@ impl VertexState {
             self.is_dirty = false;
             Some(ArcRenderCommand::SetVertexBuffer {
                 slot,
-                buffer: self.buffer.clone(),
+                buffer: Some(self.buffer.clone()),
                 offset: self.range.start,
                 size: NonZeroU64::new(binding_size),
             })
@@ -1373,8 +1397,8 @@ struct PipelineState {
     pipeline: Arc<RenderPipeline>,
 
     /// How this pipeline's vertex shader traverses each vertex buffer, indexed
-    /// by vertex buffer slot number.
-    steps: Vec<VertexStep>,
+    /// by vertex buffer slot number. `None` signifies unused vertex buffer slots.
+    steps: Vec<Option<VertexStep>>,
 }
 
 impl PipelineState {
@@ -1487,6 +1511,21 @@ impl State {
             self.binder
                 .check_compatibility(pipeline.pipeline.as_ref())?;
             self.binder.check_late_buffer_bindings()?;
+
+            // Check all needed vertex buffers have been bound
+            for index in pipeline
+                .steps
+                .iter()
+                .enumerate()
+                .filter_map(|(index, step)| step.map(|_| index))
+            {
+                if self.vertex.get(index).is_none() {
+                    return Err(DrawError::MissingVertexBuffer {
+                        pipeline: pipeline.pipeline.error_ident(),
+                        index,
+                    });
+                }
+            }
 
             if family == DrawCommandFamily::DrawIndexed {
                 let pipeline = &pipeline.pipeline;
@@ -1681,7 +1720,7 @@ pub mod bundle_ffi {
     pub fn wgpu_render_bundle_set_vertex_buffer(
         bundle: &mut RenderBundleEncoder,
         slot: u32,
-        buffer_id: id::BufferId,
+        buffer_id: Option<id::BufferId>,
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {

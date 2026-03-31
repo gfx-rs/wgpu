@@ -422,7 +422,7 @@ pub struct VertexState<'a, SM = ShaderModuleId> {
     /// The compiled vertex stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a, SM>,
     /// The format of any vertex buffers used with this pipeline.
-    pub buffers: Cow<'a, [VertexBufferLayout<'a>]>,
+    pub buffers: Cow<'a, [Option<VertexBufferLayout<'a>>]>,
 }
 
 /// cbindgen:ignore
@@ -840,7 +840,7 @@ pub struct RenderPipeline {
     pub(crate) flags: PipelineFlags,
     pub(crate) topology: wgt::PrimitiveTopology,
     pub(crate) strip_index_format: Option<wgt::IndexFormat>,
-    pub(crate) vertex_steps: Vec<VertexStep>,
+    pub(crate) vertex_steps: Vec<Option<VertexStep>>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
     pub(crate) immediate_slots_required: naga::valid::ImmediateSlots,
     /// The `label` from the descriptor used to create the resource.

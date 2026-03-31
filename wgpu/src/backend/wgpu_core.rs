@@ -1338,10 +1338,12 @@ impl dispatch::DeviceInterface for CoreDevice {
             .vertex
             .buffers
             .iter()
-            .map(|vbuf| pipe::VertexBufferLayout {
-                array_stride: vbuf.array_stride,
-                step_mode: vbuf.step_mode,
-                attributes: Borrowed(vbuf.attributes),
+            .map(|vbuf| {
+                Some(pipe::VertexBufferLayout {
+                    array_stride: vbuf.array_stride,
+                    step_mode: vbuf.step_mode,
+                    attributes: Borrowed(vbuf.attributes),
+                })
             })
             .collect();
 
@@ -3236,7 +3238,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         if let Err(cause) = self.context.0.render_pass_set_vertex_buffer(
             &mut self.pass,
             slot,
-            buffer.id,
+            Some(buffer.id),
             offset,
             size,
         ) {
@@ -3818,7 +3820,7 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     ) {
         let buffer = buffer.as_core();
 
-        wgpu_render_bundle_set_vertex_buffer(&mut self.encoder, slot, buffer.id, offset, size)
+        wgpu_render_bundle_set_vertex_buffer(&mut self.encoder, slot, Some(buffer.id), offset, size)
     }
 
     fn set_immediates(&mut self, offset: u32, data: &[u8]) {

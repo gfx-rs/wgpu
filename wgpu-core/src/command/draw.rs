@@ -27,7 +27,7 @@ pub enum DrawError {
     #[error("Currently set {pipeline} requires vertex buffer {index} to be set")]
     MissingVertexBuffer {
         pipeline: ResourceErrorIdent,
-        index: u32,
+        index: usize,
     },
     #[error("Index buffer must be set")]
     MissingIndexBuffer,
