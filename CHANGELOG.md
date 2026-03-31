@@ -42,6 +42,26 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major changes
+
+#### Optional vertex buffer slots
+
+This allows gaps in `VertexState`'s `buffers` and adds support for unbinding vertex buffers, bringing us in compliance with the WebGPU spec. As a result of this, `VertexState`'s `buffers` field now has type of `&[Option<VertexBufferLayout>]`. To migrate, wrap vertex buffer layouts in `Some`:
+
+```diff
+  let vertex_state = wgpu::VertexState {
+      module: &vs_module,
+      entry_point: Some("vs_main"),
+      compilation_options: wgpu::PipelineCompilationOptions::default(),
+      buffers: &[
+-         &vertex_buffer_layout
++         Some(&vertex_buffer_layout)
+      ],
+  };
+```
+
+By @teoxoy in [#9351](https://github.com/gfx-rs/wgpu/pull/9351).
+
 ### Added/New Features
 
 #### General
