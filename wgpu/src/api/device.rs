@@ -582,6 +582,39 @@ impl Device {
         unsafe { device.context.device_as_hal::<A>(device) }
     }
 
+    /// Returns the underlying `GPUDevice` as a `JsValue`.
+    ///
+    /// WebGPU backend equivalent of [`Device::as_hal`].
+    #[cfg(webgpu)]
+    pub fn as_webgpu(&self) -> &wasm_bindgen::JsValue {
+        self.inner.as_webgpu().gpu_device()
+    }
+
+    /// Creates a [`Texture`] from an externally-provided `GPUTexture`.
+    ///
+    /// WebGPU backend equivalent of [`Device::create_texture_from_hal`].
+    ///
+    /// # Safety
+    ///
+    /// - `gpu_texture` must be created from this device's `GPUDevice`
+    /// - `desc` must accurately describe the texture
+    #[cfg(webgpu)]
+    pub unsafe fn create_texture_from_webgpu(
+        &self,
+        gpu_texture: wasm_bindgen::JsValue,
+        desc: &TextureDescriptor<'_>,
+    ) -> Texture {
+        let texture = self.inner.as_webgpu().create_texture_from_web(gpu_texture);
+        Texture {
+            inner: texture,
+            descriptor: TextureDescriptor {
+                label: None,
+                view_formats: &[],
+                ..desc.clone()
+            },
+        }
+    }
+
     /// Destroy this device.
     pub fn destroy(&self) {
         self.inner.destroy()

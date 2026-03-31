@@ -1095,6 +1095,7 @@ impl Global {
             force_fallback_adapter: desc.force_fallback_adapter,
             compatible_surface: compatible_surface.as_deref(),
             apply_limit_buckets: desc.apply_limit_buckets,
+            xr_compatible: desc.xr_compatible,
         };
         let adapter = self.instance.request_adapter(&desc, backends)?;
         let id = self.hub.adapters.prepare(id_in).assign(Arc::new(adapter));

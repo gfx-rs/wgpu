@@ -54,6 +54,11 @@ pub struct RequestAdapterOptions<S> {
     ///
     #[doc = link_to_wgc_docs!(["limit bucketing"]: "limits/index.html#Limit-bucketing")]
     pub apply_limit_buckets: bool,
+    /// Indicates that the adapter must be compatible with WebXR immersive sessions.
+    ///
+    /// Corresponds to [`xrCompatible`](https://www.w3.org/TR/webxr-gpu-binding/#dom-gpurequestadapteroptions-xrcompatible)
+    /// in the WebXR WebGPU Binding specification. Only has effect on the WebGPU backend.
+    pub xr_compatible: bool,
 }
 
 impl<S> Default for RequestAdapterOptions<S> {
@@ -63,6 +68,7 @@ impl<S> Default for RequestAdapterOptions<S> {
             force_fallback_adapter: false,
             compatible_surface: None,
             apply_limit_buckets: false,
+            xr_compatible: false,
         }
     }
 }

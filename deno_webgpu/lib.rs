@@ -231,6 +231,7 @@ impl GPU {
       force_fallback_adapter: options.force_fallback_adapter,
       compatible_surface: None, // windowless
       apply_limit_buckets: false,
+      xr_compatible: false,
     };
     let id = instance.request_adapter(&descriptor, backends, None).ok()?;
 

@@ -1207,6 +1207,25 @@ pub struct WebDevice {
     error_scope_count: Rc<Cell<u32>>,
 }
 
+impl WebDevice {
+    pub(crate) fn gpu_device(&self) -> &JsValue {
+        self.inner.as_ref()
+    }
+
+    pub(crate) fn create_texture_from_web(
+        &self,
+        gpu_texture: JsValue,
+    ) -> crate::dispatch::DispatchTexture {
+        use wasm_bindgen::JsCast;
+        let inner: webgpu_sys::GpuTexture = gpu_texture.unchecked_into();
+        WebTexture {
+            inner,
+            ident: crate::cmp::Identifier::create(),
+        }
+        .into()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct WebQueue {
     pub(crate) inner: webgpu_sys::GpuQueue,
@@ -1598,6 +1617,9 @@ impl dispatch::InstanceInterface for ContextWebGpu {
         };
         if let Some(mapped_pref) = mapped_power_preference {
             mapped_options.set_power_preference(mapped_pref);
+        }
+        if options.xr_compatible {
+            mapped_options.set_xr_compatible(true);
         }
 
         if let Some(gpu) = &self.gpu {

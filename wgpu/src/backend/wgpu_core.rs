@@ -866,6 +866,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                     .compatible_surface
                     .map(|surface| surface.inner.as_core().id),
                 apply_limit_buckets: false,
+                xr_compatible: options.xr_compatible,
             },
             wgt::Backends::all(),
             None,
