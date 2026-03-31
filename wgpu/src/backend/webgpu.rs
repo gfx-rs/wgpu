@@ -2215,25 +2215,28 @@ impl dispatch::DeviceInterface for WebDevice {
             .vertex
             .buffers
             .iter()
-            .map(|vbuf| {
-                let mapped_attributes = vbuf
-                    .attributes
-                    .iter()
-                    .map(|attr| {
-                        webgpu_sys::GpuVertexAttribute::new_with_f64(
-                            map_vertex_format(attr.format),
-                            attr.offset as f64,
-                            attr.shader_location,
-                        )
-                    })
-                    .collect::<Vec<webgpu_sys::GpuVertexAttribute>>();
+            .map(|vbuf| match vbuf {
+                Some(vbuf) => {
+                    let mapped_attributes = vbuf
+                        .attributes
+                        .iter()
+                        .map(|attr| {
+                            webgpu_sys::GpuVertexAttribute::new_with_f64(
+                                map_vertex_format(attr.format),
+                                attr.offset as f64,
+                                attr.shader_location,
+                            )
+                        })
+                        .collect::<Vec<webgpu_sys::GpuVertexAttribute>>();
 
-                let mapped_vbuf = webgpu_sys::GpuVertexBufferLayout::new_with_f64(
-                    vbuf.array_stride as f64,
-                    &mapped_attributes,
-                );
-                mapped_vbuf.set_step_mode(map_vertex_step_mode(vbuf.step_mode));
-                js_sys::JsOption::wrap(mapped_vbuf)
+                    let mapped_vbuf = webgpu_sys::GpuVertexBufferLayout::new_with_f64(
+                        vbuf.array_stride as f64,
+                        &mapped_attributes,
+                    );
+                    mapped_vbuf.set_step_mode(map_vertex_step_mode(vbuf.step_mode));
+                    js_sys::JsOption::wrap(mapped_vbuf)
+                }
+                None => js_sys::JsOption::new(),
             })
             .collect::<Vec<js_sys::JsOption<webgpu_sys::GpuVertexBufferLayout>>>();
 
@@ -3513,22 +3516,22 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &dispatch::DispatchBuffer,
+        buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     ) {
-        let buffer = buffer.as_webgpu();
+        let buffer = buffer.map(|buffer| &buffer.as_webgpu().inner);
 
         if let Some(size) = size {
             self.inner.set_vertex_buffer_with_f64_and_f64(
                 slot,
-                Some(&buffer.inner),
+                buffer,
                 offset as f64,
                 size.get() as f64,
             );
         } else {
             self.inner
-                .set_vertex_buffer_with_f64(slot, Some(&buffer.inner), offset as f64);
+                .set_vertex_buffer_with_f64(slot, buffer, offset as f64);
         }
     }
 
@@ -3804,22 +3807,22 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &dispatch::DispatchBuffer,
+        buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     ) {
-        let buffer = buffer.as_webgpu();
+        let buffer = buffer.map(|buffer| &buffer.as_webgpu().inner);
 
         if let Some(size) = size {
             self.inner.set_vertex_buffer_with_f64_and_f64(
                 slot,
-                Some(&buffer.inner),
+                buffer,
                 offset as f64,
                 size.get() as f64,
             );
         } else {
             self.inner
-                .set_vertex_buffer_with_f64(slot, Some(&buffer.inner), offset as f64);
+                .set_vertex_buffer_with_f64(slot, buffer, offset as f64);
         }
     }
 

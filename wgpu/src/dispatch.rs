@@ -436,7 +436,7 @@ pub trait RenderPassInterface: CommonTraits + Drop {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &DispatchBuffer,
+        buffer: Option<&DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     );
@@ -547,7 +547,7 @@ pub trait RenderBundleEncoderInterface: CommonTraits {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &DispatchBuffer,
+        buffer: Option<&DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     );

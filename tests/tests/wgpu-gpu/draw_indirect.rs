@@ -127,11 +127,11 @@ async fn run_test_inner(
     use_multi_draw: bool,
 ) {
     let mut vertex_buffer_layouts = Vec::new();
-    vertex_buffer_layouts.push(wgpu::VertexBufferLayout {
+    vertex_buffer_layouts.push(Some(wgpu::VertexBufferLayout {
         array_stride: 8,
         step_mode: wgpu::VertexStepMode::Vertex,
         attributes: &vertex_attr_array![0 => Float32x2],
-    });
+    }));
     let vertex_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
         label: None,
         contents: bytemuck::cast_slice(test_data.vertex_buffer_content()),
@@ -151,11 +151,11 @@ async fn run_test_inner(
     };
 
     let instance_buffer = test_data.instanced.as_ref().map(|instanced| {
-        vertex_buffer_layouts.push(wgpu::VertexBufferLayout {
+        vertex_buffer_layouts.push(Some(wgpu::VertexBufferLayout {
             array_stride: 8,
             step_mode: wgpu::VertexStepMode::Instance,
             attributes: &vertex_attr_array![1 => Float32x2],
-        });
+        }));
         ctx.device.create_buffer_init(&BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(instanced.instance_buffer_content),
@@ -689,16 +689,16 @@ async fn indirect_buffer_offsets(ctx: TestingContext) {
         layout: None,
         vertex: wgpu::VertexState {
             buffers: &[
-                wgpu::VertexBufferLayout {
+                Some(wgpu::VertexBufferLayout {
                     array_stride: 8,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &vertex_attr_array![0 => Float32x2],
-                },
-                wgpu::VertexBufferLayout {
+                }),
+                Some(wgpu::VertexBufferLayout {
                     array_stride: 8,
                     step_mode: wgpu::VertexStepMode::Instance,
                     attributes: &vertex_attr_array![1 => Float32x2],
-                },
+                }),
             ],
             module: &shader,
             entry_point: Some("vs_main"),

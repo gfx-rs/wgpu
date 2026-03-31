@@ -1339,7 +1339,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             .buffers
             .iter()
             .map(|vbuf| {
-                Some(pipe::VertexBufferLayout {
+                vbuf.as_ref().map(|vbuf| pipe::VertexBufferLayout {
                     array_stride: vbuf.array_stride,
                     step_mode: vbuf.step_mode,
                     attributes: Borrowed(vbuf.attributes),
@@ -3229,19 +3229,17 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &dispatch::DispatchBuffer,
+        buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     ) {
-        let buffer = buffer.as_core();
+        let buffer = buffer.map(|buffer| buffer.as_core().id);
 
-        if let Err(cause) = self.context.0.render_pass_set_vertex_buffer(
-            &mut self.pass,
-            slot,
-            Some(buffer.id),
-            offset,
-            size,
-        ) {
+        if let Err(cause) =
+            self.context
+                .0
+                .render_pass_set_vertex_buffer(&mut self.pass, slot, buffer, offset, size)
+        {
             self.context.handle_error(
                 &self.error_sink,
                 cause,
@@ -3814,13 +3812,13 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &dispatch::DispatchBuffer,
+        buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     ) {
-        let buffer = buffer.as_core();
+        let buffer = buffer.map(|buffer| buffer.as_core().id);
 
-        wgpu_render_bundle_set_vertex_buffer(&mut self.encoder, slot, Some(buffer.id), offset, size)
+        wgpu_render_bundle_set_vertex_buffer(&mut self.encoder, slot, buffer, offset, size)
     }
 
     fn set_immediates(&mut self, offset: u32, data: &[u8]) {

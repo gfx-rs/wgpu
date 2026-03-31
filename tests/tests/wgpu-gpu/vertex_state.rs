@@ -74,16 +74,16 @@ async fn set_array_stride_to_0(ctx: TestingContext) {
         });
 
     let vbl = [
-        wgpu::VertexBufferLayout {
+        Some(wgpu::VertexBufferLayout {
             array_stride: 8,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &vertex_attr_array![0 => Float32x2],
-        },
-        wgpu::VertexBufferLayout {
+        }),
+        Some(wgpu::VertexBufferLayout {
             array_stride: 0,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &vertex_attr_array![1 => Float32x4],
-        },
+        }),
     ];
     let pipeline_desc = wgpu::RenderPipelineDescriptor {
         label: None,
@@ -112,7 +112,7 @@ async fn set_array_stride_to_0(ctx: TestingContext) {
     };
     let mut first_pipeline_desc = pipeline_desc.clone();
     let mut first_vbl = vbl.clone();
-    first_vbl[1].array_stride = 16;
+    first_vbl[1].as_mut().unwrap().array_stride = 16;
     first_pipeline_desc.vertex.buffers = &first_vbl;
     let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
     let first_pipeline = ctx.device.create_render_pipeline(&first_pipeline_desc);
