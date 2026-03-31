@@ -147,12 +147,12 @@ pub use wgt::{
     PrimitiveTopology, QueryType, RenderBundleDepthStencil, RequestAdapterError,
     SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel, ShaderRuntimeChecks,
     ShaderStages, StencilFaceState, StencilOperation, StencilState, StorageTextureAccess,
-    SurfaceCapabilities, SurfaceStatus, TexelCopyBufferLayout, TextureAspect, TextureDimension,
-    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
-    TextureTransition, TextureUsages, TextureUses, TextureViewDimension, Trace, VertexAttribute,
-    VertexFormat, VertexStepMode, WasmNotSend, WasmNotSendSync, WasmNotSync, WriteOnly,
-    WriteOnlyIter, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, IMMEDIATE_DATA_ALIGNMENT,
-    MAP_ALIGNMENT, MAXIMUM_SUBGROUP_MAX_SIZE, MINIMUM_SUBGROUP_MIN_SIZE,
+    SurfaceCapabilities, SurfaceStatus, TexelCopyBufferLayout, TextureAspect, TextureChannel,
+    TextureDimension, TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures,
+    TextureSampleType, TextureTransition, TextureUsages, TextureUses, TextureViewDimension, Trace,
+    VertexAttribute, VertexFormat, VertexStepMode, WasmNotSend, WasmNotSendSync, WasmNotSync,
+    WriteOnly, WriteOnlyIter, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    IMMEDIATE_DATA_ALIGNMENT, MAP_ALIGNMENT, MAXIMUM_SUBGROUP_MAX_SIZE, MINIMUM_SUBGROUP_MIN_SIZE,
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_ALIGNMENT,
 };
 

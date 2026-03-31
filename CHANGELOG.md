@@ -47,6 +47,7 @@ Bottom level categories:
 #### General
 
 - Added "limit bucketing" functionality which can adjust adapter limits and features to match one of several pre-defined buckets. This is controlled by the new `apply_limit_buckets` member in `RequestAdapterOptions`, which is `false` by default. By @andyleiserson in [#9119](https://github.com/gfx-rs/wgpu/pull/9119).
+- Make `wgpu_types::texture::format::TextureChannel` accessible as `wgpu::TextureChannel`. By @TornaxO7 in [#9394](https://github.com/gfx-rs/wgpu/pull/9349).
 
 #### Metal
 
@@ -85,6 +86,11 @@ Bottom level categories:
 - Fixed overflow detection and argument domain validation for `acosh`, `length`, `normalize`, and `pow` in constant evaluation. By @ecoricemon in [#9249](https://github.com/gfx-rs/wgpu/pull/9249).
 - Naga no longer allows derivative operations on `f16`. WGSL does not currently allow this, although [it may be added in the future](https://github.com/gpuweb/gpuweb/issues/5482). By @andyleiserson in [#9154](https://github.com/gfx-rs/wgpu/pull/9154).
 - Disallow direct access to atomic variables in WGSL front-end (e.g. `let x = myAtomic;`). By @ecoricemon in [#9262](https://github.com/gfx-rs/wgpu/pull/9262).
+
+#### dx12
+
+- Fixed use of a texture view without `TextureUsage::TEXTURE_BINDING` as a read-only depth attachment. By @andyleiserson in [#9346](https://github.com/gfx-rs/wgpu/pull/9346).
+- Fixed a `debug_assert` during stride validation for indirect multi draw. By @kristoff3r in [#9332](https://github.com/gfx-rs/wgpu/pull/9332)
 
 ## v29.0.1 (2026-03-26)
 
