@@ -499,6 +499,11 @@ pub struct PipelineOptions {
     /// vertex_buffer_mappings are used during shader translation to
     /// support vertex pulling.
     pub vertex_buffer_mappings: Vec<VertexBufferMapping>,
+
+    /// For each storage `binding_array` in the pipeline layout, the number of
+    /// elements that layout declares, keyed by `ResourceBinding`.
+    /// The MSL writer uses this to report the number of elements in an unbounded `binding_array`.
+    pub binding_array_length_map: crate::FastHashMap<crate::ResourceBinding, u32>,
 }
 
 impl Options {

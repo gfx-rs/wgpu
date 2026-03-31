@@ -621,29 +621,6 @@ fn should_pack_struct_member(
     }
 }
 
-fn needs_array_length(ty: Handle<crate::Type>, arena: &crate::UniqueArena<crate::Type>) -> bool {
-    match arena[ty].inner {
-        crate::TypeInner::Struct { ref members, .. } => {
-            if let Some(member) = members.last() {
-                if let crate::TypeInner::Array {
-                    size: crate::ArraySize::Dynamic,
-                    ..
-                } = arena[member.ty].inner
-                {
-                    return true;
-                }
-            }
-            false
-        }
-        crate::TypeInner::Array {
-            size: crate::ArraySize::Dynamic,
-            ..
-        } => true,
-        crate::TypeInner::BindingArray { base, .. } => needs_array_length(base, arena),
-        _ => false,
-    }
-}
-
 impl crate::AddressSpace {
     /// Returns true if global variables in this address space are
     /// passed in function arguments. These arguments need to be
@@ -804,6 +781,42 @@ impl<'a> ExpressionContext<'a> {
         self.info[handle].ty.inner_with(&self.module.types)
     }
 
+    /// Walks from an inner pointer toward a storage binding array global and
+    /// returns the element index at that global for MSL runtime buffer sizing.
+    fn binding_array_index_from_chain(
+        &self,
+        mut expr: Handle<crate::Expression>,
+        global: Handle<crate::GlobalVariable>,
+    ) -> Option<index::GuardedIndex> {
+        let expressions = &self.function.expressions;
+        loop {
+            match expressions[expr] {
+                crate::Expression::Load { pointer } => expr = pointer,
+                crate::Expression::Access { base, index } => {
+                    if matches!(
+                        expressions[base],
+                        crate::Expression::GlobalVariable(g) if g == global
+                    ) {
+                        return Some(index::GuardedIndex::Expression(index));
+                    }
+                    expr = base;
+                }
+                crate::Expression::AccessIndex { base, index } => {
+                    if matches!(
+                        expressions[base],
+                        crate::Expression::GlobalVariable(g) if g == global
+                    ) {
+                        return Some(index::GuardedIndex::Known(index));
+                    }
+                    expr = base;
+                }
+                crate::Expression::GlobalVariable(_) => return None,
+                _ => return None,
+            }
+        }
+    }
+
+    /// Whether `expr` is directly indexing a global in the outer `Access`/`AccessIndex` shape.
     fn is_global_access_chain(&self, expr: Handle<crate::Expression>) -> bool {
         let expressions = &self.function.expressions;
         match expressions[expr] {
@@ -1609,9 +1622,14 @@ impl<W: Write> Writer<W> {
     ///
     /// `handle` must be the handle of a global variable whose final member is a
     /// dynamically sized array.
+    ///
+    /// `chain_expr` sits on the pointer path from an inner access, such as the
+    /// value passed to array length, back toward this global. For storage binding
+    /// arrays, that path tells us which element index to use in `_buffer_sizes`.
     fn put_dynamic_array_max_index(
         &mut self,
         handle: Handle<crate::GlobalVariable>,
+        chain_expr: Handle<crate::Expression>,
         context: &ExpressionContext,
     ) -> BackendResult {
         let global = &context.module.global_variables[handle];
@@ -1676,8 +1694,31 @@ impl<W: Write> Writer<W> {
         // prevent that.
         write!(
             self.out,
-            "(_buffer_sizes.{member} - {offset} - {size}) / {stride}",
+            "(_buffer_sizes.{member}",
             member = ArraySizeMember(handle),
+        )?;
+        if let crate::TypeInner::BindingArray { .. } = context.module.types[global.ty].inner {
+            let Some(ba_idx) = context.binding_array_index_from_chain(chain_expr, handle) else {
+                return Err(Error::GenericValidation(
+                    "Could not find binding_array index for buffer size".into(),
+                ));
+            };
+            write!(self.out, "[")?;
+            match ba_idx {
+                index::GuardedIndex::Expression(expr) => {
+                    write!(self.out, "unsigned(")?;
+                    self.put_expression(expr, context, true)?;
+                    write!(self.out, ")")?;
+                }
+                index::GuardedIndex::Known(i) => {
+                    write!(self.out, "{i}u")?;
+                }
+            }
+            write!(self.out, "]")?;
+        }
+        write!(
+            self.out,
+            " - {offset} - {size}) / {stride}",
             offset = offset,
             size = size,
             stride = stride,
@@ -2922,7 +2963,7 @@ impl<W: Write> Writer<W> {
                     write!(self.out, "(")?;
                 }
                 write!(self.out, "1 + ")?;
-                self.put_dynamic_array_max_index(global, context)?;
+                self.put_dynamic_array_max_index(global, expr, context)?;
                 if !is_scoped {
                     write!(self.out, ")")?;
                 }
@@ -3184,7 +3225,7 @@ impl<W: Write> Writer<W> {
                         Error::GenericValidation("Could not find originating global".into())
                     })?;
                     write!(self.out, "1 + ")?;
-                    self.put_dynamic_array_max_index(global, context)?
+                    self.put_dynamic_array_max_index(global, base, context)?
                 }
             }
         }
@@ -3350,7 +3391,7 @@ impl<W: Write> Writer<W> {
                     let global = context.function.originating_global(base).ok_or_else(|| {
                         Error::GenericValidation("Could not find originating global".into())
                     })?;
-                    self.put_dynamic_array_max_index(global, context)?;
+                    self.put_dynamic_array_max_index(global, base, context)?;
                 }
             }
             write!(self.out, ")")?;
@@ -4015,8 +4056,9 @@ impl<W: Write> Writer<W> {
                             }
                             write!(self.out, "{name}")?;
                         }
-                        needs_buffer_sizes |=
-                            needs_array_length(var.ty, &context.expression.module.types);
+                        needs_buffer_sizes |= context.expression.module.types[var.ty]
+                            .inner
+                            .needs_host_buffer_byte_size(&context.expression.module.types);
                     }
                     if needs_buffer_sizes {
                         if separate {
@@ -4546,7 +4588,11 @@ impl<W: Write> Writer<W> {
             let globals: Vec<Handle<crate::GlobalVariable>> = module
                 .global_variables
                 .iter()
-                .filter(|&(_, var)| needs_array_length(var.ty, &module.types))
+                .filter(|&(_, var)| {
+                    module.types[var.ty]
+                        .inner
+                        .needs_host_buffer_byte_size(&module.types)
+                })
                 .map(|(handle, _)| handle)
                 .collect();
 
@@ -4559,12 +4605,34 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, "struct _mslBufferSizes {{")?;
 
                 for global in globals {
-                    writeln!(
-                        self.out,
-                        "{}uint {};",
-                        back::INDENT,
-                        ArraySizeMember(global)
-                    )?;
+                    let var = &module.global_variables[global];
+                    let var_ty = var.ty;
+                    match module.types[var_ty].inner {
+                        crate::TypeInner::BindingArray { size, .. } => {
+                            let from_shader = match size {
+                                crate::ArraySize::Constant(n) => n.get(),
+                                crate::ArraySize::Pending(_) | crate::ArraySize::Dynamic => 0,
+                            };
+                            let from_layout = var
+                                .binding
+                                .and_then(|br| pipeline_options.binding_array_length_map.get(&br))
+                                .copied()
+                                .unwrap_or(0);
+                            let n = from_shader.max(from_layout).max(1);
+                            writeln!(
+                                self.out,
+                                "{}uint {}[{n}];",
+                                back::INDENT,
+                                ArraySizeMember(global),
+                            )?;
+                        }
+                        _ => writeln!(
+                            self.out,
+                            "{}uint {};",
+                            back::INDENT,
+                            ArraySizeMember(global)
+                        )?,
+                    }
                 }
 
                 for idx in buffer_indices {
@@ -6854,7 +6922,9 @@ template <typename A>
                     if var.space.needs_pass_through() {
                         pass_through_globals.push(handle);
                     }
-                    needs_buffer_sizes |= needs_array_length(var.ty, &module.types);
+                    needs_buffer_sizes |= module.types[var.ty]
+                        .inner
+                        .needs_host_buffer_byte_size(&module.types);
                 }
             }
 
@@ -7021,7 +7091,11 @@ template <typename A>
                     .global_variables
                     .iter()
                     .filter(|&(handle, _)| !fun_info[handle].is_empty())
-                    .any(|(_, var)| needs_array_length(var.ty, &module.types));
+                    .any(|(_, var)| {
+                        module.types[var.ty]
+                            .inner
+                            .needs_host_buffer_byte_size(&module.types)
+                    });
 
             // skip this entry point if any global bindings are missing,
             // or their types are incompatible.

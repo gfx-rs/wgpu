@@ -11,7 +11,7 @@ struct DefaultConstructible {
 };
 
 struct _mslBufferSizes {
-    uint size0;
+    uint size0[1];
 };
 
 struct UniformIndex {
@@ -69,11 +69,11 @@ fragment main_Output main_(
     uint _e44 = uint(non_uniform_index) < 1 ? storage_array[non_uniform_index].inner->nested.y : DefaultConstructible();
     u1_ = _e39 + _e44;
     uint _e46 = u1_;
-    u1_ = _e46 + (1 + (_buffer_sizes.size0 - 8 - 4) / 4);
+    u1_ = _e46 + (1 + (_buffer_sizes.size0[0u] - 8 - 4) / 4);
     uint _e52 = u1_;
-    u1_ = _e52 + (1 + (_buffer_sizes.size0 - 8 - 4) / 4);
+    u1_ = _e52 + (1 + (_buffer_sizes.size0[unsigned(uniform_index)] - 8 - 4) / 4);
     uint _e58 = u1_;
-    u1_ = _e58 + (1 + (_buffer_sizes.size0 - 8 - 4) / 4);
+    u1_ = _e58 + (1 + (_buffer_sizes.size0[unsigned(non_uniform_index)] - 8 - 4) / 4);
     uint _e64 = u1_;
     return main_Output { _e64 };
 }

@@ -43,7 +43,7 @@ struct CompiledShader {
     /// is a `u32` holding the variable's total size in bytes---which is simply
     /// the size of the `Buffer` supplying that variable's contents for the
     /// draw call.
-    sized_bindings: Vec<naga::ResourceBinding>,
+    sized_bindings: Vec<(naga::ResourceBinding, u32)>,
 
     immutable_buffer_mask: usize,
 }
@@ -219,6 +219,7 @@ impl super::Device {
                     },
                     vertex_pulling_transform: true,
                     vertex_buffer_mappings: vertex_buffer_mappings.to_vec(),
+                    binding_array_length_map: layout.binding_array_length_map.clone(),
                 };
 
                 let (source, info) = naga::back::msl::write_string(
@@ -310,18 +311,27 @@ impl super::Device {
                                 immutable_buffer_mask |= 1 << slot;
                             }
 
-                            let mut dynamic_array_container_ty = var.ty;
-                            if let naga::TypeInner::Struct { ref members, .. } =
-                                module.types[var.ty].inner
+                            if module.types[var.ty]
+                                .inner
+                                .needs_host_buffer_byte_size(&module.types)
                             {
-                                dynamic_array_container_ty = members.last().unwrap().ty;
-                            }
-                            if let naga::TypeInner::Array {
-                                size: naga::ArraySize::Dynamic,
-                                ..
-                            } = module.types[dynamic_array_container_ty].inner
-                            {
-                                sized_bindings.push(br);
+                                let n = match module.types[var.ty].inner {
+                                    naga::TypeInner::BindingArray { size, .. } => {
+                                        let from_shader = match size {
+                                            naga::ArraySize::Constant(n) => n.get(),
+                                            naga::ArraySize::Pending(_)
+                                            | naga::ArraySize::Dynamic => 0,
+                                        };
+                                        let from_layout = layout
+                                            .binding_array_length_map
+                                            .get(&br)
+                                            .copied()
+                                            .unwrap_or(0);
+                                        from_shader.max(from_layout).max(1)
+                                    }
+                                    _ => 1,
+                                };
+                                sized_bindings.extend((0..n).map(|i| (br, i)));
                             }
                         }
                         _ => {}
@@ -751,6 +761,7 @@ impl crate::Device for super::Device {
             resources: Default::default(),
         });
         let mut bind_group_infos = [const { None }; crate::MAX_BIND_GROUPS];
+        let mut binding_array_length_map = naga::FastHashMap::default();
 
         // First, place the immediates
         for info in stage_data.iter_mut() {
@@ -773,6 +784,22 @@ impl crate::Device for super::Device {
             let base_resource_indices = stage_data.map_ref(|info| info.counters.clone());
 
             for entry in bgl.entries.iter() {
+                let br = naga::ResourceBinding {
+                    group: group_index as u32,
+                    binding: entry.binding,
+                };
+                if let Some(count) = entry.count {
+                    if matches!(
+                        entry.ty,
+                        wgt::BindingType::Buffer {
+                            ty: wgt::BufferBindingType::Storage { .. },
+                            ..
+                        }
+                    ) {
+                        binding_array_length_map.insert(br, count.get());
+                    }
+                }
+
                 if let wgt::BindingType::Buffer {
                     ty: wgt::BufferBindingType::Storage { .. },
                     ..
@@ -845,10 +872,6 @@ impl crate::Device for super::Device {
                         }
                     }
 
-                    let br = naga::ResourceBinding {
-                        group: group_index as u32,
-                        binding: entry.binding,
-                    };
                     info.resources.insert(br, target);
                 }
             }
@@ -892,6 +915,7 @@ impl crate::Device for super::Device {
             immediates_infos,
             total_immediates: desc.immediate_size,
             per_stage_map,
+            binding_array_length_map,
         })
     }
 
@@ -946,6 +970,7 @@ impl crate::Device for super::Device {
                             )
                             .unwrap();
 
+                        let mut array_element_sizes = Vec::new();
                         match layout.ty {
                             wgt::BindingType::Texture { .. }
                             | wgt::BindingType::StorageTexture { .. } => {
@@ -983,7 +1008,7 @@ impl crate::Device for super::Device {
                                     // need to be passed to useResource
                                 }
                             }
-                            wgt::BindingType::Buffer { .. } => {
+                            wgt::BindingType::Buffer { ty, .. } => {
                                 let start = entry.resource_index as usize;
                                 let end = start + count as usize;
                                 let buffers = &desc.buffers[start..end];
@@ -992,6 +1017,15 @@ impl crate::Device for super::Device {
                                     let addr = source.buffer.raw.gpuAddress() + source.offset;
                                     unsafe {
                                         pointers.add(idx).write(addr);
+                                    }
+
+                                    if let wgt::BufferBindingType::Storage { .. } = ty {
+                                        let remaining_size = wgt::BufferSize::new(
+                                            source.buffer.size - source.offset,
+                                        );
+                                        if let Some(binding_size) = source.size.or(remaining_size) {
+                                            array_element_sizes.push((idx as u32, binding_size));
+                                        }
                                     }
 
                                     let use_info = bg
@@ -1033,13 +1067,28 @@ impl crate::Device for super::Device {
                             }
                         }
 
-                        bg.buffers.push(super::BufferLikeResource::Buffer {
-                            ptr: NonNull::from(&*argument_buffer),
-                            offset: 0,
-                            dynamic_index: None,
-                            binding_size: None,
-                            binding_location: layout.binding,
-                        });
+                        if matches!(
+                            layout.ty,
+                            wgt::BindingType::Buffer {
+                                ty: wgt::BufferBindingType::Storage { .. },
+                                ..
+                            }
+                        ) {
+                            bg.buffers
+                                .push(super::BufferLikeResource::StorageBindingArray {
+                                    ptr: NonNull::from(&*argument_buffer),
+                                    array_element_sizes,
+                                    binding_location: layout.binding,
+                                });
+                        } else {
+                            bg.buffers.push(super::BufferLikeResource::Buffer {
+                                ptr: NonNull::from(&*argument_buffer),
+                                offset: 0,
+                                dynamic_index: None,
+                                binding_size: None,
+                                binding_location: layout.binding,
+                            });
+                        }
                         counter.buffers += 1;
 
                         bg.argument_buffers.push(argument_buffer)
