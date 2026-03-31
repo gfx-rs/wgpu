@@ -592,8 +592,8 @@ impl super::CapabilitiesQuery {
         //
         // Along with the different OSes, there is also two other modes that
         // applications can run in: the Simulator, and Mac Catalyst. This can
-        // be detected using `cfg!(target_env = "sim")` or
-        // `cfg!(target_env = "macabi")`.
+        // be detected using `cfg!(target_abi = "sim")` or
+        // `cfg!(target_abi = "macabi")`.
         //
         // Finally, iOS applications can be run on macOS and visionOS directly
         // using the "Designed for iPad" mode. This cannot be detected at
@@ -609,6 +609,13 @@ impl super::CapabilitiesQuery {
 
         let version = NSProcessInfo::processInfo().operatingSystemVersion();
         let os_type = super::OsType::new(version, device);
+
+        // Whether the actual GPU is Mac hardware (Simulator / Catalyst).
+        let runs_on_mac: bool = cfg!(any(
+            target_os = "macos",
+            target_abi = "macabi",
+            target_abi = "sim"
+        ));
 
         let family_check = available!(macos = 10.15, ios = 13.0, tvos = 13.0, visionos = 1.0);
         let metal3 = family_check && device.supportsFamily(MTLGPUFamily::Metal3);
@@ -708,11 +715,12 @@ impl super::CapabilitiesQuery {
                 MUTABLE_COMPARISON_SAMPLER_SUPPORT,
             ),
             sampler_clamp_to_border: Self::supports_any(device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
-            indirect_draw_dispatch: Self::supports_any(device, INDIRECT_DRAW_DISPATCH_SUPPORT),
+            indirect_draw_dispatch: Self::supports_any(device, INDIRECT_DRAW_DISPATCH_SUPPORT)
+                || runs_on_mac,
             base_vertex_first_instance_drawing: Self::supports_any(
                 device,
                 BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
-            ),
+            ) || runs_on_mac,
             dual_source_blending: Self::supports_any(device, DUAL_SOURCE_BLEND_SUPPORT),
             low_power: os_type != super::OsType::Macos || device.isLowPower(),
             headless: os_type == super::OsType::Macos && device.isHeadless(),
@@ -835,7 +843,9 @@ impl super::CapabilitiesQuery {
                 16
             },
             // "Buffer alignment for copying an existing texture to a buffer"
-            buffer_alignment: if matches!(os_type, super::OsType::Macos | super::OsType::VisionOs) {
+            buffer_alignment: if matches!(os_type, super::OsType::Macos | super::OsType::VisionOs)
+                || runs_on_mac
+            {
                 256
             } else if family_check && device.supportsFamily(MTLGPUFamily::Apple3) {
                 16
@@ -846,7 +856,8 @@ impl super::CapabilitiesQuery {
             constant_buffer_offset_alignment: if matches!(
                 os_type,
                 super::OsType::Macos | super::OsType::VisionOs
-            ) {
+            ) || runs_on_mac
+            {
                 256
             } else if device.supportsFeatureSet(MTLFeatureSet::macOS_GPUFamily2_v1) {
                 32
