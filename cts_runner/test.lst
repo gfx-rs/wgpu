@@ -153,9 +153,12 @@ webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="rend
 webgpu:api,validation,encoding,cmds,debug:debug_group:*
 webgpu:api,validation,encoding,cmds,debug:debug_marker:*
 webgpu:api,validation,encoding,cmds,index_access:*
+webgpu:api,validation,encoding,cmds,render,draw:buffer_binding_overlap:*
 webgpu:api,validation,encoding,cmds,render,draw:index_buffer_OOB:*
 webgpu:api,validation,encoding,cmds,render,draw:unused_buffer_bound:*
+webgpu:api,validation,encoding,cmds,render,draw:vertex_buffer_OOB:*
 webgpu:api,validation,encoding,cmds,render,dynamic_state:*
+webgpu:api,validation,encoding,cmds,render,indirect_draw:indirect_buffer_state:*
 webgpu:api,validation,encoding,cmds,render,indirect_draw:indirect_buffer_usage:*
 webgpu:api,validation,encoding,cmds,render,indirect_draw:indirect_buffer,device_mismatch:*
 webgpu:api,validation,encoding,cmds,render,setIndexBuffer:*
@@ -271,7 +274,9 @@ webgpu:api,validation,render_pipeline,primitive_state:*
 webgpu:api,validation,render_pipeline,resource_compatibility:*
 webgpu:api,validation,render_pipeline,shader_module:*
 webgpu:api,validation,render_pipeline,vertex_state:many_attributes_overlapping:*
+webgpu:api,validation,render_pipeline,vertex_state:max_vertex_attribute_limit:*
 webgpu:api,validation,render_pipeline,vertex_state:max_vertex_buffer_array_stride_limit:*
+webgpu:api,validation,render_pipeline,vertex_state:max_vertex_buffer_limit:*
 fails-if(metal) webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_contained_in_stride:*
 fails-if(metal) webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_offset_alignment:*
 webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_shaderLocation_limit:*
