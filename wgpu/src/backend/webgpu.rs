@@ -818,6 +818,7 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_texture_dimension_3d: limits.max_texture_dimension_3d(),
         max_texture_array_layers: limits.max_texture_array_layers(),
         max_bind_groups: limits.max_bind_groups(),
+        max_bind_groups_plus_vertex_buffers: limits.max_bind_groups_plus_vertex_buffers(),
         max_bindings_per_bind_group: limits.max_bindings_per_bind_group(),
         max_dynamic_uniform_buffers_per_pipeline_layout: limits
             .max_dynamic_uniform_buffers_per_pipeline_layout(),
@@ -925,7 +926,7 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object<js_sys::Number> {
         (maxTextureDimension3D, max_texture_dimension_3d),
         (maxTextureArrayLayers, max_texture_array_layers),
         (maxBindGroups, max_bind_groups),
-        // TODO: (maxBindGroupsPlusVertexBuffers, max_bind_groups_plus_vertex_buffers),
+        (maxBindGroupsPlusVertexBuffers, max_bind_groups_plus_vertex_buffers),
         (maxBindingsPerBindGroup, max_bindings_per_bind_group),
         (maxDynamicUniformBuffersPerPipelineLayout, max_dynamic_uniform_buffers_per_pipeline_layout),
         (maxDynamicStorageBuffersPerPipelineLayout, max_dynamic_storage_buffers_per_pipeline_layout),

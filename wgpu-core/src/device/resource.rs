@@ -4687,6 +4687,20 @@ impl Device {
             }
         };
 
+        if let pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) = desc.vertex {
+            let bind_groups_plus_vertex_buffers =
+                u32::try_from(pipeline_layout.bind_group_layouts.len() + vertex.buffers.len())
+                    .unwrap();
+            if bind_groups_plus_vertex_buffers > self.limits.max_bind_groups_plus_vertex_buffers {
+                return Err(
+                    pipeline::CreateRenderPipelineError::TooManyBindGroupsPlusVertexBuffers {
+                        given: bind_groups_plus_vertex_buffers,
+                        limit: self.limits.max_bind_groups_plus_vertex_buffers,
+                    },
+                );
+            }
+        }
+
         // Multiview is only supported if the feature is enabled
         if let Some(mv_mask) = desc.multiview_mask {
             self.require_features(wgt::Features::MULTIVIEW)?;

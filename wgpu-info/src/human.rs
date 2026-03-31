@@ -151,6 +151,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_texture_dimension_3d,
         max_texture_array_layers,
         max_bind_groups,
+        max_bind_groups_plus_vertex_buffers,
         max_bindings_per_bind_group,
         max_dynamic_uniform_buffers_per_pipeline_layout,
         max_dynamic_storage_buffers_per_pipeline_layout,
@@ -208,6 +209,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                           Max Texture Dimension 3d: {max_texture_dimension_3d}")?;
     writeln!(output, "\t\t                           Max Texture Array Layers: {max_texture_array_layers}")?;
     writeln!(output, "\t\t                                    Max Bind Groups: {max_bind_groups}")?;
+    writeln!(output, "\t\t                Max Bind Groups Plus Vertex Buffers: {max_bind_groups_plus_vertex_buffers}")?;
     writeln!(output, "\t\t                        Max Bindings Per Bind Group: {max_bindings_per_bind_group}")?;
     writeln!(output, "\t\t    Max Dynamic Uniform Buffers Per Pipeline Layout: {max_dynamic_uniform_buffers_per_pipeline_layout}")?;
     writeln!(output, "\t\t    Max Dynamic Storage Buffers Per Pipeline Layout: {max_dynamic_storage_buffers_per_pipeline_layout}")?;

@@ -1627,6 +1627,8 @@ impl PhysicalDeviceProperties {
             max_texture_dimension_3d: limits.max_image_dimension3_d,
             max_texture_array_layers: limits.max_image_array_layers,
             max_bind_groups: limits.max_bound_descriptor_sets,
+            // No limit.
+            max_bind_groups_plus_vertex_buffers: u32::MAX,
             max_bindings_per_bind_group,
             max_dynamic_uniform_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_uniform_buffers_dynamic,

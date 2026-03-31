@@ -1527,6 +1527,26 @@ impl State {
                 }
             }
 
+            let bind_group_space_used = self.binder.last_assigned_index().map_or(0, |i| i + 1);
+            let vertex_buffer_space_used = self
+                .vertex
+                .iter()
+                .enumerate()
+                .filter_map(|(i, state)| state.as_ref().map(|_| i))
+                .next_back()
+                .map_or(0, |i| i + 1);
+
+            let bind_groups_plus_vertex_buffers =
+                u32::try_from(bind_group_space_used + vertex_buffer_space_used).unwrap();
+            if bind_groups_plus_vertex_buffers
+                > self.device.limits.max_bind_groups_plus_vertex_buffers
+            {
+                return Err(DrawError::TooManyBindGroupsPlusVertexBuffers {
+                    given: bind_groups_plus_vertex_buffers,
+                    limit: self.device.limits.max_bind_groups_plus_vertex_buffers,
+                });
+            }
+
             if family == DrawCommandFamily::DrawIndexed {
                 let pipeline = &pipeline.pipeline;
                 let index_format = match &self.index {

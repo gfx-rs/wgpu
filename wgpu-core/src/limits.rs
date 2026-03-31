@@ -291,7 +291,7 @@ const UPLEVEL: Bucket = Bucket {
     name: "uplevel-defaults",
     limits: Limits {
         max_bind_groups: 8,
-        // wgpu does not implement max_bind_groups_plus_vertex_buffers
+        // use default max_bind_groups_plus_vertex_buffers
         // use default max_bindings_per_bind_group
         max_buffer_size: 1 << 30, // 1 GB
         max_color_attachment_bytes_per_sample: 64,

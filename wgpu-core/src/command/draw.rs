@@ -74,6 +74,8 @@ pub enum DrawError {
     MissingImmediateData {
         missing: naga::valid::ImmediateSlots,
     },
+    #[error("The number of bind groups + vertex buffers {given} exceeds the limit {limit}")]
+    TooManyBindGroupsPlusVertexBuffers { given: u32, limit: u32 },
 }
 
 impl WebGpuError for DrawError {

@@ -566,6 +566,27 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
                 }
             }
 
+            let bind_group_space_used = self.pass.binder.last_assigned_index().map_or(0, |i| i + 1);
+            let vertex_buffer_space_used = self
+                .vertex
+                .buffer_sizes
+                .iter()
+                .enumerate()
+                .filter_map(|(i, size)| size.map(|_| i))
+                .next_back()
+                .map_or(0, |i| i + 1);
+
+            let bind_groups_plus_vertex_buffers =
+                u32::try_from(bind_group_space_used + vertex_buffer_space_used).unwrap();
+            if bind_groups_plus_vertex_buffers
+                > pipeline.device.limits.max_bind_groups_plus_vertex_buffers
+            {
+                return Err(DrawError::TooManyBindGroupsPlusVertexBuffers {
+                    given: bind_groups_plus_vertex_buffers,
+                    limit: pipeline.device.limits.max_bind_groups_plus_vertex_buffers,
+                });
+            }
+
             if family == DrawCommandFamily::DrawIndexed {
                 // Pipeline expects an index buffer
                 // We have a buffer bound
