@@ -533,6 +533,11 @@ impl super::PrivateCapabilities {
         };
 
         let os_type = super::OsType::new(version, device);
+
+        // Whether the actual GPU is Mac hardware (Simulator / Catalyst).
+        let runs_on_mac: bool =
+            cfg!(any(target_os = "macos", target_abi = "macabi", target_abi = "sim"));
+
         let family_check = version.at_least((10, 15), (13, 0), (13, 0), (1, 0), os_type);
         let metal3 = family_check && device.supports_family(MTLGPUFamily::Metal3);
         let metal4 = family_check && device.supports_family(MTLGPUFamily::Metal4);
@@ -635,11 +640,12 @@ impl super::PrivateCapabilities {
                 MUTABLE_COMPARISON_SAMPLER_SUPPORT,
             ),
             sampler_clamp_to_border: Self::supports_any(device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
-            indirect_draw_dispatch: Self::supports_any(device, INDIRECT_DRAW_DISPATCH_SUPPORT),
+            indirect_draw_dispatch: Self::supports_any(device, INDIRECT_DRAW_DISPATCH_SUPPORT)
+                || runs_on_mac,
             base_vertex_first_instance_drawing: Self::supports_any(
                 device,
                 BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
-            ),
+            ) || runs_on_mac,
             dual_source_blending: Self::supports_any(device, DUAL_SOURCE_BLEND_SUPPORT),
             low_power: os_type != super::OsType::Macos || device.is_low_power(),
             headless: os_type == super::OsType::Macos && device.is_headless(),
@@ -756,7 +762,9 @@ impl super::PrivateCapabilities {
             } else {
                 16
             },
-            buffer_alignment: if matches!(os_type, super::OsType::Macos | super::OsType::VisionOs) {
+            buffer_alignment: if matches!(os_type, super::OsType::Macos | super::OsType::VisionOs)
+                || runs_on_mac
+            {
                 256
             } else {
                 64
