@@ -86,6 +86,10 @@ Bottom level categories:
 - Naga no longer allows derivative operations on `f16`. WGSL does not currently allow this, although [it may be added in the future](https://github.com/gpuweb/gpuweb/issues/5482). By @andyleiserson in [#9154](https://github.com/gfx-rs/wgpu/pull/9154).
 - Disallow direct access to atomic variables in WGSL front-end (e.g. `let x = myAtomic;`). By @ecoricemon in [#9262](https://github.com/gfx-rs/wgpu/pull/9262).
 
+#### dx12
+
+- Fixed use of a texture view without `TextureUsage::TEXTURE_BINDING` as a read-only depth attachment. By @andyleiserson in [#9346](https://github.com/gfx-rs/wgpu/pull/9346).
+
 ## v29.0.1 (2026-03-26)
 
 This release includes `wgpu-core`, `wgpu-hal` and `wgpu-types` version `29.0.1`. All other crates remain at their previous versions.
