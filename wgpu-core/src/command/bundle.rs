@@ -119,7 +119,10 @@ use crate::{
     resource_log,
     snatch::SnatchGuard,
     track::RenderBundleScope,
-    validation::{check_color_attachment_count, validate_color_attachment_bytes_per_sample},
+    validation::{
+        check_color_attachment_count, check_workgroup_sizes,
+        validate_color_attachment_bytes_per_sample,
+    },
     Label, LabelHelpers,
 };
 
@@ -848,21 +851,20 @@ fn draw_mesh_tasks(
 ) -> Result<(), RenderBundleErrorInner> {
     state.is_ready(DrawCommandFamily::DrawMeshTasks)?;
 
-    let groups_size_limit = state.device.limits.max_task_mesh_workgroups_per_dimension;
-    let max_groups = state.device.limits.max_task_mesh_workgroup_total_count;
-    if group_count_x > groups_size_limit
-        || group_count_y > groups_size_limit
-        || group_count_z > groups_size_limit
-        || group_count_x * group_count_y * group_count_z > max_groups
-    {
-        return Err(RenderBundleErrorInner::Draw(DrawError::InvalidGroupSize {
-            current: [group_count_x, group_count_y, group_count_z],
-            limit: groups_size_limit,
-            max_total: max_groups,
-        }));
-    }
+    let total_count = check_workgroup_sizes(
+        &[group_count_x, group_count_y, group_count_z],
+        &[
+            state.device.limits.max_task_mesh_workgroups_per_dimension,
+            state.device.limits.max_task_mesh_workgroups_per_dimension,
+            state.device.limits.max_task_mesh_workgroups_per_dimension,
+        ],
+        "max_task_mesh_workgroups_per_dimension",
+        state.device.limits.max_task_mesh_workgroup_total_count,
+        "max_task_mesh_workgroup_total_count",
+    )
+    .map_err(|err| RenderBundleErrorInner::Draw(err.into()))?;
 
-    if group_count_x > 0 && group_count_y > 0 && group_count_z > 0 {
+    if total_count > 0 {
         state.flush_bindings();
         state.commands.push(ArcRenderCommand::DrawMeshTasks {
             group_count_x,
@@ -895,6 +897,7 @@ fn multi_draw_indirect(
     let vertex_limits = super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.steps);
 
     let stride = super::get_src_stride_of_indirect_args(family);
+    assert!(offset <= wgt::BufferAddress::MAX - stride);
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(

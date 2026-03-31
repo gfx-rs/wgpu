@@ -721,9 +721,10 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                         }) {
                             input_barriers.push(barrier);
                         }
-                        if vertex_buffer.size
-                            < (mesh.size.vertex_count + mesh.first_vertex) as u64
-                                * mesh.vertex_stride
+                        if u64::from(mesh.size.vertex_count)
+                            .checked_add(u64::from(mesh.first_vertex))
+                            .and_then(|end_index| end_index.checked_mul(mesh.vertex_stride))
+                            .is_none_or(|end| vertex_buffer.size < end)
                         {
                             return Err(BuildAccelerationStructureError::InsufficientBufferSize(
                                 vertex_buffer.error_ident(),

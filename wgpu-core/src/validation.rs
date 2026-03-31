@@ -392,20 +392,8 @@ impl WebGpuError for InputError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum StageError {
-    #[error(
-        "Shader entry point's workgroup size {dimensions:?} ({total} total invocations) must be \
-        less or equal to the per-dimension limit `Limits::{per_dimension_limits_desc}` of \
-        {per_dimension_limits:?} and the total invocation limit `Limits::{total_limit_desc}` of \
-        {total_limit}"
-    )]
-    InvalidWorkgroupSize {
-        dimensions: [u32; 3],
-        per_dimension_limits: [u32; 3],
-        per_dimension_limits_desc: &'static str,
-        total: u32,
-        total_limit: u32,
-        total_limit_desc: &'static str,
-    },
+    #[error(transparent)]
+    InvalidWorkgroupSize(#[from] InvalidWorkgroupSizeError),
     #[error("Unable to find entry point '{0}'")]
     MissingEntryPoint(String),
     #[error("Shader global {0:?} is not available in the pipeline layout")]
@@ -1465,71 +1453,48 @@ impl Interface {
 
         // check workgroup size limits
         if shader_stage.to_naga().compute_like() {
-            let (
-                max_workgroup_size_limits,
-                max_workgroup_size_total,
-                per_dimension_limit,
-                total_limit,
-            ) = match shader_stage.to_naga() {
-                naga::ShaderStage::Compute => (
-                    [
+            let total = match shader_stage.to_naga() {
+                naga::ShaderStage::Compute => check_workgroup_sizes(
+                    &entry_point.workgroup_size,
+                    &[
                         self.limits.max_compute_workgroup_size_x,
                         self.limits.max_compute_workgroup_size_y,
                         self.limits.max_compute_workgroup_size_z,
                     ],
-                    self.limits.max_compute_invocations_per_workgroup,
                     "max_compute_workgroup_size_*",
+                    self.limits.max_compute_invocations_per_workgroup,
                     "max_compute_invocations_per_workgroup",
-                ),
-                naga::ShaderStage::Task => (
-                    [
+                )?,
+                naga::ShaderStage::Task => check_workgroup_sizes(
+                    &entry_point.workgroup_size,
+                    &[
                         self.limits.max_task_invocations_per_dimension,
                         self.limits.max_task_invocations_per_dimension,
                         self.limits.max_task_invocations_per_dimension,
                     ],
-                    self.limits.max_task_invocations_per_workgroup,
                     "max_task_invocations_per_dimension",
+                    self.limits.max_task_invocations_per_workgroup,
                     "max_task_invocations_per_workgroup",
-                ),
-                naga::ShaderStage::Mesh => (
-                    [
+                )?,
+                naga::ShaderStage::Mesh => check_workgroup_sizes(
+                    &entry_point.workgroup_size,
+                    &[
                         self.limits.max_mesh_invocations_per_dimension,
                         self.limits.max_mesh_invocations_per_dimension,
                         self.limits.max_mesh_invocations_per_dimension,
                     ],
-                    self.limits.max_mesh_invocations_per_workgroup,
                     "max_mesh_invocations_per_dimension",
+                    self.limits.max_mesh_invocations_per_workgroup,
                     "max_mesh_invocations_per_workgroup",
-                ),
+                )?,
                 _ => unreachable!(),
             };
-
-            let total_invocations = entry_point
-                .workgroup_size
-                .iter()
-                .fold(1u32, |total, &dim| total.saturating_mul(dim));
-            let invalid_total_invocations =
-                total_invocations > max_workgroup_size_total || total_invocations == 0;
-
-            assert_eq!(
-                entry_point.workgroup_size.len(),
-                max_workgroup_size_limits.len()
-            );
-            let dimension_too_large = entry_point
-                .workgroup_size
-                .iter()
-                .zip(max_workgroup_size_limits.iter())
-                .any(|(dim, limit)| dim > limit);
-
-            if invalid_total_invocations || dimension_too_large {
-                return Err(StageError::InvalidWorkgroupSize {
-                    dimensions: entry_point.workgroup_size,
-                    total: total_invocations,
-                    per_dimension_limits: max_workgroup_size_limits,
-                    total_limit: max_workgroup_size_total,
-                    per_dimension_limits_desc: per_dimension_limit,
-                    total_limit_desc: total_limit,
-                });
+            if total == 0 {
+                return Err(StageError::InvalidWorkgroupSize(
+                    InvalidWorkgroupSizeError::Zero {
+                        dimensions: entry_point.workgroup_size,
+                    },
+                ));
             }
         }
 
@@ -1921,6 +1886,62 @@ pub fn validate_color_attachment_bytes_per_sample(
     }
 
     Ok(())
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum InvalidWorkgroupSizeError {
+    #[error(
+        "Workgroup size {dimensions:?} ({total} total invocations) must be less or equal to \
+        the per-dimension limit `Limits::{per_dimension_limits_desc}` of {per_dimension_limits:?} \
+        and the total invocation limit `Limits::{total_limit_desc}` of {total_limit}"
+    )]
+    LimitExceeded {
+        dimensions: [u32; 3],
+        per_dimension_limits: [u32; 3],
+        per_dimension_limits_desc: &'static str,
+        total: u32,
+        total_limit: u32,
+        total_limit_desc: &'static str,
+    },
+    #[error("Workgroup sizes {dimensions:?} must be positive")]
+    Zero { dimensions: [u32; 3] },
+}
+
+/// Check X/Y/Z workgroup sizes against per-dimension and overall limits.
+///
+/// This function does not check that the sizes are non-zero. In a dispatch, it is legal for
+/// the size to be zero. In shader or pipeline creation, it is an error for the size to be
+/// zero, and the caller must check that.
+pub(crate) fn check_workgroup_sizes(
+    sizes: &[u32; 3],
+    per_dimension_limits: &[u32; 3],
+    per_dimension_limits_desc: &'static str,
+    total_limit: u32,
+    total_limit_desc: &'static str,
+) -> Result<u32, InvalidWorkgroupSizeError> {
+    let total = sizes
+        .iter()
+        .fold(1u32, |total, &dim| total.saturating_mul(dim));
+
+    let invalid_total_invocations = total > total_limit;
+
+    let dimension_too_large = sizes
+        .iter()
+        .zip(per_dimension_limits.iter())
+        .any(|(dim, limit)| dim > limit);
+
+    if invalid_total_invocations || dimension_too_large {
+        Err(InvalidWorkgroupSizeError::LimitExceeded {
+            dimensions: *sizes,
+            per_dimension_limits: *per_dimension_limits,
+            per_dimension_limits_desc,
+            total,
+            total_limit,
+            total_limit_desc,
+        })
+    } else {
+        Ok(total)
+    }
 }
 
 pub enum ShaderStageForValidation {

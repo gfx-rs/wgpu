@@ -44,7 +44,8 @@ use crate::{
     },
     snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker, UsageScope},
-    validation, Label,
+    validation::{self, check_workgroup_sizes},
+    Label,
 };
 
 #[cfg(feature = "serde")]
@@ -2739,21 +2740,17 @@ fn draw_mesh_tasks(
         .device
         .limits
         .max_task_mesh_workgroup_total_count;
-    if group_count_x > groups_size_limit
-        || group_count_y > groups_size_limit
-        || group_count_z > groups_size_limit
-        || group_count_x * group_count_y * group_count_z > max_groups
-    {
-        return Err(DrawError::InvalidGroupSize {
-            current: [group_count_x, group_count_y, group_count_z],
-            limit: groups_size_limit,
-            max_total: max_groups,
-        }
-        .into());
-    }
+    let total_count = check_workgroup_sizes(
+        &[group_count_x, group_count_y, group_count_z],
+        &[groups_size_limit, groups_size_limit, groups_size_limit],
+        "max_task_mesh_workgroups_per_dimension",
+        max_groups,
+        "max_task_mesh_workgroup_total_count",
+    )
+    .map_err(|err| RenderPassErrorInner::Draw(err.into()))?;
 
     unsafe {
-        if group_count_x > 0 && group_count_y > 0 && group_count_z > 0 {
+        if total_count > 0 {
             state.pass.base.raw_encoder.draw_mesh_tasks(
                 group_count_x,
                 group_count_y,
