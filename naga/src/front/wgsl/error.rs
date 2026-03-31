@@ -442,6 +442,7 @@ pub(crate) enum Error<'a> {
     },
     UnexpectedExprForTypeExpression(Span),
     MissingIncomingPayload(Span),
+    UnterminatedBlockComment(Span),
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -516,6 +517,7 @@ impl<'a> Error<'a> {
                         Token::DocComment(s) => format!("doc comment ('{s}')"),
                         Token::ModuleDocComment(s) => format!("module doc comment ('{s}')"),
                         Token::End => "end".to_string(),
+                        Token::UnterminatedBlockComment(s) => format!("unterminated doc comment ('{s}'")
                     },
                     ExpectedToken::Identifier => "identifier".to_string(),
                     ExpectedToken::LhsExpression => "LHS expression (identifier component_or_swizzle_specifier?, (`lhs_expression`) component_or_swizzle_specifier?, &`lhs_expression`, *`lhs_expression`)".to_string(),
@@ -1511,6 +1513,14 @@ impl<'a> Error<'a> {
                 )],
                 notes: vec![],
             },
+            Error::UnterminatedBlockComment(span) => ParseError {
+                message: "unterminated block comment".to_string(),
+                labels: vec![(
+                    span,
+                    "must be closed with */".into(),
+                )],
+                notes: vec![],
+            }
         }
     }
 }

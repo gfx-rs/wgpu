@@ -5237,3 +5237,18 @@ fn bitwise_shift_errors() {
         naga::valid::Capabilities::SHADER_INT64
     }
 }
+
+#[test]
+fn unterminated_block_comment_errors() {
+    check_success("/* Closed */");
+
+    check_error_matches("/* unterminated", "unterminated block comment");
+    check_error_matches(
+        "/* unterminated /* terimated inner */",
+        "unterminated block comment",
+    );
+    check_error_matches(
+        "const N: u32 = 1u; /* Trailing unterminated",
+        "unterminated block comment",
+    )
+}
