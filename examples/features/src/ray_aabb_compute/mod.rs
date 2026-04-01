@@ -398,7 +398,7 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
     optional_features: wgpu::Features::default(),
     base_test_parameters: wgpu_test::TestParameters::default()
         // Metal has no AABB intersection in ray queries yet; image compare fails.
-        // https://github.com/gfx-rs/wgpu/issues/9304
+        // https://github.com/gfx-rs/wgpu/pull/9304
         // https://github.com/gfx-rs/wgpu/issues/9100
         .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::METAL)),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
