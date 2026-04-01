@@ -369,7 +369,6 @@ fn parse_dec(
 //   on overflow and inexact for hexadecimal floating point literals
 // (underflow is not mentioned)
 
-// hexf_parse errors on overflow, underflow, inexact
 // rust std lib float from str handles overflow, underflow, inexact transparently (rounds and will not error)
 
 // Therefore we only check for overflow manually for decimal floating point literals
@@ -377,23 +376,249 @@ fn parse_dec(
 // input format: 0[xX] ( [0-9a-fA-F]+\.[0-9a-fA-F]* | [0-9a-fA-F]*\.[0-9a-fA-F]+ ) [pP][+-]?[0-9]+
 fn parse_hex_float(input: &str, kind: Option<FloatKind>) -> Result<Number, NumberError> {
     match kind {
-        None => match hexf_parse::parse_hexf64(input, false) {
-            Ok(num) => Ok(Number::AbstractFloat(num)),
-            // can only be ParseHexfErrorKind::Inexact but we can't check since it's private
-            _ => Err(NumberError::NotRepresentable),
-        },
-        // TODO: f16 is not supported by hexf_parse
+        None => {
+            let (neg, mant, exp) = parse_hex_float_parts(input.as_bytes())?;
+            let bits = convert_hex_float(neg, mant, exp, F64)?;
+            let num = f64::from_bits(bits);
+
+            Ok(Number::AbstractFloat(num))
+        }
+        // TODO: f16 is not supported
         Some(FloatKind::F16) => Err(NumberError::NotRepresentable),
-        Some(FloatKind::F32) => match hexf_parse::parse_hexf32(input, false) {
-            Ok(num) => Ok(Number::F32(num)),
-            // can only be ParseHexfErrorKind::Inexact but we can't check since it's private
-            _ => Err(NumberError::NotRepresentable),
-        },
-        Some(FloatKind::F64) => match hexf_parse::parse_hexf64(input, false) {
-            Ok(num) => Ok(Number::F64(num)),
-            // can only be ParseHexfErrorKind::Inexact but we can't check since it's private
-            _ => Err(NumberError::NotRepresentable),
-        },
+        Some(FloatKind::F32) => {
+            let (neg, mant, exp) = parse_hex_float_parts(input.as_bytes())?;
+            let bits = convert_hex_float(neg, mant, exp, F32)?;
+            let num = f32::from_bits(bits as u32);
+
+            Ok(Number::F32(num))
+        }
+        Some(FloatKind::F64) => {
+            let (neg, mant, exp) = parse_hex_float_parts(input.as_bytes())?;
+            let bits = convert_hex_float(neg, mant, exp, F64)?;
+            let num = f64::from_bits(bits);
+
+            Ok(Number::F64(num))
+        }
+    }
+}
+
+// a config for representing a hexadecimal floating-point
+struct HexFloatFormat {
+    mant_bits: usize,  // number of bits in the mantissa (excluding implicit leading 1)
+    precision: usize,  // total precision in bits including implicit bit
+    bias: i32,         // exponent bias
+    max_exp: i32,      // max exponent before overflow
+    exp_bits: usize,   // number of bits in exponent
+    min_norm_exp: i32, // smallest exponent for normalized numbers
+}
+
+const F32: HexFloatFormat = HexFloatFormat {
+    mant_bits: 23,
+    precision: 24,
+    bias: 127,
+    max_exp: 127,
+    exp_bits: 8,
+    min_norm_exp: -126,
+};
+
+const F64: HexFloatFormat = HexFloatFormat {
+    mant_bits: 52,
+    precision: 53,
+    bias: 1023,
+    max_exp: 1023,
+    exp_bits: 11,
+    min_norm_exp: -1022,
+};
+
+// derived from hexf-parse module: https://github.com/lifthrasiir/hexf (0BSD)
+// parses a hexadecimal floating-point string into its sign, mantissa, and exponent
+// input format: 0[xX] ( [0-9a-fA-F]+\.[0-9a-fA-F]* | [0-9a-fA-F]*\.[0-9a-fA-F]+ ) [pP][+-]?[0-9]+
+fn parse_hex_float_parts(s: &[u8]) -> Result<(bool, u64, i32), NumberError> {
+    let (s, negative) = match s.split_first() {
+        Some((&b'+', s)) => (s, false),
+        Some((&b'-', s)) => (s, true),
+        Some(_) => (s, false),
+        // empty
+        None => return Err(NumberError::Invalid),
+    };
+
+    if !(s.starts_with(b"0x") || s.starts_with(b"0X")) {
+        return Err(NumberError::Invalid);
+    }
+
+    let mut s = &s[2..];
+    let mut acc: u128 = 0;
+    let mut digit_seen = false;
+
+    // integer part: [0-9a-fA-F]+
+    loop {
+        let (rest, digit) = match s.split_first() {
+            Some((&c @ b'0'..=b'9', s)) => (s, c - b'0'),
+            Some((&c @ b'a'..=b'f', s)) => (s, c - b'a' + 10),
+            Some((&c @ b'A'..=b'F', s)) => (s, c - b'A' + 10),
+            _ => break,
+        };
+        s = rest;
+        digit_seen = true;
+        acc = acc.checked_shl(4).ok_or(NumberError::NotRepresentable)? | digit as u128;
+    }
+
+    // fractional part: \.[0-9a-fA-F]+
+    let mut nfracs: i32 = 0;
+    let mut frac_digit_seen = false;
+    if s.starts_with(b".") {
+        s = &s[1..];
+        loop {
+            let (rest, digit) = match s.split_first() {
+                Some((&c @ b'0'..=b'9', s)) => (s, c - b'0'),
+                Some((&c @ b'a'..=b'f', s)) => (s, c - b'a' + 10),
+                Some((&c @ b'A'..=b'F', s)) => (s, c - b'A' + 10),
+                _ => break,
+            };
+            s = rest;
+            frac_digit_seen = true;
+            acc = acc.checked_shl(4).ok_or(NumberError::NotRepresentable)? | digit as u128;
+            nfracs = nfracs.checked_add(1).ok_or(NumberError::NotRepresentable)?;
+        }
+    }
+
+    if !(digit_seen || frac_digit_seen) {
+        return Err(NumberError::Invalid);
+    }
+
+    // exponent marker 'p' or 'P'
+    let s = match s.split_first() {
+        Some((&b'P', s)) | Some((&b'p', s)) => s,
+        _ => return Err(NumberError::Invalid),
+    };
+
+    // exponent sign
+    let (mut s, negative_exponent) = match s.split_first() {
+        Some((&b'+', s)) => (s, false),
+        Some((&b'-', s)) => (s, true),
+        Some(_) => (s, false),
+        None => return Err(NumberError::Invalid),
+    };
+
+    // exponent digits: [0-9]+
+    let mut digit_seen = false;
+    let mut exponent: i32 = 0;
+    loop {
+        let (rest, digit) = match s.split_first() {
+            Some((&c @ b'0'..=b'9', s)) => (s, c - b'0'),
+            None if digit_seen => break,
+            _ => return Err(NumberError::Invalid),
+        };
+        s = rest;
+        digit_seen = true;
+
+        // only update exponent if non‑zero mantissa
+        if acc != 0 {
+            exponent = exponent
+                .checked_mul(10)
+                .and_then(|v| v.checked_add(digit as i32))
+                .ok_or(NumberError::NotRepresentable)?;
+        }
+    }
+
+    if negative_exponent {
+        exponent = -exponent;
+    }
+
+    if acc == 0 {
+        return Ok((negative, 0, 0));
+    }
+
+    // adjust exponent by 4 per fractional digit
+    let exp_adj = nfracs.checked_mul(4).ok_or(NumberError::NotRepresentable)?;
+    let exponent = exponent
+        .checked_sub(exp_adj)
+        .ok_or(NumberError::NotRepresentable)?;
+
+    // remove trailing hex zeros
+    let mut mant = acc;
+    let mut extra_shift = 0i32;
+    while mant > 0 && (mant & 0xF) == 0 {
+        mant >>= 4;
+        extra_shift = extra_shift
+            .checked_add(4)
+            .ok_or(NumberError::NotRepresentable)?;
+    }
+
+    // final mantissa must fit in 64 bits
+    if mant > u64::MAX as u128 {
+        return Err(NumberError::NotRepresentable);
+    }
+
+    let exponent = exponent
+        .checked_add(extra_shift)
+        .ok_or(NumberError::NotRepresentable)?;
+
+    Ok((negative, mant as u64, exponent))
+}
+
+fn convert_hex_float(
+    negative: bool,
+    mant: u64,
+    exp: i32,
+    fmt: HexFloatFormat,
+) -> Result<u64, NumberError> {
+    let sign_shift = fmt.mant_bits + fmt.exp_bits;
+    let sign = (negative as u64) << sign_shift;
+
+    if mant == 0 {
+        return Ok(sign);
+    }
+
+    let k = 63usize - mant.leading_zeros() as usize;
+    let normalexp = exp
+        .checked_add(k as i32)
+        .ok_or(NumberError::NotRepresentable)?;
+
+    if normalexp > fmt.max_exp {
+        return Err(NumberError::NotRepresentable);
+    }
+
+    // shift to align mantissa
+    let shift = k as i32 - ((fmt.precision as i32) - 1);
+    let mut mant_field: u64;
+
+    if normalexp >= fmt.min_norm_exp {
+        // normalized
+        if shift > 0 {
+            if shift >= 64 || (mant & ((1u64 << shift) - 1)) != 0 {
+                return Err(NumberError::NotRepresentable);
+            }
+            mant_field = mant >> shift;
+        } else {
+            mant_field = mant << -shift;
+        }
+
+        mant_field &= (1u64 << fmt.mant_bits) - 1;
+        let expo_field = (normalexp + fmt.bias) as u64;
+
+        Ok(sign | (expo_field << fmt.mant_bits) | mant_field)
+    } else {
+        // subnormal
+        let shift_sub = exp - (fmt.min_norm_exp - ((fmt.precision as i32) - 1));
+        if shift_sub < 0 {
+            let rs = (-shift_sub) as usize;
+            if rs >= 64 || (mant & ((1u64 << rs) - 1)) != 0 {
+                return Err(NumberError::NotRepresentable);
+            }
+            mant_field = mant >> rs;
+        } else {
+            mant_field = mant << shift_sub as u32;
+            if (mant_field >> fmt.mant_bits) != 0 {
+                return Err(NumberError::NotRepresentable);
+            }
+        }
+
+        if mant_field == 0 {
+            return Err(NumberError::NotRepresentable);
+        }
+
+        Ok(sign | (mant_field & ((1u64 << fmt.mant_bits) - 1)))
     }
 }
 

@@ -27,6 +27,8 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         INSTANCED_INDEXED_DRAW_OOB_INSTANCE_START,
         INSTANCED_INDEXED_DRAW_OOB_INSTANCE_COUNT,
         INDIRECT_BUFFER_OFFSETS,
+        MULTI_DRAW_INDEXED_INDIRECT,
+        MULTI_DRAW_INDIRECT,
     ]);
 }
 
@@ -115,6 +117,15 @@ impl TestData {
 }
 
 async fn run_test(ctx: TestingContext, test_data: TestData, expect_noop: bool) {
+    run_test_inner(ctx, test_data, expect_noop, false).await;
+}
+
+async fn run_test_inner(
+    ctx: TestingContext,
+    test_data: TestData,
+    expect_noop: bool,
+    use_multi_draw: bool,
+) {
     let mut vertex_buffer_layouts = Vec::new();
     vertex_buffer_layouts.push(wgpu::VertexBufferLayout {
         array_stride: 8,
@@ -283,15 +294,23 @@ async fn run_test(ctx: TestingContext, test_data: TestData, expect_noop: bool) {
         if let Some(ref index_buffer) = index_buffer {
             rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         }
-        for draw_index in 0..draws {
+        if use_multi_draw {
             if index_buffer.is_some() {
-                let offset = pass_index * draw_index * 20;
-                rpass.draw_indexed_indirect(&indirect_buffer, offset);
-                rpass.draw_indexed_indirect(&indirect_buffer2, offset);
+                rpass.multi_draw_indexed_indirect(&indirect_buffer, 0, draws);
             } else {
-                let offset = pass_index * draw_index * 20;
-                rpass.draw_indirect(&indirect_buffer, offset);
-                rpass.draw_indirect(&indirect_buffer2, offset);
+                rpass.multi_draw_indirect(&indirect_buffer, 0, draws);
+            }
+        } else {
+            for draw_index in 0..draws {
+                if index_buffer.is_some() {
+                    let offset = (pass_index * draw_index * 20) as u64;
+                    rpass.draw_indexed_indirect(&indirect_buffer, offset);
+                    rpass.draw_indexed_indirect(&indirect_buffer2, offset);
+                } else {
+                    let offset = (pass_index * draw_index * 20) as u64;
+                    rpass.draw_indirect(&indirect_buffer, offset);
+                    rpass.draw_indirect(&indirect_buffer2, offset);
+                }
             }
         }
     }
@@ -796,3 +815,21 @@ async fn indirect_buffer_offsets(ctx: TestingContext) {
         data[..half].iter().all(|b| *b == u8::MAX) && data[half..].iter().all(|b| *b == 0);
     assert!(succeeded);
 }
+
+#[gpu_test]
+static MULTI_DRAW_INDEXED_INDIRECT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| run_test_inner(ctx, get_indexed_draw_test_data(0, 6), false, true));
+
+#[gpu_test]
+static MULTI_DRAW_INDIRECT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| run_test_inner(ctx, get_draw_test_data(0, 6), false, true));

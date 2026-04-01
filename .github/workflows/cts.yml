@@ -99,7 +99,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           # The version number can be incremented for cache busting.
-          prefix-key: v2-rust-${{ hashFiles('cts_runner/revision.txt') }}
+          prefix-key: v3-rust-${{ hashFiles('cts_runner/revision.txt') }}
           cache-directories: cts
 
       # We enable line numbers for panics, but that's it
@@ -154,7 +154,7 @@ jobs:
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info

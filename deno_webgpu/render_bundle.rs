@@ -34,7 +34,7 @@ pub struct GPURenderBundleEncoder {
   pub instance: Instance,
   pub error_handler: super::error::ErrorHandler,
 
-  pub encoder: RefCell<Option<wgpu_core::command::RenderBundleEncoder>>,
+  pub encoder: RefCell<Option<Box<wgpu_core::command::RenderBundleEncoder>>>,
   pub label: String,
 }
 

@@ -94,6 +94,7 @@ vulkan = [
     "dep:arrayvec",
     "dep:ash",
     "dep:bytemuck",
+    "dep:drm",
     "dep:gpu-descriptor",
     "dep:hashbrown",
     "dep:libc",
@@ -251,6 +252,9 @@ wayland-sys = { version = "0.31.3", features = [
     "egl",
 ], optional = true }
 
+[target.'cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))'.dependencies]
+drm = { version = "0.15", optional = true }
+
 #########################
 ### Platform: Windows ###
 #########################
@@ -346,9 +350,6 @@ naga = { workspace = true, features = ["wgsl-in", "termcolor"] }
 winit.workspace = true                                           # for "halmark" example
 
 ### Platform: Windows + MacOS + Linux for "raw-gles" example ###
-[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos")))'.dev-dependencies]
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos", target_env = "ohos")))'.dev-dependencies]
 glutin-winit = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
 glutin = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
-# temporary compatibility for glutin-winit
-rwh_05.workspace = true
-winit = { workspace = true, features = ["rwh_05"] }

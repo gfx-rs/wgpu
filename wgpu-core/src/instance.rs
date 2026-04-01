@@ -1,21 +1,14 @@
-use alloc::{
-    borrow::{Cow, ToOwned as _},
-    boxed::Box,
-    string::String,
-    sync::Arc,
-    vec,
-    vec::Vec,
-};
+use alloc::{borrow::ToOwned as _, boxed::Box, string::String, sync::Arc, vec, vec::Vec};
 
 use hashbrown::HashMap;
 use thiserror::Error;
-use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
     api_log, api_log_debug,
     device::{queue::Queue, resource::Device, DeviceDescriptor, DeviceError},
     global::Global,
     id::{markers, AdapterId, DeviceId, QueueId, SurfaceId},
+    limits::{self, check_limits, FailedLimit},
     lock::{rank, Mutex},
     present::Presentation,
     resource::ResourceType,
@@ -27,35 +20,6 @@ use crate::{
 use wgt::{Backend, Backends, PowerPreference};
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
-
-#[derive(Clone, Debug, Error)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[error("Limit '{name}' value {requested} is better than allowed {allowed}")]
-pub struct FailedLimit {
-    name: Cow<'static, str>,
-    requested: u64,
-    allowed: u64,
-}
-
-impl WebGpuError for FailedLimit {
-    fn webgpu_error_type(&self) -> ErrorType {
-        ErrorType::Validation
-    }
-}
-
-fn check_limits(requested: &wgt::Limits, allowed: &wgt::Limits) -> Vec<FailedLimit> {
-    let mut failed = Vec::new();
-
-    requested.check_limits_with_fail_fn(allowed, false, |name, requested, allowed| {
-        failed.push(FailedLimit {
-            name: Cow::Borrowed(name),
-            requested,
-            allowed,
-        })
-    });
-
-    failed
-}
 
 #[test]
 fn downlevel_default_limits_less_than_default_limits() {
@@ -454,7 +418,11 @@ impl Instance {
         })
     }
 
-    pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
+    pub fn enumerate_adapters(
+        &self,
+        backends: Backends,
+        apply_limit_buckets: bool,
+    ) -> Vec<Adapter> {
         profiling::scope!("Instance::enumerate_adapters");
         api_log!("Instance::enumerate_adapters");
 
@@ -469,11 +437,23 @@ impl Instance {
             profiling::scope!("enumerating", &*alloc::format!("{_backend:?}"));
 
             let hal_adapters = unsafe { instance.enumerate_adapters(None) };
-            for raw in hal_adapters {
-                let adapter = Adapter::new(raw);
-                api_log_debug!("Adapter {:?}", adapter.raw.info);
-                adapters.push(adapter);
-            }
+
+            adapters.extend(
+                hal_adapters
+                    .into_iter()
+                    .filter_map(|raw| {
+                        if apply_limit_buckets {
+                            limits::apply_limit_buckets(raw)
+                        } else {
+                            Some(raw)
+                        }
+                    })
+                    .map(|raw| {
+                        let adapter = Adapter::new(raw);
+                        api_log_debug!("Adapter {:?}", adapter.raw.info);
+                        adapter
+                    }),
+            );
         }
         adapters
     }
@@ -545,7 +525,16 @@ impl Instance {
                     continue;
                 }
             }
-            adapters.extend(backend_adapters);
+
+            if desc.apply_limit_buckets {
+                adapters.extend(
+                    backend_adapters
+                        .into_iter()
+                        .filter_map(limits::apply_limit_buckets),
+                );
+            } else {
+                adapters.append(&mut backend_adapters);
+            }
         }
 
         match desc.power_preference {
@@ -678,19 +667,7 @@ pub struct Adapter {
 }
 
 impl Adapter {
-    pub fn new(mut raw: hal::DynExposedAdapter) -> Self {
-        // WebGPU requires this offset alignment as lower bound on all adapters.
-        const MIN_BUFFER_OFFSET_ALIGNMENT_LOWER_BOUND: u32 = 32;
-
-        let limits = &mut raw.capabilities.limits;
-
-        limits.min_uniform_buffer_offset_alignment = limits
-            .min_uniform_buffer_offset_alignment
-            .max(MIN_BUFFER_OFFSET_ALIGNMENT_LOWER_BOUND);
-        limits.min_storage_buffer_offset_alignment = limits
-            .min_storage_buffer_offset_alignment
-            .max(MIN_BUFFER_OFFSET_ALIGNMENT_LOWER_BOUND);
-
+    pub fn new(raw: hal::DynExposedAdapter) -> Self {
         Self { raw }
     }
 
@@ -1092,8 +1069,14 @@ impl Global {
         self.surfaces.remove(id);
     }
 
-    pub fn enumerate_adapters(&self, backends: Backends) -> Vec<AdapterId> {
-        let adapters = self.instance.enumerate_adapters(backends);
+    pub fn enumerate_adapters(
+        &self,
+        backends: Backends,
+        apply_limit_buckets: bool,
+    ) -> Vec<AdapterId> {
+        let adapters = self
+            .instance
+            .enumerate_adapters(backends, apply_limit_buckets);
         adapters
             .into_iter()
             .map(|adapter| self.hub.adapters.prepare(None).assign(Arc::new(adapter)))
@@ -1111,15 +1094,26 @@ impl Global {
             power_preference: desc.power_preference,
             force_fallback_adapter: desc.force_fallback_adapter,
             compatible_surface: compatible_surface.as_deref(),
+            apply_limit_buckets: desc.apply_limit_buckets,
         };
         let adapter = self.instance.request_adapter(&desc, backends)?;
         let id = self.hub.adapters.prepare(id_in).assign(Arc::new(adapter));
         Ok(id)
     }
 
+    /// Create an adapter from a HAL adapter.
+    ///
+    /// The HAL adapter may be obtained e.g. by calling `enumerate_adapters` on
+    /// the HAL directly.
+    ///
+    /// If [limit bucketing][lt] is desired, [`crate::limits::apply_limit_buckets`]
+    /// should be called with the HAL adapter before calling this function.
+    ///
     /// # Safety
     ///
     /// `hal_adapter` must be created from this global internal instance handle.
+    ///
+    /// [lt]: crate::limits#Limit-bucketing
     pub unsafe fn create_adapter_from_hal(
         &self,
         hal_adapter: hal::DynExposedAdapter,

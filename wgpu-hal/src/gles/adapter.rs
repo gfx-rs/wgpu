@@ -184,15 +184,8 @@ impl super::Adapter {
         wgt::AdapterInfo {
             name: renderer_orig,
             vendor: vendor_id,
-            device: 0,
-            device_type: inferred_device_type,
-            driver: "".to_owned(),
-            device_pci_bus_id: String::new(),
             driver_info: version,
-            backend: wgt::Backend::Gl,
-            subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
-            subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
-            transient_saves_memory: false,
+            ..wgt::AdapterInfo::new(inferred_device_type, wgt::Backend::Gl)
         }
     }
 

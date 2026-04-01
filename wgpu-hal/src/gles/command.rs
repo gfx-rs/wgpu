@@ -1073,7 +1073,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         instance_count: u32,
     ) {
         self.prepare_draw(first_instance);
-        #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
+        #[allow(
+            clippy::clone_on_copy,
+            reason = "False positive when cloning glow::UniformLocation"
+        )]
         self.cmd_buffer.commands.push(C::Draw {
             topology: self.state.topology,
             first_vertex,
@@ -1097,7 +1100,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
             wgt::IndexFormat::Uint32 => (4, glow::UNSIGNED_INT),
         };
         let index_offset = self.state.index_offset + index_size * first_index as wgt::BufferAddress;
-        #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
+        #[allow(
+            clippy::clone_on_copy,
+            reason = "False positive when cloning glow::UniformLocation"
+        )]
         self.cmd_buffer.commands.push(C::DrawIndexed {
             topology: self.state.topology,
             index_type,
@@ -1127,7 +1133,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         for draw in 0..draw_count as wgt::BufferAddress {
             let indirect_offset =
                 offset + draw * size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
-            #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
+            #[allow(
+                clippy::clone_on_copy,
+                reason = "False positive when cloning glow::UniformLocation"
+            )]
             self.cmd_buffer.commands.push(C::DrawIndirect {
                 topology: self.state.topology,
                 indirect_buf: buffer.raw.unwrap(),
@@ -1150,7 +1159,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         for draw in 0..draw_count as wgt::BufferAddress {
             let indirect_offset =
                 offset + draw * size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
-            #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
+            #[allow(
+                clippy::clone_on_copy,
+                reason = "False positive when cloning glow::UniformLocation"
+            )]
             self.cmd_buffer.commands.push(C::DrawIndexedIndirect {
                 topology: self.state.topology,
                 index_type,

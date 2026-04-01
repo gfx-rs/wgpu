@@ -712,7 +712,7 @@ jobs:
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
@@ -760,7 +760,7 @@ jobs:
 
       # Miri is *only* available on nightly.
       - name: Install nightly toolchain
-      
+
         run: |
           rustup toolchain install nightly --no-self-update --profile=minimal --component miri
           rustup override set nightly
@@ -781,7 +781,6 @@ jobs:
           # Consider expanding it to include some API tests with the noop backend.
           cargo miri test --package=wgpu --no-default-features -- write_only
 
-
   fmt:
     # runtime is normally 15 seconds
     timeout-minutes: 2
@@ -797,6 +796,15 @@ jobs:
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
+
+      # NOTE: Keep this above the others, because this will fail if there are _any_ changes to
+      # files, even ones this step doesn't modify.
+      - name: "Format `**/*.{md,js,html,yml}` files"
+        uses: creyD/prettier_action@v4.6
+        with:
+          prettier_version: 3.8.1
+          prettier_options: --check --write .
+          dry: true
 
       - name: Run `cargo fmt`
         run: |

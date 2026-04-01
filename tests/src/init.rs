@@ -73,6 +73,7 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
             // will chose the noop on wasm32 for some reason.
             noop: wgpu::NoopBackendOptions {
                 enable: !cfg!(target_arch = "wasm32"),
+                ..Default::default()
             },
         }
         .with_env(),

@@ -719,6 +719,18 @@ pub(crate) enum ExclusivePipeline {
     Compute(Weak<ComputePipeline>),
 }
 
+impl From<&Arc<RenderPipeline>> for ExclusivePipeline {
+    fn from(pipeline: &Arc<RenderPipeline>) -> Self {
+        Self::Render(Arc::downgrade(pipeline))
+    }
+}
+
+impl From<&Arc<ComputePipeline>> for ExclusivePipeline {
+    fn from(pipeline: &Arc<ComputePipeline>) -> Self {
+        Self::Compute(Arc::downgrade(pipeline))
+    }
+}
+
 impl fmt::Display for ExclusivePipeline {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -799,15 +811,13 @@ impl BindGroupLayout {
         }
     }
 
-    fn empty(device: &Arc<Device>) -> Arc<Self> {
-        let exclusive_pipeline = crate::OnceCellOrLock::new();
-        exclusive_pipeline.set(ExclusivePipeline::None).unwrap();
+    fn empty(device: &Arc<Device>, exclusive_pipeline: ExclusivePipeline) -> Arc<Self> {
         Arc::new(Self {
             raw: RawBindGroupLayout::RefDeviceEmptyBGL,
             device: device.clone(),
             entries: bgl::EntryMap::default(),
             origin: bgl::Origin::Derived,
-            exclusive_pipeline,
+            exclusive_pipeline: crate::OnceCellOrLock::from(exclusive_pipeline),
             binding_count_validator: BindingTypeMaxCountValidator::default(),
             label: String::new(),
         })
@@ -858,17 +868,51 @@ impl WebGpuError for CreatePipelineLayoutError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ImmediateUploadError {
-    #[error("Provided immediate data written to offset {offset}..{end_offset} overruns the immediate data range with a size of {size}")]
-    TooLarge {
-        offset: u32,
-        end_offset: u32,
-        size: u32,
+    #[error(
+        "Start offset {start_offset} overruns the immediate data range with a size of {immediate_size}"
+    )]
+    StartOffsetOverrun {
+        start_offset: u32,
+        immediate_size: u32,
     },
     #[error(
-        "Provided immediate data offset {0} does not respect `IMMEDIATE_DATA_ALIGNMENT` ({ida})",
+        "Provided immediate data start offset {0} does not respect \
+        `IMMEDIATE_DATA_ALIGNMENT` ({ida})",
         ida = wgt::IMMEDIATE_DATA_ALIGNMENT
     )]
-    Unaligned(u32),
+    StartOffsetUnaligned(u32),
+    #[error(
+        "Provided immediate data byte size {0} does not respect \
+        `IMMEDIATE_DATA_ALIGNMENT` ({ida})",
+        ida = wgt::IMMEDIATE_DATA_ALIGNMENT
+    )]
+    SizeUnaligned(u32),
+    #[error(
+        "Provided immediate data start offset {} + size {} overruns the immediate data range \
+        with a size of {}",
+        start_offset,
+        size,
+        immediate_size
+    )]
+    EndOffsetOverrun {
+        start_offset: u32,
+        size: u32,
+        immediate_size: u32,
+    },
+    #[error("Start index {start_index} overruns the value data range with {data_size} element(s)")]
+    ValueStartIndexOverrun { start_index: u32, data_size: usize },
+    #[error(
+        "Start index {} + count of {} overruns the value data range \
+        with {} element(s)",
+        start_index,
+        count,
+        data_size
+    )]
+    ValueEndIndexOverrun {
+        start_index: u32,
+        count: u32,
+        data_size: usize,
+    },
 }
 
 impl WebGpuError for ImmediateUploadError {
@@ -937,9 +981,10 @@ impl PipelineLayout {
         self.raw.as_ref()
     }
 
-    pub fn get_bind_group_layout(
+    pub(crate) fn get_bind_group_layout(
         self: &Arc<Self>,
         index: u32,
+        exclusive_pipeline_for_empty_bgl: ExclusivePipeline,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
         let max_bind_groups = self.device.limits.max_bind_groups;
         if index >= max_bind_groups {
@@ -953,7 +998,9 @@ impl PipelineLayout {
             .get(index as usize)
             .cloned()
             .flatten()
-            .unwrap_or_else(|| BindGroupLayout::empty(&self.device)))
+            .unwrap_or_else(|| {
+                BindGroupLayout::empty(&self.device, exclusive_pipeline_for_empty_bgl)
+            }))
     }
 
     pub(crate) fn get_bgl_entry(
@@ -970,23 +1017,35 @@ impl PipelineLayout {
     pub(crate) fn validate_immediates_ranges(
         &self,
         offset: u32,
-        end_offset: u32,
+        size_bytes: u32,
     ) -> Result<(), ImmediateUploadError> {
         // Don't need to validate size against the immediate data size limit here,
         // as immediate data ranges are already validated to be within bounds,
         // and we validate that they are within the ranges.
 
         if !offset.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
-            return Err(ImmediateUploadError::Unaligned(offset));
+            return Err(ImmediateUploadError::StartOffsetUnaligned(offset));
         }
 
-        if end_offset > self.immediate_size {
-            return Err(ImmediateUploadError::TooLarge {
-                offset,
-                end_offset,
-                size: self.immediate_size,
+        if !size_bytes.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
+            return Err(ImmediateUploadError::SizeUnaligned(offset));
+        }
+
+        if offset > self.immediate_size {
+            return Err(ImmediateUploadError::StartOffsetOverrun {
+                start_offset: offset,
+                immediate_size: self.immediate_size,
             });
         }
+
+        if size_bytes > self.immediate_size - offset {
+            return Err(ImmediateUploadError::EndOffsetOverrun {
+                start_offset: offset,
+                size: size_bytes,
+                immediate_size: self.immediate_size,
+            });
+        }
+
         Ok(())
     }
 }
@@ -1190,6 +1249,7 @@ pub struct BindGroup {
     pub(crate) used: BindGroupStates,
     pub(crate) used_buffer_ranges: Vec<BufferInitTrackerAction>,
     pub(crate) used_texture_ranges: Vec<TextureInitTrackerAction>,
+    /// INVARIANT: Sorted by binding index order.
     pub(crate) dynamic_binding_info: Vec<BindGroupDynamicBindingData>,
     /// Actual binding sizes for buffers that don't have `min_binding_size`
     /// specified in BGL. Listed in the order of iteration of `BGL.entries`.

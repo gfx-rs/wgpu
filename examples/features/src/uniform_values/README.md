@@ -13,6 +13,7 @@ cargo run --bin wgpu-examples uniform_values
 Since the codebase of this example is so large (because why not demonstrate with a sort-of game) and the points of interest in terms of the actual point of the example so small, there is a module doc comment at the top of main.rs that points out the important points of the usage of uniform values.
 
 ## Limitations
+
 At some point in exploring the fractal, you may discover there is actually a resolution; if you zoom to deep, things become weirdly pixilated. Unfortunately, the relatively basic shader is currently limited by the faults of 32-bit floating point precision. As much as I'd like to upgrade to 64-bit floats, the support in WGSL for f64's is limited and you can't even cast to one as of time of writing. Still pretty cool though.
 
 ## Screenshots

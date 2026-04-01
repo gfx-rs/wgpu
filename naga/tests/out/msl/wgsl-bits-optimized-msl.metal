@@ -96,11 +96,11 @@ kernel void main_(
     metal::int3 _e136 = i3_;
     i3_ = metal::select(31 - metal::clz(metal::select(_e136, ~_e136, _e136 < 0)), int3(-1), _e136 == 0 || _e136 == -1);
     metal::uint3 _e138 = u3_;
-    u3_ = metal::select(31 - metal::clz(_e138), uint3(-1), _e138 == 0 || _e138 == -1);
+    u3_ = metal::select(31 - metal::clz(_e138), uint3(-1), _e138 == 0);
     int _e140 = i;
     i = metal::select(31 - metal::clz(metal::select(_e140, ~_e140, _e140 < 0)), int(-1), _e140 == 0 || _e140 == -1);
     uint _e142 = u;
-    u = metal::select(31 - metal::clz(_e142), uint(-1), _e142 == 0 || _e142 == -1);
+    u = metal::select(31 - metal::clz(_e142), uint(-1), _e142 == 0);
     int _e144 = i;
     i = metal::popcount(_e144);
     metal::int2 _e146 = i2_;

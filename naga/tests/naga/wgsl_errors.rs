@@ -590,13 +590,13 @@ fn struct_member_size_too_low() {
     check(
         r#"
             struct Bar {
-                @size(0) data: array<f32>
+                @size(0) data: array<f32, 1>
             }
         "#,
         r#"error: struct member size must be at least 4
   ┌─ wgsl:3:23
   │
-3 │                 @size(0) data: array<f32>
+3 │                 @size(0) data: array<f32, 1>
   │                       ^ must be at least 4
 
 "#,
@@ -1794,10 +1794,13 @@ fn invalid_functions() {
 
     check_validation! {
         "
+        struct Atom {
+            a: atomic<u32>
+        }
         @group(0) @binding(0)
-        var<storage> atom: atomic<u32>;
+        var<storage> atom: Atom;
 
-        fn return_atomic() -> atomic<u32> {
+        fn return_atomic() -> Atom {
            return atom;
         }
         ":
@@ -1948,6 +1951,8 @@ fn missing_bindings2() {
 
 #[test]
 fn invalid_blend_src() {
+    use naga::valid::{TypeError, ValidationError, VaryingError};
+
     // Missing capability or enable directive
     check_extension_validation! {
         Capabilities::DUAL_SOURCE_BLENDING,
@@ -1969,11 +1974,8 @@ fn invalid_blend_src() {
 
 "###,
         Err(
-            naga::valid::ValidationError::EntryPoint {
-                stage: naga::ShaderStage::Fragment,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::UnsupportedCapability(Capabilities::DUAL_SOURCE_BLENDING),
-                ),
+            ValidationError::Type {
+                source: TypeError::MissingCapability(Capabilities::DUAL_SOURCE_BLENDING),
                 ..
             },
         )
@@ -1987,11 +1989,11 @@ fn invalid_blend_src() {
         fn main(@location(0) @blend_src(0) input: f32) -> vec4f { return vec4f(0.0); }
         ":
         Err(
-            naga::valid::ValidationError::EntryPoint {
+            ValidationError::EntryPoint {
                 stage: naga::ShaderStage::Fragment,
                 source: naga::valid::EntryPointError::Argument(
                     0,
-                    naga::valid::VaryingError::InvalidInputAttributeInStage("blend_src", naga::ShaderStage::Fragment),
+                    VaryingError::BlendSrcNotOnStructMember,
                 ),
                 ..
             },
@@ -2011,10 +2013,10 @@ fn invalid_blend_src() {
         fn main() -> VertexOutput { return VertexOutput(vec4(0.0), vec4(1.0)); }
         ":
         Err(
-            naga::valid::ValidationError::EntryPoint {
+            ValidationError::EntryPoint {
                 stage: naga::ShaderStage::Vertex,
                 source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::InvalidAttributeInStage("blend_src", naga::ShaderStage::Vertex),
+                    VaryingError::InvalidAttributeInStage("blend_src", naga::ShaderStage::Vertex),
                 ),
                 ..
             },
@@ -2034,10 +2036,12 @@ fn invalid_blend_src() {
         fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
         ":
         Err(
-            naga::valid::ValidationError::EntryPoint {
-                stage: naga::ShaderStage::Fragment,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::InvalidBlendSrcIndex { location: 0, blend_src: 2 },
+            ValidationError::Type {
+                source: TypeError::InvalidBlendSrc(
+                    VaryingError::InvalidBlendSrcIndex {
+                        location: 0,
+                        blend_src: 2,
+                    }
                 ),
                 ..
             },
@@ -2045,7 +2049,7 @@ fn invalid_blend_src() {
         Capabilities::DUAL_SOURCE_BLENDING
     }
 
-    // Using a location other than 1 on blend_src
+    // Using a location other than 0 on blend_src
     check_validation! {
         "
         enable dual_source_blending;
@@ -2057,10 +2061,12 @@ fn invalid_blend_src() {
         fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
         ":
         Err(
-            naga::valid::ValidationError::EntryPoint {
-                stage: naga::ShaderStage::Fragment,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::InvalidBlendSrcIndex { location: 1, blend_src: 1 },
+            ValidationError::Type {
+                source: TypeError::InvalidBlendSrc(
+                    VaryingError::InvalidBlendSrcIndex {
+                        location: 1,
+                        blend_src: 1,
+                    }
                 ),
                 ..
             },
@@ -2080,10 +2086,9 @@ fn invalid_blend_src() {
         fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
         ":
         Err(
-            naga::valid::ValidationError::EntryPoint {
-                stage: naga::ShaderStage::Fragment,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::BindingCollisionBlendSrc { blend_src: 1 },
+            ValidationError::Type {
+                source: TypeError::InvalidBlendSrc(
+                    VaryingError::BindingCollisionBlendSrc { blend_src: 1 }
                 ),
                 ..
             },
@@ -2103,10 +2108,11 @@ fn invalid_blend_src() {
         fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
         ":
         Err(
-            naga::valid::ValidationError::EntryPoint {
-                stage: naga::ShaderStage::Fragment,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::IncompleteBlendSrcUsage,
+            ValidationError::Type {
+                source: TypeError::InvalidBlendSrc(
+                    VaryingError::IncompleteBlendSrcUsage {
+                        present_blend_src: 0,
+                    }
                 ),
                 ..
             },
@@ -2119,16 +2125,17 @@ fn invalid_blend_src() {
         "
             enable dual_source_blending;
             struct FragmentOutput {
-                @location(0) @blend_src(0) output0: vec4<f32>,
+                @location(0) @blend_src(1) output0: vec4<f32>,
             }
             @fragment
             fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0)); }
             ":
         Err(
-            naga::valid::ValidationError::EntryPoint {
-                stage: naga::ShaderStage::Fragment,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::IncompleteBlendSrcUsage,
+            ValidationError::Type {
+                source: TypeError::InvalidBlendSrc(
+                    VaryingError::IncompleteBlendSrcUsage{
+                        present_blend_src: 1,
+                    }
                 ),
                 ..
             },
@@ -2148,10 +2155,70 @@ fn invalid_blend_src() {
             fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), 1.0); }
             ":
         Err(
-            naga::valid::ValidationError::EntryPoint {
-                stage: naga::ShaderStage::Fragment,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::BlendSrcOutputTypeMismatch { blend_src_0_type: _, blend_src_1_type: _ },
+            ValidationError::Type {
+                source: TypeError::InvalidBlendSrc(
+                    VaryingError::BlendSrcOutputTypeMismatch { .. }
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // Multiple entrypoints (regression test for https://github.com/gfx-rs/wgpu/issues/9111)
+    check_validation! {
+        "
+            enable dual_source_blending;
+            struct FragmentOutput {
+                @location(0) @blend_src(0) output0: vec4<f32>,
+                @location(0) @blend_src(1) output1: vec4<f32>,
+            }
+            @fragment
+            fn fs1() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
+            @fragment
+            fn fs2() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
+            ":
+        Ok(_),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // @blend_src struct with no entry point should still be validated at the type level.
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(0) @blend_src(0) output0: vec4<f32>,
+        }
+        ":
+        Err(
+            ValidationError::Type {
+                source: TypeError::InvalidBlendSrc(
+                    VaryingError::IncompleteBlendSrcUsage {
+                        present_blend_src: 0,
+                    }
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // First member has @location(1) without @blend_src, followed by two @blend_src members.
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(1) output0: vec4<f32>,
+            @location(0) @blend_src(0) output1: vec4<f32>,
+            @location(0) @blend_src(1) output2: vec4<f32>,
+        }
+        @fragment
+        fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0), vec4(2.0)); }
+        ":
+        Err(
+            ValidationError::Type {
+                source: TypeError::InvalidBlendSrc(
+                    VaryingError::InvalidBlendSrcWithOtherBindings { location: 1 }
                 ),
                 ..
             },
@@ -4246,7 +4313,7 @@ fn subgroup_invalid_broadcast() {
 fn invalid_clip_distances() {
     // Missing capability or enable directive
     check_extension_validation! {
-        Capabilities::CLIP_DISTANCE,
+        Capabilities::CLIP_DISTANCES,
         r#"
             @vertex
             fn vs_main() -> @builtin(clip_distances) array<f32, 8> {
@@ -4266,7 +4333,7 @@ fn invalid_clip_distances() {
         Err(naga::valid::ValidationError::EntryPoint {
             stage: naga::ShaderStage::Vertex,
             source: naga::valid::EntryPointError::Result(
-                naga::valid::VaryingError::UnsupportedCapability(Capabilities::CLIP_DISTANCE)
+                naga::valid::VaryingError::UnsupportedCapability(Capabilities::CLIP_DISTANCES)
             ),
             ..
         })
@@ -4290,11 +4357,11 @@ fn invalid_clip_distances() {
         Err(naga::valid::ValidationError::EntryPoint {
             stage: naga::ShaderStage::Vertex,
             source: naga::valid::EntryPointError::Result(
-                naga::valid::VaryingError::InvalidBuiltInType(naga::ir::BuiltIn::ClipDistance, _)
+                naga::valid::VaryingError::InvalidBuiltInType(naga::ir::BuiltIn::ClipDistances, _)
             ),
             ..
         }),
-        naga::valid::Capabilities::CLIP_DISTANCE
+        naga::valid::Capabilities::CLIP_DISTANCES
     }
 }
 
@@ -4329,7 +4396,7 @@ fn max_type_size_large_array() {
     // The total size of an array is not resolved until validation. Type aliases
     // don't get spans so the error isn't very helpful.
     check_validation! {
-        "alias LargeArray = array<u32, (1 << 28) + 1>;":
+        "alias LargeArray = array<u32, 1 << 29>;":
         Err(naga::valid::ValidationError::Layouter(
                 naga::proc::LayoutError {
                     inner: naga::proc::LayoutErrorInner::TooLarge,
@@ -4345,9 +4412,9 @@ fn max_type_size_array_of_arrays() {
     // during lowering. Anonymous types don't get spans so this error isn't very
     // helpful.
     check(
-        "alias ArrayOfArrays = array<array<u32, (1 << 28) + 1>, 22>;",
+        "alias ArrayOfArrays = array<array<u32, 1 << 29>, 22>;",
         r#"error: type is too large
- = note: the maximum size is 1073741824 bytes
+ = note: the maximum size is 2147483647 bytes
 
 "#,
     );
@@ -4374,7 +4441,7 @@ fn max_type_size_override_array() {
         .validate(&module)
         .expect("module should validate");
 
-    let overrides = hashbrown::HashMap::from([(String::from("SIZE"), f64::from((1 << 28) + 1))]);
+    let overrides = hashbrown::HashMap::from([(String::from("SIZE"), f64::from(1 << 29))]);
     let err = naga::back::pipeline_constants::process_overrides(&module, &info, None, &overrides)
         .unwrap_err();
     let naga::back::pipeline_constants::PipelineConstantError::ValidationError(err) = err else {
@@ -4396,16 +4463,16 @@ fn max_type_size_array_in_struct() {
     check(
         r#"
             struct ContainsLargeArray {
-                arr: array<u32, (1 << 28) + 1>,
+                arr: array<u32, 1 << 29>,
             }
         "#,
         r#"error: struct member is too large
   ┌─ wgsl:3:17
   │
-3 │                 arr: array<u32, (1 << 28) + 1>,
+3 │                 arr: array<u32, 1 << 29>,
   │                 ^^^ this member exceeds the maximum size
   │
-  = note: the maximum size is 1073741824 bytes
+  = note: the maximum size is 2147483647 bytes
 
 "#,
     );
@@ -4418,20 +4485,20 @@ fn max_type_size_two_arrays_in_struct() {
     check(
         r#"
             struct TwoArrays {
-                arr1: array<u32, 1 << 27>,
-                arr2: array<u32, (1 << 27) + 1>,
+                arr1: array<u32, 1 << 28>,
+                arr2: array<u32, 1 << 28>,
             }
         "#,
         "error: type is too large
   ┌─ wgsl:2:13
   │\x20\x20
 2 │ ╭             struct TwoArrays {
-3 │ │                 arr1: array<u32, 1 << 27>,
-4 │ │                 arr2: array<u32, (1 << 27) + 1>,
+3 │ │                 arr1: array<u32, 1 << 28>,
+4 │ │                 arr2: array<u32, 1 << 28>,
 5 │ │             }
   │ ╰─────────────^ this type exceeds the maximum size
   │\x20\x20
-  = note: the maximum size is 1073741824 bytes
+  = note: the maximum size is 2147483647 bytes
 
 ",
     );
@@ -4446,7 +4513,7 @@ fn max_type_size_array_of_structs() {
             struct NotVeryBigStruct {
                 data: u32,
             }
-            alias BigArrayOfStructs = array<NotVeryBigStruct, (1 << 28) + 1>;
+            alias BigArrayOfStructs = array<NotVeryBigStruct, 1 << 29>;
         "#:
         Err(naga::valid::ValidationError::Layouter(
                 naga::proc::LayoutError {

@@ -75,7 +75,7 @@ perf record <path_to_exe> --bench "filter"
 #### `Renderpass Encoding`
 
 This benchmark measures the performance of recording and submitting a render pass with a large
-number of draw calls and resources, emulating an intense, more traditional graphics application. 
+number of draw calls and resources, emulating an intense, more traditional graphics application.
 By default it measures 10k draw calls, with 90k total resources.
 
 Within this benchmark, both single threaded and multi-threaded recording are tested, as well as splitting
@@ -105,4 +105,4 @@ This benchmark measures the performance of creating large bind groups of 5 to 50
 
 #### `naga::back`, `naga::compact`, `naga::front`, and `naga::valid`
 
-These benchmark measures the performance of naga parsing, validating, and generating shaders. 
+These benchmark measures the performance of naga parsing, validating, and generating shaders.

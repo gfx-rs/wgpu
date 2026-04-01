@@ -609,6 +609,19 @@ macro_rules! match_literal_vector {
     };
 }
 
+fn float_length<F>(e: &[F]) -> Option<F>
+where
+    F: core::ops::Mul<F> + num_traits::Float + iter::Sum,
+{
+    if e.len() == 1 {
+        // Avoids possible overflow in squaring
+        Some(e[0].abs())
+    } else {
+        let result = e.iter().map(|&ei| ei * ei).sum::<F>().sqrt();
+        result.is_finite().then_some(result)
+    }
+}
+
 #[derive(Debug)]
 enum Behavior<'a> {
     Wgsl(WgslRestrictions<'a>),
@@ -1571,9 +1584,12 @@ impl<'a> ConstantEvaluator<'a> {
                 Float::F32([e]) => Ok(Float::F32([(e as f64).asinh() as f32])),
                 Float::F16([e]) => Ok(Float::F16([e.asinh()])),
             }),
-            crate::MathFunction::Acosh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.acosh()]) })
-            }
+            crate::MathFunction::Acosh => component_wise_float(self, span, [arg], |e| match e {
+                Float::Abstract([e]) if e >= One::one() => Ok(Float::Abstract([libm::acosh(e)])),
+                Float::F32([e]) if e >= One::one() => Ok(Float::F32([(e as f64).acosh() as f32])),
+                Float::F16([e]) if e >= One::one() => Ok(Float::F16([e.acosh()])),
+                _ => Err(ConstantEvaluatorError::InvalidMathArgValue("acosh".into())),
+            }),
             crate::MathFunction::Atanh => {
                 component_wise_float!(self, span, [arg], |e| {
                     if e.abs() < One::one() {
@@ -1687,7 +1703,22 @@ impl<'a> ConstantEvaluator<'a> {
             }
             crate::MathFunction::Pow => {
                 component_wise_float!(self, span, [arg, arg1.unwrap()], |e1, e2| {
-                    Ok([e1.powf(e2)])
+                    // 0.pow(0) is an error since exp2(0 * log2(0)) is NaN.
+                    // https://www.w3.org/TR/WGSL/#pow-builtin
+                    if e1 < Zero::zero()
+                        || e1.is_one() && e2.is_infinite()
+                        || e1.is_infinite() && e2.is_zero()
+                        || e1.is_zero() && e2.is_zero()
+                    {
+                        Err(ConstantEvaluatorError::InvalidMathArgValue("pow".into()))
+                    } else {
+                        let result = e1.powf(e2);
+                        if result.is_finite() {
+                            Ok([result])
+                        } else {
+                            Err(ConstantEvaluatorError::Overflow("pow".into()))
+                        }
+                    }
                 })
             }
 
@@ -1850,21 +1881,10 @@ impl<'a> ConstantEvaluator<'a> {
                 // https://www.w3.org/TR/WGSL/#length-builtin
                 let e1 = self.extract_vec(arg, true)?;
 
-                fn float_length<F>(e: &[F]) -> F
-                where
-                    F: core::ops::Mul<F>,
-                    F: num_traits::Float + iter::Sum,
-                {
-                    if e.len() == 1 {
-                        // Avoids possible overflow in squaring
-                        e[0].abs()
-                    } else {
-                        e.iter().map(|&ei| ei * ei).sum::<F>().sqrt()
-                    }
-                }
-
                 let result = match_literal_vector!(match e1 => Literal {
-                    Float => |e1| { float_length(e1) },
+                    Float => |e1| {
+                        float_length(e1).ok_or_else(|| ConstantEvaluatorError::Overflow("length".into()))?
+                    },
                 })?;
                 self.register_evaluated_expr(Expression::Literal(result), span)
             }
@@ -1902,21 +1922,30 @@ impl<'a> ConstantEvaluator<'a> {
                 // https://www.w3.org/TR/WGSL/#normalize-builtin
                 let e1 = self.extract_vec(arg, true)?;
 
-                fn float_normalize<F>(e: &[F]) -> ArrayVec<F, { crate::VectorSize::MAX }>
+                fn float_normalize<F>(
+                    e: &[F],
+                ) -> Result<ArrayVec<F, { crate::VectorSize::MAX }>, ConstantEvaluatorError>
                 where
                     F: core::ops::Mul<F>,
                     F: num_traits::Float + iter::Sum,
                 {
-                    let len = e.iter().map(|&ei| ei * ei).sum::<F>().sqrt();
+                    let len = match float_length(e) {
+                        Some(len) if !len.is_zero() => Ok(len),
+                        Some(_) => Err(ConstantEvaluatorError::InvalidMathArgValue(
+                            "normalize".into(),
+                        )),
+                        None => Err(ConstantEvaluatorError::Overflow("normalize".into())),
+                    }?;
+
                     let mut out = ArrayVec::new();
                     for &ei in e {
                         out.push(ei / len);
                     }
-                    out
+                    Ok(out)
                 }
 
                 let result = match_literal_vector!(match e1 => LiteralVector {
-                    Float => |e1| { float_normalize(e1) },
+                    Float => |e1| { float_normalize(e1)? },
                 })?;
                 result.register_as_evaluated_expr(self, span)
             }
@@ -2667,6 +2696,19 @@ impl<'a> ConstantEvaluator<'a> {
                     return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
                 }
 
+                if matches!(
+                    (left_value, op),
+                    (
+                        Literal::Bool(_),
+                        BinaryOperator::Less
+                            | BinaryOperator::LessEqual
+                            | BinaryOperator::Greater
+                            | BinaryOperator::GreaterEqual
+                    )
+                ) {
+                    return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
+                }
+
                 let literal = match op {
                     BinaryOperator::Equal => Literal::Bool(left_value == right_value),
                     BinaryOperator::NotEqual => Literal::Bool(left_value != right_value),
@@ -2680,20 +2722,20 @@ impl<'a> ConstantEvaluator<'a> {
                             BinaryOperator::Add => a.wrapping_add(b),
                             BinaryOperator::Subtract => a.wrapping_sub(b),
                             BinaryOperator::Multiply => a.wrapping_mul(b),
-                            BinaryOperator::Divide => {
+                            BinaryOperator::Divide => a.checked_div(b).ok_or_else(|| {
                                 if b == 0 {
-                                    return Err(ConstantEvaluatorError::DivisionByZero);
+                                    ConstantEvaluatorError::DivisionByZero
                                 } else {
-                                    a.wrapping_div(b)
+                                    ConstantEvaluatorError::Overflow("division".into())
                                 }
-                            }
-                            BinaryOperator::Modulo => {
+                            })?,
+                            BinaryOperator::Modulo => a.checked_rem(b).ok_or_else(|| {
                                 if b == 0 {
-                                    return Err(ConstantEvaluatorError::RemainderByZero);
+                                    ConstantEvaluatorError::RemainderByZero
                                 } else {
-                                    a.wrapping_rem(b)
+                                    ConstantEvaluatorError::Overflow("remainder".into())
                                 }
-                            }
+                            })?,
                             BinaryOperator::And => a & b,
                             BinaryOperator::ExclusiveOr => a ^ b,
                             BinaryOperator::InclusiveOr => a | b,
@@ -2820,6 +2862,8 @@ impl<'a> ConstantEvaluator<'a> {
                         (Literal::Bool(a), Literal::Bool(b)) => Literal::Bool(match op {
                             BinaryOperator::LogicalAnd => a && b,
                             BinaryOperator::LogicalOr => a || b,
+                            BinaryOperator::And => a & b,
+                            BinaryOperator::InclusiveOr => a | b,
                             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                         }),
                         _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),

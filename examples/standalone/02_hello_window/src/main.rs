@@ -8,6 +8,7 @@ use winit::{
 };
 
 struct State {
+    instance: wgpu::Instance,
     window: Arc<Window>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -37,6 +38,7 @@ impl State {
         let surface_format = cap.formats[0];
 
         let state = State {
+            instance,
             window,
             device,
             queue,
@@ -82,9 +84,20 @@ impl State {
         // NOTE: We must handle Timeout because the surface may be unavailable
         // (e.g., when the window is occluded on macOS).
         let surface_texture = match self.surface.get_current_texture() {
-            Ok(texture) => texture,
-            Err(wgpu::SurfaceError::Occluded) => return, // Can't render right now. Try again later.
-            Err(err) => panic!("failed to acquire next swapchain texture: {err}"),
+            wgpu::CurrentSurfaceTexture::Success(texture) => texture,
+            wgpu::CurrentSurfaceTexture::Occluded | wgpu::CurrentSurfaceTexture::Timeout => return,
+            wgpu::CurrentSurfaceTexture::Suboptimal(_) | wgpu::CurrentSurfaceTexture::Outdated => {
+                self.configure_surface();
+                return;
+            }
+            wgpu::CurrentSurfaceTexture::Validation => {
+                unreachable!("No error scope registered, so validation errors will panic")
+            }
+            wgpu::CurrentSurfaceTexture::Lost => {
+                self.surface = self.instance.create_surface(self.window.clone()).unwrap();
+                self.configure_surface();
+                return;
+            }
         };
         let texture_view = surface_texture
             .texture

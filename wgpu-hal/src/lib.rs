@@ -430,7 +430,7 @@ pub(crate) struct AllocationSizes {
 }
 
 impl AllocationSizes {
-    #[allow(dead_code)] // may be unused on some platforms
+    #[allow(dead_code, reason = "may be unused on some platforms")]
     pub(crate) fn from_memory_hints(memory_hints: &wgt::MemoryHints) -> Self {
         // TODO: the allocator's configuration should take hardware capability into
         // account.
@@ -483,13 +483,13 @@ impl From<AllocationSizes> for gpu_allocator::AllocationSizes {
     }
 }
 
-#[allow(dead_code)] // may be unused on some platforms
+#[allow(dead_code, reason = "may be unused on some platforms")]
 #[cold]
 fn hal_usage_error<T: fmt::Display>(txt: T) -> ! {
     panic!("wgpu-hal invariant was violated (usage error): {txt}")
 }
 
-#[allow(dead_code)] // may be unused on some platforms
+#[allow(dead_code, reason = "may be unused on some platforms")]
 #[cold]
 fn hal_internal_error<T: fmt::Display>(txt: T) -> ! {
     panic!("wgpu-hal ran into a preventable internal error: {txt}")
@@ -555,14 +555,14 @@ pub struct InstanceError {
 }
 
 impl InstanceError {
-    #[allow(dead_code)] // may be unused on some platforms
+    #[allow(dead_code, reason = "may be unused on some platforms")]
     pub(crate) fn new(message: String) -> Self {
         Self {
             message,
             source: None,
         }
     }
-    #[allow(dead_code)] // may be unused on some platforms
+    #[allow(dead_code, reason = "may be unused on some platforms")]
     pub(crate) fn with_source(message: String, source: impl Error + Send + Sync + 'static) -> Self {
         cfg_if::cfg_if! {
             if #[cfg(supports_ptr_atomics)] {

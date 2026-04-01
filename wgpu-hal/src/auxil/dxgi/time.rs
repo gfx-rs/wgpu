@@ -1,4 +1,4 @@
-#![allow(dead_code)] // IPresentationManager is unused currently
+#![allow(dead_code, reason = "IPresentationManager is unused currently")]
 
 use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
 

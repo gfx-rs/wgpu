@@ -2628,9 +2628,13 @@ impl<W: Write> Writer<W> {
 
                         write!(self.out, "(-1), ")?;
                         self.put_expression(arg, context, true)?;
-                        write!(self.out, " == 0 || ")?;
-                        self.put_expression(arg, context, true)?;
-                        write!(self.out, " == -1)")?;
+                        write!(self.out, " == 0")?;
+                        if scalar.kind == crate::ScalarKind::Sint {
+                            write!(self.out, " || ")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, " == -1")?;
+                        }
+                        write!(self.out, ")")?;
                     }
                     Mf::Unpack2x16float => {
                         write!(self.out, "float2(as_type<half2>(")?;
@@ -7190,10 +7194,10 @@ template <typename A>
                         };
                         let resolved = options.resolve_local_binding(binding, out_mode)?;
                         write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
+                        resolved.try_fmt(&mut self.out)?;
                         if let Some(array_len) = array_len {
                             write!(self.out, " [{array_len}]")?;
                         }
-                        resolved.try_fmt(&mut self.out)?;
                         writeln!(self.out, ";")?;
                     }
 
