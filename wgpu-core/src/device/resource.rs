@@ -1201,10 +1201,23 @@ impl Device {
         let snatch_guard = device.snatchable_lock.read();
         let raw_buf = buffer.try_raw(&snatch_guard)?;
 
+        if offset > buffer.size {
+            return Err(resource::BufferAccessError::OutOfBoundsStartOffsetOverrun {
+                index: offset,
+                max: buffer.size,
+            });
+        } else if buffer.size - offset < u64::try_from(data.len()).unwrap() {
+            return Err(resource::BufferAccessError::OutOfBoundsEndOffsetOverrun {
+                index: offset,
+                size: u64::try_from(data.len()).unwrap(),
+                max: buffer.size,
+            });
+        }
+
         let mapping = unsafe {
             device
                 .raw()
-                .map_buffer(raw_buf, offset..offset + data.len() as u64)
+                .map_buffer(raw_buf, offset..offset + u64::try_from(data.len()).unwrap())
         }
         .map_err(|e| device.handle_hal_error(e))?;
 
