@@ -2918,12 +2918,14 @@ fn multi_draw_indirect(
 
             if draw_data.buffer_index == current_draw_data.buffer_index {
                 #[cfg(debug_assertions)]
-                let dst_stride =
-                    get_dst_stride_of_indirect_args(state.pass.base.device.backend(), family);
-                debug_assert_eq!(
-                    draw_data.offset,
-                    current_draw_data.offset + dst_stride * current_draw_data.count as u64
-                );
+                {
+                    let dst_stride =
+                        get_dst_stride_of_indirect_args(state.pass.base.device.backend(), family);
+                    debug_assert_eq!(
+                        draw_data.offset,
+                        current_draw_data.offset + dst_stride * current_draw_data.count as u64
+                    );
+                }
                 current_draw_data.count += 1;
             } else {
                 draw_ctx.draw(current_draw_data);
