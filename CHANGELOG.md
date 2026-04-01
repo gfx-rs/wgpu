@@ -122,6 +122,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 
 #### General
 
+- Added new `InvalidWorkgroupSizeError`, which is now used by `DrawError::InvalidGroupSize` and `StageError::InvalidWorkgroupSize`. By @andyleiserson in [#9357](https://github.com/gfx-rs/wgpu/pull/9357).
 - Added support for cooperative load/store operations in shaders. Currently only WGSL on the input and SPIR-V, METAL, and WGSL on the output are supported. By @kvark in [#8251](https://github.com/gfx-rs/wgpu/issues/8251).
 - Added support for per-vertex attributes in fragment shaders. Currently only WGSL input is supported, and only SPIR-V or WGSL output is supported. By @atlv24 in [#8821](https://github.com/gfx-rs/wgpu/issues/8821).
 - Added support for no-perspective barycentric coordinates. By @atlv24 in [#8852](https://github.com/gfx-rs/wgpu/issues/8852).
