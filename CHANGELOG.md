@@ -67,6 +67,7 @@ Bottom level categories:
 #### General
 
 - `Features::CLIP_DISTANCE`, `naga::Capabilities::CLIP_DISTANCE`, and `naga::BuiltIn::ClipDistance` have been renamed to `CLIP_DISTANCES` and `ClipDistances` (viz., pluralized) as appropriate, to match the WebGPU spec. By @ErichDonGubler in [#9267](https://github.com/gfx-rs/wgpu/pull/9267).
+- Added new `InvalidWorkgroupSizeError`, which is now used by `DrawError::InvalidGroupSize` and `StageError::InvalidWorkgroupSize`. By @andyleiserson in [#9357](https://github.com/gfx-rs/wgpu/pull/9357).
 
 #### Validation
 
