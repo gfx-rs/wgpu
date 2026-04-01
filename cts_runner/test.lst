@@ -447,6 +447,7 @@ webgpu:shader,validation,parse,blankspace:bom:*
 webgpu:shader,validation,parse,blankspace:null_characters:contains_null=false;*
 webgpu:shader,validation,parse,blankspace:null_characters:contains_null=true;placement="delimiter"
 webgpu:shader,validation,parse,blankspace:null_characters:contains_null=true;placement="eol"
+webgpu:shader,validation,parse,comments:unterminated_block_comment:terminated=false
 webgpu:shader,validation,parse,enable:*
 webgpu:shader,validation,parse,identifiers:*
 webgpu:shader,validation,parse,requires:*
