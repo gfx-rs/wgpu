@@ -529,7 +529,9 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
 
     pass: pass::PassState<'scope, 'snatch_guard, 'cmd_enc>,
 
-    immediate_slots_set: u64,
+    /// A bitmask, tracking which 4-byte slots have been written via `set_immediates`.
+    /// Checked against the pipeline's required slots before each draw call.
+    immediate_slots_set: naga::valid::ImmediateSlots,
 
     active_occlusion_query: Option<(Arc<QuerySet>, u32)>,
     active_pipeline_statistics_query: Option<(Arc<QuerySet>, u32)>,
@@ -583,11 +585,14 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
                     wanted_mesh_pipeline: !pipeline.is_mesh,
                 });
             }
-            let required = pipeline.immediate_slots_required;
-            if required & !self.immediate_slots_set != 0 {
+            if !self
+                .immediate_slots_set
+                .contains(pipeline.immediate_slots_required)
+            {
                 return Err(DrawError::MissingImmediateData {
-                    required,
-                    set: self.immediate_slots_set,
+                    missing: pipeline
+                        .immediate_slots_required
+                        .difference(self.immediate_slots_set),
                 });
             }
             Ok(())
@@ -611,7 +616,7 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         self.pipeline = None;
         self.index.reset();
         self.vertex = Default::default();
-        self.immediate_slots_set = 0;
+        self.immediate_slots_set = Default::default();
     }
 }
 
@@ -1976,7 +1981,7 @@ pub(super) fn encode_render_pass(
                 string_offset: 0,
             },
 
-            immediate_slots_set: 0,
+            immediate_slots_set: Default::default(),
 
             active_occlusion_query: None,
             active_pipeline_statistics_query: None,
@@ -2055,7 +2060,7 @@ pub(super) fn encode_render_pass(
                     )
                     .map_pass_err(scope)?;
                     state.immediate_slots_set |=
-                        crate::immediates::slots_for_range(offset, size_bytes);
+                        naga::valid::ImmediateSlots::from_range(offset, size_bytes);
                 }
                 ArcRenderCommand::SetScissor(rect) => {
                     let scope = PassErrorScope::SetScissorRect;

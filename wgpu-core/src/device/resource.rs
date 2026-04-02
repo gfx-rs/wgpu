@@ -3914,7 +3914,7 @@ impl Device {
             validation::BindingLayoutSource::Derived(entries) => {
                 let immediate_size = shader_module
                     .interface
-                    .as_ref()
+                    .interface()
                     .map_or(0, |i| i.immediate_size);
                 self.create_derived_pipeline_layout(entries, immediate_size)?
             }
@@ -3963,10 +3963,16 @@ impl Device {
                 },
             )?;
 
-        let immediate_slots_required = shader_module
-            .interface
-            .as_ref()
-            .map_or(0, |iface| iface.immediate_slots_required);
+        let immediate_slots_required =
+            shader_module
+                .interface
+                .interface()
+                .map_or(Default::default(), |iface| {
+                    iface.immediate_slots_required(
+                        naga::ShaderStage::Compute,
+                        &final_entry_point_name,
+                    )
+                });
 
         let pipeline = pipeline::ComputePipeline {
             raw: ManuallyDrop::new(raw),
@@ -4412,6 +4418,7 @@ impl Device {
         let mut _vertex_entry_point_name = String::new();
         let mut _task_entry_point_name = String::new();
         let mut _mesh_entry_point_name = String::new();
+        let mut immediate_slots_required = naga::valid::ImmediateSlots::default();
         match desc.vertex {
             pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
                 vertex_stage = {
@@ -4438,6 +4445,8 @@ impl Device {
                         .map_err(stage_err)?;
 
                     if let Some(interface) = vertex_shader_module.interface.interface() {
+                        immediate_slots_required |= interface
+                            .immediate_slots_required(stage.to_naga(), &_vertex_entry_point_name);
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -4482,6 +4491,8 @@ impl Device {
                         .map_err(stage_err)?;
 
                     if let Some(interface) = task_shader_module.interface.interface() {
+                        immediate_slots_required |= interface
+                            .immediate_slots_required(stage.to_naga(), &_task_entry_point_name);
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -4524,6 +4535,8 @@ impl Device {
                         .map_err(stage_err)?;
 
                     if let Some(interface) = mesh_shader_module.interface.interface() {
+                        immediate_slots_required |= interface
+                            .immediate_slots_required(stage.to_naga(), &_mesh_entry_point_name);
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -4576,6 +4589,8 @@ impl Device {
                     .map_err(stage_err)?;
 
                 if let Some(interface) = shader_module.interface.interface() {
+                    immediate_slots_required |= interface
+                        .immediate_slots_required(stage.to_naga(), &fragment_entry_point_name);
                     io = interface
                         .check_stage(
                             &mut binding_layout_source,
@@ -4642,7 +4657,7 @@ impl Device {
             validation::BindingLayoutSource::Derived(entries) => {
                 let immediate_size = {
                     let immediate_size_of = |sm: &pipeline::ShaderModule| {
-                        sm.interface.as_ref().map(|i| i.immediate_size)
+                        sm.interface.interface().map(|i| i.immediate_size)
                     };
                     let vertex = match desc.vertex {
                         pipeline::RenderPipelineVertexProcessor::Vertex(ref v) => {
@@ -4791,12 +4806,6 @@ impl Device {
             shader_modules.extend(desc.fragment.map(|f| f.stage.module));
             shader_modules
         };
-
-        let immediate_slots_required = shader_modules
-            .iter()
-            .filter_map(|sm| sm.interface.as_ref())
-            .map(|i| i.immediate_slots_required)
-            .fold(0u64, core::ops::BitOr::bitor);
 
         let pipeline = pipeline::RenderPipeline {
             raw: ManuallyDrop::new(raw),

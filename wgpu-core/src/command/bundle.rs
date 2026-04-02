@@ -346,7 +346,7 @@ impl RenderBundleEncoder {
             texture_memory_init_actions: Vec::new(),
             next_dynamic_offset: 0,
             binder: Binder::new(),
-            immediate_slots_set: 0,
+            immediate_slots_set: Default::default(),
         };
 
         let indices = &state.device.tracker_indices;
@@ -768,7 +768,7 @@ fn set_immediates(
         size_bytes,
         values_offset,
     });
-    state.immediate_slots_set |= crate::immediates::slots_for_range(offset, size_bytes);
+    state.immediate_slots_set |= naga::valid::ImmediateSlots::from_range(offset, size_bytes);
     Ok(())
 }
 
@@ -1413,7 +1413,9 @@ struct State {
     texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     next_dynamic_offset: usize,
     binder: Binder,
-    immediate_slots_set: u64,
+    /// A bitmask, tracking which 4-byte slots have been written via `set_immediates`.
+    /// Checked against the pipeline's required slots before each draw call.
+    immediate_slots_set: naga::valid::ImmediateSlots,
 }
 
 impl State {
@@ -1492,11 +1494,15 @@ impl State {
                 }
             }
 
-            let required = pipeline.pipeline.immediate_slots_required;
-            if required & !self.immediate_slots_set != 0 {
+            if !self
+                .immediate_slots_set
+                .contains(pipeline.pipeline.immediate_slots_required)
+            {
                 return Err(DrawError::MissingImmediateData {
-                    required,
-                    set: self.immediate_slots_set,
+                    missing: pipeline
+                        .pipeline
+                        .immediate_slots_required
+                        .difference(self.immediate_slots_set),
                 });
             }
 

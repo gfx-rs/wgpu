@@ -70,8 +70,10 @@ pub enum DrawError {
         highest_view_index: u32,
         max_multiviews: u32,
     },
-    #[error("Not all immediate data slots required by the pipeline have been set (required: 0x{required:016X}, set: 0x{set:016X})")]
-    MissingImmediateData { required: u64, set: u64 },
+    #[error("Not all immediate data required by the pipeline has been set via set_immediates (missing byte ranges: {missing})")]
+    MissingImmediateData {
+        missing: naga::valid::ImmediateSlots,
+    },
 }
 
 impl WebGpuError for DrawError {

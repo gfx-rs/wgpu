@@ -93,7 +93,7 @@ fn dispatch_without_setting_immediates_fails() {
         pass.set_bind_group(0, &bind_group, &[]);
         pass.dispatch_workgroups(1, 1, 1);
     }
-    fail(&device, || encoder.finish(), Some("immediate data slots"));
+    fail(&device, || encoder.finish(), Some("immediate data"));
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn dispatch_with_partial_immediates_fails() {
         pass.set_immediates(0, &[0u8; 8]);
         pass.dispatch_workgroups(1, 1, 1);
     }
-    fail(&device, || encoder.finish(), Some("immediate data slots"));
+    fail(&device, || encoder.finish(), Some("immediate data"));
 }
 
 #[test]

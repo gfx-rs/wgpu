@@ -7,6 +7,7 @@ mod compose;
 mod expression;
 mod function;
 mod handles;
+pub(crate) mod immediates;
 mod interface;
 mod r#type;
 
@@ -30,6 +31,7 @@ pub use compose::ComposeError;
 pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
 pub use function::{CallError, FunctionError, LocalVariableError, SubgroupError};
+pub use immediates::ImmediateSlots;
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
 pub use r#type::{Disalignment, ImmediateError, TypeError, TypeFlags, WidthError};
 
