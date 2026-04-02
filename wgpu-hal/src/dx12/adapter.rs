@@ -1,5 +1,5 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
-use core::ptr;
+use core::{ptr, sync::atomic::AtomicU64};
 use std::thread;
 
 use parking_lot::Mutex;
@@ -1073,11 +1073,21 @@ impl crate::Adapter for super::Adapter {
             self.compiler_container.clone(),
             self.options.clone(),
         )?;
+        let idle_fence: Direct3D12::ID3D12Fence = unsafe {
+            self.device
+                .CreateFence(0, Direct3D12::D3D12_FENCE_FLAG_NONE)
+        }
+        .into_device_result("Queue idle fence creation")?;
+        let idle_event = super::Event::create(false, false)?;
+
         Ok(crate::OpenDevice {
             device,
             queue: super::Queue {
                 raw: queue,
                 temp_lists: Mutex::new(Vec::new()),
+                idle_fence,
+                idle_event,
+                idle_fence_value: AtomicU64::new(0),
             },
         })
     }
