@@ -1517,7 +1517,7 @@ impl<'a> Error<'a> {
                 message: "unterminated block comment".to_string(),
                 labels: vec![(
                     span,
-                    "must be closed with */".into(),
+                    "must be closed with `*/`".into(),
                 )],
                 notes: vec![],
             }
