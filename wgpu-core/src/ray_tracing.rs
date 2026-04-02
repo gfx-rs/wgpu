@@ -48,6 +48,8 @@ pub enum CreateBlasError {
         "Limit `max_blas_primitive_count` is {0}, but the BLAS had a maximum of {1} primitives"
     )]
     TooManyPrimitives(u32, u32),
+    #[error("AABB geometry stride {0} is invalid (must be >= {1} and a multiple of 8)")]
+    InvalidAabbStride(BufferAddress, BufferAddress),
 }
 
 impl WebGpuError for CreateBlasError {
@@ -58,7 +60,8 @@ impl WebGpuError for CreateBlasError {
             Self::MissingIndexData
             | Self::InvalidVertexFormat(..)
             | Self::TooManyGeometries(..)
-            | Self::TooManyPrimitives(..) => ErrorType::Validation,
+            | Self::TooManyPrimitives(..)
+            | Self::InvalidAabbStride(..) => ErrorType::Validation,
         }
     }
 }
@@ -181,6 +184,20 @@ pub enum BuildAccelerationStructureError {
         "Tlas {0:?} dependent {1:?} is missing AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN"
     )]
     TlasDependentMissingVertexReturn(ResourceErrorIdent, ResourceErrorIdent),
+
+    #[error("Blas {0:?} geometry kind at creation does not match build (triangles vs AABBs)")]
+    BlasGeometryKindMismatch(ResourceErrorIdent),
+
+    #[error(
+        "Blas {0:?} build AABB primitive count is greater than creation count (creation: {1}, build: {2})"
+    )]
+    IncompatibleBlasAabbPrimitiveCount(ResourceErrorIdent, u32, u32),
+
+    #[error("Blas {0:?} AABB primitive offset must be a multiple of 8")]
+    UnalignedAabbPrimitiveOffset(ResourceErrorIdent),
+
+    #[error("Blas {0:?} AABB stride is invalid (must be >= {1} and a multiple of 8)")]
+    InvalidAabbStride(ResourceErrorIdent, BufferAddress),
 }
 
 impl WebGpuError for BuildAccelerationStructureError {
@@ -212,7 +229,11 @@ impl WebGpuError for BuildAccelerationStructureError {
             | Self::TlasInstanceCountExceeded(..)
             | Self::TransformMissing(..)
             | Self::UseTransformMissing(..)
-            | Self::TlasDependentMissingVertexReturn(..) => ErrorType::Validation,
+            | Self::TlasDependentMissingVertexReturn(..)
+            | Self::BlasGeometryKindMismatch(..)
+            | Self::IncompatibleBlasAabbPrimitiveCount(..)
+            | Self::UnalignedAabbPrimitiveOffset(..)
+            | Self::InvalidAabbStride(..) => ErrorType::Validation,
         }
     }
 }
@@ -255,8 +276,17 @@ pub struct BlasTriangleGeometry<'a> {
     pub transform_buffer_offset: Option<BufferAddress>,
 }
 
+#[derive(Debug)]
+pub struct BlasAabbGeometry<'a> {
+    pub size: &'a wgt::BlasAABBGeometrySizeDescriptor,
+    pub stride: BufferAddress,
+    pub aabb_buffer: BufferId,
+    pub primitive_offset: u32,
+}
+
 pub enum BlasGeometries<'a> {
     TriangleGeometries(Box<dyn Iterator<Item = BlasTriangleGeometry<'a>> + 'a>),
+    AabbGeometries(Box<dyn Iterator<Item = BlasAabbGeometry<'a>> + 'a>),
 }
 
 pub struct BlasBuildEntry<'a> {
@@ -332,8 +362,21 @@ pub type TraceBlasTriangleGeometry = OwnedBlasTriangleGeometry<IdReferences>;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
+pub struct OwnedBlasAabbGeometry<R: ReferenceType> {
+    pub size: wgt::BlasAABBGeometrySizeDescriptor,
+    pub stride: BufferAddress,
+    pub aabb_buffer: R::Buffer,
+    pub primitive_offset: u32,
+}
+
+pub type ArcBlasAabbGeometry = OwnedBlasAabbGeometry<ArcReferences>;
+pub type TraceBlasAabbGeometry = OwnedBlasAabbGeometry<IdReferences>;
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
 pub enum OwnedBlasGeometries<R: ReferenceType> {
     TriangleGeometries(Vec<OwnedBlasTriangleGeometry<R>>),
+    AabbGeometries(Vec<OwnedBlasAabbGeometry<R>>),
 }
 
 pub type ArcBlasGeometries = OwnedBlasGeometries<ArcReferences>;

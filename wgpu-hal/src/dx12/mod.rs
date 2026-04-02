@@ -1676,24 +1676,24 @@ pub enum ShaderModuleSource {
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FeatureLevel {
-    _11_0,
-    _11_1,
-    _12_0,
-    _12_1,
-    _12_2,
+    V11_0,
+    V11_1,
+    V12_0,
+    V12_1,
+    V12_2,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ShaderModel {
-    _5_1,
-    _6_0,
-    _6_1,
-    _6_2,
-    _6_3,
-    _6_4,
-    _6_5,
-    _6_6,
-    _6_7,
-    _6_8,
-    _6_9,
+    V5_1,
+    V6_0,
+    V6_1,
+    V6_2,
+    V6_3,
+    V6_4,
+    V6_5,
+    V6_6,
+    V6_7,
+    V6_8,
+    V6_9,
 }

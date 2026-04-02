@@ -984,13 +984,7 @@ impl DrawBatcher {
         vertex_or_index_limit: u64,
         instance_limit: u64,
     ) -> Result<(usize, u64), DeviceError> {
-        // space for D3D12 special constants
-        let extra = if device.backend() == wgt::Backend::Dx12 {
-            3 * size_of::<u32>() as u64
-        } else {
-            0
-        };
-        let stride = extra + crate::command::get_stride_of_indirect_args(family);
+        let stride = crate::command::get_dst_stride_of_indirect_args(device.backend(), family);
 
         let (dst_resource_index, dst_offset) = indirect_draw_validation_resources
             .get_dst_subrange(stride, &mut self.current_dst_entry)?;
