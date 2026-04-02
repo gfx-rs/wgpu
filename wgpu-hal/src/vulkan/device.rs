@@ -776,20 +776,15 @@ impl super::Device {
         &self.shared.instance
     }
 
-    fn error_if_would_oom_on_resource_allocation(
+    /// Check whether all heaps of the given category are over the given
+    /// budget threshold. Returns `OutOfMemory` only if *every* matching
+    /// heap would be over threshold after adding `extra_size` bytes.
+    fn check_heap_budget(
         &self,
-        needs_host_access: bool,
-        size: u64,
+        threshold: u8,
+        heap_filter: Option<HeapFilter>,
+        extra_size: u64,
     ) -> Result<(), crate::DeviceError> {
-        let Some(threshold) = self
-            .shared
-            .instance
-            .memory_budget_thresholds
-            .for_resource_creation
-        else {
-            return Ok(());
-        };
-
         if !self
             .shared
             .enabled_extensions
@@ -817,11 +812,15 @@ impl super::Device {
             );
         }
 
-        let mut host_visible_heaps = [false; vk::MAX_MEMORY_HEAPS];
-        let mut device_local_heaps = [false; vk::MAX_MEMORY_HEAPS];
-
         let memory_properties = memory_properties.memory_properties;
 
+        let required_flag = match heap_filter {
+            Some(HeapFilter::HostVisible) => Some(vk::MemoryPropertyFlags::HOST_VISIBLE),
+            Some(HeapFilter::DeviceLocal) => Some(vk::MemoryPropertyFlags::DEVICE_LOCAL),
+            None => None, // check all usable heaps
+        };
+
+        let mut matching_heaps = [false; vk::MAX_MEMORY_HEAPS];
         for i in 0..memory_properties.memory_type_count {
             let memory_type = memory_properties.memory_types[i as usize];
             let flags = memory_type.property_flags;
@@ -829,43 +828,57 @@ impl super::Device {
             if flags.intersects(
                 vk::MemoryPropertyFlags::LAZILY_ALLOCATED | vk::MemoryPropertyFlags::PROTECTED,
             ) {
-                continue; // not used by gpu-alloc
+                continue; // not used by gpu-allocator
             }
 
-            if flags.contains(vk::MemoryPropertyFlags::HOST_VISIBLE) {
-                host_visible_heaps[memory_type.heap_index as usize] = true;
-            }
-
-            if flags.contains(vk::MemoryPropertyFlags::DEVICE_LOCAL) {
-                device_local_heaps[memory_type.heap_index as usize] = true;
+            if required_flag.is_none_or(|req| flags.contains(req)) {
+                matching_heaps[memory_type.heap_index as usize] = true;
             }
         }
 
-        let heaps = if needs_host_access {
-            host_visible_heaps
-        } else {
-            device_local_heaps
-        };
-
-        // NOTE: We might end up checking multiple heaps since gpu-alloc doesn't have a way
-        // for us to query the heap the resource will end up on. But this is unlikely,
-        // there is usually only one heap on integrated GPUs and two on dedicated GPUs.
-
-        for (i, check) in heaps.iter().enumerate() {
-            if !check {
-                continue;
+        let any_heap_has_room = matching_heaps.iter().enumerate().any(|(i, &matches)| {
+            if !matches {
+                return false;
             }
-
             let heap_usage = memory_budget_properties.heap_usage[i];
             let heap_budget = memory_budget_properties.heap_budget[i];
+            heap_usage + extra_size < heap_budget / 100 * threshold as u64
+        });
 
-            if heap_usage + size >= heap_budget / 100 * threshold as u64 {
-                return Err(crate::DeviceError::OutOfMemory);
-            }
+        if !any_heap_has_room {
+            return Err(crate::DeviceError::OutOfMemory);
         }
 
         Ok(())
     }
+
+    fn error_if_would_oom_on_resource_allocation(
+        &self,
+        needs_host_access: bool,
+        size: u64,
+    ) -> Result<(), crate::DeviceError> {
+        let Some(threshold) = self
+            .shared
+            .instance
+            .memory_budget_thresholds
+            .for_resource_creation
+        else {
+            return Ok(());
+        };
+
+        let heap_filter = if needs_host_access {
+            HeapFilter::HostVisible
+        } else {
+            HeapFilter::DeviceLocal
+        };
+
+        self.check_heap_budget(threshold, Some(heap_filter), size)
+    }
+}
+
+enum HeapFilter {
+    HostVisible,
+    DeviceLocal,
 }
 
 impl crate::Device for super::Device {
@@ -2685,45 +2698,7 @@ impl crate::Device for super::Device {
             return Ok(());
         };
 
-        if !self
-            .shared
-            .enabled_extensions
-            .contains(&ext::memory_budget::NAME)
-        {
-            return Ok(());
-        }
-
-        let get_physical_device_properties = self
-            .shared
-            .instance
-            .get_physical_device_properties
-            .as_ref()
-            .unwrap();
-
-        let mut memory_budget_properties = vk::PhysicalDeviceMemoryBudgetPropertiesEXT::default();
-
-        let mut memory_properties =
-            vk::PhysicalDeviceMemoryProperties2::default().push_next(&mut memory_budget_properties);
-
-        unsafe {
-            get_physical_device_properties.get_physical_device_memory_properties2(
-                self.shared.physical_device,
-                &mut memory_properties,
-            );
-        }
-
-        let memory_properties = memory_properties.memory_properties;
-
-        for i in 0..memory_properties.memory_heap_count {
-            let heap_usage = memory_budget_properties.heap_usage[i as usize];
-            let heap_budget = memory_budget_properties.heap_budget[i as usize];
-
-            if heap_usage >= heap_budget / 100 * threshold as u64 {
-                return Err(crate::DeviceError::OutOfMemory);
-            }
-        }
-
-        Ok(())
+        self.check_heap_budget(threshold, None, 0)
     }
 }
 
