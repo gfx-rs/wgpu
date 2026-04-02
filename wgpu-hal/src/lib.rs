@@ -1245,6 +1245,31 @@ pub trait Queue: WasmNotSendSync {
         surface_textures: &[&<Self::A as Api>::SurfaceTexture],
         signal_fence: (&mut <Self::A as Api>::Fence, FenceValue),
     ) -> Result<(), DeviceError>;
+    /// Present a surface texture to the screen.
+    ///
+    /// This consumes the surface texture, returning it to the swapchain.
+    ///
+    /// # Safety
+    ///
+    /// - `texture` must have been acquired from `surface` via
+    ///   [`Surface::acquire_texture`] and not yet presented or discarded.
+    /// - `surface` must be configured for use with the [`Device`][d] associated
+    ///   with this [`Queue`].
+    /// - `texture` must be in the "present" state. Either:
+    ///   - It was passed in [`submit`][s]'s `surface_textures` argument
+    ///     (which transitions it to the present state), or
+    ///   - The caller has otherwise transitioned it (e.g. via a clear +
+    ///     barrier to `PRESENT` for textures that were never rendered to).
+    /// - Any command buffers that write to `texture` must have been submitted
+    ///   via [`submit`][s] before this call. The submissions do not need to
+    ///   have completed on the GPU; platform-level synchronization handles the
+    ///   ordering between rendering and display.
+    /// - Must be externally synchronized with all other queue operations
+    ///   ([`submit`][s], [`present`][Queue::present],
+    ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue.
+    ///
+    /// [d]: Api::Device
+    /// [s]: Queue::submit
     unsafe fn present(
         &self,
         surface: &<Self::A as Api>::Surface,
