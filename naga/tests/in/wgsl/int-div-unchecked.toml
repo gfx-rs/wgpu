@@ -1,0 +1,4 @@
+targets = "SPIRV"
+
+[spv]
+emit_int_div_checks = false

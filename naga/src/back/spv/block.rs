@@ -1178,12 +1178,9 @@ impl BlockContext<'_> {
                             _ => unimplemented!(),
                         },
                         crate::BinaryOperator::Modulo => match left_ty_inner.scalar_kind() {
-                            // TODO: handle undefined behavior
-                            // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
                             Some(crate::ScalarKind::Float) => spirv::Op::FRem,
-                            Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint) => {
-                                unreachable!("Should have been handled by wrapped function")
-                            }
+                            Some(crate::ScalarKind::Sint) => spirv::Op::SRem,
+                            Some(crate::ScalarKind::Uint) => spirv::Op::UMod,
                             _ => unimplemented!(),
                         },
                         crate::BinaryOperator::Equal => match left_ty_inner.scalar_kind() {

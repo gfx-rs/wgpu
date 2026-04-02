@@ -319,6 +319,11 @@ pub struct Options {
     pub task_dispatch_limits: Option<TaskDispatchLimits>,
     /// Whether to validate the output of a mesh shader workgroup.
     pub mesh_shader_primitive_indices_clamp: bool,
+    /// If true (the default), integer division and modulo operations use
+    /// wrapper functions that guard against division by zero and signed
+    /// overflow. Set to false to emit raw division for faster compute shaders
+    /// where the developer guarantees non-zero divisors.
+    pub emit_int_div_checks: bool,
 }
 
 impl Default for Options {
@@ -334,6 +339,7 @@ impl Default for Options {
             force_loop_bounding: true,
             task_dispatch_limits: None,
             mesh_shader_primitive_indices_clamp: true,
+            emit_int_div_checks: true,
         }
     }
 }

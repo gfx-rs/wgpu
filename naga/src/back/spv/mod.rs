@@ -941,6 +941,7 @@ pub struct Writer {
     zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode,
     force_loop_bounding: bool,
     use_storage_input_output_16: bool,
+    emit_int_div_checks: bool,
     void_type: Word,
     tuple_of_u32s_ty_id: Option<Word>,
     //TODO: convert most of these into vectors, addressable by handle indices
@@ -1114,6 +1115,17 @@ pub struct Options<'a> {
     ///
     /// Currently this validation is unimplemented.
     pub mesh_shader_primitive_indices_clamp: bool,
+
+    /// If true (the default), integer division and modulo operations emit
+    /// wrapper functions that replace a zero divisor with one, and for signed
+    /// integers also guard against `INT_MIN / -1` overflow. This matches the
+    /// WGSL spec's requirement that these cases produce defined results.
+    ///
+    /// Set to `false` to emit raw `OpSDiv`/`OpUDiv`/`OpSRem`/`OpUMod`
+    /// instructions without checks. This is faster but produces
+    /// implementation-defined results when the divisor is zero. Appropriate
+    /// for compute shaders where the developer guarantees non-zero divisors.
+    pub emit_int_div_checks: bool,
 }
 
 impl Default for Options<'_> {
@@ -1139,6 +1151,7 @@ impl Default for Options<'_> {
             debug_info: None,
             task_dispatch_limits: None,
             mesh_shader_primitive_indices_clamp: true,
+            emit_int_div_checks: true,
         }
     }
 }

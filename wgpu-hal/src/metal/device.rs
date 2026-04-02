@@ -220,6 +220,7 @@ impl super::Device {
                         .module
                         .runtime_checks
                         .mesh_shader_primitive_indices_clamp,
+                    emit_int_div_checks: true,
                 };
 
                 let pipeline_options = naga::back::msl::PipelineOptions {
