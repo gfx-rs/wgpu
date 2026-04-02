@@ -868,6 +868,7 @@ impl Queue {
             self.device.alignments.buffer_copy_pitch.get() as u32,
             block_size,
         );
+        assert!(u32::MAX - bytes_in_last_row >= bytes_per_row_alignment);
         let stage_bytes_per_row = wgt::math::align_to(bytes_in_last_row, bytes_per_row_alignment);
 
         // Platform validation requires that the staging buffer always be
@@ -883,17 +884,21 @@ impl Queue {
         } else {
             profiling::scope!("copy chunked");
             // Copy row by row into the optimal alignment.
-            let block_rows_in_copy =
-                (size.depth_or_array_layers - 1) * rows_per_image + height_in_blocks;
-            let stage_size =
-                wgt::BufferSize::new(stage_bytes_per_row as u64 * block_rows_in_copy as u64)
-                    .unwrap();
+            let block_rows_in_copy = u64::from(size.depth_or_array_layers - 1)
+                * u64::from(rows_per_image)
+                + u64::from(height_in_blocks);
+            // The copy size was validated against the source buffer, however,
+            // `stage_bytes_per_row` can differ, so let's be paranoid.
+            let stage_size = u64::from(stage_bytes_per_row)
+                .checked_mul(block_rows_in_copy)
+                .and_then(wgt::BufferSize::new)
+                .unwrap();
             let mut staging_buffer = StagingBuffer::new(&self.device, stage_size)?;
-            for layer in 0..size.depth_or_array_layers {
-                let rows_offset = layer * rows_per_image;
-                for row in rows_offset..rows_offset + height_in_blocks {
-                    let src_offset = data_layout.offset as u32 + row * bytes_per_row;
-                    let dst_offset = row * stage_bytes_per_row;
+            for layer in 0..u64::from(size.depth_or_array_layers) {
+                let rows_offset = layer * u64::from(rows_per_image);
+                for row in rows_offset..rows_offset + u64::from(height_in_blocks) {
+                    let src_offset = data_layout.offset + row * u64::from(bytes_per_row);
+                    let dst_offset = row * u64::from(stage_bytes_per_row);
                     unsafe {
                         staging_buffer.write_with_offset(
                             data,

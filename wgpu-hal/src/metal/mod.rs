@@ -316,6 +316,7 @@ struct CapabilitiesQuery {
     shader_barycentrics: bool,
     supports_memoryless_storage: bool,
     supports_raytracing: bool,
+    shader_per_vertex: bool,
 }
 
 #[derive(Debug)]

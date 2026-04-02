@@ -5,7 +5,7 @@ use alloc::{
     sync::{Arc, Weak},
     vec::Vec,
 };
-use core::{fmt, mem::ManuallyDrop, ops::Range};
+use core::{fmt, mem::ManuallyDrop, num::Saturating, ops::Range};
 
 use arrayvec::ArrayVec;
 use thiserror::Error;
@@ -367,9 +367,9 @@ impl BindingTypeMaxCountErrorKind {
 
 #[derive(Debug, Default)]
 pub(crate) struct PerStageBindingTypeCounter {
-    vertex: u32,
-    fragment: u32,
-    compute: u32,
+    vertex: Saturating<u32>,
+    fragment: Saturating<u32>,
+    compute: Saturating<u32>,
 }
 
 impl PerStageBindingTypeCounter {
@@ -397,7 +397,7 @@ impl PerStageBindingTypeCounter {
         if max_value == self.compute {
             stage |= wgt::ShaderStages::COMPUTE
         }
-        (BindingZone::Stage(stage), max_value)
+        (BindingZone::Stage(stage), max_value.0)
     }
 
     pub(crate) fn merge(&mut self, other: &Self) {

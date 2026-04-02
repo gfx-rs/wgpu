@@ -1305,6 +1305,13 @@ impl Player {
                         .collect(),
                 )
             }
+            wgc::ray_tracing::OwnedBlasGeometries::AabbGeometries(geos) => {
+                wgc::ray_tracing::OwnedBlasGeometries::AabbGeometries(
+                    geos.into_iter()
+                        .map(|geo| self.resolve_blas_aabb_geometry(geo))
+                        .collect(),
+                )
+            }
         }
     }
 
@@ -1323,6 +1330,18 @@ impl Player {
             vertex_stride: geometry.vertex_stride,
             first_index: geometry.first_index,
             transform_buffer_offset: geometry.transform_buffer_offset,
+        }
+    }
+
+    fn resolve_blas_aabb_geometry(
+        &self,
+        geometry: wgc::ray_tracing::OwnedBlasAabbGeometry<PointerReferences>,
+    ) -> wgc::ray_tracing::OwnedBlasAabbGeometry<ArcReferences> {
+        wgc::ray_tracing::OwnedBlasAabbGeometry {
+            size: geometry.size,
+            stride: geometry.stride,
+            aabb_buffer: self.resolve_buffer_id(geometry.aabb_buffer),
+            primitive_offset: geometry.primitive_offset,
         }
     }
 

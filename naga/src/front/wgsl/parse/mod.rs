@@ -199,8 +199,10 @@ impl<'a> BindingParser<'a> {
             "interpolate" => {
                 lexer.expect(Token::Paren('('))?;
                 let (raw, span) = lexer.next_ident_with_span()?;
-                self.interpolation
-                    .set(conv::map_interpolation(raw, span)?, name_span)?;
+                self.interpolation.set(
+                    conv::map_interpolation(&lexer.enable_extensions, raw, span)?,
+                    name_span,
+                )?;
                 if lexer.next_if(Token::Separator(',')) {
                     let (raw, span) = lexer.next_ident_with_span()?;
                     self.sampling
