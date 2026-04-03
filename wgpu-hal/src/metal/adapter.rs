@@ -1341,8 +1341,10 @@ impl super::CapabilitiesQuery {
                 // Metal Shading Language it generates, so from `wgpu_hal`'s
                 // users' point of view, references are tightly checked.
                 uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
-                raw_tlas_instance_size: size_of::<MTLIndirectAccelerationStructureInstanceDescriptor>(
-                ),
+                raw_tlas_instance_size: u32::try_from(size_of::<
+                    MTLIndirectAccelerationStructureInstanceDescriptor,
+                >())
+                .unwrap(),
                 ray_tracing_scratch_buffer_alignment: 1,
             },
             downlevel,

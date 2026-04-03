@@ -1931,7 +1931,7 @@ pub struct Alignments {
     pub uniform_bounds_check_alignment: wgt::BufferSize,
 
     /// The size of the raw TLAS instance
-    pub raw_tlas_instance_size: usize,
+    pub raw_tlas_instance_size: u32,
 
     /// What the scratch buffer for building an acceleration structure must be aligned to
     pub ray_tracing_scratch_buffer_alignment: u32,
