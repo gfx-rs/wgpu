@@ -343,6 +343,10 @@ struct EntryPoint {
     /// [compute-like]: naga::ShaderStage::compute_like
     workgroup_size: [u32; 3],
 
+    /// Wider than the `u32` limit, so totals beyond `u32::MAX` still produce
+    /// [`StageError::WorkgroupStorageSizeLimitExceeded`].
+    workgroup_storage_size: u64,
+
     /// Indicates that the entry point uses dual source blending.
     dual_source_blending: bool,
 
@@ -513,6 +517,15 @@ pub enum StageError {
     AmbiguousEntryPoint,
     #[error("More than one entry point present in module for stage `{0:?}`, entry point name must be provided")]
     AmbiguousEntryPointForStage(naga::ShaderStage),
+    #[error(
+        "Workgroup storage size {used} must be less than or equal to \
+        `Limits::{limit_desc}` ({limit})"
+    )]
+    WorkgroupStorageSizeLimitExceeded {
+        used: u64,
+        limit: u32,
+        limit_desc: &'static str,
+    },
     #[error(transparent)]
     InvalidWorkgroupSize(#[from] InvalidWorkgroupSizeError),
     #[error("Shader global {0:?} is not available in the pipeline layout")]
@@ -634,7 +647,8 @@ impl WebGpuError for StageError {
                 var: _,
                 error,
             } => error.webgpu_error_type(),
-            Self::NoEntryPointWithName { .. }
+            Self::WorkgroupStorageSizeLimitExceeded { .. }
+            | Self::NoEntryPointWithName { .. }
             | Self::NoEntryPointWithNameForStage { .. }
             | Self::NoEntryPoints
             | Self::NoEntryPointForStage(_)
@@ -1425,12 +1439,21 @@ impl Interface {
                 );
             }
 
+            let mut workgroup_storage_size = 0u64;
             for (var_handle, var) in module.global_variables.iter() {
                 let usage = func_info[var_handle];
-                if !usage.is_empty() && var.binding.is_some() {
-                    ep.resources.push(resource_mapping[&var_handle]);
+                if !usage.is_empty() {
+                    if var.binding.is_some() {
+                        ep.resources.push(resource_mapping[&var_handle]);
+                    }
+                    if var.space == naga::AddressSpace::WorkGroup {
+                        let size = module.types[var.ty].inner.size(module.to_ctx());
+                        workgroup_storage_size = workgroup_storage_size
+                            .saturating_add(u64::from(size).next_multiple_of(16));
+                    }
                 }
             }
+            ep.workgroup_storage_size = workgroup_storage_size;
 
             for key in func_info.sampling_set.iter() {
                 ep.sampling_pairs
@@ -1718,6 +1741,17 @@ impl Interface {
                 },
                 _ => unreachable!(),
             };
+
+            if entry_point.workgroup_storage_size
+                > u64::from(self.limits.max_compute_workgroup_storage_size)
+            {
+                return Err(StageError::WorkgroupStorageSizeLimitExceeded {
+                    used: entry_point.workgroup_storage_size,
+                    limit: self.limits.max_compute_workgroup_storage_size,
+                    limit_desc: "max_compute_workgroup_storage_size",
+                });
+            }
+
             let total = workgroup_size_check.check_and_compute_total_invocations()?;
             if total == 0 {
                 return Err(StageError::InvalidWorkgroupSize(
