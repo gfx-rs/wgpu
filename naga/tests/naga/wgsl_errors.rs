@@ -3159,6 +3159,27 @@ struct S {
 }
 
 #[test]
+fn global_var_must_use() {
+    check(
+        r#"
+@must_use
+@group(0)
+@binding(0)
+var<storage> x : array<u32>;
+"#,
+        r#"error: attribute `@must_use` is only valid on function declarations
+  ┌─ wgsl:2:2
+  │
+2 │ @must_use
+  │  ^^^^^^^^
+  │
+  = note: place `@must_use` on a function declaration with a return type
+
+"#,
+    )
+}
+
+#[test]
 fn function_param_redefinition_as_param() {
     check(
         "

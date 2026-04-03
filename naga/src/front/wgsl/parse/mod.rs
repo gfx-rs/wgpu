@@ -2200,6 +2200,12 @@ impl Parser {
             }
         };
 
+        if let Some(must_use_span) = must_use.value {
+            if !matches!(kind.as_ref(), Some(ast::GlobalDeclKind::Fn(_))) {
+                return Err(Box::new(Error::FunctionMustUseOnNonFunction(must_use_span)));
+            }
+        }
+
         if let Some(kind) = kind {
             out.decls.append(
                 ast::GlobalDecl { kind, dependencies },

@@ -449,6 +449,7 @@ webgpu:shader,validation,parse,blankspace:null_characters:contains_null=true;pla
 webgpu:shader,validation,parse,blankspace:null_characters:contains_null=true;placement="eol"
 webgpu:shader,validation,parse,enable:*
 webgpu:shader,validation,parse,identifiers:*
+webgpu:shader,validation,parse,must_use:*
 webgpu:shader,validation,parse,requires:*
 webgpu:shader,validation,parse,semicolon:*
 webgpu:shader,validation,parse,shadow_builtins:function_param:*
