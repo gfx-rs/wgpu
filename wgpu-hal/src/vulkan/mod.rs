@@ -299,6 +299,8 @@ struct DeviceExtensionFunctions {
     timeline_semaphore: Option<ExtensionFn<khr::timeline_semaphore::Device>>,
     ray_tracing: Option<RayTracingDeviceExtensionFunctions>,
     mesh_shading: Option<ext::mesh_shader::Device>,
+    #[cfg_attr(not(unix), allow(dead_code))]
+    external_memory_fd: Option<khr::external_memory_fd::Device>,
 }
 
 struct RayTracingDeviceExtensionFunctions {

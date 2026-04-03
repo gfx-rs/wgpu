@@ -1069,7 +1069,7 @@ bitflags_array! {
         #[name("wgpu-shader-i16", "shader-i16")]
         const SHADER_I16 = 1 << 34;
 
-        // Bit 35 (formerly SHADER_PRIMITIVE_INDEX) is available.
+        // Bit 35 is used by VULKAN_EXTERNAL_MEMORY_FD.
 
         /// Allows shaders to use the `early_depth_test` attribute.
         ///
@@ -1204,6 +1204,33 @@ bitflags_array! {
         /// [VK_KHR_external_memory_win32]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_external_memory_win32.html
         #[name("wgpu-vulkan-external-memory-win32")]
         const VULKAN_EXTERNAL_MEMORY_WIN32 = 1 << 45;
+
+        /// Allows using the [VK_KHR_external_memory_fd] Vulkan extension.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with [VK_KHR_external_memory_fd])
+        ///
+        /// This is a native only feature.
+        ///
+        /// [VK_KHR_external_memory_fd]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_external_memory_fd.html
+        #[name("wgpu-vulkan-external-memory-fd")]
+        const VULKAN_EXTERNAL_MEMORY_FD = 1 << 35;
+
+        /// Allows using the [VK_EXT_external_memory_dma_buf] Vulkan extension
+        /// for importing DMA-buf textures on Linux.
+        ///
+        /// Requires [VK_EXT_image_drm_format_modifier] for specifying the
+        /// DRM format modifier and plane layout during import.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with [VK_EXT_external_memory_dma_buf] and [VK_EXT_image_drm_format_modifier])
+        ///
+        /// This is a native only feature.
+        ///
+        /// [VK_EXT_external_memory_dma_buf]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_external_memory_dma_buf.html
+        /// [VK_EXT_image_drm_format_modifier]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_image_drm_format_modifier.html
+        #[name("wgpu-vulkan-external-memory-dma-buf")]
+        const VULKAN_EXTERNAL_MEMORY_DMA_BUF = 1 << 63;
 
         /// Enables R64Uint image atomic min and max.
         ///
@@ -1442,7 +1469,7 @@ bitflags_array! {
         #[name("wgpu-memory-decoration-volatile")]
         const MEMORY_DECORATION_VOLATILE = 1 << 62;
 
-        // Adding a new feature? Bit 35 (formerly SHADER_PRIMITIVE_INDEX) is available.
+        // Adding a new feature? All bits in the first u64 are used. Use the second u64 (bits 64+).
     }
 
     /// Features that are not guaranteed to be supported.
