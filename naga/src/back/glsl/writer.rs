@@ -1363,11 +1363,17 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        // Write all function locals
+        // Collect variables that will be declared in `for` headers.
+        let for_init_vars = back::collect_for_init_variables(&func.body, &func.expressions);
+
+        // Write all function locals (skip those owned by for-loops)
         // Locals are `type name (= init)?;` where the init part (including the =) are optional
         //
         // Always adds a newline
         for (handle, local) in func.local_variables.iter() {
+            if for_init_vars.contains(&handle) {
+                continue;
+            }
             // Write indentation (only for readability) and the type
             // `write_type` adds no trailing space
             write!(self.out, "{}", back::INDENT)?;
@@ -1579,6 +1585,96 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         write!(self.out, "}}")?;
+        Ok(())
+    }
+
+    /// Write the update portion of a `for` header inline (no semicolons/newlines).
+    /// Write the initializer portion of a `for` header.
+    fn write_for_header_init(
+        &mut self,
+        block: &crate::Block,
+        ctx: &back::FunctionCtx,
+    ) -> BackendResult {
+        use crate::{Expression, Statement};
+
+        // Find a LocalVariable Store in the initializer block.
+        for sta in block.iter() {
+            if let Statement::Store { pointer, value } = *sta {
+                if let Expression::LocalVariable(var) = ctx.expressions[pointer] {
+                    let local = &self.module.functions[match ctx.ty {
+                        back::FunctionType::Function(handle) => handle,
+                        back::FunctionType::EntryPoint(idx) => {
+                            // Entry points don't have for-loop inits in practice,
+                            // but handle it for correctness.
+                            write!(self.out, "{}", back::INDENT)?;
+                            self.write_type(
+                                self.module.entry_points[idx as usize]
+                                    .function
+                                    .local_variables[var]
+                                    .ty,
+                            )?;
+                            write!(self.out, " {}", self.names[&ctx.name_key(var)])?;
+                            write!(self.out, " = ")?;
+                            self.write_expr(value, ctx)?;
+                            return Ok(());
+                        }
+                    }]
+                    .local_variables[var];
+                    self.write_type(local.ty)?;
+                    write!(self.out, " {}", self.names[&ctx.name_key(var)])?;
+                    if let TypeInner::Array { base, size, .. } = self.module.types[local.ty].inner {
+                        self.write_array_size(base, size)?;
+                    }
+                    write!(self.out, " = ")?;
+                    self.write_expr(value, ctx)?;
+                    return Ok(());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn write_for_update_inline(
+        &mut self,
+        block: &crate::Block,
+        ctx: &back::FunctionCtx,
+    ) -> BackendResult {
+        use crate::Statement;
+        let mut first = true;
+        for sta in block.iter() {
+            match *sta {
+                Statement::Emit(_) => {}
+                Statement::Store { pointer, value } => {
+                    if !first {
+                        write!(self.out, ", ")?;
+                    }
+                    first = false;
+                    self.write_expr(pointer, ctx)?;
+                    write!(self.out, " = ")?;
+                    self.write_expr(value, ctx)?;
+                }
+                Statement::Call {
+                    function,
+                    ref arguments,
+                    ..
+                } => {
+                    if !first {
+                        write!(self.out, ", ")?;
+                    }
+                    first = false;
+                    let name = &self.names[&NameKey::Function(function)];
+                    write!(self.out, "{name}(")?;
+                    for (i, &arg) in arguments.iter().enumerate() {
+                        if i != 0 {
+                            write!(self.out, ", ")?;
+                        }
+                        self.write_expr(arg, ctx)?;
+                    }
+                    write!(self.out, ")")?;
+                }
+                _ => {}
+            }
+        }
         Ok(())
     }
 
@@ -2253,6 +2349,104 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             Statement::CooperativeStore { .. } => unimplemented!(),
             Statement::RayPipelineFunction(_) => unimplemented!(),
+            Statement::ForLoop {
+                ref initializer,
+                condition,
+                ref condition_block,
+                ref update,
+                ref body,
+            } => {
+                self.continue_ctx.enter_loop();
+
+                if back::is_native_for_loop(condition_block, update) {
+                    // Native for loop — `continue` jumps to the update naturally.
+                    write!(self.out, "{level}for(")?;
+                    self.write_for_header_init(initializer, ctx)?;
+                    write!(self.out, "; ")?;
+                    if let Some(condition) = condition {
+                        self.write_expr(condition, ctx)?;
+                    }
+                    write!(self.out, "; ")?;
+                    self.write_for_update_inline(update, ctx)?;
+                    writeln!(self.out, ") {{")?;
+                    for sta in body.iter() {
+                        self.write_stmt(sta, ctx, level.next())?;
+                    }
+                    writeln!(self.out, "{level}}}")?;
+                } else {
+                    // Fall back to gate pattern for complex cases.
+                    for sta in initializer.iter() {
+                        self.write_stmt(sta, ctx, level)?;
+                    }
+                    if !update.is_empty() {
+                        let gate_name = self.namer.call("loop_init");
+                        writeln!(self.out, "{level}bool {gate_name} = true;")?;
+                        writeln!(self.out, "{level}while(true) {{")?;
+                        let l2 = level.next();
+                        let l3 = l2.next();
+                        writeln!(self.out, "{l2}if (!{gate_name}) {{")?;
+                        for sta in update.iter() {
+                            self.write_stmt(sta, ctx, l3)?;
+                        }
+                        writeln!(self.out, "{l2}}}")?;
+                        writeln!(self.out, "{l2}{gate_name} = false;")?;
+                    } else {
+                        writeln!(self.out, "{level}while(true) {{")?;
+                    }
+                    for sta in condition_block.iter() {
+                        self.write_stmt(sta, ctx, level.next())?;
+                    }
+                    if let Some(condition) = condition {
+                        let l2 = level.next();
+                        write!(self.out, "{l2}if (!(")?;
+                        self.write_expr(condition, ctx)?;
+                        writeln!(self.out, ")) {{")?;
+                        writeln!(self.out, "{}break;", l2.next())?;
+                        writeln!(self.out, "{l2}}}")?;
+                    }
+                    for sta in body.iter() {
+                        self.write_stmt(sta, ctx, level.next())?;
+                    }
+                    writeln!(self.out, "{level}}}")?;
+                }
+                self.continue_ctx.exit_loop();
+            }
+            Statement::WhileLoop {
+                condition,
+                ref condition_block,
+                ref body,
+            } => {
+                self.continue_ctx.enter_loop();
+                let cond_simple = condition_block
+                    .iter()
+                    .all(|s| matches!(s, Statement::Emit(_)));
+
+                if cond_simple {
+                    write!(self.out, "{level}while(")?;
+                    self.write_expr(condition, ctx)?;
+                    writeln!(self.out, ") {{")?;
+                    for sta in body.iter() {
+                        self.write_stmt(sta, ctx, level.next())?;
+                    }
+                    writeln!(self.out, "{level}}}")?;
+                } else {
+                    writeln!(self.out, "{level}while(true) {{")?;
+                    let l2 = level.next();
+                    for sta in condition_block.iter() {
+                        self.write_stmt(sta, ctx, l2)?;
+                    }
+                    write!(self.out, "{l2}if (!(")?;
+                    self.write_expr(condition, ctx)?;
+                    writeln!(self.out, ")) {{")?;
+                    writeln!(self.out, "{}break;", l2.next())?;
+                    writeln!(self.out, "{l2}}}")?;
+                    for sta in body.iter() {
+                        self.write_stmt(sta, ctx, l2)?;
+                    }
+                    writeln!(self.out, "{level}}}")?;
+                }
+                self.continue_ctx.exit_loop();
+            }
         }
 
         Ok(())

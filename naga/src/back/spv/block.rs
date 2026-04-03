@@ -126,6 +126,15 @@ enum BlockExit {
         /// The loop header block id
         preamble_id: Word,
     },
+    /// Translates a loop condition check into an `OpBranchConditional` that
+    /// enters the body if true, or exits to the merge block (via
+    /// [`LoopContext::break_id`]) if false.
+    ConditionLoop {
+        /// The loop condition expression
+        condition: Handle<crate::Expression>,
+        /// The body block to branch to when the condition is true
+        body_id: Word,
+    },
 }
 
 /// What code generation did with a provided [`BlockExit`] value.
@@ -3450,7 +3459,9 @@ impl BlockContext<'_> {
                         | Statement::Continue
                         | Statement::Kill
                         | Statement::Return { .. }
-                        | Statement::Loop { .. })
+                        | Statement::Loop { .. }
+                        | Statement::ForLoop { .. }
+                        | Statement::WhileLoop { .. })
                 ),
             ) {
                 let loc: crate::SourceLocation = span.location(debug_info.source_code);
@@ -4178,6 +4189,194 @@ impl BlockContext<'_> {
                     };
                 }
                 Statement::RayPipelineFunction(_) => unreachable!(),
+                Statement::ForLoop {
+                    ref initializer,
+                    condition,
+                    ref condition_block,
+                    ref update,
+                    ref body,
+                } => {
+                    let preamble_id = self.gen_id();
+
+                    // Write initializer block if non-empty.
+                    if !initializer.is_empty() {
+                        let init_id = self.gen_id();
+                        self.function.consume(block, Instruction::branch(init_id));
+                        let _ = self.write_block(
+                            init_id,
+                            initializer,
+                            BlockExit::Branch {
+                                target: preamble_id,
+                            },
+                            loop_context,
+                            debug_info,
+                        )?;
+                    } else {
+                        self.function
+                            .consume(block, Instruction::branch(preamble_id));
+                    }
+
+                    let merge_id = self.gen_id();
+                    let continuing_id = self.gen_id();
+
+                    // Preamble: loop merge header.
+                    block = Block::new(preamble_id);
+                    if let Some(debug_info) = debug_info {
+                        let loc: crate::SourceLocation = span.location(debug_info.source_code);
+                        block.body.push(Instruction::line(
+                            debug_info.source_file_id,
+                            loc.line_number,
+                            loc.line_position,
+                        ));
+                    }
+                    block.body.push(Instruction::loop_merge(
+                        merge_id,
+                        continuing_id,
+                        spirv::SelectionControl::NONE,
+                    ));
+                    if self.force_loop_bounding {
+                        block = self.write_force_bounded_loop_instructions(block, merge_id);
+                    }
+
+                    let inner_loop_context = LoopContext {
+                        continuing_id: Some(continuing_id),
+                        break_id: Some(merge_id),
+                    };
+
+                    if let Some(condition) = condition {
+                        let cond_id = self.gen_id();
+                        let body_id = self.gen_id();
+
+                        self.function.consume(block, Instruction::branch(cond_id));
+
+                        // Condition block: evaluate condition then branch.
+                        let _ = self.write_block(
+                            cond_id,
+                            condition_block,
+                            BlockExit::ConditionLoop { condition, body_id },
+                            inner_loop_context,
+                            debug_info,
+                        )?;
+
+                        // Body block.
+                        let _ = self.write_block(
+                            body_id,
+                            body,
+                            BlockExit::Branch {
+                                target: continuing_id,
+                            },
+                            inner_loop_context,
+                            debug_info,
+                        )?;
+                    } else {
+                        let body_id = self.gen_id();
+                        self.function.consume(block, Instruction::branch(body_id));
+
+                        let _ = self.write_block(
+                            body_id,
+                            body,
+                            BlockExit::Branch {
+                                target: continuing_id,
+                            },
+                            inner_loop_context,
+                            debug_info,
+                        )?;
+                    }
+
+                    // Continuing (update) block.
+                    let _ = self.write_block(
+                        continuing_id,
+                        update,
+                        BlockExit::Branch {
+                            target: preamble_id,
+                        },
+                        LoopContext {
+                            continuing_id: None,
+                            break_id: Some(merge_id),
+                        },
+                        debug_info,
+                    )?;
+
+                    block = Block::new(merge_id);
+                }
+                Statement::WhileLoop {
+                    condition,
+                    ref condition_block,
+                    ref body,
+                } => {
+                    let preamble_id = self.gen_id();
+                    self.function
+                        .consume(block, Instruction::branch(preamble_id));
+
+                    let merge_id = self.gen_id();
+                    let continuing_id = self.gen_id();
+
+                    // Preamble: loop merge header.
+                    block = Block::new(preamble_id);
+                    if let Some(debug_info) = debug_info {
+                        let loc: crate::SourceLocation = span.location(debug_info.source_code);
+                        block.body.push(Instruction::line(
+                            debug_info.source_file_id,
+                            loc.line_number,
+                            loc.line_position,
+                        ));
+                    }
+                    block.body.push(Instruction::loop_merge(
+                        merge_id,
+                        continuing_id,
+                        spirv::SelectionControl::NONE,
+                    ));
+                    if self.force_loop_bounding {
+                        block = self.write_force_bounded_loop_instructions(block, merge_id);
+                    }
+
+                    let inner_loop_context = LoopContext {
+                        continuing_id: Some(continuing_id),
+                        break_id: Some(merge_id),
+                    };
+
+                    let cond_id = self.gen_id();
+                    let body_id = self.gen_id();
+
+                    self.function.consume(block, Instruction::branch(cond_id));
+
+                    // Condition block: evaluate condition then branch.
+                    let _ = self.write_block(
+                        cond_id,
+                        condition_block,
+                        BlockExit::ConditionLoop { condition, body_id },
+                        inner_loop_context,
+                        debug_info,
+                    )?;
+
+                    // Body block.
+                    let _ = self.write_block(
+                        body_id,
+                        body,
+                        BlockExit::Branch {
+                            target: continuing_id,
+                        },
+                        inner_loop_context,
+                        debug_info,
+                    )?;
+
+                    // Empty continuing block (while loops have no update).
+                    let empty_block = crate::Block::default();
+                    let _ = self.write_block(
+                        continuing_id,
+                        &empty_block,
+                        BlockExit::Branch {
+                            target: preamble_id,
+                        },
+                        LoopContext {
+                            continuing_id: None,
+                            break_id: Some(merge_id),
+                        },
+                        debug_info,
+                    )?;
+
+                    block = Block::new(merge_id);
+                }
             }
         }
 
@@ -4203,6 +4402,15 @@ impl BlockContext<'_> {
                     condition_id,
                     loop_context.break_id.unwrap(),
                     preamble_id,
+                )
+            }
+            BlockExit::ConditionLoop { condition, body_id } => {
+                let condition_id = self.cached[condition];
+
+                Instruction::branch_conditional(
+                    condition_id,
+                    body_id,
+                    loop_context.break_id.unwrap(),
                 )
             }
         };

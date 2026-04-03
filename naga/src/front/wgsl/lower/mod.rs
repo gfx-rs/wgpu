@@ -2085,6 +2085,67 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     break_if,
                 }
             }
+            ast::StatementKind::ForLoop {
+                ref initializer,
+                condition,
+                ref update,
+                ref body,
+            } => {
+                // Pass `true` so that variable initializers are kept as Store
+                // statements in the block rather than being hoisted into
+                // LocalVariable::init. This lets backends emit the
+                // initializer inside the `for` header.
+                let initializer = self.block(initializer, true, ctx)?;
+
+                // Lower the condition into its own block so backends can
+                // evaluate it separately from the body.
+                let mut condition_block = ir::Block::default();
+                let mut emitter = proc::Emitter::default();
+                emitter.start(&ctx.function.expressions);
+                let condition = condition
+                    .map(|expr| {
+                        self.expression(
+                            expr,
+                            &mut ctx.as_expression(&mut condition_block, &mut emitter),
+                        )
+                    })
+                    .transpose()?;
+                condition_block.extend(emitter.finish(&ctx.function.expressions));
+
+                let body = self.block(body, true, ctx)?;
+                let update = self.block(update, true, ctx)?;
+
+                ir::Statement::ForLoop {
+                    initializer,
+                    condition,
+                    condition_block,
+                    update,
+                    body,
+                }
+            }
+            ast::StatementKind::WhileLoop {
+                condition,
+                ref body,
+            } => {
+                // Lower the condition into its own block so backends can
+                // evaluate it separately from the body.
+                let mut condition_block = ir::Block::default();
+                let mut emitter = proc::Emitter::default();
+                emitter.start(&ctx.function.expressions);
+                let condition = self.expression(
+                    condition,
+                    &mut ctx.as_expression(&mut condition_block, &mut emitter),
+                )?;
+                condition_block.extend(emitter.finish(&ctx.function.expressions));
+
+                let body = self.block(body, true, ctx)?;
+
+                ir::Statement::WhileLoop {
+                    condition,
+                    condition_block,
+                    body,
+                }
+            }
             ast::StatementKind::Break => ir::Statement::Break,
             ast::StatementKind::Continue => ir::Statement::Continue,
             ast::StatementKind::Return { value: ast_value } => {

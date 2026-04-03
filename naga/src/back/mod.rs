@@ -9,7 +9,8 @@ Backend functions that export shader [`Module`](super::Module)s into binary and 
     )
 )]
 
-use alloc::string::String;
+use alloc::{string::String, vec::Vec};
+use hashbrown::HashSet;
 
 #[cfg(dot_out)]
 pub mod dot;
@@ -29,6 +30,96 @@ pub mod pipeline_constants;
 
 #[cfg(any(hlsl_out, glsl_out))]
 mod continue_forward;
+
+/// Check whether a [`ForLoop`]'s `condition_block` and `update` are simple
+/// enough for backends to emit native `for` syntax.
+///
+/// Returns `true` when `condition_block` contains only [`Emit`] statements and
+/// `update` contains only [`Emit`], [`Store`], or [`Call`] statements.
+///
+/// [`ForLoop`]: crate::Statement::ForLoop
+/// [`Emit`]: crate::Statement::Emit
+/// [`Store`]: crate::Statement::Store
+/// [`Call`]: crate::Statement::Call
+pub fn is_native_for_loop(condition_block: &crate::Block, update: &crate::Block) -> bool {
+    use crate::Statement;
+    condition_block
+        .iter()
+        .all(|s| matches!(s, Statement::Emit(_)))
+        && update.iter().all(|s| {
+            matches!(
+                s,
+                Statement::Emit(_) | Statement::Store { .. } | Statement::Call { .. }
+            )
+        })
+}
+
+/// Collect [`LocalVariable`] handles that will be written inside a `for`
+/// header instead of at function scope.
+///
+/// Only collects variables from [`ForLoop`] statements that pass
+/// [`is_native_for_loop`]. Recursively walks all nested blocks.
+///
+/// [`LocalVariable`]: crate::LocalVariable
+/// [`ForLoop`]: crate::Statement::ForLoop
+pub fn collect_for_init_variables(
+    block: &crate::Block,
+    expressions: &crate::Arena<crate::Expression>,
+) -> HashSet<crate::Handle<crate::LocalVariable>> {
+    use crate::{Expression, Statement};
+    let mut vars = HashSet::new();
+    for stmt in block.iter() {
+        match *stmt {
+            Statement::ForLoop {
+                ref initializer,
+                ref condition_block,
+                ref update,
+                ref body,
+                ..
+            } => {
+                if is_native_for_loop(condition_block, update) {
+                    for s in initializer.iter() {
+                        if let Statement::Store { pointer, .. } = *s {
+                            if let Expression::LocalVariable(var) = expressions[pointer] {
+                                vars.insert(var);
+                            }
+                        }
+                    }
+                }
+                vars.extend(collect_for_init_variables(body, expressions));
+            }
+            Statement::Block(ref b) => {
+                vars.extend(collect_for_init_variables(b, expressions));
+            }
+            Statement::If {
+                ref accept,
+                ref reject,
+                ..
+            } => {
+                vars.extend(collect_for_init_variables(accept, expressions));
+                vars.extend(collect_for_init_variables(reject, expressions));
+            }
+            Statement::Loop {
+                ref body,
+                ref continuing,
+                ..
+            } => {
+                vars.extend(collect_for_init_variables(body, expressions));
+                vars.extend(collect_for_init_variables(continuing, expressions));
+            }
+            Statement::Switch { ref cases, .. } => {
+                for case in cases {
+                    vars.extend(collect_for_init_variables(&case.body, expressions));
+                }
+            }
+            Statement::WhileLoop { ref body, .. } => {
+                vars.extend(collect_for_init_variables(body, expressions));
+            }
+            _ => {}
+        }
+    }
+    vars
+}
 
 /// Names of vector components.
 pub const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];

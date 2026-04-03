@@ -342,6 +342,16 @@ pub enum StatementKind<'a> {
         continuing: Block<'a>,
         break_if: Option<Handle<Expression<'a>>>,
     },
+    ForLoop {
+        initializer: Block<'a>,
+        condition: Option<Handle<Expression<'a>>>,
+        update: Block<'a>,
+        body: Block<'a>,
+    },
+    WhileLoop {
+        condition: Handle<Expression<'a>>,
+        body: Block<'a>,
+    },
     Break,
     Continue,
     Return {

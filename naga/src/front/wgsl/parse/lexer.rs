@@ -514,25 +514,6 @@ impl<'a> Lexer<'a> {
         self.enable_extensions.require(extension, span)
     }
 
-    /// Calls the function with a lexer and returns the result of the function as well as the span for everything the function parsed
-    ///
-    /// # Examples
-    /// ```ignore
-    /// let lexer = Lexer::new("5");
-    /// let (value, span) = lexer.capture_span(Lexer::next_uint_literal);
-    /// assert_eq!(value, 5);
-    /// ```
-    #[inline]
-    pub fn capture_span<T, E>(
-        &mut self,
-        inner: impl FnOnce(&mut Self) -> core::result::Result<T, E>,
-    ) -> core::result::Result<(T, Span), E> {
-        let start = self.current_byte_offset();
-        let res = inner(self)?;
-        let end = self.current_byte_offset();
-        Ok((res, Span::from(start..end)))
-    }
-
     pub(in crate::front::wgsl) fn start_byte_offset(&mut self) -> usize {
         loop {
             // Eat all trivia because `next` doesn't eat trailing trivia.

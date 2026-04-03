@@ -2133,6 +2133,56 @@ pub enum Statement {
         break_if: Option<Handle<Expression>>,
     },
 
+    /// A C-style `for` loop.
+    ///
+    /// Execution order:
+    /// 1. Execute `initializer` block (once, before the loop begins).
+    /// 2. Execute `condition_block`, then evaluate `condition`. If `Some`
+    ///    and false, exit the loop. If `None`, or `Some` and true, continue the loop.
+    /// 3. Execute `body` block.
+    /// 4. Execute `update` block.
+    /// 5. Go to step 2.
+    ///
+    /// The `condition_block` contains any [`Emit`] statements and other
+    /// operations (e.g. function calls) needed to evaluate `condition`.
+    /// Expressions emitted in `initializer`, `condition_block`, `body`,
+    /// or `update` are in scope for `condition`.
+    ///
+    /// [`Continue`] statements in `body` jump to the `update` block.
+    ///
+    /// [`Emit`]: Statement::Emit
+    /// [`Continue`]: Statement::Continue
+    ForLoop {
+        initializer: Block,
+        condition: Option<Handle<Expression>>,
+        condition_block: Block,
+        update: Block,
+        body: Block,
+    },
+
+    /// A `while` loop.
+    ///
+    /// Execution order:
+    /// 1. Execute `condition_block`, then evaluate `condition`. If false,
+    ///    exit the loop.
+    /// 2. Execute `body` block.
+    /// 3. Go to step 1.
+    ///
+    /// The `condition_block` contains any [`Emit`] statements and other
+    /// operations (e.g. function calls) needed to evaluate `condition`.
+    /// Expressions emitted in `condition_block` or `body` are in scope
+    /// for `condition`.
+    ///
+    /// [`Continue`] statements in `body` jump back to step 1.
+    ///
+    /// [`Emit`]: Statement::Emit
+    /// [`Continue`]: Statement::Continue
+    WhileLoop {
+        condition: Handle<Expression>,
+        condition_block: Block,
+        body: Block,
+    },
+
     /// Exits the innermost enclosing [`Loop`] or [`Switch`].
     ///
     /// A `Break` statement may only appear within a [`Loop`] or [`Switch`]

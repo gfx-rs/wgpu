@@ -921,6 +921,30 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 adjust(payload);
             }
         },
+        Statement::ForLoop {
+            ref mut initializer,
+            ref mut condition,
+            ref mut condition_block,
+            ref mut update,
+            ref mut body,
+        } => {
+            if let Some(ref mut condition) = *condition {
+                adjust(condition);
+            }
+            adjust_block(new_pos, initializer);
+            adjust_block(new_pos, condition_block);
+            adjust_block(new_pos, update);
+            adjust_block(new_pos, body);
+        }
+        Statement::WhileLoop {
+            ref mut condition,
+            ref mut condition_block,
+            ref mut body,
+        } => {
+            adjust(condition);
+            adjust_block(new_pos, condition_block);
+            adjust_block(new_pos, body);
+        }
         Statement::Break
         | Statement::Continue
         | Statement::Kill
@@ -1009,6 +1033,44 @@ fn filter_emits_in_block(block: &mut Block, expressions: &Arena<Expression>) {
                         body,
                         continuing,
                         break_if,
+                    },
+                    span,
+                );
+            }
+            Statement::ForLoop {
+                mut initializer,
+                condition,
+                mut condition_block,
+                mut update,
+                mut body,
+            } => {
+                filter_emits_in_block(&mut initializer, expressions);
+                filter_emits_in_block(&mut condition_block, expressions);
+                filter_emits_in_block(&mut update, expressions);
+                filter_emits_in_block(&mut body, expressions);
+                block.push(
+                    Statement::ForLoop {
+                        initializer,
+                        condition,
+                        condition_block,
+                        update,
+                        body,
+                    },
+                    span,
+                );
+            }
+            Statement::WhileLoop {
+                condition,
+                mut condition_block,
+                mut body,
+            } => {
+                filter_emits_in_block(&mut condition_block, expressions);
+                filter_emits_in_block(&mut body, expressions);
+                block.push(
+                    Statement::WhileLoop {
+                        condition,
+                        condition_block,
+                        body,
                     },
                     span,
                 );

@@ -169,6 +169,31 @@ impl FunctionTracer<'_> {
                         }
                     },
 
+                    St::ForLoop {
+                        ref initializer,
+                        condition,
+                        ref condition_block,
+                        ref update,
+                        ref body,
+                    } => {
+                        self.trace_block(initializer);
+                        if let Some(condition) = condition {
+                            self.expressions_used.insert(condition);
+                        }
+                        self.trace_block(condition_block);
+                        self.trace_block(update);
+                        self.trace_block(body);
+                    }
+                    St::WhileLoop {
+                        condition,
+                        ref condition_block,
+                        ref body,
+                    } => {
+                        self.expressions_used.insert(condition);
+                        self.trace_block(condition_block);
+                        self.trace_block(body);
+                    }
+
                     // Trivial statements.
                     St::Break
                     | St::Continue
@@ -406,6 +431,30 @@ impl FunctionMap {
                             adjust(payload);
                         }
                     },
+                    St::ForLoop {
+                        ref mut initializer,
+                        ref mut condition,
+                        ref mut condition_block,
+                        ref mut update,
+                        ref mut body,
+                    } => {
+                        if let Some(ref mut condition) = *condition {
+                            adjust(condition);
+                        }
+                        worklist.push(initializer);
+                        worklist.push(condition_block);
+                        worklist.push(update);
+                        worklist.push(body);
+                    }
+                    St::WhileLoop {
+                        ref mut condition,
+                        ref mut condition_block,
+                        ref mut body,
+                    } => {
+                        adjust(condition);
+                        worklist.push(condition_block);
+                        worklist.push(body);
+                    }
 
                     // Trivial statements.
                     St::Break

@@ -1204,6 +1204,71 @@ impl FunctionInfo {
                     }
                     FunctionUniformity::new()
                 }
+                S::ForLoop {
+                    ref initializer,
+                    condition,
+                    ref condition_block,
+                    ref update,
+                    ref body,
+                } => {
+                    let init_uniformity = self.process_block(
+                        initializer,
+                        other_functions,
+                        disruptor,
+                        expression_arena,
+                        diagnostic_filter_arena,
+                    )?;
+                    if let Some(condition) = condition {
+                        let _ = self.add_ref(condition);
+                    }
+                    let condition_block_uniformity = self.process_block(
+                        condition_block,
+                        other_functions,
+                        disruptor,
+                        expression_arena,
+                        diagnostic_filter_arena,
+                    )?;
+                    let body_uniformity = self.process_block(
+                        body,
+                        other_functions,
+                        disruptor,
+                        expression_arena,
+                        diagnostic_filter_arena,
+                    )?;
+                    let update_uniformity = self.process_block(
+                        update,
+                        other_functions,
+                        disruptor.or(body_uniformity.exit_disruptor()),
+                        expression_arena,
+                        diagnostic_filter_arena,
+                    )?;
+                    init_uniformity
+                        | condition_block_uniformity
+                        | body_uniformity
+                        | update_uniformity
+                }
+                S::WhileLoop {
+                    condition,
+                    ref condition_block,
+                    ref body,
+                } => {
+                    let _ = self.add_ref(condition);
+                    let condition_block_uniformity = self.process_block(
+                        condition_block,
+                        other_functions,
+                        disruptor,
+                        expression_arena,
+                        diagnostic_filter_arena,
+                    )?;
+                    let body_uniformity = self.process_block(
+                        body,
+                        other_functions,
+                        disruptor,
+                        expression_arena,
+                        diagnostic_filter_arena,
+                    )?;
+                    condition_block_uniformity | body_uniformity
+                }
             };
 
             disruptor = disruptor.or(uniformity.exit_disruptor());

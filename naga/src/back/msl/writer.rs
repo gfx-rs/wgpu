@@ -1045,6 +1045,9 @@ impl<W: Write> Writer<W> {
     /// The names of the OOB locals are also added to `self.names` at the same
     /// time.
     fn put_locals(&mut self, context: &ExpressionContext) -> BackendResult {
+        let for_init_vars =
+            back::collect_for_init_variables(&context.function.body, &context.function.expressions);
+
         let oob_local_types = context.oob_local_types();
         for &ty in oob_local_types.iter() {
             let name_key = NameKey::oob_local_for_type(context.origin, ty);
@@ -1055,6 +1058,7 @@ impl<W: Write> Writer<W> {
             .function
             .local_variables
             .iter()
+            .filter(|&(ref handle, _)| !for_init_vars.contains(handle))
             .map(|(local_handle, local)| {
                 let name_key = NameKey::local(context.origin, local_handle);
                 (name_key, local.ty, local.init)
@@ -3669,6 +3673,80 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Write the update portion of a `for` header inline (no semicolons/newlines).
+    /// Write the initializer portion of a `for` header.
+    fn put_for_header_init(
+        &mut self,
+        block: &crate::Block,
+        context: &StatementContext,
+    ) -> BackendResult {
+        for sta in block.iter() {
+            if let crate::Statement::Store { pointer, value } = *sta {
+                if let crate::Expression::LocalVariable(var) =
+                    context.expression.function.expressions[pointer]
+                {
+                    let local = &context.expression.function.local_variables[var];
+                    let name_key = NameKey::local(context.expression.origin, var);
+                    let ty_name = TypeContext {
+                        handle: local.ty,
+                        gctx: context.expression.module.to_ctx(),
+                        names: &self.names,
+                        access: crate::StorageAccess::empty(),
+                        first_time: false,
+                    };
+                    write!(self.out, "{} {}", ty_name, self.names[&name_key])?;
+                    write!(self.out, " = ")?;
+                    self.put_expression(value, &context.expression, true)?;
+                    return Ok(());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn put_for_update_inline(
+        &mut self,
+        block: &crate::Block,
+        context: &StatementContext,
+    ) -> BackendResult {
+        let mut first = true;
+        for sta in block.iter() {
+            match *sta {
+                crate::Statement::Emit(_) => {}
+                crate::Statement::Store { pointer, value } => {
+                    if !first {
+                        write!(self.out, ", ")?;
+                    }
+                    first = false;
+                    self.put_expression(pointer, &context.expression, true)?;
+                    write!(self.out, " = ")?;
+                    self.put_expression(value, &context.expression, true)?;
+                }
+                crate::Statement::Call {
+                    function,
+                    ref arguments,
+                    ..
+                } => {
+                    if !first {
+                        write!(self.out, ", ")?;
+                    }
+                    first = false;
+                    let name = &self.names[&NameKey::Function(function)];
+                    write!(self.out, "{name}(")?;
+                    for (i, &arg) in arguments.iter().enumerate() {
+                        if i != 0 {
+                            write!(self.out, ", ")?;
+                        }
+                        self.put_expression(arg, &context.expression, true)?;
+                    }
+                    write!(self.out, ")")?;
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
     fn put_block(
         &mut self,
         level: back::Level,
@@ -4338,6 +4416,104 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, ");")?;
                 }
                 crate::Statement::RayPipelineFunction(_) => unreachable!(),
+                crate::Statement::ForLoop {
+                    ref initializer,
+                    condition,
+                    ref condition_block,
+                    ref update,
+                    ref body,
+                } => {
+                    let force_loop_bound_statements =
+                        self.gen_force_bounded_loop_statements(level, context);
+                    if let Some((ref decl, _)) = force_loop_bound_statements {
+                        writeln!(self.out, "{decl}")?;
+                    }
+
+                    if back::is_native_for_loop(condition_block, update) {
+                        write!(self.out, "{level}for(")?;
+                        self.put_for_header_init(initializer, context)?;
+                        write!(self.out, "; ")?;
+                        if let Some(condition) = condition {
+                            self.put_expression(condition, &context.expression, true)?;
+                        }
+                        write!(self.out, "; ")?;
+                        self.put_for_update_inline(update, context)?;
+                        writeln!(self.out, ") {{")?;
+                        if let Some((_, ref break_and_inc)) = force_loop_bound_statements {
+                            writeln!(self.out, "{break_and_inc}")?;
+                        }
+                        self.put_block(level.next(), body, context)?;
+                        writeln!(self.out, "{level}}}")?;
+                    } else {
+                        self.put_block(level, initializer, context)?;
+                        let gate_name = (!update.is_empty()).then(|| self.namer.call("loop_init"));
+                        if let Some(ref gate_name) = gate_name {
+                            writeln!(self.out, "{level}bool {gate_name} = true;")?;
+                        }
+                        writeln!(self.out, "{level}while(true) {{")?;
+                        if let Some((_, ref break_and_inc)) = force_loop_bound_statements {
+                            writeln!(self.out, "{break_and_inc}")?;
+                        }
+                        if let Some(ref gate_name) = gate_name {
+                            let lif = level.next();
+                            let lupdate = lif.next();
+                            writeln!(self.out, "{lif}if (!{gate_name}) {{")?;
+                            self.put_block(lupdate, update, context)?;
+                            writeln!(self.out, "{lif}}}")?;
+                            writeln!(self.out, "{lif}{gate_name} = false;")?;
+                        }
+                        self.put_block(level.next(), condition_block, context)?;
+                        if let Some(condition) = condition {
+                            let lif = level.next();
+                            write!(self.out, "{lif}if (!(")?;
+                            self.put_expression(condition, &context.expression, true)?;
+                            writeln!(self.out, ")) {{")?;
+                            writeln!(self.out, "{}break;", lif.next())?;
+                            writeln!(self.out, "{lif}}}")?;
+                        }
+                        self.put_block(level.next(), body, context)?;
+                        writeln!(self.out, "{level}}}")?;
+                    }
+                }
+                crate::Statement::WhileLoop {
+                    condition,
+                    ref condition_block,
+                    ref body,
+                } => {
+                    let cond_simple = condition_block
+                        .iter()
+                        .all(|s| matches!(s, crate::Statement::Emit(_)));
+                    let force_loop_bound_statements =
+                        self.gen_force_bounded_loop_statements(level, context);
+                    if let Some((ref decl, _)) = force_loop_bound_statements {
+                        writeln!(self.out, "{decl}")?;
+                    }
+
+                    if cond_simple {
+                        write!(self.out, "{level}while(")?;
+                        self.put_expression(condition, &context.expression, true)?;
+                        writeln!(self.out, ") {{")?;
+                        if let Some((_, ref break_and_inc)) = force_loop_bound_statements {
+                            writeln!(self.out, "{break_and_inc}")?;
+                        }
+                        self.put_block(level.next(), body, context)?;
+                        writeln!(self.out, "{level}}}")?;
+                    } else {
+                        writeln!(self.out, "{level}while(true) {{")?;
+                        if let Some((_, ref break_and_inc)) = force_loop_bound_statements {
+                            writeln!(self.out, "{break_and_inc}")?;
+                        }
+                        self.put_block(level.next(), condition_block, context)?;
+                        let lif = level.next();
+                        write!(self.out, "{lif}if (!(")?;
+                        self.put_expression(condition, &context.expression, true)?;
+                        writeln!(self.out, ")) {{")?;
+                        writeln!(self.out, "{}break;", lif.next())?;
+                        writeln!(self.out, "{lif}}}")?;
+                        self.put_block(level.next(), body, context)?;
+                        writeln!(self.out, "{level}}}")?;
+                    }
+                }
             }
         }
 

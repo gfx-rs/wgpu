@@ -1618,6 +1618,26 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     self.patch_statements(body, expressions, fun_parameter_sampling)?;
                     self.patch_statements(continuing, expressions, fun_parameter_sampling)?;
                 }
+                S::ForLoop {
+                    ref mut initializer,
+                    condition: _,
+                    ref mut condition_block,
+                    ref mut update,
+                    ref mut body,
+                } => {
+                    self.patch_statements(initializer, expressions, fun_parameter_sampling)?;
+                    self.patch_statements(condition_block, expressions, fun_parameter_sampling)?;
+                    self.patch_statements(update, expressions, fun_parameter_sampling)?;
+                    self.patch_statements(body, expressions, fun_parameter_sampling)?;
+                }
+                S::WhileLoop {
+                    condition: _,
+                    ref mut condition_block,
+                    ref mut body,
+                } => {
+                    self.patch_statements(condition_block, expressions, fun_parameter_sampling)?;
+                    self.patch_statements(body, expressions, fun_parameter_sampling)?;
+                }
                 S::Break
                 | S::Continue
                 | S::Return { .. }

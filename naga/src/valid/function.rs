@@ -1759,6 +1759,108 @@ impl super::Validator {
                         }
                     }
                 },
+                S::ForLoop {
+                    ref initializer,
+                    condition,
+                    ref condition_block,
+                    ref update,
+                    ref body,
+                } => {
+                    // Expressions emitted in the body are in scope for the
+                    // condition (the condition's Emit is at the start of the
+                    // body block), so validate body before checking condition.
+                    let base_expression_count = self.valid_expression_list.len();
+                    let pass_through_abilities = context.abilities & ControlFlowAbility::RETURN;
+
+                    stages &= self
+                        .validate_block_impl(
+                            initializer,
+                            &context.with_abilities(pass_through_abilities),
+                        )?
+                        .stages;
+                    stages &= self
+                        .validate_block_impl(
+                            condition_block,
+                            &context.with_abilities(pass_through_abilities),
+                        )?
+                        .stages;
+                    stages &= self
+                        .validate_block_impl(
+                            body,
+                            &context.with_abilities(
+                                pass_through_abilities
+                                    | ControlFlowAbility::BREAK
+                                    | ControlFlowAbility::CONTINUE,
+                            ),
+                        )?
+                        .stages;
+                    stages &= self
+                        .validate_block_impl(
+                            update,
+                            &context.with_abilities(ControlFlowAbility::empty()),
+                        )?
+                        .stages;
+
+                    if let Some(condition) = condition {
+                        match *context.resolve_type_inner(condition, &self.valid_expression_set)? {
+                            Ti::Scalar(crate::Scalar {
+                                kind: crate::ScalarKind::Bool,
+                                width: _,
+                            }) => {}
+                            _ => {
+                                return Err(FunctionError::InvalidIfType(condition)
+                                    .with_span_handle(condition, context.expressions))
+                            }
+                        }
+                    }
+
+                    for handle in self.valid_expression_list.drain(base_expression_count..) {
+                        self.valid_expression_set.remove(handle);
+                    }
+                }
+                S::WhileLoop {
+                    condition,
+                    ref condition_block,
+                    ref body,
+                } => {
+                    // Expressions emitted in the body are in scope for the
+                    // condition (the condition's Emit is at the start of the
+                    // body block), so validate body before checking condition.
+                    let base_expression_count = self.valid_expression_list.len();
+                    let pass_through_abilities = context.abilities & ControlFlowAbility::RETURN;
+
+                    stages &= self
+                        .validate_block_impl(
+                            condition_block,
+                            &context.with_abilities(pass_through_abilities),
+                        )?
+                        .stages;
+                    stages &= self
+                        .validate_block_impl(
+                            body,
+                            &context.with_abilities(
+                                pass_through_abilities
+                                    | ControlFlowAbility::BREAK
+                                    | ControlFlowAbility::CONTINUE,
+                            ),
+                        )?
+                        .stages;
+
+                    match *context.resolve_type_inner(condition, &self.valid_expression_set)? {
+                        Ti::Scalar(crate::Scalar {
+                            kind: crate::ScalarKind::Bool,
+                            width: _,
+                        }) => {}
+                        _ => {
+                            return Err(FunctionError::InvalidIfType(condition)
+                                .with_span_handle(condition, context.expressions))
+                        }
+                    }
+
+                    for handle in self.valid_expression_list.drain(base_expression_count..) {
+                        self.valid_expression_set.remove(handle);
+                    }
+                }
             }
         }
         Ok(BlockInfo { stages })

@@ -1396,101 +1396,58 @@ impl Parser {
                 }
                 (Token::Word("loop"), _) => this.r#loop(lexer, ctx, brace_nesting_level)?,
                 (Token::Word("while"), _) => {
-                    let mut body = ast::Block::default();
-
-                    let (condition, span) =
-                        lexer.capture_span(|lexer| this.expression(lexer, ctx))?;
-                    let mut reject = ast::Block::default();
-                    reject.stmts.push(ast::Statement {
-                        kind: ast::StatementKind::Break,
-                        span,
-                    });
-
-                    body.stmts.push(ast::Statement {
-                        kind: ast::StatementKind::If {
-                            condition,
-                            accept: ast::Block::default(),
-                            reject,
-                        },
-                        span,
-                    });
-
-                    let (block, span) = this.block(lexer, ctx, brace_nesting_level)?;
-                    body.stmts.push(ast::Statement {
-                        kind: ast::StatementKind::Block(block),
-                        span,
-                    });
-
-                    ast::StatementKind::Loop {
-                        body,
-                        continuing: ast::Block::default(),
-                        break_if: None,
-                    }
+                    let condition = this.expression(lexer, ctx)?;
+                    let (body, _) = this.block(lexer, ctx, brace_nesting_level)?;
+                    ast::StatementKind::WhileLoop { condition, body }
                 }
                 (Token::Word("for"), _) => {
                     lexer.expect(Token::Paren('('))?;
 
                     ctx.local_table.push_scope();
 
+                    let mut initializer = ast::Block::default();
                     if !lexer.next_if(Token::Separator(';')) {
                         let token = lexer.next();
                         this.variable_or_value_or_func_call_or_variable_updating_statement(
                             lexer,
                             ctx,
-                            block,
+                            &mut initializer,
                             token,
                             ExpectedToken::ForInit,
                         )?;
                         lexer.expect(Token::Separator(';'))?;
                     };
 
-                    let mut body = ast::Block::default();
-                    if !lexer.next_if(Token::Separator(';')) {
-                        let (condition, span) = lexer.capture_span(|lexer| -> Result<'_, _> {
-                            let condition = this.expression(lexer, ctx)?;
-                            lexer.expect(Token::Separator(';'))?;
-                            Ok(condition)
-                        })?;
-                        let mut reject = ast::Block::default();
-                        reject.stmts.push(ast::Statement {
-                            kind: ast::StatementKind::Break,
-                            span,
-                        });
-                        body.stmts.push(ast::Statement {
-                            kind: ast::StatementKind::If {
-                                condition,
-                                accept: ast::Block::default(),
-                                reject,
-                            },
-                            span,
-                        });
+                    let condition = if !lexer.next_if(Token::Separator(';')) {
+                        let cond = this.expression(lexer, ctx)?;
+                        lexer.expect(Token::Separator(';'))?;
+                        Some(cond)
+                    } else {
+                        None
                     };
 
-                    let mut continuing = ast::Block::default();
+                    let mut update = ast::Block::default();
                     if !lexer.next_if(Token::Paren(')')) {
                         let token = lexer.next();
                         this.func_call_or_variable_updating_statement(
                             lexer,
                             ctx,
-                            &mut continuing,
+                            &mut update,
                             token,
                             ExpectedToken::ForUpdate,
                         )?;
                         lexer.expect(Token::Paren(')'))?;
                     }
 
-                    let (block, span) = this.block(lexer, ctx, brace_nesting_level)?;
-                    body.stmts.push(ast::Statement {
-                        kind: ast::StatementKind::Block(block),
-                        span,
-                    });
+                    let (body, _) = this.block(lexer, ctx, brace_nesting_level)?;
 
                     ctx.local_table.pop_scope();
 
-                    ast::StatementKind::Loop {
+                    ast::StatementKind::ForLoop {
+                        initializer,
+                        condition,
+                        update,
                         body,
-                        continuing,
-                        break_if: None,
                     }
                 }
                 (Token::Word("break"), span) => {

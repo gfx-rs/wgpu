@@ -429,6 +429,49 @@ impl StatementGraph {
                         "TraceRay"
                     }
                 },
+                S::ForLoop {
+                    ref initializer,
+                    condition,
+                    condition_block: _,
+                    ref update,
+                    ref body,
+                } => {
+                    let mut targets = targets;
+                    targets.break_target = Some(id);
+
+                    let (update_id, update_last) = self.add(update, targets);
+                    targets.continue_target = Some(update_id);
+
+                    let (init_id, init_last) = self.add(initializer, targets);
+                    let (body_id, body_last) = self.add(body, targets);
+
+                    self.flow.push((id, init_id, "init"));
+                    self.flow.push((init_last, body_id, "body"));
+                    self.flow.push((body_last, update_id, "update"));
+                    self.flow.push((update_last, body_id, "loop"));
+
+                    if let Some(condition) = condition {
+                        self.dependencies.push((id, condition, "condition"));
+                    }
+
+                    "ForLoop"
+                }
+                S::WhileLoop {
+                    condition,
+                    condition_block: _,
+                    ref body,
+                } => {
+                    let mut targets = targets;
+                    targets.break_target = Some(id);
+
+                    let (body_id, body_last) = self.add(body, targets);
+
+                    self.flow.push((id, body_id, "body"));
+                    self.flow.push((body_last, body_id, "loop"));
+                    self.dependencies.push((id, condition, "condition"));
+
+                    "WhileLoop"
+                }
             };
             // Set the last node to the merge node
             last_node = merge_id;

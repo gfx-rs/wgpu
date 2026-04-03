@@ -876,6 +876,32 @@ impl super::Validator {
                     Ok(())
                 }
             },
+            crate::Statement::ForLoop {
+                ref initializer,
+                condition,
+                ref condition_block,
+                ref update,
+                ref body,
+            } => {
+                validate_block(initializer)?;
+                if let Some(condition) = condition {
+                    validate_expr(condition)?;
+                }
+                validate_block(condition_block)?;
+                validate_block(update)?;
+                validate_block(body)?;
+                Ok(())
+            }
+            crate::Statement::WhileLoop {
+                condition,
+                ref condition_block,
+                ref body,
+            } => {
+                validate_expr(condition)?;
+                validate_block(condition_block)?;
+                validate_block(body)?;
+                Ok(())
+            }
             crate::Statement::Break
             | crate::Statement::Continue
             | crate::Statement::Kill
