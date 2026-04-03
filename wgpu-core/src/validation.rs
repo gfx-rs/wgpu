@@ -1215,45 +1215,43 @@ impl Interface {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
-            let bind = match var.binding {
-                Some(br) => br,
-                _ => continue,
-            };
-            let naga_ty = &module.types[var.ty].inner;
+            if let Some(bind) = var.binding {
+                let naga_ty = &module.types[var.ty].inner;
 
-            let inner_ty = match *naga_ty {
-                naga::TypeInner::BindingArray { base, .. } => &module.types[base].inner,
-                ref ty => ty,
-            };
+                let inner_ty = match *naga_ty {
+                    naga::TypeInner::BindingArray { base, .. } => &module.types[base].inner,
+                    ref ty => ty,
+                };
 
-            let ty = match *inner_ty {
-                naga::TypeInner::Image {
-                    dim,
-                    arrayed,
-                    class,
-                } => ResourceType::Texture {
-                    dim,
-                    arrayed,
-                    class,
-                },
-                naga::TypeInner::Sampler { comparison } => ResourceType::Sampler { comparison },
-                naga::TypeInner::AccelerationStructure { vertex_return } => {
-                    ResourceType::AccelerationStructure { vertex_return }
-                }
-                ref other => ResourceType::Buffer {
-                    size: wgt::BufferSize::new(other.size(module.to_ctx()) as u64).unwrap(),
-                },
-            };
-            let handle = resources.append(
-                Resource {
-                    name: var.name.clone(),
-                    bind,
-                    ty,
-                    class: var.space,
-                },
-                Default::default(),
-            );
-            resource_mapping.insert(var_handle, handle);
+                let ty = match *inner_ty {
+                    naga::TypeInner::Image {
+                        dim,
+                        arrayed,
+                        class,
+                    } => ResourceType::Texture {
+                        dim,
+                        arrayed,
+                        class,
+                    },
+                    naga::TypeInner::Sampler { comparison } => ResourceType::Sampler { comparison },
+                    naga::TypeInner::AccelerationStructure { vertex_return } => {
+                        ResourceType::AccelerationStructure { vertex_return }
+                    }
+                    ref other => ResourceType::Buffer {
+                        size: wgt::BufferSize::new(other.size(module.to_ctx()) as u64).unwrap(),
+                    },
+                };
+                let handle = resources.append(
+                    Resource {
+                        name: var.name.clone(),
+                        bind,
+                        ty,
+                        class: var.space,
+                    },
+                    Default::default(),
+                );
+                resource_mapping.insert(var_handle, handle);
+            }
         }
 
         let immediate_size = naga::valid::ImmediateSlots::size_for_module(module);
