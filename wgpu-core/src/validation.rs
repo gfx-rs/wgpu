@@ -290,6 +290,14 @@ struct EntryPoint {
     spec_constants: Vec<SpecializationConstant>,
     sampling_pairs: FastHashSet<(naga::Handle<Resource>, naga::Handle<Resource>)>,
     workgroup_size: [u32; 3],
+
+    /// Number of bytes needed for this entry point's `workgroup` globals.
+    ///
+    /// Since `Limits::max_compute_workgroup_storage_size` could, in principle,
+    /// be as high as `u32::MAX`, this is a `u64` to represent values beyond
+    /// that.
+    workgroup_storage_size: u64,
+
     dual_source_blending: bool,
     task_payload_size: Option<u32>,
     mesh_info: Option<EntryPointMeshInfo>,
@@ -448,6 +456,15 @@ pub enum StageError {
         but no entry point was specified"
     )]
     MultipleEntryPointsFound,
+    #[error(
+        "Workgroup storage size {used} must be less than or equal to \
+        `Limits::{limit_desc}` ({limit})"
+    )]
+    WorkgroupStorageSizeLimitExceeded {
+        used: u64,
+        limit: u32,
+        limit_desc: &'static str,
+    },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(
@@ -549,7 +566,8 @@ impl WebGpuError for StageError {
                 var: _,
                 error,
             } => error.webgpu_error_type(),
-            Self::InvalidWorkgroupSize { .. }
+            Self::WorkgroupStorageSizeLimitExceeded { .. }
+            | Self::InvalidWorkgroupSize { .. }
             | Self::MissingEntryPoint(..)
             | Self::NoEntryPointFound
             | Self::MultipleEntryPointsFound
@@ -1275,12 +1293,21 @@ impl Interface {
                 );
             }
 
+            let mut workgroup_storage_size = 0u64;
             for (var_handle, var) in module.global_variables.iter() {
                 let usage = info[var_handle];
-                if !usage.is_empty() && var.binding.is_some() {
-                    ep.resources.push(resource_mapping[&var_handle]);
+                if !usage.is_empty() {
+                    if var.binding.is_some() {
+                        ep.resources.push(resource_mapping[&var_handle]);
+                    }
+                    if var.space == naga::AddressSpace::WorkGroup {
+                        let size = module.types[var.ty].inner.size(module.to_ctx());
+                        workgroup_storage_size = workgroup_storage_size
+                            .saturating_add(u64::from(size).next_multiple_of(16));
+                    }
                 }
             }
+            ep.workgroup_storage_size = workgroup_storage_size;
 
             for key in info.sampling_set.iter() {
                 ep.sampling_pairs
@@ -1505,6 +1532,16 @@ impl Interface {
 
         // check workgroup size limits
         if shader_stage.to_naga().compute_like() {
+            if entry_point.workgroup_storage_size
+                > u64::from(self.limits.max_compute_workgroup_storage_size)
+            {
+                return Err(StageError::WorkgroupStorageSizeLimitExceeded {
+                    used: entry_point.workgroup_storage_size,
+                    limit: self.limits.max_compute_workgroup_storage_size,
+                    limit_desc: "max_compute_workgroup_storage_size",
+                });
+            }
+
             let total = match shader_stage.to_naga() {
                 naga::ShaderStage::Compute => check_workgroup_sizes(
                     &entry_point.workgroup_size,
