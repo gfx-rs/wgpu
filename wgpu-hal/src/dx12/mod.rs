@@ -957,6 +957,12 @@ pub struct Buffer {
     allocation: suballocation::Allocation,
 }
 
+impl Buffer {
+    pub unsafe fn raw_resource(&self) -> &Direct3D12::ID3D12Resource {
+        &self.resource
+    }
+}
+
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
 
