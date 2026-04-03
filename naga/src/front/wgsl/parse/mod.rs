@@ -2192,6 +2192,9 @@ impl Parser {
                 Some(ast::GlobalDeclKind::ConstAssert(condition))
             }
             (Token::End, _) => return Ok(()),
+            (Token::UnterminatedBlockComment(_), span) => {
+                return Err(Box::new(Error::UnterminatedBlockComment(span)))
+            }
             other => {
                 return Err(Box::new(Error::Unexpected(
                     other.1,
