@@ -154,7 +154,7 @@ pub enum ComputePassErrorInner {
     DestroyedResource(#[from] DestroyedResourceError),
     #[error("Indirect buffer offset {0:?} is not a multiple of 4")]
     UnalignedIndirectBufferOffset(BufferAddress),
-    #[error("Indirect buffer of {args_size} bytes starting at {offset} would overrun buffer of size {buffer_size}")]
+    #[error("Indirect buffer of {args_size} bytes starting at offset {offset} would overrun buffer of size {buffer_size}")]
     IndirectBufferOverrun {
         args_size: u64,
         offset: u64,
