@@ -1366,10 +1366,8 @@ impl Interface {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
-            let bind = match var.binding {
-                Some(br) => br,
-                _ => continue,
-            };
+            let Some(bind) = var.binding else { continue };
+
             let naga_ty = &module.types[var.ty].inner;
 
             let inner_ty = match *naga_ty {
