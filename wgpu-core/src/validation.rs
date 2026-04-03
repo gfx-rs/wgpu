@@ -290,6 +290,7 @@ struct EntryPoint {
     spec_constants: Vec<SpecializationConstant>,
     sampling_pairs: FastHashSet<(naga::Handle<Resource>, naga::Handle<Resource>)>,
     workgroup_size: [u32; 3],
+    workgroup_storage_size: u32,
     dual_source_blending: bool,
     task_payload_size: Option<u32>,
     mesh_info: Option<EntryPointMeshInfo>,
@@ -418,6 +419,15 @@ impl WebGpuError for InputError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum StageError {
+    #[error(
+        "Workgroup storage size {used} must be less than or equal to \
+        `Limits::{limit_desc}` ({limit})"
+    )]
+    WorkgroupStorageSizeLimitExceeded {
+        used: u32,
+        limit: u32,
+        limit_desc: &'static str,
+    },
     #[error(transparent)]
     InvalidWorkgroupSize(#[from] InvalidWorkgroupSizeError),
     #[error("Unable to find entry point '{0}'")]
@@ -549,7 +559,8 @@ impl WebGpuError for StageError {
                 var: _,
                 error,
             } => error.webgpu_error_type(),
-            Self::InvalidWorkgroupSize { .. }
+            Self::WorkgroupStorageSizeLimitExceeded { .. }
+            | Self::InvalidWorkgroupSize { .. }
             | Self::MissingEntryPoint(..)
             | Self::NoEntryPointFound
             | Self::MultipleEntryPointsFound
@@ -1214,6 +1225,7 @@ impl Interface {
     pub fn new(module: &naga::Module, info: &naga::valid::ModuleInfo, limits: wgt::Limits) -> Self {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
+        let mut workspace_storage_size_per_var = FastHashMap::<&str, _>::default();
         for (var_handle, var) in module.global_variables.iter() {
             if let Some(bind) = var.binding {
                 let naga_ty = &module.types[var.ty].inner;
@@ -1252,6 +1264,12 @@ impl Interface {
                 );
                 resource_mapping.insert(var_handle, handle);
             }
+            if var.space == naga::AddressSpace::WorkGroup {
+                workspace_storage_size_per_var.insert(
+                    var.name.as_deref().unwrap(),
+                    module.types[var.ty].inner.size(module.to_ctx()),
+                );
+            }
         }
 
         let immediate_size = naga::valid::ImmediateSlots::size_for_module(module);
@@ -1273,12 +1291,23 @@ impl Interface {
                 );
             }
 
+            let mut workgroup_storage_size = 0u32;
             for (var_handle, var) in module.global_variables.iter() {
                 let usage = info[var_handle];
-                if !usage.is_empty() && var.binding.is_some() {
-                    ep.resources.push(resource_mapping[&var_handle]);
+                if !usage.is_empty() {
+                    if var.binding.is_some() {
+                        ep.resources.push(resource_mapping[&var_handle]);
+                    }
+                    if var.space == naga::AddressSpace::WorkGroup {
+                        workgroup_storage_size = workgroup_storage_size
+                            .checked_add(
+                                workspace_storage_size_per_var[var.name.as_deref().unwrap()],
+                            )
+                            .unwrap();
+                    }
                 }
             }
+            ep.workgroup_storage_size = workgroup_storage_size;
 
             for key in info.sampling_set.iter() {
                 ep.sampling_pairs
@@ -1534,6 +1563,16 @@ impl Interface {
                 },
                 _ => unreachable!(),
             };
+
+            let workgroup_storage_used = entry_point.workgroup_storage_size.next_multiple_of(16);
+            if workgroup_storage_used > self.limits.max_compute_workgroup_storage_size {
+                return Err(StageError::WorkgroupStorageSizeLimitExceeded {
+                    used: workgroup_storage_used,
+                    limit: self.limits.max_compute_workgroup_storage_size,
+                    limit_desc: "max_compute_workgroup_storage_size",
+                });
+            }
+
             let total = workgroup_size_check.check_and_compute_total_invocations()?;
             if total == 0 {
                 return Err(StageError::InvalidWorkgroupSize(

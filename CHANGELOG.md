@@ -234,6 +234,7 @@ By @stuartparmenter in [#9658](https://github.com/gfx-rs/wgpu/pull/9658).
 - Add clip distances validation for `maxInterStageShaderVariables`. By @ErichDonGubler in [#8762](https://github.com/gfx-rs/wgpu/pull/8762). This may break some existing programs, but it compiles with the WebGPU spec.
 - Bring immediates in line with webgpu spec. By @atlv24 in [#9280](https://github.com/gfx-rs/wgpu/pull/9280).
 - Validate `LoadOp` and `StoreOp` are `None` for attachments without corresponding depth or stencil aspect. By @beicause in [#9567](https://github.com/gfx-rs/wgpu/pull/9567).
+- Validate `Limits::max_compute_workgroup_storage_size`. By @ErichDonGubler in [#9732](https://github.com/gfx-rs/wgpu/pull/9732).
 
 #### DX12
 

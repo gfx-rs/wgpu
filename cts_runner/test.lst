@@ -92,12 +92,15 @@ webgpu:api,validation,capability_checks,limits,minUniformBufferOffsetAlignment:v
 webgpu:api,validation,compute_pipeline:basic:*
 webgpu:api,validation,compute_pipeline:limits,invocations_per_workgroup,each_component:*
 webgpu:api,validation,compute_pipeline:limits,invocations_per_workgroup:*
+webgpu:api,validation,compute_pipeline:limits,workgroup_storage_size:*
 webgpu:api,validation,compute_pipeline:overrides,entry_point,validation_error:*
 webgpu:api,validation,compute_pipeline:overrides,identifier:*
 webgpu:api,validation,compute_pipeline:overrides,uninitialized:*
 webgpu:api,validation,compute_pipeline:overrides,value,type_error:*
 webgpu:api,validation,compute_pipeline:overrides,value,validation_error,f16:*
 webgpu:api,validation,compute_pipeline:overrides,value,validation_error:*
+webgpu:api,validation,compute_pipeline:overrides,workgroup_size,limits,workgroup_storage_size:*
+webgpu:api,validation,compute_pipeline:overrides,workgroup_size,limits:*
 webgpu:api,validation,compute_pipeline:overrides,workgroup_size:*
 webgpu:api,validation,compute_pipeline:pipeline_layout,device_mismatch:*
 webgpu:api,validation,compute_pipeline:resource_compatibility:*
