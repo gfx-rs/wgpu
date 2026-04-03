@@ -457,6 +457,21 @@ impl super::Device {
         desc: &crate::TextureDescriptor,
         external_memory_image_create_info: Option<&mut vk::ExternalMemoryImageCreateInfo>,
     ) -> Result<ImageWithoutMemory, crate::DeviceError> {
+        self.create_image_without_memory_with_tiling(
+            desc,
+            vk::ImageTiling::OPTIMAL,
+            external_memory_image_create_info,
+            None,
+        )
+    }
+
+    fn create_image_without_memory_with_tiling(
+        &self,
+        desc: &crate::TextureDescriptor,
+        tiling: vk::ImageTiling,
+        external_memory_image_create_info: Option<&mut vk::ExternalMemoryImageCreateInfo>,
+        drm_modifier_info: Option<&mut vk::ImageDrmFormatModifierExplicitCreateInfoEXT>,
+    ) -> Result<ImageWithoutMemory, crate::DeviceError> {
         let copy_size = desc.copy_extent();
 
         let mut raw_flags = vk::ImageCreateFlags::empty();
@@ -496,7 +511,7 @@ impl super::Device {
             .mip_levels(desc.mip_level_count)
             .array_layers(desc.array_layer_count())
             .samples(vk::SampleCountFlags::from_raw(desc.sample_count))
-            .tiling(vk::ImageTiling::OPTIMAL)
+            .tiling(tiling)
             .usage(conv::map_texture_usage(desc.usage))
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .initial_layout(vk::ImageLayout::UNDEFINED);
@@ -509,6 +524,10 @@ impl super::Device {
 
         if let Some(ext_info) = external_memory_image_create_info {
             vk_info = vk_info.push_next(ext_info);
+        }
+
+        if let Some(drm_info) = drm_modifier_info {
+            vk_info = vk_info.push_next(drm_info);
         }
 
         let raw = unsafe { self.shared.raw.create_image(&vk_info, None) }.map_err(map_err)?;
