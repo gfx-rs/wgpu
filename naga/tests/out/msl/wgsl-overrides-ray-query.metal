@@ -38,8 +38,7 @@ kernel void main_(
         if (metal::all(loop_bound == uint2(0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
         bool _e31 = rq.ready;
-        if (_e31) {
-        } else {
+        if (!(_e31)) {
             break;
         }
     }

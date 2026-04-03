@@ -126,11 +126,8 @@ RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructu
                 naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 2;
                 if (!_e9) { naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 4; }
         }}
-        if (_e9) {
-        } else {
+        if (!(_e9)) {
             break;
-        }
-        {
         }
     }
     const RayIntersection rayintersection = GetCommittedIntersection(rq_1, naga_query_init_tracker_for_rq_1);

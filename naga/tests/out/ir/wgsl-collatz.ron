@@ -166,8 +166,9 @@
                     pointer: 1,
                     value: 0,
                 ),
-                Loop(
-                    body: [
+                WhileLoop(
+                    condition: 6,
+                    condition_block: [
                         Emit((
                             start: 4,
                             end: 5,
@@ -176,73 +177,64 @@
                             start: 6,
                             end: 7,
                         )),
+                    ],
+                    body: [
+                        Emit((
+                            start: 7,
+                            end: 8,
+                        )),
+                        Emit((
+                            start: 9,
+                            end: 10,
+                        )),
+                        Emit((
+                            start: 11,
+                            end: 12,
+                        )),
                         If(
-                            condition: 6,
-                            accept: [],
+                            condition: 11,
+                            accept: [
+                                Emit((
+                                    start: 12,
+                                    end: 13,
+                                )),
+                                Emit((
+                                    start: 14,
+                                    end: 15,
+                                )),
+                                Store(
+                                    pointer: 1,
+                                    value: 14,
+                                ),
+                            ],
                             reject: [
-                                Break,
+                                Emit((
+                                    start: 16,
+                                    end: 18,
+                                )),
+                                Emit((
+                                    start: 19,
+                                    end: 20,
+                                )),
+                                Store(
+                                    pointer: 1,
+                                    value: 19,
+                                ),
                             ],
                         ),
-                        Block([
-                            Emit((
-                                start: 7,
-                                end: 8,
-                            )),
-                            Emit((
-                                start: 9,
-                                end: 10,
-                            )),
-                            Emit((
-                                start: 11,
-                                end: 12,
-                            )),
-                            If(
-                                condition: 11,
-                                accept: [
-                                    Emit((
-                                        start: 12,
-                                        end: 13,
-                                    )),
-                                    Emit((
-                                        start: 14,
-                                        end: 15,
-                                    )),
-                                    Store(
-                                        pointer: 1,
-                                        value: 14,
-                                    ),
-                                ],
-                                reject: [
-                                    Emit((
-                                        start: 16,
-                                        end: 18,
-                                    )),
-                                    Emit((
-                                        start: 19,
-                                        end: 20,
-                                    )),
-                                    Store(
-                                        pointer: 1,
-                                        value: 19,
-                                    ),
-                                ],
-                            ),
-                            Emit((
-                                start: 20,
-                                end: 21,
-                            )),
-                            Emit((
-                                start: 22,
-                                end: 23,
-                            )),
-                            Store(
-                                pointer: 3,
-                                value: 22,
-                            ),
-                        ]),
+                        Emit((
+                            start: 20,
+                            end: 21,
+                        )),
+                        Emit((
+                            start: 22,
+                            end: 23,
+                        )),
+                        Store(
+                            pointer: 3,
+                            value: 22,
+                        ),
                     ],
-                    continuing: [],
-                    break_if: None,
                 ),
                 Emit((
                     start: 23,

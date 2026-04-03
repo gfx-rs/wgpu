@@ -70,6 +70,10 @@ Bottom level categories:
 
 - Add clip distances validation for `maxInterStageShaderVariables`. By @ErichDonGubler in [#8762](https://github.com/gfx-rs/wgpu/pull/8762). This may break some existing programs, but it compiles with the WebGPU spec.
 
+#### naga
+
+- Naga used to turn `for` and `while(condition)` loops into `while(true)` loops, which confused downstream shader compilers, decreasing performance. This is no longer the case, and backends now write proper loop constructs. By @JMS55 in [#9329](https://github.com/gfx-rs/wgpu/pull/9329)
+
 ### Bug Fixes
 
 #### General

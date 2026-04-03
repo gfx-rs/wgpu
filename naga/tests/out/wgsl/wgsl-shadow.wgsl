@@ -65,30 +65,17 @@ fn vs_main(@location(0) @interpolate(flat) position: vec4<i32>, @location(1) @in
 @fragment 
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color: vec3<f32> = c_ambient;
-    var i: u32 = 0u;
 
     let normal_1 = normalize(in.world_normal);
-    loop {
-        let _e7 = i;
-        let _e11 = u_globals.num_lights.x;
-        if (_e7 < min(_e11, c_max_lights)) {
-        } else {
-            break;
-        }
-        {
-            let _e16 = i;
-            let light = s_lights[_e16];
-            let _e19 = i;
-            let _e23 = fetch_shadow(_e19, (light.proj * in.world_position));
-            let light_dir = normalize((light.pos.xyz - in.world_position.xyz));
-            let diffuse = max(0f, dot(normal_1, light_dir));
-            let _e33 = color;
-            color = (_e33 + ((_e23 * diffuse) * light.color.xyz));
-        }
-        continuing {
-            let _e40 = i;
-            i = (_e40 + 1u);
-        }
+    for (var i: u32 = 0u; (i < min(u_globals.num_lights.x, c_max_lights)); i = (i + 1u)) {
+        let _e16 = i;
+        let light = s_lights[_e16];
+        let _e19 = i;
+        let _e23 = fetch_shadow(_e19, (light.proj * in.world_position));
+        let light_dir = normalize((light.pos.xyz - in.world_position.xyz));
+        let diffuse = max(0f, dot(normal_1, light_dir));
+        let _e33 = color;
+        color = (_e33 + ((_e23 * diffuse) * light.color.xyz));
     }
     let _e42 = color;
     let _e47 = u_entity.color;
@@ -98,30 +85,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 @fragment 
 fn fs_main_without_storage(in_1: VertexOutput) -> @location(0) vec4<f32> {
     var color_1: vec3<f32> = c_ambient;
-    var i_1: u32 = 0u;
 
     let normal_2 = normalize(in_1.world_normal);
-    loop {
-        let _e7 = i_1;
-        let _e11 = u_globals.num_lights.x;
-        if (_e7 < min(_e11, c_max_lights)) {
-        } else {
-            break;
-        }
-        {
-            let _e16 = i_1;
-            let light_1 = u_lights[_e16];
-            let _e19 = i_1;
-            let _e23 = fetch_shadow(_e19, (light_1.proj * in_1.world_position));
-            let light_dir_1 = normalize((light_1.pos.xyz - in_1.world_position.xyz));
-            let diffuse_1 = max(0f, dot(normal_2, light_dir_1));
-            let _e33 = color_1;
-            color_1 = (_e33 + ((_e23 * diffuse_1) * light_1.color.xyz));
-        }
-        continuing {
-            let _e40 = i_1;
-            i_1 = (_e40 + 1u);
-        }
+    for (var i_1: u32 = 0u; (i_1 < min(u_globals.num_lights.x, c_max_lights)); i_1 = (i_1 + 1u)) {
+        let _e16 = i_1;
+        let light_1 = u_lights[_e16];
+        let _e19 = i_1;
+        let _e23 = fetch_shadow(_e19, (light_1.proj * in_1.world_position));
+        let light_dir_1 = normalize((light_1.pos.xyz - in_1.world_position.xyz));
+        let diffuse_1 = max(0f, dot(normal_2, light_dir_1));
+        let _e33 = color_1;
+        color_1 = (_e33 + ((_e23 * diffuse_1) * light_1.color.xyz));
     }
     let _e42 = color_1;
     let _e47 = u_entity.color;

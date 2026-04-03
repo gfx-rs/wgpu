@@ -128,6 +128,7 @@ pub struct SpirvOutParameters {
     pub binding_map: naga::back::spv::BindingMap,
     pub ray_query_initialization_tracking: bool,
     pub use_storage_input_output_16: bool,
+    pub force_loop_bounding: bool,
 }
 impl Default for SpirvOutParameters {
     fn default() -> Self {
@@ -141,6 +142,7 @@ impl Default for SpirvOutParameters {
             separate_entry_points: false,
             ray_query_initialization_tracking: true,
             use_storage_input_output_16: true,
+            force_loop_bounding: true,
             binding_map: naga::back::spv::BindingMap::default(),
         }
     }
@@ -172,7 +174,7 @@ impl SpirvOutParameters {
             fake_missing_bindings: true,
             binding_map: self.binding_map.clone(),
             zero_initialize_workgroup_memory: spv::ZeroInitializeWorkgroupMemoryMode::Polyfill,
-            force_loop_bounding: true,
+            force_loop_bounding: self.force_loop_bounding,
             ray_query_initialization_tracking: true,
             debug_info,
             use_storage_input_output_16: self.use_storage_input_output_16,

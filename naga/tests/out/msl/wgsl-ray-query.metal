@@ -58,8 +58,7 @@ RayIntersection query_loop(
         if (metal::all(loop_bound == uint2(0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
         bool _e9 = rq_1.ready;
-        if (_e9) {
-        } else {
+        if (!(_e9)) {
             break;
         }
     }

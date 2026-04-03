@@ -1,0 +1,4 @@
+targets = "SPIRV | METAL | HLSL | WGSL | GLSL"
+
+[glsl]
+compute_main = "main"

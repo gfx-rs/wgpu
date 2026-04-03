@@ -94,11 +94,8 @@ RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructu
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
         bool _e9 = false;
         _e9 = rq_1.Proceed();
-        if (_e9) {
-        } else {
+        if (!(_e9)) {
             break;
-        }
-        {
         }
     }
     const RayIntersection rayintersection = GetCommittedIntersection(rq_1, naga_query_init_tracker_for_rq_1);

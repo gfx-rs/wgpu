@@ -238,25 +238,17 @@
                             descriptor: 23,
                         ),
                     ),
-                    Loop(
-                        body: [
+                    WhileLoop(
+                        condition: 25,
+                        condition_block: [
                             RayQuery(
                                 query: 0,
                                 fun: Proceed(
                                     result: 25,
                                 ),
                             ),
-                            If(
-                                condition: 25,
-                                accept: [],
-                                reject: [
-                                    Break,
-                                ],
-                            ),
-                            Block([]),
                         ],
-                        continuing: [],
-                        break_if: None,
+                        body: [],
                     ),
                     Return(
                         value: None,
