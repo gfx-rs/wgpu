@@ -371,7 +371,7 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
     }
 }
 
-/// Compute pass version of [`CommandEncoder::transition_resources`](crate::CommandEncoder::transition_resources).
+/// Compute pass version of [`command::transition_resources`](crate::command::transition_resources).
 /// See also `State::flush_bindings` for details on the implementation.
 fn transition_resources(
     state: &mut State,
