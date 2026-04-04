@@ -2192,6 +2192,9 @@ impl Parser {
                 Some(ast::GlobalDeclKind::ConstAssert(condition))
             }
             (Token::End, _) => return Ok(()),
+            (Token::UnterminatedBlockComment(_), span) => {
+                return Err(Box::new(Error::UnterminatedBlockComment(span)))
+            }
             other => {
                 return Err(Box::new(Error::Unexpected(
                     other.1,
@@ -2199,6 +2202,12 @@ impl Parser {
                 )))
             }
         };
+
+        if let Some(must_use_span) = must_use.value {
+            if !matches!(kind.as_ref(), Some(ast::GlobalDeclKind::Fn(_))) {
+                return Err(Box::new(Error::FunctionMustUseOnNonFunction(must_use_span)));
+            }
+        }
 
         if let Some(kind) = kind {
             out.decls.append(

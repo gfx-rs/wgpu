@@ -3159,6 +3159,27 @@ struct S {
 }
 
 #[test]
+fn global_var_must_use() {
+    check(
+        r#"
+@must_use
+@group(0)
+@binding(0)
+var<storage> x : array<u32>;
+"#,
+        r#"error: attribute `@must_use` is only valid on function declarations
+  ┌─ wgsl:2:2
+  │
+2 │ @must_use
+  │  ^^^^^^^^
+  │
+  = note: place `@must_use` on a function declaration with a return type
+
+"#,
+    )
+}
+
+#[test]
 fn function_param_redefinition_as_param() {
     check(
         "
@@ -5236,4 +5257,19 @@ fn bitwise_shift_errors() {
         }),
         naga::valid::Capabilities::SHADER_INT64
     }
+}
+
+#[test]
+fn unterminated_block_comment_errors() {
+    check_success("/* Closed */");
+
+    check_error_matches("/* unterminated", "unterminated block comment");
+    check_error_matches(
+        "/* unterminated /* terimated inner */",
+        "unterminated block comment",
+    );
+    check_error_matches(
+        "const N: u32 = 1u; /* Trailing unterminated",
+        "unterminated block comment",
+    )
 }
