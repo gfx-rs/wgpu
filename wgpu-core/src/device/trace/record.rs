@@ -492,6 +492,26 @@ impl IntoTrace for ArcComputeCommand {
                 query_index,
             },
             C::EndPipelineStatisticsQuery => C::EndPipelineStatisticsQuery,
+            C::TransitionResources {
+                buffer_transitions,
+                texture_transitions,
+            } => C::TransitionResources {
+                buffer_transitions: buffer_transitions
+                    .into_iter()
+                    .map(|buffer_transition| wgt::BufferTransition {
+                        buffer: buffer_transition.buffer.into_trace(),
+                        state: buffer_transition.state,
+                    })
+                    .collect(),
+                texture_transitions: texture_transitions
+                    .into_iter()
+                    .map(|texture_transition| wgt::TextureTransition {
+                        texture: texture_transition.texture.into_trace(),
+                        selector: texture_transition.selector,
+                        state: texture_transition.state,
+                    })
+                    .collect(),
+            },
         }
     }
 }

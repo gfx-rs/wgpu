@@ -23,6 +23,7 @@ mod clear_texture;
 mod clip_distances;
 mod cloneable_types;
 mod compute_pass_ownership;
+mod compute_pass_transition_resources;
 mod create_surface_error;
 mod device;
 mod dispatch_workgroups_indirect;
@@ -155,6 +156,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     transfer::all_tests(&mut tests);
     transient::all_tests(&mut tests);
     transition_resources::all_tests(&mut tests);
+    compute_pass_transition_resources::all_tests(&mut tests);
     vertex_formats::all_tests(&mut tests);
     vertex_indices::all_tests(&mut tests);
     vertex_state::all_tests(&mut tests);

@@ -3392,6 +3392,18 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
         self.inner
             .dispatch_workgroups_indirect_with_f64(&indirect_buffer.inner, indirect_offset as f64);
     }
+
+    fn transition_resources<'a>(
+        &mut self,
+        _buffer_transitions: &mut dyn Iterator<
+            Item = wgt::BufferTransition<&'a dispatch::DispatchBuffer>,
+        >,
+        _texture_transitions: &mut dyn Iterator<
+            Item = wgt::TextureTransition<&'a dispatch::DispatchTextureView>,
+        >,
+    ) {
+        // noop
+    }
 }
 impl Drop for WebComputePassEncoder {
     fn drop(&mut self) {

@@ -407,6 +407,14 @@ pub trait ComputePassInterface: CommonTraits + Drop {
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
     );
+
+    fn transition_resources<'a>(
+        &mut self,
+        buffer_transitions: &mut dyn Iterator<Item = wgt::BufferTransition<&'a DispatchBuffer>>,
+        texture_transitions: &mut dyn Iterator<
+            Item = wgt::TextureTransition<&'a DispatchTextureView>,
+        >,
+    );
 }
 pub trait RenderPassInterface: CommonTraits + Drop {
     fn set_pipeline(&mut self, pipeline: &DispatchRenderPipeline);

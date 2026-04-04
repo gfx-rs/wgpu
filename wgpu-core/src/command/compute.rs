@@ -21,7 +21,7 @@ use crate::{
         ArcCommand, ArcPassTimestampWrites, BasePass, BindGroupStateChange, CommandEncoder,
         CommandEncoderError, DebugGroupError, EncoderStateError, InnerCommandEncoder, MapPassErr,
         PassErrorScope, PassStateError, PassTimestampWrites, QueryUseError, StateChange,
-        TimestampWritesError,
+        TimestampWritesError, TransitionResourcesError,
     },
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
     global::Global,
@@ -30,9 +30,9 @@ use crate::{
     pipeline::ComputePipeline,
     resource::{
         self, Buffer, DestroyedResourceError, InvalidResourceError, Labeled,
-        MissingBufferUsageError, ParentDevice, RawResourceAccess, Trackable,
+        MissingBufferUsageError, ParentDevice, RawResourceAccess, TextureView, Trackable,
     },
-    track::{ResourceUsageCompatibilityError, Tracker},
+    track::{ResourceUsageCompatibilityError, TextureViewBindGroupState, Tracker},
     Label,
 };
 
@@ -179,6 +179,8 @@ pub enum ComputePassErrorInner {
     #[error(transparent)]
     QueryUse(#[from] QueryUseError),
     #[error(transparent)]
+    TransitionResources(#[from] TransitionResourcesError),
+    #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
@@ -235,6 +237,7 @@ impl WebGpuError for ComputePassError {
             ComputePassErrorInner::Bind(e) => e.webgpu_error_type(),
             ComputePassErrorInner::ImmediateData(e) => e.webgpu_error_type(),
             ComputePassErrorInner::QueryUse(e) => e.webgpu_error_type(),
+            ComputePassErrorInner::TransitionResources(e) => e.webgpu_error_type(),
             ComputePassErrorInner::MissingFeatures(e) => e.webgpu_error_type(),
             ComputePassErrorInner::MissingDownlevelFlags(e) => e.webgpu_error_type(),
             ComputePassErrorInner::InvalidResource(e) => e.webgpu_error_type(),
@@ -366,6 +369,70 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         );
         Ok(())
     }
+}
+
+/// Compute pass version of [`CommandEncoder::transition_resources`](crate::CommandEncoder::transition_resources).
+/// See also `State::flush_bindings` for details on the implementation.
+fn transition_resources(
+    state: &mut State,
+    buffer_transitions: Vec<wgt::BufferTransition<Arc<Buffer>>>,
+    texture_transitions: Vec<wgt::TextureTransition<Arc<TextureView>>>,
+) -> Result<(), TransitionResourcesError> {
+    let indices = &state.pass.base.device.tracker_indices;
+    state.pass.scope.buffers.set_size(indices.buffers.size());
+    state.pass.scope.textures.set_size(indices.textures.size());
+
+    let mut buffer_ids = Vec::with_capacity(buffer_transitions.len());
+    let mut textures = TextureViewBindGroupState::new();
+
+    // Process buffer transitions
+    for buffer_transition in buffer_transitions {
+        buffer_transition
+            .buffer
+            .same_device(state.pass.base.device)?;
+
+        state
+            .pass
+            .scope
+            .buffers
+            .merge_single(&buffer_transition.buffer, buffer_transition.state)?;
+        buffer_ids.push(buffer_transition.buffer.tracker_index());
+    }
+
+    state
+        .intermediate_trackers
+        .buffers
+        .set_and_remove_from_usage_scope_sparse(&mut state.pass.scope.buffers, buffer_ids);
+
+    // Process texture transitions
+    for texture_transition in texture_transitions {
+        texture_transition
+            .texture
+            .same_device(state.pass.base.device)?;
+
+        unsafe {
+            state.pass.scope.textures.merge_single(
+                &texture_transition.texture.parent,
+                texture_transition.selector,
+                texture_transition.state,
+            )
+        }?;
+
+        textures.insert_single(texture_transition.texture, texture_transition.state);
+    }
+
+    state
+        .intermediate_trackers
+        .textures
+        .set_and_remove_from_usage_scope_sparse(&mut state.pass.scope.textures, &textures);
+
+    // Record any needed barriers based on tracker data
+    CommandEncoder::drain_barriers(
+        state.pass.base.raw_encoder,
+        &mut state.intermediate_trackers,
+        state.pass.base.snatch_guard,
+    );
+    Ok(())
 }
 
 // Running the compute pass.
@@ -727,6 +794,14 @@ pub(super) fn encode_compute_pass(
             ArcComputeCommand::EndPipelineStatisticsQuery => {
                 let scope = PassErrorScope::EndPipelineStatisticsQuery;
                 end_pipeline_statistics_query(state.pass.base.raw_encoder, &mut state.active_query)
+                    .map_pass_err(scope)?;
+            }
+            ArcComputeCommand::TransitionResources {
+                buffer_transitions,
+                texture_transitions,
+            } => {
+                let scope = PassErrorScope::TransitionResources;
+                transition_resources(&mut state, buffer_transitions, texture_transitions)
                     .map_pass_err(scope)?;
             }
         }
@@ -1313,6 +1388,51 @@ impl Global {
         pass_base!(pass, PassErrorScope::EndPipelineStatisticsQuery)
             .commands
             .push(ArcComputeCommand::EndPipelineStatisticsQuery);
+
+        Ok(())
+    }
+
+    pub fn compute_pass_transition_resources(
+        &self,
+        pass: &mut ComputePass,
+        buffer_transitions: impl Iterator<Item = wgt::BufferTransition<id::BufferId>>,
+        texture_transitions: impl Iterator<Item = wgt::TextureTransition<id::TextureViewId>>,
+    ) -> Result<(), PassStateError> {
+        let scope = PassErrorScope::TransitionResources;
+        let base = pass_base!(pass, scope);
+
+        let hub = &self.hub;
+        let buffer_transitions = pass_try!(
+            base,
+            scope,
+            buffer_transitions
+                .map(|buffer_transition| -> Result<_, InvalidResourceError> {
+                    Ok(wgt::BufferTransition {
+                        buffer: hub.buffers.get(buffer_transition.buffer).get()?,
+                        state: buffer_transition.state,
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        );
+
+        let texture_transitions = pass_try!(
+            base,
+            scope,
+            texture_transitions
+                .map(|texture_transition| -> Result<_, InvalidResourceError> {
+                    Ok(wgt::TextureTransition {
+                        texture: hub.texture_views.get(texture_transition.texture).get()?,
+                        selector: texture_transition.selector,
+                        state: texture_transition.state,
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        );
+
+        base.commands.push(ArcComputeCommand::TransitionResources {
+            buffer_transitions,
+            texture_transitions,
+        });
 
         Ok(())
     }

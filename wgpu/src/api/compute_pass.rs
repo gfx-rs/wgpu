@@ -102,6 +102,31 @@ impl ComputePass<'_> {
             .dispatch_workgroups_indirect(&indirect_buffer.inner, indirect_offset);
     }
 
+    /// Transition resources to an underlying hal resource state. Compute pass version of
+    /// [`CommandEncoder::transition_resources`].
+    ///
+    /// This is an advanced, native-only API (no-op on web). Useful for native interoperability.
+    ///
+    /// A user wanting to interoperate with the underlying native graphics APIs (Vulkan, DirectX12, Metal, etc) can use this API to generate barriers between wgpu commands and
+    /// the native API commands, for synchronization and resource state transition purposes.
+    pub fn transition_resources<'a>(
+        &mut self,
+        buffer_transitions: impl Iterator<Item = wgt::BufferTransition<&'a Buffer>>,
+        texture_transitions: impl Iterator<Item = wgt::TextureTransition<&'a TextureView>>,
+    ) {
+        self.inner.transition_resources(
+            &mut buffer_transitions.map(|t| wgt::BufferTransition {
+                buffer: &t.buffer.inner,
+                state: t.state,
+            }),
+            &mut texture_transitions.map(|t| wgt::TextureTransition {
+                texture: &t.texture.inner,
+                selector: t.selector,
+                state: t.state,
+            }),
+        );
+    }
+
     impl_deferred_command_buffer_actions!();
 
     #[cfg(custom)]
