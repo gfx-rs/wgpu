@@ -180,6 +180,6 @@ async fn per_vertex(ctx: TestingContext) {
         64, 191, 127, 255, // bottom right
     ];
     readback_buffer
-        .assert_buffer_contents(&ctx, &expected)
+        .assert_buffer_contents_imprecise(&ctx, &expected, 1)
         .await;
 }

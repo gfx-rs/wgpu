@@ -20,9 +20,9 @@ use crate::{
     id::CommandEncoderId,
     init_tracker::MemoryInitKind,
     ray_tracing::{
-        ArcBlasBuildEntry, ArcBlasGeometries, ArcBlasTriangleGeometry, ArcTlasInstance,
-        ArcTlasPackage, BlasBuildEntry, BlasGeometries, BuildAccelerationStructureError,
-        OwnedBlasBuildEntry, OwnedTlasPackage, TlasPackage,
+        ArcBlasAabbGeometry, ArcBlasBuildEntry, ArcBlasGeometries, ArcBlasTriangleGeometry,
+        ArcTlasInstance, ArcTlasPackage, BlasBuildEntry, BlasGeometries,
+        BuildAccelerationStructureError, OwnedBlasBuildEntry, OwnedTlasPackage, TlasPackage,
     },
     resource::{Blas, BlasCompactState, Labeled, StagingBuffer, Tlas},
     scratch::ScratchBuffer,
@@ -138,6 +138,19 @@ impl Global {
                                 })
                                 .collect::<Result<_, BuildAccelerationStructureError>>()?;
                             ArcBlasGeometries::TriangleGeometries(tri_geo)
+                        }
+                        BlasGeometries::AabbGeometries(aabb_geometries) => {
+                            let aabb_geo = aabb_geometries
+                                .map(|ag| {
+                                    Ok(ArcBlasAabbGeometry {
+                                        size: ag.size.clone(),
+                                        stride: ag.stride,
+                                        aabb_buffer: self.resolve_buffer_id(ag.aabb_buffer)?,
+                                        primitive_offset: ag.primitive_offset,
+                                    })
+                                })
+                                .collect::<Result<_, BuildAccelerationStructureError>>()?;
+                            ArcBlasGeometries::AabbGeometries(aabb_geo)
                         }
                     };
                     Ok(ArcBlasBuildEntry {
@@ -592,6 +605,11 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                 for (i, mesh) in triangle_geometries.iter().enumerate() {
                     let size_desc = match &blas.sizes {
                         wgt::BlasGeometrySizeDescriptors::Triangles { descriptors } => descriptors,
+                        _ => {
+                            return Err(BuildAccelerationStructureError::BlasGeometryKindMismatch(
+                                blas.error_ident(),
+                            ));
+                        }
                     };
                     if i >= size_desc.len() {
                         return Err(BuildAccelerationStructureError::IncompatibleBlasBuildSizes(
@@ -703,9 +721,10 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                         }) {
                             input_barriers.push(barrier);
                         }
-                        if vertex_buffer.size
-                            < (mesh.size.vertex_count + mesh.first_vertex) as u64
-                                * mesh.vertex_stride
+                        if u64::from(mesh.size.vertex_count)
+                            .checked_add(u64::from(mesh.first_vertex))
+                            .and_then(|end_index| end_index.checked_mul(mesh.vertex_stride))
+                            .is_none_or(|end| vertex_buffer.size < end)
                         {
                             return Err(BuildAccelerationStructureError::InsufficientBufferSize(
                                 vertex_buffer.error_ident(),
@@ -884,6 +903,118 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                     blas_storage.push(BlasStore {
                         blas: blas.clone(),
                         entries: hal::AccelerationStructureEntries::Triangles(triangle_entries),
+                        scratch_buffer_offset,
+                    });
+                }
+            }
+            ArcBlasGeometries::AabbGeometries(aabb_geometries) => {
+                let mut aabb_entries =
+                    Vec::<hal::AccelerationStructureAABBs<dyn hal::DynBuffer>>::new();
+
+                for (i, aabb) in aabb_geometries.iter().enumerate() {
+                    let size_desc = match &blas.sizes {
+                        wgt::BlasGeometrySizeDescriptors::AABBs { descriptors } => descriptors,
+                        _ => {
+                            return Err(BuildAccelerationStructureError::BlasGeometryKindMismatch(
+                                blas.error_ident(),
+                            ));
+                        }
+                    };
+                    if i >= size_desc.len() {
+                        return Err(BuildAccelerationStructureError::IncompatibleBlasBuildSizes(
+                            blas.error_ident(),
+                        ));
+                    }
+                    let size_desc = &size_desc[i];
+
+                    if size_desc.flags != aabb.size.flags {
+                        return Err(BuildAccelerationStructureError::IncompatibleBlasFlags(
+                            blas.error_ident(),
+                            size_desc.flags,
+                            aabb.size.flags,
+                        ));
+                    }
+
+                    if size_desc.primitive_count < aabb.size.primitive_count {
+                        return Err(
+                            BuildAccelerationStructureError::IncompatibleBlasAabbPrimitiveCount(
+                                blas.error_ident(),
+                                size_desc.primitive_count,
+                                aabb.size.primitive_count,
+                            ),
+                        );
+                    }
+
+                    if aabb.primitive_offset % 8 != 0 {
+                        return Err(
+                            BuildAccelerationStructureError::UnalignedAabbPrimitiveOffset(
+                                blas.error_ident(),
+                            ),
+                        );
+                    }
+
+                    if aabb.stride < wgt::AABB_GEOMETRY_MIN_STRIDE || aabb.stride % 8 != 0 {
+                        return Err(BuildAccelerationStructureError::InvalidAabbStride(
+                            blas.error_ident(),
+                            aabb.stride,
+                        ));
+                    }
+
+                    let aabb_buffer = aabb.aabb_buffer.clone();
+                    let aabb_pending = state.tracker.buffers.set_single(
+                        &aabb_buffer,
+                        BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                    );
+                    let aabb_raw = {
+                        let aabb_raw = aabb.aabb_buffer.as_ref().try_raw(state.snatch_guard)?;
+                        let aabb_buffer = &aabb.aabb_buffer;
+                        aabb_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
+
+                        if let Some(barrier) = aabb_pending.map(|pending| {
+                            pending.into_hal(aabb_buffer.as_ref(), state.snatch_guard)
+                        }) {
+                            input_barriers.push(barrier);
+                        }
+
+                        let required_end = aabb.primitive_offset as u64
+                            + aabb.size.primitive_count as u64 * aabb.stride;
+                        if aabb_buffer.size < required_end {
+                            return Err(BuildAccelerationStructureError::InsufficientBufferSize(
+                                aabb_buffer.error_ident(),
+                                aabb_buffer.size,
+                                required_end,
+                            ));
+                        }
+
+                        state.buffer_memory_init_actions.extend(
+                            aabb_buffer.initialization_status.read().create_action(
+                                aabb_buffer,
+                                aabb.primitive_offset as u64..required_end,
+                                MemoryInitKind::NeedsInitializedMemory,
+                            ),
+                        );
+                        aabb_raw
+                    };
+
+                    aabb_entries.push(hal::AccelerationStructureAABBs {
+                        buffer: Some(aabb_raw),
+                        offset: aabb.primitive_offset,
+                        count: aabb.size.primitive_count,
+                        stride: aabb.stride,
+                        flags: aabb.size.flags,
+                    });
+                }
+
+                {
+                    let scratch_buffer_offset = *scratch_buffer_blas_size;
+                    *scratch_buffer_blas_size += align_to(
+                        blas.size_info.build_scratch_size as u32,
+                        state.device.alignments.ray_tracing_scratch_buffer_alignment,
+                    ) as u64;
+
+                    blas_storage.push(BlasStore {
+                        blas: blas.clone(),
+                        entries: hal::AccelerationStructureEntries::AABBs(aabb_entries),
                         scratch_buffer_offset,
                     });
                 }

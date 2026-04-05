@@ -296,6 +296,7 @@ impl<W: Write> Writer<W> {
             cooperative_matrix: bool,
             draw_index: bool,
             ray_tracing_pipeline: bool,
+            per_vertex: bool,
         }
         let mut needed = RequiredEnabled {
             mesh_shaders: module.uses_mesh_shaders(),
@@ -320,6 +321,12 @@ impl<W: Write> Writer<W> {
                 ..
             } => {
                 needed.mesh_shaders = true;
+            }
+            crate::Binding::Location {
+                interpolation: Some(crate::Interpolation::PerVertex),
+                ..
+            } => {
+                needed.per_vertex = true;
             }
             crate::Binding::BuiltIn(crate::BuiltIn::DrawIndex) => needed.draw_index = true,
             crate::Binding::BuiltIn(
@@ -448,6 +455,10 @@ impl<W: Write> Writer<W> {
         }
         if needed.ray_tracing_pipeline {
             writeln!(self.out, "enable wgpu_ray_tracing_pipeline;")?;
+            any_written = true;
+        }
+        if needed.per_vertex {
+            writeln!(self.out, "enable wgpu_per_vertex;")?;
             any_written = true;
         }
         if any_written {

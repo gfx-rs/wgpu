@@ -885,11 +885,11 @@ fn dispatch_indirect(
         return Err(ComputePassErrorInner::UnalignedIndirectBufferOffset(offset));
     }
 
-    let end_offset = offset + size_of::<wgt::DispatchIndirectArgs>() as u64;
-    if end_offset > buffer.size {
+    let args_size = size_of::<wgt::DispatchIndirectArgs>() as u64;
+    if buffer.size < args_size || buffer.size - args_size < offset {
         return Err(ComputePassErrorInner::IndirectBufferOverrun {
             offset,
-            end_offset,
+            end_offset: offset + args_size,
             buffer_size: buffer.size,
         });
     }

@@ -1233,6 +1233,8 @@ fn int64_capability() {
 fn per_vertex_capability() {
     check_validation! {
             r#"
+            enable wgpu_per_vertex;
+
             @fragment
             fn fs_main(@location(0) @interpolate(per_vertex) v: array<f32, 3>) -> @location(0) vec4<f32> {
                 return vec4(v[0], v[1], v[2], 1.0);
@@ -3157,6 +3159,27 @@ struct S {
 }
 
 #[test]
+fn global_var_must_use() {
+    check(
+        r#"
+@must_use
+@group(0)
+@binding(0)
+var<storage> x : array<u32>;
+"#,
+        r#"error: attribute `@must_use` is only valid on function declarations
+  ┌─ wgsl:2:2
+  │
+2 │ @must_use
+  │  ^^^^^^^^
+  │
+  = note: place `@must_use` on a function declaration with a return type
+
+"#,
+    )
+}
+
+#[test]
 fn function_param_redefinition_as_param() {
     check(
         "
@@ -4958,6 +4981,38 @@ fn mesh_shader_enable_extension() {
     );
 }
 
+#[test]
+fn per_vertex_enable_extension() {
+    // `task_payload` address space
+    check_extension_validation!(
+        Capabilities::PER_VERTEX,
+        r#"@fragment
+fn fs_main(@location(0) @interpolate(per_vertex) v: array<f32, 3>) -> @location(0) vec4<f32> {
+    return vec4(v[0], v[1], v[2], 1.0);
+}
+
+        "#,
+        r#"error: the `wgpu_per_vertex` enable extension is not enabled
+  ┌─ wgsl:2:38
+  │
+2 │ fn fs_main(@location(0) @interpolate(per_vertex) v: array<f32, 3>) -> @location(0) vec4<f32> {
+  │                                      ^^^^^^^^^^ the `wgpu_per_vertex` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_per_vertex;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Argument(
+                0,
+                naga::valid::VaryingError::UnsupportedCapability(
+                    naga::valid::Capabilities::PER_VERTEX
+                )
+            ),
+            ..
+        })
+    );
+}
+
 /// Checks that every ray tracing pipeline binding in naga is invalid in other stages.
 #[test]
 fn check_ray_tracing_pipeline_bindings() {
@@ -5202,4 +5257,19 @@ fn bitwise_shift_errors() {
         }),
         naga::valid::Capabilities::SHADER_INT64
     }
+}
+
+#[test]
+fn unterminated_block_comment_errors() {
+    check_success("/* Closed */");
+
+    check_error_matches("/* unterminated", "unterminated block comment");
+    check_error_matches(
+        "/* unterminated /* terimated inner */",
+        "unterminated block comment",
+    );
+    check_error_matches(
+        "const N: u32 = 1u; /* Trailing unterminated",
+        "unterminated block comment",
+    )
 }

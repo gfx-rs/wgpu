@@ -21,6 +21,7 @@ pub(crate) struct EnableExtensions {
     wgpu_cooperative_matrix: bool,
     draw_index: bool,
     primitive_index: bool,
+    per_vertex: bool,
 }
 
 impl EnableExtensions {
@@ -36,6 +37,7 @@ impl EnableExtensions {
             wgpu_cooperative_matrix: false,
             draw_index: false,
             primitive_index: false,
+            per_vertex: false,
         }
     }
 
@@ -56,6 +58,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::WgpuCooperativeMatrix => &mut self.wgpu_cooperative_matrix,
             ImplementedEnableExtension::DrawIndex => &mut self.draw_index,
             ImplementedEnableExtension::PrimitiveIndex => &mut self.primitive_index,
+            ImplementedEnableExtension::PerVertex => &mut self.per_vertex,
         };
         *field = true;
     }
@@ -75,6 +78,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::WgpuCooperativeMatrix => self.wgpu_cooperative_matrix,
             ImplementedEnableExtension::DrawIndex => self.draw_index,
             ImplementedEnableExtension::PrimitiveIndex => self.primitive_index,
+            ImplementedEnableExtension::PerVertex => self.per_vertex,
         }
     }
 
@@ -127,6 +131,7 @@ impl EnableExtension {
     const SUBGROUPS: &'static str = "subgroups";
     const PRIMITIVE_INDEX: &'static str = "primitive_index";
     const DRAW_INDEX: &'static str = "draw_index";
+    const PER_VERTEX: &'static str = "wgpu_per_vertex";
 
     /// Convert from a sentinel word in WGSL into its associated [`EnableExtension`], if possible.
     pub(crate) fn from_ident(word: &str, span: Span) -> Result<'_, Self> {
@@ -150,6 +155,7 @@ impl EnableExtension {
             Self::SUBGROUPS => Self::Unimplemented(UnimplementedEnableExtension::Subgroups),
             Self::DRAW_INDEX => Self::Implemented(ImplementedEnableExtension::DrawIndex),
             Self::PRIMITIVE_INDEX => Self::Implemented(ImplementedEnableExtension::PrimitiveIndex),
+            Self::PER_VERTEX => Self::Implemented(ImplementedEnableExtension::PerVertex),
             _ => return Err(Box::new(Error::UnknownEnableExtension(span, word))),
         })
     }
@@ -170,6 +176,7 @@ impl EnableExtension {
                 ImplementedEnableExtension::DrawIndex => Self::DRAW_INDEX,
                 ImplementedEnableExtension::PrimitiveIndex => Self::PRIMITIVE_INDEX,
                 ImplementedEnableExtension::WgpuRayTracingPipeline => Self::RAY_TRACING_PIPELINE,
+                ImplementedEnableExtension::PerVertex => Self::PER_VERTEX,
             },
             Self::Unimplemented(kind) => match kind {
                 UnimplementedEnableExtension::Subgroups => Self::SUBGROUPS,
@@ -218,6 +225,8 @@ pub enum ImplementedEnableExtension {
     ///
     /// [`enable primitive-index;`]: https://www.w3.org/TR/WGSL/#extension-primitive_index
     PrimitiveIndex,
+    /// Enables the `wgpu_per_vertex` extension, allows using `@interpolate(per_vertex)` attribute in WGSL, native only.
+    PerVertex,
 }
 
 impl ImplementedEnableExtension {
@@ -233,6 +242,7 @@ impl ImplementedEnableExtension {
         Self::WgpuCooperativeMatrix,
         Self::DrawIndex,
         Self::PrimitiveIndex,
+        Self::PerVertex,
     ];
 
     /// Returns slice of all variants of [`ImplementedEnableExtension`].
@@ -254,6 +264,7 @@ impl ImplementedEnableExtension {
             Self::WgpuRayTracingPipeline => C::RAY_TRACING_PIPELINE,
             Self::DrawIndex => C::DRAW_INDEX,
             Self::PrimitiveIndex => C::PRIMITIVE_INDEX,
+            Self::PerVertex => C::PER_VERTEX,
         }
     }
 }

@@ -3876,6 +3876,7 @@ impl Device {
                     &final_entry_point_name,
                     stage,
                     io,
+                    None,
                 )?;
             }
         }
@@ -4406,6 +4407,7 @@ impl Device {
                                 &_vertex_entry_point_name,
                                 stage,
                                 io,
+                                Some(desc.primitive.topology),
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
@@ -4449,6 +4451,7 @@ impl Device {
                                 &_task_entry_point_name,
                                 stage,
                                 io,
+                                Some(desc.primitive.topology),
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
@@ -4490,6 +4493,7 @@ impl Device {
                                 &_mesh_entry_point_name,
                                 stage,
                                 io,
+                                Some(desc.primitive.topology),
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
@@ -4541,6 +4545,7 @@ impl Device {
                             &fragment_entry_point_name,
                             stage,
                             io,
+                            Some(desc.primitive.topology),
                         )
                         .map_err(stage_err)?;
                     validated_stages |= stage_bit;

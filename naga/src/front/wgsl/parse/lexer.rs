@@ -89,6 +89,11 @@ pub enum Token<'a> {
     /// A module-level doc comment, beginning with `//!` or `/*!`.
     ModuleDocComment(&'a str),
 
+    /// A block comment that is incomplete, and has not been closed with */.
+    ///
+    /// It's expected that the parser will consider this to be an error.
+    UnterminatedBlockComment(&'a str),
+
     /// The end of the input.
     End,
 }
@@ -360,7 +365,7 @@ fn consume_token(
                         }
                     }
 
-                    (Token::End, "")
+                    (Token::UnterminatedBlockComment(input), "")
                 }
                 Some('=') => (Token::AssignmentOperation(cur), chars.as_str()),
                 _ => (Token::Operation(cur), og_chars),
@@ -1261,5 +1266,13 @@ fn test_doc_comments_module() {
             Token::Word("const"),
             Token::ModuleDocComment("//! After anything else is not."),
         ],
+    );
+}
+
+#[test]
+fn test_block_comment_unclosed() {
+    sub_test_with_and_without_doc_comments(
+        "/** Unclosed Doc Comment",
+        &[Token::UnterminatedBlockComment("/** Unclosed Doc Comment")],
     );
 }
