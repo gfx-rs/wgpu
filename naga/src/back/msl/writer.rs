@@ -7376,7 +7376,7 @@ template <typename A>
                             if access.contains(crate::StorageAccess::STORE)
                                 && ep.stage == crate::ShaderStage::Fragment =>
                         {
-                            return Err(Error::UnsupportedWriteableStorageBuffer)
+                            return Err(Error::UnsupportedWritableStorageBuffer)
                         }
                         crate::AddressSpace::Handle => {
                             match module.types[var.ty].inner {
@@ -7397,7 +7397,7 @@ template <typename A>
                                         && (ep.stage == crate::ShaderStage::Vertex
                                             || ep.stage == crate::ShaderStage::Fragment)
                                     {
-                                        return Err(Error::UnsupportedWriteableStorageTexture(
+                                        return Err(Error::UnsupportedWritableStorageTexture(
                                             ep.stage,
                                         ));
                                     }
