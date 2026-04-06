@@ -116,7 +116,8 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     // NOW we can call get_mapped_range.
     {
         let view = buffer_slice.get_mapped_range();
-        local_buffer.copy_from_slice(bytemuck::cast_slice(&view));
+        let data: Vec<u32> = bytemuck::allocation::pod_collect_to_vec(&view);
+        local_buffer.copy_from_slice(&data);
     }
     log::info!("Results written to local buffer.");
     // We need to make sure all `BufferView`'s are dropped before we do what we're about
