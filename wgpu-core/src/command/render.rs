@@ -44,7 +44,8 @@ use crate::{
     },
     snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker, UsageScope},
-    validation, Label,
+    validation::{self, check_workgroup_sizes},
+    Label,
 };
 
 #[cfg(feature = "serde")]
@@ -1189,7 +1190,15 @@ impl RenderPassInfo {
                     .flags
                     .contains(wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL)
             {
-                wgt::TextureUses::DEPTH_STENCIL_READ | wgt::TextureUses::RESOURCE
+                // If the texture supports TEXTURE_BINDING, it can be used as a shader
+                // resource and a read-only depth attachment simultaneously. But if it
+                // doesn't support TEXTURE_BINDING, don't attempt to transition it to a
+                // shader resource state, because DX12 will raise an error.
+                if view.desc.usage.contains(TextureUsages::TEXTURE_BINDING) {
+                    wgt::TextureUses::DEPTH_STENCIL_READ | wgt::TextureUses::RESOURCE
+                } else {
+                    wgt::TextureUses::DEPTH_STENCIL_READ
+                }
             } else {
                 wgt::TextureUses::DEPTH_STENCIL_WRITE
             };
@@ -2732,21 +2741,17 @@ fn draw_mesh_tasks(
         )
     };
 
-    if group_count_x > groups_size_limit
-        || group_count_y > groups_size_limit
-        || group_count_z > groups_size_limit
-        || group_count_x * group_count_y * group_count_z > max_groups
-    {
-        return Err(DrawError::InvalidGroupSize {
-            current: [group_count_x, group_count_y, group_count_z],
-            limit: groups_size_limit,
-            max_total: max_groups,
-        }
-        .into());
-    }
+    let total_count = check_workgroup_sizes(
+        &[group_count_x, group_count_y, group_count_z],
+        &[groups_size_limit, groups_size_limit, groups_size_limit],
+        "max_task_mesh_workgroups_per_dimension",
+        max_groups,
+        "max_task_mesh_workgroup_total_count",
+    )
+    .map_err(|err| RenderPassErrorInner::Draw(err.into()))?;
 
     unsafe {
-        if group_count_x > 0 && group_count_y > 0 && group_count_z > 0 {
+        if total_count > 0 {
             state.pass.base.raw_encoder.draw_mesh_tasks(
                 group_count_x,
                 group_count_y,
@@ -2792,7 +2797,7 @@ fn multi_draw_indirect(
         return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
     }
 
-    let stride = get_stride_of_indirect_args(family);
+    let stride = get_src_stride_of_indirect_args(family);
 
     let end_offset = offset + stride * count as u64;
     if end_offset > indirect_buffer.size {
@@ -2910,10 +2915,15 @@ fn multi_draw_indirect(
             let draw_data = draw_ctx.add(offset + stride * i as u64)?;
 
             if draw_data.buffer_index == current_draw_data.buffer_index {
-                debug_assert_eq!(
-                    draw_data.offset,
-                    current_draw_data.offset + stride * current_draw_data.count as u64
-                );
+                #[cfg(debug_assertions)]
+                {
+                    let dst_stride =
+                        get_dst_stride_of_indirect_args(state.pass.base.device.backend(), family);
+                    debug_assert_eq!(
+                        draw_data.offset,
+                        current_draw_data.offset + dst_stride * current_draw_data.count as u64
+                    );
+                }
                 current_draw_data.count += 1;
             } else {
                 draw_ctx.draw(current_draw_data);
@@ -2964,7 +2974,7 @@ fn multi_draw_indirect_count(
         validate_mesh_draw_multiview(state)?;
     }
 
-    let stride = get_stride_of_indirect_args(family);
+    let stride = get_src_stride_of_indirect_args(family);
 
     state
         .pass
@@ -3833,10 +3843,23 @@ impl Global {
     }
 }
 
-pub(crate) const fn get_stride_of_indirect_args(family: DrawCommandFamily) -> u64 {
+pub(crate) const fn get_src_stride_of_indirect_args(family: DrawCommandFamily) -> u64 {
     match family {
         DrawCommandFamily::Draw => size_of::<wgt::DrawIndirectArgs>() as u64,
         DrawCommandFamily::DrawIndexed => size_of::<wgt::DrawIndexedIndirectArgs>() as u64,
         DrawCommandFamily::DrawMeshTasks => size_of::<wgt::DispatchIndirectArgs>() as u64,
     }
+}
+
+pub(crate) const fn get_dst_stride_of_indirect_args(
+    backend: wgt::Backend,
+    family: DrawCommandFamily,
+) -> u64 {
+    // space for D3D12 special constants
+    let extra = if matches!(backend, wgt::Backend::Dx12) {
+        3 * size_of::<u32>() as u64
+    } else {
+        0
+    };
+    extra + get_src_stride_of_indirect_args(family)
 }

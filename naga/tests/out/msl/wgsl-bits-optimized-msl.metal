@@ -5,7 +5,7 @@
 using metal::uint;
 
 
-kernel void main_(
+[[max_total_threads_per_threadgroup(1)]] kernel void main_(
 ) {
     int i = 0;
     metal::int2 i2_ = metal::int2(0);

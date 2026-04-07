@@ -69,7 +69,7 @@ fragment fragment_Output fragment_(
 
 struct computeInput {
 };
-kernel void compute(
+[[max_total_threads_per_threadgroup(1)]] kernel void compute(
   metal::uint3 global_id [[thread_position_in_grid]]
 , metal::uint3 local_id [[thread_position_in_threadgroup]]
 , uint local_index [[thread_index_in_threadgroup]]

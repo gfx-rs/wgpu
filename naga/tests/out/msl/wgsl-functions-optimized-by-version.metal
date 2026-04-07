@@ -26,7 +26,7 @@ uint test_packed_integer_dot_product(
     return c_8_;
 }
 
-kernel void main_(
+[[max_total_threads_per_threadgroup(1)]] kernel void main_(
 ) {
     uint _e0 = test_packed_integer_dot_product();
     return;

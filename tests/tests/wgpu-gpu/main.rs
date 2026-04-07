@@ -5,6 +5,7 @@ mod regression {
     pub mod issue_4122;
     pub mod issue_4485;
     pub mod issue_4514;
+    pub mod issue_5231_9343;
     pub mod issue_5553;
     pub mod issue_6317;
     pub mod issue_6467;
@@ -129,6 +130,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     regression::issue_4122::all_tests(&mut tests);
     regression::issue_4485::all_tests(&mut tests);
     regression::issue_4514::all_tests(&mut tests);
+    regression::issue_5231_9343::all_tests(&mut tests);
     regression::issue_5553::all_tests(&mut tests);
     regression::issue_6317::all_tests(&mut tests);
     regression::issue_6467::all_tests(&mut tests);

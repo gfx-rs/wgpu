@@ -669,7 +669,9 @@ impl super::CapabilitiesQuery {
                     // Mesh shaders don't work on virtual devices even if they should be supported. CI thing
                 && !is_virtual;
 
-        let msl_version = if available!(macos = 15.0, ios = 18.0, tvos = 18.0, visionos = 2.0) {
+        let msl_version = if available!(macos = 26.0, ios = 26.0, tvos = 26.0, visionos = 26.0) {
+            MTLLanguageVersion::Version4_0
+        } else if available!(macos = 15.0, ios = 18.0, tvos = 18.0, visionos = 2.0) {
             MTLLanguageVersion::Version3_2
         } else if available!(macos = 14.0, ios = 17.0, tvos = 17.0, visionos = 1.0) {
             MTLLanguageVersion::Version3_1
@@ -932,6 +934,9 @@ impl super::CapabilitiesQuery {
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=6
             // These are older checks but still hold true; no entry in this table supports
             // more than 1024 threads.
+            // **Note:** this is used to emit the `[[max_total_threads_per_threadgroup]]`
+            // attribute. This is how we guarantee that compute dispatches will always run
+            // and not silently fail due to hardware register pressure or occupancy limits.
             max_threads_per_group: if Self::supports_any(
                 device,
                 &[
@@ -1101,6 +1106,7 @@ impl super::CapabilitiesQuery {
             } else {
                 false
             },
+            shader_per_vertex: family_check && device.supportsFamily(MTLGPUFamily::Apple10),
         }
     }
 
@@ -1209,6 +1215,8 @@ impl super::CapabilitiesQuery {
             self.shader_barycentrics && self.msl_version >= MTLLanguageVersion::Version2_2,
         );
 
+        features.set(F::SHADER_PER_VERTEX, self.shader_per_vertex);
+
         if self.supports_simd_scoped_operations {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);
         }
@@ -1264,6 +1272,11 @@ impl super::CapabilitiesQuery {
         downlevel
             .flags
             .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
+
+        downlevel.flags.set(
+            wgt::DownlevelFlags::MSL2_1,
+            self.msl_version >= MTLLanguageVersion::Version2_1,
+        );
 
         let limits = crate::auxil::adjust_raw_limits(wgt::Limits {
             //

@@ -6,6 +6,7 @@ use wgt::error::{ErrorType, WebGpuError};
 
 use super::bind::BinderError;
 use crate::command::pass;
+use crate::validation::InvalidWorkgroupSizeError;
 use crate::{
     binding_model::{BindingError, ImmediateUploadError, LateMinBufferBindingSizeMismatch},
     resource::{
@@ -60,14 +61,8 @@ pub enum DrawError {
         if *wanted_mesh_pipeline {"standard"} else {"mesh shader"},
     )]
     WrongPipelineType { wanted_mesh_pipeline: bool },
-    #[error(
-        "Each current draw group size dimension ({current:?}) must be less or equal to {limit}, and the product must be less or equal to {max_total}"
-    )]
-    InvalidGroupSize {
-        current: [u32; 3],
-        limit: u32,
-        max_total: u32,
-    },
+    #[error(transparent)]
+    InvalidGroupSize(#[from] InvalidWorkgroupSizeError),
     #[error(
         "Mesh shader calls in multiview render passes require enabling the `EXPERIMENTAL_MESH_SHADER_MULTIVIEW` feature, and the highest bit ({highest_view_index}) in the multiview mask must be <= `Limits::max_multiview_view_count` ({max_multiviews})"
     )]

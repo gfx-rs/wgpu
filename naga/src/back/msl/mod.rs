@@ -191,6 +191,7 @@ enum ResolvedInterpolation {
     SamplePerspective,
     SampleNoPerspective,
     Flat,
+    PerVertex,
 }
 
 // Note: some of these should be removed in favor of proper IR validation.
@@ -243,6 +244,8 @@ pub enum Error {
     EntryPointNotFound(ir::ShaderStage, String),
     #[error("Cannot use mesh shader syntax prior to MSL 3.0")]
     UnsupportedMeshShader,
+    #[error("Per vertex fragment inputs are not supported prior to MSL 4.0")]
+    PerVertexNotSupported,
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -823,6 +826,7 @@ impl ResolvedInterpolation {
             (I::Linear, S::Centroid) => Self::CentroidNoPerspective,
             (I::Linear, S::Sample) => Self::SampleNoPerspective,
             (I::Flat, _) => Self::Flat,
+            (I::PerVertex, S::Center) => Self::PerVertex,
             _ => unreachable!(),
         }
     }
@@ -836,6 +840,7 @@ impl ResolvedInterpolation {
             Self::SamplePerspective => "sample_perspective",
             Self::SampleNoPerspective => "sample_no_perspective",
             Self::Flat => "flat",
+            Self::PerVertex => unreachable!(),
         };
         out.write_str(identifier)?;
         Ok(())
@@ -919,7 +924,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING
         | Caps::STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
         | Caps::COOPERATIVE_MATRIX
-        // No PER_VERTEX
+        | Caps::PER_VERTEX
         // No RAY_TRACING_PIPELINE
         // No DRAW_INDEX
         // No MEMORY_DECORATION_VOLATILE

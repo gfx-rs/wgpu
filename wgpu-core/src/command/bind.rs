@@ -349,6 +349,8 @@ impl Binder {
         new: &Arc<PipelineLayout>,
         late_sized_buffer_groups: &[LateSizedBufferGroup],
     ) -> bool {
+        self.update_late_buffer_bindings(late_sized_buffer_groups);
+
         if let Some(old) = self.pipeline_layout.as_ref() {
             if old.is_equal(new) {
                 return false;
@@ -358,33 +360,6 @@ impl Binder {
         let old = self.pipeline_layout.replace(new.clone());
 
         self.manager.update_expectations(&new.bind_group_layouts);
-
-        // Update the buffer binding sizes that are required by shaders.
-
-        for (payload, late_group) in self.payloads.iter_mut().zip(late_sized_buffer_groups) {
-            payload.late_bindings_effective_count = late_group.shader_sizes.len();
-            // Update entries that already exist as the bind group was bound before the pipeline
-            // was bound.
-            for (late_binding, &shader_expect_size) in payload
-                .late_buffer_bindings
-                .iter_mut()
-                .zip(late_group.shader_sizes.iter())
-            {
-                late_binding.shader_expect_size = shader_expect_size;
-            }
-            // Add new entries for the bindings that were not known when the bind group was bound.
-            if late_group.shader_sizes.len() > payload.late_buffer_bindings.len() {
-                for &shader_expect_size in
-                    late_group.shader_sizes[payload.late_buffer_bindings.len()..].iter()
-                {
-                    payload.late_buffer_bindings.push(LateBufferBinding {
-                        binding_index: 0,
-                        shader_expect_size,
-                        bound_size: 0,
-                    });
-                }
-            }
-        }
 
         if let Some(old) = old {
             // root constants are the base compatibility property
@@ -523,5 +498,37 @@ impl Binder {
             }
         }
         Ok(())
+    }
+
+    /// This must be called even when a new pipeline has the same layout
+    /// as the previous one, because different pipelines can have different
+    /// shader-expected buffer sizes even with identical layouts.
+    fn update_late_buffer_bindings(&mut self, late_sized_buffer_groups: &[LateSizedBufferGroup]) {
+        for (payload, late_group) in self.payloads.iter_mut().zip(late_sized_buffer_groups) {
+            payload.late_bindings_effective_count = late_group.shader_sizes.len();
+
+            // Update entries that already exist as the bind group was bound before the pipeline
+            // was bound.
+            for (late_binding, &shader_expect_size) in payload
+                .late_buffer_bindings
+                .iter_mut()
+                .zip(late_group.shader_sizes.iter())
+            {
+                late_binding.shader_expect_size = shader_expect_size;
+            }
+
+            // Add new entries for the bindings that were not known when the bind group was bound.
+            if late_group.shader_sizes.len() > payload.late_buffer_bindings.len() {
+                for &shader_expect_size in
+                    late_group.shader_sizes[payload.late_buffer_bindings.len()..].iter()
+                {
+                    payload.late_buffer_bindings.push(LateBufferBinding {
+                        binding_index: 0,
+                        shader_expect_size,
+                        bound_size: 0,
+                    });
+                }
+            }
+        }
     }
 }

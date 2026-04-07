@@ -215,6 +215,16 @@ impl TypeContext<'_> {
             _ => None,
         }
     }
+
+    fn unwrap_array(self) -> Self {
+        match self.gctx.types[self.handle].inner {
+            crate::TypeInner::Array { base, .. } => Self {
+                handle: base,
+                ..self
+            },
+            _ => self,
+        }
+    }
 }
 
 impl Display for TypeContext<'_> {
@@ -2285,6 +2295,7 @@ impl<W: Write> Writer<W> {
                     // to signed.
                     self.put_bitcasted_expression(
                         context.resolve_type(expr_handle),
+                        expr_handle,
                         context,
                         &|writer, context, is_scoped| {
                             writer.put_binop(
@@ -2296,6 +2307,7 @@ impl<W: Write> Writer<W> {
                                 &|writer, expr, context, _is_scoped| {
                                     writer.put_bitcasted_expression(
                                         &to_unsigned(context.resolve_type(expr))?,
+                                        expr,
                                         context,
                                         &|writer, context, is_scoped| {
                                             writer.put_expression(expr, context, is_scoped)
@@ -3037,6 +3049,7 @@ impl<W: Write> Writer<W> {
     fn put_bitcasted_expression<F>(
         &mut self,
         cast_to: &crate::TypeInner,
+        inner_expr: Handle<crate::Expression>,
         context: &ExpressionContext,
         put_expression: &F,
     ) -> BackendResult
@@ -3052,9 +3065,18 @@ impl<W: Write> Writer<W> {
             _ => return Err(Error::UnsupportedBitCast(cast_to.clone())),
         };
         write!(self.out, ">(")?;
-        put_expression(self, context, true)?;
-        write!(self.out, ")")?;
 
+        // if it's packed, we must unpack it (e.g., float3(val)) before the bitcast.
+        if let Some(scalar) = context.get_packed_vec_kind(inner_expr) {
+            put_numeric_type(&mut self.out, scalar, &[crate::VectorSize::Tri])?;
+            write!(self.out, "(")?;
+            put_expression(self, context, true)?;
+            write!(self.out, ")")?;
+        } else {
+            put_expression(self, context, true)?;
+        }
+
+        write!(self.out, ")")?;
         Ok(())
     }
 
@@ -7114,6 +7136,7 @@ template <typename A>
             let stage_in_name = self.namer.call(&format!("{fun_name}Input"));
             let varyings_member_name = self.namer.call("varyings");
             let mut has_varyings = false;
+
             if !flattened_arguments.is_empty() {
                 if !do_vertex_pulling {
                     writeln!(self.out, "struct {stage_in_name} {{")?;
@@ -7155,8 +7178,25 @@ template <typename A>
                         );
                     } else {
                         has_varyings = true;
-                        write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
-                        resolved.try_fmt(&mut self.out)?;
+                        if let super::ResolvedBinding::User {
+                            prefix,
+                            index,
+                            interpolation: Some(super::ResolvedInterpolation::PerVertex),
+                        } = resolved
+                        {
+                            if options.lang_version < (4, 0) {
+                                return Err(Error::PerVertexNotSupported);
+                            }
+                            write!(
+                                self.out,
+                                "{}{NAMESPACE}::vertex_value<{}> {name} [[user({prefix}{index})]]",
+                                back::INDENT,
+                                ty_name.unwrap_array()
+                            )?;
+                        } else {
+                            write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
+                            resolved.try_fmt(&mut self.out)?;
+                        }
                         writeln!(self.out, ";")?;
                     }
                 }
@@ -7294,6 +7334,16 @@ template <typename A>
             } else {
                 fun_name.clone()
             };
+
+            // https://web.archive.org/web/20181029003926/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
+            if ep.stage == crate::ShaderStage::Compute && options.lang_version >= (2, 1) {
+                let total_threads =
+                    ep.workgroup_size[0] * ep.workgroup_size[1] * ep.workgroup_size[2];
+                write!(
+                    self.out,
+                    "[[max_total_threads_per_threadgroup({total_threads})]] "
+                )?;
+            }
 
             // Write the entry point function's name, and begin its argument list.
             if let Some(em_str) = em_str {
@@ -8000,16 +8050,51 @@ template <typename A>
                             {
                                 write!(self.out, "{{}}, ")?;
                             }
-                            if let Some(crate::Binding::Location { .. }) = member.binding {
-                                if has_varyings {
-                                    write!(self.out, "{varyings_member_name}.")?;
+                            match member.binding {
+                                Some(crate::Binding::Location {
+                                    interpolation: Some(crate::Interpolation::PerVertex),
+                                    ..
+                                }) => {
+                                    writeln!(
+                                        self.out,
+                                        "{0}{{ {1}.{2}.get({NAMESPACE}::vertex_index::first), {1}.{2}.get({NAMESPACE}::vertex_index::second), {1}.{2}.get({NAMESPACE}::vertex_index::third) }}",
+                                        back::INDENT,
+                                        varyings_member_name,
+                                        arg_name,
+                                    )?;
+                                    continue;
                                 }
+                                Some(crate::Binding::Location { .. }) => {
+                                    if has_varyings {
+                                        write!(self.out, "{varyings_member_name}.")?;
+                                    }
+                                }
+                                _ => (),
                             }
                             write!(self.out, "{name}")?;
                         }
                         writeln!(self.out, " }};")?;
                     }
                     _ => match arg.binding {
+                        Some(crate::Binding::Location {
+                            interpolation: Some(crate::Interpolation::PerVertex),
+                            ..
+                        }) => {
+                            let ty_name = TypeContext {
+                                handle: arg.ty,
+                                gctx: module.to_ctx(),
+                                names: &self.names,
+                                access: crate::StorageAccess::empty(),
+                                first_time: false,
+                            };
+                            writeln!(
+                                self.out,
+                                "{0}const {ty_name} {arg_name} = {{ {1}.{2}.get({NAMESPACE}::vertex_index::first), {1}.{2}.get({NAMESPACE}::vertex_index::second), {1}.{2}.get({NAMESPACE}::vertex_index::third) }};",
+                                back::INDENT,
+                                varyings_member_name,
+                                arg_name,
+                            )?;
+                        }
                         Some(crate::Binding::Location { .. })
                         | Some(crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. })) => {
                             if has_varyings {

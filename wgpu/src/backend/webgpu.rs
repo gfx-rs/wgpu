@@ -1120,11 +1120,19 @@ impl ContextWebGpu {
             }
         };
 
-        // Not returning this error because it is a type error that shouldn't happen unless
-        // the browser, JS builtin objects, or wasm bindings are misbehaving somehow.
-        let context: webgpu_sys::GpuCanvasContext = context
-            .dyn_into()
-            .expect("canvas context is not a GPUCanvasContext");
+        // An error here indicated that WebGPU is disabled in the browser.
+        let context: webgpu_sys::GpuCanvasContext =
+            context
+                .dyn_into()
+                .map_err(|actual| crate::CreateSurfaceError {
+                    inner: crate::CreateSurfaceErrorKind::Web(format!(
+                        "`canvas.getContext()` returned a value that did not coerce to \
+                        `GPUCanvasContext`. \
+                        This is likely because WebGPU is disabled in this browser. \
+                        Expected: `GPUCanvasContext`, Actual: `{}`",
+                        actual.to_string()
+                    )),
+                })?;
 
         Ok(WebSurface {
             gpu: self.gpu.clone(),
