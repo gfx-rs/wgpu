@@ -147,6 +147,29 @@ impl SemaphoreList {
         self.check();
     }
 
+    /// Remove all entries matching `semaphore` from the list. Returns `true`
+    /// if anything was removed.
+    pub fn remove(&mut self, semaphore: vk::Semaphore) -> bool {
+        let mut removed = false;
+        let mut i = 0;
+        while i < self.semaphores.len() {
+            if self.semaphores[i] == semaphore {
+                self.semaphores.swap_remove(i);
+                if !self.values.is_empty() {
+                    self.values.swap_remove(i);
+                }
+                if !self.stage_masks.is_empty() {
+                    self.stage_masks.swap_remove(i);
+                }
+                removed = true;
+            } else {
+                i += 1;
+            }
+        }
+        self.check();
+        removed
+    }
+
     /// Append `other` to `self`, leaving `other` empty.
     pub fn append(&mut self, other: &mut Self) {
         assert_eq!(self.mode, other.mode);
