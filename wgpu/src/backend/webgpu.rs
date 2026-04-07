@@ -1125,12 +1125,13 @@ impl ContextWebGpu {
             context
                 .dyn_into()
                 .map_err(|actual| crate::CreateSurfaceError {
-                    inner: crate::CreateSurfaceErrorKind::Web(
-                        format!(
-                        "canvas.getContext() returned a value that did not coerce to GPUCanvasContext. This is likely because WebGPU is disabled in this browser. Expected: GPUCanvasContext, Actual: {}",
+                    inner: crate::CreateSurfaceErrorKind::Web(format!(
+                        "`canvas.getContext()` returned a value that did not coerce to \
+                        `GPUCanvasContext`. \
+                        This is likely because WebGPU is disabled in this browser. \
+                        Expected: `GPUCanvasContext`, Actual: `{}`",
                         actual.to_string()
-                        )
-                    ),
+                    )),
                 })?;
 
         Ok(WebSurface {
