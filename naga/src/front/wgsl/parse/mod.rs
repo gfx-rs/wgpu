@@ -494,6 +494,7 @@ impl Parser {
             (Token::Word("RAY_QUERY_INTERSECTION_AABB"), _) => {
                 literal_ray_intersection(crate::RayQueryIntersection::Aabb)
             }
+            (Token::String(s), _) => ast::Expression::String(s),
             (Token::Word(word), span) => {
                 let ident = self.template_elaborated_ident(word, span, lexer, ctx)?;
 

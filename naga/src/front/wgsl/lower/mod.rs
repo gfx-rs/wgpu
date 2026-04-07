@@ -2545,6 +2545,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                 access
             }
+            ast::Expression::String(_) => {
+                return Err(Box::new(Error::Internal(
+                    "String literals are only supported in debugPrintf",
+                )));
+            }
         };
 
         expr.try_map(|handle| ctx.append_expression(handle, span))
@@ -3821,6 +3826,56 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     rctx.emitter.start(&rctx.function.expressions);
                     rctx.block
                         .push(ir::Statement::RayPipelineFunction(fun), function_span);
+                    return Ok(None);
+                }
+                "debugPrintf" => {
+                    if !ctx
+                        .enable_extensions
+                        .contains(crate::front::wgsl::ImplementedEnableExtension::WgpuDebugPrintf)
+                    {
+                        return Err(Box::new(Error::EnableExtensionNotEnabled {
+                            span: function_span,
+                            kind: crate::front::wgsl::ImplementedEnableExtension::WgpuDebugPrintf
+                                .into(),
+                        }));
+                    }
+
+                    if arguments.is_empty() {
+                        return Err(Box::new(Error::WrongArgumentCount {
+                            expected: 1..u32::MAX,
+                            found: 0,
+                            span: function_span,
+                        }));
+                    }
+
+                    //extract the format string
+                    let format_handle = arguments[0];
+                    let format = match ctx.ast_expressions[format_handle] {
+                        ast::Expression::String(s) => s.to_string(),
+                        _ => {
+                            return Err(Box::new(Error::Internal(
+                                "debugPrintf format must be a string literal",
+                            )))
+                        }
+                    };
+
+                    //extract remaining arguments (if any)
+                    let mut ir_arguments = Vec::with_capacity(arguments.len().saturating_sub(1));
+
+                    for &ast_handle in &arguments[1..] {
+                        let ir_handle = self.expression(ast_handle, ctx)?;
+                        ir_arguments.push(ir_handle);
+                    }
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block.push(
+                        ir::Statement::DebugPrintf {
+                            format,
+                            arguments: ir_arguments,
+                        },
+                        function_span,
+                    );
+
                     return Ok(None);
                 }
                 _ => return Err(Box::new(Error::UnknownIdent(function_span, function_name))),

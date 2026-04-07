@@ -256,6 +256,10 @@ impl super::Device {
                     options.setPreserveInvariance(true);
                 }
 
+                if self.shared.use_debug_printf.get() {
+                    options.setEnableLogging(true);
+                }
+
                 let library = self
                     .shared
                     .device

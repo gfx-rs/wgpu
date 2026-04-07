@@ -89,6 +89,9 @@ mod webgpu_impl {
 
     #[doc(hidden)]
     pub const WEBGPU_FEATURE_PRIMITIVE_INDEX: u64 = 1 << 17;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_DEBUG_PRINTF: u64 = 1 << 18;
 }
 
 macro_rules! bitflags_array_impl {
@@ -1821,6 +1824,15 @@ bitflags_array! {
         /// remain compatible with previous wgpu behavior.
         #[name("primitive-index", "shader-primitive-index")]
         const PRIMITIVE_INDEX = WEBGPU_FEATURE_PRIMITIVE_INDEX;
+
+        /// Allows the user to printf inside the shader by using `debugPrintf()`.
+        ///
+        /// Supported platforms:
+        /// - Metal (3.2+)
+        ///
+        /// This is a native only feature.
+        #[name("wgpu-debug-printf")]
+        const DEBUG_PRINTF =WEBGPU_FEATURE_DEBUG_PRINTF;
     }
 }
 

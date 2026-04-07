@@ -236,6 +236,10 @@ pub enum FunctionError {
     MismatchedPayloadType(Handle<crate::Type>, Handle<crate::Type>),
     #[error("The payload passed to `traceRay` must be a pointer directly to a global variable")]
     PayloadPointerNotGlobal,
+    #[error("Expression {0:?} is used before it is defined/emitted")]
+    InvalidExpression(Handle<crate::Expression>),
+    #[error("Argument {0:?} for `debugPrintf` must be a supported scalar or vector type")]
+    InvalidDebugPrintfArgument(Handle<crate::Expression>),
 }
 
 bitflags::bitflags! {
@@ -1770,6 +1774,28 @@ impl super::Validator {
                         }
                     }
                 },
+
+                S::DebugPrintf {
+                    format: _,
+                    ref arguments,
+                } => {
+                    for &argument in arguments {
+                        if !self.valid_expression_set.contains(argument) {
+                            return Err(FunctionError::InvalidExpression(argument)
+                                .with_span_handle(argument, context.expressions));
+                        }
+
+                        let ty =
+                            context.resolve_type_inner(argument, &self.valid_expression_set)?;
+                        match *ty {
+                            Ti::Scalar(_) => {}
+                            _ => {
+                                return Err(FunctionError::InvalidDebugPrintfArgument(argument)
+                                    .with_span_handle(argument, context.expressions));
+                            }
+                        }
+                    }
+                }
             }
         }
         Ok(BlockInfo { stages })

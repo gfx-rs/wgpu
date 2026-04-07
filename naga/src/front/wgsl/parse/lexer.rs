@@ -36,6 +36,9 @@ pub enum Token<'a> {
     /// An identifier, possibly a reserved word.
     Word(&'a str),
 
+    /// A string literal, used for things like debugPrintf format strings.
+    String(&'a str),
+
     /// A miscellaneous single-character operator, like an arithmetic unary or
     /// binary operator. This includes `=`, for assignment and initialization.
     Operation(char),
@@ -270,6 +273,17 @@ fn consume_token(
         None => return (Token::End, ""),
     };
     match cur {
+        '"' => {
+            // Find the next quote in the remaining string
+            match chars.as_str().find('"') {
+                Some(len) => {
+                    let content = &chars.as_str()[..len];
+                    let rest = &chars.as_str()[len + 1..];
+                    (Token::String(content), rest)
+                }
+                None => (Token::Unknown('"'), chars.as_str()),
+            }
+        }
         ':' | ';' | ',' => (Token::Separator(cur), chars.as_str()),
         '.' => {
             let og_chars = chars.as_str();

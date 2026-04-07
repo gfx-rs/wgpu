@@ -1226,6 +1226,22 @@ impl FunctionInfo {
                     }
                     FunctionUniformity::new()
                 }
+                S::DebugPrintf {
+                    format: _,
+                    ref arguments,
+                } => {
+                    let mut requirements = UniformityRequirements::empty();
+                    for &expr in arguments {
+                        requirements |= self.expressions[expr.index()].uniformity.requirements;
+                    }
+                    FunctionUniformity {
+                        result: Uniformity {
+                            non_uniform_result: None,
+                            requirements,
+                        },
+                        exit: ExitFlags::empty(),
+                    }
+                }
             };
 
             disruptor = disruptor.or(uniformity.exit_disruptor());

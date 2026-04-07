@@ -535,6 +535,7 @@ impl<'a> Error<'a> {
                         Token::Attribute => "@".to_string(),
                         Token::Number(_) => "number".to_string(),
                         Token::Word(s) => s.to_string(),
+                        Token::String(_) => "a string literal".to_string(),
                         Token::Operation(c) => format!("operation (`{c}`)"),
                         Token::LogicalOperation(c) => format!("logical operation (`{c}`)"),
                         Token::ShiftOperation(c) => format!("bitshift (`{c}{c}`)"),
