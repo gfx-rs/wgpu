@@ -231,7 +231,18 @@ impl ApplicationHandler<TriangleAction> for App {
                         }
                         return;
                     }
-                    CurrentSurfaceTexture::Suboptimal(_) | CurrentSurfaceTexture::Outdated => {
+                    CurrentSurfaceTexture::Suboptimal(texture) => {
+                        drop(texture);
+
+                        wgpu_state
+                            .surface
+                            .configure(&wgpu_state.device, &wgpu_state.config);
+                        if let Some(window) = &self.window {
+                            window.request_redraw();
+                        }
+                        return;
+                    }
+                    CurrentSurfaceTexture::Outdated => {
                         wgpu_state
                             .surface
                             .configure(&wgpu_state.device, &wgpu_state.config);
