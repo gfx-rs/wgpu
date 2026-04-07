@@ -731,7 +731,8 @@ impl crate::Device for super::Device {
                                 buffer.map_flags,
                             )
                         },
-                        Ok(_) | Err(_) => ptr::dangling_mut(),
+                        Ok(_) => ptr::dangling_mut(),
+                        Err(_) => panic!("Buffer range invalid for GLES"),
                     }
                 };
                 unsafe { gl.bind_buffer(buffer.target, None) };
