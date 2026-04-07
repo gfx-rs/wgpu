@@ -78,7 +78,7 @@ void main() {
     wg[2] = _e43;
     _group_0_binding_1_cs.v1_ = 4.0;
     wg[1] = float(uint(_group_0_binding_2_cs.length()));
-    at_1 = 2u;
+    atomicExchange(at_1, 2u);
     return;
 }
 

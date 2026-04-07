@@ -1990,10 +1990,21 @@ impl<'a, W: Write> Writer<'a, W> {
             // Stores in glsl are just variable assignments written as `pointer = value;`
             Statement::Store { pointer, value } => {
                 write!(self.out, "{level}")?;
-                self.write_expr(pointer, ctx)?;
-                write!(self.out, " = ")?;
-                self.write_expr(value, ctx)?;
-                writeln!(self.out, ";")?
+                let is_atomic_pointer = ctx
+                    .resolve_type(pointer, &self.module.types)
+                    .is_atomic_pointer(&self.module.types);
+                if is_atomic_pointer {
+                    write!(self.out, "atomicExchange(")?;
+                    self.write_expr(pointer, ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(value, ctx)?;
+                    writeln!(self.out, ");")?
+                } else {
+                    self.write_expr(pointer, ctx)?;
+                    write!(self.out, " = ")?;
+                    self.write_expr(value, ctx)?;
+                    writeln!(self.out, ";")?
+                }
             }
             Statement::WorkGroupUniformLoad { pointer, result } => {
                 // GLSL doesn't have pointers, which means that this backend needs to ensure that
@@ -2487,7 +2498,18 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, "{}", self.names[&ctx.name_key(handle)])?
             }
             // glsl has no pointers so there's no load operation, just write the pointer expression
-            Expression::Load { pointer } => self.write_expr(pointer, ctx)?,
+            Expression::Load { pointer } => {
+                let is_atomic_pointer = ctx
+                    .resolve_type(pointer, &self.module.types)
+                    .is_atomic_pointer(&self.module.types);
+                if is_atomic_pointer {
+                    write!(self.out, "atomicOr(")?;
+                    self.write_expr(pointer, ctx)?;
+                    write!(self.out, ", 0)")?
+                } else {
+                    self.write_expr(pointer, ctx)?
+                }
+            }
             // `ImageSample` is a bit complicated compared to the rest of the IR.
             //
             // First there are three variations depending whether the sample level is explicitly set,

@@ -238,6 +238,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             if min_ref_count <= expr_info.ref_count {
                 self.need_bake_expressions.insert(exp_handle);
             }
+            if let Expression::Load { pointer } = *expr {
+                if info[pointer]
+                    .ty
+                    .inner_with(&module.types)
+                    .is_atomic_pointer(&module.types)
+                {
+                    self.need_bake_expressions.insert(exp_handle);
+                }
+            }
 
             if let Expression::Math { fun, arg, arg1, .. } = *expr {
                 match fun {
@@ -2322,7 +2331,29 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
             Statement::Store { pointer, value } => {
                 let ty_inner = func_ctx.resolve_type(pointer, &module.types);
-                if let Some(crate::AddressSpace::Storage { .. }) = ty_inner.pointer_space() {
+                if ty_inner.is_atomic_pointer(&module.types) {
+                    let pointer_space = ty_inner.pointer_space().unwrap();
+                    let dummy = self.namer.call("dummy");
+                    write!(self.out, "{level}{{  uint {dummy} = 0; ")?;
+                    match pointer_space {
+                        crate::AddressSpace::WorkGroup => {
+                            write!(self.out, "InterlockedExchange(")?;
+                            self.write_expr(module, pointer, func_ctx)?;
+                        }
+                        crate::AddressSpace::Storage { .. } => {
+                            let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
+                            let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
+                            write!(self.out, "{var_name}.InterlockedExchange(")?;
+                            let chain = mem::take(&mut self.temp_access_chain);
+                            self.write_storage_address(module, &chain, func_ctx)?;
+                            self.temp_access_chain = chain;
+                        }
+                        _ => unreachable!(),
+                    }
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, value, func_ctx)?;
+                    writeln!(self.out, ", {dummy}); }}")?;
+                } else if let Some(crate::AddressSpace::Storage { .. }) = ty_inner.pointer_space() {
                     let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
                     self.write_storage_store(
                         module,
@@ -3751,6 +3782,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "{}", self.names[&func_ctx.name_key(handle)])?
             }
             Expression::Load { pointer } => {
+                let ty_inner = func_ctx.resolve_type(pointer, &module.types);
+                if ty_inner.is_atomic_pointer(&module.types) {
+                    return Err(Error::Custom("Atomic loads must be baked".into()));
+                }
                 match func_ctx
                     .resolve_type(pointer, &module.types)
                     .pointer_space()
@@ -4694,10 +4729,36 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         name: String,
         // The expression which is being named.
         // Generally, this is the same as handle, except in WorkGroupUniformLoad
-        named: Handle<crate::Expression>,
-        ctx: &back::FunctionCtx,
+        expr: Handle<crate::Expression>,
+        func_ctx: &back::FunctionCtx,
     ) -> BackendResult {
-        match ctx.info[named].ty {
+        if let crate::Expression::Load { pointer } = func_ctx.expressions[expr] {
+            let ty_inner = func_ctx.resolve_type(pointer, &module.types);
+            if ty_inner.is_atomic_pointer(&module.types) {
+                let pointer_space = ty_inner.pointer_space().unwrap();
+                self.write_value_type(module, func_ctx.info[handle].ty.inner_with(&module.types))?;
+                write!(self.out, " {name}; ")?;
+                match pointer_space {
+                    crate::AddressSpace::WorkGroup => {
+                        write!(self.out, "InterlockedOr(")?;
+                        self.write_expr(module, pointer, func_ctx)?;
+                    }
+                    crate::AddressSpace::Storage { .. } => {
+                        let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
+                        let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
+                        write!(self.out, "{var_name}.InterlockedOr(")?;
+                        let chain = mem::take(&mut self.temp_access_chain);
+                        self.write_storage_address(module, &chain, func_ctx)?;
+                        self.temp_access_chain = chain;
+                    }
+                    _ => unreachable!(),
+                }
+                writeln!(self.out, ", 0, {name});")?;
+                self.named_expressions.insert(expr, name);
+                return Ok(());
+            }
+        }
+        match func_ctx.info[expr].ty {
             proc::TypeResolution::Handle(ty_handle) => match module.types[ty_handle].inner {
                 TypeInner::Struct { .. } => {
                     let ty_name = &self.names[&NameKey::Type(ty_handle)];
@@ -4712,7 +4773,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
         }
 
-        let resolved = ctx.resolve_type(named, &module.types);
+        let resolved = func_ctx.resolve_type(expr, &module.types);
 
         write!(self.out, " {name}")?;
         // If rhs is a array type, we should write array size
@@ -4720,9 +4781,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             self.write_array_size(module, base, size)?;
         }
         write!(self.out, " = ")?;
-        self.write_expr(module, handle, ctx)?;
+        self.write_expr(module, handle, func_ctx)?;
         writeln!(self.out, ";")?;
-        self.named_expressions.insert(named, name);
+        self.named_expressions.insert(expr, name);
 
         Ok(())
     }
