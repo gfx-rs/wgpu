@@ -574,7 +574,6 @@ impl<'a> BufferSlice<'a> {
     ) {
         let mut mc = self.buffer.map_context.lock();
         assert_eq!(mc.mapped_range, 0..0, "Buffer is already mapped");
-        // FIXME: should self.size == 0 be forbidden here?
         let end = self.offset + self.size;
         mc.mapped_range = self.offset..end;
         drop(mc); // release the lock of map_context as callback can call lock it again
@@ -604,7 +603,7 @@ impl<'a> BufferSlice<'a> {
     /// [mapped]: Buffer#mapping-buffers
     #[track_caller]
     pub fn get_mapped_range(&self) -> BufferView {
-        let slice_size = self.size_expect_nonzero();
+        let slice_size = self.size();
         let subrange = Subrange::new(self.offset, slice_size, RangeMappingKind::Immutable);
         self.buffer
             .map_context
@@ -639,7 +638,7 @@ impl<'a> BufferSlice<'a> {
     /// [mapped]: Buffer#mapping-buffers
     #[track_caller]
     pub fn get_mapped_range_mut(&self) -> BufferViewMut {
-        let slice_size = self.size_expect_nonzero();
+        let slice_size = self.size();
         let subrange = Subrange::new(self.offset, slice_size, RangeMappingKind::Mutable);
         self.buffer
             .map_context
@@ -674,7 +673,7 @@ impl<'a> BufferSlice<'a> {
     }
 
     pub(crate) fn size_expect_nonzero(&self) -> BufferSize {
-        BufferSize::new(self.size).expect("buffer slices can not be empty")
+        BufferSize::new(self.size).expect("buffer slice can not be empty")
     }
 }
 
@@ -731,9 +730,9 @@ struct Subrange {
 }
 
 impl Subrange {
-    fn new(offset: BufferAddress, size: BufferSize, kind: RangeMappingKind) -> Self {
+    fn new(offset: BufferAddress, size: BufferAddress, kind: RangeMappingKind) -> Self {
         Self {
-            index: offset..(offset + size.get()),
+            index: offset..(offset + size),
             kind,
         }
     }
@@ -840,8 +839,8 @@ impl MapContext {
     ///
     /// This panics if the given range does not exactly match one previously
     /// passed to [`MapContext::validate_and_add`].
-    pub(crate) fn remove(&mut self, offset: BufferAddress, size: BufferSize) {
-        let end = offset + size.get();
+    pub(crate) fn remove(&mut self, offset: BufferAddress, size: BufferAddress) {
+        let end = offset + size;
 
         let index = self
             .sub_ranges
@@ -922,7 +921,7 @@ pub struct BufferView {
     // `buffer, offset, size` are similar to `BufferSlice`, except that they own the buffer.
     buffer: Buffer,
     offset: BufferAddress,
-    size: BufferSize,
+    size: BufferAddress,
     inner: dispatch::DispatchBufferMappedRange,
 }
 
@@ -948,7 +947,7 @@ pub struct BufferViewMut {
     // `buffer, offset, size` are similar to `BufferSlice`, except that they own the buffer.
     buffer: Buffer,
     offset: BufferAddress,
-    size: BufferSize,
+    size: BufferAddress,
     inner: dispatch::DispatchBufferMappedRange,
 }
 
@@ -1007,7 +1006,7 @@ impl BufferViewMut {
     /// Returns the length of this view; the number of bytes to be written.
     pub fn len(&self) -> usize {
         // cannot fail because we can't actually map more than isize::MAX bytes
-        usize::try_from(self.size.get()).unwrap()
+        usize::try_from(self.size).unwrap()
     }
 
     /// Returns `true` if the view has a length of 0.

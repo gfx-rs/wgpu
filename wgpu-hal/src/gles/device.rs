@@ -719,13 +719,19 @@ impl crate::Device for super::Device {
                     slice.as_mut_ptr()
                 } else {
                     *lock(&buffer.offset_of_current_mapping) = range.start;
-                    unsafe {
-                        gl.map_buffer_range(
-                            buffer.target,
-                            range.start as i32,
-                            (range.end - range.start) as i32,
-                            buffer.map_flags,
-                        )
+                    // glMapBufferRange throws an error if length is 0.
+                    // We want to allow mapping 0-sized buffer slices, so perform a workaround
+                    // if the range length is 0. The resulting pointer must never be dereferenced.
+                    match (range.end - range.start).try_into() {
+                        Ok(length) => unsafe {
+                            gl.map_buffer_range(
+                                buffer.target,
+                                range.start as i32,
+                                length,
+                                buffer.map_flags,
+                            )
+                        },
+                        Err(_) => ptr::dangling_mut(),
                     }
                 };
                 unsafe { gl.bind_buffer(buffer.target, None) };
