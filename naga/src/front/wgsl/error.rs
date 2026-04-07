@@ -232,6 +232,7 @@ impl core::fmt::Display for ExpectedToken<'_> {
                 Token::Attribute => Kind::Str("@"),
                 Token::Number(_) => Kind::Str("number"),
                 Token::Word(s) => Kind::Str(s),
+                Token::String(_) => Kind::Str("a string literal"),
                 Token::Operation(c) => Kind::FormatChar("operation (`", c, "`)"),
                 Token::LogicalOperation(c) => Kind::FormatChar("logical operation (`", c, "`)"),
                 Token::ShiftOperation(c) => {

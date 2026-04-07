@@ -3063,6 +3063,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
             Statement::CooperativeStore { .. } => unimplemented!(),
             Statement::RayPipelineFunction(_) => unreachable!(),
+            Statement::DebugPrintf { .. } => unimplemented!(),
         }
 
         Ok(())
