@@ -137,6 +137,6 @@ void main(uint local_invocation_index : SV_GroupIndex)
     wg[2] = _e43;
     alignment.Store(12, asuint(4.0));
     wg[1] = float(((NagaBufferLength(dummy) - 0) / 8));
-    {  uint dummy_1 = 0; InterlockedExchange(at_1, 2u, dummy_1); }
+    { uint dummy_1 = 0; InterlockedExchange(at_1, 2u, dummy_1); }
     return;
 }

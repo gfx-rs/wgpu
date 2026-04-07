@@ -2515,7 +2515,9 @@ impl<'a, W: Write> Writer<'a, W> {
                     write!(self.out, "atomicOr(")?;
                     self.write_expr(pointer, ctx)?;
                     write!(self.out, ", 0{})", suffix)?
-                } else { self.write_expr(pointer, ctx)? }
+                } else {
+                    self.write_expr(pointer, ctx)?
+                }
             }
             // `ImageSample` is a bit complicated compared to the rest of the IR.
             //

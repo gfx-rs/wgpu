@@ -49,13 +49,13 @@ void main() {
     atomicExchange(workgroup_struct.atomic_arr[1], 1);
     memoryBarrierShared();
     barrier();
-    uint l0_ = atomicOr(_group_0_binding_0_cs, 0);
+    uint l0_ = atomicOr(_group_0_binding_0_cs, 0u);
     int l1_ = atomicOr(_group_0_binding_1_cs[1], 0);
-    uint l2_ = atomicOr(_group_0_binding_2_cs.atomic_scalar, 0);
+    uint l2_ = atomicOr(_group_0_binding_2_cs.atomic_scalar, 0u);
     int l3_ = atomicOr(_group_0_binding_2_cs.atomic_arr[1], 0);
-    uint l4_ = atomicOr(workgroup_atomic_scalar, 0);
+    uint l4_ = atomicOr(workgroup_atomic_scalar, 0u);
     int l5_ = atomicOr(workgroup_atomic_arr[1], 0);
-    uint l6_ = atomicOr(workgroup_struct.atomic_scalar, 0);
+    uint l6_ = atomicOr(workgroup_struct.atomic_scalar, 0u);
     int l7_ = atomicOr(workgroup_struct.atomic_arr[1], 0);
     memoryBarrierShared();
     barrier();
