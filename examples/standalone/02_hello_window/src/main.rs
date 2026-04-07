@@ -90,7 +90,7 @@ impl State {
                 drop(texture);
                 self.configure_surface();
                 return;
-            },
+            }
             wgpu::CurrentSurfaceTexture::Outdated => {
                 self.configure_surface();
                 return;
