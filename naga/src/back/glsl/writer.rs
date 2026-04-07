@@ -2499,16 +2499,23 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             // glsl has no pointers so there's no load operation, just write the pointer expression
             Expression::Load { pointer } => {
-                let is_atomic_pointer = ctx
-                    .resolve_type(pointer, &self.module.types)
-                    .is_atomic_pointer(&self.module.types);
-                if is_atomic_pointer {
+                let ty_inner = ctx.resolve_type(pointer, &self.module.types);
+                if ty_inner.is_atomic_pointer(&self.module.types) {
+                    let mut suffix = "";
+                    if let TypeInner::Pointer { base, .. } = *ty_inner {
+                        if let TypeInner::Atomic(scalar) = self.module.types[base].inner {
+                            suffix = match (scalar.kind, scalar.width) {
+                                (crate::ScalarKind::Uint, 8) => "ul",
+                                (crate::ScalarKind::Sint, 8) => "l",
+                                (crate::ScalarKind::Uint, _) => "u",
+                                _ => "",
+                            };
+                        }
+                    }
                     write!(self.out, "atomicOr(")?;
                     self.write_expr(pointer, ctx)?;
-                    write!(self.out, ", 0)")?
-                } else {
-                    self.write_expr(pointer, ctx)?
-                }
+                    write!(self.out, ", 0{})", suffix)?
+                } else { self.write_expr(pointer, ctx)? }
             }
             // `ImageSample` is a bit complicated compared to the rest of the IR.
             //

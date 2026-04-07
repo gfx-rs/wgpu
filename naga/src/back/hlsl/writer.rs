@@ -2334,7 +2334,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 if ty_inner.is_atomic_pointer(&module.types) {
                     let pointer_space = ty_inner.pointer_space().unwrap();
                     let dummy = self.namer.call("dummy");
-                    write!(self.out, "{level}{{  uint {dummy} = 0; ")?;
+                    write!(self.out, "{level}{{ ")?;
+                    if let TypeInner::Pointer { base, .. } = *ty_inner {
+                        self.write_value_type(module, &module.types[base].inner)?;
+                    }
+                    write!(self.out, " {dummy} = 0; ")?;
                     match pointer_space {
                         crate::AddressSpace::WorkGroup => {
                             write!(self.out, "InterlockedExchange(")?;
