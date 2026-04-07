@@ -85,6 +85,11 @@ vulkan-portability = ["wgpu-core?/vulkan-portability"]
 ## Enables the GLES backend on WebAssembly only.
 webgl = ["web", "wgpu-core/webgl", "dep:wgpu-hal", "dep:smallvec"]
 
+#! ### Backend features
+
+## Support creating textures from DRM display/window handles.
+drm = ["wgpu-core?/drm"]
+
 ## Enables the noop backend for testing.
 ##
 ## This backend allows creating resources such as buffers and textures,

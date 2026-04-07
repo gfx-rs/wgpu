@@ -367,7 +367,7 @@ pub enum SurfaceTargetUnsafe {
     ///
     /// - All parameters must point to valid DRM values and remain valid for as long as the resulting [`Surface`] exists.
     /// - The file descriptor (`fd`), plane, connector, and mode configuration must be valid and compatible.
-    #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+    #[cfg(drm)]
     Drm {
         /// The file descriptor of the DRM device.
         fd: i32,

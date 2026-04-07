@@ -93,7 +93,6 @@ vulkan = [
     "dep:arrayvec",
     "dep:ash",
     "dep:bytemuck",
-    "dep:drm",
     "dep:gpu-descriptor",
     "dep:libc",
     "dep:libloading",
@@ -251,6 +250,7 @@ wayland-sys = { version = "0.31.3", features = [
     "egl",
 ], optional = true }
 
+## Support creating textures from DRM display/window handles.
 [target.'cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))'.dependencies]
 drm = { version = "0.15", optional = true }
 

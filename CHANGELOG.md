@@ -70,7 +70,9 @@ Bottom level categories:
 #### Vulkan
 
 - Add `vulkan::Device::texture_from_dmabuf_fd()` for importing DMA-buf textures on Linux, with `VULKAN_EXTERNAL_MEMORY_FD` and `VULKAN_EXTERNAL_MEMORY_DMA_BUF` feature flags. By @TODO in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
-- Add support for RawWindowHandle::Drm on unix. By @rectalogic in [#9182](https://github.com/gfx-rs/wgpu/pull/9182).
+- Add support for RawWindowHandle::Drm on unix, conditional on the `"drm"` feature.
+  - DRM support by @rectalogic in [#9182](https://github.com/gfx-rs/wgpu/pull/9182).
+  - Conditional compilation by @jimblandy in [#9390](https://github.com/gfx-rs/wgpu/pull/9390)
 
 ### Changes
 
