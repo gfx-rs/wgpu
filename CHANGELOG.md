@@ -88,7 +88,7 @@ Bottom level categories:
 
 #### naga
 
-- Fixed atomic load and store operations being incorrectly generated as non-atomic memory accesses in GLSL and HLSL. By @CldStlkr in [#9242]()
+- Fixed atomic load and store operations being incorrectly generated as non-atomic memory accesses in GLSL and HLSL. By @CldStlkr in [#9387](https://github.com/gfx-rs/wgpu/pull/9387)
 - Fixed overflow detection and argument domain validation for `acosh`, `length`, `normalize`, and `pow` in constant evaluation. By @ecoricemon in [#9249](https://github.com/gfx-rs/wgpu/pull/9249).
 - Naga no longer allows derivative operations on `f16`. WGSL does not currently allow this, although [it may be added in the future](https://github.com/gpuweb/gpuweb/issues/5482). By @andyleiserson in [#9154](https://github.com/gfx-rs/wgpu/pull/9154).
 - Disallow direct access to atomic variables in WGSL front-end (e.g. `let x = myAtomic;`). By @ecoricemon in [#9262](https://github.com/gfx-rs/wgpu/pull/9262).
