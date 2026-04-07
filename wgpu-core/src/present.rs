@@ -76,7 +76,7 @@ pub enum ConfigureSurfaceError {
     InvalidViewFormat(wgt::TextureFormat, wgt::TextureFormat),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
-    #[error("`SurfaceOutput` must be dropped before a new `Surface` is made")]
+    #[error("The texture of the surface must be dropped before configuring the surface or a new texture of the surface is made.")]
     PreviousOutputExists,
     #[error("Failed to wait for GPU to come idle before reconfiguring the Surface")]
     GpuWaitTimeout,
