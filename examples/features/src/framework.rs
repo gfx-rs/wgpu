@@ -197,7 +197,16 @@ impl SurfaceWrapper {
             // If we timed out or the window is occluded, skip this frame:
             CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => None,
             // If the surface is outdated or suboptimal, reconfigure and retry.
-            CurrentSurfaceTexture::Suboptimal(_) | CurrentSurfaceTexture::Outdated => {
+            CurrentSurfaceTexture::Suboptimal(texture) => {
+                drop(texture);
+                surface.configure(&context.device, self.config());
+                match surface.get_current_texture() {
+                    CurrentSurfaceTexture::Success(frame)
+                    | CurrentSurfaceTexture::Suboptimal(frame) => Some(frame),
+                    other => panic!("Failed to acquire next surface texture: {other:?}"),
+                }
+            }
+            CurrentSurfaceTexture::Outdated => {
                 surface.configure(&context.device, self.config());
                 match surface.get_current_texture() {
                     CurrentSurfaceTexture::Success(frame)

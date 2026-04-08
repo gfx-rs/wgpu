@@ -16,7 +16,7 @@ kernel void compute1_(
 , uint local_invocation_index [[thread_index_in_threadgroup]]
 , threadgroup uint& wg_var
 ) {
-    if (metal::all(local_invocation_id == metal::uint3(0u))) {
+    if (local_invocation_index == 0u) {
         wg_var = {};
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);

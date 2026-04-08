@@ -820,6 +820,7 @@ pub struct RenderPipeline {
     pub(crate) tracking_data: TrackingData,
     /// Whether this is a mesh shader pipeline
     pub(crate) is_mesh: bool,
+    pub(crate) has_task_shader: bool,
 }
 
 impl Drop for RenderPipeline {

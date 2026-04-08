@@ -1579,7 +1579,7 @@ bitflags::bitflags! {
     pub struct Barrier: u32 {
         /// Barrier affects all [`AddressSpace::Storage`] accesses.
         const STORAGE = 1 << 0;
-        /// Barrier affects all [`AddressSpace::WorkGroup`] accesses.
+        /// Barrier affects all [`AddressSpace::WorkGroup`] and [`AddressSpace::TaskPayload`] accesses.
         const WORK_GROUP = 1 << 1;
         /// Barrier synchronizes execution across all invocations within a subgroup that execute this instruction.
         const SUB_GROUP = 1 << 2;

@@ -415,10 +415,10 @@ async fn execute(
 
     // Convert result back to f32 for comparison
     let result: Vec<f32> = if use_f16 {
-        let result_f16: &[f16] = bytemuck::cast_slice(&data);
+        let result_f16: Vec<f16> = bytemuck::allocation::pod_collect_to_vec(&data);
         result_f16.iter().map(|x| x.to_f32()).collect()
     } else {
-        bytemuck::cast_slice::<_, f32>(&data).to_vec()
+        bytemuck::allocation::pod_collect_to_vec(&data)
     };
 
     // Compute reference result on CPU for verification

@@ -344,7 +344,7 @@ const RESERVED: &[&str] = &[
     // Naga utilities
     "DefaultConstructible",
     // Naga builtin names
-    "__local_invocation_id",
+    "__local_invocation_index",
     super::writer::FREXP_FUNCTION,
     super::writer::MODF_FUNCTION,
     super::writer::ABS_FUNCTION,

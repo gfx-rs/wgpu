@@ -28,16 +28,6 @@ fn compile_wgsl(device: &wgpu::Device) -> wgpu::ShaderModule {
     })
 }
 
-fn compile_msl(device: &wgpu::Device) -> wgpu::ShaderModule {
-    unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-            label: None,
-            msl: Some(std::borrow::Cow::Borrowed(include_str!("shader.metal"))),
-            num_workgroups: (1, 1, 1),
-            ..Default::default()
-        })
-    }
-}
 struct Shaders {
     ts: Option<wgpu::ShaderModule>,
     ms: wgpu::ShaderModule,
@@ -46,50 +36,24 @@ struct Shaders {
     ms_name: &'static str,
     fs_name: &'static str,
 }
-fn get_shaders(
-    device: &wgpu::Device,
-    backend: wgpu::Backend,
-    info: &MeshPipelineTestInfo,
-) -> Shaders {
+fn get_shaders(device: &wgpu::Device, info: &MeshPipelineTestInfo) -> Shaders {
     if info.divergent && info.use_task {
         unreachable!();
     }
-    // In the case that the platform does support mesh shaders, the dummy
-    // shader is used to avoid requiring PASSTHROUGH_SHADERS.
-    match backend {
-        wgpu::Backend::Vulkan | wgpu::Backend::Dx12 => {
-            let compiled = compile_wgsl(device);
-            Shaders {
-                ts: info.use_task.then_some(compiled.clone()),
-                ms: compiled.clone(),
-                fs: info.use_frag.then_some(compiled),
-                ts_name: "ts_main",
-                ms_name: if info.divergent {
-                    "ms_divergent"
-                } else if info.use_task {
-                    "ms_main"
-                } else {
-                    "ms_no_ts"
-                },
-                fs_name: "fs_main",
-            }
-        }
-        wgpu::Backend::Metal => {
-            let compiled = compile_msl(device);
-            Shaders {
-                ts: info.use_task.then_some(compiled.clone()),
-                ms: compiled.clone(),
-                fs: info.use_frag.then_some(compiled),
-                ts_name: "taskShader",
-                ms_name: if info.use_task {
-                    "meshShader"
-                } else {
-                    "meshNoTaskShader"
-                },
-                fs_name: "fragShader",
-            }
-        }
-        _ => unreachable!(),
+    let compiled = compile_wgsl(device);
+    Shaders {
+        ts: info.use_task.then_some(compiled.clone()),
+        ms: compiled.clone(),
+        fs: info.use_frag.then_some(compiled),
+        ts_name: "ts_main",
+        ms_name: if info.divergent {
+            "ms_divergent"
+        } else if info.use_task {
+            "ms_main"
+        } else {
+            "ms_no_ts"
+        },
+        fs_name: "fs_main",
     }
 }
 
@@ -130,7 +94,6 @@ struct MeshPipelineTestInfo {
 }
 
 fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
-    let backend = ctx.adapter.get_info().backend;
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
 
@@ -141,7 +104,7 @@ fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
         ts_name,
         ms_name,
         fs_name,
-    } = get_shaders(device, backend, &info);
+    } = get_shaders(device, &info);
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
@@ -214,7 +177,6 @@ pub enum DrawType {
 }
 
 fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestInfo) {
-    let backend = ctx.adapter.get_info().backend;
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
 
@@ -225,7 +187,7 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestIn
         ts_name,
         ms_name,
         fs_name,
-    } = get_shaders(device, backend, &info);
+    } = get_shaders(device, &info);
     let frag = fs.unwrap();
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,

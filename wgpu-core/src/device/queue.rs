@@ -533,8 +533,12 @@ impl Queue {
         let data_size = if let Some(data_size) = wgt::BufferSize::new(data_size) {
             data_size
         } else {
-            // This must happen after parameter validation (so that errors are reported
-            // as required by the spec), but before any side effects.
+            // even though a zero-length write is a no-op and no copy operation will occur,
+            // we must still validate the copy operation. This ensures that invalid
+            // API calls—like writing to a mapped buffer or out-of-bounds offsets—are
+            // caught consistently, even if no data is actually moved.
+            self.validate_write_buffer_impl(buffer.as_ref(), buffer_offset, 0)?;
+
             log::trace!("Ignoring write_buffer of size 0");
             return Ok(());
         };
@@ -635,7 +639,7 @@ impl Queue {
 
         let buffer = buffer.get()?;
 
-        self.validate_write_buffer_impl(&buffer, buffer_offset, buffer_size)?;
+        self.validate_write_buffer_impl(&buffer, buffer_offset, buffer_size.into())?;
 
         Ok(())
     }
@@ -644,14 +648,14 @@ impl Queue {
         &self,
         buffer: &Buffer,
         buffer_offset: u64,
-        buffer_size: wgt::BufferSize,
+        buffer_size: u64,
     ) -> Result<(), TransferError> {
         if !matches!(&*buffer.map_state.lock(), BufferMapState::Idle) {
             return Err(TransferError::BufferNotAvailable);
         }
         buffer.check_usage(wgt::BufferUsages::COPY_DST)?;
-        if !buffer_size.get().is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
-            return Err(TransferError::UnalignedCopySize(buffer_size.get()));
+        if !buffer_size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
+            return Err(TransferError::UnalignedCopySize(buffer_size));
         }
         if !buffer_offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             return Err(TransferError::UnalignedBufferOffset(buffer_offset));
@@ -664,10 +668,10 @@ impl Queue {
                 side: CopySide::Destination,
             });
         }
-        if buffer_size.get() > buffer.size - buffer_offset {
+        if buffer_size > buffer.size - buffer_offset {
             return Err(TransferError::BufferEndOffsetOverrun {
                 start_offset: buffer_offset,
-                size: buffer_size.get(),
+                size: buffer_size,
                 buffer_size: buffer.size,
                 side: CopySide::Destination,
             });
@@ -697,7 +701,7 @@ impl Queue {
 
         self.same_device_as(buffer.as_ref())?;
 
-        self.validate_write_buffer_impl(&buffer, buffer_offset, staging_buffer.size)?;
+        self.validate_write_buffer_impl(&buffer, buffer_offset, staging_buffer.size.into())?;
 
         let region = hal::BufferCopy {
             src_offset: 0,

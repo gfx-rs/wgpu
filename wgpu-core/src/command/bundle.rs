@@ -851,15 +851,25 @@ fn draw_mesh_tasks(
 ) -> Result<(), RenderBundleErrorInner> {
     state.is_ready(DrawCommandFamily::DrawMeshTasks)?;
 
+    let limits = &state.device.limits;
+    let (groups_size_limit, max_groups) =
+        if state.pipeline.as_ref().unwrap().pipeline.has_task_shader {
+            (
+                limits.max_task_workgroups_per_dimension,
+                limits.max_task_workgroup_total_count,
+            )
+        } else {
+            (
+                limits.max_mesh_workgroups_per_dimension,
+                limits.max_mesh_workgroup_total_count,
+            )
+        };
+
     let total_count = check_workgroup_sizes(
         &[group_count_x, group_count_y, group_count_z],
-        &[
-            state.device.limits.max_task_mesh_workgroups_per_dimension,
-            state.device.limits.max_task_mesh_workgroups_per_dimension,
-            state.device.limits.max_task_mesh_workgroups_per_dimension,
-        ],
+        &[groups_size_limit, groups_size_limit, groups_size_limit],
         "max_task_mesh_workgroups_per_dimension",
-        state.device.limits.max_task_mesh_workgroup_total_count,
+        max_groups,
         "max_task_mesh_workgroup_total_count",
     )
     .map_err(|err| RenderBundleErrorInner::Draw(err.into()))?;
