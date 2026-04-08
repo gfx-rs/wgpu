@@ -852,6 +852,19 @@ impl super::Adapter {
             );
         }
 
+        // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-api
+        let max_task_mesh_workgroup_total_count = if mesh_shader_supported {
+            2u32.pow(22)
+        } else {
+            0
+        };
+        // Technically it says "64k" but I highly doubt they want 65536 for compute and exactly 64,000 for task workgroups
+        let max_task_mesh_workgroups_per_dimension = if mesh_shader_supported {
+            Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION
+        } else {
+            0
+        };
+
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
                 raw: adapter,
@@ -940,23 +953,16 @@ impl super::Adapter {
                     // NATIVE (Non-WebGPU) LIMITS:
                     //
                     max_non_sampler_bindings: 1_000_000,
-
                     max_binding_array_elements_per_shader_stage: full_heap_count,
                     max_binding_array_sampler_elements_per_shader_stage:
                         Direct3D12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
 
+                    max_task_workgroup_total_count: max_task_mesh_workgroup_total_count,
+                    max_task_workgroups_per_dimension: max_task_mesh_workgroups_per_dimension,
+                    max_mesh_workgroup_total_count: max_task_mesh_workgroup_total_count,
+                    max_mesh_workgroups_per_dimension: max_task_mesh_workgroups_per_dimension,
+
                     // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-api
-                    max_task_mesh_workgroup_total_count: if mesh_shader_supported {
-                        2u32.pow(22)
-                    } else {
-                        0
-                    },
-                    // Technically it says "64k" but I highly doubt they want 65536 for compute and exactly 64,000 for task workgroups
-                    max_task_mesh_workgroups_per_dimension: if mesh_shader_supported {
-                        Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION
-                    } else {
-                        0
-                    },
                     // Assume this inherits from compute shaders
                     max_task_invocations_per_workgroup: if mesh_shader_supported {
                         Direct3D12::D3D12_CS_4_X_THREAD_GROUP_MAX_THREADS_PER_GROUP

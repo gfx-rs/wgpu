@@ -673,7 +673,8 @@ impl PhysicalDeviceFeatures {
             | Df::VIEW_FORMATS
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
             | Df::NONBLOCKING_QUERY_RESOLVE
-            | Df::SHADER_F16_IN_F32;
+            | Df::SHADER_F16_IN_F32
+            | Df::MSL2_1;
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,
@@ -1390,9 +1391,14 @@ impl PhysicalDeviceProperties {
     fn to_wgpu_limits(&self) -> wgt::Limits {
         let limits = &self.properties.limits;
 
+        // Default is only implemented for tuples up to a certain size.
         let (
-            mut max_task_mesh_workgroup_total_count,
-            mut max_task_mesh_workgroups_per_dimension,
+            mut max_task_workgroup_total_count,
+            mut max_task_workgroups_per_dimension,
+            mut max_mesh_workgroup_total_count,
+            mut max_mesh_workgroups_per_dimension,
+        ) = Default::default();
+        let (
             mut max_task_invocations_per_workgroup,
             mut max_task_invocations_per_dimension,
             mut max_mesh_invocations_per_workgroup,
@@ -1404,15 +1410,12 @@ impl PhysicalDeviceProperties {
             mut max_mesh_multiview_view_count,
         ) = Default::default();
         if let Some(m) = self.mesh_shader {
-            max_task_mesh_workgroup_total_count = m
-                .max_task_work_group_total_count
-                .min(m.max_mesh_work_group_total_count);
-            max_task_mesh_workgroups_per_dimension = m
-                .max_task_work_group_count
-                .into_iter()
-                .chain(m.max_mesh_work_group_count)
-                .min()
-                .unwrap();
+            max_task_workgroup_total_count = m.max_task_work_group_total_count;
+            max_task_workgroups_per_dimension =
+                m.max_task_work_group_count.into_iter().min().unwrap();
+            max_mesh_workgroup_total_count = m.max_mesh_work_group_total_count;
+            max_mesh_workgroups_per_dimension =
+                m.max_mesh_work_group_count.into_iter().min().unwrap();
             max_task_invocations_per_workgroup = m.max_task_work_group_invocations;
             max_task_invocations_per_dimension =
                 m.max_task_work_group_size.into_iter().min().unwrap();
@@ -1680,8 +1683,11 @@ impl PhysicalDeviceProperties {
                 0
             },
 
-            max_task_mesh_workgroup_total_count,
-            max_task_mesh_workgroups_per_dimension,
+            max_task_workgroup_total_count,
+            max_task_workgroups_per_dimension,
+            max_mesh_workgroup_total_count,
+            max_mesh_workgroups_per_dimension,
+
             max_task_invocations_per_workgroup,
             max_task_invocations_per_dimension,
 
@@ -2712,8 +2718,8 @@ impl super::Adapter {
                 binding_map: BTreeMap::default(),
                 debug_info: None,
                 task_dispatch_limits: Some(naga::back::TaskDispatchLimits {
-                    max_mesh_workgroups_per_dim: limits.max_task_mesh_workgroups_per_dimension,
-                    max_mesh_workgroups_total: limits.max_task_mesh_workgroup_total_count,
+                    max_mesh_workgroups_per_dim: limits.max_mesh_workgroups_per_dimension,
+                    max_mesh_workgroups_total: limits.max_mesh_workgroup_total_count,
                 }),
                 mesh_shader_primitive_indices_clamp: true,
             }

@@ -108,8 +108,8 @@ arbitrary = "1.4.2"
 argh = "0.1.13"
 arrayvec = { version = "0.7.1", default-features = false }
 bincode = "2"
-bit-set = { version = "0.9", default-features = false }
-bit-vec = { version = "0.9", default-features = false }
+bit-set = { version = "0.10", default-features = false }
+bit-vec = { version = "0.9.1", default-features = false }
 bitflags = "2.9"
 bytemuck = { version = "1.22", features = [
     "extern_crate_alloc",
@@ -274,6 +274,7 @@ gpu-descriptor = "0.3.2"
 range-alloc = "0.1"
 mach-dxcompiler-rs = { version = "0.1.4", default-features = false } # remember to increase max_shader_model if applicable
 windows-core = { version = "0.62", default-features = false }
+windows-result = { version = "0.4", default-features = false }
 
 # DX12 and Vulkan dependencies
 gpu-allocator = { version = "0.28", default-features = false, features = [

@@ -109,7 +109,6 @@ vulkan = [
     "windows/Win32",
 ]
 gles = [
-    "naga/glsl-out",
     "dep:arrayvec",
     "dep:bytemuck",
     "dep:glow",
@@ -117,39 +116,43 @@ gles = [
     "dep:hashbrown",
     "dep:js-sys",
     "dep:khronos-egl",
-    "dep:wayland-sys",
     "dep:libloading",
     "dep:ndk-sys",
     "dep:objc2",
     "dep:parking_lot",
     "dep:profiling",
     "dep:wasm-bindgen",
+    "dep:wayland-sys",
     "dep:web-sys",
+    "dep:windows-result",
+    "naga/glsl-out",
     "wgpu-types/web",
-    "windows/Win32_Graphics_OpenGL",
+    "windows-result/std",                   # Need to enable this for the `Error` impl on `windows_result::Error` to work.
     "windows/Win32_Graphics_Gdi",
+    "windows/Win32_Graphics_OpenGL",
     "windows/Win32_System_LibraryLoader",
     "windows/Win32_UI_WindowsAndMessaging",
 ]
 ## Enables the DX12 backend when targeting Windows.
 dx12 = [
-    "naga/hlsl-out",
     "dep:arrayvec",
     "dep:bit-set",
     "dep:bytemuck",
+    "dep:gpu-allocator",
     "dep:hashbrown",
     "dep:libloading",
-    "dep:ordered-float",
     "dep:once_cell",
+    "dep:ordered-float",
     "dep:parking_lot",
     "dep:profiling",
     "dep:range-alloc",
     "dep:windows-core",
-    "dep:gpu-allocator",
     "gpu-allocator/d3d12",
+    "naga/hlsl-out",
+    "once_cell/std",
     "windows/Win32_Devices_DeviceAndDriverInstallation",
-    "windows/Win32_Graphics_Direct3D_Fxc",
     "windows/Win32_Graphics_Direct3D_Dxc",
+    "windows/Win32_Graphics_Direct3D_Fxc",
     "windows/Win32_Graphics_Direct3D",
     "windows/Win32_Graphics_Direct3D12",
     "windows/Win32_Graphics_DirectComposition",
@@ -263,6 +266,7 @@ drm = { version = "0.15", optional = true }
 # Backend: Dx12 and GLES
 windows = { workspace = true, optional = true }
 windows-core = { workspace = true, optional = true }
+windows-result = { workspace = true, optional = true }
 # Backend: Dx12
 bit-set = { workspace = true, optional = true }
 range-alloc = { workspace = true, optional = true }

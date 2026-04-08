@@ -2728,18 +2728,19 @@ fn draw_mesh_tasks(
     state.flush_bindings()?;
     validate_mesh_draw_multiview(state)?;
 
-    let groups_size_limit = state
-        .pass
-        .base
-        .device
-        .limits
-        .max_task_mesh_workgroups_per_dimension;
-    let max_groups = state
-        .pass
-        .base
-        .device
-        .limits
-        .max_task_mesh_workgroup_total_count;
+    let limits = &state.pass.base.device.limits;
+    let (groups_size_limit, max_groups) = if state.pipeline.as_ref().unwrap().has_task_shader {
+        (
+            limits.max_task_workgroups_per_dimension,
+            limits.max_task_workgroup_total_count,
+        )
+    } else {
+        (
+            limits.max_mesh_workgroups_per_dimension,
+            limits.max_mesh_workgroup_total_count,
+        )
+    };
+
     let total_count = check_workgroup_sizes(
         &[group_count_x, group_count_y, group_count_z],
         &[groups_size_limit, groups_size_limit, groups_size_limit],

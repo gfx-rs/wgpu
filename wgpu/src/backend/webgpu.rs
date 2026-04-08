@@ -829,10 +829,10 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_immediate_size: wgt::Limits::default().max_immediate_size,
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
 
-        max_task_mesh_workgroup_total_count: wgt::Limits::default()
-            .max_task_mesh_workgroup_total_count,
-        max_task_mesh_workgroups_per_dimension: wgt::Limits::default()
-            .max_task_mesh_workgroups_per_dimension,
+        max_task_workgroup_total_count: wgt::Limits::default().max_task_workgroup_total_count,
+        max_task_workgroups_per_dimension: wgt::Limits::default().max_task_workgroups_per_dimension,
+        max_mesh_workgroup_total_count: wgt::Limits::default().max_mesh_workgroup_total_count,
+        max_mesh_workgroups_per_dimension: wgt::Limits::default().max_mesh_workgroups_per_dimension,
         max_task_invocations_per_workgroup: wgt::Limits::default()
             .max_task_invocations_per_workgroup,
         max_task_invocations_per_dimension: wgt::Limits::default()
@@ -1120,11 +1120,19 @@ impl ContextWebGpu {
             }
         };
 
-        // Not returning this error because it is a type error that shouldn't happen unless
-        // the browser, JS builtin objects, or wasm bindings are misbehaving somehow.
-        let context: webgpu_sys::GpuCanvasContext = context
-            .dyn_into()
-            .expect("canvas context is not a GPUCanvasContext");
+        // An error here indicated that WebGPU is disabled in the browser.
+        let context: webgpu_sys::GpuCanvasContext =
+            context
+                .dyn_into()
+                .map_err(|actual| crate::CreateSurfaceError {
+                    inner: crate::CreateSurfaceErrorKind::Web(format!(
+                        "`canvas.getContext()` returned a value that did not coerce to \
+                        `GPUCanvasContext`. \
+                        This is likely because WebGPU is disabled in this browser. \
+                        Expected: `GPUCanvasContext`, Actual: `{}`",
+                        actual.to_string()
+                    )),
+                })?;
 
         Ok(WebSurface {
             gpu: self.gpu.clone(),
