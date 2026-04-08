@@ -48,6 +48,7 @@ Bottom level categories:
 
 - BLAS support for procedural AABB geometry (`BlasGeometrySizeDescriptors::AABBs`, `BlasAabbGeometry`, and related descriptors). By @dylanblokhuis in [#9290](https://github.com/gfx-rs/wgpu/pull/9290)
 - Added "limit bucketing" functionality which can adjust adapter limits and features to match one of several pre-defined buckets. This is controlled by the new `apply_limit_buckets` member in `RequestAdapterOptions`, which is `false` by default. By @andyleiserson in [#9119](https://github.com/gfx-rs/wgpu/pull/9119).
+- Fix missing dependency feature activations when building wgpu-hal with gles/dx12 in isolation. By @wumpf in [#9325](https://github.com/gfx-rs/wgpu/pull/9325)
 - Make `wgpu_types::texture::format::TextureChannel` accessible as `wgpu::TextureChannel`. By @TornaxO7 in [#9394](https://github.com/gfx-rs/wgpu/pull/9349).
 - Add support for `per_vertex` in Metal and DX12, as well as some validation for `per_vertex`, and a new enable extension, `wgpu_per_vertex`. By @inner-daemons in [#9219](https://github.com/gfx-rs/wgpu/pull/9219).
 

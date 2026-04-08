@@ -274,6 +274,7 @@ gpu-descriptor = "0.3.2"
 range-alloc = "0.1"
 mach-dxcompiler-rs = { version = "0.1.4", default-features = false } # remember to increase max_shader_model if applicable
 windows-core = { version = "0.62", default-features = false }
+windows-result = { version = "0.4", default-features = false }
 
 # DX12 and Vulkan dependencies
 gpu-allocator = { version = "0.28", default-features = false, features = [

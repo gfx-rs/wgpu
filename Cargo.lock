@@ -4870,6 +4870,7 @@ dependencies = [
  "wgpu-types",
  "windows",
  "windows-core",
+ "windows-result",
  "winit",
 ]
 
