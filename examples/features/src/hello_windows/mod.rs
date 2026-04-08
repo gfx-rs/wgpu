@@ -203,7 +203,13 @@ impl ApplicationHandler for App {
                             viewport.desc.window.request_redraw();
                             return;
                         }
-                        CurrentSurfaceTexture::Suboptimal(_) | CurrentSurfaceTexture::Outdated => {
+                        CurrentSurfaceTexture::Suboptimal(texture) => {
+                            drop(texture);
+                            viewport.desc.surface.configure(device, &viewport.config);
+                            viewport.desc.window.request_redraw();
+                            return;
+                        }
+                        CurrentSurfaceTexture::Outdated => {
                             viewport.desc.surface.configure(device, &viewport.config);
                             viewport.desc.window.request_redraw();
                             return;

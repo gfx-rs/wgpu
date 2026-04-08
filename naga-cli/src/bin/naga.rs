@@ -575,6 +575,8 @@ fn run() -> anyhow::Result<()> {
 
     params.spv_out.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
     params.spv_out.task_dispatch_limits = args.task_limits.0;
+    params.msl.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
+    params.msl.task_dispatch_limits = args.task_limits.0;
     params.hlsl.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
     params.hlsl.task_dispatch_limits = args.task_limits.0;
 

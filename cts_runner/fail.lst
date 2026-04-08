@@ -59,7 +59,6 @@ webgpu:api,validation,texture,destroy:submit_a_destroyed_texture_as_attachment:*
 
 webgpu:shader,execution,expression,call,builtin,atan2:f16:* // dx12, fails with dxc, passes with fxc, https://github.com/gfx-rs/wgpu/issues/9179
 
-webgpu:shader,validation,decl,context_dependent_resolution:* // 92%, f16 as reserved keyword when enabled
 webgpu:shader,validation,decl,let:* // texture/sampler let
 webgpu:shader,validation,decl,override:* // 93%, unrestricted_pointer_parameters not implemented, https://github.com/gfx-rs/wgpu/issues/5158
 webgpu:shader,validation,decl,var:* // 99%, https://github.com/gfx-rs/wgpu/issues/8925 (trailing comma), atomics in read-only storage, shader stage restrictions
@@ -120,21 +119,19 @@ webgpu:shader,validation,expression,early_evaluation:* // 67%, mixed override/ru
 webgpu:shader,validation,expression,precedence:* // 76%, https://github.com/gfx-rs/wgpu/issues/4536
 webgpu:shader,validation,extension,readonly_and_readwrite_storage_textures:* // 50%, interaction w/ texture_formats_tier1, https://github.com/gfx-rs/wgpu/issues/8962#issuecomment-3819427894
 webgpu:shader,validation,functions,alias_analysis:* // 2%, https://github.com/gfx-rs/wgpu/issues/7650
-webgpu:shader,validation,functions,restrictions:*
+webgpu:shader,validation,functions,restrictions:* // 81%, @id/@workgroup_size accepted on plain functions, https://github.com/gfx-rs/wgpu/issues/8898
 webgpu:shader,validation,parse,attribute:* // 93%, group index validation at shader module creation
 webgpu:shader,validation,parse,blankspace:* // 95%, null in comments, https://github.com/gfx-rs/wgpu/issues/8877
 webgpu:shader,validation,parse,comments:* // 93%, unterminated block comments, https://github.com/gfx-rs/wgpu/issues/8877
 webgpu:shader,validation,parse,diagnostic:* // 50%, https://github.com/gfx-rs/wgpu/issues/6458
 webgpu:shader,validation,parse,literal:* // 96%, https://github.com/gfx-rs/wgpu/issues/7046
-webgpu:shader,validation,parse,must_use:* // 97%, https://github.com/gfx-rs/wgpu/issues/8876
 webgpu:shader,validation,parse,shadow_builtins:* // 83%, function param shadowing parser issue; determinant const-eval; texture_external capability missing
-webgpu:shader,validation,shader_io,align:*
+webgpu:shader,validation,shader_io,align:* // 98%, @align(2^31) accepted but exceeds i32::MAX per WGSL spec
 webgpu:shader,validation,shader_io,id:* // 97%, @id on const
 webgpu:shader,validation,shader_io,interpolate:*
 webgpu:shader,validation,shader_io,layout_constraints:* // 99%, struct alignment not inferred from @align on members
 webgpu:shader,validation,shader_io,locations:stage_inout:* // 66%, invalid usage @location in compute shaders
 webgpu:shader,validation,shader_io,pipeline_stage:* // 92%, stage attributes incorrectly accepted on var<private> and var<storage>
-webgpu:shader,validation,shader_io,size:* // 94%, large size validation, runtime-sized array
 webgpu:shader,validation,shader_io,workgroup_size:* // 88%, type mixing, attribute placement
 webgpu:shader,validation,statement,continue:* // 90%, continue bypassing declaration used in continuing block, https://github.com/gfx-rs/wgpu/issues/7650
 webgpu:shader,validation,statement,for:* // 93%, phony/increment in for-loop init/cont, empty loop behavior

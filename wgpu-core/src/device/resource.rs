@@ -3876,6 +3876,7 @@ impl Device {
                     &final_entry_point_name,
                     stage,
                     io,
+                    None,
                 )?;
             }
         }
@@ -3950,11 +3951,7 @@ impl Device {
 
                 // `bind_group_layouts` might contain duplicate entries, so we need to ignore the
                 // result.
-                let _ = bgl
-                    .exclusive_pipeline
-                    .set(binding_model::ExclusivePipeline::Compute(Arc::downgrade(
-                        &pipeline,
-                    )));
+                let _ = bgl.exclusive_pipeline.set((&pipeline).into());
             }
         }
 
@@ -4410,6 +4407,7 @@ impl Device {
                                 &_vertex_entry_point_name,
                                 stage,
                                 io,
+                                Some(desc.primitive.topology),
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
@@ -4453,6 +4451,7 @@ impl Device {
                                 &_task_entry_point_name,
                                 stage,
                                 io,
+                                Some(desc.primitive.topology),
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
@@ -4494,6 +4493,7 @@ impl Device {
                                 &_mesh_entry_point_name,
                                 stage,
                                 io,
+                                Some(desc.primitive.topology),
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
@@ -4545,6 +4545,7 @@ impl Device {
                             &fragment_entry_point_name,
                             stage,
                             io,
+                            Some(desc.primitive.topology),
                         )
                         .map_err(stage_err)?;
                     validated_stages |= stage_bit;
@@ -4641,6 +4642,7 @@ impl Device {
         };
 
         let is_mesh = mesh_stage.is_some();
+        let has_task_shader = task_stage.is_some();
         let raw = {
             let pipeline_desc = hal::RenderPipelineDescriptor {
                 label: desc.label.to_hal(self.instance_flags),
@@ -4747,6 +4749,7 @@ impl Device {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.render_pipelines.clone()),
             is_mesh,
+            has_task_shader,
         };
 
         let pipeline = Arc::new(pipeline);
@@ -4759,11 +4762,7 @@ impl Device {
 
                 // `bind_group_layouts` might contain duplicate entries, so we need to ignore the
                 // result.
-                let _ = bgl
-                    .exclusive_pipeline
-                    .set(binding_model::ExclusivePipeline::Render(Arc::downgrade(
-                        &pipeline,
-                    )));
+                let _ = bgl.exclusive_pipeline.set((&pipeline).into());
             }
         }
 

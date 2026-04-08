@@ -355,6 +355,7 @@ webgpu:shader,validation,const_assert,const_assert:*
 webgpu:shader,validation,decl,assignment_statement:*
 webgpu:shader,validation,decl,compound_statement:*
 webgpu:shader,validation,decl,const:*
+webgpu:shader,validation,decl,context_dependent_resolution:*
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_neg"
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_one"
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_zero_signed"
@@ -446,8 +447,10 @@ webgpu:shader,validation,parse,blankspace:bom:*
 webgpu:shader,validation,parse,blankspace:null_characters:contains_null=false;*
 webgpu:shader,validation,parse,blankspace:null_characters:contains_null=true;placement="delimiter"
 webgpu:shader,validation,parse,blankspace:null_characters:contains_null=true;placement="eol"
+webgpu:shader,validation,parse,comments:unterminated_block_comment:terminated=false
 webgpu:shader,validation,parse,enable:*
 webgpu:shader,validation,parse,identifiers:*
+webgpu:shader,validation,parse,must_use:*
 webgpu:shader,validation,parse,requires:*
 webgpu:shader,validation,parse,semicolon:*
 webgpu:shader,validation,parse,shadow_builtins:function_param:*
@@ -465,6 +468,7 @@ webgpu:shader,validation,shader_io,locations:nesting:*
 webgpu:shader,validation,shader_io,locations:out_of_order:*
 webgpu:shader,validation,shader_io,locations:type:*
 webgpu:shader,validation,shader_io,locations:validation:*
+webgpu:shader,validation,shader_io,size:*
 webgpu:shader,validation,statement,break_if:*
 webgpu:shader,validation,statement,break:*
 webgpu:shader,validation,statement,compound:*

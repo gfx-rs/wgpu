@@ -435,6 +435,7 @@ fn incompatible_interpolation_and_sampling_types() {
                     naga::Interpolation::Flat,
                     Some(naga::Sampling::First | naga::Sampling::Either)
                 )
+                | (naga::Interpolation::PerVertex, Some(naga::Sampling::Center))
         );
 
         if valid {
@@ -456,11 +457,12 @@ fn incompatible_interpolation_and_sampling_types() {
         }
     };
 
+    // Note: `PerVertex` is excluded here because its invalid sampling combinations produce
+    // `VaryingError::InvalidPerVertexSampling` rather than `InvalidInterpolationSamplingCombination`.
     let invalid_cases = [
         naga::Interpolation::Flat,
         naga::Interpolation::Linear,
         naga::Interpolation::Perspective,
-        naga::Interpolation::PerVertex,
     ]
     .into_iter()
     .cartesian_product(
@@ -571,9 +573,15 @@ mod dummy_interpolation_shader {
                 naga::Interpolation::PerVertex => "array<u32, 3>",
             };
 
+            let enable_extension = if interpolation == naga::Interpolation::PerVertex {
+                "enable wgpu_per_vertex;\n\n"
+            } else {
+                ""
+            };
             let interpolate_attr = format!("@interpolate({interpolation_str}{sampling_str})");
             let source = format!(
                 "\
+                {enable_extension}
                 struct VertexOutput {{
     @location(0) {interpolate_attr} member: {member_type},
 }}

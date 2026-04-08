@@ -309,7 +309,7 @@ impl ComputePipeline {
         self: &Arc<Self>,
         index: u32,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
-        self.layout.get_bind_group_layout(index)
+        self.layout.get_bind_group_layout(index, self.into())
     }
 }
 
@@ -820,6 +820,7 @@ pub struct RenderPipeline {
     pub(crate) tracking_data: TrackingData,
     /// Whether this is a mesh shader pipeline
     pub(crate) is_mesh: bool,
+    pub(crate) has_task_shader: bool,
 }
 
 impl Drop for RenderPipeline {
@@ -848,6 +849,6 @@ impl RenderPipeline {
         self: &Arc<Self>,
         index: u32,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
-        self.layout.get_bind_group_layout(index)
+        self.layout.get_bind_group_layout(index, self.into())
     }
 }

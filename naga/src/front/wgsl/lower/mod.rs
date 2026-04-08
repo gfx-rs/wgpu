@@ -4603,6 +4603,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
             let member_size = if let Some(size_expr) = member.size {
                 let (size, span) = self.const_u32(size_expr, &mut ctx.as_const())?;
+                if let ir::TypeInner::Array {
+                    size: ir::ArraySize::Dynamic | ir::ArraySize::Pending(_),
+                    ..
+                } = ctx.module.types[ty].inner
+                {
+                    return Err(Box::new(Error::SizeAttributeRequiresFixedFootprint(span)));
+                }
                 if size < member_min_size {
                     return Err(Box::new(Error::SizeAttributeTooLow(span, member_min_size)));
                 } else {

@@ -127,11 +127,11 @@ impl super::Adapter {
         }
         .unwrap();
         let max_feature_level = match device_levels.MaxSupportedFeatureLevel {
-            Direct3D::D3D_FEATURE_LEVEL_11_0 => FeatureLevel::_11_0,
-            Direct3D::D3D_FEATURE_LEVEL_11_1 => FeatureLevel::_11_1,
-            Direct3D::D3D_FEATURE_LEVEL_12_0 => FeatureLevel::_12_0,
-            Direct3D::D3D_FEATURE_LEVEL_12_1 => FeatureLevel::_12_1,
-            Direct3D::D3D_FEATURE_LEVEL_12_2 => FeatureLevel::_12_2,
+            Direct3D::D3D_FEATURE_LEVEL_11_0 => FeatureLevel::V11_0,
+            Direct3D::D3D_FEATURE_LEVEL_11_1 => FeatureLevel::V11_1,
+            Direct3D::D3D_FEATURE_LEVEL_12_0 => FeatureLevel::V12_0,
+            Direct3D::D3D_FEATURE_LEVEL_12_1 => FeatureLevel::V12_1,
+            Direct3D::D3D_FEATURE_LEVEL_12_2 => FeatureLevel::V12_2,
             fl => {
                 if let Some(telemetry) = telemetry {
                     (telemetry.d3d12_expose_adapter)(
@@ -369,22 +369,22 @@ impl super::Adapter {
                 .is_ok()
                 {
                     break match sm.HighestShaderModel {
-                        Direct3D12::D3D_SHADER_MODEL_5_1 => ShaderModel::_5_1,
-                        Direct3D12::D3D_SHADER_MODEL_6_0 => ShaderModel::_6_0,
-                        Direct3D12::D3D_SHADER_MODEL_6_1 => ShaderModel::_6_1,
-                        Direct3D12::D3D_SHADER_MODEL_6_2 => ShaderModel::_6_2,
-                        Direct3D12::D3D_SHADER_MODEL_6_3 => ShaderModel::_6_3,
-                        Direct3D12::D3D_SHADER_MODEL_6_4 => ShaderModel::_6_4,
-                        Direct3D12::D3D_SHADER_MODEL_6_5 => ShaderModel::_6_5,
-                        Direct3D12::D3D_SHADER_MODEL_6_6 => ShaderModel::_6_6,
-                        Direct3D12::D3D_SHADER_MODEL_6_7 => ShaderModel::_6_7,
-                        Direct3D12::D3D_SHADER_MODEL_6_8 => ShaderModel::_6_8,
-                        Direct3D12::D3D_SHADER_MODEL_6_9 => ShaderModel::_6_9,
+                        Direct3D12::D3D_SHADER_MODEL_5_1 => ShaderModel::V5_1,
+                        Direct3D12::D3D_SHADER_MODEL_6_0 => ShaderModel::V6_0,
+                        Direct3D12::D3D_SHADER_MODEL_6_1 => ShaderModel::V6_1,
+                        Direct3D12::D3D_SHADER_MODEL_6_2 => ShaderModel::V6_2,
+                        Direct3D12::D3D_SHADER_MODEL_6_3 => ShaderModel::V6_3,
+                        Direct3D12::D3D_SHADER_MODEL_6_4 => ShaderModel::V6_4,
+                        Direct3D12::D3D_SHADER_MODEL_6_5 => ShaderModel::V6_5,
+                        Direct3D12::D3D_SHADER_MODEL_6_6 => ShaderModel::V6_6,
+                        Direct3D12::D3D_SHADER_MODEL_6_7 => ShaderModel::V6_7,
+                        Direct3D12::D3D_SHADER_MODEL_6_8 => ShaderModel::V6_8,
+                        Direct3D12::D3D_SHADER_MODEL_6_9 => ShaderModel::V6_9,
                         _ => unreachable!(),
                     };
                 }
             } else {
-                break ShaderModel::_5_1;
+                break ShaderModel::V5_1;
             }
         };
 
@@ -395,22 +395,22 @@ impl super::Adapter {
 
         let shader_model = if let Some(max_shader_model) = wgt_shader_model {
             let max_dxc_shader_model = match max_shader_model {
-                wgt::DxcShaderModel::V6_0 => ShaderModel::_6_0,
-                wgt::DxcShaderModel::V6_1 => ShaderModel::_6_1,
-                wgt::DxcShaderModel::V6_2 => ShaderModel::_6_2,
-                wgt::DxcShaderModel::V6_3 => ShaderModel::_6_3,
-                wgt::DxcShaderModel::V6_4 => ShaderModel::_6_4,
-                wgt::DxcShaderModel::V6_5 => ShaderModel::_6_5,
-                wgt::DxcShaderModel::V6_6 => ShaderModel::_6_6,
-                wgt::DxcShaderModel::V6_7 => ShaderModel::_6_7,
-                wgt::DxcShaderModel::V6_8 => ShaderModel::_6_8,
-                wgt::DxcShaderModel::V6_9 => ShaderModel::_6_9,
+                wgt::DxcShaderModel::V6_0 => ShaderModel::V6_0,
+                wgt::DxcShaderModel::V6_1 => ShaderModel::V6_1,
+                wgt::DxcShaderModel::V6_2 => ShaderModel::V6_2,
+                wgt::DxcShaderModel::V6_3 => ShaderModel::V6_3,
+                wgt::DxcShaderModel::V6_4 => ShaderModel::V6_4,
+                wgt::DxcShaderModel::V6_5 => ShaderModel::V6_5,
+                wgt::DxcShaderModel::V6_6 => ShaderModel::V6_6,
+                wgt::DxcShaderModel::V6_7 => ShaderModel::V6_7,
+                wgt::DxcShaderModel::V6_8 => ShaderModel::V6_8,
+                wgt::DxcShaderModel::V6_9 => ShaderModel::V6_9,
             };
 
             let shader_model = max_device_shader_model.min(max_dxc_shader_model);
 
             match shader_model {
-                ShaderModel::_5_1 => {
+                ShaderModel::V5_1 => {
                     if let Some(telemetry) = telemetry {
                         (telemetry.d3d12_expose_adapter)(
                             &desc,
@@ -421,16 +421,16 @@ impl super::Adapter {
                     // don't expose this adapter if it doesn't support DXIL
                     return None;
                 }
-                ShaderModel::_6_0 => naga::back::hlsl::ShaderModel::V6_0,
-                ShaderModel::_6_1 => naga::back::hlsl::ShaderModel::V6_1,
-                ShaderModel::_6_2 => naga::back::hlsl::ShaderModel::V6_2,
-                ShaderModel::_6_3 => naga::back::hlsl::ShaderModel::V6_3,
-                ShaderModel::_6_4 => naga::back::hlsl::ShaderModel::V6_4,
-                ShaderModel::_6_5 => naga::back::hlsl::ShaderModel::V6_5,
-                ShaderModel::_6_6 => naga::back::hlsl::ShaderModel::V6_6,
-                ShaderModel::_6_7 => naga::back::hlsl::ShaderModel::V6_7,
-                ShaderModel::_6_8 => naga::back::hlsl::ShaderModel::V6_8,
-                ShaderModel::_6_9 => naga::back::hlsl::ShaderModel::V6_9,
+                ShaderModel::V6_0 => naga::back::hlsl::ShaderModel::V6_0,
+                ShaderModel::V6_1 => naga::back::hlsl::ShaderModel::V6_1,
+                ShaderModel::V6_2 => naga::back::hlsl::ShaderModel::V6_2,
+                ShaderModel::V6_3 => naga::back::hlsl::ShaderModel::V6_3,
+                ShaderModel::V6_4 => naga::back::hlsl::ShaderModel::V6_4,
+                ShaderModel::V6_5 => naga::back::hlsl::ShaderModel::V6_5,
+                ShaderModel::V6_6 => naga::back::hlsl::ShaderModel::V6_6,
+                ShaderModel::V6_7 => naga::back::hlsl::ShaderModel::V6_7,
+                ShaderModel::V6_8 => naga::back::hlsl::ShaderModel::V6_8,
+                ShaderModel::V6_9 => naga::back::hlsl::ShaderModel::V6_9,
             }
         } else {
             naga::back::hlsl::ShaderModel::V5_1
@@ -491,7 +491,7 @@ impl super::Adapter {
         // write the results there, and issue a bunch of copy commands.
         //| wgt::Features::PIPELINE_STATISTICS_QUERY
 
-        if max_feature_level >= FeatureLevel::_11_1 {
+        if max_feature_level >= FeatureLevel::V11_1 {
             features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
         }
 
@@ -710,7 +710,7 @@ impl super::Adapter {
                 && shader_model >= naga::back::hlsl::ShaderModel::V6_1
         };
         features.set(
-            wgt::Features::SHADER_BARYCENTRICS,
+            wgt::Features::SHADER_BARYCENTRICS | wgt::Features::SHADER_PER_VERTEX,
             shader_barycentrics_supported,
         );
 
@@ -807,7 +807,7 @@ impl super::Adapter {
         // "Maximum number of Unordered Access Views in all descriptor tables across all stages"
         let max_uav_across_all_stages = match rbt {
             ResourceBindingTier::T1 => match max_feature_level {
-                FeatureLevel::_11_0 => 8,
+                FeatureLevel::V11_0 => 8,
                 _ => 64,
             },
             ResourceBindingTier::T2 => 64,
@@ -851,6 +851,19 @@ impl super::Adapter {
                 ),
             );
         }
+
+        // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-api
+        let max_task_mesh_workgroup_total_count = if mesh_shader_supported {
+            2u32.pow(22)
+        } else {
+            0
+        };
+        // Technically it says "64k" but I highly doubt they want 65536 for compute and exactly 64,000 for task workgroups
+        let max_task_mesh_workgroups_per_dimension = if mesh_shader_supported {
+            Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION
+        } else {
+            0
+        };
 
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
@@ -940,22 +953,16 @@ impl super::Adapter {
                     // NATIVE (Non-WebGPU) LIMITS:
                     //
                     max_non_sampler_bindings: 1_000_000,
-
                     max_binding_array_elements_per_shader_stage: full_heap_count,
-                    max_binding_array_sampler_elements_per_shader_stage: full_heap_count,
+                    max_binding_array_sampler_elements_per_shader_stage:
+                        Direct3D12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
+
+                    max_task_workgroup_total_count: max_task_mesh_workgroup_total_count,
+                    max_task_workgroups_per_dimension: max_task_mesh_workgroups_per_dimension,
+                    max_mesh_workgroup_total_count: max_task_mesh_workgroup_total_count,
+                    max_mesh_workgroups_per_dimension: max_task_mesh_workgroups_per_dimension,
 
                     // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-api
-                    max_task_mesh_workgroup_total_count: if mesh_shader_supported {
-                        2u32.pow(22)
-                    } else {
-                        0
-                    },
-                    // Technically it says "64k" but I highly doubt they want 65536 for compute and exactly 64,000 for task workgroups
-                    max_task_mesh_workgroups_per_dimension: if mesh_shader_supported {
-                        Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION
-                    } else {
-                        0
-                    },
                     // Assume this inherits from compute shaders
                     max_task_invocations_per_workgroup: if mesh_shader_supported {
                         Direct3D12::D3D12_CS_4_X_THREAD_GROUP_MAX_THREADS_PER_GROUP

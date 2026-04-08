@@ -182,7 +182,7 @@ impl Queries {
                 .destination_buffer
                 .slice(..(size_of::<u64>() as wgpu::BufferAddress * self.num_queries))
                 .get_mapped_range();
-            bytemuck::cast_slice(&timestamp_view).to_vec()
+            bytemuck::allocation::pod_collect_to_vec(&timestamp_view)
         };
 
         self.destination_buffer.unmap();

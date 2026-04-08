@@ -719,7 +719,7 @@ jobs:
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
@@ -826,7 +826,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.44.0
+        uses: crate-ci/typos@v1.45.0
 
   check-cts-runner:
     # runtime is normally 2 minutes
