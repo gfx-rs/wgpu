@@ -509,7 +509,7 @@ impl super::Device {
                 let super::ShaderModuleSource::Naga(naga_module) = source else {
                     // ImmediateItem can only be constructed given a naga module, as it requires a type handle.
                     // Passthrough shaders will have immediates_items empty
-                    unreachable!();
+                    unreachable!("Passthrough shaders don't currently support immediates on GLES");
                 };
                 let type_inner = &naga_module.module.types[item.ty].inner;
 
