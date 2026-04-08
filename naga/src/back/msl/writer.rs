@@ -544,6 +544,7 @@ pub struct Writer<W> {
     /// Set of (struct type, struct field index) denoting which fields require
     /// padding inserted **before** them (i.e. between fields at index - 1 and index)
     pub(super) struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
+    pub(super) needs_object_memory_barriers: bool,
 }
 
 impl crate::Scalar {
@@ -893,6 +894,7 @@ impl<W: Write> Writer<W> {
             #[cfg(test)]
             put_block_stack_pointers: Default::default(),
             struct_member_pads: FastHashSet::default(),
+            needs_object_memory_barriers: false,
         }
     }
 
@@ -3927,7 +3929,7 @@ impl<W: Write> Writer<W> {
                 }
                 crate::Statement::ControlBarrier(flags)
                 | crate::Statement::MemoryBarrier(flags) => {
-                    self.write_barrier(flags, level, context.expression.lang_version)?;
+                    self.write_barrier(flags, level)?;
                 }
                 crate::Statement::Store { pointer, value } => {
                     self.put_store(pointer, value, level, context)?
@@ -4079,11 +4081,7 @@ impl<W: Write> Writer<W> {
                     self.put_image_atomic(level, image, &address, fun, value, context)?
                 }
                 crate::Statement::WorkGroupUniformLoad { pointer, result } => {
-                    self.write_barrier(
-                        crate::Barrier::WORK_GROUP,
-                        level,
-                        context.expression.lang_version,
-                    )?;
+                    self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
 
                     write!(self.out, "{level}")?;
                     let name = self.namer.call("");
@@ -4092,11 +4090,7 @@ impl<W: Write> Writer<W> {
                     self.named_expressions.insert(result, name);
 
                     writeln!(self.out, ";")?;
-                    self.write_barrier(
-                        crate::Barrier::WORK_GROUP,
-                        level,
-                        context.expression.lang_version,
-                    )?;
+                    self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
                 }
                 crate::Statement::RayQuery { query, ref fun } => {
                     if context.expression.lang_version < (2, 4) {
@@ -4481,6 +4475,10 @@ impl<W: Write> Writer<W> {
         if module.uses_mesh_shaders() && options.lang_version < (3, 0) {
             return Err(Error::UnsupportedMeshShader);
         }
+        self.needs_object_memory_barriers = module
+            .entry_points
+            .iter()
+            .any(|e| e.stage == crate::ShaderStage::Task && e.task_payload.is_some());
 
         let mut uses_ray_query = false;
         for (_, ty) in module.types.iter() {
@@ -8020,7 +8018,6 @@ template <typename A>
                     fun_info,
                     local_invocation_index,
                     ep.stage,
-                    options.lang_version,
                 )?;
             }
 
@@ -8180,7 +8177,6 @@ template <typename A>
         &mut self,
         flags: crate::Barrier,
         level: back::Level,
-        lang_version: (u8, u8),
     ) -> BackendResult {
         // Note: OR-ring bitflags requires `__HAVE_MEMFLAG_OPERATORS__`,
         // so we try to avoid it here.
@@ -8201,7 +8197,7 @@ template <typename A>
                 self.out,
                 "{level}{NAMESPACE}::threadgroup_barrier({NAMESPACE}::mem_flags::mem_threadgroup);",
             )?;
-            if lang_version >= (3, 0) {
+            if self.needs_object_memory_barriers {
                 writeln!(
                     self.out,
                     "{level}{NAMESPACE}::threadgroup_barrier({NAMESPACE}::mem_flags::mem_object_data);",
@@ -8322,7 +8318,6 @@ mod workgroup_mem_init {
             fun_info: &valid::FunctionInfo,
             local_invocation_index: Option<&NameKey>,
             stage: crate::ShaderStage,
-            lang_version: (u8, u8),
         ) -> BackendResult {
             let level = back::Level(1);
 
@@ -8357,7 +8352,7 @@ mod workgroup_mem_init {
             }
 
             writeln!(self.out, "{level}}}")?;
-            self.write_barrier(crate::Barrier::WORK_GROUP, level, lang_version)
+            self.write_barrier(crate::Barrier::WORK_GROUP, level)
         }
 
         fn write_workgroup_variable_initialization(
