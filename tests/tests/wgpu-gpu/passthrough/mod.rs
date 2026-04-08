@@ -412,7 +412,7 @@ fn is_gles(ctx: &TestingContext) -> bool {
 
 fn glsl_vertex_source(ctx: &TestingContext) -> Cow<'static, str> {
     let version_string = if is_gles(ctx) {
-        "#version 300 es\n#precision mediump float;\n"
+        "#version 300 es\nprecision highp float;\n"
     } else {
         "#version 330 core\n"
     };
