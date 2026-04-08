@@ -1493,13 +1493,20 @@ impl PhysicalDeviceProperties {
             .max_color_attachments
             .min(limits.max_fragment_output_attachments);
 
-        let ignore_max_fragment_combined_output_resources = [
+        let ignore_max_fragment_combined_output_resources_by_device = [
             crate::auxil::db::intel::VENDOR,
             crate::auxil::db::nvidia::VENDOR,
             crate::auxil::db::amd::VENDOR,
             crate::auxil::db::imgtec::VENDOR,
         ]
         .contains(&self.properties.vendor_id);
+        let ignore_max_fragment_combined_output_resources_by_driver = self
+            .driver
+            .map(|driver| [vk::DriverId::MESA_AGXV].contains(&driver.driver_id))
+            .unwrap_or_default();
+        let ignore_max_fragment_combined_output_resources =
+            ignore_max_fragment_combined_output_resources_by_device
+                || ignore_max_fragment_combined_output_resources_by_driver;
 
         if !ignore_max_fragment_combined_output_resources {
             crate::auxil::cap_limits_to_be_under_the_sum_limit(
