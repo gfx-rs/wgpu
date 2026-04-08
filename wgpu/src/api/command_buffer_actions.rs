@@ -1,5 +1,4 @@
 use alloc::{sync::Arc, vec::Vec};
-use core::num::NonZeroU64;
 
 use crate::{util::Mutex, *};
 
@@ -8,8 +7,8 @@ use crate::{util::Mutex, *};
 pub(crate) struct DeferredBufferMapping {
     pub buffer: api::Buffer,
     pub mode: MapMode,
-    pub offset: u64,
-    pub size: NonZeroU64,
+    pub offset: BufferAddress,
+    pub size: BufferAddress,
     pub callback: dispatch::BufferMapCallback,
 }
 
@@ -33,7 +32,7 @@ impl DeferredCommandBufferActions {
         for mapping in self.buffer_mappings {
             mapping.buffer.map_async(
                 mapping.mode,
-                mapping.offset..mapping.offset + mapping.size.get(),
+                mapping.offset..mapping.offset + mapping.size,
                 mapping.callback,
             );
         }
@@ -110,7 +109,6 @@ macro_rules! impl_deferred_command_buffer_actions {
             callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
         ) {
             let (offset, size) = range_to_offset_size(bounds, buffer.size);
-            let size = BufferSize::new(size).expect("buffer slices can not be empty");
             self.actions.lock().buffer_mappings.push(
                 crate::api::command_buffer_actions::DeferredBufferMapping {
                     buffer: buffer.clone(),
