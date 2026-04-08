@@ -1,3 +1,5 @@
+enable wgpu_per_vertex;
+
 struct VertexOutput {
     @builtin(position) clip: vec4<f32>,
     @interpolate(flat) @location(0) z: f32,

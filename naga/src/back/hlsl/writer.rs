@@ -921,6 +921,23 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     ep_input.local_invocation_index_name.as_ref().unwrap()
                 )?;
             }
+            Some(crate::Binding::Location {
+                interpolation: Some(crate::Interpolation::PerVertex),
+                ..
+            }) => {
+                if self.options.shader_model < ShaderModel::V6_1 {
+                    return Err(Error::ShaderModelTooLow(
+                        "per_vertex fragment inputs".to_string(),
+                        ShaderModel::V6_1,
+                    ));
+                }
+                write!(
+                    self.out,
+                    "{{ GetAttributeAtVertex({0}.{1}, 0), GetAttributeAtVertex({0}.{1}, 1), GetAttributeAtVertex({0}.{1}, 2) }}",
+                    ep_input.arg_name,
+                    fake_member.name,
+                )?;
+            }
             _ => {
                 write!(self.out, "{}.{}", ep_input.arg_name, fake_member.name)?;
             }

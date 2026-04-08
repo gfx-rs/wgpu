@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use wgpu::util::DeviceExt;
 use wgpu_test::{
     gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
@@ -20,53 +18,6 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
         MESH_PIPELINE_BASIC_MESH_NO_DRAW,
         MESH_PIPELINE_BASIC_TASK_MESH_FRAG_NO_DRAW,
     ]);
-}
-
-fn get_shader(device: &wgpu::Device, backend: wgpu::Backend) -> wgpu::ShaderModule {
-    match backend {
-        wgpu::Backend::Vulkan | wgpu::Backend::Dx12 => {
-            // Workgroup memory zero initialization can be expensive for mesh shaders
-            unsafe {
-                device.create_shader_module_trusted(
-                    wgpu::ShaderModuleDescriptor {
-                        label: None,
-                        source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
-                    },
-                    wgpu::ShaderRuntimeChecks::unchecked(),
-                )
-            }
-        }
-        wgpu::Backend::Metal => unsafe {
-            device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-                label: None,
-                entry_points: Cow::Borrowed(&[
-                    wgpu::PassthroughShaderEntryPoint {
-                        name: "ts_main".into(),
-                        workgroup_size: (1, 1, 1),
-                    },
-                    wgpu::PassthroughShaderEntryPoint {
-                        name: "ms_main".into(),
-                        workgroup_size: (1, 1, 1),
-                    },
-                    wgpu::PassthroughShaderEntryPoint {
-                        name: "ms_no_ts".into(),
-                        workgroup_size: (1, 1, 1),
-                    },
-                    wgpu::PassthroughShaderEntryPoint {
-                        name: "fs_main".into(),
-                        workgroup_size: (0, 0, 0),
-                    },
-                    wgpu::PassthroughShaderEntryPoint {
-                        name: "ms_divergent".into(),
-                        workgroup_size: (1, 1, 1),
-                    },
-                ]),
-                msl: Some(Cow::Borrowed(include_str!("shader.metal"))),
-                ..Default::default()
-            })
-        },
-        _ => unreachable!(),
-    }
 }
 
 fn create_depth(
@@ -106,11 +57,10 @@ struct MeshPipelineTestInfo {
 }
 
 fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
-    let backend = ctx.adapter.get_info().backend;
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
 
-    let shader = get_shader(device, backend);
+    let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
@@ -189,11 +139,10 @@ pub enum DrawType {
 }
 
 fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestInfo) {
-    let backend = ctx.adapter.get_info().backend;
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
 
-    let shader = get_shader(device, backend);
+    let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],

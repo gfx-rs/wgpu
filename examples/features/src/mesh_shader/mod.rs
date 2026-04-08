@@ -1,57 +1,14 @@
-use std::borrow::Cow;
-
-fn get_shader(device: &wgpu::Device, backend: wgpu::Backend) -> wgpu::ShaderModule {
-    // In the case that the platform does support mesh shaders, the dummy
-    // shader is used to avoid requiring PASSTHROUGH_SHADERS.
-    match backend {
-        wgpu::Backend::Vulkan | wgpu::Backend::Dx12 => {
-            // Workgroup memory zero initialization can be expensive for mesh shaders
-            unsafe {
-                device.create_shader_module_trusted(
-                    wgpu::ShaderModuleDescriptor {
-                        label: None,
-                        source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
-                    },
-                    wgpu::ShaderRuntimeChecks::unchecked(),
-                )
-            }
-        }
-        wgpu::Backend::Metal => unsafe {
-            device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-                label: None,
-                entry_points: Cow::Borrowed(&[
-                    wgpu::PassthroughShaderEntryPoint {
-                        name: "ts_main".into(),
-                        workgroup_size: (1, 1, 1),
-                    },
-                    wgpu::PassthroughShaderEntryPoint {
-                        name: "ms_main".into(),
-                        workgroup_size: (1, 1, 1),
-                    },
-                    wgpu::PassthroughShaderEntryPoint {
-                        name: "fs_main".into(),
-                        workgroup_size: (0, 0, 0),
-                    },
-                ]),
-                msl: Some(Cow::Borrowed(include_str!("shader.metal"))),
-                ..Default::default()
-            })
-        },
-        _ => unreachable!(),
-    }
-}
-
 pub struct Example {
     pipeline: wgpu::RenderPipeline,
 }
 impl crate::framework::Example for Example {
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        adapter: &wgpu::Adapter,
+        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
-        let shader = get_shader(device, adapter.get_info().backend);
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],

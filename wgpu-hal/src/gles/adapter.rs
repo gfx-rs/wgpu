@@ -387,7 +387,8 @@ impl super::Adapter {
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | wgt::DownlevelFlags::COMPARISON_SAMPLERS
-            | wgt::DownlevelFlags::SHADER_F16_IN_F32;
+            | wgt::DownlevelFlags::SHADER_F16_IN_F32
+            | wgt::DownlevelFlags::MSL2_1;
         downlevel_flags.set(
             wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES,
             supports_cube_array,
@@ -823,8 +824,10 @@ impl super::Adapter {
             max_buffer_size: i32::MAX as u64,
             max_non_sampler_bindings: u32::MAX,
 
-            max_task_mesh_workgroup_total_count: 0,
-            max_task_mesh_workgroups_per_dimension: 0,
+            max_task_workgroup_total_count: 0,
+            max_task_workgroups_per_dimension: 0,
+            max_mesh_workgroup_total_count: 0,
+            max_mesh_workgroups_per_dimension: 0,
             max_task_invocations_per_workgroup: 0,
             max_task_invocations_per_dimension: 0,
             max_mesh_invocations_per_workgroup: 0,

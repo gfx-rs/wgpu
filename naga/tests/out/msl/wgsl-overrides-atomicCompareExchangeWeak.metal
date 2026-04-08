@@ -37,10 +37,10 @@ _atomic_compare_exchange_result_Uint_4_ naga_atomic_compare_exchange_weak_explic
 constant int o = 2;
 
 kernel void f(
-  metal::uint3 __local_invocation_id [[thread_position_in_threadgroup]]
+  uint __local_invocation_index [[thread_index_in_threadgroup]]
 , threadgroup metal::atomic_uint& a
 ) {
-    if (metal::all(__local_invocation_id == metal::uint3(0u))) {
+    if (__local_invocation_index == 0u) {
         metal::atomic_store_explicit(&a, 0, metal::memory_order_relaxed);
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);

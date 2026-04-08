@@ -79,6 +79,7 @@
     {
       "description": "CTS revision is pinned to a Git SHA.",
       "matchPackageNames": ["https://github.com/gpuweb/cts"],
+      "changelogUrl": "https://github.com/gpuweb/cts/commits/main",
       "versioning": "git"
     }
   ],

@@ -3890,6 +3890,7 @@ impl Device {
                     &final_entry_point_name,
                     stage,
                     io,
+                    None,
                 )?;
             }
         }
@@ -4420,6 +4421,7 @@ impl Device {
                                 &_vertex_entry_point_name,
                                 stage,
                                 io,
+                                Some(desc.primitive.topology),
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
@@ -4463,6 +4465,7 @@ impl Device {
                                 &_task_entry_point_name,
                                 stage,
                                 io,
+                                Some(desc.primitive.topology),
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
@@ -4504,6 +4507,7 @@ impl Device {
                                 &_mesh_entry_point_name,
                                 stage,
                                 io,
+                                Some(desc.primitive.topology),
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
@@ -4555,6 +4559,7 @@ impl Device {
                             &fragment_entry_point_name,
                             stage,
                             io,
+                            Some(desc.primitive.topology),
                         )
                         .map_err(stage_err)?;
                     validated_stages |= stage_bit;
@@ -4651,6 +4656,7 @@ impl Device {
         };
 
         let is_mesh = mesh_stage.is_some();
+        let has_task_shader = task_stage.is_some();
         let raw = {
             let pipeline_desc = hal::RenderPipelineDescriptor {
                 label: desc.label.to_hal(self.instance_flags),
@@ -4757,6 +4763,7 @@ impl Device {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.render_pipelines.clone()),
             is_mesh,
+            has_task_shader,
         };
 
         let pipeline = Arc::new(pipeline);

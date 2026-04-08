@@ -131,8 +131,8 @@ Note: this is an issue with snapshot configuration, not code. If you added a new
             &info,
             &params.msl,
             &params.msl_pipeline,
-            params.bounds_check_policies,
             &params.pipeline_constants,
+            &shared_info,
         );
     }
 
@@ -267,8 +267,8 @@ fn write_output_msl(
     info: &naga::valid::ModuleInfo,
     options: &naga::back::msl::Options,
     pipeline_options: &naga::back::msl::PipelineOptions,
-    bounds_check_policies: naga::proc::BoundsCheckPolicies,
     pipeline_constants: &naga::back::PipelineConstants,
+    shared_options: &WriterSharedOptions,
 ) {
     use naga::back::msl;
 
@@ -279,7 +279,9 @@ fn write_output_msl(
             .expect("override evaluation failed");
 
     let mut options = options.clone();
-    options.bounds_check_policies = bounds_check_policies;
+    options.bounds_check_policies = shared_options.bounds_checks_policies;
+    options.mesh_shader_primitive_indices_clamp = shared_options.mesh_output_validation;
+    options.task_dispatch_limits = shared_options.task_limits;
     let (string, tr_info) = msl::write_string(&module, &info, &options, pipeline_options)
         .unwrap_or_else(|err| panic!("Metal write failed: {err}"));
 

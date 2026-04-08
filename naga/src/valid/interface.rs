@@ -121,6 +121,8 @@ pub enum VaryingError {
     MissingPerPrimitive,
     #[error("Per vertex fragment inputs must be an array of length 3.")]
     PerVertexNotArrayOfThree,
+    #[error("Per vertex can only have Center sampling or no sampling modifier")]
+    InvalidPerVertexSampling,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -692,6 +694,9 @@ impl VaryingContext<'_> {
                         return Err(VaryingError::UnsupportedCapability(
                             Capabilities::PER_VERTEX,
                         ));
+                    }
+                    if sampling.is_some_and(|e| e != crate::Sampling::Center) {
+                        return Err(VaryingError::InvalidPerVertexSampling);
                     }
                 }
                 // If this is per-vertex, we change the type we validate to the inner type, otherwise we leave it be.

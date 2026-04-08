@@ -1378,6 +1378,14 @@ impl Queue {
             guard.push_signal(SemaphoreType::Binary(semaphore));
         }
     }
+
+    /// Remove `semaphore` from the pending signal list if it is still present.
+    ///
+    /// Returns `true` if the semaphore was found and removed. If the submit
+    /// already consumed it, this is a harmless no-op that returns `false`.
+    pub fn remove_signal_semaphore(&self, semaphore: vk::Semaphore) -> bool {
+        self.signal_semaphores.lock().remove(semaphore)
+    }
 }
 
 /// Maps
