@@ -4180,7 +4180,19 @@ impl BlockContext<'_> {
                 Statement::RayPipelineFunction(ref fun) => {
                     self.write_ray_tracing_pipeline_function(fun, &mut block);
                 }
-                Statement::DebugPrintf { .. } => unreachable!(),
+                ,Statement::DebugPrintf {
+                    ref format,
+                    ref arguments,
+                } => {
+                    let mut format_params = Vec::with_capacity(arguments.len());
+                    for &arg in arguments {
+                        let word = self.cached[arg];
+                        format_params.push(word);
+                    }
+
+                    self.writer
+                        .write_debug_printf(&mut block, format, &format_params);
+                }
             }
         }
 

@@ -79,6 +79,16 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         return vk::FALSE;
     }
 
+    const VUID_DEBUG_PRINTF: i32 = 0x4fe1fef9;
+    if cd.message_id_number == VUID_DEBUG_PRINTF {
+        let message =
+            unsafe { cd.message_as_c_str() }.map_or(Cow::Borrowed(""), CStr::to_string_lossy);
+
+        log::warn!("[debugPrintf] {}", message);
+
+        return vk::FALSE;
+    }
+
     let level = match message_severity {
         // We intentionally suppress info messages down to debug
         // so that users are not innundated with info messages from the runtime.
@@ -802,6 +812,8 @@ impl super::Instance {
                 // Always enable synchronization validation
                 validation_feature_list
                     .push(vk::ValidationFeatureEnableEXT::SYNCHRONIZATION_VALIDATION);
+
+                validation_feature_list.push(vk::ValidationFeatureEnableEXT::DEBUG_PRINTF);
 
                 // Only enable GPU assisted validation if requested.
                 if should_enable_gpu_based_validation {
