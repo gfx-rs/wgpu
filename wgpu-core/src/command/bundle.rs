@@ -173,38 +173,47 @@ pub struct RenderBundleEncoder {
     current_pipeline: StateChange<id::RenderPipelineId>,
 }
 
-/// Validate a render bundle descriptor
+/// Validate a render bundle descriptor.
+///
+/// The underlying `device` is required to fully validate the descriptor.
+/// If omitted, some validation will be skipped.
 ///
 /// Returns a tuple (is_depth_read_only, is_stencil_read_only).
 fn validate_render_bundle_encoder_descriptor(
     desc: &RenderBundleEncoderDescriptor,
-    device: &Arc<Device>,
+    device: Option<&Arc<Device>>,
 ) -> Result<(bool, bool), CreateRenderBundleError> {
     let mut have_attachment = false;
 
-    check_color_attachment_count(
-        desc.color_formats.len(),
-        device.limits.max_color_attachments,
-    )?;
+    if let Some(device) = device {
+        check_color_attachment_count(
+            desc.color_formats.len(),
+            device.limits.max_color_attachments,
+        )?;
+    }
 
     for &format in desc.color_formats.iter().flatten() {
         have_attachment = true;
-        let format_features = device.describe_format_features(format)?;
         if !format.has_color_aspect() {
             return Err(CreateRenderBundleError::FormatNotColor(format));
         }
-        if !format_features
-            .allowed_usages
-            .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
-        {
-            return Err(CreateRenderBundleError::FormatNotRenderable(format));
+        if let Some(device) = device {
+            let format_features = device.describe_format_features(format)?;
+            if !format_features
+                .allowed_usages
+                .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+            {
+                return Err(CreateRenderBundleError::FormatNotRenderable(format));
+            }
         }
     }
 
-    validate_color_attachment_bytes_per_sample(
-        desc.color_formats.iter().flatten().copied(),
-        device.limits.max_color_attachment_bytes_per_sample,
-    )?;
+    if let Some(device) = device {
+        validate_color_attachment_bytes_per_sample(
+            desc.color_formats.iter().flatten().copied(),
+            device.limits.max_color_attachment_bytes_per_sample,
+        )?;
+    }
 
     let (is_depth_read_only, is_stencil_read_only) = match desc.depth_stencil {
         Some(ds) => {
@@ -234,9 +243,14 @@ fn validate_render_bundle_encoder_descriptor(
 }
 
 impl RenderBundleEncoder {
+    /// Create a new `RenderBundleEncoder`.
+    ///
+    /// The underlying `device` is required to fully validate the descriptor.
+    /// If the device is not available, some validation will be deferred
+    /// until `finish()`.
     pub fn new(
         desc: &RenderBundleEncoderDescriptor,
-        device: &Arc<Device>,
+        device: Option<&Arc<Device>>,
         parent_id: id::DeviceId,
     ) -> Result<Self, CreateRenderBundleError> {
         let (is_depth_read_only, is_stencil_read_only) =
@@ -324,10 +338,8 @@ impl RenderBundleEncoder {
                 multiview: self.context.multiview_mask,
             };
 
-            validate_render_bundle_encoder_descriptor(&encoder_desc, device).expect(
-                "Invalid render bundle descriptor \
-                    should have been rejected by RenderBundleEncoder::new",
-            );
+            validate_render_bundle_encoder_descriptor(&encoder_desc, Some(device))
+                .map_pass_err(scope)?;
         };
 
         let bind_group_guard = hub.bind_groups.read();
@@ -1550,6 +1562,8 @@ impl State {
 #[derive(Clone, Debug, Error)]
 pub enum RenderBundleErrorInner {
     #[error(transparent)]
+    Create(#[from] CreateRenderBundleError),
+    #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
     RenderCommand(RenderCommandError),
@@ -1585,6 +1599,7 @@ impl WebGpuError for RenderBundleError {
     fn webgpu_error_type(&self) -> ErrorType {
         let Self { scope: _, inner } = self;
         match inner {
+            RenderBundleErrorInner::Create(e) => e.webgpu_error_type(),
             RenderBundleErrorInner::Device(e) => e.webgpu_error_type(),
             RenderBundleErrorInner::RenderCommand(e) => e.webgpu_error_type(),
             RenderBundleErrorInner::Draw(e) => e.webgpu_error_type(),
