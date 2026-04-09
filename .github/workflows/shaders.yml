@@ -38,6 +38,8 @@ jobs:
           EOF
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       # We must have the FXC job before the DXC job, so the DXC PATH has priority
       # over the FXC PATH. This is because the windows kits also include an older
@@ -82,6 +84,8 @@ jobs:
           EOF
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - run: |
           cd naga
@@ -110,6 +114,8 @@ jobs:
           EOF
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - run: cd naga; cargo xtask validate spv
 
