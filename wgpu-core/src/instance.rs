@@ -265,7 +265,7 @@ impl Instance {
     /// non-apple Unix-like platforms (Linux, FreeBSD) and currently only works
     /// with the Vulkan backend.
     #[cfg(drm)]
-    #[cfg_attr(not(vulkan), expect(unused_variables))]
+    #[cfg_attr(not(vulkan), expect(unused_variables, unused_mut))]
     pub unsafe fn create_surface_from_drm(
         &self,
         fd: i32,
