@@ -34,7 +34,7 @@ use anyhow::{anyhow, bail, Context};
 use core::fmt;
 use pico_args::Arguments;
 use regex_lite::{Regex, RegexBuilder};
-use std::{ffi::OsString, sync::LazyLock};
+use std::{env, ffi::OsString, sync::LazyLock};
 use xshell::Shell;
 
 use crate::util::{git_version_at_least, parse_binary_from_cargo_json};
@@ -323,15 +323,17 @@ pub fn run_cts(
         cargo_opts.push("--release".into());
     }
 
-    let env_vars = if llvm_cov {
-        // Typically coverage runs are done via cargo with `cargo llvm-cov run`. Running the
-        // coverage-instrumented binary directly requires setting some environment variables. See
+    let env_vars = if llvm_cov && env::var("CARGO_LLVM_COV_SHOW_ENV").is_err() {
+        // Typically coverage runs are done via cargo with `cargo llvm-cov run`, but we want
+        // to run the coverage-instrumented binary directly because that is much faster than
+        // invoking `cargo` repeatedly for each CTS test selector. Running it directly requires
+        // setting some environment variables output by `cargo llvm-cov show-env`. See
         // <https://github.com/taiki-e/cargo-llvm-cov/blob/main/README.md#get-coverage-of-external-tests>
         //
-        // Unlike regular `llvm-cov run`, which builds artifacts in `target/llvm-cov-target`,
-        // `llvm-cov show-env` uses the regular target directory for artifacts. Because of this,
-        // the CTS job configures the `install-mesa` and `install-warp` actions with the regular
-        // target directory, not the `llvm-cov-target` directory.
+        // In CI the variables are set by the GitHub workflow, which we detect by checking
+        // whether `CARGO_LLVM_COV_SHOW_ENV` is already set. If the environment variables
+        // have not been set already, query them now so we can add them to the commands
+        // we run.
         let env = shell
             .cmd("cargo")
             .args(&["llvm-cov", "--no-cfg-coverage", "show-env"])
