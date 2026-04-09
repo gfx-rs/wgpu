@@ -1115,6 +1115,11 @@ impl PhysicalDeviceFeatures {
                 || caps.supports_extension(c"VK_KHR_shader_draw_parameters"),
         );
 
+        features.set(
+            F::DEBUG_PRINTF,
+            caps.supports_extension(c"VK_KHR_shader_non_semantic_info"),
+        );
+
         (features, dl_flags)
     }
 }
