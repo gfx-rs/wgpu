@@ -584,7 +584,7 @@ impl ReadbackBuffers {
         let expected_buffer_size = expected_bytes_per_row
             * (self.texture_height / block_height)
             * self.texture_depth_or_array_layers;
-        let data: BufferView = buffer_slice.get_mapped_range();
+        let data: BufferView = buffer_slice.get_mapped_range().unwrap();
         if expected_buffer_size as usize == data.len() {
             data.to_vec()
         } else {

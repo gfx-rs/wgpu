@@ -185,7 +185,7 @@ async fn get_data<T: bytemuck::Pod>(
     device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
     receiver.recv_async().await.unwrap().unwrap();
     let data: Vec<T> =
-        bytemuck::allocation::pod_collect_to_vec(&buffer_slice.get_mapped_range()[..]);
+        bytemuck::allocation::pod_collect_to_vec(&buffer_slice.get_mapped_range().unwrap()[..]);
     output.copy_from_slice(&data);
     staging_buffer.unmap();
 }

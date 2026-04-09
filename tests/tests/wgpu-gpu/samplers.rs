@@ -545,7 +545,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
         .poll(wgpu::PollType::wait_indefinitely())
         .unwrap();
 
-    let buffer_data = buffer_slice.get_mapped_range();
+    let buffer_data = buffer_slice.get_mapped_range().unwrap();
 
     let f32_buffer: &[f32] = bytemuck::cast_slice(&buffer_data);
 

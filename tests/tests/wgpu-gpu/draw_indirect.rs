@@ -346,7 +346,7 @@ async fn run_test_inner(
         .await
         .unwrap();
 
-    let data = slice.get_mapped_range();
+    let data = slice.get_mapped_range().unwrap();
     let succeeded = if expect_noop {
         data.iter().all(|b| *b == 0)
     } else {
@@ -809,7 +809,7 @@ async fn indirect_buffer_offsets(ctx: TestingContext) {
         .await
         .unwrap();
 
-    let data = slice.get_mapped_range();
+    let data = slice.get_mapped_range().unwrap();
     let half = data.len() / 2;
     let succeeded =
         data[..half].iter().all(|b| *b == u8::MAX) && data[half..].iter().all(|b| *b == 0);

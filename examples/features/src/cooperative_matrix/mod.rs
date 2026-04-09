@@ -411,7 +411,7 @@ async fn execute(
         .expect("Channel receive failed")
         .expect("Buffer mapping failed");
 
-    let data = buffer_slice.get_mapped_range();
+    let data = buffer_slice.get_mapped_range().unwrap();
 
     // Convert result back to f32 for comparison
     let result: Vec<f32> = if use_f16 {

@@ -2246,22 +2246,19 @@ impl dispatch::BufferInterface for CoreBuffer {
     fn get_mapped_range(
         &self,
         sub_range: Range<crate::BufferAddress>,
-    ) -> dispatch::DispatchBufferMappedRange {
+    ) -> Result<dispatch::DispatchBufferMappedRange, crate::MapRangeError> {
         let size = sub_range.end - sub_range.start;
-        match self
-            .context
+        self.context
             .0
             .buffer_get_mapped_range(self.id, sub_range.start, Some(size))
-        {
-            Ok((ptr, size)) => CoreBufferMappedRange {
-                ptr,
-                size: size as usize,
-            }
-            .into(),
-            Err(err) => self
-                .context
-                .handle_error_fatal(err, "Buffer::get_mapped_range"),
-        }
+            .map(|(ptr, size)| {
+                CoreBufferMappedRange {
+                    ptr,
+                    size: size as usize,
+                }
+                .into()
+            })
+            .map_err(|err| crate::MapRangeError(self.context.format_error(&err)))
     }
 
     fn unmap(&self) {

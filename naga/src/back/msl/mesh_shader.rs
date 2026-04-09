@@ -266,11 +266,7 @@ impl<W: core::fmt::Write> super::Writer<W> {
             }
         }
         writeln!(self.out, ");")?;
-        self.write_barrier(
-            crate::Barrier::WORK_GROUP,
-            back::Level(1),
-            info.options.lang_version,
-        )?;
+        self.write_barrier(crate::Barrier::WORK_GROUP, back::Level(1))?;
 
         if let Some(grid_name) = task_grid_name {
             let result_name = result_name.unwrap();

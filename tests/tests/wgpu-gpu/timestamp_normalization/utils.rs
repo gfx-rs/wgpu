@@ -286,5 +286,5 @@ fn process_shader(ctx: TestingContext, inputs: &[u8], entry_point_src: &str) -> 
         .poll(wgpu::PollType::wait_indefinitely())
         .unwrap();
 
-    pulldown_buffer.get_mapped_range(..).to_vec()
+    pulldown_buffer.get_mapped_range(..).unwrap().to_vec()
 }

@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{
     error, fmt,
     ops::{Bound, Deref, Range, RangeBounds},
@@ -139,7 +139,7 @@ use crate::*;
 /// let capturable = buffer.clone();
 /// buffer.map_async(wgpu::MapMode::Write, .., move |result| {
 ///     if result.is_ok() {
-///         let mut view = capturable.get_mapped_range_mut(..);
+///         let mut view = capturable.get_mapped_range_mut(..).unwrap();
 ///         let mut floats: wgpu::WriteOnly<[[u8; 4]]> = view.slice(..).into_chunks::<4>().0;
 ///         floats.fill(42.0f32.to_ne_bytes());
 ///         drop(view);
@@ -406,7 +406,7 @@ impl Buffer {
     ///
     /// This can also be performed using [`BufferSlice::get_mapped_range()`].
     ///
-    /// # Panics
+    /// # Errors
     ///
     /// - If `bounds` is outside of the bounds of `self`.
     /// - If `bounds` does not start at a multiple of [`MAP_ALIGNMENT`].
@@ -416,7 +416,10 @@ impl Buffer {
     ///
     /// [mapped]: Buffer#mapping-buffers
     #[track_caller]
-    pub fn get_mapped_range<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferView {
+    pub fn get_mapped_range<S: RangeBounds<BufferAddress>>(
+        &self,
+        bounds: S,
+    ) -> Result<BufferView, MapRangeError> {
         self.slice(bounds).get_mapped_range()
     }
 
@@ -430,7 +433,7 @@ impl Buffer {
     ///
     /// This can also be performed using [`BufferSlice::get_mapped_range_mut()`].
     ///
-    /// # Panics
+    /// # Errors
     ///
     /// - If `bounds` is outside of the bounds of `self`.
     /// - If `bounds` does not start at a multiple of [`MAP_ALIGNMENT`].
@@ -440,7 +443,10 @@ impl Buffer {
     ///
     /// [mapped]: Buffer#mapping-buffers
     #[track_caller]
-    pub fn get_mapped_range_mut<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferViewMut {
+    pub fn get_mapped_range_mut<S: RangeBounds<BufferAddress>>(
+        &self,
+        bounds: S,
+    ) -> Result<BufferViewMut, MapRangeError> {
         self.slice(bounds).get_mapped_range_mut()
     }
 
@@ -589,7 +595,7 @@ impl<'a> BufferSlice<'a> {
     ///
     /// This can also be performed using [`Buffer::get_mapped_range()`].
     ///
-    /// # Panics
+    /// # Errors
     ///
     /// - If the beginning of this slice is not aligned to [`MAP_ALIGNMENT`] within the buffer.
     /// - If the length of this slice is not a multiple of 4.
@@ -598,19 +604,16 @@ impl<'a> BufferSlice<'a> {
     ///
     /// [mapped]: Buffer#mapping-buffers
     #[track_caller]
-    pub fn get_mapped_range(&self) -> BufferView {
+    pub fn get_mapped_range(&self) -> Result<BufferView, MapRangeError> {
         let subrange = Subrange::new(self.offset, self.size, RangeMappingKind::Immutable);
-        self.buffer
-            .map_context
-            .lock()
-            .validate_and_add(subrange.clone());
-        let range = self.buffer.inner.get_mapped_range(subrange.index);
-        BufferView {
+        let range = self.buffer.inner.get_mapped_range(subrange.index.clone())?;
+        self.buffer.map_context.lock().validate_and_add(subrange)?;
+        Ok(BufferView {
             buffer: self.buffer.clone(),
             size: self.size,
             offset: self.offset,
             inner: range,
-        }
+        })
     }
 
     /// Gain write-only access to the bytes of a [mapped] [`Buffer`].
@@ -623,7 +626,7 @@ impl<'a> BufferSlice<'a> {
     ///
     /// This can also be performed using [`Buffer::get_mapped_range_mut()`].
     ///
-    /// # Panics
+    /// # Errors
     ///
     /// - If the beginning of this slice is not aligned to [`MAP_ALIGNMENT`] within the buffer.
     /// - If the length of this slice is not a multiple of 4.
@@ -632,19 +635,16 @@ impl<'a> BufferSlice<'a> {
     ///
     /// [mapped]: Buffer#mapping-buffers
     #[track_caller]
-    pub fn get_mapped_range_mut(&self) -> BufferViewMut {
+    pub fn get_mapped_range_mut(&self) -> Result<BufferViewMut, MapRangeError> {
         let subrange = Subrange::new(self.offset, self.size, RangeMappingKind::Mutable);
-        self.buffer
-            .map_context
-            .lock()
-            .validate_and_add(subrange.clone());
-        let range = self.buffer.inner.get_mapped_range(subrange.index);
-        BufferViewMut {
+        let range = self.buffer.inner.get_mapped_range(subrange.index.clone())?;
+        self.buffer.map_context.lock().validate_and_add(subrange)?;
+        Ok(BufferViewMut {
             buffer: self.buffer.clone(),
             size: self.size,
             offset: self.offset,
             inner: range,
-        }
+        })
     }
 
     /// Returns the buffer this is a slice of.
@@ -785,22 +785,24 @@ impl MapContext {
 
     /// Record that the `size` bytes of the buffer at `offset` are now viewed.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// This panics if the given range is invalid.
-    #[track_caller]
-    fn validate_and_add(&mut self, new_sub: Subrange) {
+    /// This returns an error if the given range is invalid.
+    fn validate_and_add(&mut self, new_sub: Subrange) -> Result<(), MapRangeError> {
         if self.mapped_range.is_empty() {
-            panic!("tried to call get_mapped_range(_mut) on an unmapped buffer");
+            return Err(MapRangeError(
+                "tried to call get_mapped_range(_mut) on an unmapped buffer".into(),
+            ));
         }
         if !range_contains(&self.mapped_range, &new_sub.index) {
-            panic!(
+            return Err(MapRangeError(alloc::format!(
                 "tried to call get_mapped_range(_mut) on a range that is not entirely mapped. \
                  Attempted to get range {}, but the mapped range is {}..{}",
-                new_sub, self.mapped_range.start, self.mapped_range.end
-            );
+                new_sub,
+                self.mapped_range.start,
+                self.mapped_range.end
+            )));
         }
-
         // This check is essential for avoiding undefined behavior: it is the
         // only thing that ensures that `&mut` references to the buffer's
         // contents don't alias anything else.
@@ -808,15 +810,17 @@ impl MapContext {
             if range_overlaps(&sub.index, &new_sub.index)
                 && !sub.kind.allowed_concurrently_with(new_sub.kind)
             {
-                panic!(
+                return Err(MapRangeError(alloc::format!(
                     "tried to call get_mapped_range(_mut) on a range that has already \
                      been mapped and would break Rust memory aliasing rules. Attempted \
                      to get range {}, and the conflicting range is {}",
-                    new_sub, sub
-                );
+                    new_sub,
+                    sub
+                )));
             }
         }
         self.sub_ranges.push(new_sub);
+        Ok(())
     }
 
     /// Record that the `size` bytes of the buffer at `offset` are no longer viewed.
@@ -858,6 +862,23 @@ impl fmt::Display for BufferAsyncError {
 }
 
 impl error::Error for BufferAsyncError {}
+
+/// Error returned by [`BufferSlice::get_mapped_range`] and [`BufferSlice::get_mapped_range_mut`].
+///
+/// Corresponds to the `OperationError` thrown by
+/// [`getMappedRange()`](https://gpuweb.github.io/gpuweb/#dom-gpubuffer-getmappedrange)
+/// in the WebGPU spec.
+#[derive(Clone, Debug)]
+pub struct MapRangeError(pub(crate) String);
+static_assertions::assert_impl_all!(MapRangeError: Send, Sync);
+
+impl fmt::Display for MapRangeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Buffer view error: {}", self.0)
+    }
+}
+
+impl error::Error for MapRangeError {}
 
 /// Type of buffer mapping.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

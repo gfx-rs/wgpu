@@ -69,6 +69,7 @@ impl DeviceExt for crate::Device {
 
             buffer
                 .get_mapped_range_mut(..)
+                .expect("Failed to get mapped range for buffer created with mapped_at_creation")
                 .slice(..unpadded_size as usize)
                 .copy_from_slice(descriptor.contents);
             buffer.unmap();

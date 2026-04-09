@@ -62,9 +62,15 @@ impl NativeTest {
 
                 let env_value = if metal_validation { "1" } else { "0" };
                 std::env::set_var("MTL_DEBUG_LAYER", env_value);
-                if std::env::var("GITHUB_ACTIONS").as_deref() != Ok("true") {
+                if std::env::var("GITHUB_ACTIONS").as_deref() != Ok("true")
+                    && !config.params.disable_mtl_shader_validation
+                {
                     // Metal Shader Validation is entirely broken in the paravirtualized CI environment.
                     std::env::set_var("MTL_SHADER_VALIDATION", env_value);
+                } else if config.params.disable_mtl_shader_validation {
+                    // For ray tracing, where MTL_SHADER_VALIDATION causes acceleration structure ids to be
+                    // completely incorrect.
+                    std::env::set_var("MTL_SHADER_VALIDATION", "0");
                 }
 
                 execute_test(Some(&adapter_report), config, Some(test_info)).await;

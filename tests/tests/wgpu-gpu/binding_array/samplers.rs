@@ -267,7 +267,7 @@ async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
     readback_buffer.slice(..).map_async(MapMode::Read, |_| {});
     ctx.device.poll(PollType::wait_indefinitely()).unwrap();
 
-    let readback_buffer_slice = readback_buffer.slice(..).get_mapped_range();
+    let readback_buffer_slice = readback_buffer.slice(..).get_mapped_range().unwrap();
 
     assert_eq!(&readback_buffer_slice[0..8], &expected_output[..]);
 }

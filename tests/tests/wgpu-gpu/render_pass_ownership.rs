@@ -351,7 +351,7 @@ async fn assert_render_pass_executed_normally(
         .await
         .unwrap();
 
-    let data = cpu_buffer.slice(..).get_mapped_range();
+    let data = cpu_buffer.slice(..).get_mapped_range().unwrap();
 
     let floats: &[f32] = bytemuck::cast_slice(&data);
     assert!(floats[0] >= 2.0);

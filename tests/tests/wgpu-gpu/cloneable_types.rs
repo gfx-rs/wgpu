@@ -24,6 +24,7 @@ fn cloneable_buffers(ctx: TestingContext) {
     buffer
         .slice(..)
         .get_mapped_range_mut()
+        .unwrap()
         .copy_from_slice(&buffer_contents);
 
     buffer.unmap();
@@ -35,7 +36,7 @@ fn cloneable_buffers(ctx: TestingContext) {
     let cloned_buffer_contents = buffer_contents.clone();
 
     buffer.slice(..).map_async(wgpu::MapMode::Read, move |_| {
-        let data = cloned_buffer.slice(..).get_mapped_range();
+        let data = cloned_buffer.slice(..).get_mapped_range().unwrap();
 
         assert_eq!(&*data, &cloned_buffer_contents);
     });
@@ -44,7 +45,7 @@ fn cloneable_buffers(ctx: TestingContext) {
         .poll(wgpu::PollType::wait_indefinitely())
         .unwrap();
 
-    let data = buffer.slice(..).get_mapped_range();
+    let data = buffer.slice(..).get_mapped_range().unwrap();
 
     assert_eq!(&*data, &buffer_contents);
 }

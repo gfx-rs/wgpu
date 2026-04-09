@@ -1288,22 +1288,28 @@ impl WebBuffer {
     }
 
     /// Obtains a reference to the re-usable buffer mapping as a Javascript array view.
-    fn get_mapped_range(&self, sub_range: Range<wgt::BufferAddress>) -> js_sys::Uint8Array {
+    fn get_mapped_range(
+        &self,
+        sub_range: Range<wgt::BufferAddress>,
+    ) -> Result<js_sys::Uint8Array, crate::MapRangeError> {
         let mut mapping = self.mapping.borrow_mut();
         let range = mapping.range.clone();
-        let array_buffer = mapping.mapped_buffer.get_or_insert_with(|| {
-            self.inner
+        if mapping.mapped_buffer.is_none() {
+            let buffer = self
+                .inner
                 .get_mapped_range_with_f64_and_f64(
                     range.start as f64,
                     (range.end - range.start) as f64,
                 )
-                .unwrap()
-        });
-        js_sys::Uint8Array::new_with_byte_offset_and_length(
+                .map_err(|e| crate::MapRangeError(format!("{e:?}")))?;
+            mapping.mapped_buffer = Some(buffer);
+        }
+        let array_buffer = mapping.mapped_buffer.as_ref().unwrap();
+        Ok(js_sys::Uint8Array::new_with_byte_offset_and_length(
             array_buffer,
             (sub_range.start - range.start) as u32,
             (sub_range.end - sub_range.start) as u32,
-        )
+        ))
     }
 
     /// Sets the range of the buffer which is presently mapped.
@@ -2821,15 +2827,15 @@ impl dispatch::BufferInterface for WebBuffer {
     fn get_mapped_range(
         &self,
         sub_range: Range<crate::BufferAddress>,
-    ) -> dispatch::DispatchBufferMappedRange {
-        let actual_mapping = self.get_mapped_range(sub_range);
-        WebBufferMappedRange {
+    ) -> Result<dispatch::DispatchBufferMappedRange, crate::MapRangeError> {
+        let actual_mapping = self.get_mapped_range(sub_range)?;
+        Ok(WebBufferMappedRange {
             actual_mapping,
             temporary_mapping: OnceCell::new(),
             temporary_mapping_modified: false,
             ident: crate::cmp::Identifier::create(),
         }
-        .into()
+        .into())
     }
 
     fn unmap(&self) {

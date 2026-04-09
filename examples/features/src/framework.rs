@@ -744,7 +744,7 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
                 ctx.async_poll(wgpu::PollType::wait_indefinitely())
                     .await
                     .unwrap();
-                let bytes = dst_buffer_slice.get_mapped_range().to_vec();
+                let bytes = dst_buffer_slice.get_mapped_range().unwrap().to_vec();
 
                 wgpu_test::image::compare_image_output(
                     dbg!(env!("CARGO_MANIFEST_DIR").to_string() + "/../../" + params.image_path),

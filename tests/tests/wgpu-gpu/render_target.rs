@@ -244,7 +244,7 @@ async fn run_test(
         .await
         .unwrap();
 
-    let data = slice.get_mapped_range();
+    let data = slice.get_mapped_range().unwrap();
     let succeeded = data.iter().all(|b| *b == u8::MAX);
     assert!(succeeded);
 }
@@ -436,7 +436,7 @@ async fn run_test_3d(ctx: TestingContext) {
         .await
         .unwrap();
 
-    let data = slice.get_mapped_range();
+    let data = slice.get_mapped_range().unwrap();
     let succeeded = data.iter().all(|b| *b == u8::MAX);
     assert!(succeeded);
 }

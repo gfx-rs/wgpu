@@ -313,7 +313,11 @@ async fn run_test(ctx: &TestingContext, num_workgroups: &[u32; 3]) -> [u32; 3] {
             .await
             .unwrap();
 
-        let view = test_resources.readback_buffer.slice(..).get_mapped_range();
+        let view = test_resources
+            .readback_buffer
+            .slice(..)
+            .get_mapped_range()
+            .unwrap();
 
         let current_res = *bytemuck::from_bytes(&view);
         drop(view);

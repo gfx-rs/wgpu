@@ -725,7 +725,8 @@ impl Limits {
             max_blas_geometry_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
             max_tlas_instance_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
             max_blas_primitive_count: 1 << 28,      // 2^28: Metal's minimum
-            max_acceleration_structures_per_shader_stage: 16, // Vulkan's minimum
+            // On metal acceleration structures are limited because they share buffer slots
+            max_acceleration_structures_per_shader_stage: 1,
             ..self
         }
     }
