@@ -192,6 +192,20 @@ impl BlendState {
         color: BlendComponent::OVER,
         alpha: BlendComponent::OVER,
     };
+
+    /// Blend mode that does standard additive blending.
+    pub const ADDITIVE: Self = Self {
+        color: BlendComponent {
+            src_factor: BlendFactor::One,
+            dst_factor: BlendFactor::One,
+            operation: BlendOperation::Add,
+        },
+        alpha: BlendComponent {
+            src_factor: BlendFactor::One,
+            dst_factor: BlendFactor::One,
+            operation: BlendOperation::Add,
+        },
+    };
 }
 
 /// Describes the color state of a render pipeline.
