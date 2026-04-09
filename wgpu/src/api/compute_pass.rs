@@ -107,8 +107,30 @@ impl ComputePass<'_> {
     ///
     /// This is an advanced, native-only API (no-op on web). Useful for native interoperability.
     ///
-    /// A user wanting to interoperate with the underlying native graphics APIs (Vulkan, DirectX12, Metal, etc) can use this API to generate barriers between wgpu commands and
-    /// the native API commands, for synchronization and resource state transition purposes.
+    /// A user wanting to interoperate with the underlying native graphics APIs (Vulkan, DirectX12, Metal, etc)
+    /// can use this API to generate barriers between wgpu commands and the native API commands,
+    /// for synchronization and resource state transition purposes.
+    /// Unlike [`CommandEncoder::transition_resources`], this does not require ending the pass and will
+    /// use the same semantics and granularity as the automatic barriers inserted for bindings.
+    ///
+    /// For example, users might want to pass buffer device addresses into a SPIR-V passthrough shader.
+    /// These resources cannot be tracked by wgpu since they do not appear in the bindings and will
+    /// cause data races if not handled - this function allows marking the underlying buffers behind
+    /// the address as used:
+    ///
+    /// ```ignore
+    /// let buffer_transitions =
+    ///     custom_resources
+    ///         .iter()
+    ///         .map(|resource| wgpu::BufferTransition {
+    ///             buffer: &resource.buffer,
+    ///             state: wgpu::BufferUses::STORAGE_READ_WRITE,
+    ///         });
+    /// pass.transition_resources(buffer_transitions, iter::empty())
+    ///
+    /// pass.dispatch_workgroups(x, y, z);
+    /// ```
+    ///
     pub fn transition_resources<'a>(
         &mut self,
         buffer_transitions: impl Iterator<Item = wgt::BufferTransition<&'a Buffer>>,
