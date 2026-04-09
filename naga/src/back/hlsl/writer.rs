@@ -3786,10 +3786,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "{}", self.names[&func_ctx.name_key(handle)])?
             }
             Expression::Load { pointer } => {
-                let ty_inner = func_ctx.resolve_type(pointer, &module.types);
-                if ty_inner.is_atomic_pointer(&module.types) {
-                    return Err(Error::Custom("Atomic loads must be baked".into()));
-                }
                 match func_ctx
                     .resolve_type(pointer, &module.types)
                     .pointer_space()
