@@ -1021,20 +1021,20 @@ impl Queue {
             .into());
         }
 
-        if source.origin.x + size.width > src_width {
+        if source.origin.x > src_width || src_width - source.origin.x < size.width {
             return Err(TransferError::TextureOverrun {
                 start_offset: source.origin.x,
-                end_offset: source.origin.x + size.width,
+                end_offset: source.origin.x.saturating_add(size.width),
                 texture_size: src_width,
                 dimension: crate::resource::TextureErrorDimension::X,
                 side: CopySide::Source,
             }
             .into());
         }
-        if source.origin.y + size.height > src_height {
+        if source.origin.y > src_height || src_height - source.origin.y < size.height {
             return Err(TransferError::TextureOverrun {
                 start_offset: source.origin.y,
-                end_offset: source.origin.y + size.height,
+                end_offset: source.origin.y.saturating_add(size.height),
                 texture_size: src_height,
                 dimension: crate::resource::TextureErrorDimension::Y,
                 side: CopySide::Source,

@@ -838,6 +838,9 @@ fn multi_draw_indirect(
     let vertex_limits = super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.steps);
 
     let stride = super::get_stride_of_indirect_args(family);
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8051): It would be better to report this
+    // as a validation error, but it's pathological, so let's do the simpler thing for now
+    // and do the better thing as part of eliminating pass/bundle duplication.
     assert!(offset <= wgt::BufferAddress::MAX - stride);
     state
         .buffer_memory_init_actions
