@@ -14,9 +14,33 @@ impl ImmediateSlots {
 
     /// Compute the bitmask for a byte range [offset .. offset + size_bytes).
     pub const fn from_range(offset: u32, size_bytes: u32) -> Self {
+        if size_bytes == 0 {
+            return Self(0);
+        }
         let lo = offset / 4;
         let hi = (offset + size_bytes).div_ceil(4);
         Self(u64::MAX << lo & u64::MAX >> (64 - hi))
+    }
+
+    /// Compute the slots occupied by a type at a given byte offset,
+    /// excluding padding between struct members.
+    pub fn from_type(
+        ty: &crate::TypeInner,
+        offset: u32,
+        types: &crate::UniqueArena<crate::Type>,
+        gctx: crate::proc::GlobalCtx,
+    ) -> Self {
+        match *ty {
+            crate::TypeInner::Struct { ref members, .. } => {
+                let mut slots = Self::default();
+                for member in members {
+                    let member_ty = &types[member.ty].inner;
+                    slots |= Self::from_type(member_ty, offset + member.offset, types, gctx);
+                }
+                slots
+            }
+            _ => Self::from_range(offset, ty.size(gctx)),
+        }
     }
 
     /// Returns true if `self` contains all bits in `other`.
@@ -39,14 +63,12 @@ impl ImmediateSlots {
             .map(|(_, var)| module.types[var.ty].inner.size(module.to_ctx()))
             .unwrap_or(0)
     }
+
     /// Compute the immediate slot bitmask for a pointer expression that
     /// refers to (part of) an immediate global variable.
     ///
     /// `global` is the handle of the immediate global variable that this
     /// pointer derives from (obtained from `assignable_global`).
-    ///
-    /// Handles the common cases like direct global load and single struct member access.
-    /// Falls back to requiring all slots of the global's type for anything more complex.
     pub(crate) fn for_pointer(
         pointer: crate::arena::Handle<crate::Expression>,
         global: crate::arena::Handle<crate::GlobalVariable>,
@@ -64,23 +86,21 @@ impl ImmediateSlots {
             global_expressions: &crate::Arena::new(),
         };
 
-        let all_slots = Self::from_range(0, types[global_vars[global].ty].inner.size(gctx));
+        let global_ty = &types[global_vars[global].ty].inner;
 
         match expression_arena[pointer] {
-            E::GlobalVariable(_) => all_slots,
+            E::GlobalVariable(_) => Self::from_type(global_ty, 0, types, gctx),
             E::AccessIndex { base, index } => {
                 if let E::GlobalVariable(_) = expression_arena[base] {
-                    if let TypeInner::Struct { ref members, .. } =
-                        types[global_vars[global].ty].inner
-                    {
+                    if let TypeInner::Struct { ref members, .. } = *global_ty {
                         let member = &members[index as usize];
-                        let size = types[member.ty].inner.size(gctx);
-                        return Self::from_range(member.offset, size);
+                        let member_ty = &types[member.ty].inner;
+                        return Self::from_type(member_ty, member.offset, types, gctx);
                     }
                 }
-                all_slots
+                Self::from_type(global_ty, 0, types, gctx)
             }
-            _ => all_slots,
+            _ => Self::from_type(global_ty, 0, types, gctx),
         }
     }
 }
@@ -163,6 +183,16 @@ mod tests {
             ImmediateSlots::from_range(0, 256),
             ImmediateSlots::from_raw(u64::MAX)
         );
+    }
+
+    #[test]
+    fn from_type_excludes_struct_padding() {
+        let module = crate::front::wgsl::parse_str("struct S { a: f32, b: vec4<f32> }").unwrap();
+        let struct_ty = (module.types.iter().map(|ty| ty.1))
+            .find(|ty| ty.name.as_deref() == Some("S"))
+            .unwrap();
+        let slots = ImmediateSlots::from_type(&struct_ty.inner, 0, &module.types, module.to_ctx());
+        assert_eq!(slots, ImmediateSlots::from_raw(0b1111_0001));
     }
 
     #[test]
