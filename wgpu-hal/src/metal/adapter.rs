@@ -922,11 +922,30 @@ impl super::CapabilitiesQuery {
             // This limit is the minimum of:
             // - "Maximum scalar or vector inputs to a fragment function"
             // - "Maximum number of input components to a fragment function" / 4
-            max_inter_stage_shader_variables: if (family_check
-                && device.supportsFamily(MTLGPUFamily::Apple4))
-                || device.supportsFeatureSet(MTLFeatureSet::macOS_GPUFamily1_v1)
+            //
+            // On non-Apple GPUs only, the Metal validation layers will error with:
+            //
+            // "number of shader varying components (125) exceeds limit (124).
+            // Note that on macOS the following attributes count towards the
+            // limit: [[position]], [[clip_distance]], [[point_size]],
+            // [[point_coord]], and, when read in the fragment shader,
+            // [[viewport_array_index]] & [[render_target_array_index]]."
+            //
+            // if the limit in the feature tables is crossed while also using
+            // one of the built-ins mentioned above.
+            //
+            // Note that the error says "on macOS" but it actually only applies
+            // to non-Apple GPUs.
+            //
+            // We only need to account for the position built-in since the others
+            // are either not used or they already count towards the limit
+            // calculation as specified by WebGPU.
+            max_inter_stage_shader_variables: if family_check
+                && device.supportsFamily(MTLGPUFamily::Apple4)
             {
-                31 // min(32 or 124, 124 / 4)
+                31 // min(124, 124 / 4)
+            } else if device.supportsFeatureSet(MTLFeatureSet::macOS_GPUFamily1_v1) {
+                30 // min(32, 124 / 4) - 1
             } else {
                 15 // min(60, 60 / 4)
             },
