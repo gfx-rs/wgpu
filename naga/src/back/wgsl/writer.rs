@@ -309,6 +309,8 @@ impl<W: Write> Writer<W> {
             crate::Statement::Switch { ref cases, .. } => cases
                 .iter()
                 .any(|c| c.body.iter().any(Self::find_debug_printf)),
+            // Note: does not match on function `Call`s to look inside function bodies recursively.
+            // This is fine because this is called on all functions and entrypoints in a module to check for `debugPrintf` usage.
             _ => false,
         }
     }
