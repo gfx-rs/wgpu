@@ -2374,7 +2374,6 @@ pub enum Statement {
         target: Handle<Expression>,
         data: CooperativeData,
     },
-
     /// This corresponds to `debugPrintf` in WGSL
     DebugPrintf {
         format: String,
