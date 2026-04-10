@@ -254,6 +254,7 @@ pub enum ImplementedEnableExtension {
     /// Enables `i16`/`u16` 16-bit integer support in WGSL, native only.
     WgpuInt16,
     /// Enables the `wgpu_debug_printf` extension, allows using debugPrintf.
+    /// Enables the `wgpu_debug_printf` extension, allows using `debugPrintf`.
     WgpuDebugPrintf,
 }
 
