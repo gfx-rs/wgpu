@@ -142,10 +142,18 @@ impl crate::Surface for super::Surface {
                         unsafe { objc2::msg_send![&*delegate, window] };
 
                     if let Some(window) = window {
-                        const NS_WINDOW_OCCLUSION_STATE_VISIBLE: usize = 1 << 1;
-                        let occlusion_state: usize =
-                            unsafe { objc2::msg_send![&*window, occlusionState] };
-                        let is_visible = (occlusion_state & NS_WINDOW_OCCLUSION_STATE_VISIBLE) != 0;
+                        // Use `isVisible` instead of `occlusionState` to determine
+                        // if the window can be rendered to. `occlusionState` does not
+                        // have the `NSWindowOcclusionStateVisible` bit set when the
+                        // app is launched from Terminal or another CLI environment on
+                        // macOS, causing `get_current_texture()` to return `Occluded`
+                        // indefinitely — even though the window is on-screen and
+                        // interactive. `isVisible` correctly reflects the window's
+                        // actual visibility in all launch contexts.
+                        //
+                        // See: https://github.com/gfx-rs/wgpu/issues/8309
+                        let is_visible: bool =
+                            unsafe { objc2::msg_send![&*window, isVisible] };
 
                         if !is_visible {
                             return Err(crate::SurfaceError::Occluded);
