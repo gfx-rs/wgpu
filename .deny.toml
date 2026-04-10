@@ -45,6 +45,9 @@ skip = [
 
     # parking-lot and winit use old versions
     { name = "redox_syscall", version = "0.4.1" },
+    # winit uses this old version
+    { name = "redox_syscall", version = "0.4.1" },
+    # parking-lot uses this old version
     { name = "redox_syscall", version = "0.5.18" },
 
     # deno uses an old version
