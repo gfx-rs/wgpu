@@ -36,7 +36,7 @@ pub enum Token<'a> {
     /// An identifier, possibly a reserved word.
     Word(&'a str),
 
-    /// A string literal, used for things like debugPrintf format strings.
+    /// A string literal, used for `debugPrintf` format strings.
     String(&'a str),
 
     /// A miscellaneous single-character operator, like an arithmetic unary or
