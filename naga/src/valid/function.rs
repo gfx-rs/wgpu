@@ -1780,11 +1780,6 @@ impl super::Validator {
                     ref arguments,
                 } => {
                     for &argument in arguments {
-                        if !self.valid_expression_set.contains(argument) {
-                            return Err(FunctionError::InvalidExpression(argument)
-                                .with_span_handle(argument, context.expressions));
-                        }
-
                         let ty =
                             context.resolve_type_inner(argument, &self.valid_expression_set)?;
                         match *ty {
