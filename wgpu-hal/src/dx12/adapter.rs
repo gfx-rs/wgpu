@@ -917,8 +917,9 @@ impl super::Adapter {
                     // 16
                     min_storage_buffer_offset_alignment:
                         Direct3D12::D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT,
-                    // 32
-                    max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
+                    // 30
+                    max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT
+                        - 2, // -2 for `SV_VertexID` and `SV_InstanceID`
                     // 2048
                     max_vertex_buffer_array_stride: Direct3D12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
                     // 31
