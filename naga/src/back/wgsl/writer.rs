@@ -1270,8 +1270,7 @@ impl<W: Write> Writer<W> {
                 ref format,
                 ref arguments,
             } => {
-                write!(self.out, "{level}")?;
-                write!(self.out, "debugPrintf(\"{}\"", format)?;
+                write!(self.out, "{level}debugPrintf(\"{}\"", format)?;
                 for &arg in arguments {
                     write!(self.out, ", ")?;
                     self.write_expr(module, arg, func_ctx)?;
