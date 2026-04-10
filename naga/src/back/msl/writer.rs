@@ -4473,7 +4473,11 @@ impl<W: Write> Writer<W> {
                     ref format,
                     ref arguments,
                 } => {
-                    write!(self.out, "{level}metal::os_log_default.log_info(\"{}\"", format)?;
+                    write!(
+                        self.out,
+                        "{level}metal::os_log_default.log_info(\"{}\"",
+                        format
+                    )?;
                     for &arg in arguments {
                         write!(self.out, ", ")?;
                         self.put_expression(arg, &context.expression, true)?;
