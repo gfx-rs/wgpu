@@ -185,12 +185,11 @@ fn validate_render_bundle_encoder_descriptor(
 ) -> Result<(bool, bool), CreateRenderBundleError> {
     let mut have_attachment = false;
 
-    if let Some(device) = device {
-        check_color_attachment_count(
-            desc.color_formats.len(),
-            device.limits.max_color_attachments,
-        )?;
-    }
+    let max_color_attachments = device.map_or(hal::MAX_COLOR_ATTACHMENTS as u32, |device| {
+        assert!(device.limits.max_color_attachments <= hal::MAX_COLOR_ATTACHMENTS as u32);
+        device.limits.max_color_attachments
+    });
+    check_color_attachment_count(desc.color_formats.len(), max_color_attachments)?;
 
     for &format in desc.color_formats.iter().flatten() {
         have_attachment = true;
