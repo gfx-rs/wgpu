@@ -283,7 +283,9 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    //traverse nested blocks (if/loop/etc) to find debugPrintf
+    /// Returns `true` if a `debugPrintf` is found anywhere within this statement, `false` otherwise.
+    ///
+    /// Does not traverse into function calls.
     fn find_debug_printf(stmt: &crate::Statement) -> bool {
         match *stmt {
             crate::Statement::DebugPrintf { .. } => true,
