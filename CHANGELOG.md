@@ -108,6 +108,10 @@ Bottom level categories:
 - Fixed handling of unterminated block comments. By @BKDaugherty in [#9356](https://github.com/gfx-rs/wgpu/pull/9356).
 - Enforce that `@must_use` appear only on function declarations. By @dnsn021 in [#9367](https://github.com/gfx-rs/wgpu/pull/9367).
 
+#### Vulkan
+
+- Fixed validation errors when frames take longer than the specified swapchain acquire timeout. By @atlv24 in [#9405](https://github.com/gfx-rs/wgpu/pull/9405).
+
 #### dx12
 
 - Fixed use of a texture view without `TextureUsage::TEXTURE_BINDING` as a read-only depth attachment. By @andyleiserson in [#9346](https://github.com/gfx-rs/wgpu/pull/9346).
