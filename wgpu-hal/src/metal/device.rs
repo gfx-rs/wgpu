@@ -521,6 +521,14 @@ impl crate::Device for super::Device {
                 && self.shared.private_caps.supports_memoryless_storage
             {
                 MTLStorageMode::Memoryless
+            } else if cfg!(target_pointer_width = "32") {
+                // On arm64_32 (watchOS ILP32), the AGXMetalS4 driver (A13/S6 GPU)
+                // crashes in copyFromTexture:toBuffer: on Private textures — null
+                // deref at offset 0x50 in the driver's internal texture state. Use
+                // Shared storage which works correctly on Apple's unified memory
+                // architecture and matches what native Swift Metal code uses on
+                // these devices.
+                MTLStorageMode::Shared
             } else {
                 MTLStorageMode::Private
             };
