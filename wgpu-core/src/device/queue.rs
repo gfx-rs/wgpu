@@ -1383,100 +1383,22 @@ impl Queue {
 
             let mut pending_writes = self.pending_writes.lock();
 
-            {
-                used_surface_textures.set_size(self.device.tracker_indices.textures.size());
-                for texture in pending_writes.dst_textures.values() {
-                    match texture.try_inner(&snatch_guard) {
-                        Ok(TextureInner::Native { .. }) => {}
-                        Ok(TextureInner::Surface { .. }) => {
-                            // Compare the Arcs by pointer as Textures don't implement Eq
-                            submit_surface_textures_owned
-                                .insert(Arc::as_ptr(texture), texture.clone());
-
-                            unsafe {
-                                used_surface_textures
-                                    .merge_single(texture, None, wgt::TextureUses::PRESENT)
-                                    .unwrap()
-                            };
-                        }
-                        // The texture must not have been destroyed when its usage here was
-                        // encoded. If it was destroyed after that, then it was transferred
-                        // to `pending_writes.temp_resources` at the time of destruction, so
-                        // we are still okay to use it.
-                        Err(DestroyedResourceError(_)) => {}
-                    }
-                }
-
-                if !used_surface_textures.is_empty() {
-                    let mut trackers = self.device.trackers.lock();
-
-                    let texture_barriers = trackers
-                        .textures
-                        .set_from_usage_scope_and_drain_transitions(
-                            &used_surface_textures,
-                            &snatch_guard,
-                        )
-                        .collect::<Vec<_>>();
-                    unsafe {
-                        pending_writes
-                            .command_encoder
-                            .transition_textures(&texture_barriers);
-                    };
-                }
+            if let Err(e) = self.submit_with_pending_writes(
+                &mut pending_writes,
+                active_executions,
+                submit_surface_textures_owned,
+                fence.as_mut(),
+                submit_index,
+                &snatch_guard,
+            ) {
+                break 'error Err(e.into());
             }
 
-            match pending_writes.pre_submit(&self.device.command_allocator, &self.device, self) {
-                Ok(Some(pending_execution)) => {
-                    active_executions.insert(0, pending_execution);
-                }
-                Ok(None) => {}
-                Err(e) => break 'error Err(e.into()),
-            }
-            let hal_command_buffers = active_executions
-                .iter()
-                .flat_map(|e| e.inner.list.iter().map(|b| b.as_ref()))
-                .collect::<Vec<_>>();
+            drop(command_index_guard);
 
-            {
-                let mut submit_surface_textures =
-                    SmallVec::<[&dyn hal::DynSurfaceTexture; 2]>::with_capacity(
-                        submit_surface_textures_owned.len(),
-                    );
-
-                for texture in submit_surface_textures_owned.values() {
-                    let raw = match texture.inner.get(&snatch_guard) {
-                        Some(TextureInner::Surface { raw, .. }) => raw.as_ref(),
-                        _ => unreachable!(),
-                    };
-                    submit_surface_textures.push(raw);
-                }
-
-                if let Err(e) = unsafe {
-                    self.raw().submit(
-                        &hal_command_buffers,
-                        &submit_surface_textures,
-                        (fence.as_mut(), submit_index),
-                    )
-                }
-                .map_err(|e| self.device.handle_hal_error(e))
-                {
-                    break 'error Err(e.into());
-                }
-
-                drop(command_index_guard);
-
-                // Advance the successful submission index.
-                self.device
-                    .last_successful_submission_index
-                    .fetch_max(submit_index, Ordering::SeqCst);
-            }
+            drop(pending_writes);
 
             profiling::scope!("cleanup");
-
-            // this will register the new submission to the life time tracker
-            self.lock_life()
-                .track_submission(submit_index, active_executions);
-            drop(pending_writes);
 
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
@@ -1514,6 +1436,99 @@ impl Queue {
         api_log!("Queue::submit returned submit index {submit_index}");
 
         Ok(submit_index)
+    }
+
+    /// Flush pending writes and any additional command encoders as a HAL submission.
+    ///
+    /// Advances `last_successful_submission_index` and registers the submission with the lifetime tracker.
+    fn submit_with_pending_writes(
+        &self,
+        pending_writes: &mut PendingWrites,
+        mut active_executions: Vec<EncoderInFlight>,
+        mut surface_textures: FastHashMap<*const Texture, Arc<Texture>>,
+        fence: &mut dyn hal::DynFence,
+        submit_index: SubmissionIndex,
+        snatch_guard: &SnatchGuard,
+    ) -> Result<(), DeviceError> {
+        let mut used_surface_textures = track::TextureUsageScope::default();
+        used_surface_textures.set_size(self.device.tracker_indices.textures.size());
+        for texture in pending_writes.dst_textures.values() {
+            match texture.try_inner(snatch_guard) {
+                Ok(TextureInner::Native { .. }) => {}
+                Ok(TextureInner::Surface { .. }) => {
+                    // Compare the Arcs by pointer as Textures don't implement Eq
+                    surface_textures.insert(Arc::as_ptr(texture), texture.clone());
+
+                    unsafe {
+                        used_surface_textures
+                            .merge_single(texture, None, wgt::TextureUses::PRESENT)
+                            .unwrap()
+                    };
+                }
+                // The texture must not have been destroyed when its usage here was
+                // encoded. If it was destroyed after that, then it was transferred
+                // to `pending_writes.temp_resources` at the time of destruction, so
+                // we are still okay to use it.
+                Err(DestroyedResourceError(_)) => {}
+            }
+        }
+
+        if !used_surface_textures.is_empty() {
+            let mut trackers = self.device.trackers.lock();
+
+            let texture_barriers = trackers
+                .textures
+                .set_from_usage_scope_and_drain_transitions(&used_surface_textures, snatch_guard)
+                .collect::<Vec<_>>();
+            unsafe {
+                pending_writes
+                    .command_encoder
+                    .transition_textures(&texture_barriers);
+            };
+        }
+
+        match pending_writes.pre_submit(&self.device.command_allocator, &self.device, self) {
+            Ok(Some(pending_execution)) => {
+                active_executions.insert(0, pending_execution);
+            }
+            Ok(None) => {}
+            Err(e) => return Err(e),
+        }
+        let hal_command_buffers = active_executions
+            .iter()
+            .flat_map(|e| e.inner.list.iter().map(|b| b.as_ref()))
+            .collect::<Vec<_>>();
+
+        {
+            let mut submit_surface_textures =
+                SmallVec::<[&dyn hal::DynSurfaceTexture; 2]>::with_capacity(surface_textures.len());
+            for texture in surface_textures.values() {
+                let raw = match texture.inner.get(snatch_guard) {
+                    Some(TextureInner::Surface { raw, .. }) => raw.as_ref(),
+                    _ => unreachable!(),
+                };
+                submit_surface_textures.push(raw);
+            }
+
+            unsafe {
+                self.raw().submit(
+                    &hal_command_buffers,
+                    &submit_surface_textures,
+                    (fence, submit_index),
+                )
+            }
+            .map_err(|e| self.device.handle_hal_error(e))?;
+
+            // Advance the successful submission index.
+            self.device
+                .last_successful_submission_index
+                .fetch_max(submit_index, Ordering::SeqCst);
+        }
+        // this will register the new submission to the life time tracker
+        self.lock_life()
+            .track_submission(submit_index, active_executions);
+
+        Ok(())
     }
 
     pub fn get_timestamp_period(&self) -> f32 {
