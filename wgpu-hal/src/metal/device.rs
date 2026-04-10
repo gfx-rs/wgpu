@@ -1280,8 +1280,11 @@ impl crate::Device for super::Device {
             }
 
             // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
-            let supports_mutability =
-                available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0);
+            // Disabled on arm64_32 (watchOS ILP32): the AGXMetalS4 driver exhibits
+            // instability when mutability hints are combined with Shared storage
+            // mode textures. Conservative disable until broader device coverage.
+            let supports_mutability = !cfg!(target_pointer_width = "32")
+                && available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0);
 
             let (primitive_class, raw_primitive_type) =
                 conv::map_primitive_topology(desc.primitive.topology);
