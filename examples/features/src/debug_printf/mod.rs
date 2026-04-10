@@ -27,7 +27,7 @@ impl crate::framework::Example for Example {
 
         @compute @workgroup_size(8, 1, 1)
         fn main(@builtin(local_invocation_index) idx: u32) {
-            // We use a specific ID to identify our print in the logs
+             // We use a specific ID to identify our print in the logs
              debugPrintf("WGSL_METAL_LOG: Thread index is %u", idx);
         }
     "#;
