@@ -466,11 +466,11 @@ impl<W: Write> Writer<W> {
         let mut functions_to_check = module.functions.iter().map(|(_, f)| f).collect::<Vec<_>>();
         functions_to_check.extend(module.entry_points.iter().map(|ep| &ep.function));
 
-        for func in functions_to_check {
+        'outer: for func in functions_to_check {
             for stmt in func.body.iter() {
                 if Self::find_debug_printf(stmt) {
                     needed.debug_printf = true;
-                    break;
+                    break 'outer;
                 }
             }
         }
