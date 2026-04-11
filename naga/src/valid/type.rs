@@ -323,6 +323,9 @@ impl super::Validator {
                             flag: "SHADER_INT16",
                         });
                     }
+
+                    immediates_compatibility = Err(ImmediateError::InvalidScalar(scalar));
+
                     true
                 } else if scalar.width == 8 {
                     if !self.capabilities.contains(Capabilities::SHADER_INT64) {
@@ -344,6 +347,9 @@ impl super::Validator {
                             flag: "SHADER_INT16",
                         });
                     }
+
+                    immediates_compatibility = Err(ImmediateError::InvalidScalar(scalar));
+
                     true
                 } else if scalar.width == 8 {
                     if !self.capabilities.contains(Capabilities::SHADER_INT64) {
