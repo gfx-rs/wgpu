@@ -84,7 +84,6 @@ macro_rules! impl_deferred_command_buffer_actions {
         /// # Panics
         ///
         /// - If `bounds` is outside the bounds of `buffer`.
-        /// - If `bounds` has a length less than 1.
         ///
         /// # Panics During Submit
         ///
@@ -92,7 +91,7 @@ macro_rules! impl_deferred_command_buffer_actions {
         /// - If the buffer’s [`BufferUsages`] do not allow the requested [`MapMode`].
         /// - If `bounds` is outside of the bounds of `buffer`.
         /// - If `bounds` does not start at a multiple of [`MAP_ALIGNMENT`].
-        /// - If `bounds` has a length that is not a multiple of 4 greater than 0.
+        /// - If `bounds` has a length that is not a multiple of 4.
         ///
         /// [q::s]: Queue::submit
         /// [i::p_a]: Instance::poll_all

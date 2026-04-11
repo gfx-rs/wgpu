@@ -93,6 +93,7 @@ impl<'a> RenderBundleEncoder<'a> {
             &buffer_slice.buffer.inner,
             index_format,
             buffer_slice.offset,
+            // TODO(https://github.com/gfx-rs/wgpu/issues/3170): Empty slices should be supported here
             Some(buffer_slice.size_expect_nonzero()),
         );
     }
@@ -117,7 +118,8 @@ impl<'a> RenderBundleEncoder<'a> {
                 slot,
                 Some(&buffer_slice.buffer.inner),
                 buffer_slice.offset,
-                Some(buffer_slice.size),
+                // TODO(https://github.com/gfx-rs/wgpu/issues/3170): Empty slices should be supported here
+                Some(buffer_slice.size_expect_nonzero()),
             );
         } else {
             self.inner.set_vertex_buffer(slot, None, 0, None);
