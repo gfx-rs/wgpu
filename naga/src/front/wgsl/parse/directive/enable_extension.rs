@@ -17,6 +17,8 @@ pub(crate) struct EnableExtensions {
     dual_source_blending: bool,
     /// Whether `enable f16;` was written earlier in the shader module.
     f16: bool,
+    /// Whether `enable wgpu_int16;` was written earlier in the shader module.
+    wgpu_int16: bool,
     clip_distances: bool,
     wgpu_cooperative_matrix: bool,
     draw_index: bool,
@@ -32,6 +34,7 @@ impl EnableExtensions {
             wgpu_ray_query_vertex_return: false,
             wgpu_ray_tracing_pipelines: false,
             f16: false,
+            wgpu_int16: false,
             dual_source_blending: false,
             clip_distances: false,
             wgpu_cooperative_matrix: false,
@@ -54,6 +57,7 @@ impl EnableExtensions {
             }
             ImplementedEnableExtension::DualSourceBlending => &mut self.dual_source_blending,
             ImplementedEnableExtension::F16 => &mut self.f16,
+            ImplementedEnableExtension::WgpuInt16 => &mut self.wgpu_int16,
             ImplementedEnableExtension::ClipDistances => &mut self.clip_distances,
             ImplementedEnableExtension::WgpuCooperativeMatrix => &mut self.wgpu_cooperative_matrix,
             ImplementedEnableExtension::DrawIndex => &mut self.draw_index,
@@ -74,6 +78,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::WgpuRayTracingPipeline => self.wgpu_ray_tracing_pipelines,
             ImplementedEnableExtension::DualSourceBlending => self.dual_source_blending,
             ImplementedEnableExtension::F16 => self.f16,
+            ImplementedEnableExtension::WgpuInt16 => self.wgpu_int16,
             ImplementedEnableExtension::ClipDistances => self.clip_distances,
             ImplementedEnableExtension::WgpuCooperativeMatrix => self.wgpu_cooperative_matrix,
             ImplementedEnableExtension::DrawIndex => self.draw_index,
@@ -132,6 +137,7 @@ impl EnableExtension {
     const PRIMITIVE_INDEX: &'static str = "primitive_index";
     const DRAW_INDEX: &'static str = "draw_index";
     const PER_VERTEX: &'static str = "wgpu_per_vertex";
+    const INT16: &'static str = "wgpu_int16";
 
     /// Convert from a sentinel word in WGSL into its associated [`EnableExtension`], if possible.
     pub(crate) fn from_ident(word: &str, span: Span) -> Result<'_, Self> {
@@ -156,6 +162,7 @@ impl EnableExtension {
             Self::DRAW_INDEX => Self::Implemented(ImplementedEnableExtension::DrawIndex),
             Self::PRIMITIVE_INDEX => Self::Implemented(ImplementedEnableExtension::PrimitiveIndex),
             Self::PER_VERTEX => Self::Implemented(ImplementedEnableExtension::PerVertex),
+            Self::INT16 => Self::Implemented(ImplementedEnableExtension::WgpuInt16),
             _ => return Err(Box::new(Error::UnknownEnableExtension(span, word))),
         })
     }
@@ -177,6 +184,7 @@ impl EnableExtension {
                 ImplementedEnableExtension::PrimitiveIndex => Self::PRIMITIVE_INDEX,
                 ImplementedEnableExtension::WgpuRayTracingPipeline => Self::RAY_TRACING_PIPELINE,
                 ImplementedEnableExtension::PerVertex => Self::PER_VERTEX,
+                ImplementedEnableExtension::WgpuInt16 => Self::INT16,
             },
             Self::Unimplemented(kind) => match kind {
                 UnimplementedEnableExtension::Subgroups => Self::SUBGROUPS,
@@ -227,6 +235,8 @@ pub enum ImplementedEnableExtension {
     PrimitiveIndex,
     /// Enables the `wgpu_per_vertex` extension, allows using `@interpolate(per_vertex)` attribute in WGSL, native only.
     PerVertex,
+    /// Enables `i16`/`u16` 16-bit integer support in WGSL, native only.
+    WgpuInt16,
 }
 
 impl ImplementedEnableExtension {
@@ -243,6 +253,7 @@ impl ImplementedEnableExtension {
         Self::DrawIndex,
         Self::PrimitiveIndex,
         Self::PerVertex,
+        Self::WgpuInt16,
     ];
 
     /// Returns slice of all variants of [`ImplementedEnableExtension`].
@@ -265,6 +276,7 @@ impl ImplementedEnableExtension {
             Self::DrawIndex => C::DRAW_INDEX,
             Self::PrimitiveIndex => C::PRIMITIVE_INDEX,
             Self::PerVertex => C::PER_VERTEX,
+            Self::WgpuInt16 => C::SHADER_INT16,
         }
     }
 }

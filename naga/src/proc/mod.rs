@@ -90,6 +90,8 @@ pub enum HashableLiteral {
     F64(u64),
     F32(u32),
     F16(u16),
+    U16(u16),
+    I16(i16),
     U32(u32),
     I32(i32),
     U64(u64),
@@ -105,6 +107,8 @@ impl From<crate::Literal> for HashableLiteral {
             crate::Literal::F64(v) => Self::F64(v.to_bits()),
             crate::Literal::F32(v) => Self::F32(v.to_bits()),
             crate::Literal::F16(v) => Self::F16(v.to_bits()),
+            crate::Literal::U16(v) => Self::U16(v),
+            crate::Literal::I16(v) => Self::I16(v),
             crate::Literal::U32(v) => Self::U32(v),
             crate::Literal::I32(v) => Self::I32(v),
             crate::Literal::U64(v) => Self::U64(v),
@@ -124,6 +128,8 @@ impl crate::Literal {
             (value, crate::ScalarKind::Float, 2) => {
                 Some(Self::F16(half::f16::from_f32_const(value as _)))
             }
+            (value, crate::ScalarKind::Uint, 2) => Some(Self::U16(value as _)),
+            (value, crate::ScalarKind::Sint, 2) => Some(Self::I16(value as _)),
             (value, crate::ScalarKind::Uint, 4) => Some(Self::U32(value as _)),
             (value, crate::ScalarKind::Sint, 4) => Some(Self::I32(value as _)),
             (value, crate::ScalarKind::Uint, 8) => Some(Self::U64(value as _)),
@@ -151,6 +157,7 @@ impl crate::Literal {
             (crate::ScalarKind::Float, 2) => Some(Self::F16(half::f16::from_f32_const(-1.0))),
             (crate::ScalarKind::Sint, 8) => Some(Self::I64(-1)),
             (crate::ScalarKind::Sint, 4) => Some(Self::I32(-1)),
+            (crate::ScalarKind::Sint, 2) => Some(Self::I16(-1)),
             (crate::ScalarKind::AbstractInt, 8) => Some(Self::AbstractInt(-1)),
             _ => None,
         }
@@ -160,7 +167,7 @@ impl crate::Literal {
         match *self {
             Self::F64(_) | Self::I64(_) | Self::U64(_) => 8,
             Self::F32(_) | Self::U32(_) | Self::I32(_) => 4,
-            Self::F16(_) => 2,
+            Self::F16(_) | Self::U16(_) | Self::I16(_) => 2,
             Self::Bool(_) => crate::BOOL_WIDTH,
             Self::AbstractInt(_) | Self::AbstractFloat(_) => crate::ABSTRACT_WIDTH,
         }
@@ -170,6 +177,8 @@ impl crate::Literal {
             Self::F64(_) => crate::Scalar::F64,
             Self::F32(_) => crate::Scalar::F32,
             Self::F16(_) => crate::Scalar::F16,
+            Self::U16(_) => crate::Scalar::U16,
+            Self::I16(_) => crate::Scalar::I16,
             Self::U32(_) => crate::Scalar::U32,
             Self::I32(_) => crate::Scalar::I32,
             Self::U64(_) => crate::Scalar::U64,
@@ -192,6 +201,8 @@ impl TryFrom<crate::Literal> for u32 {
 
     fn try_from(value: crate::Literal) -> Result<Self, Self::Error> {
         match value {
+            crate::Literal::U16(value) => Ok(value as u32),
+            crate::Literal::I16(value) => value.try_into().map_err(|_| ConstValueError::Negative),
             crate::Literal::U32(value) => Ok(value),
             crate::Literal::I32(value) => value.try_into().map_err(|_| ConstValueError::Negative),
             _ => Err(ConstValueError::InvalidType),

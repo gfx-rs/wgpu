@@ -561,6 +561,14 @@ impl crate::Scalar {
             } => "half",
             Self {
                 kind: Sk::Sint,
+                width: 2,
+            } => "short",
+            Self {
+                kind: Sk::Uint,
+                width: 2,
+            } => "ushort",
+            Self {
+                kind: Sk::Sint,
                 width: 4,
             } => "int",
             Self {
@@ -1799,6 +1807,12 @@ impl<W: Write> Writer<W> {
                     let suffix = if value.fract() == 0.0 { ".0" } else { "" };
                     write!(self.out, "{value}{suffix}")?;
                 }
+            }
+            crate::Literal::U16(value) => {
+                write!(self.out, "static_cast<ushort>({value})")?;
+            }
+            crate::Literal::I16(value) => {
+                write!(self.out, "static_cast<short>({value})")?;
             }
             crate::Literal::U32(value) => {
                 write!(self.out, "{value}u")?;
@@ -3058,6 +3072,16 @@ impl<W: Write> Writer<W> {
     where
         F: Fn(&mut Self, &ExpressionContext, bool) -> BackendResult,
     {
+        // For sub-32-bit types, C++ integer promotion can widen the inner
+        // expression (e.g. `ushort + ushort` promotes to `int`), making a
+        // direct `as_type<short>(int_expr)` invalid due to size mismatch.
+        // We wrap with `static_cast` to truncate back before the bitcast.
+        let needs_truncation = match *cast_to {
+            crate::TypeInner::Scalar(scalar) => scalar.width < 4,
+            crate::TypeInner::Vector { scalar, .. } => scalar.width < 4,
+            _ => false,
+        };
+
         write!(self.out, "as_type<")?;
         match *cast_to {
             crate::TypeInner::Scalar(scalar) => put_numeric_type(&mut self.out, scalar, &[])?,
@@ -3068,6 +3092,32 @@ impl<W: Write> Writer<W> {
         };
         write!(self.out, ">(")?;
 
+        if needs_truncation {
+            write!(self.out, "static_cast<")?;
+            // Cast to the unsigned version of the target type to truncate
+            let unsigned_scalar = match *cast_to {
+                crate::TypeInner::Scalar(scalar) => crate::Scalar {
+                    kind: crate::ScalarKind::Uint,
+                    ..scalar
+                },
+                crate::TypeInner::Vector { scalar, .. } => crate::Scalar {
+                    kind: crate::ScalarKind::Uint,
+                    ..scalar
+                },
+                _ => unreachable!(),
+            };
+            match *cast_to {
+                crate::TypeInner::Scalar(_) => {
+                    put_numeric_type(&mut self.out, unsigned_scalar, &[])?
+                }
+                crate::TypeInner::Vector { size, .. } => {
+                    put_numeric_type(&mut self.out, unsigned_scalar, &[size])?
+                }
+                _ => unreachable!(),
+            };
+            write!(self.out, ">(")?;
+        }
+
         // if it's packed, we must unpack it (e.g., float3(val)) before the bitcast.
         if let Some(scalar) = context.get_packed_vec_kind(inner_expr) {
             put_numeric_type(&mut self.out, scalar, &[crate::VectorSize::Tri])?;
@@ -3076,6 +3126,10 @@ impl<W: Write> Writer<W> {
             write!(self.out, ")")?;
         } else {
             put_expression(self, context, true)?;
+        }
+
+        if needs_truncation {
+            write!(self.out, ")")?;
         }
 
         write!(self.out, ")")?;
@@ -5815,7 +5869,7 @@ template <typename A>
                 let level = back::Level(1);
                 writeln!(
                     self.out,
-                    "{level}return as_type<{type_name}>(-as_type<{unsigned_type_name}>(val));"
+                    "{level}return as_type<{type_name}>(static_cast<{unsigned_type_name}>(-as_type<{unsigned_type_name}>(val)));"
                 )?;
                 writeln!(self.out, "}}")?;
                 writeln!(self.out)?;
@@ -5879,6 +5933,7 @@ template <typename A>
                 match scalar.kind {
                     crate::ScalarKind::Sint => {
                         let min_val = match scalar.width {
+                            2 => crate::Literal::I16(i16::MIN),
                             4 => crate::Literal::I32(i32::MIN),
                             8 => crate::Literal::I64(i64::MIN),
                             _ => {
@@ -5889,14 +5944,14 @@ template <typename A>
                         };
                         write!(
                             self.out,
-                            "{level}return lhs / metal::select(rhs, 1, (lhs == "
+                            "{level}return lhs / metal::select(rhs, {type_name}(1), (lhs == "
                         )?;
                         self.put_literal(min_val)?;
-                        writeln!(self.out, " & rhs == -1) | (rhs == 0));")?
+                        writeln!(self.out, " & rhs == {type_name}(-1)) | (rhs == {type_name}(0)));")?
                     }
                     crate::ScalarKind::Uint => writeln!(
                         self.out,
-                        "{level}return lhs / metal::select(rhs, 1u, rhs == 0u);"
+                        "{level}return lhs / metal::select(rhs, {type_name}(1), rhs == {type_name}(0));"
                     )?,
                     _ => unreachable!(),
                 }
@@ -5957,6 +6012,7 @@ template <typename A>
                 match scalar.kind {
                     crate::ScalarKind::Sint => {
                         let min_val = match scalar.width {
+                            2 => crate::Literal::I16(i16::MIN),
                             4 => crate::Literal::I32(i32::MIN),
                             8 => crate::Literal::I64(i64::MIN),
                             _ => {
@@ -5967,15 +6023,15 @@ template <typename A>
                         };
                         write!(
                             self.out,
-                            "{level}{rhs_type_name} divisor = metal::select(rhs, 1, (lhs == "
+                            "{level}{rhs_type_name} divisor = metal::select(rhs, {type_name}(1), (lhs == "
                         )?;
                         self.put_literal(min_val)?;
-                        writeln!(self.out, " & rhs == -1) | (rhs == 0));")?;
+                        writeln!(self.out, " & rhs == {type_name}(-1)) | (rhs == {type_name}(0)));")?;
                         writeln!(self.out, "{level}return lhs - (lhs / divisor) * divisor;")?
                     }
                     crate::ScalarKind::Uint => writeln!(
                         self.out,
-                        "{level}return lhs % metal::select(rhs, 1u, rhs == 0u);"
+                        "{level}return lhs % metal::select(rhs, {type_name}(1), rhs == {type_name}(0));"
                     )?,
                     _ => unreachable!(),
                 }
@@ -6056,7 +6112,7 @@ template <typename A>
 
                 writeln!(self.out, "{type_name} {ABS_FUNCTION}({type_name} val) {{")?;
                 let level = back::Level(1);
-                writeln!(self.out, "{level}return metal::select(as_type<{type_name}>(-as_type<{unsigned_type_name}>(val)), val, val >= 0);")?;
+                writeln!(self.out, "{level}return metal::select(as_type<{type_name}>(static_cast<{unsigned_type_name}>(-as_type<{unsigned_type_name}>(val))), val, val >= {type_name}(0));")?;
                 writeln!(self.out, "}}")?;
                 writeln!(self.out)?;
             }

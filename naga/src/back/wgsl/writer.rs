@@ -289,6 +289,7 @@ impl<W: Write> Writer<W> {
         #[derive(Default)]
         struct RequiredEnabled {
             f16: bool,
+            int16: bool,
             dual_source_blending: bool,
             clip_distances: bool,
             mesh_shaders: bool,
@@ -355,6 +356,7 @@ impl<W: Write> Writer<W> {
                 | TypeInner::Vector { scalar, .. }
                 | TypeInner::Matrix { scalar, .. } => {
                     needed.f16 |= scalar == crate::Scalar::F16;
+                    needed.int16 |= scalar == crate::Scalar::I16 || scalar == crate::Scalar::U16;
                 }
                 TypeInner::Struct { ref members, .. } => {
                     for binding in members.iter().filter_map(|m| m.binding.as_ref()) {
@@ -427,6 +429,10 @@ impl<W: Write> Writer<W> {
         let mut any_written = false;
         if needed.f16 {
             writeln!(self.out, "enable f16;")?;
+            any_written = true;
+        }
+        if needed.int16 {
+            writeln!(self.out, "enable wgpu_int16;")?;
             any_written = true;
         }
         if needed.dual_source_blending {
@@ -1370,6 +1376,8 @@ impl<W: Write> Writer<W> {
             Expression::Literal(literal) => match literal {
                 crate::Literal::F16(value) => write!(self.out, "{value}h")?,
                 crate::Literal::F32(value) => write!(self.out, "{value}f")?,
+                crate::Literal::U16(value) => write!(self.out, "u16({value})")?,
+                crate::Literal::I16(value) => write!(self.out, "i16({value})")?,
                 crate::Literal::U32(value) => write!(self.out, "{value}u")?,
                 crate::Literal::I32(value) => {
                     // `-2147483648i` is not valid WGSL. The most negative `i32`
