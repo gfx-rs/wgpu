@@ -364,6 +364,7 @@ By @inner-daemons in [#9434](https://github.com/gfx-rs/wgpu/pull/9434).
 - Add `spirv-out` ray tracing pipelines. By @Vecvec in [#9085](https://github.com/gfx-rs/wgpu/pull/9085).
 - Add `naga::front::wgsl::ParseError::notes()`. By @kwillemsen in [#9572](https://github.com/gfx-rs/wgpu/pull/9572).
 - Add MSL support for cooperative matrix multiply-add with lower-precision A/B operands and a higher-precision accumulator/result, such as `coopMultiplyAdd(f16, f16, f32) -> f32`. By @seddonm1 in [#9629](https://github.com/gfx-rs/wgpu/pull/9629).
+- Implement `debugPrintf()` in Vulkan backend. By @39ali [#9389](https://github.com/gfx-rs/wgpu/pull/9389).
 
 #### DX12
 
@@ -387,6 +388,7 @@ By @inner-daemons in [#9434](https://github.com/gfx-rs/wgpu/pull/9434).
 - Added full support for mesh shaders, including in WGSL shaders. By @inner-daemons in [#8739](https://github.com/gfx-rs/wgpu/pull/8739).
 - Added support for bindless storage buffers (buffer binding arrays) on Metal. By @mate-h in [#9081](https://github.com/gfx-rs/wgpu/pull/9081).
 - Added `DropCallback`s to Metal textures. By @jerzywilczek in [#9634](https://github.com/gfx-rs/wgpu/pull/9634).
+- Implement `debugPrintf()` in Metal backend. By @39ali [#9389](https://github.com/gfx-rs/wgpu/pull/9389).
 
 #### GLES
 
