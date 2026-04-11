@@ -4004,9 +4004,10 @@ impl dispatch::SurfaceOutputDetailInterface for CoreSurfaceOutputDetail {
     fn texture_discard(&self) {
         match self.context.0.surface_texture_discard(self.surface_id) {
             Ok(_status) => (),
-            Err(err) => self
-                .context
-                .handle_error_fatal(err, "Surface::discard_texture"),
+            Err(err) => {
+                self.context
+                    .handle_error_nolabel(&self.error_sink, err, "Surface::discard_texture")
+            }
         }
     }
 }
