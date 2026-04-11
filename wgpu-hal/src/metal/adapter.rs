@@ -1130,6 +1130,7 @@ impl super::CapabilitiesQuery {
             | F::CLEAR_TEXTURE
             | F::TEXTURE_FORMAT_16BIT_NORM
             | F::SHADER_F16
+            | F::SHADER_I16
             | F::DEPTH32FLOAT_STENCIL8
             | F::BGRA8UNORM_STORAGE
             | F::PASSTHROUGH_SHADERS
