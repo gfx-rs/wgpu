@@ -13,7 +13,7 @@ struct Data {
     metal::float4x4 view;
 };
 int naga_div(int lhs, int rhs) {
-    return lhs / metal::select(rhs, 1, (lhs == (-2147483647 - 1) & rhs == -1) | (rhs == 0));
+    return lhs / metal::select(rhs, int(1), (lhs == (-2147483647 - 1) & rhs == int(-1)) | (rhs == int(0)));
 }
 
 
