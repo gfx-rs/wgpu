@@ -805,7 +805,7 @@ impl super::Instance {
 
             // Enable explicit validation features if available
             let mut validation_features;
-            let mut validation_feature_list: ArrayVec<_, 3>;
+            let mut validation_feature_list: ArrayVec<_, 4>;
             if validation_features_are_enabled {
                 validation_feature_list = ArrayVec::new();
 
