@@ -43,7 +43,9 @@ skip = [
     # getrandom 0.3 uses an old version
     { name = "r-efi", version = "5" },
 
-    # parking-lot uses an old version
+    # winit uses this old version
+    { name = "redox_syscall", version = "0.4.1" },
+    # parking-lot uses this old version
     { name = "redox_syscall", version = "0.5.18" },
 
     # deno uses an old version

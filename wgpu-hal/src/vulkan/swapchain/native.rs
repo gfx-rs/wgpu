@@ -420,11 +420,14 @@ impl Swapchain for NativeSwapchain {
         // thus waited for `locked_swapchain_semaphores.acquire`, wait for all
         // of them to finish, thus ensuring that it's okay to pass `acquire` to
         // `vkAcquireNextImageKHR` again.
-        self.device.wait_for_fence(
+        let completed = self.device.wait_for_fence(
             fence,
             acquire_semaphore_guard.previously_used_submission_index,
             timeout_ns,
         )?;
+        if !completed {
+            return Err(crate::SurfaceError::Timeout);
+        }
 
         // will block if no image is available
         let (index, suboptimal) = match unsafe {

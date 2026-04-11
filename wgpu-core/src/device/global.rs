@@ -1202,10 +1202,11 @@ impl Global {
         profiling::scope!("Device::create_render_bundle_encoder");
         api_log!("Device::device_create_render_bundle_encoder");
         let device = self.hub.devices.get(device_id);
-        let (encoder, error) = match command::RenderBundleEncoder::new(desc, &device, device_id) {
-            Ok(encoder) => (encoder, None),
-            Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
-        };
+        let (encoder, error) =
+            match command::RenderBundleEncoder::new(desc, Some(&device), device_id) {
+                Ok(encoder) => (encoder, None),
+                Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
+            };
         (Box::new(encoder), error)
     }
 
