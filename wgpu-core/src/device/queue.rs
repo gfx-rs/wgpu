@@ -117,6 +117,115 @@ impl Queue {
         self.life_tracker.lock()
     }
 
+    /// Ensure the surface texture is in the PRESENT state, clearing it if it was never rendered to.
+    /// Submits any necessary work to the GPU before the HAL present call.
+    ///
+    /// See <https://github.com/gfx-rs/wgpu/issues/6748>
+    pub(crate) fn prepare_surface_texture_for_present(
+        &self,
+        texture: &Arc<Texture>,
+    ) -> Result<(), DeviceError> {
+        let device = &self.device;
+        let snatch_guard = device.snatchable_lock.read();
+
+        // If the texture is uninitialized it needs to be cleared before presenting
+        let needs_clear = {
+            let status = texture.initialization_status.read();
+            status
+                .mips
+                .first()
+                .is_some_and(|mip| mip.check(0..1).is_some())
+        };
+
+        // Fence lock must be acquired after the snatch lock and before
+        // pending_writes to match the lock ordering in Queue::submit.
+        let mut fence = device.fence.write();
+        let mut pending_writes = self.pending_writes.lock();
+
+        if needs_clear {
+            let encoder = pending_writes.activate();
+            let mut trackers = device.trackers.lock();
+            crate::command::clear_texture(
+                texture,
+                TextureInitRange {
+                    mip_range: 0..1,
+                    layer_range: 0..1,
+                },
+                encoder,
+                &mut trackers.textures,
+                &device.alignments,
+                device.zero_buffer.as_ref(),
+                &snatch_guard,
+                device.instance_flags,
+            )
+            .map_err(|e| match e {
+                ClearError::Device(e) => e,
+                _ => DeviceError::Lost,
+            })?;
+            texture.initialization_status.write().mips[0].drain(0..1);
+        }
+
+        // Transition the texture to PRESENT in the device tracker.
+        // If it's already in PRESENT, this produces no barriers and we can skip the submission.
+        //
+        // This has to be after any clear_texture call because clear_texture modifies the tracker state internally.
+        // Computing transitions afterward ensures they reflect the actual current state.
+        let pending = {
+            let mut trackers = device.trackers.lock();
+            let pending: Vec<track::PendingTransition<wgt::TextureUses>> = trackers
+                .textures
+                .set_single(
+                    texture,
+                    texture.full_range.clone(),
+                    wgt::TextureUses::PRESENT,
+                )
+                .collect();
+            pending
+        };
+
+        if pending.is_empty() {
+            return Ok(());
+        }
+
+        // Emit the transition barriers to PRESENT.
+        {
+            let raw_texture = texture
+                .try_raw(&snatch_guard)
+                .map_err(|_| DeviceError::Lost)?;
+            let barriers: Vec<hal::TextureBarrier<'_, dyn hal::DynTexture>> = pending
+                .into_iter()
+                .map(|pt| pt.into_hal(raw_texture))
+                .collect();
+
+            let encoder = pending_writes.activate();
+            // SAFETY:
+            // - The encoder is in the recording state after `activate()`
+            // - The texture is kept alive by the Arc from `acquired_texture`
+            unsafe {
+                encoder.transition_textures(&barriers);
+            }
+        }
+
+        // Flush pending writes through the standard submission path.
+        let mut surface_textures = FastHashMap::default();
+        surface_textures.insert(Arc::as_ptr(texture), texture.clone());
+
+        let submit_index = {
+            let mut indices = device.command_indices.write();
+            indices.active_submission_index += 1;
+            indices.active_submission_index
+        };
+
+        self.submit_with_pending_writes(
+            &mut pending_writes,
+            Vec::new(),
+            surface_textures,
+            fence.as_mut(),
+            submit_index,
+            &snatch_guard,
+        )
+    }
+
     pub(crate) fn maintain(
         &self,
         submission_index: u64,
