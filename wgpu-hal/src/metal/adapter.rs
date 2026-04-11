@@ -112,23 +112,22 @@ impl crate::Adapter for super::Adapter {
                      category: *mut NSString,
                      _level: MTLLogLevel,
                      message: NonNull<NSString>| {
-                        unsafe {
-                            let msg = message.as_ref().to_string();
+                        // these usnafe blocks are guaranteed to be a none null ptr
+                        let msg = unsafe { message.as_ref() }.to_string();
 
-                            let cat = if !category.is_null() {
-                                (*category).to_string()
-                            } else {
-                                "null".to_string()
-                            };
+                        let cat = if !category.is_null() {
+                            unsafe { (*category).to_string() }
+                        } else {
+                            "null".to_string()
+                        };
 
-                            let sub = if !subsystem.is_null() {
-                                (*subsystem).to_string()
-                            } else {
-                                "null".to_string()
-                            };
+                        let sub = if !subsystem.is_null() {
+                            unsafe { (*subsystem).to_string() }
+                        } else {
+                            "null".to_string()
+                        };
 
-                            println!("[{sub}::{cat}] {msg}");
-                        }
+                        println!("[{sub}::{cat}] {msg}");
                     },
                 );
 
