@@ -277,7 +277,7 @@ pub(crate) fn buckets() -> impl Iterator<Item = &'static Bucket> {
 // are to avoid introducing platform or backend dependencies.
 //
 // **`max_vertex_attributes`:** While there is broad support for 32, Intel hardware with
-// Vulkan only supports 29.
+// Vulkan only supports 29; the D3D12 backend is also limited to 30.
 // See <https://gitlab.freedesktop.org/mesa/mesa/-/blob/465c186fc5f72c51bda943ac0e19f6512f8e6262/src/intel/vulkan/anv_private.h#L188>.
 //
 // **`max_dynamic_{storage,uniform}_buffers_per_pipeline_layout`:** These are limited to
@@ -389,7 +389,7 @@ const BUCKET_A2: Bucket = Bucket {
         max_sampled_textures_per_shader_stage: 48,
         max_storage_buffer_binding_size: 1 << 30, // 1 GB,
         max_storage_buffers_per_shader_stage: 16,
-        max_vertex_attributes: 32,
+        max_vertex_attributes: 30,
         ..UPLEVEL.limits
     },
     info: BucketedAdapterInfo {
@@ -427,7 +427,7 @@ const BUCKET_N1: Bucket = Bucket {
         max_sampled_textures_per_shader_stage: 48,
         max_storage_buffer_binding_size: 1 << 30, // 1 GB,
         max_storage_buffers_per_shader_stage: 16,
-        max_vertex_attributes: 32,
+        max_vertex_attributes: 30,
         ..UPLEVEL.limits
     },
     info: BucketedAdapterInfo {
@@ -446,7 +446,7 @@ const BUCKET_A1: Bucket = Bucket {
         max_sampled_textures_per_shader_stage: 48,
         max_storage_buffer_binding_size: 1 << 30, // 1 GB,
         max_storage_buffers_per_shader_stage: 16,
-        max_vertex_attributes: 32,
+        max_vertex_attributes: 30,
         ..UPLEVEL.limits
     },
     info: BucketedAdapterInfo {
@@ -466,7 +466,7 @@ const BUCKET_NO_F16: Bucket = Bucket {
         max_sampled_textures_per_shader_stage: 48,
         max_storage_buffer_binding_size: 1 << 30, // 1 GB
         max_storage_buffers_per_shader_stage: 16,
-        max_vertex_attributes: 32,
+        max_vertex_attributes: 30,
         ..UPLEVEL.limits
     },
     info: BucketedAdapterInfo {
@@ -504,7 +504,7 @@ const BUCKET_WARP: Bucket = Bucket {
         max_color_attachment_bytes_per_sample: 128,
         max_sampled_textures_per_shader_stage: 48,
         max_storage_buffers_per_shader_stage: 16,
-        max_vertex_attributes: 32,
+        max_vertex_attributes: 30,
         ..UPLEVEL.limits
     },
     info: BucketedAdapterInfo {

@@ -3317,7 +3317,8 @@ fn global_initialization_type_mismatch() {
 #[test]
 fn binding_array_local() {
     check_validation! {
-        "fn f() { var x: binding_array<sampler, 4>; }":
+        "enable wgpu_binding_array;
+         fn f() { var x: binding_array<sampler, 4>; }":
         Err(_)
     }
 }
@@ -3325,7 +3326,8 @@ fn binding_array_local() {
 #[test]
 fn binding_array_private() {
     check_validation! {
-        "var<private> x: binding_array<sampler, 4>;":
+        "enable wgpu_binding_array;
+         var<private> x: binding_array<sampler, 4>;":
         Err(_)
     }
 }
@@ -3333,7 +3335,8 @@ fn binding_array_private() {
 #[test]
 fn binding_array_non_struct() {
     check_validation! {
-        "var<storage> x: binding_array<i32, 4>;":
+        "enable wgpu_binding_array;
+         var<storage> x: binding_array<i32, 4>;":
         Err(naga::valid::ValidationError::Type {
             source: naga::valid::TypeError::BindingArrayBaseTypeNotStruct(_),
             ..
@@ -3343,6 +3346,7 @@ fn binding_array_non_struct() {
     check_validation! {
         r#"
             enable wgpu_ray_query;
+            enable wgpu_binding_array;
             @group(0) @binding(0)
             var<storage> ray_query_array: binding_array<ray_query, 10>;
         "#:
@@ -4694,9 +4698,165 @@ fn ray_query_vertex_return_enable_extension() {
 }
 
 #[test]
+fn binding_array_enable_extension() {
+    //buffers
+
+    check_extension_validation!(
+        Capabilities::BUFFER_BINDING_ARRAY,
+        r#"struct UniformBuffer { data: u32 }
+@group(0) @binding(0)
+var<uniform> uniform_array: binding_array<UniformBuffer, 5>;"#,
+        r#"error: the `wgpu_binding_array` enable extension is not enabled
+  ┌─ wgsl:3:29
+  │
+3 │ var<uniform> uniform_array: binding_array<UniformBuffer, 5>;
+  │                             ^^^^^^^^^^^^^ the `wgpu_binding_array` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_binding_array;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::BUFFER_BINDING_ARRAY
+            ),
+            ..
+        })
+    );
+
+    check_extension_validation!(
+        Capabilities::STORAGE_BUFFER_BINDING_ARRAY,
+        r#"struct Buffer { data: u32 }
+@group(0) @binding(0)
+var<storage, read> storage_array: binding_array<Buffer, 5>;"#,
+        r#"error: the `wgpu_binding_array` enable extension is not enabled
+  ┌─ wgsl:3:35
+  │
+3 │ var<storage, read> storage_array: binding_array<Buffer, 5>;
+  │                                   ^^^^^^^^^^^^^ the `wgpu_binding_array` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_binding_array;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::STORAGE_BUFFER_BINDING_ARRAY
+            ),
+            ..
+        })
+    );
+
+    //textures and samplers
+    check_extension_validation!(
+        Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY,
+        r#"@group(0) @binding(0)
+        var texture_array_unbounded: binding_array<texture_2d<f32>>;"#,
+        r#"error: the `wgpu_binding_array` enable extension is not enabled
+  ┌─ wgsl:2:38
+  │
+2 │         var texture_array_unbounded: binding_array<texture_2d<f32>>;
+  │                                      ^^^^^^^^^^^^^ the `wgpu_binding_array` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_binding_array;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+            ),
+            ..
+        })
+    );
+
+    check_extension_validation!(
+        Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY,
+        r#"@group(0) @binding(0)
+        var texture_array_bounded: binding_array<texture_2d<f32>, 5>;"#,
+        r#"error: the `wgpu_binding_array` enable extension is not enabled
+  ┌─ wgsl:2:36
+  │
+2 │         var texture_array_bounded: binding_array<texture_2d<f32>, 5>;
+  │                                    ^^^^^^^^^^^^^ the `wgpu_binding_array` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_binding_array;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+            ),
+            ..
+        })
+    );
+
+    check_extension_validation!(
+        Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY,
+        r#"@group(0) @binding(0)
+        var texture_array_2darray: binding_array<texture_2d_array<f32>, 5>;"#,
+        r#"error: the `wgpu_binding_array` enable extension is not enabled
+  ┌─ wgsl:2:36
+  │
+2 │         var texture_array_2darray: binding_array<texture_2d_array<f32>, 5>;
+  │                                    ^^^^^^^^^^^^^ the `wgpu_binding_array` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_binding_array;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+            ),
+            ..
+        })
+    );
+
+    check_extension_validation!(
+        Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY,
+        r#"@group(0) @binding(0)
+        var samp: binding_array<sampler, 5>;"#,
+        r#"error: the `wgpu_binding_array` enable extension is not enabled
+  ┌─ wgsl:2:19
+  │
+2 │         var samp: binding_array<sampler, 5>;
+  │                   ^^^^^^^^^^^^^ the `wgpu_binding_array` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_binding_array;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+            ),
+            ..
+        })
+    );
+
+    check_extension_validation!(
+        Capabilities::STORAGE_TEXTURE_BINDING_ARRAY,
+        r#"@group(0) @binding(0)
+        var texture_array_storage: binding_array<texture_storage_2d<rgba32float, write>, 5>;"#,
+        r#"error: the `wgpu_binding_array` enable extension is not enabled
+  ┌─ wgsl:2:36
+  │
+2 │         var texture_array_storage: binding_array<texture_storage_2d<rgba32float, write>, 5>;
+  │                                    ^^^^^^^^^^^^^ the `wgpu_binding_array` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_binding_array;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::STORAGE_TEXTURE_BINDING_ARRAY
+            ),
+            ..
+        })
+    );
+}
+
+#[test]
 fn binding_array_requires_capability() {
     check_validation! {
         r#"
+            enable wgpu_binding_array;
             struct Buffer { data: u32 }
             @group(0) @binding(0)
             var<storage> storage_array: binding_array<Buffer, 10>;
@@ -4711,6 +4871,7 @@ fn binding_array_requires_capability() {
 
     check_validation! {
         r#"
+            enable wgpu_binding_array; 
             struct Buffer { data: u32 }
             @group(0) @binding(0)
             var<uniform> uniform_array: binding_array<Buffer, 10>;
@@ -4725,6 +4886,7 @@ fn binding_array_requires_capability() {
 
     check_validation! {
         r#"
+            enable wgpu_binding_array;
             @group(0) @binding(0)
             var storage_texture_array: binding_array<texture_storage_2d<rgba8unorm, write>, 10>;
         "#:
@@ -4738,6 +4900,7 @@ fn binding_array_requires_capability() {
 
     check_validation! {
         r#"
+            enable wgpu_binding_array;
             @group(0) @binding(0)
             var sampled_texture_array: binding_array<texture_2d<f32>, 10>;
         "#:
@@ -4751,6 +4914,7 @@ fn binding_array_requires_capability() {
 
     check_validation! {
         r#"
+            enable wgpu_binding_array;
             @group(0) @binding(0)
             var sampler_array: binding_array<sampler, 10>;
         "#:
@@ -4765,6 +4929,7 @@ fn binding_array_requires_capability() {
     // Binding arrays of external textures are not yet supported.
     check_validation! {
         r#"
+            enable wgpu_binding_array;
             @group(0) @binding(0)
             var external_texture_array: binding_array<texture_external, 10>;
         "#:
@@ -4778,6 +4943,7 @@ fn binding_array_requires_capability() {
     // Binding arrays of acceleration structures require a capability.
     check_validation! {
         r#"
+            enable wgpu_binding_array;
             enable wgpu_ray_query;
             @group(0) @binding(0)
             var acc_struct_array: binding_array<acceleration_structure, 10>;

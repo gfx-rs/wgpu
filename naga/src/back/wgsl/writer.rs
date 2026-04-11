@@ -297,6 +297,7 @@ impl<W: Write> Writer<W> {
             draw_index: bool,
             ray_tracing_pipeline: bool,
             per_vertex: bool,
+            binding_array: bool,
         }
         let mut needed = RequiredEnabled {
             mesh_shaders: module.uses_mesh_shaders(),
@@ -366,6 +367,9 @@ impl<W: Write> Writer<W> {
                 }
                 TypeInner::AccelerationStructure { .. } => {
                     needed.ray_tracing_pipeline = true;
+                }
+                TypeInner::BindingArray { .. } => {
+                    needed.binding_array = true;
                 }
                 _ => {}
             }
@@ -439,6 +443,10 @@ impl<W: Write> Writer<W> {
         }
         if module.uses_mesh_shaders() {
             writeln!(self.out, "enable wgpu_mesh_shader;")?;
+            any_written = true;
+        }
+        if needed.binding_array {
+            writeln!(self.out, "enable wgpu_binding_array;")?;
             any_written = true;
         }
         if needed.draw_index {

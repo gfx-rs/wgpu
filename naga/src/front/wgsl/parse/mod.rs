@@ -2273,7 +2273,7 @@ impl Parser {
                             };
                             // Check if the required capability is supported
                             let required_capability = extension.capability();
-                            if !options.capabilities.contains(required_capability) {
+                            if !options.capabilities.intersects(required_capability) {
                                 return Err(Box::new(Error::EnableExtensionNotSupported {
                                     kind,
                                     span,

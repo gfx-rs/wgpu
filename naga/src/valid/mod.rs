@@ -238,6 +238,16 @@ impl Capabilities {
             Self::COOPERATIVE_MATRIX => Some(Ext::WgpuCooperativeMatrix),
             Self::RAY_TRACING_PIPELINE => Some(Ext::WgpuRayTracingPipeline),
             Self::PER_VERTEX => Some(Ext::PerVertex),
+            Self::BUFFER_BINDING_ARRAY
+            | Self::BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+            | Self::STORAGE_BUFFER_BINDING_ARRAY
+            | Self::STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+            | Self::STORAGE_TEXTURE_BINDING_ARRAY
+            | Self::STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING
+            | Self::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+            | Self::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING => {
+                Some(Ext::WgpuBindingArray)
+            }
             _ => None,
         }
     }
