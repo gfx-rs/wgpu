@@ -49,6 +49,8 @@ pub enum SurfaceError {
     Device(#[from] DeviceError),
     #[error("Surface image is already acquired")]
     AlreadyAcquired,
+    #[error("No surface image is currently acquired to present")]
+    NothingToPresent,
     #[error("Texture has been destroyed")]
     TextureDestroyed,
 }
@@ -60,6 +62,7 @@ impl WebGpuError for SurfaceError {
             Self::Invalid
             | Self::NotConfigured
             | Self::AlreadyAcquired
+            | Self::NothingToPresent
             | Self::TextureDestroyed => ErrorType::Validation,
         }
     }
@@ -290,7 +293,7 @@ impl Surface {
         let texture = present
             .acquired_texture
             .take()
-            .ok_or(SurfaceError::AlreadyAcquired)?;
+            .ok_or(SurfaceError::NothingToPresent)?;
 
         let mut exclusive_snatch_guard = device.snatchable_lock.write();
         let inner = texture.inner.snatch(&mut exclusive_snatch_guard);
@@ -341,7 +344,7 @@ impl Surface {
         let texture = present
             .acquired_texture
             .take()
-            .ok_or(SurfaceError::AlreadyAcquired)?;
+            .ok_or(SurfaceError::NothingToPresent)?;
 
         let mut exclusive_snatch_guard = device.snatchable_lock.write();
         let inner = texture.inner.snatch(&mut exclusive_snatch_guard);
