@@ -23,7 +23,7 @@ impl crate::framework::Example for Example {
         queue: &wgpu::Queue,
     ) -> Self {
         let shader_source = r#"
-       enable wgpu_debug_printf;
+        enable wgpu_debug_printf;
 
         @compute @workgroup_size(8, 1, 1)
         fn main(@builtin(local_invocation_index) idx: u32) {
