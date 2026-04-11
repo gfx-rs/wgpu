@@ -60,7 +60,7 @@ fn into_buffer_binding() {
         buffer: b,
         offset: 50,
         size: Some(size),
-    }) = wgpu::BindingResource::from(buffer.slice(50..80))
+    }) = buffer.slice(50..80).try_into().unwrap()
     else {
         panic!("didn't match")
     };

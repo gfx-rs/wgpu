@@ -1,6 +1,7 @@
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{
     error, fmt,
+    num::NonZero,
     ops::{Bound, Deref, Range, RangeBounds},
 };
 
@@ -669,23 +670,29 @@ impl<'a> BufferSlice<'a> {
     }
 }
 
-impl<'a> From<BufferSlice<'a>> for crate::BufferBinding<'a> {
+impl<'a> TryFrom<BufferSlice<'a>> for crate::BufferBinding<'a> {
+    type Error = ();
+
     /// Convert a [`BufferSlice`] to an equivalent [`BufferBinding`],
     /// provided that it will be used without a dynamic offset.
-    fn from(value: BufferSlice<'a>) -> Self {
-        BufferBinding {
+    fn try_from(value: BufferSlice<'a>) -> Result<Self, Self::Error> {
+        Ok(BufferBinding {
             buffer: value.buffer,
             offset: value.offset,
-            size: Some(value.size_expect_nonzero()),
-        }
+            size: Some(NonZero::new(value.size()).ok_or(())?),
+        })
     }
 }
 
-impl<'a> From<BufferSlice<'a>> for crate::BindingResource<'a> {
+impl<'a> TryFrom<BufferSlice<'a>> for crate::BindingResource<'a> {
+    type Error = ();
+
     /// Convert a [`BufferSlice`] to an equivalent [`BindingResource::Buffer`],
     /// provided that it will be used without a dynamic offset.
-    fn from(value: BufferSlice<'a>) -> Self {
-        crate::BindingResource::Buffer(crate::BufferBinding::from(value))
+    fn try_from(value: BufferSlice<'a>) -> Result<Self, Self::Error> {
+        Ok(crate::BindingResource::Buffer(
+            crate::BufferBinding::try_from(value)?,
+        ))
     }
 }
 
