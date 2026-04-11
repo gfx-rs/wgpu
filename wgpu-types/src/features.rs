@@ -1065,9 +1065,9 @@ bitflags_array! {
         /// Requires `enable wgpu_int16;` in WGSL shaders.
         ///
         /// Supported platforms:
-        /// - Vulkan (via `shaderInt16`)
+        /// - Vulkan (with `shaderInt16` and `VK_KHR_16bit_storage`)
         /// - Metal (always available)
-        /// - DX12 (via `Native16BitShaderOpsSupported`, SM 6.2+)
+        /// - DX12 (with `Native16BitShaderOpsSupported`, SM 6.2+)
         ///
         /// This is a native only feature.
         #[name("wgpu-shader-i16", "shader-i16")]
