@@ -21,7 +21,6 @@ pub fn validate_capabilities(ctx: TestingContext) {
                 // BUFFER_BINDING_ARRAY because it is not currently reported by
                 // naga's MSL backend.
                 | Caps::BUFFER_BINDING_ARRAY
-                | Caps::DEBUG_PRINTF
         }
         wgpu::Backend::Gl => naga::back::glsl::supported_capabilities(),
         wgpu::Backend::BrowserWebGpu => naga::back::wgsl::supported_capabilities(),
