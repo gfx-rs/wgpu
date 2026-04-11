@@ -602,17 +602,13 @@ impl<'a> BufferSlice<'a> {
     ///
     /// [mapped]: Buffer#mapping-buffers
     #[track_caller]
-    pub fn get_mapped_range(&self) -> BufferView {
-        let slice_size = self.size();
-        let subrange = Subrange::new(self.offset, slice_size, RangeMappingKind::Immutable);
-        self.buffer
-            .map_context
-            .lock()
-            .validate_and_add(subrange.clone());
-        let range = self.buffer.inner.get_mapped_range(subrange.index);
-        BufferView {
+    pub fn get_mapped_range(&self) -> Result<BufferView, MapRangeError> {
+        let subrange = Subrange::new(self.offset, self.size, RangeMappingKind::Immutable);
+        let range = self.buffer.inner.get_mapped_range(subrange.index.clone())?;
+        self.buffer.map_context.lock().validate_and_add(subrange)?;
+        Ok(BufferView {
             buffer: self.buffer.clone(),
-            size: slice_size,
+            size: self.size,
             offset: self.offset,
             inner: range,
         })
@@ -637,17 +633,13 @@ impl<'a> BufferSlice<'a> {
     ///
     /// [mapped]: Buffer#mapping-buffers
     #[track_caller]
-    pub fn get_mapped_range_mut(&self) -> BufferViewMut {
-        let slice_size = self.size();
-        let subrange = Subrange::new(self.offset, slice_size, RangeMappingKind::Mutable);
-        self.buffer
-            .map_context
-            .lock()
-            .validate_and_add(subrange.clone());
-        let range = self.buffer.inner.get_mapped_range(subrange.index);
-        BufferViewMut {
+    pub fn get_mapped_range_mut(&self) -> Result<BufferViewMut, MapRangeError> {
+        let subrange = Subrange::new(self.offset, self.size, RangeMappingKind::Mutable);
+        let range = self.buffer.inner.get_mapped_range(subrange.index.clone())?;
+        self.buffer.map_context.lock().validate_and_add(subrange)?;
+        Ok(BufferViewMut {
             buffer: self.buffer.clone(),
-            size: slice_size,
+            size: self.size,
             offset: self.offset,
             inner: range,
         })
