@@ -1851,7 +1851,7 @@ impl crate::Device for super::Device {
         self.counters.fences.add(1);
         // https://developer.apple.com/documentation/metal/mtlsharedevent
         let shared_event = if available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0) {
-            Some(self.shared.device.newSharedEvent().unwrap())
+            self.shared.device.newSharedEvent() // This should be supported on said devices, but some sandbox environments may still restrict it, making it return `None`.
         } else {
             None
         };
