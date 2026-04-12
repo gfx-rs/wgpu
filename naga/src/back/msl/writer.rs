@@ -1719,13 +1719,14 @@ impl<W: Write> Writer<W> {
             member = ArraySizeMember(handle),
         )?;
         if let crate::TypeInner::BindingArray { .. } = context.module.types[global.ty].inner {
-            let Some(ba_idx) = context.binding_array_index_from_chain(chain_expr, handle) else {
+            let Some(array_index) = context.binding_array_index_from_chain(chain_expr, handle)
+            else {
                 return Err(Error::GenericValidation(
                     "Could not find binding_array index for buffer size".into(),
                 ));
             };
             write!(self.out, "[")?;
-            match ba_idx {
+            match array_index {
                 index::GuardedIndex::Expression(expr) => {
                     write!(self.out, "unsigned(")?;
                     self.put_expression(expr, context, true)?;
