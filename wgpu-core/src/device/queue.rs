@@ -206,6 +206,10 @@ impl Queue {
             }
         }
 
+        // Keep the texture alive in the submission so its clear_view isn't
+        // destroyed before the GPU finishes the submitted commands.
+        pending_writes.insert_texture(texture);
+
         // Flush pending writes through the standard submission path.
         let mut surface_textures = FastHashMap::default();
         surface_textures.insert(Arc::as_ptr(texture), texture.clone());
