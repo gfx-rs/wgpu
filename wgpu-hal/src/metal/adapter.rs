@@ -92,6 +92,7 @@ impl crate::Adapter for super::Adapter {
         let device = &self.shared.device;
 
         let cq_desc = MTLCommandQueueDescriptor::new();
+        // SAFETY: MAX_COMMAND_BUFFERS is a reasonable number of buffers.
         unsafe {
             cq_desc.setMaxCommandBufferCount(MAX_COMMAND_BUFFERS);
         }
