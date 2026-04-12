@@ -3848,7 +3848,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }));
                     }
 
-                    //extract the format string
+                    // extract the format string
                     let format_handle = arguments[0];
                     let format = match ctx.ast_expressions[format_handle] {
                         ast::Expression::String(s) => s.to_string(),
