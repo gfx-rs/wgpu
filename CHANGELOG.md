@@ -137,7 +137,6 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
 - Unconditionally enable `Features::CLIP_DISTANCES`. By @ErichDonGubler in [#9270](https://github.com/gfx-rs/wgpu/pull/9270).
 - Added full support for mesh shaders, including in WGSL shaders. By @inner-daemons in [#8739](https://github.com/gfx-rs/wgpu/pull/8739).
-- Implement `debugPrintf()` in Metal backend. By @39ali [#9389](https://github.com/gfx-rs/wgpu/pull/9389).
 
 #### GLES
 
