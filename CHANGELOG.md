@@ -78,6 +78,7 @@ Bottom level categories:
 
 #### General
 
+- `SurfaceTexture::present()` has been replaced by `Queue::present(surface_texture)`. By @inner-daemons and @atlv24 in [#9361](https://github.com/gfx-rs/wgpu/pull/9361).
 - `Features::CLIP_DISTANCE`, `naga::Capabilities::CLIP_DISTANCE`, and `naga::BuiltIn::ClipDistance` have been renamed to `CLIP_DISTANCES` and `ClipDistances` (viz., pluralized) as appropriate, to match the WebGPU spec. By @ErichDonGubler in [#9267](https://github.com/gfx-rs/wgpu/pull/9267).
 - Added more granular limits for mesh shaders. By @inner-daemons in [#8739](https://github.com/gfx-rs/wgpu/pull/8739).
 - Added new `InvalidWorkgroupSizeError`, which is now used by `DrawError::InvalidGroupSize` and `StageError::InvalidWorkgroupSize`. By @andyleiserson in [#9357](https://github.com/gfx-rs/wgpu/pull/9357).
@@ -99,6 +100,7 @@ Bottom level categories:
 
 #### General
 
+- Fix `SYNC-HAZARD-WRITE-AFTER-PRESENT` on Vulkan when a surface texture is presented without being rendered to. By @inner-daemons and @atlv24 in [#9361](https://github.com/gfx-rs/wgpu/pull/9361).
 - Fix incorrect checks for dynamic binding bounds when calling an encoder's `set_bind_group` in passes and bundles. By @ErichDonGubler in [#9308](https://github.com/gfx-rs/wgpu/pull/9308).
 
 #### naga
