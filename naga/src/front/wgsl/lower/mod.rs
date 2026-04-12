@@ -3924,7 +3924,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                     };
 
-                    //extract remaining arguments (if any)
+                    // extract remaining arguments (if any)
                     let mut ir_arguments = Vec::with_capacity(arguments.len().saturating_sub(1));
 
                     for &ast_handle in &arguments[1..] {
