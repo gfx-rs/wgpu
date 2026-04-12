@@ -1,3 +1,5 @@
+enable wgpu_binding_array;
+
 struct UniformIndex {
     index: u32,
 }

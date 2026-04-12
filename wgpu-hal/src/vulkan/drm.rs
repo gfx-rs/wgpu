@@ -1,4 +1,4 @@
-#![cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+#![cfg(drm)]
 
 use alloc::{string::ToString, vec::Vec};
 use core::{mem::MaybeUninit, num::NonZeroU32};

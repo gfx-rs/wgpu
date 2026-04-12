@@ -227,7 +227,7 @@ fn get_dimensions(ctx: &TestingContext, texture_resource: wgpu::BindingResource)
         .poll(wgpu::PollType::wait_indefinitely())
         .unwrap();
 
-    let data = buffer_slice.get_mapped_range();
+    let data = buffer_slice.get_mapped_range().unwrap();
     let size: &[u32] = bytemuck::cast_slice(&data);
     size.try_into().unwrap()
 }
@@ -312,7 +312,7 @@ fn get_loads(
         .poll(wgpu::PollType::wait_indefinitely())
         .unwrap();
 
-    let data = buffer_slice.get_mapped_range();
+    let data = buffer_slice.get_mapped_range().unwrap();
     let values: &[[f32; 4]] = bytemuck::cast_slice(&data);
     values.to_vec()
 }
@@ -405,7 +405,7 @@ fn get_samples(
         .poll(wgpu::PollType::wait_indefinitely())
         .unwrap();
 
-    let data = buffer_slice.get_mapped_range();
+    let data = buffer_slice.get_mapped_range().unwrap();
     let values: &[[f32; 4]] = bytemuck::cast_slice(&data);
     values.to_vec()
 }

@@ -957,6 +957,12 @@ pub struct Buffer {
     allocation: suballocation::Allocation,
 }
 
+impl Buffer {
+    pub unsafe fn raw_resource(&self) -> &Direct3D12::ID3D12Resource {
+        &self.resource
+    }
+}
+
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
 
@@ -1658,13 +1664,11 @@ impl crate::Queue for Queue {
 #[derive(Debug)]
 pub struct DxilPassthroughShader {
     pub shader: Vec<u8>,
-    pub num_workgroups: (u32, u32, u32),
 }
 
 #[derive(Debug)]
 pub struct HlslPassthroughShader {
     pub shader: String,
-    pub num_workgroups: (u32, u32, u32),
 }
 
 #[derive(Debug)]

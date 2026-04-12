@@ -38,7 +38,7 @@ void function(
 
 struct main_Input {
 };
-kernel void main_(
+[[max_total_threads_per_threadgroup(1)]] kernel void main_(
   uint param [[simdgroups_per_threadgroup]]
 , uint param_1 [[simdgroup_index_in_threadgroup]]
 , uint param_2 [[threads_per_simdgroup]]

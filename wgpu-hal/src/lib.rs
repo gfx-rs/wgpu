@@ -1101,7 +1101,7 @@ pub trait Device: WasmNotSendSync {
     /// Calling `wait` with a lower [`FenceValue`] than `fence`'s current value
     /// returns immediately.
     ///
-    /// If `timeout` is provided, the function will block indefinitely or until
+    /// If `timeout` is not provided, the function will block indefinitely or until
     /// an error is encountered.
     ///
     /// Returns `Ok(true)` on success and `Ok(false)` on timeout.
@@ -1689,8 +1689,8 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &<Self::A as Api>::ComputePipeline);
 
-    unsafe fn dispatch(&mut self, count: [u32; 3]);
-    unsafe fn dispatch_indirect(
+    unsafe fn dispatch_workgroups(&mut self, count: [u32; 3]);
+    unsafe fn dispatch_workgroups_indirect(
         &mut self,
         buffer: &<Self::A as Api>::Buffer,
         offset: wgt::BufferAddress,
@@ -1931,7 +1931,7 @@ pub struct Alignments {
     pub uniform_bounds_check_alignment: wgt::BufferSize,
 
     /// The size of the raw TLAS instance
-    pub raw_tlas_instance_size: usize,
+    pub raw_tlas_instance_size: u32,
 
     /// What the scratch buffer for building an acceleration structure must be aligned to
     pub ray_tracing_scratch_buffer_alignment: u32,
@@ -2361,24 +2361,21 @@ pub enum ShaderInput<'a> {
     Naga(NagaShader),
     MetalLib {
         file: &'a [u8],
-        num_workgroups: (u32, u32, u32),
+        num_workgroups: hashbrown::HashMap<String, (u32, u32, u32)>,
     },
     Msl {
         shader: &'a str,
-        num_workgroups: (u32, u32, u32),
+        num_workgroups: hashbrown::HashMap<String, (u32, u32, u32)>,
     },
     SpirV(&'a [u32]),
     Dxil {
         shader: &'a [u8],
-        num_workgroups: (u32, u32, u32),
     },
     Hlsl {
         shader: &'a str,
-        num_workgroups: (u32, u32, u32),
     },
     Glsl {
         shader: &'a str,
-        num_workgroups: (u32, u32, u32),
     },
 }
 

@@ -7,7 +7,7 @@ using metal::uint;
 
 struct cs_mainInput {
 };
-kernel void cs_main(
+[[max_total_threads_per_threadgroup(2)]] kernel void cs_main(
   metal::uint3 id [[thread_position_in_threadgroup]]
 , metal::texture2d<ulong, metal::access::read_write> image [[user(fake0)]]
 ) {

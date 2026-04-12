@@ -107,10 +107,10 @@ void wgpu_4435_(
 }
 
 kernel void main_(
-  metal::uint3 __local_invocation_id [[thread_position_in_threadgroup]]
+  uint __local_invocation_index [[thread_index_in_threadgroup]]
 , threadgroup type_3& a
 ) {
-    if (metal::all(__local_invocation_id == metal::uint3(0u))) {
+    if (__local_invocation_index == 0u) {
         a = {};
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);

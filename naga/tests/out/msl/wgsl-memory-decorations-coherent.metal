@@ -14,7 +14,7 @@ struct Data {
     type_1 values;
 };
 
-kernel void main_(
+[[max_total_threads_per_threadgroup(1)]] kernel void main_(
   coherent device Data& coherent_buf [[user(fake0)]]
 , device Data const& plain_buf [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]

@@ -107,6 +107,7 @@ async fn binding_array_buffers(
     };
 
     let shader = r#"
+        enable wgpu_binding_array;
         struct ImAU32 {
             value: u32,
             _padding: u32,
@@ -156,6 +157,7 @@ async fn binding_array_buffers(
         });
         buffer
             .get_mapped_range_mut(..)
+            .unwrap()
             .slice(0..4)
             .copy_from_slice(&data.0);
         buffer.unmap();
@@ -270,7 +272,7 @@ async fn binding_array_buffers(
 
     ctx.device.poll(PollType::wait_indefinitely()).unwrap();
 
-    let data = slice.get_mapped_range();
+    let data = slice.get_mapped_range().unwrap();
 
     assert_eq!(&data[..], &*image);
 }

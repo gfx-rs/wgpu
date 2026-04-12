@@ -1118,7 +1118,7 @@ impl Global {
                     id: shader.to_trace(),
                     data: file_names,
                     label: desc.label.clone(),
-                    num_workgroups: desc.num_workgroups,
+                    entry_points: desc.entry_points.clone(),
                 });
             };
 
@@ -1202,10 +1202,11 @@ impl Global {
         profiling::scope!("Device::create_render_bundle_encoder");
         api_log!("Device::device_create_render_bundle_encoder");
         let device = self.hub.devices.get(device_id);
-        let (encoder, error) = match command::RenderBundleEncoder::new(desc, &device, device_id) {
-            Ok(encoder) => (encoder, None),
-            Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
-        };
+        let (encoder, error) =
+            match command::RenderBundleEncoder::new(desc, Some(&device), device_id) {
+                Ok(encoder) => (encoder, None),
+                Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
+            };
         (Box::new(encoder), error)
     }
 
@@ -1413,7 +1414,7 @@ impl Global {
                         Ok(module) => module,
                         Err(e) => break 'error e,
                     };
-                    if module.interface.is_none() {
+                    if module.interface.interface().is_none() {
                         passthrough_stages |= wgt::ShaderStages::VERTEX;
                     }
                     let stage = ResolvedProgrammableStageDescriptor {
@@ -1443,7 +1444,7 @@ impl Global {
                             Ok(module) => module,
                             Err(e) => break 'error e,
                         };
-                        if module.interface.is_none() {
+                        if module.interface.interface().is_none() {
                             passthrough_stages |= wgt::ShaderStages::TASK;
                         }
                         let state = ResolvedProgrammableStageDescriptor {
@@ -1470,7 +1471,7 @@ impl Global {
                         Ok(module) => module,
                         Err(e) => break 'error e,
                     };
-                    if mesh_module.interface.is_none() {
+                    if mesh_module.interface.interface().is_none() {
                         passthrough_stages |= wgt::ShaderStages::VERTEX;
                     }
                     let mesh_stage = ResolvedProgrammableStageDescriptor {
@@ -1501,7 +1502,7 @@ impl Global {
                     Ok(module) => module,
                     Err(e) => break 'error e,
                 };
-                if module.interface.is_none() {
+                if module.interface.interface().is_none() {
                     passthrough_stages |= wgt::ShaderStages::FRAGMENT;
                 }
                 let stage = ResolvedProgrammableStageDescriptor {
@@ -1668,7 +1669,7 @@ impl Global {
                 Ok(module) => module,
                 Err(e) => break 'error e.into(),
             };
-            if module.interface.is_none() && layout.is_none() {
+            if module.interface.interface().is_none() && layout.is_none() {
                 break 'error pipeline::CreateComputePipelineError::Implicit(
                     pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::COMPUTE),
                 );

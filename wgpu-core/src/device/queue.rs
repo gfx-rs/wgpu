@@ -533,8 +533,12 @@ impl Queue {
         let data_size = if let Some(data_size) = wgt::BufferSize::new(data_size) {
             data_size
         } else {
-            // This must happen after parameter validation (so that errors are reported
-            // as required by the spec), but before any side effects.
+            // even though a zero-length write is a no-op and no copy operation will occur,
+            // we must still validate the copy operation. This ensures that invalid
+            // API calls—like writing to a mapped buffer or out-of-bounds offsets—are
+            // caught consistently, even if no data is actually moved.
+            self.validate_write_buffer_impl(buffer.as_ref(), buffer_offset, 0)?;
+
             log::trace!("Ignoring write_buffer of size 0");
             return Ok(());
         };
@@ -635,7 +639,7 @@ impl Queue {
 
         let buffer = buffer.get()?;
 
-        self.validate_write_buffer_impl(&buffer, buffer_offset, buffer_size)?;
+        self.validate_write_buffer_impl(&buffer, buffer_offset, buffer_size.into())?;
 
         Ok(())
     }
@@ -644,14 +648,14 @@ impl Queue {
         &self,
         buffer: &Buffer,
         buffer_offset: u64,
-        buffer_size: wgt::BufferSize,
+        buffer_size: u64,
     ) -> Result<(), TransferError> {
         if !matches!(&*buffer.map_state.lock(), BufferMapState::Idle) {
             return Err(TransferError::BufferNotAvailable);
         }
         buffer.check_usage(wgt::BufferUsages::COPY_DST)?;
-        if !buffer_size.get().is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
-            return Err(TransferError::UnalignedCopySize(buffer_size.get()));
+        if !buffer_size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
+            return Err(TransferError::UnalignedCopySize(buffer_size));
         }
         if !buffer_offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             return Err(TransferError::UnalignedBufferOffset(buffer_offset));
@@ -664,10 +668,10 @@ impl Queue {
                 side: CopySide::Destination,
             });
         }
-        if buffer_size.get() > buffer.size - buffer_offset {
+        if buffer_size > buffer.size - buffer_offset {
             return Err(TransferError::BufferEndOffsetOverrun {
                 start_offset: buffer_offset,
-                size: buffer_size.get(),
+                size: buffer_size,
                 buffer_size: buffer.size,
                 side: CopySide::Destination,
             });
@@ -697,7 +701,7 @@ impl Queue {
 
         self.same_device_as(buffer.as_ref())?;
 
-        self.validate_write_buffer_impl(&buffer, buffer_offset, staging_buffer.size)?;
+        self.validate_write_buffer_impl(&buffer, buffer_offset, staging_buffer.size.into())?;
 
         let region = hal::BufferCopy {
             src_offset: 0,
@@ -868,6 +872,7 @@ impl Queue {
             self.device.alignments.buffer_copy_pitch.get() as u32,
             block_size,
         );
+        assert!(u32::MAX - bytes_in_last_row >= bytes_per_row_alignment);
         let stage_bytes_per_row = wgt::math::align_to(bytes_in_last_row, bytes_per_row_alignment);
 
         // Platform validation requires that the staging buffer always be
@@ -883,17 +888,21 @@ impl Queue {
         } else {
             profiling::scope!("copy chunked");
             // Copy row by row into the optimal alignment.
-            let block_rows_in_copy =
-                (size.depth_or_array_layers - 1) * rows_per_image + height_in_blocks;
-            let stage_size =
-                wgt::BufferSize::new(stage_bytes_per_row as u64 * block_rows_in_copy as u64)
-                    .unwrap();
+            let block_rows_in_copy = u64::from(size.depth_or_array_layers - 1)
+                * u64::from(rows_per_image)
+                + u64::from(height_in_blocks);
+            // The copy size was validated against the source buffer, however,
+            // `stage_bytes_per_row` can differ, so let's be paranoid.
+            let stage_size = u64::from(stage_bytes_per_row)
+                .checked_mul(block_rows_in_copy)
+                .and_then(wgt::BufferSize::new)
+                .unwrap();
             let mut staging_buffer = StagingBuffer::new(&self.device, stage_size)?;
-            for layer in 0..size.depth_or_array_layers {
-                let rows_offset = layer * rows_per_image;
-                for row in rows_offset..rows_offset + height_in_blocks {
-                    let src_offset = data_layout.offset as u32 + row * bytes_per_row;
-                    let dst_offset = row * stage_bytes_per_row;
+            for layer in 0..u64::from(size.depth_or_array_layers) {
+                let rows_offset = layer * u64::from(rows_per_image);
+                for row in rows_offset..rows_offset + u64::from(height_in_blocks) {
+                    let src_offset = data_layout.offset + row * u64::from(bytes_per_row);
+                    let dst_offset = row * u64::from(stage_bytes_per_row);
                     unsafe {
                         staging_buffer.write_with_offset(
                             data,
@@ -1016,20 +1025,20 @@ impl Queue {
             .into());
         }
 
-        if source.origin.x + size.width > src_width {
+        if source.origin.x > src_width || src_width - source.origin.x < size.width {
             return Err(TransferError::TextureOverrun {
                 start_offset: source.origin.x,
-                end_offset: source.origin.x + size.width,
+                end_offset: source.origin.x.saturating_add(size.width),
                 texture_size: src_width,
                 dimension: crate::resource::TextureErrorDimension::X,
                 side: CopySide::Source,
             }
             .into());
         }
-        if source.origin.y + size.height > src_height {
+        if source.origin.y > src_height || src_height - source.origin.y < size.height {
             return Err(TransferError::TextureOverrun {
                 start_offset: source.origin.y,
-                end_offset: source.origin.y + size.height,
+                end_offset: source.origin.y.saturating_add(size.height),
                 texture_size: src_height,
                 dimension: crate::resource::TextureErrorDimension::Y,
                 side: CopySide::Source,

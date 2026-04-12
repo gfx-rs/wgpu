@@ -155,7 +155,9 @@ impl StagingBelt {
             offset,
             size.get(),
         );
-        slice_of_belt.get_mapped_range_mut()
+        slice_of_belt
+            .get_mapped_range_mut()
+            .expect("Failed to get mapped range for staging belt buffer")
     }
 
     /// Allocate a staging belt slice with the given `size` and `alignment` and return it.

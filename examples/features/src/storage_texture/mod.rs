@@ -146,7 +146,7 @@ async fn run(_path: Option<String>) {
     receiver.recv_async().await.unwrap().unwrap();
     log::info!("Output buffer mapped");
     {
-        let view = buffer_slice.get_mapped_range();
+        let view = buffer_slice.get_mapped_range().unwrap();
         texture_data.copy_from_slice(&view[..]);
     }
     log::info!("GPU data copied to local.");

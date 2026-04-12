@@ -829,10 +829,10 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_immediate_size: wgt::Limits::default().max_immediate_size,
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
 
-        max_task_mesh_workgroup_total_count: wgt::Limits::default()
-            .max_task_mesh_workgroup_total_count,
-        max_task_mesh_workgroups_per_dimension: wgt::Limits::default()
-            .max_task_mesh_workgroups_per_dimension,
+        max_task_workgroup_total_count: wgt::Limits::default().max_task_workgroup_total_count,
+        max_task_workgroups_per_dimension: wgt::Limits::default().max_task_workgroups_per_dimension,
+        max_mesh_workgroup_total_count: wgt::Limits::default().max_mesh_workgroup_total_count,
+        max_mesh_workgroups_per_dimension: wgt::Limits::default().max_mesh_workgroups_per_dimension,
         max_task_invocations_per_workgroup: wgt::Limits::default()
             .max_task_invocations_per_workgroup,
         max_task_invocations_per_dimension: wgt::Limits::default()
@@ -1120,11 +1120,19 @@ impl ContextWebGpu {
             }
         };
 
-        // Not returning this error because it is a type error that shouldn't happen unless
-        // the browser, JS builtin objects, or wasm bindings are misbehaving somehow.
-        let context: webgpu_sys::GpuCanvasContext = context
-            .dyn_into()
-            .expect("canvas context is not a GPUCanvasContext");
+        // An error here indicated that WebGPU is disabled in the browser.
+        let context: webgpu_sys::GpuCanvasContext =
+            context
+                .dyn_into()
+                .map_err(|actual| crate::CreateSurfaceError {
+                    inner: crate::CreateSurfaceErrorKind::Web(format!(
+                        "`canvas.getContext()` returned a value that did not coerce to \
+                        `GPUCanvasContext`. \
+                        This is likely because WebGPU is disabled in this browser. \
+                        Expected: `GPUCanvasContext`, Actual: `{}`",
+                        actual.to_string()
+                    )),
+                })?;
 
         Ok(WebSurface {
             gpu: self.gpu.clone(),
@@ -1280,22 +1288,28 @@ impl WebBuffer {
     }
 
     /// Obtains a reference to the re-usable buffer mapping as a Javascript array view.
-    fn get_mapped_range(&self, sub_range: Range<wgt::BufferAddress>) -> js_sys::Uint8Array {
+    fn get_mapped_range(
+        &self,
+        sub_range: Range<wgt::BufferAddress>,
+    ) -> Result<js_sys::Uint8Array, crate::MapRangeError> {
         let mut mapping = self.mapping.borrow_mut();
         let range = mapping.range.clone();
-        let array_buffer = mapping.mapped_buffer.get_or_insert_with(|| {
-            self.inner
+        if mapping.mapped_buffer.is_none() {
+            let buffer = self
+                .inner
                 .get_mapped_range_with_f64_and_f64(
                     range.start as f64,
                     (range.end - range.start) as f64,
                 )
-                .unwrap()
-        });
-        js_sys::Uint8Array::new_with_byte_offset_and_length(
+                .map_err(|e| crate::MapRangeError(format!("{e:?}")))?;
+            mapping.mapped_buffer = Some(buffer);
+        }
+        let array_buffer = mapping.mapped_buffer.as_ref().unwrap();
+        Ok(js_sys::Uint8Array::new_with_byte_offset_and_length(
             array_buffer,
             (sub_range.start - range.start) as u32,
             (sub_range.end - sub_range.start) as u32,
-        )
+        ))
     }
 
     /// Sets the range of the buffer which is presently mapped.
@@ -2813,15 +2827,15 @@ impl dispatch::BufferInterface for WebBuffer {
     fn get_mapped_range(
         &self,
         sub_range: Range<crate::BufferAddress>,
-    ) -> dispatch::DispatchBufferMappedRange {
-        let actual_mapping = self.get_mapped_range(sub_range);
-        WebBufferMappedRange {
+    ) -> Result<dispatch::DispatchBufferMappedRange, crate::MapRangeError> {
+        let actual_mapping = self.get_mapped_range(sub_range)?;
+        Ok(WebBufferMappedRange {
             actual_mapping,
             temporary_mapping: OnceCell::new(),
             temporary_mapping_modified: false,
             ident: crate::cmp::Identifier::create(),
         }
-        .into()
+        .into())
     }
 
     fn unmap(&self) {
@@ -3391,6 +3405,18 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
 
         self.inner
             .dispatch_workgroups_indirect_with_f64(&indirect_buffer.inner, indirect_offset as f64);
+    }
+
+    fn transition_resources<'a>(
+        &mut self,
+        _buffer_transitions: &mut dyn Iterator<
+            Item = wgt::BufferTransition<&'a dispatch::DispatchBuffer>,
+        >,
+        _texture_transitions: &mut dyn Iterator<
+            Item = wgt::TextureTransition<&'a dispatch::DispatchTextureView>,
+        >,
+    ) {
+        // noop
     }
 }
 impl Drop for WebComputePassEncoder {

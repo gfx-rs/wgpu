@@ -277,8 +277,10 @@ pub trait BufferInterface: CommonTraits {
         range: Range<crate::BufferAddress>,
         callback: BufferMapCallback,
     );
-    fn get_mapped_range(&self, sub_range: Range<crate::BufferAddress>)
-        -> DispatchBufferMappedRange;
+    fn get_mapped_range(
+        &self,
+        sub_range: Range<crate::BufferAddress>,
+    ) -> Result<DispatchBufferMappedRange, crate::MapRangeError>;
 
     fn unmap(&self);
 
@@ -406,6 +408,14 @@ pub trait ComputePassInterface: CommonTraits + Drop {
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
+    );
+
+    fn transition_resources<'a>(
+        &mut self,
+        buffer_transitions: &mut dyn Iterator<Item = wgt::BufferTransition<&'a DispatchBuffer>>,
+        texture_transitions: &mut dyn Iterator<
+            Item = wgt::TextureTransition<&'a DispatchTextureView>,
+        >,
     );
 }
 pub trait RenderPassInterface: CommonTraits + Drop {

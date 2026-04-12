@@ -23,7 +23,7 @@ void test_atomic_workgroup_uniform_load(uint3 workgroup_id : SV_GroupID, uint3 l
     uint active_tile_index = (workgroup_id.x + (workgroup_id.y * 32768u));
     uint _e11; InterlockedOr(wg_scalar, uint((active_tile_index >= 64u)), _e11);
     int _e14; InterlockedAdd(wg_signed, int(1), _e14);
-    wg_struct.atomic_scalar = 1u;
+    { uint dummy = 0; InterlockedExchange(wg_struct.atomic_scalar, 1u, dummy); }
     int _e22; InterlockedAdd(wg_struct.atomic_arr[0], int(1), _e22);
     GroupMemoryBarrierWithGroupSync();
     GroupMemoryBarrierWithGroupSync();

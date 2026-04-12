@@ -53,17 +53,17 @@ metal::float4 mock_function(
 }
 
 kernel void main_(
-  metal::uint3 __local_invocation_id [[thread_position_in_threadgroup]]
+  uint __local_invocation_index [[thread_index_in_threadgroup]]
 , device InStorage const& in_storage [[user(fake0)]]
 , constant InUniform& in_uniform [[user(fake0)]]
 , metal::texture2d_array<float, metal::access::sample> image_2d_array [[user(fake0)]]
 , threadgroup type_5& in_workgroup
 ) {
-    if (metal::all(__local_invocation_id == metal::uint3(0u))) {
+    type_6 in_private = {};
+    if (__local_invocation_index == 0u) {
         in_workgroup = {};
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    type_6 in_private = {};
     metal::float4 _e5 = mock_function(metal::int2(1, 2), 3, 4, in_storage, in_uniform, image_2d_array, in_workgroup, in_private);
     return;
 }

@@ -1,3 +1,5 @@
+enable wgpu_per_vertex;
+
 var<private> global: array<f32, 3>;
 var<private> global_1: vec4<f32>;
 

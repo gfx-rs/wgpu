@@ -32,7 +32,7 @@ async fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: 
             .unwrap();
 
         {
-            let view = b0.slice(0..0).get_mapped_range();
+            let view = b0.slice(0..0).get_mapped_range().unwrap();
             assert!(view.is_empty());
         }
 
@@ -88,7 +88,7 @@ async fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: 
     });
 
     {
-        let view = b1.slice(0..0).get_mapped_range_mut();
+        let view = b1.slice(0..0).get_mapped_range_mut().unwrap();
         assert_eq!(view.len(), 0);
     }
 
@@ -147,7 +147,7 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
 
         {
             let slice = write_buf.slice(32..48);
-            let mut view = slice.get_mapped_range_mut();
+            let mut view = slice.get_mapped_range_mut().unwrap();
             for byte in view.slice(..) {
                 byte.write(2);
             }
@@ -172,7 +172,7 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
             .unwrap();
 
         let slice = read_buf.slice(..);
-        let view = slice.get_mapped_range();
+        let view = slice.get_mapped_range().unwrap();
         for byte in &view[0..32] {
             assert_eq!(*byte, 0);
         }

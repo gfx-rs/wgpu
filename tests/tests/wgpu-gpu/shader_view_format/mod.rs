@@ -194,7 +194,7 @@ async fn reinterpret(
         .await
         .unwrap();
 
-    let data: Vec<u8> = slice.get_mapped_range().to_vec();
+    let data: Vec<u8> = slice.get_mapped_range().unwrap().to_vec();
     let tolerance_data: [[u8; 4]; 4] = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [1, 1, 1, 0]];
 
     for h in 0..size.height {

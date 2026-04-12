@@ -137,7 +137,7 @@ async fn clip_distances(ctx: TestingContext) {
     ctx.async_poll(wgpu::PollType::wait_indefinitely())
         .await
         .unwrap();
-    let data: &[u8] = &slice.get_mapped_range();
+    let data: &[u8] = &slice.get_mapped_range().unwrap();
 
     // We should have filled the upper sector of the texture. Verify that this is the case.
     assert_eq!(data[128 + 64 * 256], 0xFF);

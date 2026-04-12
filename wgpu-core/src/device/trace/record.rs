@@ -362,6 +362,11 @@ impl IntoTrace for crate::ray_tracing::OwnedBlasGeometries<ArcReferences> {
                     geos.into_iter().map(|g| g.into_trace()).collect(),
                 )
             }
+            crate::ray_tracing::OwnedBlasGeometries::AabbGeometries(geos) => {
+                crate::ray_tracing::OwnedBlasGeometries::AabbGeometries(
+                    geos.into_iter().map(|g| g.into_trace()).collect(),
+                )
+            }
         }
     }
 }
@@ -378,6 +383,18 @@ impl IntoTrace for crate::ray_tracing::OwnedBlasTriangleGeometry<ArcReferences> 
             vertex_stride: self.vertex_stride,
             first_index: self.first_index,
             transform_buffer_offset: self.transform_buffer_offset,
+        }
+    }
+}
+
+impl IntoTrace for crate::ray_tracing::OwnedBlasAabbGeometry<ArcReferences> {
+    type Output = crate::ray_tracing::OwnedBlasAabbGeometry<PointerReferences>;
+    fn into_trace(self) -> Self::Output {
+        crate::ray_tracing::OwnedBlasAabbGeometry {
+            size: self.size,
+            stride: self.stride,
+            aabb_buffer: self.aabb_buffer.into_trace(),
+            primitive_offset: self.primitive_offset,
         }
     }
 }
@@ -452,8 +469,8 @@ impl IntoTrace for ArcComputeCommand {
                 size_bytes,
                 values_offset,
             },
-            C::Dispatch(groups) => C::Dispatch(groups),
-            C::DispatchIndirect { buffer, offset } => C::DispatchIndirect {
+            C::DispatchWorkgroups(groups) => C::DispatchWorkgroups(groups),
+            C::DispatchWorkgroupsIndirect { buffer, offset } => C::DispatchWorkgroupsIndirect {
                 buffer: buffer.into_trace(),
                 offset,
             },
@@ -475,6 +492,26 @@ impl IntoTrace for ArcComputeCommand {
                 query_index,
             },
             C::EndPipelineStatisticsQuery => C::EndPipelineStatisticsQuery,
+            C::TransitionResources {
+                buffer_transitions,
+                texture_transitions,
+            } => C::TransitionResources {
+                buffer_transitions: buffer_transitions
+                    .into_iter()
+                    .map(|buffer_transition| wgt::BufferTransition {
+                        buffer: buffer_transition.buffer.into_trace(),
+                        state: buffer_transition.state,
+                    })
+                    .collect(),
+                texture_transitions: texture_transitions
+                    .into_iter()
+                    .map(|texture_transition| wgt::TextureTransition {
+                        texture: texture_transition.texture.into_trace(),
+                        selector: texture_transition.selector,
+                        state: texture_transition.state,
+                    })
+                    .collect(),
+            },
         }
     }
 }

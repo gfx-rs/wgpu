@@ -673,7 +673,8 @@ impl PhysicalDeviceFeatures {
             | Df::VIEW_FORMATS
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
             | Df::NONBLOCKING_QUERY_RESOLVE
-            | Df::SHADER_F16_IN_F32;
+            | Df::SHADER_F16_IN_F32
+            | Df::MSL2_1;
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,
@@ -1020,6 +1021,16 @@ impl PhysicalDeviceFeatures {
             caps.supports_extension(khr::external_memory_win32::NAME),
         );
         features.set(
+            F::VULKAN_EXTERNAL_MEMORY_FD,
+            caps.supports_extension(khr::external_memory_fd::NAME),
+        );
+        features.set(
+            F::VULKAN_EXTERNAL_MEMORY_DMA_BUF,
+            caps.supports_extension(khr::external_memory_fd::NAME)
+                && caps.supports_extension(ext::external_memory_dma_buf::NAME)
+                && caps.supports_extension(ext::image_drm_format_modifier::NAME),
+        );
+        features.set(
             F::EXPERIMENTAL_MESH_SHADER,
             caps.supports_extension(ext::mesh_shader::NAME),
         );
@@ -1290,6 +1301,11 @@ impl PhysicalDeviceProperties {
             extensions.push(ext::external_memory_dma_buf::NAME);
         }
 
+        // Optional `VK_EXT_image_drm_format_modifier`
+        if self.supports_extension(ext::image_drm_format_modifier::NAME) {
+            extensions.push(ext::image_drm_format_modifier::NAME);
+        }
+
         // Optional `VK_EXT_memory_budget`
         if self.supports_extension(ext::memory_budget::NAME) {
             extensions.push(ext::memory_budget::NAME);
@@ -1375,9 +1391,14 @@ impl PhysicalDeviceProperties {
     fn to_wgpu_limits(&self) -> wgt::Limits {
         let limits = &self.properties.limits;
 
+        // Default is only implemented for tuples up to a certain size.
         let (
-            mut max_task_mesh_workgroup_total_count,
-            mut max_task_mesh_workgroups_per_dimension,
+            mut max_task_workgroup_total_count,
+            mut max_task_workgroups_per_dimension,
+            mut max_mesh_workgroup_total_count,
+            mut max_mesh_workgroups_per_dimension,
+        ) = Default::default();
+        let (
             mut max_task_invocations_per_workgroup,
             mut max_task_invocations_per_dimension,
             mut max_mesh_invocations_per_workgroup,
@@ -1389,15 +1410,12 @@ impl PhysicalDeviceProperties {
             mut max_mesh_multiview_view_count,
         ) = Default::default();
         if let Some(m) = self.mesh_shader {
-            max_task_mesh_workgroup_total_count = m
-                .max_task_work_group_total_count
-                .min(m.max_mesh_work_group_total_count);
-            max_task_mesh_workgroups_per_dimension = m
-                .max_task_work_group_count
-                .into_iter()
-                .chain(m.max_mesh_work_group_count)
-                .min()
-                .unwrap();
+            max_task_workgroup_total_count = m.max_task_work_group_total_count;
+            max_task_workgroups_per_dimension =
+                m.max_task_work_group_count.into_iter().min().unwrap();
+            max_mesh_workgroup_total_count = m.max_mesh_work_group_total_count;
+            max_mesh_workgroups_per_dimension =
+                m.max_mesh_work_group_count.into_iter().min().unwrap();
             max_task_invocations_per_workgroup = m.max_task_work_group_invocations;
             max_task_invocations_per_dimension =
                 m.max_task_work_group_size.into_iter().min().unwrap();
@@ -1665,8 +1683,11 @@ impl PhysicalDeviceProperties {
                 0
             },
 
-            max_task_mesh_workgroup_total_count,
-            max_task_mesh_workgroups_per_dimension,
+            max_task_workgroup_total_count,
+            max_task_workgroups_per_dimension,
+            max_mesh_workgroup_total_count,
+            max_mesh_workgroups_per_dimension,
+
             max_task_invocations_per_workgroup,
             max_task_invocations_per_dimension,
 
@@ -2494,6 +2515,14 @@ impl super::Adapter {
         } else {
             None
         };
+        let external_memory_fd_fn = if enabled_extensions.contains(&khr::external_memory_fd::NAME) {
+            Some(khr::external_memory_fd::Device::new(
+                &self.instance.raw,
+                &raw_device,
+            ))
+        } else {
+            None
+        };
 
         let naga_options = {
             use naga::back::spv;
@@ -2689,8 +2718,8 @@ impl super::Adapter {
                 binding_map: BTreeMap::default(),
                 debug_info: None,
                 task_dispatch_limits: Some(naga::back::TaskDispatchLimits {
-                    max_mesh_workgroups_per_dim: limits.max_task_mesh_workgroups_per_dimension,
-                    max_mesh_workgroups_total: limits.max_task_mesh_workgroup_total_count,
+                    max_mesh_workgroups_per_dim: limits.max_mesh_workgroups_per_dimension,
+                    max_mesh_workgroups_total: limits.max_mesh_workgroup_total_count,
                 }),
                 mesh_shader_primitive_indices_clamp: true,
             }
@@ -2737,6 +2766,7 @@ impl super::Adapter {
                 timeline_semaphore: timeline_semaphore_fn,
                 ray_tracing: ray_tracing_fns,
                 mesh_shading: mesh_shading_fns,
+                external_memory_fd: external_memory_fd_fn,
             },
             pipeline_cache_validation_key,
             vendor_id: self.phd_capabilities.properties.vendor_id,

@@ -710,7 +710,7 @@ impl super::Adapter {
                 && shader_model >= naga::back::hlsl::ShaderModel::V6_1
         };
         features.set(
-            wgt::Features::SHADER_BARYCENTRICS,
+            wgt::Features::SHADER_BARYCENTRICS | wgt::Features::SHADER_PER_VERTEX,
             shader_barycentrics_supported,
         );
 
@@ -852,6 +852,19 @@ impl super::Adapter {
             );
         }
 
+        // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-api
+        let max_task_mesh_workgroup_total_count = if mesh_shader_supported {
+            2u32.pow(22)
+        } else {
+            0
+        };
+        // Technically it says "64k" but I highly doubt they want 65536 for compute and exactly 64,000 for task workgroups
+        let max_task_mesh_workgroups_per_dimension = if mesh_shader_supported {
+            Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION
+        } else {
+            0
+        };
+
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
                 raw: adapter,
@@ -904,8 +917,9 @@ impl super::Adapter {
                     // 16
                     min_storage_buffer_offset_alignment:
                         Direct3D12::D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT,
-                    // 32
-                    max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
+                    // 30
+                    max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT
+                        - 2, // -2 for `SV_VertexID` and `SV_InstanceID`
                     // 2048
                     max_vertex_buffer_array_stride: Direct3D12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
                     // 31
@@ -940,23 +954,16 @@ impl super::Adapter {
                     // NATIVE (Non-WebGPU) LIMITS:
                     //
                     max_non_sampler_bindings: 1_000_000,
-
                     max_binding_array_elements_per_shader_stage: full_heap_count,
                     max_binding_array_sampler_elements_per_shader_stage:
                         Direct3D12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
 
+                    max_task_workgroup_total_count: max_task_mesh_workgroup_total_count,
+                    max_task_workgroups_per_dimension: max_task_mesh_workgroups_per_dimension,
+                    max_mesh_workgroup_total_count: max_task_mesh_workgroup_total_count,
+                    max_mesh_workgroups_per_dimension: max_task_mesh_workgroups_per_dimension,
+
                     // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-api
-                    max_task_mesh_workgroup_total_count: if mesh_shader_supported {
-                        2u32.pow(22)
-                    } else {
-                        0
-                    },
-                    // Technically it says "64k" but I highly doubt they want 65536 for compute and exactly 64,000 for task workgroups
-                    max_task_mesh_workgroups_per_dimension: if mesh_shader_supported {
-                        Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION
-                    } else {
-                        0
-                    },
                     // Assume this inherits from compute shaders
                     max_task_invocations_per_workgroup: if mesh_shader_supported {
                         Direct3D12::D3D12_CS_4_X_THREAD_GROUP_MAX_THREADS_PER_GROUP
@@ -1015,7 +1022,10 @@ impl super::Adapter {
                     // Direct3D correctly bounds-checks all array accesses:
                     // https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.8.2%20Device%20Memory%20Reads
                     uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
-                    raw_tlas_instance_size: size_of::<Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC>(),
+                    raw_tlas_instance_size: u32::try_from(size_of::<
+                        Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC,
+                    >())
+                    .unwrap(),
                     ray_tracing_scratch_buffer_alignment:
                         Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT,
                 },

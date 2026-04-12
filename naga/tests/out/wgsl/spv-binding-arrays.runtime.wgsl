@@ -1,3 +1,5 @@
+enable wgpu_binding_array;
+
 var<private> input_u002e_texture_coordinates_1: vec2<f32>;
 var<private> input_u002e_texture_index_1: u32;
 @group(0) @binding(0) 

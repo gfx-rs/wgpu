@@ -57,6 +57,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: doc-build
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Build the docs
         run: |

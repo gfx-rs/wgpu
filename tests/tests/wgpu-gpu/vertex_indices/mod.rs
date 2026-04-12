@@ -450,7 +450,7 @@ async fn vertex_index_common(ctx: TestingContext) {
         ctx.async_poll(wgpu::PollType::wait_indefinitely())
             .await
             .unwrap();
-        let data: Vec<u32> = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
+        let data: Vec<u32> = bytemuck::cast_slice(&slice.get_mapped_range().unwrap()).to_vec();
 
         let case_name = format!(
             "Case {:?} getting indices from {:?} using {:?} draw calls, encoded with a {:?}",

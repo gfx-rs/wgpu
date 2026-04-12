@@ -32,7 +32,7 @@ void main() {
     uint active_tile_index = (workgroup_id.x + (workgroup_id.y * 32768u));
     uint _e11 = atomicOr(wg_scalar, uint((active_tile_index >= 64u)));
     int _e14 = atomicAdd(wg_signed, 1);
-    wg_struct.atomic_scalar = 1u;
+    atomicExchange(wg_struct.atomic_scalar, 1u);
     int _e22 = atomicAdd(wg_struct.atomic_arr[0], 1);
     memoryBarrierShared();
     barrier();

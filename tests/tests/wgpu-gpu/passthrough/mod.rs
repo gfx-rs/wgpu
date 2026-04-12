@@ -47,7 +47,7 @@ fn test_with_module(ctx: TestingContext, vertex: wgpu::ShaderModule, fragment: w
             layout: Some(&layout),
             vertex: VertexState {
                 module: &vertex,
-                entry_point: Some("vertex_main"),
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
@@ -56,7 +56,7 @@ fn test_with_module(ctx: TestingContext, vertex: wgpu::ShaderModule, fragment: w
             multisample: MultisampleState::default(),
             fragment: Some(FragmentState {
                 module: &fragment,
-                entry_point: Some("fragment_main"),
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,
@@ -78,7 +78,16 @@ fn metal_test(ctx: TestingContext) {
         ctx.device
             .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
                 label: None,
-                num_workgroups: (0, 0, 0),
+                entry_points: Cow::Borrowed(&[
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: "vs_main".into(),
+                        workgroup_size: (0, 0, 0),
+                    },
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: "fs_main".into(),
+                        workgroup_size: (0, 0, 0),
+                    },
+                ]),
                 msl: Some(metal_source()),
                 ..Default::default()
             })
@@ -180,7 +189,16 @@ fn metallib_test(ctx: TestingContext) {
         ctx.device
             .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
                 label: None,
-                num_workgroups: (0, 0, 0),
+                entry_points: Cow::Borrowed(&[
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: "vs_main".into(),
+                        workgroup_size: (0, 0, 0),
+                    },
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: "fs_main".into(),
+                        workgroup_size: (0, 0, 0),
+                    },
+                ]),
                 metallib: Some(std::borrow::Cow::Borrowed(&source)),
                 ..Default::default()
             })
@@ -205,6 +223,16 @@ fn hlsl_test(ctx: TestingContext) {
     let module = unsafe {
         ctx.device
             .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
+                entry_points: Cow::Borrowed(&[
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: "vs_main".into(),
+                        workgroup_size: (0, 0, 0),
+                    },
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: "fs_main".into(),
+                        workgroup_size: (0, 0, 0),
+                    },
+                ]),
                 hlsl: Some(hlsl_source()),
                 ..Default::default()
             })
@@ -253,7 +281,7 @@ fn compile_dxil(entry: &str, stage_str: &str, test_hash: u64) -> Cow<'static, [u
 
 fn dxil_vertex_source(test_hash: u64) -> Cow<'static, [u8]> {
     if cfg!(target_os = "windows") {
-        compile_dxil("vertex_main", "vs", test_hash)
+        compile_dxil("vs_main", "vs", test_hash)
     } else {
         Cow::Borrowed(&[])
     }
@@ -261,7 +289,7 @@ fn dxil_vertex_source(test_hash: u64) -> Cow<'static, [u8]> {
 
 fn dxil_fragment_source(test_hash: u64) -> Cow<'static, [u8]> {
     if cfg!(target_os = "windows") {
-        compile_dxil("fragment_main", "ps", test_hash)
+        compile_dxil("fs_main", "ps", test_hash)
     } else {
         Cow::Borrowed(&[])
     }
@@ -274,7 +302,10 @@ fn dxil_test(ctx: TestingContext) {
         ctx.device
             .create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
                 label: None,
-                num_workgroups: (1, 1, 1),
+                entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
+                    name: "vs_main".into(),
+                    workgroup_size: (0, 0, 0),
+                }]),
                 dxil: Some(vertex_source),
                 ..Default::default()
             })
@@ -284,7 +315,10 @@ fn dxil_test(ctx: TestingContext) {
         ctx.device
             .create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
                 label: None,
-                num_workgroups: (1, 1, 1),
+                entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
+                    name: "fs_main".into(),
+                    workgroup_size: (0, 0, 0),
+                }]),
                 dxil: Some(fragment_source),
                 ..Default::default()
             })
@@ -303,7 +337,7 @@ static DXIL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new
 
 fn spirv_source(test_hash: u64) -> Cow<'static, [u32]> {
     let out_path = format!(
-        "{}/tests/wgpu-gpu/passthrough/shade{test_hash}.spv",
+        "{}/tests/wgpu-gpu/passthrough/shader{test_hash}.spv",
         env!("CARGO_MANIFEST_DIR")
     );
     let cmd = std::process::Command::new("dxc")
@@ -340,6 +374,16 @@ fn spirv_test(ctx: TestingContext) {
     let module = unsafe {
         ctx.device
             .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
+                entry_points: Cow::Borrowed(&[
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: "vs_main".into(),
+                        workgroup_size: (0, 0, 0),
+                    },
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: "fs_main".into(),
+                        workgroup_size: (0, 0, 0),
+                    },
+                ]),
                 spirv: Some(spirv_source(test_hash)),
                 ..Default::default()
             })
@@ -356,26 +400,54 @@ static SPIRV_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::ne
     )
     .run_sync(spirv_test);
 
-fn glsl_vertex_source() -> Cow<'static, str> {
-    std::borrow::Cow::Borrowed(include_str!("shader.vert"))
+fn is_gles(ctx: &TestingContext) -> bool {
+    unsafe {
+        let Some(dev) = ctx.adapter.as_hal::<wgpu::hal::gles::Api>() else {
+            return false;
+        };
+        let version = dev.get_glsl_version();
+        matches!(version, naga::back::glsl::Version::Embedded { .. })
+    }
 }
 
-fn glsl_fragment_source() -> Cow<'static, str> {
-    std::borrow::Cow::Borrowed(include_str!("shader.frag"))
+fn glsl_vertex_source(ctx: &TestingContext) -> Cow<'static, str> {
+    let version_string = if is_gles(ctx) {
+        "#version 300 es\nprecision highp float;\n"
+    } else {
+        "#version 330 core\n"
+    };
+    std::borrow::Cow::Owned(format!("{version_string}{}", include_str!("shader.vert")))
+}
+
+fn glsl_fragment_source(ctx: &TestingContext) -> Cow<'static, str> {
+    let version_string = if is_gles(ctx) {
+        "#version 300 es\nprecision highp float;\n"
+    } else {
+        "#version 330 core\n"
+    };
+    std::borrow::Cow::Owned(format!("{version_string}{}", include_str!("shader.frag")))
 }
 
 fn glsl_test(ctx: TestingContext) {
     let vertex = unsafe {
         ctx.device
             .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
-                glsl: Some(glsl_vertex_source()),
+                entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
+                    name: "vs_main".into(),
+                    workgroup_size: (0, 0, 0),
+                }]),
+                glsl: Some(glsl_vertex_source(&ctx)),
                 ..Default::default()
             })
     };
     let fragment = unsafe {
         ctx.device
             .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
-                glsl: Some(glsl_fragment_source()),
+                entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
+                    name: "fs_main".into(),
+                    workgroup_size: (0, 0, 0),
+                }]),
+                glsl: Some(glsl_fragment_source(&ctx)),
                 ..Default::default()
             })
     };
@@ -416,35 +488,35 @@ static WGSL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new
     .run_sync(wgsl_test);
 
 fn all_passthrough_shaders_binary(ctx: TestingContext) {
+    #[allow(unused_variables)]
     let test_hash = test_hash(&ctx, "all_passthrough_binary");
-    let vertex = unsafe {
-        ctx.device
-            .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
-                label: None,
-                num_workgroups: (0, 0, 0),
-                spirv: Some(spirv_source(test_hash)),
-                dxil: Some(dxil_vertex_source(test_hash)),
-                hlsl: None,
-                metallib: Some(metallib_source(test_hash)),
-                msl: None,
-                glsl: Some(glsl_vertex_source()),
-                wgsl: Some(wgsl_source()),
-            })
+    let desc = CreateShaderModuleDescriptorPassthrough {
+        entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
+            name: "vs_main".into(),
+            workgroup_size: (0, 0, 0),
+        }]),
+        #[cfg(not(target_arch = "wasm32"))]
+        spirv: Some(spirv_source(test_hash)),
+        #[cfg(not(target_arch = "wasm32"))]
+        dxil: Some(dxil_vertex_source(test_hash)),
+        #[cfg(not(target_arch = "wasm32"))]
+        metallib: Some(metallib_source(test_hash)),
+        glsl: Some(glsl_vertex_source(&ctx)),
+        wgsl: Some(wgsl_source()),
+        ..Default::default()
     };
-    let fragment = unsafe {
-        ctx.device
-            .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
-                label: None,
-                num_workgroups: (0, 0, 0),
-                spirv: Some(spirv_source(test_hash)),
-                dxil: Some(dxil_fragment_source(test_hash)),
-                hlsl: None,
-                metallib: Some(metallib_source(test_hash)),
-                msl: None,
-                glsl: Some(glsl_fragment_source()),
-                wgsl: Some(wgsl_source()),
-            })
+    let vertex = unsafe { ctx.device.create_shader_module_passthrough(desc.clone()) };
+    let desc = CreateShaderModuleDescriptorPassthrough {
+        entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
+            name: "fs_main".into(),
+            workgroup_size: (0, 0, 0),
+        }]),
+        #[cfg(not(target_arch = "wasm32"))]
+        dxil: Some(dxil_fragment_source(test_hash)),
+        glsl: Some(glsl_fragment_source(&ctx)),
+        ..desc
     };
+    let fragment = unsafe { ctx.device.create_shader_module_passthrough(desc) };
     test_with_module(ctx, vertex, fragment);
 }
 
@@ -454,35 +526,31 @@ static ALL_PASSTHROUGH_SHADERS_BINARY: GpuTestConfiguration = GpuTestConfigurati
     .run_sync(all_passthrough_shaders_binary);
 
 fn all_passthrough_shader_source(ctx: TestingContext) {
+    #[allow(unused_variables)]
     let test_hash = test_hash(&ctx, "all_passthrough_source");
-    let vertex = unsafe {
-        ctx.device
-            .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
-                label: None,
-                num_workgroups: (0, 0, 0),
-                spirv: Some(spirv_source(test_hash)),
-                dxil: None,
-                hlsl: Some(hlsl_source()),
-                metallib: None,
-                msl: Some(metal_source()),
-                glsl: Some(glsl_vertex_source()),
-                wgsl: Some(wgsl_source()),
-            })
+    let desc = CreateShaderModuleDescriptorPassthrough {
+        entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
+            name: "vs_main".into(),
+            workgroup_size: (0, 0, 0),
+        }]),
+        #[cfg(not(target_arch = "wasm32"))]
+        spirv: Some(spirv_source(test_hash)),
+        hlsl: Some(hlsl_source()),
+        msl: Some(metal_source()),
+        glsl: Some(glsl_vertex_source(&ctx)),
+        wgsl: Some(wgsl_source()),
+        ..Default::default()
     };
-    let fragment = unsafe {
-        ctx.device
-            .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
-                label: None,
-                num_workgroups: (0, 0, 0),
-                spirv: Some(spirv_source(test_hash)),
-                dxil: None,
-                hlsl: Some(hlsl_source()),
-                metallib: None,
-                msl: Some(metal_source()),
-                glsl: Some(glsl_fragment_source()),
-                wgsl: Some(wgsl_source()),
-            })
+    let vertex = unsafe { ctx.device.create_shader_module_passthrough(desc.clone()) };
+    let desc = CreateShaderModuleDescriptorPassthrough {
+        entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
+            name: "fs_main".into(),
+            workgroup_size: (0, 0, 0),
+        }]),
+        glsl: Some(glsl_fragment_source(&ctx)),
+        ..desc
     };
+    let fragment = unsafe { ctx.device.create_shader_module_passthrough(desc) };
     test_with_module(ctx, vertex, fragment);
 }
 
@@ -492,35 +560,31 @@ static ALL_PASSTHROUGH_SHADERS_SOURCE: GpuTestConfiguration = GpuTestConfigurati
     .run_sync(all_passthrough_shader_source);
 
 fn explicit_layout_validation(ctx: TestingContext) {
+    #[allow(unused_variables)]
     let test_hash = test_hash(&ctx, "explicit_layout_validation");
-    let vertex = unsafe {
-        ctx.device
-            .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
-                label: None,
-                num_workgroups: (0, 0, 0),
-                spirv: Some(spirv_source(test_hash)),
-                dxil: None,
-                hlsl: Some(hlsl_source()),
-                metallib: None,
-                msl: Some(metal_source()),
-                glsl: Some(glsl_vertex_source()),
-                wgsl: Some(wgsl_source()),
-            })
+    let desc = CreateShaderModuleDescriptorPassthrough {
+        entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
+            name: "vs_main".into(),
+            workgroup_size: (0, 0, 0),
+        }]),
+        #[cfg(not(target_arch = "wasm32"))]
+        spirv: Some(spirv_source(test_hash)),
+        hlsl: Some(hlsl_source()),
+        msl: Some(metal_source()),
+        glsl: Some(glsl_vertex_source(&ctx)),
+        wgsl: Some(wgsl_source()),
+        ..Default::default()
     };
-    let fragment = unsafe {
-        ctx.device
-            .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
-                label: None,
-                num_workgroups: (0, 0, 0),
-                spirv: Some(spirv_source(test_hash)),
-                dxil: None,
-                hlsl: Some(hlsl_source()),
-                metallib: None,
-                msl: Some(metal_source()),
-                glsl: Some(glsl_fragment_source()),
-                wgsl: Some(wgsl_source()),
-            })
+    let vertex = unsafe { ctx.device.create_shader_module_passthrough(desc.clone()) };
+    let desc = CreateShaderModuleDescriptorPassthrough {
+        entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
+            name: "fs_main".into(),
+            workgroup_size: (0, 0, 0),
+        }]),
+        glsl: Some(glsl_fragment_source(&ctx)),
+        ..desc
     };
+    let fragment = unsafe { ctx.device.create_shader_module_passthrough(desc) };
 
     let _pipeline = ctx
         .device
@@ -529,7 +593,7 @@ fn explicit_layout_validation(ctx: TestingContext) {
             layout: None,
             vertex: VertexState {
                 module: &vertex,
-                entry_point: Some("vertex_main"),
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
@@ -538,7 +602,7 @@ fn explicit_layout_validation(ctx: TestingContext) {
             multisample: MultisampleState::default(),
             fragment: Some(FragmentState {
                 module: &fragment,
-                entry_point: Some("fragment_main"),
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,

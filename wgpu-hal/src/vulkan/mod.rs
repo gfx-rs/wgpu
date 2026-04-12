@@ -299,6 +299,8 @@ struct DeviceExtensionFunctions {
     timeline_semaphore: Option<ExtensionFn<khr::timeline_semaphore::Device>>,
     ray_tracing: Option<RayTracingDeviceExtensionFunctions>,
     mesh_shading: Option<ext::mesh_shader::Device>,
+    #[cfg_attr(not(unix), allow(dead_code))]
+    external_memory_fd: Option<khr::external_memory_fd::Device>,
 }
 
 struct RayTracingDeviceExtensionFunctions {
@@ -1377,6 +1379,14 @@ impl Queue {
         } else {
             guard.push_signal(SemaphoreType::Binary(semaphore));
         }
+    }
+
+    /// Remove `semaphore` from the pending signal list if it is still present.
+    ///
+    /// Returns `true` if the semaphore was found and removed. If the submit
+    /// already consumed it, this is a harmless no-op that returns `false`.
+    pub fn remove_signal_semaphore(&self, semaphore: vk::Semaphore) -> bool {
+        self.signal_semaphores.lock().remove(semaphore)
     }
 }
 

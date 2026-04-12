@@ -65,6 +65,7 @@ static PARTIAL_BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestCon
 /// output due to non-native support for non-uniform indexing within a WARP.
 async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bool) {
     let shader = r#"
+        enable wgpu_binding_array;
         @group(0) @binding(0)
         var textures: binding_array<texture_2d<f32>>;
 

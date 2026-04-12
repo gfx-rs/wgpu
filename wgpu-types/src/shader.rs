@@ -95,16 +95,30 @@ impl Default for ShaderRuntimeChecks {
     }
 }
 
+/// Describes a single entry point in a passthrough shader descriptor.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PassthroughShaderEntryPoint<'a> {
+    /// The name of the entry point. Only used in validation and for GLSL or DXIL.
+    pub name: Cow<'a, str>,
+    /// Number of workgroups in each dimension x, y and z. Only used for metal with
+    /// compute-like shader stages.
+    pub workgroup_size: (u32, u32, u32),
+}
+
 /// Descriptor for a shader module given by any of several sources.
 /// These shaders are passed through directly to the underlying api.
 /// At least one shader type that may be used by the backend must be `Some` or a panic is raised.
+///
+/// Note that you shouldn't expect this to work with bindings except on SPIR-V, and even on SPIR-V
+/// there will be some caveats.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
     /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
     pub label: L,
-    /// Number of workgroups in each dimension x, y and z. Unused for Spir-V.
-    pub num_workgroups: (u32, u32, u32),
+    /// The list of entry points and their corresponding workgroup sizes.
+    pub entry_points: Cow<'a, [PassthroughShaderEntryPoint<'a>]>,
 
     /// Binary SPIR-V data, in 4-byte words.
     pub spirv: Option<Cow<'a, [u32]>>,
@@ -128,7 +142,7 @@ impl<'a, L: Default> Default for CreateShaderModuleDescriptorPassthrough<'a, L> 
     fn default() -> Self {
         Self {
             label: Default::default(),
-            num_workgroups: (0, 0, 0),
+            entry_points: Cow::Borrowed(&[]),
             spirv: None,
             dxil: None,
             metallib: None,
@@ -148,7 +162,7 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
     ) -> CreateShaderModuleDescriptorPassthrough<'a, K> {
         CreateShaderModuleDescriptorPassthrough {
             label: fun(&self.label),
-            num_workgroups: self.num_workgroups,
+            entry_points: self.entry_points.clone(),
             spirv: self.spirv.clone(),
             metallib: self.metallib.clone(),
             dxil: self.dxil.clone(),

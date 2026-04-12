@@ -71,7 +71,7 @@ pub(crate) use self::{
     clear::clear_texture,
     encoder::EncodingState,
     memory_init::CommandBufferTextureMemoryActions,
-    render::{get_stride_of_indirect_args, VertexLimits},
+    render::{get_dst_stride_of_indirect_args, get_src_stride_of_indirect_args, VertexLimits},
     transfer::{
         extract_texture_selector, validate_linear_texture_data, validate_texture_buffer_copy,
         validate_texture_copy_dst_format, validate_texture_copy_range,
@@ -2047,6 +2047,8 @@ pub enum PassErrorScope {
     BeginPipelineStatisticsQuery,
     #[error("In a end_pipeline_statistics_query command")]
     EndPipelineStatisticsQuery,
+    #[error("In a transition_resources command")]
+    TransitionResources,
     #[error("In a execute_bundle command")]
     ExecuteBundle,
     #[error("In a dispatch command, indirect:{indirect}")]

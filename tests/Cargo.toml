@@ -32,7 +32,7 @@ name = "wgpu-validation"
 harness = true
 
 [features]
-webgl = ["wgpu/webgl"]
+webgl = []
 # This feature is not actually used by this package, but it being present somewhere in the workspace
 # allows us to force the build to have profiling code enabled so we can test that configuration.
 test-build-with-profiling = ["profiling/type-check"]
@@ -42,7 +42,9 @@ test-build-with-profiling = ["profiling/type-check"]
 # dev-dependencies will make the dependency graph just a bit shallower, and makes
 # `cargo clippy -- -Wunused-crate-dependencies` give fewer false positives.
 [dependencies]
-wgpu = { workspace = true, features = ["noop"] }
+# Passthrough backend uses as_hal for the GLES backend, and there's not a great way to cfg-gate that.
+# These are all enabled for any testing on CI anyway, and won't do anything if no devices are detected.
+wgpu = { workspace = true, features = ["noop", "gles", "webgl", "angle"] }
 wgpu-core = { workspace = true, features = ["trace"] }
 wgpu-hal = { workspace = true, features = ["validation_canary"] }
 wgpu-macros.workspace = true

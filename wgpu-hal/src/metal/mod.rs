@@ -28,7 +28,11 @@ mod library_from_metallib;
 mod surface;
 mod time;
 
-use alloc::{string::ToString as _, sync::Arc, vec::Vec};
+use alloc::{
+    string::{String, ToString as _},
+    sync::Arc,
+    vec::Vec,
+};
 use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
 
 use bitflags::bitflags;
@@ -310,12 +314,15 @@ struct CapabilitiesQuery {
     int64_atomics: bool,
     float_atomics: bool,
     mesh_shaders: bool,
-    max_mesh_task_workgroup_count: u32,
+    max_task_workgroup_count: u32,
+    max_mesh_workgroup_count: u32,
     max_task_payload_size: u32,
     supported_vertex_amplification_factor: u32,
     shader_barycentrics: bool,
     supports_memoryless_storage: bool,
     supports_raytracing: bool,
+    shader_per_vertex: bool,
+    supports_multisample_array: bool,
 }
 
 #[derive(Debug)]
@@ -477,6 +484,7 @@ pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
     counters: Arc<wgt::HalCounters>,
+    limits: wgt::Limits,
 }
 
 pub struct Surface {
@@ -871,7 +879,7 @@ pub enum ShaderModuleSource {
 #[derive(Debug)]
 pub struct PassthroughShader {
     pub library: Retained<ProtocolObject<dyn MTLLibrary>>,
-    pub num_workgroups: (u32, u32, u32),
+    pub num_workgroups: HashMap<String, (u32, u32, u32)>,
 }
 
 unsafe impl Send for PassthroughShader {}
@@ -880,7 +888,7 @@ unsafe impl Sync for PassthroughShader {}
 #[derive(Debug)]
 pub struct ShaderModule {
     source: ShaderModuleSource,
-    bounds_checks: wgt::ShaderRuntimeChecks,
+    runtime_checks: wgt::ShaderRuntimeChecks,
 }
 
 impl crate::DynShaderModule for ShaderModule {}

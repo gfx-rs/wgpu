@@ -261,15 +261,11 @@ impl Instance {
     ///
     /// # Platform Support
     ///
-    /// This function is only available on non-apple Unix-like platforms (Linux, FreeBSD) and
-    /// currently only works with the Vulkan backend.
-    #[cfg(all(
-        unix,
-        not(target_vendor = "apple"),
-        not(target_family = "wasm"),
-        not(target_os = "netbsd")
-    ))]
-    #[cfg_attr(not(vulkan), expect(unused_variables))]
+    /// This function requires the `"drm"` feature. It is only available on
+    /// non-apple Unix-like platforms (Linux, FreeBSD) and currently only works
+    /// with the Vulkan backend.
+    #[cfg(drm)]
+    #[cfg_attr(not(vulkan), expect(unused_variables, unused_mut))]
     pub unsafe fn create_surface_from_drm(
         &self,
         fd: i32,
@@ -285,7 +281,7 @@ impl Instance {
         let mut surface_per_backend: HashMap<Backend, Box<dyn hal::DynSurface>> =
             HashMap::default();
 
-        #[cfg(all(vulkan, not(target_os = "netbsd")))]
+        #[cfg(vulkan)]
         {
             let instance = unsafe { self.as_hal::<hal::api::Vulkan>() }
                 .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Vulkan))?;
@@ -966,14 +962,10 @@ impl Global {
     ///
     /// # Platform Support
     ///
-    /// This function is only available on non-apple Unix-like platforms (Linux, FreeBSD) and
-    /// currently only works with the Vulkan backend.
-    #[cfg(all(
-        unix,
-        not(target_vendor = "apple"),
-        not(target_family = "wasm"),
-        not(target_os = "netbsd")
-    ))]
+    /// This function requires the `"drm"` feature, and is only available on
+    /// non-apple Unix-like platforms (Linux, FreeBSD) and currently only works
+    /// with the Vulkan backend.
+    #[cfg(drm)]
     pub unsafe fn instance_create_surface_from_drm(
         &self,
         fd: i32,

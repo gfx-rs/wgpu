@@ -21,6 +21,10 @@ fn main() {
             // to explicitly opt-in to Vulkan since it's meant to be used with MoltenVK.
             all(target_vendor = "apple", feature = "vulkan-portability")
         ) },
+        drm: { all(
+            feature = "drm",
+            any(target_os = "linux", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd")
+        ) },
         gles: { any(
             // The `gles` feature enables the OpenGL/GLES backend only on "native OpenGL" platforms, i.e. Windows, Linux, Android, and Emscripten.
             // (Note that WebGL is also not included here!)

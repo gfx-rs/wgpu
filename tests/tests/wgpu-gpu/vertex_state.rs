@@ -198,7 +198,7 @@ async fn set_array_stride_to_0(ctx: TestingContext) {
         .await
         .unwrap();
 
-    let data = slice.get_mapped_range();
+    let data = slice.get_mapped_range().unwrap();
     let succeeded = data.iter().all(|b| *b == u8::MAX);
     assert!(succeeded);
 }

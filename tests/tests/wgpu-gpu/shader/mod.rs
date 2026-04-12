@@ -376,7 +376,7 @@ async fn shader_input_output_test(
         mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
         ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
 
-        let mapped = mapping_buffer.slice(..).get_mapped_range();
+        let mapped = mapping_buffer.slice(..).get_mapped_range().unwrap();
 
         let typed: &[u32] = bytemuck::cast_slice(&mapped);
 

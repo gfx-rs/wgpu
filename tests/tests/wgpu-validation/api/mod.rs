@@ -8,6 +8,7 @@ mod encoding;
 mod error_scopes;
 mod experimental;
 mod external_texture;
+mod immediates;
 mod instance;
 mod render_pipeline;
 mod texture;

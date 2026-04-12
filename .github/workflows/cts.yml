@@ -101,6 +101,9 @@ jobs:
           # The version number can be incremented for cache busting.
           prefix-key: v3-rust-${{ hashFiles('cts_runner/revision.txt') }}
           cache-directories: cts
+          # Save the cache from the `other` job because it also runs the cts_runner
+          # integration tests.
+          save-if: ${{ github.ref == 'refs/heads/trunk' && matrix.suite == 'other' }}
 
       # We enable line numbers for panics, but that's it
       - name: disable debug

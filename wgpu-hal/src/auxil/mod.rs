@@ -187,6 +187,8 @@ pub(crate) fn adjust_raw_limits(mut limits: wgt::Limits) -> wgt::Limits {
     limits.max_compute_workgroup_size_z = z.min(m);
     limits.max_compute_invocations_per_workgroup = m.min(x.saturating_mul(y).saturating_mul(z));
 
+    limits.max_immediate_size = limits.max_immediate_size.min(256);
+
     limits
 }
 

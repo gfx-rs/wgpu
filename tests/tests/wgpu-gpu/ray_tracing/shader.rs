@@ -115,7 +115,7 @@ static PREVENT_INVALID_RAY_QUERY_CALLS: GpuTestConfiguration = GpuTestConfigurat
             .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
             // Otherwise, mistakes in the generated code won't be caught.
             .instance_flags(InstanceFlags::GPU_BASED_VALIDATION)
-            // not yet implemented in directx12
+            // not yet implemented in metal
             .skip(FailureCase::backend(Backends::METAL)),
     )
     .run_sync(prevent_invalid_ray_query_calls);

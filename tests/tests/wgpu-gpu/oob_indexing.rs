@@ -59,7 +59,11 @@ static RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET: GpuTestConfiguration = GpuTestCo
             .await
             .unwrap();
 
-        let view = test_resources.readback_buffer.slice(..).get_mapped_range();
+        let view = test_resources
+            .readback_buffer
+            .slice(..)
+            .get_mapped_range()
+            .unwrap();
 
         let current_res: [u32; 12] = *bytemuck::from_bytes(&view);
         drop(view);
@@ -462,7 +466,7 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
         .await
         .unwrap();
 
-    let view = readback_buffer.slice(..).get_mapped_range();
+    let view = readback_buffer.slice(..).get_mapped_range().unwrap();
 
     let current_res: [u32; 3] = *bytemuck::from_bytes(&view);
     drop(view);
