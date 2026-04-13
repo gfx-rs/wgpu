@@ -134,6 +134,10 @@ gles = [
     "windows/Win32_System_LibraryLoader",
     "windows/Win32_UI_WindowsAndMessaging",
 ]
+## Enables the ANGLE/EGL implementation for the GLES backend on Windows or macOS.
+##
+## Without this feature, the Windows GLES backend uses WGL by default.
+angle = ["gles"]
 ## Enables the DX12 backend when targeting Windows.
 dx12 = [
     "dep:arrayvec",

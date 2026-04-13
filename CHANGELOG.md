@@ -313,6 +313,10 @@ By @inner-daemons in [#9434](https://github.com/gfx-rs/wgpu/pull/9434).
 - Fixed WGSL loop-local `var` declarations without explicit initializers so they are zero-initialized each iteration. By @ruihe774 in [#9592](https://github.com/gfx-rs/wgpu/pull/9592).
 - Fixed logic errors in the ray query spirv writer. By @Vecvec in [#9731](https://github.com/gfx-rs/wgpu/pull/9731).
 
+#### GLES / OpenGL
+
+- Add angle as OpenGL backend on Windows. By @csmoe in [#9422](https://github.com/gfx-rs/wgpu/pull/9422).
+
 #### DX12
 
 - Fixed use of a texture view without `TextureUsage::TEXTURE_BINDING` as a read-only depth attachment. By @andyleiserson in [#9346](https://github.com/gfx-rs/wgpu/pull/9346).

@@ -77,7 +77,7 @@ webgpu = [
 
 #! ### Conditional Backends
 
-## Enables the GLES backend on macOS only for use with [ANGLE](https://github.com/google/angle).
+## Enables the GLES backend via [ANGLE](https://github.com/google/angle) on Windows and macOS.
 angle = ["wgpu-core?/angle"]
 
 ## Enables the Vulkan backend on macOS & iOS only for use with [MoltenVK](https://github.com/KhronosGroup/MoltenVK).

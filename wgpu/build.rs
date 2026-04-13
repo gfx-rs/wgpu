@@ -29,9 +29,9 @@ fn main() {
             // The `gles` feature enables the OpenGL/GLES backend only on "native OpenGL" platforms, i.e. Windows, Linux, Android, and Emscripten.
             // (Note that WebGL is also not included here!)
             all(any(windows, target_os = "linux", target_os = "android", target_os = "freebsd", Emscripten), feature = "gles"),
-            // On Apple platforms, however, we require the `angle` feature to explicitly opt-in to OpenGL
-            // since its meant to be used with ANGLE.
-            all(target_vendor = "apple", feature = "angle")
+            // On Windows and Apple platforms, the `angle` feature explicitly opts into
+            // the ANGLE-based OpenGL backend.
+            all(any(windows, target_vendor = "apple"), feature = "angle")
         ) },
         noop: { feature = "noop" },
 

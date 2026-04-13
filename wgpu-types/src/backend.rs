@@ -97,8 +97,9 @@ bitflags::bitflags! {
         const VULKAN = 1 << Backend::Vulkan as u32;
 
         /// [`Backend::Gl`].
-        /// Supported on Linux/Android, the web through webassembly via WebGL, and Windows and
-        /// macOS/iOS via ANGLE
+        /// Supported on Linux/Android, the web through webassembly via WebGL, Windows
+        /// through native OpenGL by default or ANGLE with the `angle` feature, and
+        /// macOS/iOS via ANGLE.
         const GL = 1 << Backend::Gl as u32;
 
         /// [`Backend::Metal`].

@@ -14,7 +14,7 @@ fn main() {
             all(windows_linux_android, feature = "gles"), // Regular GLES
             all(webgl), // WebGL
             all(target_os = "emscripten", feature = "gles"), // Emscripten GLES
-            all(target_vendor = "apple", feature = "angle") // ANGLE on Apple
+            all(any(windows, target_vendor = "apple"), feature = "angle") // ANGLE on Windows and Apple
         ) },
         vulkan: { any(
             all(windows_linux_android, feature = "vulkan"), // Regular Vulkan

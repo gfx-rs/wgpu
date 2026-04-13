@@ -75,7 +75,7 @@ Contributors are welcome! See [CONTRIBUTING.md][contrib] for more information.
 
 ✅ = First Class Support  
 🆗 = Downlevel/Best Effort Support  
-📐 = Requires the [ANGLE](https://github.com/gfx-rs/wgpu/wiki/Running-on-ANGLE) translation layer (GL ES 3.0 only)  
+📐 = Requires the [ANGLE](https://github.com/gfx-rs/wgpu/wiki/Running-on-ANGLE) translation layer (GL ES 3.0 only). The `angle` feature is supported on Windows and macOS.  
 🌋 = Requires the [MoltenVK](https://vulkan.lunarg.com/sdk/home#mac) translation layer  
 🛠️ = Unsupported, though open to contributions
 

@@ -18,6 +18,7 @@ rust-version = "1.76"
 
 [features]
 gles = ["wgpu-hal/gles"]
+angle = ["wgpu-hal/gles", "wgpu-hal/angle"]
 vulkan = ["wgpu-hal/vulkan"]
 dx12 = ["wgpu-hal/dx12"]
 renderdoc = ["wgpu-hal/renderdoc"]
