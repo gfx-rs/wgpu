@@ -111,7 +111,7 @@ use crate::{
     hub::Hub,
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
-    pipeline::{PipelineFlags, RenderPipeline, VertexStep},
+    pipeline::{PipelineFlags, RenderPipeline},
     resource::{
         Buffer, DestroyedResourceError, Fallible, InvalidResourceError, Labeled, ParentDevice,
         RawResourceAccess, TrackingData,
@@ -662,13 +662,11 @@ fn set_pipeline(
         return Err(RenderCommandError::IncompatibleStencilAccess(pipeline.error_ident()).into());
     }
 
-    let pipeline_state = PipelineState::new(&pipeline);
-
     state
         .commands
         .push(ArcRenderCommand::SetPipeline(pipeline.clone()));
 
-    state.pipeline = Some(pipeline_state);
+    state.pipeline = Some(pipeline.clone());
 
     state
         .binder
@@ -791,10 +789,9 @@ fn set_immediates(
     size_bytes: u32,
     values_offset: Option<u32>,
 ) -> Result<(), RenderBundleErrorInner> {
-    let pipeline_state = state.pipeline()?;
+    let pipeline = state.pipeline()?;
 
-    pipeline_state
-        .pipeline
+    pipeline
         .layout
         .validate_immediates_ranges(offset, size_bytes)?;
 
@@ -817,7 +814,8 @@ fn draw(
     state.is_ready(DrawCommandFamily::Draw)?;
     let pipeline = state.pipeline()?;
 
-    let vertex_limits = super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.steps);
+    let vertex_limits =
+        super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.vertex_steps);
     vertex_limits.validate_vertex_limit(first_vertex, vertex_count)?;
     vertex_limits.validate_instance_limit(first_instance, instance_count)?;
 
@@ -847,7 +845,8 @@ fn draw_indexed(
 
     let index = state.index.as_ref().unwrap();
 
-    let vertex_limits = super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.steps);
+    let vertex_limits =
+        super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.vertex_steps);
 
     let last_index = first_index as u64 + index_count as u64;
     let index_limit = index.limit();
@@ -884,18 +883,17 @@ fn draw_mesh_tasks(
     state.is_ready(DrawCommandFamily::DrawMeshTasks)?;
 
     let limits = &state.device.limits;
-    let (groups_size_limit, max_groups) =
-        if state.pipeline.as_ref().unwrap().pipeline.has_task_shader {
-            (
-                limits.max_task_workgroups_per_dimension,
-                limits.max_task_workgroup_total_count,
-            )
-        } else {
-            (
-                limits.max_mesh_workgroups_per_dimension,
-                limits.max_mesh_workgroup_total_count,
-            )
-        };
+    let (groups_size_limit, max_groups) = if state.pipeline.as_ref().unwrap().has_task_shader {
+        (
+            limits.max_task_workgroups_per_dimension,
+            limits.max_task_workgroup_total_count,
+        )
+    } else {
+        (
+            limits.max_mesh_workgroups_per_dimension,
+            limits.max_mesh_workgroup_total_count,
+        )
+    };
 
     let total_count = check_workgroup_sizes(
         &[group_count_x, group_count_y, group_count_z],
@@ -936,7 +934,8 @@ fn multi_draw_indirect(
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
 
-    let vertex_limits = super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.steps);
+    let vertex_limits =
+        super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.vertex_steps);
 
     let stride = super::get_src_stride_of_indirect_args(family);
     // TODO(https://github.com/gfx-rs/wgpu/issues/8051): It would be better to report this
@@ -1391,25 +1390,6 @@ impl VertexState {
     }
 }
 
-/// The bundle's current pipeline, and some cached information needed for validation.
-struct PipelineState {
-    /// The pipeline
-    pipeline: Arc<RenderPipeline>,
-
-    /// How this pipeline's vertex shader traverses each vertex buffer, indexed
-    /// by vertex buffer slot number. `None` signifies unused vertex buffer slots.
-    steps: Vec<Option<VertexStep>>,
-}
-
-impl PipelineState {
-    fn new(pipeline: &Arc<RenderPipeline>) -> Self {
-        Self {
-            pipeline: pipeline.clone(),
-            steps: pipeline.vertex_steps.to_vec(),
-        }
-    }
-}
-
 /// State for analyzing and cleaning up bundle command streams.
 ///
 /// To minimize state updates, [`RenderBundleEncoder::finish`]
@@ -1425,7 +1405,7 @@ struct State {
     trackers: RenderBundleScope,
 
     /// The currently set pipeline, if any.
-    pipeline: Option<PipelineState>,
+    pipeline: Option<Arc<RenderPipeline>>,
 
     /// The state of each vertex buffer slot.
     vertex: [Option<VertexState>; hal::MAX_VERTEX_BUFFERS],
@@ -1455,9 +1435,9 @@ struct State {
 
 impl State {
     /// Return the current pipeline state. Return an error if none is set.
-    fn pipeline(&self) -> Result<&PipelineState, RenderBundleErrorInner> {
+    fn pipeline(&self) -> Result<&RenderPipeline, RenderBundleErrorInner> {
         self.pipeline
-            .as_ref()
+            .as_deref()
             .ok_or(DrawError::MissingPipeline(pass::MissingPipeline).into())
     }
 
@@ -1508,20 +1488,19 @@ impl State {
     /// This should be further deduplicated with similar validation on render/compute passes.
     fn is_ready(&mut self, family: DrawCommandFamily) -> Result<(), DrawError> {
         if let Some(pipeline) = self.pipeline.as_ref() {
-            self.binder
-                .check_compatibility(pipeline.pipeline.as_ref())?;
+            self.binder.check_compatibility(pipeline.as_ref())?;
             self.binder.check_late_buffer_bindings()?;
 
             // Check all needed vertex buffers have been bound
             for index in pipeline
-                .steps
+                .vertex_steps
                 .iter()
                 .enumerate()
                 .filter_map(|(index, step)| step.map(|_| index))
             {
                 if self.vertex.get(index).is_none() {
                     return Err(DrawError::MissingVertexBuffer {
-                        pipeline: pipeline.pipeline.error_ident(),
+                        pipeline: pipeline.error_ident(),
                         index,
                     });
                 }
@@ -1548,7 +1527,6 @@ impl State {
             }
 
             if family == DrawCommandFamily::DrawIndexed {
-                let pipeline = &pipeline.pipeline;
                 let index_format = match &self.index {
                     Some(index) => index.format,
                     None => return Err(DrawError::MissingIndexBuffer),
@@ -1566,11 +1544,10 @@ impl State {
 
             if !self
                 .immediate_slots_set
-                .contains(pipeline.pipeline.immediate_slots_required)
+                .contains(pipeline.immediate_slots_required)
             {
                 return Err(DrawError::MissingImmediateData {
                     missing: pipeline
-                        .pipeline
                         .immediate_slots_required
                         .difference(self.immediate_slots_set),
                 });
