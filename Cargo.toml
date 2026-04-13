@@ -192,7 +192,7 @@ shell-words = "1"
 smallvec = "1.14"
 spirv = "0.4"
 static_assertions = "1.1"
-strum = { version = "0.27.1", default-features = false, features = ["derive"] }
+strum = { version = "0.28.0", default-features = false, features = ["derive"] }
 syn = "2.0.98"
 tempfile = "3"
 toml = "1.0.0"
