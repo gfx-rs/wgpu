@@ -2562,10 +2562,10 @@ fn set_index_buffer(
 
     buffer.check_usage(BufferUsages::INDEX)?;
 
-    if !offset.is_multiple_of(u64::try_from(index_format.byte_size()).unwrap()) {
+    if !offset.is_multiple_of(u64::from(index_format.byte_size())) {
         return Err(RenderCommandError::UnalignedIndexBuffer {
             offset,
-            alignment: index_format.byte_size(),
+            alignment: index_format.byte_size() as usize,
         }
         .into());
     }

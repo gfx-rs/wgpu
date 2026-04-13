@@ -213,7 +213,7 @@ pub(crate) fn build_acceleration_structures(
         state,
     )?;
 
-    let mut scratch_buffer_tlas_size = 0;
+    let mut scratch_buffer_tlas_size: u64 = 0;
     let mut tlas_storage = Vec::<TlasStore>::with_capacity(tlas.len());
     let mut instance_buffer_staging_source = Vec::<u8>::new();
 
@@ -222,15 +222,10 @@ pub(crate) fn build_acceleration_structures(
         state.tracker.tlas_s.insert_single(tlas.clone());
 
         let scratch_buffer_offset = scratch_buffer_tlas_size;
-        assert!(
-            tlas.size_info.build_scratch_size
-                <= u64::MAX
-                    - u64::from(state.device.alignments.ray_tracing_scratch_buffer_alignment)
-        );
-        scratch_buffer_tlas_size += align_to(
+        scratch_buffer_tlas_size = scratch_buffer_tlas_size.saturating_add(align_to(
             tlas.size_info.build_scratch_size,
             u64::from(state.device.alignments.ray_tracing_scratch_buffer_alignment),
-        );
+        ));
 
         let first_byte_index = instance_buffer_staging_source.len();
 
@@ -311,7 +306,9 @@ pub(crate) fn build_acceleration_structures(
         return Ok(());
     };
 
-    assert!(scratch_size.get() != u64::MAX);
+    if scratch_size.get() == u64::MAX {
+        return Err(crate::device::DeviceError::OutOfMemory.into());
+    }
 
     let scratch_buffer = ScratchBuffer::new(state.device, scratch_size)?;
 
@@ -775,11 +772,30 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                         }) {
                             input_barriers.push(barrier);
                         }
-                        let index_stride = mesh.size.index_format.unwrap().byte_size() as u32;
+                        let index_stride = mesh.size.index_format.unwrap().byte_size();
                         // `hal::AccelerationStructureTriangleIndices` accepts only `u32` offset
-                        let vertex_offset = mesh.first_index.unwrap().saturating_mul(index_stride);
-                        let indexes_size =
-                            mesh.size.index_count.unwrap().saturating_mul(index_stride);
+                        let Some(vertex_offset) =
+                            mesh.first_index.unwrap().checked_mul(index_stride)
+                        else {
+                            return Err(BuildAccelerationStructureError::OffsetLimitedTo4GB {
+                                buffer_ident: index_buffer.error_ident(),
+                                offset: u64::from(mesh.first_index.unwrap())
+                                    .saturating_mul(u64::from(index_stride)),
+                                count: u64::from(mesh.first_index.unwrap()),
+                                stride: u64::from(index_stride),
+                            });
+                        };
+                        let Some(indexes_size) =
+                            mesh.size.index_count.unwrap().checked_mul(index_stride)
+                        else {
+                            return Err(BuildAccelerationStructureError::OffsetLimitedTo4GB {
+                                buffer_ident: index_buffer.error_ident(),
+                                offset: u64::from(mesh.size.index_count.unwrap())
+                                    .saturating_mul(u64::from(index_stride)),
+                                count: u64::from(mesh.size.index_count.unwrap()),
+                                stride: u64::from(index_stride),
+                            });
+                        };
 
                         if mesh.size.index_count.unwrap() % 3 != 0 {
                             return Err(BuildAccelerationStructureError::InvalidIndexCount(
@@ -787,9 +803,7 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                                 mesh.size.index_count.unwrap(),
                             ));
                         }
-                        if indexes_size == u32::MAX
-                            || vertex_offset == u32::MAX
-                            || index_buffer.size < u64::from(vertex_offset)
+                        if index_buffer.size < u64::from(vertex_offset)
                             || index_buffer.size - u64::from(vertex_offset)
                                 < u64::from(indexes_size)
                         {
@@ -847,8 +861,15 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                         }
 
                         // `hal::AccelerationStructureTriangleTransform` accepts only `u32` offset
-                        let offset = u32::try_from(mesh.transform_buffer_offset.unwrap())
-                            .unwrap_or(u32::MAX);
+                        let Ok(offset) = u32::try_from(mesh.transform_buffer_offset.unwrap())
+                        else {
+                            return Err(BuildAccelerationStructureError::OffsetLimitedTo4GB {
+                                buffer_ident: transform_buffer.error_ident(),
+                                offset: mesh.transform_buffer_offset.unwrap(),
+                                count: mesh.transform_buffer_offset.unwrap(),
+                                stride: 1,
+                            });
+                        };
 
                         if offset % wgt::TRANSFORM_BUFFER_ALIGNMENT as u32 != 0 {
                             return Err(
@@ -857,8 +878,7 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                                 ),
                             );
                         }
-                        if offset == u32::MAX
-                            || transform_buffer.size < 48
+                        if transform_buffer.size < 48
                             || transform_buffer.size - 48 < u64::from(offset)
                         {
                             return Err(BuildAccelerationStructureError::InsufficientBufferSize {
@@ -915,13 +935,6 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
 
                 {
                     let scratch_buffer_offset = *scratch_buffer_blas_size;
-                    assert!(
-                        blas.size_info.build_scratch_size
-                            <= u64::MAX
-                                - u64::from(
-                                    state.device.alignments.ray_tracing_scratch_buffer_alignment
-                                )
-                    );
                     *scratch_buffer_blas_size = scratch_buffer_blas_size.saturating_add(align_to(
                         blas.size_info.build_scratch_size,
                         u64::from(state.device.alignments.ray_tracing_scratch_buffer_alignment),
@@ -1004,12 +1017,20 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                         }
 
                         // `hal::AccelerationStructureAABBs` accepts only `u32` offset
-                        let aabb_size = aabb
-                            .size
-                            .primitive_count
-                            .saturating_mul(u32::try_from(aabb.stride).unwrap());
-                        if aabb_size == u32::MAX
-                            || aabb_buffer.size < u64::from(aabb.primitive_offset)
+                        let Some(aabb_size) = u32::try_from(aabb.stride)
+                            .ok()
+                            .and_then(|stride| aabb.size.primitive_count.checked_mul(stride))
+                        else {
+                            return Err(BuildAccelerationStructureError::OffsetLimitedTo4GB {
+                                buffer_ident: aabb_buffer.error_ident(),
+                                offset: u64::from(aabb.size.primitive_count)
+                                    .saturating_mul(aabb.stride),
+                                count: u64::from(aabb.size.primitive_count),
+                                stride: aabb.stride,
+                            });
+                        };
+
+                        if aabb_buffer.size < u64::from(aabb.primitive_offset)
                             || aabb_buffer.size - u64::from(aabb.primitive_offset)
                                 < u64::from(aabb_size)
                         {
