@@ -62,7 +62,7 @@
                             query_set: PointerId(0x10),
                             query_index: 0,
                         ),
-                        Dispatch((2, 3, 7,)),
+                        DispatchWorkgroups((2, 3, 7,)),
                         EndPipelineStatisticsQuery,
                     ],
                     dynamic_offsets: [],

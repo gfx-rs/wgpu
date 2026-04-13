@@ -36,9 +36,9 @@ pub enum ComputeCommand<R: ReferenceType> {
         values_offset: u32,
     },
 
-    Dispatch([u32; 3]),
+    DispatchWorkgroups([u32; 3]),
 
-    DispatchIndirect {
+    DispatchWorkgroupsIndirect {
         buffer: R::Buffer,
         offset: wgt::BufferAddress,
     },

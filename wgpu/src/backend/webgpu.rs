@@ -622,7 +622,7 @@ fn map_buffer_copy_view(
     if let Some(rows_per_image) = view.layout.rows_per_image {
         mapped.set_rows_per_image(rows_per_image);
     }
-    mapped.set_offset(view.layout.offset as f64);
+    mapped.set_offset_f64(view.layout.offset as f64);
     mapped
 }
 
@@ -632,7 +632,7 @@ fn map_texture_copy_view(
     let texture = view.texture.inner.as_webgpu();
     let mapped = webgpu_sys::GpuTexelCopyTextureInfo::new(&texture.inner);
     mapped.set_mip_level(view.mip_level);
-    mapped.set_origin(&map_origin_3d(view.origin));
+    mapped.set_origin_gpu_origin_3d_dict(&map_origin_3d(view.origin));
     mapped.set_aspect(map_texture_aspect(view.aspect));
     mapped
 }
@@ -643,7 +643,7 @@ fn map_tagged_texture_copy_view(
     let texture = view.texture.inner.as_webgpu();
     let mapped = webgpu_sys::GpuCopyExternalImageDestInfo::new(&texture.inner);
     mapped.set_mip_level(view.mip_level);
-    mapped.set_origin(&map_origin_3d(view.origin));
+    mapped.set_origin_gpu_origin_3d_dict(&map_origin_3d(view.origin));
     mapped.set_aspect(map_texture_aspect(view.aspect));
     // mapped.set_color_space(map_color_space(view.color_space));
     mapped.set_premultiplied_alpha(view.premultiplied_alpha);
@@ -653,8 +653,30 @@ fn map_tagged_texture_copy_view(
 fn map_external_texture_copy_view(
     view: &crate::CopyExternalImageSourceInfo,
 ) -> webgpu_sys::GpuCopyExternalImageSourceInfo {
-    let mapped = webgpu_sys::GpuCopyExternalImageSourceInfo::new(&view.source);
-    mapped.set_origin(&map_origin_2d(view.origin));
+    let mapped = match &view.source {
+        crate::ExternalImageSource::ImageBitmap(bitmap) => {
+            webgpu_sys::GpuCopyExternalImageSourceInfo::new(bitmap)
+        }
+        crate::ExternalImageSource::HTMLImageElement(image) => {
+            webgpu_sys::GpuCopyExternalImageSourceInfo::new_with_html_image_element(image)
+        }
+        crate::ExternalImageSource::HTMLVideoElement(video) => {
+            webgpu_sys::GpuCopyExternalImageSourceInfo::new_with_html_video_element(video)
+        }
+        crate::ExternalImageSource::ImageData(image_data) => {
+            webgpu_sys::GpuCopyExternalImageSourceInfo::new_with_image_data(image_data)
+        }
+        crate::ExternalImageSource::HTMLCanvasElement(canvas) => {
+            webgpu_sys::GpuCopyExternalImageSourceInfo::new_with_html_canvas_element(canvas)
+        }
+        crate::ExternalImageSource::OffscreenCanvas(offscreen_canvas) => {
+            webgpu_sys::GpuCopyExternalImageSourceInfo::new_with_offscreen_canvas(offscreen_canvas)
+        }
+        crate::ExternalImageSource::VideoFrame(video_frame) => {
+            webgpu_sys::GpuCopyExternalImageSourceInfo::new_with_video_frame(video_frame)
+        }
+    };
+    mapped.set_origin_gpu_origin_2d_dict(&map_origin_2d(view.origin));
     mapped.set_flip_y(view.flip_y);
     mapped
 }
@@ -875,8 +897,8 @@ fn map_adapter_info(adapter_info: &webgpu_sys::GpuAdapterInfo) -> wgt::AdapterIn
     }
 }
 
-fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
-    let object = js_sys::Object::new();
+fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object<js_sys::Number> {
+    let object = js_sys::Object::<js_sys::Number>::new_typed();
 
     macro_rules! set_properties {
         (($from:expr) => ($on:expr) : $(($js_ident:ident, $rs_ident:ident)),* $(,)?) => {
@@ -934,23 +956,20 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
     object
 }
 
-type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
-
 fn future_request_adapter(
-    result: JsFutureResult,
+    result: Result<js_sys::JsOption<webgpu_sys::GpuAdapter>, wasm_bindgen::JsValue>,
     requested_backends: Backends,
 ) -> Result<dispatch::DispatchAdapter, wgt::RequestAdapterError> {
-    let web_adapter: Option<webgpu_sys::GpuAdapter> =
-        result.and_then(wasm_bindgen::JsCast::dyn_into).ok();
-    web_adapter
-        .map(|adapter| {
-            WebAdapter {
+    result
+        .map_err(|_| request_adapter_null_error(requested_backends))
+        .and_then(|adapter| match adapter.into_option() {
+            Some(adapter) => Ok(WebAdapter {
                 inner: adapter,
                 ident: crate::cmp::Identifier::create(),
             }
-            .into()
+            .into()),
+            None => Err(request_adapter_null_error(requested_backends)),
         })
-        .ok_or_else(|| request_adapter_null_error(requested_backends))
 }
 
 // Translate WebGPU’s null return into our error.
@@ -968,11 +987,10 @@ fn request_adapter_null_error(requested_backends: Backends) -> wgt::RequestAdapt
 }
 
 fn future_request_device(
-    result: JsFutureResult,
+    result: Result<webgpu_sys::GpuDevice, wasm_bindgen::JsValue>,
 ) -> Result<(dispatch::DispatchDevice, dispatch::DispatchQueue), crate::RequestDeviceError> {
     result
-        .map(|js_value| {
-            let device = webgpu_sys::GpuDevice::from(js_value);
+        .map(|device| {
             let queue = device.queue();
 
             (
@@ -995,18 +1013,14 @@ fn future_request_device(
         })
 }
 
-fn future_pop_error_scope(result: JsFutureResult) -> Option<crate::Error> {
-    match result {
-        Ok(js_value) if js_value.is_object() => {
-            let js_error = wasm_bindgen::JsCast::dyn_into(js_value).unwrap();
-            Some(crate::Error::from_js(js_error))
-        }
-        _ => None,
-    }
+fn future_pop_error_scope(
+    result: Result<js_sys::JsOption<webgpu_sys::GpuError>, wasm_bindgen::JsValue>,
+) -> Option<crate::Error> {
+    Some(crate::Error::from_js(result.ok()?.into_option()?.into()))
 }
 
 fn future_compilation_info(
-    result: JsFutureResult,
+    result: Result<webgpu_sys::GpuCompilationInfo, wasm_bindgen::JsValue>,
     base_compilation_info: &WebShaderCompilationInfo,
 ) -> crate::CompilationInfo {
     let base_messages = match base_compilation_info {
@@ -1016,34 +1030,33 @@ fn future_compilation_info(
         _ => [].iter().cloned(),
     };
 
-    let messages = match result {
-        Ok(js_value) => {
-            let info = webgpu_sys::GpuCompilationInfo::from(js_value);
-            base_messages
+    let messages =
+        match result {
+            Ok(info) => base_messages
                 .chain(info.messages().into_iter().map(|message| {
-                    crate::CompilationMessage::from_js(
-                        webgpu_sys::GpuCompilationMessage::from(message),
-                        base_compilation_info,
-                    )
+                    crate::CompilationMessage::from_js(message, base_compilation_info)
                 }))
-                .collect()
-        }
-        Err(_v) => base_messages
-            .chain(core::iter::once(crate::CompilationMessage {
-                message: "Getting compilation info failed".to_string(),
-                message_type: crate::CompilationMessageType::Error,
-                location: None,
-            }))
-            .collect(),
-    };
+                .collect(),
+            Err(_v) => base_messages
+                .chain(core::iter::once(crate::CompilationMessage {
+                    message: "Getting compilation info failed".to_string(),
+                    message_type: crate::CompilationMessageType::Error,
+                    location: None,
+                }))
+                .collect(),
+        };
 
     crate::CompilationInfo { messages }
 }
 
 /// Calls `callback(success_value)` when the promise completes successfully, calls `callback(failure_value)`
 /// when the promise completes unsuccessfully.
-fn register_then_closures<F, T>(promise: &Promise, callback: F, success_value: T, failure_value: T)
-where
+fn register_then_closures<F, T>(
+    promise: &Promise<js_sys::Undefined>,
+    callback: F,
+    success_value: T,
+    failure_value: T,
+) where
     F: FnOnce(T) + 'static,
     T: 'static,
 {
@@ -1060,12 +1073,14 @@ where
 
     let rc_callback_clone1 = rc_callback.clone();
     let rc_callback_clone2 = rc_callback.clone();
+
     let closure_success = wasm_bindgen::closure::Closure::once(move |_| {
         let (success_closure, rejection_closure, callback) =
             rc_callback_clone1.borrow_mut().take().unwrap();
         callback(success_value);
         // drop the closures, including ourselves, which will free any captured memory.
         drop((success_closure, rejection_closure));
+        Ok(())
     });
     let closure_rejected = wasm_bindgen::closure::Closure::once(move |_| {
         let (success_closure, rejection_closure, callback) =
@@ -1073,11 +1088,12 @@ where
         callback(failure_value);
         // drop the closures, including ourselves, which will free any captured memory.
         drop((success_closure, rejection_closure));
+        Ok(())
     });
 
     // Calling then before setting the value in the Rc seems like a race, but it isn't
     // because the promise callback will run on this thread, so there is no race.
-    let _ = promise.then2(&closure_success, &closure_rejected);
+    let _ = promise.then_with_reject(&closure_success, &closure_rejected);
 
     *rc_callback.borrow_mut() = Some((closure_success, closure_rejected, callback));
 }
@@ -1708,12 +1724,16 @@ impl dispatch::AdapterInterface for WebAdapter {
             .copied()
             .flat_map(|(flag, value)| {
                 if desc.required_features.contains(flag) {
-                    Some(JsValue::from(value))
+                    Some(
+                        wasm_bindgen::JsValue::from(value)
+                            .dyn_into::<js_sys::JsString>()
+                            .unwrap(),
+                    )
                 } else {
                     None
                 }
             })
-            .collect::<js_sys::Array>();
+            .collect::<Vec<js_sys::JsString>>();
         mapped_desc.set_required_features(&required_features);
 
         if let Some(label) = desc.label {
@@ -1985,7 +2005,7 @@ impl dispatch::DeviceInterface for WebDevice {
                         let buffer = webgpu_sys::GpuBufferBindingLayout::new();
                         buffer.set_has_dynamic_offset(has_dynamic_offset);
                         if let Some(size) = min_binding_size {
-                            buffer.set_min_binding_size(size.get() as f64);
+                            buffer.set_min_binding_size_f64(size.get() as f64);
                         }
                         buffer.set_type(match ty {
                             wgt::BufferBindingType::Uniform => {
@@ -2064,7 +2084,7 @@ impl dispatch::DeviceInterface for WebDevice {
 
                 mapped_entry
             })
-            .collect::<js_sys::Array>();
+            .collect::<Vec<webgpu_sys::GpuBindGroupLayoutEntry>>();
 
         let mapped_desc = webgpu_sys::GpuBindGroupLayoutDescriptor::new(&mapped_bindings);
         if let Some(label) = desc.label {
@@ -2086,53 +2106,55 @@ impl dispatch::DeviceInterface for WebDevice {
         let mapped_entries = desc
             .entries
             .iter()
-            .map(|binding| {
-                let mapped_resource = match binding.resource {
-                    crate::BindingResource::Buffer(crate::BufferBinding {
-                        buffer,
-                        offset,
-                        size,
-                    }) => {
-                        let buffer = buffer.inner.as_webgpu();
-                        let mapped_buffer_binding =
-                            webgpu_sys::GpuBufferBinding::new(&buffer.inner);
-                        mapped_buffer_binding.set_offset(offset as f64);
-                        if let Some(s) = size {
-                            mapped_buffer_binding.set_size(s.get() as f64);
-                        }
-                        JsValue::from(mapped_buffer_binding)
+            .map(|binding| match binding.resource {
+                crate::BindingResource::Buffer(crate::BufferBinding {
+                    buffer,
+                    offset,
+                    size,
+                }) => {
+                    let buffer = buffer.inner.as_webgpu();
+                    let mapped_buffer_binding = webgpu_sys::GpuBufferBinding::new(&buffer.inner);
+                    mapped_buffer_binding.set_offset_f64(offset as f64);
+                    if let Some(s) = size {
+                        mapped_buffer_binding.set_size_f64(s.get() as f64);
                     }
-                    crate::BindingResource::BufferArray(..) => {
-                        panic!("Web backend does not support arrays of buffers")
-                    }
-                    crate::BindingResource::Sampler(sampler) => {
-                        let sampler = &sampler.inner.as_webgpu().inner;
-                        JsValue::from(sampler)
-                    }
-                    crate::BindingResource::SamplerArray(..) => {
-                        panic!("Web backend does not support arrays of samplers")
-                    }
-                    crate::BindingResource::TextureView(texture_view) => {
-                        let texture_view = &texture_view.inner.as_webgpu().inner;
-                        JsValue::from(texture_view)
-                    }
-                    crate::BindingResource::TextureViewArray(..) => {
-                        panic!("Web backend does not support BINDING_INDEXING extension")
-                    }
-                    crate::BindingResource::AccelerationStructure(_) => {
-                        unimplemented!("Raytracing not implemented for web")
-                    }
-                    crate::BindingResource::AccelerationStructureArray(_) => {
-                        unimplemented!("Raytracing not implemented for web")
-                    }
-                    crate::BindingResource::ExternalTexture(_) => {
-                        unimplemented!("ExternalTexture not implemented for web")
-                    }
-                };
 
-                webgpu_sys::GpuBindGroupEntry::new(binding.binding, &mapped_resource)
+                    webgpu_sys::GpuBindGroupEntry::new_with_gpu_buffer_binding(
+                        binding.binding,
+                        &mapped_buffer_binding,
+                    )
+                }
+                crate::BindingResource::BufferArray(..) => {
+                    panic!("Web backend does not support arrays of buffers")
+                }
+                crate::BindingResource::Sampler(sampler) => {
+                    let sampler = &sampler.inner.as_webgpu().inner;
+                    webgpu_sys::GpuBindGroupEntry::new(binding.binding, sampler)
+                }
+                crate::BindingResource::SamplerArray(..) => {
+                    panic!("Web backend does not support arrays of samplers")
+                }
+                crate::BindingResource::TextureView(texture_view) => {
+                    let texture_view = &texture_view.inner.as_webgpu().inner;
+                    webgpu_sys::GpuBindGroupEntry::new_with_gpu_texture_view(
+                        binding.binding,
+                        texture_view,
+                    )
+                }
+                crate::BindingResource::TextureViewArray(..) => {
+                    panic!("Web backend does not support BINDING_INDEXING extension")
+                }
+                crate::BindingResource::AccelerationStructure(_) => {
+                    unimplemented!("Raytracing not implemented for web")
+                }
+                crate::BindingResource::AccelerationStructureArray(_) => {
+                    unimplemented!("Raytracing not implemented for web")
+                }
+                crate::BindingResource::ExternalTexture(_) => {
+                    unimplemented!("ExternalTexture not implemented for web")
+                }
             })
-            .collect::<js_sys::Array>();
+            .collect::<Vec<webgpu_sys::GpuBindGroupEntry>>();
 
         let bgl = &desc.layout.inner.as_webgpu().inner;
         let mapped_desc = webgpu_sys::GpuBindGroupDescriptor::new(&mapped_entries, bgl);
@@ -2152,15 +2174,14 @@ impl dispatch::DeviceInterface for WebDevice {
         &self,
         desc: &crate::PipelineLayoutDescriptor<'_>,
     ) -> dispatch::DispatchPipelineLayout {
-        let null = wasm_bindgen::JsValue::NULL;
         let temp_layouts = desc
             .bind_group_layouts
             .iter()
             .map(|bgl| match bgl {
-                Some(bgl) => bgl.inner.as_webgpu().inner.as_ref(),
-                None => &null,
+                Some(bgl) => js_sys::JsOption::wrap(bgl.inner.as_webgpu().inner.clone()),
+                None => js_sys::JsOption::new(),
             })
-            .collect::<js_sys::Array>();
+            .collect::<Vec<js_sys::JsOption<webgpu_sys::GpuBindGroupLayout>>>();
         let mapped_desc = webgpu_sys::GpuPipelineLayoutDescriptor::new(&temp_layouts);
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
@@ -2198,36 +2219,35 @@ impl dispatch::DeviceInterface for WebDevice {
                     .attributes
                     .iter()
                     .map(|attr| {
-                        webgpu_sys::GpuVertexAttribute::new(
+                        webgpu_sys::GpuVertexAttribute::new_with_f64(
                             map_vertex_format(attr.format),
                             attr.offset as f64,
                             attr.shader_location,
                         )
                     })
-                    .collect::<js_sys::Array>();
+                    .collect::<Vec<webgpu_sys::GpuVertexAttribute>>();
 
-                let mapped_vbuf = webgpu_sys::GpuVertexBufferLayout::new(
+                let mapped_vbuf = webgpu_sys::GpuVertexBufferLayout::new_with_f64(
                     vbuf.array_stride as f64,
                     &mapped_attributes,
                 );
                 mapped_vbuf.set_step_mode(map_vertex_step_mode(vbuf.step_mode));
-                mapped_vbuf
+                js_sys::JsOption::wrap(mapped_vbuf)
             })
-            .collect::<js_sys::Array>();
+            .collect::<Vec<js_sys::JsOption<webgpu_sys::GpuVertexBufferLayout>>>();
 
         mapped_vertex_state.set_buffers(&buffers);
 
-        let auto_layout = wasm_bindgen::JsValue::from(webgpu_sys::GpuAutoLayoutMode::Auto);
-        let mapped_desc = webgpu_sys::GpuRenderPipelineDescriptor::new(
-            &match desc.layout {
-                Some(layout) => {
-                    let layout = &layout.inner.as_webgpu().inner;
-                    JsValue::from(layout)
-                }
-                None => auto_layout,
-            },
-            &mapped_vertex_state,
-        );
+        let mapped_desc = match desc.layout {
+            Some(layout) => webgpu_sys::GpuRenderPipelineDescriptor::new(
+                &layout.inner.as_webgpu().inner,
+                &mapped_vertex_state,
+            ),
+            None => webgpu_sys::GpuRenderPipelineDescriptor::new_with_gpu_auto_layout_mode(
+                webgpu_sys::GpuAutoLayoutMode::Auto,
+                &mapped_vertex_state,
+            ),
+        };
 
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
@@ -2253,11 +2273,11 @@ impl dispatch::DeviceInterface for WebDevice {
                             mapped_color_state.set_blend(&mapped_blend_state);
                         }
                         mapped_color_state.set_write_mask(target.write_mask.bits());
-                        wasm_bindgen::JsValue::from(mapped_color_state)
+                        js_sys::JsOption::wrap(mapped_color_state)
                     }
-                    None => wasm_bindgen::JsValue::null(),
+                    None => js_sys::JsOption::new(),
                 })
-                .collect::<js_sys::Array>();
+                .collect::<Vec<js_sys::JsOption<webgpu_sys::GpuColorTargetState>>>();
             let module = frag.module.inner.as_webgpu();
             let mapped_fragment_desc = webgpu_sys::GpuFragmentState::new(&module.module, &targets);
             insert_constants_map(&mapped_fragment_desc, frag.compilation_options.constants);
@@ -2303,17 +2323,17 @@ impl dispatch::DeviceInterface for WebDevice {
         if let Some(ep) = desc.entry_point {
             mapped_compute_stage.set_entry_point(ep);
         }
-        let auto_layout = wasm_bindgen::JsValue::from(webgpu_sys::GpuAutoLayoutMode::Auto);
-        let mapped_desc = webgpu_sys::GpuComputePipelineDescriptor::new(
-            &match desc.layout {
-                Some(layout) => {
-                    let layout = &layout.inner.as_webgpu().inner;
-                    JsValue::from(layout)
-                }
-                None => auto_layout,
-            },
-            &mapped_compute_stage,
-        );
+        let mapped_desc = match desc.layout {
+            Some(layout) => webgpu_sys::GpuComputePipelineDescriptor::new(
+                &layout.inner.as_webgpu().inner,
+                &mapped_compute_stage,
+            ),
+            None => webgpu_sys::GpuComputePipelineDescriptor::new_with_gpu_auto_layout_mode(
+                webgpu_sys::GpuAutoLayoutMode::Auto,
+                &mapped_compute_stage,
+            ),
+        };
+
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
         }
@@ -2338,7 +2358,8 @@ impl dispatch::DeviceInterface for WebDevice {
     }
 
     fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> dispatch::DispatchBuffer {
-        let mapped_desc = webgpu_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
+        let mapped_desc =
+            webgpu_sys::GpuBufferDescriptor::new_with_f64(desc.size as f64, desc.usage.bits());
         mapped_desc.set_mapped_at_creation(desc.mapped_at_creation);
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
@@ -2347,7 +2368,7 @@ impl dispatch::DeviceInterface for WebDevice {
     }
 
     fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> dispatch::DispatchTexture {
-        let mapped_desc = webgpu_sys::GpuTextureDescriptor::new(
+        let mapped_desc = webgpu_sys::GpuTextureDescriptor::new_with_gpu_extent_3d_dict(
             map_texture_format(desc.format),
             &map_extent_3d(desc.size),
             (desc.usage - crate::TextureUsages::TRANSIENT).bits(),
@@ -2361,8 +2382,12 @@ impl dispatch::DeviceInterface for WebDevice {
         let mapped_view_formats = desc
             .view_formats
             .iter()
-            .map(|format| JsValue::from(map_texture_format(*format)))
-            .collect::<js_sys::Array>();
+            .map(|format| {
+                wasm_bindgen::JsValue::from(map_texture_format(*format))
+                    .dyn_into::<js_sys::JsString>()
+                    .unwrap()
+            })
+            .collect::<Vec<js_sys::JsString>>();
         mapped_desc.set_view_formats(&mapped_view_formats);
 
         let texture = self.inner.create_texture(&mapped_desc).unwrap();
@@ -2468,10 +2493,14 @@ impl dispatch::DeviceInterface for WebDevice {
             .color_formats
             .iter()
             .map(|cf| match cf {
-                Some(cf) => wasm_bindgen::JsValue::from(map_texture_format(*cf)),
-                None => wasm_bindgen::JsValue::null(),
+                Some(cf) => js_sys::JsOption::wrap(
+                    wasm_bindgen::JsValue::from(map_texture_format(*cf))
+                        .dyn_into::<js_sys::JsString>()
+                        .unwrap(),
+                ),
+                None => js_sys::JsOption::new(),
             })
-            .collect::<js_sys::Array>();
+            .collect::<Vec<js_sys::JsOption<js_sys::JsString>>>();
         let mapped_desc = webgpu_sys::GpuRenderBundleEncoderDescriptor::new(&mapped_color_formats);
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
@@ -2496,8 +2525,7 @@ impl dispatch::DeviceInterface for WebDevice {
     }
 
     fn set_device_lost_callback(&self, device_lost_callback: dispatch::BoxDeviceLostCallback) {
-        let closure = Closure::once(move |info: JsValue| {
-            let info = info.dyn_into::<webgpu_sys::GpuDeviceLostInfo>().unwrap();
+        let closure = Closure::once(move |info: webgpu_sys::GpuDeviceLostInfo| {
             device_lost_callback(
                 match info.reason() {
                     webgpu_sys::GpuDeviceLostReason::Destroyed => {
@@ -2685,7 +2713,7 @@ impl dispatch::QueueInterface for WebQueue {
         if let Some(rows_per_image) = data_layout.rows_per_image {
             mapped_data_layout.set_rows_per_image(rows_per_image);
         }
-        mapped_data_layout.set_offset(data_layout.offset as f64);
+        mapped_data_layout.set_offset_f64(data_layout.offset as f64);
 
         self.inner
             .write_texture_with_u8_slice_and_gpu_extent_3d_dict(
@@ -2720,8 +2748,8 @@ impl dispatch::QueueInterface for WebQueue {
 
         let array = temp_command_buffers
             .iter()
-            .map(|buffer| &buffer.as_webgpu().inner)
-            .collect::<js_sys::Array>();
+            .map(|buffer| buffer.as_webgpu().inner.clone())
+            .collect::<Vec<webgpu_sys::GpuCommandBuffer>>();
 
         self.inner.submit(&array);
 
@@ -3096,43 +3124,44 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
             .iter()
             .map(|attachment| match attachment {
                 Some(ca) => {
-                    let mut clear_value: Option<wasm_bindgen::JsValue> = None;
-                    let load_value = match ca.ops.load {
+                    let (load_op, clear_value) = match ca.ops.load {
                         crate::LoadOp::Clear(color) => {
-                            clear_value = Some(wasm_bindgen::JsValue::from(map_color(color)));
-                            webgpu_sys::GpuLoadOp::Clear
+                            (webgpu_sys::GpuLoadOp::Clear, Some(map_color(color)))
                         }
                         crate::LoadOp::DontCare(_token) => {
                             // WebGPU can't safely have a ClearOp::DontCare, so we clear to black
                             // which is ideal for most GPUs.
-                            clear_value =
-                                Some(wasm_bindgen::JsValue::from(map_color(crate::Color::BLACK)));
-                            webgpu_sys::GpuLoadOp::Clear
+                            (
+                                webgpu_sys::GpuLoadOp::Clear,
+                                Some(map_color(crate::Color::BLACK)),
+                            )
                         }
-                        crate::LoadOp::Load => webgpu_sys::GpuLoadOp::Load,
+                        crate::LoadOp::Load => (webgpu_sys::GpuLoadOp::Load, None),
                     };
 
                     let view = &ca.view.inner.as_webgpu().inner;
 
-                    let mapped_color_attachment = webgpu_sys::GpuRenderPassColorAttachment::new(
-                        load_value,
-                        map_store_op(ca.ops.store),
-                        view,
-                    );
+                    let mapped_color_attachment =
+                        webgpu_sys::GpuRenderPassColorAttachment::new_with_gpu_texture_view(
+                            load_op,
+                            map_store_op(ca.ops.store),
+                            view,
+                        );
                     if let Some(cv) = clear_value {
-                        mapped_color_attachment.set_clear_value(&cv);
+                        mapped_color_attachment.set_clear_value_gpu_color_dict(&cv);
                     }
                     if let Some(rt) = ca.resolve_target {
                         let resolve_target_view = &rt.inner.as_webgpu().inner;
-                        mapped_color_attachment.set_resolve_target(resolve_target_view);
+                        mapped_color_attachment
+                            .set_resolve_target_gpu_texture_view(resolve_target_view);
                     }
                     mapped_color_attachment.set_store_op(map_store_op(ca.ops.store));
 
-                    wasm_bindgen::JsValue::from(mapped_color_attachment)
+                    js_sys::JsOption::wrap(mapped_color_attachment)
                 }
-                None => wasm_bindgen::JsValue::null(),
+                None => js_sys::JsOption::new(),
             })
-            .collect::<js_sys::Array>();
+            .collect::<Vec<js_sys::JsOption<webgpu_sys::GpuRenderPassColorAttachment>>>();
 
         let mapped_desc = webgpu_sys::GpuRenderPassDescriptor::new(&mapped_color_attachments);
 
@@ -3143,7 +3172,9 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         if let Some(dsa) = &desc.depth_stencil_attachment {
             let depth_stencil_attachment = &dsa.view.inner.as_webgpu().inner;
             let mapped_depth_stencil_attachment =
-                webgpu_sys::GpuRenderPassDepthStencilAttachment::new(depth_stencil_attachment);
+                webgpu_sys::GpuRenderPassDepthStencilAttachment::new_with_gpu_texture_view(
+                    depth_stencil_attachment,
+                );
             if let Some(ref ops) = dsa.depth_ops {
                 let load_op = match ops.load {
                     crate::LoadOp::Clear(v) => {
@@ -3699,8 +3730,8 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         render_bundles: &mut dyn Iterator<Item = &dispatch::DispatchRenderBundle>,
     ) {
         let mapped = render_bundles
-            .map(|bundle| &bundle.as_webgpu().inner)
-            .collect::<js_sys::Array>();
+            .map(|bundle| bundle.as_webgpu().inner.clone())
+            .collect::<Vec<webgpu_sys::GpuRenderBundle>>();
         self.inner.execute_bundles(&mapped);
     }
 }
@@ -3934,8 +3965,12 @@ impl dispatch::SurfaceInterface for WebSurface {
         let mapped_view_formats = config
             .view_formats
             .iter()
-            .map(|format| JsValue::from(map_texture_format(*format)))
-            .collect::<js_sys::Array>();
+            .map(|format| {
+                wasm_bindgen::JsValue::from(map_texture_format(*format))
+                    .dyn_into::<js_sys::JsString>()
+                    .unwrap()
+            })
+            .collect::<Vec<js_sys::JsString>>();
         mapped.set_view_formats(&mapped_view_formats);
         self.context.configure(&mapped).unwrap();
     }

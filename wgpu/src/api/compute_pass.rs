@@ -49,7 +49,7 @@ impl ComputePass<'_> {
     }
 
     /// Sets the active bind group for a given bind group index. The bind group layout
-    /// in the active pipeline when the `dispatch()` function is called must match the layout of this bind group.
+    /// in the active pipeline when the `dispatch_workgroups()` function is called must match the layout of this bind group.
     ///
     /// If the bind group have dynamic offsets, provide them in the binding order.
     /// These offsets have to be aligned to [`Limits::min_uniform_buffer_offset_alignment`]

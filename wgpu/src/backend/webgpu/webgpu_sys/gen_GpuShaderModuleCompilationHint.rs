@@ -26,81 +26,88 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 extern "C" {
-    # [wasm_bindgen (extends = :: js_sys :: Object , js_name = GPUOrigin2DDict)]
+    # [wasm_bindgen (extends = :: js_sys :: Object , js_name = GPUShaderModuleCompilationHint)]
     #[derive(Debug, Clone, PartialEq, Eq)]
-    #[doc = "The `GpuOrigin2dDict` dictionary."]
+    #[doc = "The `GpuShaderModuleCompilationHint` dictionary."]
     #[doc = ""]
-    #[doc = "*This API requires the following crate features to be activated: `GpuOrigin2dDict`*"]
+    #[doc = "*This API requires the following crate features to be activated: `GpuShaderModuleCompilationHint`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    pub type GpuOrigin2dDict;
+    pub type GpuShaderModuleCompilationHint;
 
-    #[doc = "Get the `x` field of this object."]
+    #[doc = "Get the `entryPoint` field of this object."]
     #[doc = ""]
-    #[doc = "*This API requires the following crate features to be activated: `GpuOrigin2dDict`*"]
+    #[doc = "*This API requires the following crate features to be activated: `GpuShaderModuleCompilationHint`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    #[wasm_bindgen(method, getter = "x")]
-    pub fn get_x(this: &GpuOrigin2dDict) -> Option<u32>;
+    #[wasm_bindgen(method, getter = "entryPoint")]
+    pub fn get_entry_point(this: &GpuShaderModuleCompilationHint) -> ::alloc::string::String;
 
-    #[doc = "Change the `x` field of this object."]
+    #[doc = "Change the `entryPoint` field of this object."]
     #[doc = ""]
-    #[doc = "*This API requires the following crate features to be activated: `GpuOrigin2dDict`*"]
+    #[doc = "*This API requires the following crate features to be activated: `GpuShaderModuleCompilationHint`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    #[wasm_bindgen(method, setter = "x")]
-    pub fn set_x(this: &GpuOrigin2dDict, val: u32);
+    #[wasm_bindgen(method, setter = "entryPoint")]
+    pub fn set_entry_point(this: &GpuShaderModuleCompilationHint, val: &str);
 
-    #[doc = "Get the `y` field of this object."]
+    #[doc = "Get the `layout` field of this object."]
     #[doc = ""]
-    #[doc = "*This API requires the following crate features to be activated: `GpuOrigin2dDict`*"]
+    #[doc = "*This API requires the following crate features to be activated: `GpuPipelineLayout`, `GpuShaderModuleCompilationHint`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    #[wasm_bindgen(method, getter = "y")]
-    pub fn get_y(this: &GpuOrigin2dDict) -> Option<u32>;
+    #[wasm_bindgen(method, getter = "layout")]
+    pub fn get_layout(this: &GpuShaderModuleCompilationHint) -> ::wasm_bindgen::JsValue;
 
-    #[doc = "Change the `y` field of this object."]
+    #[doc = "Change the `layout` field of this object."]
     #[doc = ""]
-    #[doc = "*This API requires the following crate features to be activated: `GpuOrigin2dDict`*"]
+    #[doc = "*This API requires the following crate features to be activated: `GpuPipelineLayout`, `GpuShaderModuleCompilationHint`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    #[wasm_bindgen(method, setter = "y")]
-    pub fn set_y(this: &GpuOrigin2dDict, val: u32);
+    #[wasm_bindgen(method, setter = "layout")]
+    pub fn set_layout(this: &GpuShaderModuleCompilationHint, val: &GpuPipelineLayout);
+
+    #[doc = "Change the `layout` field of this object."]
+    #[doc = ""]
+    #[doc = "*This API requires the following crate features to be activated: `GpuAutoLayoutMode`, `GpuShaderModuleCompilationHint`*"]
+    #[doc = ""]
+    #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
+    #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
+    #[wasm_bindgen(method, setter = "layout")]
+    pub fn set_layout_gpu_auto_layout_mode(
+        this: &GpuShaderModuleCompilationHint,
+        val: GpuAutoLayoutMode,
+    );
 }
 
-impl GpuOrigin2dDict {
-    #[doc = "Construct a new `GpuOrigin2dDict`."]
+impl GpuShaderModuleCompilationHint {
+    #[doc = "Construct a new `GpuShaderModuleCompilationHint`."]
     #[doc = ""]
-    #[doc = "*This API requires the following crate features to be activated: `GpuOrigin2dDict`*"]
+    #[doc = "*This API requires the following crate features to be activated: `GpuShaderModuleCompilationHint`*"]
     #[doc = ""]
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
-    pub fn new() -> Self {
+    pub fn new(entry_point: &str) -> Self {
         #[allow(unused_mut)]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
+        ret.set_entry_point(entry_point);
         ret
     }
 
-    #[deprecated = "Use `set_x()` instead."]
-    pub fn x(&mut self, val: u32) -> &mut Self {
-        self.set_x(val);
+    #[deprecated = "Use `set_entry_point()` instead."]
+    pub fn entry_point(&mut self, val: &str) -> &mut Self {
+        self.set_entry_point(val);
         self
     }
 
-    #[deprecated = "Use `set_y()` instead."]
-    pub fn y(&mut self, val: u32) -> &mut Self {
-        self.set_y(val);
+    #[deprecated = "Use `set_layout()` instead."]
+    pub fn layout(&mut self, val: &GpuPipelineLayout) -> &mut Self {
+        self.set_layout(val);
         self
-    }
-}
-
-impl Default for GpuOrigin2dDict {
-    fn default() -> Self {
-        Self::new()
     }
 }

@@ -991,7 +991,7 @@ impl DrawIndexedIndirectArgs {
     }
 }
 
-/// Argument buffer layout for `dispatch_indirect` commands.
+/// Argument buffer layout for `dispatch_workgroups_indirect` commands.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
 pub struct DispatchIndirectArgs {
