@@ -4975,6 +4975,7 @@ dependencies = [
  "raw-window-handle",
  "serde",
  "serde_json",
+ "static_assertions",
  "web-sys",
 ]
 

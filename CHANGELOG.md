@@ -86,6 +86,7 @@ Bottom level categories:
 - `Buffer::get_mapped_range` and variants now return `Result<_, MapRangeError>>` instead of panicking, in line with WebGPU spec. By @atlv24 in [#9281](https://github.com/gfx-rs/wgpu/pull/9281).
 - Passthrough shaders now require a list of entry points when being created. by @inner-daemons in [#9064](https://github.com/gfx-rs/wgpu/pull/9064).
 - BREAKING: The `dispatch` and `dispatch_indirect` methods on pass and bundle encoders have been renamed to `dispatch_workgroups` and `dispatch_workgroups_indirect`, respectively, to match the WebGPU spec. By @ErichDonGubler in [#9362](https://github.com/gfx-rs/wgpu/pull/9362).
+- `LoadOp::DontCare` can no longer be deserialized, and the `LoadOpDontCare` token no longer implements `Default`. This ensures that `DontCare` can only be used with `unsafe`, as intended. By @kpreid in [#9428](https://github.com/gfx-rs/wgpu/pull/9428).
 
 #### Validation
 
