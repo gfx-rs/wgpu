@@ -225,8 +225,7 @@ webgpu:api,validation,queue,buffer_mapped:copyBufferToBuffer:*
 webgpu:api,validation,queue,buffer_mapped:copyBufferToTexture:*
 webgpu:api,validation,queue,buffer_mapped:copyTextureToBuffer:*
 webgpu:api,validation,queue,buffer_mapped:map_command_recording_order:*
-// `vulkan` failure: https://github.com/gfx-rs/wgpu/issues/????
-fails-if(vulkan) webgpu:api,validation,queue,buffer_mapped:writeBuffer:*
+webgpu:api,validation,queue,buffer_mapped:writeBuffer:*
 webgpu:api,validation,queue,submit:command_buffer,*
 webgpu:api,validation,queue,writeBuffer:buffer_state:*
 webgpu:api,validation,queue,writeBuffer:buffer,device_mismatch:*
