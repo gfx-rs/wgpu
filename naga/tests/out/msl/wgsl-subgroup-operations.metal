@@ -2,7 +2,7 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-using metal::uint;
+using namespace metal;
 
 struct Structure {
     uint num_subgroups;

@@ -2,7 +2,7 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-using metal::uint;
+using namespace metal;
 
 constant half MIN_F16_ = -65504.0h;
 constant half MAX_F16_ = 65504.0h;

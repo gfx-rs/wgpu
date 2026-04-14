@@ -2,7 +2,7 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-using metal::uint;
+using namespace metal;
 
 struct type_3 {
     uint inner[64];

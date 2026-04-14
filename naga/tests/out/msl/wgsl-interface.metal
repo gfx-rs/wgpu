@@ -2,7 +2,7 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-using metal::uint;
+using namespace metal;
 
 struct VertexOutput {
     metal::float4 position;

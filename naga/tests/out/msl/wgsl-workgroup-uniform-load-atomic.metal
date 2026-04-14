@@ -2,7 +2,7 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-using metal::uint;
+using namespace metal;
 
 struct type_4 {
     metal::atomic_int inner[2];

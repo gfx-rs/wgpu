@@ -2,7 +2,7 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-using metal::uint;
+using namespace metal;
 
 struct _atomic_compare_exchange_result_Uint_4_ {
     uint old_value;

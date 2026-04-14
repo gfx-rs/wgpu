@@ -2,7 +2,7 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-using metal::uint;
+using namespace metal;
 
 struct FragmentOutputVec4Vec3_ {
     metal::float4 vec4f;

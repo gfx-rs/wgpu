@@ -2,7 +2,7 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-using metal::uint;
+using namespace metal;
 
 constant uint g1_ = 1u;
 constant float g3_ = 1.0;

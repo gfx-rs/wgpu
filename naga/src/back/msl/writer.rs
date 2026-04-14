@@ -4469,8 +4469,7 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "#include <metal_stdlib>")?;
         writeln!(self.out, "#include <simd/simd.h>")?;
         writeln!(self.out)?;
-        // Work around Metal bug where `uint` is not available by default
-        writeln!(self.out, "using {NAMESPACE}::uint;")?;
+        writeln!(self.out, "using namespace {NAMESPACE};")?;
 
         if module.uses_mesh_shaders() && options.lang_version < (3, 0) {
             return Err(Error::UnsupportedMeshShader);
