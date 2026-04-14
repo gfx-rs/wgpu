@@ -523,7 +523,7 @@ pub(crate) struct VertexSlot {
 /// derived from those buffers and the current pipeline, avoiding recomputation on each draw.
 #[derive(Debug, Default)]
 pub(crate) struct VertexState {
-    pub(crate) slots: [Option<VertexSlot>; hal::MAX_VERTEX_BUFFERS],
+    slots: [Option<VertexSlot>; hal::MAX_VERTEX_BUFFERS],
     pub(crate) limits: VertexLimits,
 }
 
@@ -557,12 +557,49 @@ impl VertexState {
         );
     }
 
-    pub(crate) fn last_assigned_index(&self) -> Option<usize> {
+    fn last_assigned_index(&self) -> Option<usize> {
         self.slots
             .iter()
             .enumerate()
             .filter_map(|(i, s)| s.as_ref().map(|_| i))
             .next_back()
+    }
+
+    pub(super) fn validate(
+        &self,
+        pipeline: &RenderPipeline,
+        binder: &Binder,
+    ) -> Result<(), DrawError> {
+        // Check all needed vertex buffers have been bound
+        for index in pipeline
+            .vertex_steps
+            .iter()
+            .enumerate()
+            .filter_map(|(index, step)| step.map(|_| index))
+        {
+            if self.slots[index].is_none() {
+                return Err(DrawError::MissingVertexBuffer {
+                    pipeline: pipeline.error_ident(),
+                    index,
+                });
+            }
+        }
+
+        let bind_group_space_used = binder.last_assigned_index().map_or(0, |i| i + 1);
+        let vertex_buffer_space_used = self.last_assigned_index().map_or(0, |i| i + 1);
+
+        let bind_groups_plus_vertex_buffers =
+            u32::try_from(bind_group_space_used + vertex_buffer_space_used).unwrap();
+        if bind_groups_plus_vertex_buffers
+            > pipeline.device.limits.max_bind_groups_plus_vertex_buffers
+        {
+            return Err(DrawError::TooManyBindGroupsPlusVertexBuffers {
+                given: bind_groups_plus_vertex_buffers,
+                limit: pipeline.device.limits.max_bind_groups_plus_vertex_buffers,
+            });
+        }
+
+        Ok(())
     }
 
     /// Call `f` for each dirty slot with `(slot_index, buffer, offset, size)` and mark them clean.
@@ -617,34 +654,7 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
                 return Err(DrawError::MissingBlendConstant);
             }
 
-            // Check all needed vertex buffers have been bound
-            for index in pipeline
-                .vertex_steps
-                .iter()
-                .enumerate()
-                .filter_map(|(index, step)| step.map(|_| index))
-            {
-                if self.vertex.slots[index].is_none() {
-                    return Err(DrawError::MissingVertexBuffer {
-                        pipeline: pipeline.error_ident(),
-                        index,
-                    });
-                }
-            }
-
-            let bind_group_space_used = self.pass.binder.last_assigned_index().map_or(0, |i| i + 1);
-            let vertex_buffer_space_used = self.vertex.last_assigned_index().map_or(0, |i| i + 1);
-
-            let bind_groups_plus_vertex_buffers =
-                u32::try_from(bind_group_space_used + vertex_buffer_space_used).unwrap();
-            if bind_groups_plus_vertex_buffers
-                > pipeline.device.limits.max_bind_groups_plus_vertex_buffers
-            {
-                return Err(DrawError::TooManyBindGroupsPlusVertexBuffers {
-                    given: bind_groups_plus_vertex_buffers,
-                    limit: pipeline.device.limits.max_bind_groups_plus_vertex_buffers,
-                });
-            }
+            self.vertex.validate(pipeline.as_ref(), &self.pass.binder)?;
 
             if family == DrawCommandFamily::DrawIndexed {
                 // Pipeline expects an index buffer

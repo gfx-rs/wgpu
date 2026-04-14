@@ -1454,34 +1454,7 @@ impl State {
             self.binder.check_compatibility(pipeline.as_ref())?;
             self.binder.check_late_buffer_bindings()?;
 
-            // Check all needed vertex buffers have been bound
-            for index in pipeline
-                .vertex_steps
-                .iter()
-                .enumerate()
-                .filter_map(|(index, step)| step.map(|_| index))
-            {
-                if self.vertex.slots[index].is_none() {
-                    return Err(DrawError::MissingVertexBuffer {
-                        pipeline: pipeline.error_ident(),
-                        index,
-                    });
-                }
-            }
-
-            let bind_group_space_used = self.binder.last_assigned_index().map_or(0, |i| i + 1);
-            let vertex_buffer_space_used = self.vertex.last_assigned_index().map_or(0, |i| i + 1);
-
-            let bind_groups_plus_vertex_buffers =
-                u32::try_from(bind_group_space_used + vertex_buffer_space_used).unwrap();
-            if bind_groups_plus_vertex_buffers
-                > self.device.limits.max_bind_groups_plus_vertex_buffers
-            {
-                return Err(DrawError::TooManyBindGroupsPlusVertexBuffers {
-                    given: bind_groups_plus_vertex_buffers,
-                    limit: self.device.limits.max_bind_groups_plus_vertex_buffers,
-                });
-            }
+            self.vertex.validate(pipeline.as_ref(), &self.binder)?;
 
             if family == DrawCommandFamily::DrawIndexed {
                 let index_format = match &self.index {
