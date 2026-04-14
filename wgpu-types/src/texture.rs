@@ -971,7 +971,7 @@ impl ImageSubresourceRange {
     #[must_use]
     pub fn mip_range(&self, mip_level_count: u32) -> Range<u32> {
         self.base_mip_level..match self.mip_level_count {
-            Some(mip_level_count) => self.base_mip_level + mip_level_count,
+            Some(mip_level_count) => self.base_mip_level.saturating_add(mip_level_count),
             None => mip_level_count,
         }
     }
@@ -980,7 +980,7 @@ impl ImageSubresourceRange {
     #[must_use]
     pub fn layer_range(&self, array_layer_count: u32) -> Range<u32> {
         self.base_array_layer..match self.array_layer_count {
-            Some(array_layer_count) => self.base_array_layer + array_layer_count,
+            Some(array_layer_count) => self.base_array_layer.saturating_add(array_layer_count),
             None => array_layer_count,
         }
     }

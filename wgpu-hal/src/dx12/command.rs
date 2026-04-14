@@ -1589,12 +1589,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
         unsafe { list.SetPipelineState(&pipeline.raw) }
     }
 
-    unsafe fn dispatch(&mut self, count @ [x, y, z]: [u32; 3]) {
+    unsafe fn dispatch_workgroups(&mut self, count @ [x, y, z]: [u32; 3]) {
         self.prepare_dispatch(count);
         unsafe { self.list.as_ref().unwrap().Dispatch(x, y, z) }
     }
 
-    unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
+    unsafe fn dispatch_workgroups_indirect(
+        &mut self,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+    ) {
         if self
             .pass
             .layout

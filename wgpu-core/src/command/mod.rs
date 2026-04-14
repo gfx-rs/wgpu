@@ -2047,6 +2047,8 @@ pub enum PassErrorScope {
     BeginPipelineStatisticsQuery,
     #[error("In a end_pipeline_statistics_query command")]
     EndPipelineStatisticsQuery,
+    #[error("In a transition_resources command")]
+    TransitionResources,
     #[error("In a execute_bundle command")]
     ExecuteBundle,
     #[error("In a dispatch command, indirect:{indirect}")]

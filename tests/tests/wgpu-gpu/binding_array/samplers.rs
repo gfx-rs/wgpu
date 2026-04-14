@@ -58,6 +58,7 @@ static PARTIAL_BINDING_ARRAY_SAMPLERS: GpuTestConfiguration = GpuTestConfigurati
 
 async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
     let shader = r#"
+        enable wgpu_binding_array;
         @group(0) @binding(0)
         var samplers: binding_array<sampler>;
         @group(0) @binding(1)

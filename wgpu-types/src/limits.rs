@@ -231,7 +231,7 @@ pub struct Limits {
     /// The maximum value of the `workgroup_size` Z dimension for a compute stage `ShaderModule` entry-point.
     /// Defaults to 64. Higher is "better".
     pub max_compute_workgroup_size_z: u32,
-    /// The maximum value for each dimension of a `ComputePass::dispatch(x, y, z)` operation.
+    /// The maximum value for each dimension of a `ComputePass::dispatch_workgroups(x, y, z)` operation.
     /// Defaults to 65535. Higher is "better".
     pub max_compute_workgroups_per_dimension: u32,
 

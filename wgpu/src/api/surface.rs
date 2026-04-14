@@ -108,9 +108,8 @@ impl Surface<'_> {
 
     /// Returns the next texture to be presented by the surface for drawing.
     ///
-    /// In order to present the [`SurfaceTexture`] returned by this method,
-    /// first a [`Queue::submit`] needs to be done with some work rendering to this texture.
-    /// Then [`SurfaceTexture::present`] needs to be called.
+    /// After rendering to the returned [`SurfaceTexture`], submit work via [`Queue::submit`]
+    /// and then call [`Queue::present`] to display it.
     ///
     /// If a [`SurfaceTexture`] referencing this surface is alive when [`Surface::configure()`]
     /// is called, the configure call will panic.
@@ -367,7 +366,7 @@ pub enum SurfaceTargetUnsafe {
     ///
     /// - All parameters must point to valid DRM values and remain valid for as long as the resulting [`Surface`] exists.
     /// - The file descriptor (`fd`), plane, connector, and mode configuration must be valid and compatible.
-    #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+    #[cfg(drm)]
     Drm {
         /// The file descriptor of the DRM device.
         fd: i32,

@@ -265,12 +265,14 @@ impl Device {
         }
         .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
-        let instance_buffer_size =
-            self.alignments.raw_tlas_instance_size * desc.max_instances.max(1) as usize;
+        let instance_buffer_size = self
+            .alignments
+            .raw_tlas_instance_size
+            .saturating_mul(desc.max_instances.max(1));
         let instance_buffer = unsafe {
             self.raw().create_buffer(&hal::BufferDescriptor {
                 label: hal_label(Some("(wgpu-core) instances_buffer"), self.instance_flags),
-                size: instance_buffer_size as u64,
+                size: u64::from(instance_buffer_size),
                 usage: wgt::BufferUses::COPY_DST
                     | wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                 memory_flags: hal::MemoryFlags::PREFER_COHERENT,

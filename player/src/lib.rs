@@ -1056,8 +1056,8 @@ impl Player {
                 size_bytes,
                 values_offset,
             },
-            C::Dispatch(groups) => C::Dispatch(groups),
-            C::DispatchIndirect { buffer, offset } => C::DispatchIndirect {
+            C::DispatchWorkgroups(groups) => C::DispatchWorkgroups(groups),
+            C::DispatchWorkgroupsIndirect { buffer, offset } => C::DispatchWorkgroupsIndirect {
                 buffer: self.resolve_buffer_id(buffer),
                 offset,
             },
@@ -1079,6 +1079,26 @@ impl Player {
                 query_index,
             },
             C::EndPipelineStatisticsQuery => C::EndPipelineStatisticsQuery,
+            C::TransitionResources {
+                buffer_transitions,
+                texture_transitions,
+            } => C::TransitionResources {
+                buffer_transitions: buffer_transitions
+                    .into_iter()
+                    .map(|buffer_transition| wgt::BufferTransition {
+                        buffer: self.resolve_buffer_id(buffer_transition.buffer),
+                        state: buffer_transition.state,
+                    })
+                    .collect(),
+                texture_transitions: texture_transitions
+                    .into_iter()
+                    .map(|texture_transition| wgt::TextureTransition {
+                        texture: self.resolve_texture_view_id(texture_transition.texture),
+                        selector: texture_transition.selector,
+                        state: texture_transition.state,
+                    })
+                    .collect(),
+            },
         }
     }
 

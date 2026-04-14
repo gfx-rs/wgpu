@@ -493,7 +493,15 @@ impl crate::Device for super::Device {
                 wgt::TextureDimension::D2 => {
                     if desc.sample_count > 1 {
                         unsafe { descriptor.setSampleCount(desc.sample_count as usize) };
-                        MTLTextureType::Type2DMultisample
+
+                        if desc.size.depth_or_array_layers > 1 {
+                            unsafe {
+                                descriptor.setArrayLength(desc.size.depth_or_array_layers as usize)
+                            };
+                            MTLTextureType::Type2DMultisampleArray
+                        } else {
+                            MTLTextureType::Type2DMultisample
+                        }
                     } else if desc.size.depth_or_array_layers > 1 {
                         unsafe {
                             descriptor.setArrayLength(desc.size.depth_or_array_layers as usize)
@@ -560,7 +568,9 @@ impl crate::Device for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> DeviceResult<super::TextureView> {
-        let raw_type = if texture.raw_type == MTLTextureType::Type2DMultisample {
+        let raw_type = if texture.raw_type == MTLTextureType::Type2DMultisample
+            || texture.raw_type == MTLTextureType::Type2DMultisampleArray
+        {
             texture.raw_type
         } else {
             conv::map_texture_view_dimension(desc.dimension)

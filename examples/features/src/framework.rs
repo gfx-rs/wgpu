@@ -557,7 +557,7 @@ impl<E: Example> ApplicationHandler<AppAction> for App<E> {
                     if let Some(window) = &self.window {
                         window.pre_present_notify();
                     }
-                    frame.present();
+                    context.queue.present(frame);
                 }
 
                 if let Some(window) = &self.window {

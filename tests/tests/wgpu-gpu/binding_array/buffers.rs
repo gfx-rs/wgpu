@@ -107,6 +107,7 @@ async fn binding_array_buffers(
     };
 
     let shader = r#"
+        enable wgpu_binding_array;
         struct ImAU32 {
             value: u32,
             _padding: u32,

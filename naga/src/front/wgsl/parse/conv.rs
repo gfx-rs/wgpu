@@ -583,6 +583,9 @@ pub fn map_predeclared_type(
         PredeclaredType::TypeGenerator(TypeGenerator::CooperativeMatrix { .. }) => {
             Some(&[ImplementedEnableExtension::WgpuCooperativeMatrix])
         }
+        PredeclaredType::TypeGenerator(TypeGenerator::BindingArray) => {
+            Some(&[ImplementedEnableExtension::WgpuBindingArray])
+        }
         _ => None,
     };
     if let Some(extensions_needed) = extensions_needed {

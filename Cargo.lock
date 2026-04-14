@@ -4694,6 +4694,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-bug-repro-02-present-bugs"
+version = "0.0.0"
+dependencies = [
+ "env_logger",
+ "pollster",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "wgpu-core"
 version = "29.0.0"
 dependencies = [

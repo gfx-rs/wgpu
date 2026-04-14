@@ -1387,6 +1387,7 @@ bitflags_array! {
         ///
         /// Supported platforms:
         /// - Vulkan (except VK_KHR_portability_subset if multisampleArrayImage is not available)
+        /// - Metal (with macos 10.14+, ios 14.0+, tvos 16.0+, visionos 1.0+)
         #[name("wgpu-multisample-array")]
         const MULTISAMPLE_ARRAY = 1 << 56;
 

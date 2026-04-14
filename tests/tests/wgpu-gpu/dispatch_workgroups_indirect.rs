@@ -144,7 +144,7 @@ static ZERO_SIZED_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
         let error = pollster::block_on(scope.pop());
         assert!(error.is_some_and(|error| {
             format!("{error}").contains(
-                "Indirect buffer uses bytes 0..12 which overruns indirect buffer of size 0",
+                "Indirect buffer of 12 bytes starting at offset 0 would overrun buffer of size 0",
             )
         }));
     });

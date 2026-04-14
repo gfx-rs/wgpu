@@ -1,5 +1,5 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
-use core::ptr;
+use core::{ptr, sync::atomic::AtomicU64};
 use std::thread;
 
 use parking_lot::Mutex;
@@ -917,8 +917,9 @@ impl super::Adapter {
                     // 16
                     min_storage_buffer_offset_alignment:
                         Direct3D12::D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT,
-                    // 32
-                    max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
+                    // 30
+                    max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT
+                        - 2, // -2 for `SV_VertexID` and `SV_InstanceID`
                     // 2048
                     max_vertex_buffer_array_stride: Direct3D12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
                     // 31
@@ -1021,7 +1022,10 @@ impl super::Adapter {
                     // Direct3D correctly bounds-checks all array accesses:
                     // https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.8.2%20Device%20Memory%20Reads
                     uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
-                    raw_tlas_instance_size: size_of::<Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC>(),
+                    raw_tlas_instance_size: u32::try_from(size_of::<
+                        Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC,
+                    >())
+                    .unwrap(),
                     ray_tracing_scratch_buffer_alignment:
                         Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT,
                 },
@@ -1069,11 +1073,21 @@ impl crate::Adapter for super::Adapter {
             self.compiler_container.clone(),
             self.options.clone(),
         )?;
+        let idle_fence: Direct3D12::ID3D12Fence = unsafe {
+            self.device
+                .CreateFence(0, Direct3D12::D3D12_FENCE_FLAG_NONE)
+        }
+        .into_device_result("Queue idle fence creation")?;
+        let idle_event = super::Event::create(false, false)?;
+
         Ok(crate::OpenDevice {
             device,
             queue: super::Queue {
                 raw: queue,
                 temp_lists: Mutex::new(Vec::new()),
+                idle_fence,
+                idle_event,
+                idle_fence_value: AtomicU64::new(0),
             },
         })
     }

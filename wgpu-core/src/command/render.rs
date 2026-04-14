@@ -529,6 +529,10 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
 
     pass: pass::PassState<'scope, 'snatch_guard, 'cmd_enc>,
 
+    /// A bitmask, tracking which 4-byte slots have been written via `set_immediates`.
+    /// Checked against the pipeline's required slots before each draw call.
+    immediate_slots_set: naga::valid::ImmediateSlots,
+
     active_occlusion_query: Option<(Arc<QuerySet>, u32)>,
     active_pipeline_statistics_query: Option<(Arc<QuerySet>, u32)>,
 }
@@ -581,6 +585,16 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
                     wanted_mesh_pipeline: !pipeline.is_mesh,
                 });
             }
+            if !self
+                .immediate_slots_set
+                .contains(pipeline.immediate_slots_required)
+            {
+                return Err(DrawError::MissingImmediateData {
+                    missing: pipeline
+                        .immediate_slots_required
+                        .difference(self.immediate_slots_set),
+                });
+            }
             Ok(())
         } else {
             Err(DrawError::MissingPipeline(pass::MissingPipeline))
@@ -602,6 +616,7 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         self.pipeline = None;
         self.index.reset();
         self.vertex = Default::default();
+        self.immediate_slots_set = Default::default();
     }
 }
 
@@ -757,17 +772,17 @@ pub enum RenderPassErrorInner {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("Indirect buffer offset {0:?} is not a multiple of 4")]
     UnalignedIndirectBufferOffset(BufferAddress),
-    #[error("Indirect draw uses bytes {offset}..{end_offset} using count {count} which overruns indirect buffer of size {buffer_size}")]
+    #[error("Indirect draw arguments of {args_size} bytes (count = {count}) starting at {offset} would overrun buffer size of {buffer_size}")]
     IndirectBufferOverrun {
         count: u32,
         offset: u64,
-        end_offset: u64,
+        args_size: u64,
         buffer_size: u64,
     },
-    #[error("Indirect draw uses bytes {begin_count_offset}..{end_count_offset} which overruns indirect buffer of size {count_buffer_size}")]
+    #[error("Indirect draw count of {count_bytes} bytes starting at {begin_count_offset} would overrun buffer of size {count_buffer_size}")]
     IndirectCountBufferOverrun {
+        count_bytes: u64,
         begin_count_offset: u64,
-        end_count_offset: u64,
         count_buffer_size: u64,
     },
     #[error(transparent)]
@@ -1966,6 +1981,8 @@ pub(super) fn encode_render_pass(
                 string_offset: 0,
             },
 
+            immediate_slots_set: Default::default(),
+
             active_occlusion_query: None,
             active_pipeline_statistics_query: None,
         };
@@ -2042,6 +2059,8 @@ pub(super) fn encode_render_pass(
                         |_| {},
                     )
                     .map_pass_err(scope)?;
+                    state.immediate_slots_set |=
+                        naga::valid::ImmediateSlots::from_range(offset, size_bytes);
                 }
                 ArcRenderCommand::SetScissor(rect) => {
                     let scope = PassErrorScope::SetScissorRect;
@@ -2798,21 +2817,22 @@ fn multi_draw_indirect(
     }
 
     let stride = get_src_stride_of_indirect_args(family);
-
-    let end_offset = offset + stride * count as u64;
-    if end_offset > indirect_buffer.size {
-        return Err(RenderPassErrorInner::IndirectBufferOverrun {
-            count,
-            offset,
-            end_offset,
-            buffer_size: indirect_buffer.size,
-        });
-    }
+    let args_size = match stride.checked_mul(u64::from(count)) {
+        Some(sz) if sz <= indirect_buffer.size && indirect_buffer.size - sz >= offset => sz,
+        args_size => {
+            return Err(RenderPassErrorInner::IndirectBufferOverrun {
+                count,
+                offset,
+                args_size: args_size.unwrap_or(u64::MAX),
+                buffer_size: indirect_buffer.size,
+            });
+        }
+    };
 
     state.pass.base.buffer_memory_init_actions.extend(
         indirect_buffer.initialization_status.read().create_action(
             &indirect_buffer,
-            offset..end_offset,
+            offset..offset + args_size,
             MemoryInitKind::NeedsInitializedMemory,
         ),
     );
@@ -3012,36 +3032,39 @@ fn multi_draw_indirect_count(
         return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
     }
 
-    let end_offset = offset + stride * max_count as u64;
-    if end_offset > indirect_buffer.size {
-        return Err(RenderPassErrorInner::IndirectBufferOverrun {
-            count: 1,
-            offset,
-            end_offset,
-            buffer_size: indirect_buffer.size,
-        });
-    }
+    let args_size = match stride.checked_mul(u64::from(max_count)) {
+        Some(sz) if sz <= indirect_buffer.size && indirect_buffer.size - sz >= offset => sz,
+        args_size => {
+            return Err(RenderPassErrorInner::IndirectBufferOverrun {
+                count: 1,
+                offset,
+                args_size: args_size.unwrap_or(u64::MAX),
+                buffer_size: indirect_buffer.size,
+            });
+        }
+    };
+
     state.pass.base.buffer_memory_init_actions.extend(
         indirect_buffer.initialization_status.read().create_action(
             &indirect_buffer,
-            offset..end_offset,
+            offset..offset + args_size,
             MemoryInitKind::NeedsInitializedMemory,
         ),
     );
 
     let begin_count_offset = count_buffer_offset;
-    let end_count_offset = count_buffer_offset + 4;
-    if end_count_offset > count_buffer.size {
+    let count_bytes = 4;
+    if count_buffer.size < count_bytes || count_buffer.size - count_bytes < count_buffer_offset {
         return Err(RenderPassErrorInner::IndirectCountBufferOverrun {
             begin_count_offset,
-            end_count_offset,
+            count_bytes: 4,
             count_buffer_size: count_buffer.size,
         });
     }
     state.pass.base.buffer_memory_init_actions.extend(
         count_buffer.initialization_status.read().create_action(
             &count_buffer,
-            count_buffer_offset..end_count_offset,
+            count_buffer_offset..count_buffer_offset + count_bytes,
             MemoryInitKind::NeedsInitializedMemory,
         ),
     );

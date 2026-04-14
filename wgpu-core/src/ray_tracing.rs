@@ -110,9 +110,14 @@ pub enum BuildAccelerationStructureError {
     MissingFeatures(#[from] MissingFeatures),
 
     #[error(
-        "Buffer {0:?} size is insufficient for provided size information (size: {1}, required: {2}"
+        "Data range of {region_size} B starting at offset {offset} would overrun the size {buffer_size} of buffer {buffer_ident:?}"
     )]
-    InsufficientBufferSize(ResourceErrorIdent, u64, u64),
+    InsufficientBufferSize {
+        buffer_ident: ResourceErrorIdent,
+        offset: BufferAddress,
+        region_size: BufferAddress,
+        buffer_size: BufferAddress,
+    },
 
     #[error("Buffer {0:?} associated offset doesn't align with the index type")]
     UnalignedIndexBufferOffset(ResourceErrorIdent),
@@ -209,7 +214,7 @@ impl WebGpuError for BuildAccelerationStructureError {
             Self::DestroyedResource(e) => e.webgpu_error_type(),
             Self::MissingBufferUsage(e) => e.webgpu_error_type(),
             Self::MissingFeatures(e) => e.webgpu_error_type(),
-            Self::InsufficientBufferSize(..)
+            Self::InsufficientBufferSize { .. }
             | Self::UnalignedIndexBufferOffset(..)
             | Self::UnalignedTransformBufferOffset(..)
             | Self::InvalidIndexCount(..)

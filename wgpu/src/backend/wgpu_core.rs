@@ -792,12 +792,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                     .instance_create_surface(raw_display_handle, raw_window_handle, None)
             },
 
-            #[cfg(all(
-                unix,
-                not(target_vendor = "apple"),
-                not(target_family = "wasm"),
-                not(target_os = "netbsd")
-            ))]
+            #[cfg(all(drm, not(target_os = "netbsd")))]
             SurfaceTargetUnsafe::Drm {
                 fd,
                 plane,
@@ -822,7 +817,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                 self.0.instance_create_surface_metal(layer, None)
             },
 
-            #[cfg(target_os = "netbsd")]
+            #[cfg(all(drm, target_os = "netbsd"))]
             SurfaceTargetUnsafe::Drm { .. } => Err(
                 wgc::instance::CreateSurfaceError::BackendNotEnabled(wgt::Backend::Vulkan),
             ),
@@ -2147,6 +2142,17 @@ impl dispatch::QueueInterface for CoreQueue {
             .into(),
         )
     }
+
+    fn present(&self, detail: &dispatch::DispatchSurfaceOutputDetail) {
+        let detail = detail.as_core();
+        match self.context.0.surface_present(detail.surface_id) {
+            Ok(_status) => (),
+            Err(err) => {
+                self.context
+                    .handle_error_nolabel(&self.error_sink, err, "Queue::present");
+            }
+        }
+    }
 }
 
 impl Drop for CoreQueue {
@@ -3117,6 +3123,38 @@ impl dispatch::ComputePassInterface for CoreComputePass {
             );
         }
     }
+
+    fn transition_resources<'a>(
+        &mut self,
+        buffer_transitions: &mut dyn Iterator<
+            Item = wgt::BufferTransition<&'a dispatch::DispatchBuffer>,
+        >,
+        texture_transitions: &mut dyn Iterator<
+            Item = wgt::TextureTransition<&'a dispatch::DispatchTextureView>,
+        >,
+    ) {
+        let result = self.context.0.compute_pass_transition_resources(
+            &mut self.pass,
+            buffer_transitions.map(|t| wgt::BufferTransition {
+                buffer: t.buffer.as_core().id,
+                state: t.state,
+            }),
+            texture_transitions.map(|t| wgt::TextureTransition {
+                texture: t.texture.as_core().id,
+                selector: t.selector.clone(),
+                state: t.state,
+            }),
+        );
+
+        if let Err(cause) = result {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                self.pass.label(),
+                "ComputePass::transition_resources",
+            );
+        }
+    }
 }
 
 impl Drop for CoreComputePass {
@@ -3964,22 +4002,13 @@ impl Drop for CoreSurface {
 }
 
 impl dispatch::SurfaceOutputDetailInterface for CoreSurfaceOutputDetail {
-    fn present(&self) {
-        match self.context.0.surface_present(self.surface_id) {
-            Ok(_status) => (),
-            Err(err) => {
-                self.context
-                    .handle_error_nolabel(&self.error_sink, err, "Surface::present");
-            }
-        }
-    }
-
     fn texture_discard(&self) {
         match self.context.0.surface_texture_discard(self.surface_id) {
             Ok(_status) => (),
-            Err(err) => self
-                .context
-                .handle_error_fatal(err, "Surface::discard_texture"),
+            Err(err) => {
+                self.context
+                    .handle_error_nolabel(&self.error_sink, err, "Surface::discard_texture")
+            }
         }
     }
 }

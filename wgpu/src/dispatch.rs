@@ -261,6 +261,8 @@ pub trait QueueInterface: CommonTraits {
     fn on_submitted_work_done(&self, callback: BoxSubmittedWorkDoneCallback);
 
     fn compact_blas(&self, blas: &DispatchBlas) -> (Option<u64>, DispatchBlas);
+
+    fn present(&self, detail: &DispatchSurfaceOutputDetail);
 }
 
 pub trait ShaderModuleInterface: CommonTraits {
@@ -408,6 +410,14 @@ pub trait ComputePassInterface: CommonTraits + Drop {
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
+    );
+
+    fn transition_resources<'a>(
+        &mut self,
+        buffer_transitions: &mut dyn Iterator<Item = wgt::BufferTransition<&'a DispatchBuffer>>,
+        texture_transitions: &mut dyn Iterator<
+            Item = wgt::TextureTransition<&'a DispatchTextureView>,
+        >,
     );
 }
 pub trait RenderPassInterface: CommonTraits + Drop {
@@ -580,7 +590,6 @@ pub trait SurfaceInterface: CommonTraits {
 }
 
 pub trait SurfaceOutputDetailInterface: CommonTraits {
-    fn present(&self);
     fn texture_discard(&self);
 }
 

@@ -37,7 +37,6 @@ var acc_struct: acceleration_structure;
 
 struct ImmediateData {
     light: vec3<f32>,
-    padding: f32,
 }
 var<immediate> pc: ImmediateData;
 

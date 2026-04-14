@@ -1340,14 +1340,18 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
     }
 
-    unsafe fn dispatch(&mut self, count: [u32; 3]) {
+    unsafe fn dispatch_workgroups(&mut self, count: [u32; 3]) {
         unsafe {
             self.device
                 .raw
                 .cmd_dispatch(self.active, count[0], count[1], count[2])
         };
     }
-    unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
+    unsafe fn dispatch_workgroups_indirect(
+        &mut self,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+    ) {
         unsafe {
             self.device
                 .raw

@@ -21,7 +21,7 @@ use crate::{
         ArcCommand, ArcPassTimestampWrites, BasePass, BindGroupStateChange, CommandEncoder,
         CommandEncoderError, DebugGroupError, EncoderStateError, InnerCommandEncoder, MapPassErr,
         PassErrorScope, PassStateError, PassTimestampWrites, QueryUseError, StateChange,
-        TimestampWritesError,
+        TimestampWritesError, TransitionResourcesError,
     },
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
     global::Global,
@@ -30,9 +30,9 @@ use crate::{
     pipeline::ComputePipeline,
     resource::{
         self, Buffer, DestroyedResourceError, InvalidResourceError, Labeled,
-        MissingBufferUsageError, ParentDevice, RawResourceAccess, Trackable,
+        MissingBufferUsageError, ParentDevice, RawResourceAccess, TextureView, Trackable,
     },
-    track::{ResourceUsageCompatibilityError, Tracker},
+    track::{ResourceUsageCompatibilityError, TextureViewBindGroupState, Tracker},
     Label,
 };
 
@@ -129,6 +129,10 @@ pub enum DispatchError {
     InvalidGroupSize { current: [u32; 3], limit: u32 },
     #[error(transparent)]
     BindingSizeTooSmall(#[from] LateMinBufferBindingSizeMismatch),
+    #[error("Not all immediate data required by the pipeline has been set via set_immediates (missing byte ranges: {missing})")]
+    MissingImmediateData {
+        missing: naga::valid::ImmediateSlots,
+    },
 }
 
 impl WebGpuError for DispatchError {
@@ -154,10 +158,10 @@ pub enum ComputePassErrorInner {
     DestroyedResource(#[from] DestroyedResourceError),
     #[error("Indirect buffer offset {0:?} is not a multiple of 4")]
     UnalignedIndirectBufferOffset(BufferAddress),
-    #[error("Indirect buffer uses bytes {offset}..{end_offset} which overruns indirect buffer of size {buffer_size}")]
+    #[error("Indirect buffer of {args_size} bytes starting at offset {offset} would overrun buffer of size {buffer_size}")]
     IndirectBufferOverrun {
+        args_size: u64,
         offset: u64,
-        end_offset: u64,
         buffer_size: u64,
     },
     #[error(transparent)]
@@ -178,6 +182,8 @@ pub enum ComputePassErrorInner {
     ImmediateOutOfMemory,
     #[error(transparent)]
     QueryUse(#[from] QueryUseError),
+    #[error(transparent)]
+    TransitionResources(#[from] TransitionResourcesError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
@@ -235,6 +241,7 @@ impl WebGpuError for ComputePassError {
             ComputePassErrorInner::Bind(e) => e.webgpu_error_type(),
             ComputePassErrorInner::ImmediateData(e) => e.webgpu_error_type(),
             ComputePassErrorInner::QueryUse(e) => e.webgpu_error_type(),
+            ComputePassErrorInner::TransitionResources(e) => e.webgpu_error_type(),
             ComputePassErrorInner::MissingFeatures(e) => e.webgpu_error_type(),
             ComputePassErrorInner::MissingDownlevelFlags(e) => e.webgpu_error_type(),
             ComputePassErrorInner::InvalidResource(e) => e.webgpu_error_type(),
@@ -262,6 +269,10 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
 
     immediates: Vec<u32>,
 
+    /// A bitmask, tracking which 4-byte slots have been written via `set_immediates`.
+    /// Checked against the pipeline's required slots before each dispatch.
+    immediate_slots_set: naga::valid::ImmediateSlots,
+
     intermediate_trackers: Tracker,
 }
 
@@ -270,6 +281,16 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         if let Some(pipeline) = self.pipeline.as_ref() {
             self.pass.binder.check_compatibility(pipeline.as_ref())?;
             self.pass.binder.check_late_buffer_bindings()?;
+            if !self
+                .immediate_slots_set
+                .contains(pipeline.immediate_slots_required)
+            {
+                return Err(DispatchError::MissingImmediateData {
+                    missing: pipeline
+                        .immediate_slots_required
+                        .difference(self.immediate_slots_set),
+                });
+            }
             Ok(())
         } else {
             Err(DispatchError::MissingPipeline(pass::MissingPipeline))
@@ -366,6 +387,70 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         );
         Ok(())
     }
+}
+
+/// Compute pass version of [`command::transition_resources`](crate::command::transition_resources).
+/// See also `State::flush_bindings` for details on the implementation.
+fn transition_resources(
+    state: &mut State,
+    buffer_transitions: Vec<wgt::BufferTransition<Arc<Buffer>>>,
+    texture_transitions: Vec<wgt::TextureTransition<Arc<TextureView>>>,
+) -> Result<(), TransitionResourcesError> {
+    let indices = &state.pass.base.device.tracker_indices;
+    state.pass.scope.buffers.set_size(indices.buffers.size());
+    state.pass.scope.textures.set_size(indices.textures.size());
+
+    let mut buffer_ids = Vec::with_capacity(buffer_transitions.len());
+    let mut textures = TextureViewBindGroupState::new();
+
+    // Process buffer transitions
+    for buffer_transition in buffer_transitions {
+        buffer_transition
+            .buffer
+            .same_device(state.pass.base.device)?;
+
+        state
+            .pass
+            .scope
+            .buffers
+            .merge_single(&buffer_transition.buffer, buffer_transition.state)?;
+        buffer_ids.push(buffer_transition.buffer.tracker_index());
+    }
+
+    state
+        .intermediate_trackers
+        .buffers
+        .set_and_remove_from_usage_scope_sparse(&mut state.pass.scope.buffers, buffer_ids);
+
+    // Process texture transitions
+    for texture_transition in texture_transitions {
+        texture_transition
+            .texture
+            .same_device(state.pass.base.device)?;
+
+        unsafe {
+            state.pass.scope.textures.merge_single(
+                &texture_transition.texture.parent,
+                texture_transition.selector,
+                texture_transition.state,
+            )
+        }?;
+
+        textures.insert_single(texture_transition.texture, texture_transition.state);
+    }
+
+    state
+        .intermediate_trackers
+        .textures
+        .set_and_remove_from_usage_scope_sparse(&mut state.pass.scope.textures, &textures);
+
+    // Record any needed barriers based on tracker data
+    CommandEncoder::drain_barriers(
+        state.pass.base.raw_encoder,
+        &mut state.intermediate_trackers,
+        state.pass.base.snatch_guard,
+    );
+    Ok(())
 }
 
 // Running the compute pass.
@@ -558,6 +643,8 @@ pub(super) fn encode_compute_pass(
 
         immediates: Vec::new(),
 
+        immediate_slots_set: Default::default(),
+
         intermediate_trackers: Tracker::new(
             device.ordered_buffer_usages,
             device.ordered_texture_usages,
@@ -674,14 +761,17 @@ pub(super) fn encode_compute_pass(
                     },
                 )
                 .map_pass_err(scope)?;
+                state.immediate_slots_set |=
+                    naga::valid::ImmediateSlots::from_range(offset, size_bytes);
             }
-            ArcComputeCommand::Dispatch(groups) => {
+            ArcComputeCommand::DispatchWorkgroups(groups) => {
                 let scope = PassErrorScope::Dispatch { indirect: false };
-                dispatch(&mut state, groups).map_pass_err(scope)?;
+                dispatch_workgroups(&mut state, groups).map_pass_err(scope)?;
             }
-            ArcComputeCommand::DispatchIndirect { buffer, offset } => {
+            ArcComputeCommand::DispatchWorkgroupsIndirect { buffer, offset } => {
                 let scope = PassErrorScope::Dispatch { indirect: true };
-                dispatch_indirect(&mut state, device, buffer, offset).map_pass_err(scope)?;
+                dispatch_workgroups_indirect(&mut state, device, buffer, offset)
+                    .map_pass_err(scope)?;
             }
             ArcComputeCommand::PushDebugGroup { color: _, len } => {
                 pass::push_debug_group(&mut state.pass, &base.string_data, len);
@@ -727,6 +817,14 @@ pub(super) fn encode_compute_pass(
             ArcComputeCommand::EndPipelineStatisticsQuery => {
                 let scope = PassErrorScope::EndPipelineStatisticsQuery;
                 end_pipeline_statistics_query(state.pass.base.raw_encoder, &mut state.active_query)
+                    .map_pass_err(scope)?;
+            }
+            ArcComputeCommand::TransitionResources {
+                buffer_transitions,
+                texture_transitions,
+            } => {
+                let scope = PassErrorScope::TransitionResources;
+                transition_resources(&mut state, buffer_transitions, texture_transitions)
                     .map_pass_err(scope)?;
             }
         }
@@ -832,7 +930,7 @@ fn set_pipeline(
     )
 }
 
-fn dispatch(state: &mut State, groups: [u32; 3]) -> Result<(), ComputePassErrorInner> {
+fn dispatch_workgroups(state: &mut State, groups: [u32; 3]) -> Result<(), ComputePassErrorInner> {
     api_log!("ComputePass::dispatch {groups:?}");
 
     state.is_ready()?;
@@ -856,12 +954,12 @@ fn dispatch(state: &mut State, groups: [u32; 3]) -> Result<(), ComputePassErrorI
     }
 
     unsafe {
-        state.pass.base.raw_encoder.dispatch(groups);
+        state.pass.base.raw_encoder.dispatch_workgroups(groups);
     }
     Ok(())
 }
 
-fn dispatch_indirect(
+fn dispatch_workgroups_indirect(
     state: &mut State,
     device: &Arc<Device>,
     buffer: Arc<Buffer>,
@@ -888,8 +986,8 @@ fn dispatch_indirect(
     let args_size = size_of::<wgt::DispatchIndirectArgs>() as u64;
     if buffer.size < args_size || buffer.size - args_size < offset {
         return Err(ComputePassErrorInner::IndirectBufferOverrun {
+            args_size,
             offset,
-            end_offset: offset + args_size,
             buffer_size: buffer.size,
         });
     }
@@ -979,7 +1077,7 @@ fn dispatch_indirect(
         }
 
         unsafe {
-            state.pass.base.raw_encoder.dispatch([1, 1, 1]);
+            state.pass.base.raw_encoder.dispatch_workgroups([1, 1, 1]);
         }
 
         // reset state
@@ -1037,7 +1135,7 @@ fn dispatch_indirect(
                 .pass
                 .base
                 .raw_encoder
-                .dispatch_indirect(params.dst_buffer, 0);
+                .dispatch_workgroups_indirect(params.dst_buffer, 0);
         }
     } else {
         state.flush_bindings(Some(&buffer), true)?;
@@ -1048,7 +1146,7 @@ fn dispatch_indirect(
                 .pass
                 .base
                 .raw_encoder
-                .dispatch_indirect(buf_raw, offset);
+                .dispatch_workgroups_indirect(buf_raw, offset);
         }
     }
 
@@ -1193,7 +1291,9 @@ impl Global {
 
         pass_base!(pass, scope)
             .commands
-            .push(ArcComputeCommand::Dispatch([groups_x, groups_y, groups_z]));
+            .push(ArcComputeCommand::DispatchWorkgroups([
+                groups_x, groups_y, groups_z,
+            ]));
 
         Ok(())
     }
@@ -1211,7 +1311,7 @@ impl Global {
         let buffer = pass_try!(base, scope, hub.buffers.get(buffer_id).get());
 
         base.commands
-            .push(ArcComputeCommand::DispatchIndirect { buffer, offset });
+            .push(ArcComputeCommand::DispatchWorkgroupsIndirect { buffer, offset });
 
         Ok(())
     }
@@ -1313,6 +1413,51 @@ impl Global {
         pass_base!(pass, PassErrorScope::EndPipelineStatisticsQuery)
             .commands
             .push(ArcComputeCommand::EndPipelineStatisticsQuery);
+
+        Ok(())
+    }
+
+    pub fn compute_pass_transition_resources(
+        &self,
+        pass: &mut ComputePass,
+        buffer_transitions: impl Iterator<Item = wgt::BufferTransition<id::BufferId>>,
+        texture_transitions: impl Iterator<Item = wgt::TextureTransition<id::TextureViewId>>,
+    ) -> Result<(), PassStateError> {
+        let scope = PassErrorScope::TransitionResources;
+        let base = pass_base!(pass, scope);
+
+        let hub = &self.hub;
+        let buffer_transitions = pass_try!(
+            base,
+            scope,
+            buffer_transitions
+                .map(|buffer_transition| -> Result<_, InvalidResourceError> {
+                    Ok(wgt::BufferTransition {
+                        buffer: hub.buffers.get(buffer_transition.buffer).get()?,
+                        state: buffer_transition.state,
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        );
+
+        let texture_transitions = pass_try!(
+            base,
+            scope,
+            texture_transitions
+                .map(|texture_transition| -> Result<_, InvalidResourceError> {
+                    Ok(wgt::TextureTransition {
+                        texture: hub.texture_views.get(texture_transition.texture).get()?,
+                        selector: texture_transition.selector,
+                        state: texture_transition.state,
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        );
+
+        base.commands.push(ArcComputeCommand::TransitionResources {
+            buffer_transitions,
+            texture_transitions,
+        });
 
         Ok(())
     }

@@ -286,6 +286,10 @@ impl crate::Queue for Context {
     unsafe fn get_timestamp_period(&self) -> f32 {
         1.0
     }
+
+    unsafe fn wait_for_idle(&self) -> Result<(), crate::DeviceError> {
+        Ok(())
+    }
 }
 
 impl crate::Device for Context {

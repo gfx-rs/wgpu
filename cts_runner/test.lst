@@ -303,6 +303,7 @@ webgpu:api,validation,texture,destroy:invalid_texture:*
 webgpu:api,validation,texture,destroy:twice:*
 webgpu:api,validation,texture,float32_filterable:create_bind_group:*
 webgpu:api,validation,texture,rg11b10ufloat_renderable:*
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:*
 
 fails-if(dx12) webgpu:shader,execution,expression,call,builtin,atan2:f16:*
 webgpu:shader,execution,expression,call,builtin,atan2:f32:*
