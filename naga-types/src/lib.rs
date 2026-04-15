@@ -180,3 +180,15 @@ pub type FastIndexSet<K> =
 /// hasher as `FastHashMap<K, V>` (faster but not resilient to DoS attacks).
 pub type FastIndexMap<K, V> =
     indexmap::IndexMap<K, V, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+
+/// Pipeline binding information for global resources.
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub struct ResourceBinding {
+    /// The bind group index.
+    pub group: u32,
+    /// Binding number within the group.
+    pub binding: u32,
+}
