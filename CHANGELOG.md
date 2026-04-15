@@ -85,6 +85,31 @@ GLSL:
 
 By @andyleiserson in [#9321](https://github.com/gfx-rs/wgpu/pull/9321).
 
+#### Empty buffer slices are now permitted
+
+Creating a `BufferSlice` with a length of 0 no longer causes a panic.
+
+Empty buffer slices can be:
+- Instantiated
+- Mapped (the result is an empty slice of bytes)
+
+Empty buffer slices cannot be:
+- Used in buffer bindings
+- Passed to `set_index_buffer` or `set_vertex_buffer`
+
+#3170 tracks making it possible to pass a zero-size `BufferSlice` to `set_vertex_buffer` and `set_index_buffer` in the future.
+
+Zero-size buffer bindings are still not permitted. `BufferBinding` now implements `TryFrom<BufferSlice>` instead of `From<BufferSlice>`. The `TryFrom` conversion will fail if the slice is zero-size.
+
+```diff
+-let slice = buffer.slice(0..0); // panic!
+-let mapping = BufferBinding::from(slice); // infallible
++let slice = buffer.slice(0..0); // okay
++let mapping = BufferBinding::try_from(slice).unwrap(); // panic
+```
+
+By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
+
 ### Added/New Features
 
 #### General
@@ -96,7 +121,6 @@ By @andyleiserson in [#9321](https://github.com/gfx-rs/wgpu/pull/9321).
 - Make `wgpu_types::texture::format::TextureChannel` accessible as `wgpu::TextureChannel`. By @TornaxO7 in [#9394](https://github.com/gfx-rs/wgpu/pull/9349).
 - Add support for `per_vertex` in Metal and DX12, as well as some validation for `per_vertex`, and a new enable extension, `wgpu_per_vertex`. By @inner-daemons in [#9219](https://github.com/gfx-rs/wgpu/pull/9219).
 - Add `ComputePass` version of `CommandEncoder::transition_resources` that allows intra-pass transitions. By @wingertge in [#9371](https://github.com/gfx-rs/wgpu/pull/9371).
-- Buffer slices with a length of 0 can now be instantiated. By @beholdnec in [#8505] (https://github.com/gfx-rs/wgpu/pull/8505).
 
 #### Metal
 
