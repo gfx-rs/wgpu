@@ -840,7 +840,7 @@ enum RootElement {
     DescriptorTable(Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE),
     /// Descriptor table referring to the entire sampler heap.
     SamplerHeapDescriptorTable,
-    /// Descriptor for an uniform buffer that has dynamic offset.
+    /// Root descriptor for a uniform buffer binding that has a dynamic offset.
     DynamicUniformBuffer {
         address: Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE,
     },
