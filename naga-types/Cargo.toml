@@ -1,0 +1,37 @@
+[package]
+name = "naga-types"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Common types for naga and wgpu"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "wasm32-unknown-unknown",
+]
+
+[lints]
+workspace = true
+
+[features]
+serialize = ["dep:serde"]
+deserialize = ["dep:serde"]
+arbitrary = ["dep:arbitrary", "std"]
+std = []
+
+[dependencies]
+arbitrary = { workspace = true, features = ["derive"], optional = true }
+serde = { workspace = true, features = ["alloc", "derive"], optional = true }
+
+hashbrown.workspace = true
+rustc-hash.workspace = true
+thiserror.workspace = true
