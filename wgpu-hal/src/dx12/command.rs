@@ -267,7 +267,7 @@ impl super::CommandEncoder {
                         }
                     }
                 }
-                super::RootElement::SamplerHeap => match self.pass.kind {
+                super::RootElement::SamplerHeapDescriptorTable => match self.pass.kind {
                     Pk::Render => unsafe {
                         list.SetGraphicsRootDescriptorTable(
                             index,
@@ -296,7 +296,8 @@ impl super::CommandEncoder {
                 };
         }
         if let Some(root_index) = layout.sampler_heap_root_index {
-            self.pass.root_elements[root_index as usize] = super::RootElement::SamplerHeap;
+            self.pass.root_elements[root_index as usize] =
+                super::RootElement::SamplerHeapDescriptorTable;
         }
         self.pass.layout = layout.clone();
         self.pass.dirty_root_elements = (1 << layout.total_root_elements) - 1;
