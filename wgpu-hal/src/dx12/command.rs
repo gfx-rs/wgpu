@@ -204,10 +204,10 @@ impl super::CommandEncoder {
                     "Empty root element at index {index} should not have been marked as dirty"
                 ),
                 super::RootElement::Constant => {
-                    let info = self.pass.layout.root_constant_info.as_ref().unwrap();
+                    let info = self.pass.layout.immediates_info.as_ref().unwrap();
 
-                    for offset in info.range.clone() {
-                        let val = self.pass.constant_data[offset as usize];
+                    for offset in 0..info.size {
+                        let val = self.pass.immediates[offset as usize];
                         match self.pass.kind {
                             Pk::Render => unsafe {
                                 list.SetGraphicsRoot32BitConstant(index, val, offset)
@@ -1201,11 +1201,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) {
         let offset_words = offset_bytes as usize / 4;
 
-        let info = layout.shared.root_constant_info.as_ref().unwrap();
+        let info = layout.shared.immediates_info.as_ref().unwrap();
 
         self.pass.root_elements[info.root_index as usize] = super::RootElement::Constant;
 
-        self.pass.constant_data[offset_words..(offset_words + data.len())].copy_from_slice(data);
+        self.pass.immediates[offset_words..(offset_words + data.len())].copy_from_slice(data);
 
         if self.pass.layout.signature == layout.shared.signature {
             self.pass.dirty_root_elements |= 1 << info.root_index;
