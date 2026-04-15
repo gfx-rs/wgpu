@@ -36,9 +36,13 @@ impl_align_to!(usize);
 ///
 /// ```
 /// # use wgpu_types::math::align_to;
-/// assert_eq!(align_to(253, 16), 256);
-/// assert_eq!(align_to(256, 16), 256);
-/// assert_eq!(align_to(0, 16), 0);
+/// assert_eq!(align_to(253_u32, 16), 256);
+/// assert_eq!(align_to(256_u32, 16), 256);
+/// assert_eq!(align_to(0_u32, 16), 0);
+/// ```
+///
+/// ```should_panic
+/// wgpu_types::math::align_to(u32::MAX, 16);
 /// ```
 ///
 pub fn align_to<T: AlignTo>(value: T, alignment: T) -> T {
