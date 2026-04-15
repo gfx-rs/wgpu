@@ -755,14 +755,15 @@ impl crate::Device for super::Device {
         })
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
-        if let Some(raw) = buffer.raw {
-            if buffer.mapped.get() && buffer.data.is_none() {
-                let gl = &self.shared.context.lock();
-                unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
-                unsafe { gl.unmap_buffer(buffer.target) };
-                unsafe { gl.bind_buffer(buffer.target, None) };
-                *lock(&buffer.offset_of_current_mapping) = 0;
-                buffer.mapped.set(false);
+        if buffer.mapped.replace(false) {
+            if let Some(raw) = buffer.raw {
+                if buffer.data.is_none() {
+                    let gl = &self.shared.context.lock();
+                    unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
+                    unsafe { gl.unmap_buffer(buffer.target) };
+                    unsafe { gl.bind_buffer(buffer.target, None) };
+                    *lock(&buffer.offset_of_current_mapping) = 0;
+                }
             }
         }
     }
@@ -770,19 +771,21 @@ impl crate::Device for super::Device {
     where
         I: Iterator<Item = crate::MemoryRange>,
     {
-        if let Some(raw) = buffer.raw {
-            if buffer.data.is_none() {
-                let gl = &self.shared.context.lock();
-                unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
-                for range in ranges {
-                    let offset_of_current_mapping = *lock(&buffer.offset_of_current_mapping);
-                    unsafe {
-                        gl.flush_mapped_buffer_range(
-                            buffer.target,
-                            (range.start - offset_of_current_mapping) as i32,
-                            (range.end - range.start) as i32,
-                        )
-                    };
+        if buffer.mapped.get() {
+            if let Some(raw) = buffer.raw {
+                if buffer.data.is_none() {
+                    let gl = &self.shared.context.lock();
+                    unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
+                    for range in ranges {
+                        let offset_of_current_mapping = *lock(&buffer.offset_of_current_mapping);
+                        unsafe {
+                            gl.flush_mapped_buffer_range(
+                                buffer.target,
+                                (range.start - offset_of_current_mapping) as i32,
+                                (range.end - range.start) as i32,
+                            )
+                        };
+                    }
                 }
             }
         }
