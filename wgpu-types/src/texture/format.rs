@@ -1615,6 +1615,123 @@ impl TextureFormat {
         }
     }
 
+    /// Provides texture srgb view formats with static lifetime for `TextureDescriptor.view_formats`.
+    /// Returns the srgb view formats if the format has an srgb variant, otherwise returns an empty slice.
+    ///
+    /// The return result covers all the results of [`TextureFormat::add_srgb_suffix`].
+    pub fn srgb_view_formats(&self) -> &'static [TextureFormat] {
+        match self {
+            TextureFormat::Rgba8Unorm => &[TextureFormat::Rgba8UnormSrgb],
+            TextureFormat::Bgra8Unorm => &[TextureFormat::Bgra8UnormSrgb],
+            TextureFormat::Bc1RgbaUnorm => &[TextureFormat::Bc1RgbaUnormSrgb],
+            TextureFormat::Bc2RgbaUnorm => &[TextureFormat::Bc2RgbaUnormSrgb],
+            TextureFormat::Bc3RgbaUnorm => &[TextureFormat::Bc3RgbaUnormSrgb],
+            TextureFormat::Bc7RgbaUnorm => &[TextureFormat::Bc7RgbaUnormSrgb],
+            TextureFormat::Etc2Rgb8Unorm => &[TextureFormat::Etc2Rgb8UnormSrgb],
+            TextureFormat::Etc2Rgb8A1Unorm => &[TextureFormat::Etc2Rgb8A1UnormSrgb],
+            TextureFormat::Etc2Rgba8Unorm => &[TextureFormat::Etc2Rgba8UnormSrgb],
+            TextureFormat::Astc {
+                block: AstcBlock::B4x4,
+                channel: AstcChannel::Unorm,
+            } => &[TextureFormat::Astc {
+                block: AstcBlock::B4x4,
+                channel: AstcChannel::UnormSrgb,
+            }],
+            TextureFormat::Astc {
+                block: AstcBlock::B5x4,
+                channel: AstcChannel::Unorm,
+            } => &[TextureFormat::Astc {
+                block: AstcBlock::B5x4,
+                channel: AstcChannel::UnormSrgb,
+            }],
+            TextureFormat::Astc {
+                block: AstcBlock::B5x5,
+                channel: AstcChannel::Unorm,
+            } => &[TextureFormat::Astc {
+                block: AstcBlock::B5x5,
+                channel: AstcChannel::UnormSrgb,
+            }],
+            TextureFormat::Astc {
+                block: AstcBlock::B6x5,
+                channel: AstcChannel::Unorm,
+            } => &[TextureFormat::Astc {
+                block: AstcBlock::B6x5,
+                channel: AstcChannel::UnormSrgb,
+            }],
+            TextureFormat::Astc {
+                block: AstcBlock::B6x6,
+                channel: AstcChannel::Unorm,
+            } => &[TextureFormat::Astc {
+                block: AstcBlock::B6x6,
+                channel: AstcChannel::UnormSrgb,
+            }],
+            TextureFormat::Astc {
+                block: AstcBlock::B8x5,
+                channel: AstcChannel::Unorm,
+            } => &[TextureFormat::Astc {
+                block: AstcBlock::B8x5,
+                channel: AstcChannel::UnormSrgb,
+            }],
+            TextureFormat::Astc {
+                block: AstcBlock::B8x6,
+                channel: AstcChannel::Unorm,
+            } => &[TextureFormat::Astc {
+                block: AstcBlock::B8x6,
+                channel: AstcChannel::UnormSrgb,
+            }],
+            TextureFormat::Astc {
+                block: AstcBlock::B8x8,
+                channel: AstcChannel::Unorm,
+            } => &[TextureFormat::Astc {
+                block: AstcBlock::B8x8,
+                channel: AstcChannel::UnormSrgb,
+            }],
+            TextureFormat::Astc {
+                block: AstcBlock::B10x5,
+                channel: AstcChannel::Unorm,
+            } => &[TextureFormat::Astc {
+                block: AstcBlock::B10x5,
+                channel: AstcChannel::UnormSrgb,
+            }],
+            TextureFormat::Astc {
+                block: AstcBlock::B10x6,
+                channel: AstcChannel::Unorm,
+            } => &[TextureFormat::Astc {
+                block: AstcBlock::B10x6,
+                channel: AstcChannel::UnormSrgb,
+            }],
+            TextureFormat::Astc {
+                block: AstcBlock::B10x8,
+                channel: AstcChannel::Unorm,
+            } => &[TextureFormat::Astc {
+                block: AstcBlock::B10x8,
+                channel: AstcChannel::UnormSrgb,
+            }],
+            TextureFormat::Astc {
+                block: AstcBlock::B10x10,
+                channel: AstcChannel::Unorm,
+            } => &[TextureFormat::Astc {
+                block: AstcBlock::B10x10,
+                channel: AstcChannel::UnormSrgb,
+            }],
+            TextureFormat::Astc {
+                block: AstcBlock::B12x10,
+                channel: AstcChannel::Unorm,
+            } => &[TextureFormat::Astc {
+                block: AstcBlock::B12x10,
+                channel: AstcChannel::UnormSrgb,
+            }],
+            TextureFormat::Astc {
+                block: AstcBlock::B12x12,
+                channel: AstcChannel::Unorm,
+            } => &[TextureFormat::Astc {
+                block: AstcBlock::B12x12,
+                channel: AstcChannel::UnormSrgb,
+            }],
+            _ => &[],
+        }
+    }
+
     /// Returns `true` for srgb formats.
     #[must_use]
     pub fn is_srgb(&self) -> bool {
