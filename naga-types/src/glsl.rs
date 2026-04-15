@@ -146,3 +146,6 @@ impl fmt::Display for GlslVersion {
         }
     }
 }
+
+/// Mapping between resources and bindings.
+pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, u8>;
