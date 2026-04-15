@@ -277,7 +277,7 @@ struct AdapterShared {
     limits: wgt::Limits,
     workarounds: Workarounds,
     options: wgt::GlBackendOptions,
-    shading_language_version: naga::back::glsl::Version,
+    shading_language_version: naga::back::glsl::GlslVersion,
     next_shader_id: AtomicU32,
     program_cache: Mutex<ProgramCache>,
     es: bool,

@@ -14,7 +14,7 @@ const GL_UNMASKED_VENDOR_WEBGL: u32 = 0x9245;
 const GL_UNMASKED_RENDERER_WEBGL: u32 = 0x9246;
 
 impl super::Adapter {
-    pub fn get_glsl_version(&self) -> naga::back::glsl::Version {
+    pub fn get_glsl_version(&self) -> naga::back::glsl::GlslVersion {
         self.shared.shading_language_version
     }
 
@@ -283,11 +283,11 @@ impl super::Adapter {
                 if value > 450 {
                     value = 450;
                 }
-                naga::back::glsl::Version::Desktop(value)
+                naga::back::glsl::GlslVersion::Desktop(value)
             } else {
                 let (sl_major, sl_minor) = Self::parse_version(&sl_version).ok()?;
                 let value = sl_major as u16 * 100 + sl_minor as u16 * 10;
-                naga::back::glsl::Version::Embedded {
+                naga::back::glsl::GlslVersion::Embedded {
                     version: value,
                     is_webgl: cfg!(any(webgl, Emscripten)),
                 }

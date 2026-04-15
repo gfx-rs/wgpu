@@ -468,7 +468,7 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
         || {
             let mut string = String::new();
             let options = naga::back::glsl::Options {
-                version: naga::back::glsl::Version::new_gles(320),
+                version: naga::back::glsl::GlslVersion::new_gles(320),
                 writer_flags: naga::back::glsl::WriterFlags::empty(),
                 binding_map: Default::default(),
                 zero_initialize_workgroup_memory: true,
