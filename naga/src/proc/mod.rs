@@ -947,3 +947,60 @@ impl crate::AddressSpace {
         matches!(self, Self::WorkGroup | Self::TaskPayload)
     }
 }
+
+impl From<crate::ScalarKind> for nt::glsl::GlslScalarKind {
+    fn from(val: crate::ScalarKind) -> Self {
+        match val {
+            crate::ScalarKind::AbstractFloat => nt::glsl::GlslScalarKind::AbstractFloat,
+            crate::ScalarKind::AbstractInt => nt::glsl::GlslScalarKind::AbstractInt,
+            crate::ScalarKind::Bool => nt::glsl::GlslScalarKind::Bool,
+            crate::ScalarKind::Sint => nt::glsl::GlslScalarKind::Sint,
+            crate::ScalarKind::Uint => nt::glsl::GlslScalarKind::Uint,
+            crate::ScalarKind::Float => nt::glsl::GlslScalarKind::Float,
+        }
+    }
+}
+
+impl From<crate::VectorSize> for nt::glsl::GlslVectorSize {
+    fn from(val: crate::VectorSize) -> Self {
+        match val {
+            crate::VectorSize::Bi => nt::glsl::GlslVectorSize::Bi,
+            crate::VectorSize::Tri => nt::glsl::GlslVectorSize::Tri,
+            crate::VectorSize::Quad => nt::glsl::GlslVectorSize::Quad,
+        }
+    }
+}
+
+impl From<crate::Scalar> for nt::glsl::GlslScalar {
+    fn from(val: crate::Scalar) -> Self {
+        nt::glsl::GlslScalar {
+            kind: val.kind.into(),
+            width: val.width,
+        }
+    }
+}
+
+impl TryFrom<&crate::TypeInner> for nt::glsl::GlslUniformType {
+    type Error = ();
+    fn try_from(value: &crate::TypeInner) -> Result<Self, Self::Error> {
+        match *value {
+            crate::TypeInner::Scalar(scalar) => {
+                Ok(nt::glsl::GlslUniformType::Scalar(scalar.into()))
+            }
+            crate::TypeInner::Vector { size, scalar } => Ok(nt::glsl::GlslUniformType::Vector {
+                size: size.into(),
+                scalar: scalar.into(),
+            }),
+            crate::TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => Ok(nt::glsl::GlslUniformType::Matrix {
+                columns: columns.into(),
+                rows: rows.into(),
+                scalar: scalar.into(),
+            }),
+            _ => Err(()),
+        }
+    }
+}

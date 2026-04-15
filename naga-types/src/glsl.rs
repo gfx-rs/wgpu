@@ -164,3 +164,89 @@ pub struct ApiVersion {
     pub is_embedded: bool,
     pub is_webgl: bool,
 }
+
+/// Separate type from `naga::ScalarKind` so that naga can easily add impl's
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub enum GlslScalarKind {
+    Sint,
+    Uint,
+    Float,
+    Bool,
+    AbstractInt,
+    AbstractFloat,
+}
+
+/// Separate type from `naga::VectorSize` so that naga can easily add impl's
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub enum GlslVectorSize {
+    Bi = 2,
+    Tri = 3,
+    Quad = 4,
+}
+impl GlslVectorSize {
+    pub fn alignment(&self) -> u32 {
+        match self {
+            Self::Bi => 2,
+            Self::Tri | Self::Quad => 4,
+        }
+    }
+}
+
+/// Separate type from `naga::Scalar` so that naga can easily add impl's
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct GlslScalar {
+    pub kind: GlslScalarKind,
+    pub width: u8,
+}
+
+impl GlslScalar {
+    pub const F32: Self = Self {
+        kind: GlslScalarKind::Float,
+        width: 4,
+    };
+    pub const I32: Self = Self {
+        kind: GlslScalarKind::Sint,
+        width: 4,
+    };
+    pub const U32: Self = Self {
+        kind: GlslScalarKind::Uint,
+        width: 4,
+    };
+}
+
+/// A subset of `naga::TypeInner` so that uniforms can be analyzed without pulling in the entire naga IR.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub enum GlslUniformType {
+    Scalar(GlslScalar),
+    Vector {
+        size: GlslVectorSize,
+        scalar: GlslScalar,
+    },
+    Matrix {
+        columns: GlslVectorSize,
+        rows: GlslVectorSize,
+        scalar: GlslScalar,
+    },
+}
+impl GlslUniformType {
+    pub fn size(&self) -> u32 {
+        match self {
+            Self::Scalar(scalar) => scalar.width as u32,
+            Self::Vector { size, scalar } => *size as u32 * scalar.width as u32,
+            // matrices are treated as arrays of aligned columns
+            Self::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => rows.alignment() * scalar.width as u32 * *columns as u32,
+        }
+    }
+}

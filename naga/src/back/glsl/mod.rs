@@ -298,7 +298,7 @@ pub struct ImmediateItem {
     ///
     pub access_path: String,
     /// Type of the uniform. This will only ever be a scalar, vector, or matrix.
-    pub ty: Handle<crate::Type>,
+    pub ty: GlslUniformType,
     /// The offset in the immediate data memory block this uniform maps to.
     ///
     /// The size of the uniform can be derived from the type.

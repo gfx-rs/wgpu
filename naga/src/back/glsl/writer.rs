@@ -4589,7 +4589,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 items.push(ImmediateItem {
                     access_path: name,
                     offset: *offset,
-                    ty,
+                    ty: (&self.module.types[ty].inner).try_into().unwrap(),
                 });
                 *offset += layout.size;
             }
