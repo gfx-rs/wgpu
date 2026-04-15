@@ -74,7 +74,7 @@ authors = ["gfx-rs developers"]
 [workspace.dependencies]
 naga = { version = "29.0.0", path = "./naga" }
 naga-test = { path = "./naga-test" }
-naga-types = { path = "./naga-types" }
+naga-types = { version = "29.0.0", path = "./naga-types" }
 wgpu = { version = "29.0.0", path = "./wgpu", default-features = false, features = [
     "std",
     "serde",
