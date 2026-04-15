@@ -4767,10 +4767,10 @@ template <typename A>
 
     fn write_unpacking_function(
         &mut self,
-        format: back::msl::VertexFormat,
+        format: nt::VertexFormat,
     ) -> Result<(String, u32, Option<crate::VectorSize>, crate::Scalar), Error> {
         use crate::{Scalar, VectorSize};
-        use back::msl::VertexFormat::*;
+        use nt::VertexFormat::*;
         match format {
             Uint8 => {
                 let name = self.namer.call("unpackUint8");
@@ -5568,6 +5568,8 @@ template <typename A>
                 writeln!(self.out, "}}")?;
                 Ok((name, 4, Some(VectorSize::Quad), Scalar::F32))
             }
+            // These are treated as f32 by the shader.
+            Float64 | Float64x2 | Float64x3 | Float64x4 => unreachable!(),
         }
     }
 
@@ -6512,7 +6514,7 @@ template <typename A>
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
-        use back::msl::VertexFormat;
+        use nt::VertexFormat;
 
         // Define structs to hold resolved/generated data for vertex buffers and
         // their attributes.

@@ -19,6 +19,8 @@ extern crate std;
 
 extern crate alloc;
 
+extern crate naga_types as nt;
+
 use core::{fmt, hash::Hash, time::Duration};
 
 #[cfg(any(feature = "serde", test))]
