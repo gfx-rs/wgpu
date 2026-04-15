@@ -1,5 +1,7 @@
 //! Types for configuring render passes and render pipelines (except for vertex attributes).
 
+pub use nt::PrimitiveTopology;
+
 use bytemuck::{Pod, Zeroable};
 
 #[cfg(any(feature = "serde", test))]
@@ -270,56 +272,6 @@ bitflags::bitflags! {
 impl Default for ColorWrites {
     fn default() -> Self {
         Self::ALL
-    }
-}
-
-/// Primitive type the input mesh is composed of.
-///
-/// Corresponds to [WebGPU `GPUPrimitiveTopology`](
-/// https://gpuweb.github.io/gpuweb/#enumdef-gpuprimitivetopology).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
-pub enum PrimitiveTopology {
-    /// Vertex data is a list of points. Each vertex is a new point.
-    PointList = 0,
-    /// Vertex data is a list of lines. Each pair of vertices composes a new line.
-    ///
-    /// Vertices `0 1 2 3` create two lines `0 1` and `2 3`
-    LineList = 1,
-    /// Vertex data is a strip of lines. Each set of two adjacent vertices form a line.
-    ///
-    /// Vertices `0 1 2 3` create three lines `0 1`, `1 2`, and `2 3`.
-    LineStrip = 2,
-    /// Vertex data is a list of triangles. Each set of 3 vertices composes a new triangle.
-    ///
-    /// Vertices `0 1 2 3 4 5` create two triangles `0 1 2` and `3 4 5`
-    #[default]
-    TriangleList = 3,
-    /// Vertex data is a triangle strip. Each set of three adjacent vertices form a triangle.
-    ///
-    /// Vertices `0 1 2 3 4 5` create four triangles `0 1 2`, `2 1 3`, `2 3 4`, and `4 3 5`
-    TriangleStrip = 4,
-}
-
-impl PrimitiveTopology {
-    /// Returns true for strip topologies.
-    #[must_use]
-    pub fn is_strip(&self) -> bool {
-        match *self {
-            Self::PointList | Self::LineList | Self::TriangleList => false,
-            Self::LineStrip | Self::TriangleStrip => true,
-        }
-    }
-
-    /// Returns true for triangle topologies.
-    #[must_use]
-    pub fn is_triangles(&self) -> bool {
-        match *self {
-            Self::TriangleList | Self::TriangleStrip => true,
-            Self::PointList | Self::LineList | Self::LineStrip => false,
-        }
     }
 }
 
