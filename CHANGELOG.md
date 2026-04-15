@@ -90,10 +90,12 @@ By @andyleiserson in [#9321](https://github.com/gfx-rs/wgpu/pull/9321).
 Creating a `BufferSlice` with a length of 0 no longer causes a panic.
 
 Empty buffer slices can be:
+
 - Instantiated
 - Mapped (the result is an empty slice of bytes)
 
 Empty buffer slices cannot be:
+
 - Used in buffer bindings
 - Passed to `set_index_buffer` or `set_vertex_buffer`
 

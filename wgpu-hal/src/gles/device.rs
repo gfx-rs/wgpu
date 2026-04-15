@@ -579,6 +579,7 @@ impl crate::Device for super::Device {
                 target,
                 size: desc.size,
                 map_flags: 0,
+                mapped: false.into(),
                 data: Some(Arc::new(MaybeMutex::new(vec![0; desc.size as usize]))),
                 offset_of_current_mapping: Arc::new(MaybeMutex::new(0)),
             });
@@ -678,6 +679,7 @@ impl crate::Device for super::Device {
             raw,
             target,
             size: desc.size,
+            mapped: false.into(),
             map_flags,
             data,
             offset_of_current_mapping: Arc::new(MaybeMutex::new(0)),
@@ -730,6 +732,7 @@ impl crate::Device for super::Device {
                         .try_into()
                         .expect("Buffer range invalid for GLES");
                     if range_length != 0 {
+                        buffer.mapped.set(true);
                         unsafe {
                             gl.map_buffer_range(
                                 buffer.target,
@@ -753,12 +756,13 @@ impl crate::Device for super::Device {
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
         if let Some(raw) = buffer.raw {
-            if buffer.data.is_none() {
+            if buffer.mapped.get() && buffer.data.is_none() {
                 let gl = &self.shared.context.lock();
                 unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
                 unsafe { gl.unmap_buffer(buffer.target) };
                 unsafe { gl.bind_buffer(buffer.target, None) };
                 *lock(&buffer.offset_of_current_mapping) = 0;
+                buffer.mapped.set(false);
             }
         }
     }

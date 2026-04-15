@@ -574,7 +574,13 @@ impl<'a> BufferSlice<'a> {
         callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
     ) {
         let mut mc = self.buffer.map_context.lock();
-        assert_eq!(mc.mapped_range, None, "Buffer is already mapped");
+        if mc.mapped_range.is_some() {
+            // Buffer is already mapped; fail
+            drop(mc);
+            callback(Err(BufferAsyncError));
+            return;
+        }
+
         let end = self.offset + self.size;
         mc.mapped_range = Some(self.offset..end);
         drop(mc); // release the lock of map_context as callback can call lock it again
