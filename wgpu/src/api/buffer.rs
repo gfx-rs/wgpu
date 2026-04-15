@@ -574,9 +574,9 @@ impl<'a> BufferSlice<'a> {
         callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
     ) {
         let mut mc = self.buffer.map_context.lock();
-        assert_eq!(mc.mapped_range, 0..0, "Buffer is already mapped");
+        assert_eq!(mc.mapped_range, None, "Buffer is already mapped");
         let end = self.offset + self.size;
-        mc.mapped_range = self.offset..end;
+        mc.mapped_range = Some(self.offset..end);
         drop(mc); // release the lock of map_context as callback can call lock it again
 
         self.buffer
@@ -754,13 +754,12 @@ impl fmt::Display for Subrange {
 pub(crate) struct MapContext {
     /// The range of the buffer that is mapped.
     ///
-    /// This is `0..0` if the buffer is not mapped. This becomes non-empty when
-    /// the buffer is mapped at creation time, and when you call `map_async` on
-    /// some [`BufferSlice`] (so technically, it indicates the portion that is
-    /// *or has been requested to be* mapped.)
+    /// This becomes Some(...) when the buffer is mapped at creation time, and
+    /// when you call `map_async` on some [`BufferSlice`] (so technically, it
+    /// indicates the portion that is *or has been requested to be* mapped.)
     ///
     /// All [`BufferView`]s and [`BufferViewMut`]s must fall within this range.
-    mapped_range: Range<BufferAddress>,
+    mapped_range: Option<Range<BufferAddress>>,
 
     /// The ranges covered by all outstanding [`BufferView`]s and
     /// [`BufferViewMut`]s. These are non-overlapping, and are all contained
@@ -777,14 +776,14 @@ impl MapContext {
     /// [`mapped_at_creation`]: BufferDescriptor::mapped_at_creation
     pub(crate) fn new(mapped_range: Option<Range<BufferAddress>>) -> Self {
         Self {
-            mapped_range: mapped_range.unwrap_or(0..0),
+            mapped_range,
             sub_ranges: Vec::new(),
         }
     }
 
     /// Record that the buffer is no longer mapped.
     fn reset(&mut self) {
-        self.mapped_range = 0..0;
+        self.mapped_range = None;
 
         assert!(
             self.sub_ranges.is_empty(),
@@ -798,18 +797,19 @@ impl MapContext {
     ///
     /// This returns an error if the given range is invalid.
     fn validate_and_add(&mut self, new_sub: Subrange) -> Result<(), MapRangeError> {
-        if self.mapped_range.is_empty() {
+        if self.mapped_range.is_none() {
             return Err(MapRangeError(
                 "tried to call get_mapped_range(_mut) on an unmapped buffer".into(),
             ));
         }
-        if !range_contains(&self.mapped_range, &new_sub.index) {
+        let mapped_range = self.mapped_range.as_ref().unwrap();
+        if !range_contains(mapped_range, &new_sub.index) {
             return Err(MapRangeError(alloc::format!(
                 "tried to call get_mapped_range(_mut) on a range that is not entirely mapped. \
                  Attempted to get range {}, but the mapped range is {}..{}",
                 new_sub,
-                self.mapped_range.start,
-                self.mapped_range.end
+                mapped_range.start,
+                mapped_range.end
             )));
         }
         // This check is essential for avoiding undefined behavior: it is the
