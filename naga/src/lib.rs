@@ -106,6 +106,8 @@ extern crate std;
 
 extern crate alloc;
 
+extern crate naga_types as nt;
+
 mod arena;
 pub mod back;
 pub mod common;

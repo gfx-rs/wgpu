@@ -677,24 +677,6 @@ pub fn flatten_compose<'arenas>(
         .take(size)
 }
 
-impl super::ShaderStage {
-    pub const fn compute_like(self) -> bool {
-        match self {
-            Self::Vertex | Self::Fragment => false,
-            Self::Compute | Self::Task | Self::Mesh => true,
-            Self::RayGeneration | Self::AnyHit | Self::ClosestHit | Self::Miss => false,
-        }
-    }
-
-    /// Mesh or task shader
-    pub const fn mesh_like(self) -> bool {
-        match self {
-            Self::Task | Self::Mesh => true,
-            _ => false,
-        }
-    }
-}
-
 #[test]
 fn test_matrix_size() {
     let module = crate::Module::default();

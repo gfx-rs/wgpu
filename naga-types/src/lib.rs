@@ -110,3 +110,52 @@ macro_rules! link_to_wgc_docs {
         )
     };
 }
+
+/// Stage of the programmable pipeline.
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub enum ShaderStage {
+    /// A vertex shader, in a render pipeline.
+    Vertex,
+
+    /// A task shader, in a mesh render pipeline.
+    Task,
+
+    /// A mesh shader, in a mesh render pipeline.
+    Mesh,
+
+    /// A fragment shader, in a render pipeline.
+    Fragment,
+
+    /// Compute pipeline shader.
+    Compute,
+
+    /// A ray generation shader, in a ray tracing pipeline.
+    RayGeneration,
+
+    /// A miss shader, in a ray tracing pipeline.
+    Miss,
+
+    /// A any hit shader, in a ray tracing pipeline.
+    AnyHit,
+
+    /// A closest hit shader, in a ray tracing pipeline.
+    ClosestHit,
+}
+
+impl ShaderStage {
+    pub const fn compute_like(self) -> bool {
+        match self {
+            Self::Vertex | Self::Fragment => false,
+            Self::Compute | Self::Task | Self::Mesh => true,
+            Self::RayGeneration | Self::AnyHit | Self::ClosestHit | Self::Miss => false,
+        }
+    }
+
+    /// Mesh or task shader
+    pub const fn mesh_like(self) -> bool {
+        matches!(self, Self::Task | Self::Mesh)
+    }
+}

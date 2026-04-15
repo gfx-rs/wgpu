@@ -533,19 +533,17 @@ impl fmt::Display for VaryingName<'_> {
     }
 }
 
-impl ShaderStage {
-    const fn to_str(self) -> &'static str {
-        match self {
-            ShaderStage::Compute => "cs",
-            ShaderStage::Fragment => "fs",
-            ShaderStage::Vertex => "vs",
-            ShaderStage::Task
-            | ShaderStage::Mesh
-            | ShaderStage::RayGeneration
-            | ShaderStage::AnyHit
-            | ShaderStage::ClosestHit
-            | ShaderStage::Miss => unreachable!(),
-        }
+const fn shader_stage_to_str(st: ShaderStage) -> &'static str {
+    match st {
+        ShaderStage::Compute => "cs",
+        ShaderStage::Fragment => "fs",
+        ShaderStage::Vertex => "vs",
+        ShaderStage::Task
+        | ShaderStage::Mesh
+        | ShaderStage::RayGeneration
+        | ShaderStage::AnyHit
+        | ShaderStage::ClosestHit
+        | ShaderStage::Miss => unreachable!(),
     }
 }
 
