@@ -509,6 +509,10 @@ crate::impl_dyn_resource!(
 
 // Limited by D3D12's root signature size of 64. Each element takes 1 or 2 entries.
 const MAX_ROOT_ELEMENTS: usize = 64;
+/// See comment in [`Adapter::expose`].
+/// You must change the math in the comment before you update this value.
+const MAX_IMMEDIATE_SIZE: u32 = 128;
+const MAX_IMMEDIATES: usize = MAX_IMMEDIATE_SIZE as usize / 4;
 const ZERO_BUFFER_SIZE: wgt::BufferAddress = 256 << 10;
 
 pub struct Instance {
@@ -863,7 +867,7 @@ struct PassState {
     resolves: ArrayVec<PassResolve, { crate::MAX_COLOR_ATTACHMENTS }>,
     layout: PipelineLayoutShared,
     root_elements: [RootElement; MAX_ROOT_ELEMENTS],
-    immediates: [u32; MAX_ROOT_ELEMENTS],
+    immediates: [u32; MAX_IMMEDIATES],
     dynamic_storage_buffer_offsets: Vec<u32>,
     dirty_root_elements: u64,
     vertex_buffers: [Direct3D12::D3D12_VERTEX_BUFFER_VIEW; crate::MAX_VERTEX_BUFFERS],
@@ -887,7 +891,7 @@ impl PassState {
                 sampler_heap_root_index: None,
             },
             root_elements: [RootElement::Empty; MAX_ROOT_ELEMENTS],
-            immediates: [0; MAX_ROOT_ELEMENTS],
+            immediates: [0; MAX_IMMEDIATES],
             dynamic_storage_buffer_offsets: Vec::new(),
             dirty_root_elements: 0,
             vertex_buffers: [Default::default(); crate::MAX_VERTEX_BUFFERS],

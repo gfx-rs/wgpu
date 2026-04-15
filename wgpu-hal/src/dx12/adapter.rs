@@ -759,7 +759,7 @@ impl super::Adapter {
         //
         // Total: 128 + 4 + 12 + 16 + 64 + 32 = 256 bytes
         //
-        let max_immediate_size = 128;
+        let max_immediate_size = super::MAX_IMMEDIATE_SIZE;
         let max_bind_groups = 8;
         let max_dynamic_uniform_buffers_per_pipeline_layout = 8;
         let max_dynamic_storage_buffers_per_pipeline_layout = 4;
