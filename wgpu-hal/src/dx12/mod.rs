@@ -825,18 +825,39 @@ struct PassResolve {
     format: Dxgi::Common::DXGI_FORMAT,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct SpecialConstants {
+    /// The first vertex in an indirect draw call, _or_ the `x` of a compute dispatch.
+    first_vertex_or_x: i32,
+    /// The first instance in an indirect draw call, _or_ the `y` of a compute dispatch.
+    first_instance_or_y: u32,
+    /// Unused in an indirect draw call, _or_ the `z` of a compute dispatch.
+    unused_or_z: u32,
+}
+
+impl SpecialConstants {
+    fn from_indirect_draw_call_params(first_vertex: i32, first_instance: u32) -> Self {
+        Self {
+            first_vertex_or_x: first_vertex,
+            first_instance_or_y: first_instance,
+            unused_or_z: 0,
+        }
+    }
+
+    fn from_compute_dispatch_params(workgroup_count: [u32; 3]) -> Self {
+        Self {
+            first_vertex_or_x: workgroup_count[0] as i32,
+            first_instance_or_y: workgroup_count[1],
+            unused_or_z: workgroup_count[2],
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum RootElement {
     Empty,
     Immediates,
-    SpecialConstantBuffer {
-        /// The first vertex in an indirect draw call, _or_ the `x` of a compute dispatch.
-        first_vertex: i32,
-        /// The first instance in an indirect draw call, _or_ the `y` of a compute dispatch.
-        first_instance: u32,
-        /// Unused in an indirect draw call, _or_ the `z` of a compute dispatch.
-        other: u32,
-    },
+    SpecialConstants(SpecialConstants),
     DescriptorTable(Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE),
     /// Descriptor table referring to the entire sampler heap.
     SamplerHeapDescriptorTable,

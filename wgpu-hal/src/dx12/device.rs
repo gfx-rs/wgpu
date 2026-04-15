@@ -1400,23 +1400,7 @@ impl crate::Device for super::Device {
                         },
                     },
                 };
-                let special_constant_buffer_args_len = {
-                    // Hack: construct a dummy value of the special constants buffer value we need to
-                    // fill, and calculate the size of each member.
-                    let super::RootElement::SpecialConstantBuffer {
-                        first_vertex,
-                        first_instance,
-                        other,
-                    } = (super::RootElement::SpecialConstantBuffer {
-                        first_vertex: 0,
-                        first_instance: 0,
-                        other: 0,
-                    })
-                    else {
-                        unreachable!();
-                    };
-                    size_of_val(&first_vertex) + size_of_val(&first_instance) + size_of_val(&other)
-                };
+                let special_constant_buffer_args_len = size_of::<super::SpecialConstants>();
 
                 let draw_mesh = if self
                     .features

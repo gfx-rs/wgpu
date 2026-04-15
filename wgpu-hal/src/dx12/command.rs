@@ -139,28 +139,26 @@ impl super::CommandEncoder {
             .as_ref()
             .map(|sc| sc.root_index)
         {
+            let special_constants = super::SpecialConstants::from_indirect_draw_call_params(
+                first_vertex,
+                first_instance,
+            );
             let needs_update = match self.pass.root_elements[root_index as usize] {
-                super::RootElement::SpecialConstantBuffer {
-                    first_vertex: other_vertex,
-                    first_instance: other_instance,
-                    other: _,
-                } => first_vertex != other_vertex || first_instance != other_instance,
+                super::RootElement::SpecialConstants(old_special_constants) => {
+                    old_special_constants != special_constants
+                }
                 _ => true,
             };
             if needs_update {
                 self.pass.dirty_root_elements |= 1 << root_index;
                 self.pass.root_elements[root_index as usize] =
-                    super::RootElement::SpecialConstantBuffer {
-                        first_vertex,
-                        first_instance,
-                        other: 0,
-                    };
+                    super::RootElement::SpecialConstants(special_constants);
             }
         }
         self.update_root_elements();
     }
 
-    fn prepare_dispatch(&mut self, count: [u32; 3]) {
+    fn prepare_dispatch(&mut self, workgroup_count: [u32; 3]) {
         if let Some(root_index) = self
             .pass
             .layout
@@ -168,22 +166,18 @@ impl super::CommandEncoder {
             .as_ref()
             .map(|sc| sc.root_index)
         {
+            let special_constants =
+                super::SpecialConstants::from_compute_dispatch_params(workgroup_count);
             let needs_update = match self.pass.root_elements[root_index as usize] {
-                super::RootElement::SpecialConstantBuffer {
-                    first_vertex,
-                    first_instance,
-                    other,
-                } => [first_vertex as u32, first_instance, other] != count,
+                super::RootElement::SpecialConstants(old_special_constants) => {
+                    old_special_constants != special_constants
+                }
                 _ => true,
             };
             if needs_update {
                 self.pass.dirty_root_elements |= 1 << root_index;
                 self.pass.root_elements[root_index as usize] =
-                    super::RootElement::SpecialConstantBuffer {
-                        first_vertex: count[0] as i32,
-                        first_instance: count[1],
-                        other: count[2],
-                    };
+                    super::RootElement::SpecialConstants(special_constants);
             }
         }
         self.update_root_elements();
@@ -219,19 +213,23 @@ impl super::CommandEncoder {
                         }
                     }
                 }
-                super::RootElement::SpecialConstantBuffer {
-                    first_vertex,
-                    first_instance,
-                    other,
-                } => match self.pass.kind {
+                super::RootElement::SpecialConstants(super::SpecialConstants {
+                    first_vertex_or_x,
+                    first_instance_or_y,
+                    unused_or_z,
+                }) => match self.pass.kind {
                     Pk::Render => {
-                        unsafe { list.SetGraphicsRoot32BitConstant(index, first_vertex as u32, 0) };
-                        unsafe { list.SetGraphicsRoot32BitConstant(index, first_instance, 1) };
+                        unsafe {
+                            list.SetGraphicsRoot32BitConstant(index, first_vertex_or_x as u32, 0)
+                        };
+                        unsafe { list.SetGraphicsRoot32BitConstant(index, first_instance_or_y, 1) };
                     }
                     Pk::Compute => {
-                        unsafe { list.SetComputeRoot32BitConstant(index, first_vertex as u32, 0) };
-                        unsafe { list.SetComputeRoot32BitConstant(index, first_instance, 1) };
-                        unsafe { list.SetComputeRoot32BitConstant(index, other, 2) };
+                        unsafe {
+                            list.SetComputeRoot32BitConstant(index, first_vertex_or_x as u32, 0)
+                        };
+                        unsafe { list.SetComputeRoot32BitConstant(index, first_instance_or_y, 1) };
+                        unsafe { list.SetComputeRoot32BitConstant(index, unused_or_z, 2) };
                     }
                     Pk::Transfer => (),
                 },
@@ -289,11 +287,7 @@ impl super::CommandEncoder {
     fn reset_signature(&mut self, layout: &super::PipelineLayoutShared) {
         if let Some(root_index) = layout.special_constants.as_ref().map(|sc| sc.root_index) {
             self.pass.root_elements[root_index as usize] =
-                super::RootElement::SpecialConstantBuffer {
-                    first_vertex: 0,
-                    first_instance: 0,
-                    other: 0,
-                };
+                super::RootElement::SpecialConstants(super::SpecialConstants::default());
         }
         if let Some(root_index) = layout.sampler_heap_root_index {
             self.pass.root_elements[root_index as usize] =
