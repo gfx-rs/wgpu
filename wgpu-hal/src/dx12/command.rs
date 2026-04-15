@@ -203,7 +203,7 @@ impl super::CommandEncoder {
                 super::RootElement::Empty => unreachable!(
                     "Empty root element at index {index} should not have been marked as dirty"
                 ),
-                super::RootElement::Constant => {
+                super::RootElement::Immediates => {
                     let info = self.pass.layout.immediates_info.as_ref().unwrap();
 
                     for offset in 0..info.size {
@@ -1203,7 +1203,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         let info = layout.shared.immediates_info.as_ref().unwrap();
 
-        self.pass.root_elements[info.root_index as usize] = super::RootElement::Constant;
+        self.pass.root_elements[info.root_index as usize] = super::RootElement::Immediates;
 
         self.pass.immediates[offset_words..(offset_words + data.len())].copy_from_slice(data);
 

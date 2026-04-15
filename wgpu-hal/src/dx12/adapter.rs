@@ -743,7 +743,7 @@ impl super::Adapter {
         // Source: https://learn.microsoft.com/en-us/windows/win32/direct3d12/root-signature-limits#memory-limits-and-costs
         //
         // Per pipeline layout:
-        // - RootElement::Constant, (immediates) 32 root constants
+        // - RootElement::Immediates, 32 root constants
         //     (bounded by maxImmediateSize) = 32 x 4 bytes = 128 bytes
         // - RootElement::SamplerHeap, a root table = 4 bytes
         // - RootElement::SpecialConstantBuffer, 3 root constants = 3 x 4 bytes = 12 bytes

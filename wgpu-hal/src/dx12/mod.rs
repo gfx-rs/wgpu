@@ -828,7 +828,7 @@ struct PassResolve {
 #[derive(Clone, Copy, Debug)]
 enum RootElement {
     Empty,
-    Constant,
+    Immediates,
     SpecialConstantBuffer {
         /// The first vertex in an indirect draw call, _or_ the `x` of a compute dispatch.
         first_vertex: i32,
