@@ -137,8 +137,7 @@ impl Queue {
                 .is_some_and(|mip| mip.check(0..1).is_some())
         };
 
-        // Fence lock must be acquired after the snatch lock and before
-        // pending_writes to match the lock ordering in Queue::submit.
+        // Note required lock order: snatch -> fence -> pending writes
         let mut fence = device.fence.write();
         let mut pending_writes = self.pending_writes.lock();
 
