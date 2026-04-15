@@ -837,8 +837,7 @@ enum RootElement {
         /// Unused in an indirect draw call, _or_ the `z` of a compute dispatch.
         other: u32,
     },
-    /// Descriptor table.
-    Table(Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE),
+    DescriptorTable(Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE),
     /// Descriptor for an uniform buffer that has dynamic offset.
     DynamicUniformBuffer {
         address: Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE,

@@ -235,7 +235,7 @@ impl super::CommandEncoder {
                     }
                     Pk::Transfer => (),
                 },
-                super::RootElement::Table(descriptor) => match self.pass.kind {
+                super::RootElement::DescriptorTable(descriptor) => match self.pass.kind {
                     Pk::Render => unsafe { list.SetGraphicsRootDescriptorTable(index, descriptor) },
                     Pk::Compute => unsafe { list.SetComputeRootDescriptorTable(index, descriptor) },
                     Pk::Transfer => (),
@@ -1135,7 +1135,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         // Bind CBV/SRC/UAV descriptor tables
         if info.tables.contains(super::TableTypes::SRV_CBV_UAV) {
             self.pass.root_elements[root_index] =
-                super::RootElement::Table(group.handle_views.unwrap().gpu);
+                super::RootElement::DescriptorTable(group.handle_views.unwrap().gpu);
             root_index += 1;
         }
 

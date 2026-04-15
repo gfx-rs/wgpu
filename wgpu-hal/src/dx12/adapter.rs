@@ -752,7 +752,7 @@ impl super::Adapter {
         // - RootElement::DynamicUniformBuffer, a root descriptor per dynamic uniform buffer
         //     (bounded by maxDynamicUniformBuffersPerPipelineLayout) = 8 x 8 bytes = 64 bytes
         // Per bind group:
-        // - RootElement::Table, a root table
+        // - RootElement::DescriptorTable, a descriptor table
         //     (bounded by maxBindGroups) = 8 x 4 bytes = 32 bytes
         //
         // Source: logic in `create_pipeline_layout`
