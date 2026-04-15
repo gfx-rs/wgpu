@@ -159,3 +159,24 @@ impl ShaderStage {
         matches!(self, Self::Task | Self::Mesh)
     }
 }
+
+/// Hash map that is faster but not resilient to DoS attacks.
+/// (Similar to rustc_hash::FxHashMap but using hashbrown::HashMap instead of alloc::collections::HashMap.)
+/// To construct a new instance: `FastHashMap::default()`
+pub type FastHashMap<K, T> =
+    hashbrown::HashMap<K, T, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+
+/// Hash set that is faster but not resilient to DoS attacks.
+/// (Similar to rustc_hash::FxHashSet but using hashbrown::HashSet instead of alloc::collections::HashMap.)
+pub type FastHashSet<K> =
+    hashbrown::HashSet<K, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+
+/// Insertion-order-preserving hash set (`IndexSet<K>`), but with the same
+/// hasher as `FastHashSet<K>` (faster but not resilient to DoS attacks).
+pub type FastIndexSet<K> =
+    indexmap::IndexSet<K, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+
+/// Insertion-order-preserving hash map (`IndexMap<K, V>`), but with the same
+/// hasher as `FastHashMap<K, V>` (faster but not resilient to DoS attacks).
+pub type FastIndexMap<K, V> =
+    indexmap::IndexMap<K, V, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;

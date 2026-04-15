@@ -23,15 +23,15 @@ targets = [
 workspace = true
 
 [features]
-serialize = ["dep:serde"]
-deserialize = ["dep:serde"]
-arbitrary = ["dep:arbitrary", "std"]
+serialize = ["dep:serde", "indexmap/serde"]
+deserialize = ["dep:serde", "indexmap/serde"]
+arbitrary = ["dep:arbitrary", "std", "indexmap/arbitrary"]
 std = []
 
 [dependencies]
 arbitrary = { workspace = true, features = ["derive"], optional = true }
-serde = { workspace = true, features = ["alloc", "derive"], optional = true }
-
 hashbrown.workspace = true
+indexmap.workspace = true
 rustc-hash.workspace = true
+serde = { workspace = true, features = ["alloc", "derive"], optional = true }
 thiserror.workspace = true

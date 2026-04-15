@@ -41,7 +41,6 @@ serialize = [
     "bitflags/serde",
     "half/serde",
     "hashbrown/serde",
-    "indexmap/serde",
     "naga-types/serialize",
 ]
 deserialize = [
@@ -49,13 +48,11 @@ deserialize = [
     "bitflags/serde",
     "half/serde",
     "hashbrown/serde",
-    "indexmap/serde",
     "naga-types/deserialize",
 ]
 arbitrary = [
     "dep:arbitrary",
     "bitflags/arbitrary",
-    "indexmap/arbitrary",
     "half/arbitrary",
     "half/std",
     "naga-types/arbitrary",
@@ -96,8 +93,8 @@ cfg-if.workspace = true
 codespan-reporting = { workspace = true }
 hashbrown.workspace = true
 half = { workspace = true, features = ["num-traits"] }
-rustc-hash.workspace = true
 indexmap.workspace = true
+rustc-hash.workspace = true
 libm = { workspace = true, default-features = false }
 log.workspace = true
 num-traits.workspace = true
