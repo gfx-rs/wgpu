@@ -871,10 +871,8 @@ struct PassState {
     kind: PassKind,
 }
 
-#[test]
-fn test_dirty_mask() {
-    assert_eq!(MAX_ROOT_ELEMENTS, u64::BITS as usize);
-}
+// `root_elements` size must match `dirty_root_elements` bit size
+const _: () = assert!(MAX_ROOT_ELEMENTS == u64::BITS as usize);
 
 impl PassState {
     fn new() -> Self {
