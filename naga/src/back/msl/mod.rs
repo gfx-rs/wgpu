@@ -364,7 +364,7 @@ pub struct AttributeMapping {
     /// <https://gpuweb.github.io/gpuweb/#enumdef-gpuvertexformat>.
     /// The conversion process is described by
     /// <https://gpuweb.github.io/gpuweb/#vertex-processing>.
-    pub format: VertexFormat,
+    pub format: nt::VertexFormat,
 }
 
 /// A description of a vertex buffer with all the information we

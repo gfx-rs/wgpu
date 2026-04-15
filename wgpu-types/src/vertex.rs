@@ -1,6 +1,6 @@
 //! Types for defining vertex attributes and their buffers.
 
-pub use nt::VertexFormat;
+pub use nt::{VertexAttribute, VertexFormat};
 
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
@@ -77,29 +77,4 @@ pub enum VertexStepMode {
     Vertex = 0,
     /// Vertex data is advanced every instance.
     Instance = 1,
-}
-
-/// Vertex inputs (attributes) to shaders.
-///
-/// These are used to specify the individual attributes within a [`VertexBufferLayout`].
-/// See its documentation for an example.
-///
-/// The [`vertex_attr_array!`] macro can help create these with appropriate offsets.
-///
-/// Corresponds to [WebGPU `GPUVertexAttribute`](
-/// https://gpuweb.github.io/gpuweb/#dictdef-gpuvertexattribute).
-///
-#[doc = link_to_wgpu_docs!(["`vertex_attr_array!`"]: "macro.vertex_attr_array.html")]
-#[doc = link_to_wgpu_item!(struct VertexBufferLayout)]
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
-pub struct VertexAttribute {
-    /// Format of the input
-    pub format: VertexFormat,
-    /// Byte offset of the start of the input
-    pub offset: crate::BufferAddress,
-    /// Location for this input. Must match the location in the shader.
-    pub shader_location: crate::ShaderLocation,
 }
