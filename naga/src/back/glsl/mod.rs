@@ -43,6 +43,8 @@ to output a [`Module`](crate::Module) into glsl
 // Additions that are relevant for the backend are the discard keyword, the introduction of
 // vector, matrices, samplers, image types and functions that provide common shader operations
 
+pub use nt::glsl::*;
+
 pub use features::Features;
 pub use writer::Writer;
 
@@ -80,20 +82,12 @@ mod keywords;
 /// Contains the [`Writer`] type.
 mod writer;
 
-/// List of supported `core` GLSL versions.
-pub const SUPPORTED_CORE_VERSIONS: &[u16] = &[140, 150, 330, 400, 410, 420, 430, 440, 450, 460];
-/// List of supported `es` GLSL versions.
-pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
-
 /// The suffix of the variable that will hold the calculated clamped level
 /// of detail for bounds checking in `ImageLoad`
 const CLAMPED_LOD_SUFFIX: &str = "_clamped_lod";
 
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
-
-// Must match code in glsl_built_in
-pub const FIRST_INSTANCE_BINDING: &str = "naga_vs_first_instance";
 
 #[cfg(feature = "deserialize")]
 #[derive(serde::Deserialize)]

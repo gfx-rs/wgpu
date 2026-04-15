@@ -110,7 +110,7 @@ mod selection;
 mod subgroup;
 mod writer;
 
-pub use nt::spv::{BindingInfo, BindingMap};
+pub use nt::spv::*;
 
 pub use mesh_shader::{MeshReturnInfo, MeshReturnMember};
 pub use spirv::{Capability, SourceLanguage};
