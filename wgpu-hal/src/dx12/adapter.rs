@@ -747,7 +747,7 @@ impl super::Adapter {
         //     (bounded by maxImmediateSize) = 32 x 4 bytes = 128 bytes
         // - RootElement::SamplerHeapDescriptorTable, a descriptor table = 4 bytes
         // - RootElement::SpecialConstantBuffer, 3 root constants = 3 x 4 bytes = 12 bytes
-        // - RootElement::DynamicOffsetsBuffer, a root constant per dynamic storage buffer
+        // - RootElement::DynamicStorageBufferOffsets, a root constant per dynamic storage buffer
         //     (bounded by maxDynamicStorageBuffersPerPipelineLayout) = 4 x 4 bytes = 16 bytes
         // - RootElement::DynamicUniformBuffer, a root descriptor per dynamic uniform buffer
         //     (bounded by maxDynamicUniformBuffersPerPipelineLayout) = 8 x 8 bytes = 64 bytes

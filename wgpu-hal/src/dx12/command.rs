@@ -252,7 +252,7 @@ impl super::CommandEncoder {
                         Pk::Transfer => (),
                     }
                 }
-                super::RootElement::DynamicOffsetsBuffer { start, end } => {
+                super::RootElement::DynamicStorageBufferOffsets { start, end } => {
                     let values = &self.pass.dynamic_storage_buffer_offsets[start..end];
 
                     for (offset, &value) in values.iter().enumerate() {
@@ -1154,7 +1154,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             offsets_index += range.start;
 
             self.pass.root_elements[root_index as usize] =
-                super::RootElement::DynamicOffsetsBuffer {
+                super::RootElement::DynamicStorageBufferOffsets {
                     start: range.start,
                     end: range.end,
                 };

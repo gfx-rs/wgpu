@@ -844,11 +844,11 @@ enum RootElement {
     DynamicUniformBuffer {
         address: Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE,
     },
-    /// Root constants for dynamic offsets.
+    /// Root constants for storage buffer bindings with dynamic offsets.
     ///
     /// start..end is the range of values in [`PassState::dynamic_storage_buffer_offsets`]
     /// that will be used to update the root constants.
-    DynamicOffsetsBuffer {
+    DynamicStorageBufferOffsets {
         start: usize,
         end: usize,
     },
