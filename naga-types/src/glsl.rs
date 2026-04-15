@@ -123,6 +123,11 @@ impl GlslVersion {
     pub fn supports_pack_unpack_half_2x16(&self) -> bool {
         *self >= GlslVersion::Desktop(420) || *self >= GlslVersion::new_gles(300)
     }
+
+    pub fn from_api_version(_api_version: ApiVersion) -> Self {
+        // Source: https://en.wikipedia.org/wiki/OpenGL_Shading_Language#Versions
+        todo!()
+    }
 }
 
 impl PartialOrd for GlslVersion {
@@ -149,3 +154,13 @@ impl fmt::Display for GlslVersion {
 
 /// Mapping between resources and bindings.
 pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, u8>;
+
+/// An OpenGL/OpenGL ES/WebGL version.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct ApiVersion {
+    pub version: u16,
+    pub is_embedded: bool,
+    pub is_webgl: bool,
+}
