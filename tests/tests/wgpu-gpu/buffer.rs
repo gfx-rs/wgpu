@@ -62,6 +62,21 @@ async fn test_empty_buffer_range_with_usage(
         });
     b0.unmap();
 
+    // Ensure mapping errors didn't break it permanently.
+    b0.slice(0..0)
+        .map_async(wgpu::MapMode::Read, Result::unwrap);
+
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
+
+    {
+        let view = b0.slice(0..0).get_mapped_range().unwrap();
+        assert!(view.is_empty());
+    }
+
+    b0.unmap();
+
     // Write mode.
     if usage.contains(wgpu::BufferUsages::MAP_WRITE) {
         b0.slice(0..0)
@@ -76,26 +91,38 @@ async fn test_empty_buffer_range_with_usage(
             assert!(view.is_empty());
         }
 
+        {
+            let view = b0.slice(0..0).get_mapped_range_mut().unwrap();
+            assert!(view.is_empty());
+        }
+
         b0.unmap();
 
         // Map and unmap right away.
-        b0.slice(0..0).map_async(wgpu::MapMode::Write, move |_| {});
+        b0.slice(0..0)
+            .map_async(wgpu::MapMode::Write, Result::unwrap);
         b0.unmap();
-
-        let b1 = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some(label),
-            size: buffer_size,
-            usage,
-            mapped_at_creation: true,
-        });
-
-        {
-            let view = b1.slice(0..0).get_mapped_range_mut().unwrap();
-            assert_eq!(view.len(), 0);
-        }
-
-        b1.unmap();
     }
+
+    // Test buffer mapped at creation.
+    let b1 = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some(label),
+        size: buffer_size,
+        usage,
+        mapped_at_creation: true,
+    });
+
+    {
+        let view = b1.slice(0..0).get_mapped_range().unwrap();
+        assert!(view.is_empty());
+    }
+
+    if usage.contains(wgpu::BufferUsages::MAP_WRITE) {
+        let view = b1.slice(0..0).get_mapped_range_mut().unwrap();
+        assert!(view.is_empty());
+    }
+
+    b1.unmap();
 
     ctx.async_poll(wgpu::PollType::wait_indefinitely())
         .await
@@ -104,11 +131,7 @@ async fn test_empty_buffer_range_with_usage(
 
 #[gpu_test]
 static EMPTY_BUFFER_READ: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            // .expect_fail(FailureCase::always())
-            .enable_noop(),
-    )
+    .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
         let usage = wgpu::BufferUsages::MAP_READ;
         test_empty_buffer_range_with_usage(&ctx, 2048, "regular buffer", usage).await;
