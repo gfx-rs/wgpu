@@ -108,6 +108,10 @@ By @teoxoy in [#9351](https://github.com/gfx-rs/wgpu/pull/9351).
 - Passthrough shaders now require a list of entry points when being created. by @inner-daemons in [#9064](https://github.com/gfx-rs/wgpu/pull/9064).
 - BREAKING: The `dispatch` and `dispatch_indirect` methods on pass and bundle encoders have been renamed to `dispatch_workgroups` and `dispatch_workgroups_indirect`, respectively, to match the WebGPU spec. By @ErichDonGubler in [#9362](https://github.com/gfx-rs/wgpu/pull/9362).
 - `LoadOp::DontCare` can no longer be deserialized, and the `LoadOpDontCare` token no longer implements `Default`. This ensures that `DontCare` can only be used with `unsafe`, as intended. By @kpreid in [#9428](https://github.com/gfx-rs/wgpu/pull/9428).
+- Minor changes to various error enums to support improved validation. By @andyleiserson in [#9357](https://github.com/gfx-rs/wgpu/pull/9357), [#9363](https://github.com/gfx-rs/wgpu/pull/9363), and [#9425](https://github.com/gfx-rs/wgpu/pull/9425):
+  - Added new `InvalidWorkgroupSizeError`, which is now used by `DrawError::InvalidGroupSize` and `StageError::InvalidWorkgroupSize`.
+  - Added `BuildAccelerationStructureError` variant `OffsetLimitedTo4GB` and changed `IndirectBufferOverrun` to contain offset and size rather than start and end offsets.
+  - `IndexFormat::byte_size` now returns `u32` instead of `usize`.
 
 #### Validation
 
