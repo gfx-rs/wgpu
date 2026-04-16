@@ -351,7 +351,7 @@ async fn assert_render_pass_executed_normally(
         .await
         .unwrap();
 
-    let data = cpu_buffer.slice(..).get_mapped_range();
+    let data = cpu_buffer.slice(..).get_mapped_range().unwrap();
 
     let floats: &[f32] = bytemuck::cast_slice(&data);
     assert!(floats[0] >= 2.0);
@@ -520,11 +520,11 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
                 module: &sm,
                 entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
-                buffers: &[wgpu::VertexBufferLayout {
+                buffers: &[Some(wgpu::VertexBufferLayout {
                     array_stride: 4,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![0 => Uint32],
-                }],
+                })],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &sm,

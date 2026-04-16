@@ -19,7 +19,14 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
     .parameters(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            .limits(Limits::downlevel_defaults()),
+            .limits(Limits::downlevel_defaults())
+            // https://github.com/gfx-rs/wgpu/issues/9184
+            .expect_fail(
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline")
+                    .panic("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
+            ),
     )
     .run_async(|ctx| async move {
         let bgl = ctx
@@ -137,7 +144,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
         mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
         ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
 
-        let mapped = mapping_buffer.slice(..).get_mapped_range();
+        let mapped = mapping_buffer.slice(..).get_mapped_range().unwrap();
 
         let typed: &[u32] = bytemuck::cast_slice(&mapped);
 

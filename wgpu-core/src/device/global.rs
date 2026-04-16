@@ -1118,7 +1118,7 @@ impl Global {
                     id: shader.to_trace(),
                     data: file_names,
                     label: desc.label.clone(),
-                    num_workgroups: desc.num_workgroups,
+                    entry_points: desc.entry_points.clone(),
                 });
             };
 
@@ -1196,21 +1196,23 @@ impl Global {
         device_id: DeviceId,
         desc: &command::RenderBundleEncoderDescriptor,
     ) -> (
-        *mut command::RenderBundleEncoder,
+        Box<command::RenderBundleEncoder>,
         Option<command::CreateRenderBundleError>,
     ) {
         profiling::scope!("Device::create_render_bundle_encoder");
         api_log!("Device::device_create_render_bundle_encoder");
-        let (encoder, error) = match command::RenderBundleEncoder::new(desc, device_id) {
-            Ok(encoder) => (encoder, None),
-            Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
-        };
-        (Box::into_raw(Box::new(encoder)), error)
+        let device = self.hub.devices.get(device_id);
+        let (encoder, error) =
+            match command::RenderBundleEncoder::new(desc, Some(&device), device_id) {
+                Ok(encoder) => (encoder, None),
+                Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
+            };
+        (Box::new(encoder), error)
     }
 
     pub fn render_bundle_encoder_finish(
         &self,
-        bundle_encoder: command::RenderBundleEncoder,
+        bundle_encoder: Box<command::RenderBundleEncoder>,
         desc: &command::RenderBundleDescriptor,
         id_in: Option<id::RenderBundleId>,
     ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
@@ -1412,7 +1414,7 @@ impl Global {
                         Ok(module) => module,
                         Err(e) => break 'error e,
                     };
-                    if module.interface.is_none() {
+                    if module.interface.interface().is_none() {
                         passthrough_stages |= wgt::ShaderStages::VERTEX;
                     }
                     let stage = ResolvedProgrammableStageDescriptor {
@@ -1442,7 +1444,7 @@ impl Global {
                             Ok(module) => module,
                             Err(e) => break 'error e,
                         };
-                        if module.interface.is_none() {
+                        if module.interface.interface().is_none() {
                             passthrough_stages |= wgt::ShaderStages::TASK;
                         }
                         let state = ResolvedProgrammableStageDescriptor {
@@ -1469,7 +1471,7 @@ impl Global {
                         Ok(module) => module,
                         Err(e) => break 'error e,
                     };
-                    if mesh_module.interface.is_none() {
+                    if mesh_module.interface.interface().is_none() {
                         passthrough_stages |= wgt::ShaderStages::VERTEX;
                     }
                     let mesh_stage = ResolvedProgrammableStageDescriptor {
@@ -1500,7 +1502,7 @@ impl Global {
                     Ok(module) => module,
                     Err(e) => break 'error e,
                 };
-                if module.interface.is_none() {
+                if module.interface.interface().is_none() {
                     passthrough_stages |= wgt::ShaderStages::FRAGMENT;
                 }
                 let stage = ResolvedProgrammableStageDescriptor {
@@ -1538,18 +1540,20 @@ impl Global {
             #[cfg(feature = "trace")]
             let trace_desc = desc.clone().into_trace();
 
-            let pipeline = match device.create_render_pipeline(desc) {
-                Ok(pair) => pair,
-                Err(e) => break 'error e,
-            };
+            let res = device.create_render_pipeline(desc);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateGeneralRenderPipeline {
-                    id: pipeline.to_trace(),
+                    id: res.as_ref().ok().map(IntoTrace::to_trace),
                     desc: trace_desc,
                 });
             }
+
+            let pipeline = match res {
+                Ok(pair) => pair,
+                Err(e) => break 'error e,
+            };
 
             let id = fid.assign(Fallible::Valid(pipeline));
             api_log!("Device::create_render_pipeline -> {id:?}");
@@ -1665,7 +1669,7 @@ impl Global {
                 Ok(module) => module,
                 Err(e) => break 'error e.into(),
             };
-            if module.interface.is_none() && layout.is_none() {
+            if module.interface.interface().is_none() && layout.is_none() {
                 break 'error pipeline::CreateComputePipelineError::Implicit(
                     pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::COMPUTE),
                 );
@@ -1687,18 +1691,20 @@ impl Global {
             #[cfg(feature = "trace")]
             let trace_desc = desc.clone().into_trace();
 
-            let pipeline = match device.create_compute_pipeline(desc) {
-                Ok(pair) => pair,
-                Err(e) => break 'error e,
-            };
+            let res = device.create_compute_pipeline(desc);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateComputePipeline {
-                    id: pipeline.to_trace(),
+                    id: res.as_ref().ok().map(IntoTrace::to_trace),
                     desc: trace_desc,
                 });
             }
+
+            let pipeline = match res {
+                Ok(pair) => pair,
+                Err(e) => break 'error e,
+            };
 
             let id = fid.assign(Fallible::Valid(pipeline));
             api_log!("Device::create_compute_pipeline -> {id:?}");

@@ -80,7 +80,8 @@ impl ContextWgpuCore {
 
     #[cfg(wgpu_core)]
     pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
-        self.0.enumerate_adapters(backends)
+        self.0
+            .enumerate_adapters(backends, false /* no limit bucketing */)
     }
 
     pub unsafe fn create_adapter_from_hal<A: hal::Api>(
@@ -541,7 +542,7 @@ pub struct CoreCommandBuffer {
 #[derive(Debug)]
 pub struct CoreRenderBundleEncoder {
     pub(crate) context: ContextWgpuCore,
-    encoder: wgc::command::RenderBundleEncoder,
+    encoder: Box<wgc::command::RenderBundleEncoder>,
     id: crate::cmp::Identifier,
 }
 
@@ -791,12 +792,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                     .instance_create_surface(raw_display_handle, raw_window_handle, None)
             },
 
-            #[cfg(all(
-                unix,
-                not(target_vendor = "apple"),
-                not(target_family = "wasm"),
-                not(target_os = "netbsd")
-            ))]
+            #[cfg(all(drm, not(target_os = "netbsd")))]
             SurfaceTargetUnsafe::Drm {
                 fd,
                 plane,
@@ -821,7 +817,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                 self.0.instance_create_surface_metal(layer, None)
             },
 
-            #[cfg(target_os = "netbsd")]
+            #[cfg(all(drm, target_os = "netbsd"))]
             SurfaceTargetUnsafe::Drm { .. } => Err(
                 wgc::instance::CreateSurfaceError::BackendNotEnabled(wgt::Backend::Vulkan),
             ),
@@ -864,6 +860,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                 compatible_surface: options
                     .compatible_surface
                     .map(|surface| surface.inner.as_core().id),
+                apply_limit_buckets: false,
             },
             wgt::Backends::all(),
             None,
@@ -1341,10 +1338,12 @@ impl dispatch::DeviceInterface for CoreDevice {
             .vertex
             .buffers
             .iter()
-            .map(|vbuf| pipe::VertexBufferLayout {
-                array_stride: vbuf.array_stride,
-                step_mode: vbuf.step_mode,
-                attributes: Borrowed(vbuf.attributes),
+            .map(|vbuf| {
+                vbuf.as_ref().map(|vbuf| pipe::VertexBufferLayout {
+                    array_stride: vbuf.array_stride,
+                    step_mode: vbuf.step_mode,
+                    attributes: Borrowed(vbuf.attributes),
+                })
             })
             .collect();
 
@@ -1805,10 +1804,18 @@ impl dispatch::DeviceInterface for CoreDevice {
             sample_count: desc.sample_count,
             multiview: desc.multiview,
         };
-        let encoder = match wgc::command::RenderBundleEncoder::new(&descriptor, self.id) {
-            Ok(encoder) => encoder,
-            Err(e) => panic!("Error in Device::create_render_bundle_encoder: {e}"),
-        };
+        let (encoder, error) = self
+            .context
+            .0
+            .device_create_render_bundle_encoder(self.id, &descriptor);
+        if let Some(cause) = error {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                desc.label,
+                "Device::create_render_bundle_encoder",
+            );
+        }
 
         CoreRenderBundleEncoder {
             context: self.context.clone(),
@@ -2137,6 +2144,17 @@ impl dispatch::QueueInterface for CoreQueue {
             .into(),
         )
     }
+
+    fn present(&self, detail: &dispatch::DispatchSurfaceOutputDetail) {
+        let detail = detail.as_core();
+        match self.context.0.surface_present(detail.surface_id) {
+            Ok(_status) => (),
+            Err(err) => {
+                self.context
+                    .handle_error_nolabel(&self.error_sink, err, "Queue::present");
+            }
+        }
+    }
 }
 
 impl Drop for CoreQueue {
@@ -2236,22 +2254,19 @@ impl dispatch::BufferInterface for CoreBuffer {
     fn get_mapped_range(
         &self,
         sub_range: Range<crate::BufferAddress>,
-    ) -> dispatch::DispatchBufferMappedRange {
+    ) -> Result<dispatch::DispatchBufferMappedRange, crate::MapRangeError> {
         let size = sub_range.end - sub_range.start;
-        match self
-            .context
+        self.context
             .0
             .buffer_get_mapped_range(self.id, sub_range.start, Some(size))
-        {
-            Ok((ptr, size)) => CoreBufferMappedRange {
-                ptr,
-                size: size as usize,
-            }
-            .into(),
-            Err(err) => self
-                .context
-                .handle_error_fatal(err, "Buffer::get_mapped_range"),
-        }
+            .map(|(ptr, size)| {
+                CoreBufferMappedRange {
+                    ptr,
+                    size: size as usize,
+                }
+                .into()
+            })
+            .map_err(|err| crate::MapRangeError(self.context.format_error(&err)))
     }
 
     fn unmap(&self) {
@@ -2827,6 +2842,18 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                     });
                     wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
                 }
+                crate::BlasGeometries::AabbGeometries(ref aabb_geometries) => {
+                    let iter =
+                        aabb_geometries
+                            .iter()
+                            .map(|ag| wgc::ray_tracing::BlasAabbGeometry {
+                                aabb_buffer: ag.aabb_buffer.inner.as_core().id,
+                                stride: ag.stride,
+                                size: ag.size,
+                                primitive_offset: ag.primitive_offset,
+                            });
+                    wgc::ray_tracing::BlasGeometries::AabbGeometries(Box::new(iter))
+                }
             };
             wgc::ray_tracing::BlasBuildEntry {
                 blas_id: e.blas.inner.as_core().id,
@@ -3098,6 +3125,38 @@ impl dispatch::ComputePassInterface for CoreComputePass {
             );
         }
     }
+
+    fn transition_resources<'a>(
+        &mut self,
+        buffer_transitions: &mut dyn Iterator<
+            Item = wgt::BufferTransition<&'a dispatch::DispatchBuffer>,
+        >,
+        texture_transitions: &mut dyn Iterator<
+            Item = wgt::TextureTransition<&'a dispatch::DispatchTextureView>,
+        >,
+    ) {
+        let result = self.context.0.compute_pass_transition_resources(
+            &mut self.pass,
+            buffer_transitions.map(|t| wgt::BufferTransition {
+                buffer: t.buffer.as_core().id,
+                state: t.state,
+            }),
+            texture_transitions.map(|t| wgt::TextureTransition {
+                texture: t.texture.as_core().id,
+                selector: t.selector.clone(),
+                state: t.state,
+            }),
+        );
+
+        if let Err(cause) = result {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                self.pass.label(),
+                "ComputePass::transition_resources",
+            );
+        }
+    }
 }
 
 impl Drop for CoreComputePass {
@@ -3181,19 +3240,17 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &dispatch::DispatchBuffer,
+        buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     ) {
-        let buffer = buffer.as_core();
+        let buffer = buffer.map(|buffer| buffer.as_core().id);
 
-        if let Err(cause) = self.context.0.render_pass_set_vertex_buffer(
-            &mut self.pass,
-            slot,
-            buffer.id,
-            offset,
-            size,
-        ) {
+        if let Err(cause) =
+            self.context
+                .0
+                .render_pass_set_vertex_buffer(&mut self.pass, slot, buffer, offset, size)
+        {
             self.context.handle_error(
                 &self.error_sink,
                 cause,
@@ -3766,13 +3823,13 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &dispatch::DispatchBuffer,
+        buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     ) {
-        let buffer = buffer.as_core();
+        let buffer = buffer.map(|buffer| buffer.as_core().id);
 
-        wgpu_render_bundle_set_vertex_buffer(&mut self.encoder, slot, buffer.id, offset, size)
+        wgpu_render_bundle_set_vertex_buffer(&mut self.encoder, slot, buffer, offset, size)
     }
 
     fn set_immediates(&mut self, offset: u32, data: &[u8]) {
@@ -3927,7 +3984,7 @@ impl dispatch::SurfaceInterface for CoreSurface {
                             err,
                             "Surface::get_current_texture_view",
                         );
-                        (None, crate::SurfaceStatus::Unknown, output_detail)
+                        (None, crate::SurfaceStatus::Validation, output_detail)
                     }
                     None => self
                         .context
@@ -3945,22 +4002,13 @@ impl Drop for CoreSurface {
 }
 
 impl dispatch::SurfaceOutputDetailInterface for CoreSurfaceOutputDetail {
-    fn present(&self) {
-        match self.context.0.surface_present(self.surface_id) {
-            Ok(_status) => (),
-            Err(err) => {
-                self.context
-                    .handle_error_nolabel(&self.error_sink, err, "Surface::present");
-            }
-        }
-    }
-
     fn texture_discard(&self) {
         match self.context.0.surface_texture_discard(self.surface_id) {
             Ok(_status) => (),
-            Err(err) => self
-                .context
-                .handle_error_fatal(err, "Surface::discard_texture"),
+            Err(err) => {
+                self.context
+                    .handle_error_nolabel(&self.error_sink, err, "Surface::discard_texture")
+            }
         }
     }
 }

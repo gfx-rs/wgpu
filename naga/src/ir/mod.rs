@@ -401,6 +401,11 @@ pub enum AddressSpace {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum BuiltIn {
+    // This must be at the top so that it gets sorted to the top. PrimitiveIndex is considered a non SV
+    // by FXC so it must appear before any other SVs.
+    /// Read in fragment shaders, written in mesh shaders, read in any and closest hit shaders.
+    PrimitiveIndex,
+
     /// Written in vertex/mesh shaders, read in fragment shaders
     Position { invariant: bool },
     /// Read in task, mesh, vertex, and fragment shaders
@@ -411,7 +416,7 @@ pub enum BuiltIn {
     /// Read in vertex shaders
     BaseVertex,
     /// Written in vertex & mesh shaders
-    ClipDistance,
+    ClipDistances,
     /// Written in vertex & mesh shaders
     CullDistance,
     /// Read in vertex, any- and closest-hit shaders
@@ -429,8 +434,6 @@ pub enum BuiltIn {
     PointCoord,
     /// Read in fragment shaders
     FrontFacing,
-    /// Read in fragment shaders, written in mesh shaders, read in any and closest hit shaders.
-    PrimitiveIndex,
     /// Read in fragment shaders
     Barycentric { perspective: bool },
     /// Read in fragment shaders
@@ -1576,7 +1579,7 @@ bitflags::bitflags! {
     pub struct Barrier: u32 {
         /// Barrier affects all [`AddressSpace::Storage`] accesses.
         const STORAGE = 1 << 0;
-        /// Barrier affects all [`AddressSpace::WorkGroup`] accesses.
+        /// Barrier affects all [`AddressSpace::WorkGroup`] and [`AddressSpace::TaskPayload`] accesses.
         const WORK_GROUP = 1 << 1;
         /// Barrier synchronizes execution across all invocations within a subgroup that execute this instruction.
         const SUB_GROUP = 1 << 2;

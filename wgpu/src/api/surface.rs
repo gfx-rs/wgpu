@@ -89,7 +89,7 @@ impl Surface<'_> {
     ///
     /// # Panics
     ///
-    /// - A old [`SurfaceTexture`] is still alive referencing an old surface.
+    /// - An old [`SurfaceTexture`] is still alive referencing an old surface.
     /// - Texture format requested is unsupported on the surface.
     /// - `config.width` or `config.height` is zero.
     pub fn configure(&self, device: &Device, config: &SurfaceConfiguration) {
@@ -106,29 +106,27 @@ impl Surface<'_> {
         self.config.lock().clone()
     }
 
-    /// Returns the next texture to be presented by the swapchain for drawing.
+    /// Returns the next texture to be presented by the surface for drawing.
     ///
-    /// In order to present the [`SurfaceTexture`] returned by this method,
-    /// first a [`Queue::submit`] needs to be done with some work rendering to this texture.
-    /// Then [`SurfaceTexture::present`] needs to be called.
+    /// After rendering to the returned [`SurfaceTexture`], submit work via [`Queue::submit`]
+    /// and then call [`Queue::present`] to display it.
     ///
-    /// If a SurfaceTexture referencing this surface is alive when the swapchain is recreated,
-    /// recreating the swapchain will panic.
+    /// If a [`SurfaceTexture`] referencing this surface is alive when [`Surface::configure()`]
+    /// is called, the configure call will panic.
     ///
-    /// This may return [`SurfaceError::Timeout`] if the surface is not visible
-    /// (e.g., the window is minimized, fully occluded, or on another virtual desktop).
-    /// Applications should handle this by skipping the current frame.
-    pub fn get_current_texture(&self) -> Result<SurfaceTexture, SurfaceError> {
+    /// See the documentation of [`CurrentSurfaceTexture`] for how each possible result
+    /// should be handled.
+    pub fn get_current_texture(&self) -> CurrentSurfaceTexture {
         let (texture, status, detail) = self.inner.get_current_texture();
 
         let suboptimal = match status {
             SurfaceStatus::Good => false,
             SurfaceStatus::Suboptimal => true,
-            SurfaceStatus::Timeout => return Err(SurfaceError::Timeout),
-            SurfaceStatus::Occluded => return Err(SurfaceError::Occluded),
-            SurfaceStatus::Outdated => return Err(SurfaceError::Outdated),
-            SurfaceStatus::Lost => return Err(SurfaceError::Lost),
-            SurfaceStatus::Unknown => return Err(SurfaceError::Other),
+            SurfaceStatus::Timeout => return CurrentSurfaceTexture::Timeout,
+            SurfaceStatus::Occluded => return CurrentSurfaceTexture::Occluded,
+            SurfaceStatus::Outdated => return CurrentSurfaceTexture::Outdated,
+            SurfaceStatus::Lost => return CurrentSurfaceTexture::Lost,
+            SurfaceStatus::Validation => return CurrentSurfaceTexture::Validation,
         };
 
         let guard = self.config.lock();
@@ -151,17 +149,24 @@ impl Surface<'_> {
             view_formats: &[],
         };
 
-        texture
-            .map(|texture| SurfaceTexture {
-                texture: Texture {
-                    inner: texture,
-                    descriptor,
-                },
-                suboptimal,
-                presented: false,
-                detail,
-            })
-            .ok_or(SurfaceError::Lost)
+        match texture {
+            Some(texture) => {
+                let surface_texture = SurfaceTexture {
+                    texture: Texture {
+                        inner: texture,
+                        descriptor,
+                    },
+                    presented: false,
+                    detail,
+                };
+                if suboptimal {
+                    CurrentSurfaceTexture::Suboptimal(surface_texture)
+                } else {
+                    CurrentSurfaceTexture::Success(surface_texture)
+                }
+            }
+            None => CurrentSurfaceTexture::Lost,
+        }
     }
 
     /// Get the [`wgpu_hal`] surface from this `Surface`.
@@ -361,7 +366,7 @@ pub enum SurfaceTargetUnsafe {
     ///
     /// - All parameters must point to valid DRM values and remain valid for as long as the resulting [`Surface`] exists.
     /// - The file descriptor (`fd`), plane, connector, and mode configuration must be valid and compatible.
-    #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+    #[cfg(drm)]
     Drm {
         /// The file descriptor of the DRM device.
         fd: i32,

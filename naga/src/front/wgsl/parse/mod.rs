@@ -199,8 +199,10 @@ impl<'a> BindingParser<'a> {
             "interpolate" => {
                 lexer.expect(Token::Paren('('))?;
                 let (raw, span) = lexer.next_ident_with_span()?;
-                self.interpolation
-                    .set(conv::map_interpolation(raw, span)?, name_span)?;
+                self.interpolation.set(
+                    conv::map_interpolation(&lexer.enable_extensions, raw, span)?,
+                    name_span,
+                )?;
                 if lexer.next_if(Token::Separator(',')) {
                     let (raw, span) = lexer.next_ident_with_span()?;
                     self.sampling
@@ -339,7 +341,7 @@ impl Parser {
         F: FnOnce(&mut Self) -> Result<'a, R>,
     {
         self.recursion_depth += 1;
-        if self.recursion_depth >= 256 {
+        if self.recursion_depth >= 200 {
             return Err(Box::new(Error::Internal("Parser recursion limit exceeded")));
         }
         let ret = f(self);
@@ -789,64 +791,68 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         context: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<'a, Handle<ast::Expression<'a>>> {
-        self.push_rule_span(Rule::GeneralExpr, lexer);
-        // logical_or_expression
-        let handle = context.parse_binary_op(
-            lexer,
-            |token| match token {
-                Token::LogicalOperation('|') => Some(crate::BinaryOperator::LogicalOr),
-                _ => None,
-            },
-            // logical_and_expression
-            |lexer, context| {
-                context.parse_binary_op(
-                    lexer,
-                    |token| match token {
-                        Token::LogicalOperation('&') => Some(crate::BinaryOperator::LogicalAnd),
-                        _ => None,
-                    },
-                    // inclusive_or_expression
-                    |lexer, context| {
-                        context.parse_binary_op(
-                            lexer,
-                            |token| match token {
-                                Token::Operation('|') => Some(crate::BinaryOperator::InclusiveOr),
-                                _ => None,
-                            },
-                            // exclusive_or_expression
-                            |lexer, context| {
-                                context.parse_binary_op(
-                                    lexer,
-                                    |token| match token {
-                                        Token::Operation('^') => {
-                                            Some(crate::BinaryOperator::ExclusiveOr)
-                                        }
-                                        _ => None,
-                                    },
-                                    // and_expression
-                                    |lexer, context| {
-                                        context.parse_binary_op(
-                                            lexer,
-                                            |token| match token {
-                                                Token::Operation('&') => {
-                                                    Some(crate::BinaryOperator::And)
-                                                }
-                                                _ => None,
-                                            },
-                                            |lexer, context| {
-                                                self.equality_expression(lexer, context)
-                                            },
-                                        )
-                                    },
-                                )
-                            },
-                        )
-                    },
-                )
-            },
-        )?;
-        self.pop_rule_span(lexer);
-        Ok(handle)
+        self.track_recursion(|this| {
+            this.push_rule_span(Rule::GeneralExpr, lexer);
+            // logical_or_expression
+            let handle = context.parse_binary_op(
+                lexer,
+                |token| match token {
+                    Token::LogicalOperation('|') => Some(crate::BinaryOperator::LogicalOr),
+                    _ => None,
+                },
+                // logical_and_expression
+                |lexer, context| {
+                    context.parse_binary_op(
+                        lexer,
+                        |token| match token {
+                            Token::LogicalOperation('&') => Some(crate::BinaryOperator::LogicalAnd),
+                            _ => None,
+                        },
+                        // inclusive_or_expression
+                        |lexer, context| {
+                            context.parse_binary_op(
+                                lexer,
+                                |token| match token {
+                                    Token::Operation('|') => {
+                                        Some(crate::BinaryOperator::InclusiveOr)
+                                    }
+                                    _ => None,
+                                },
+                                // exclusive_or_expression
+                                |lexer, context| {
+                                    context.parse_binary_op(
+                                        lexer,
+                                        |token| match token {
+                                            Token::Operation('^') => {
+                                                Some(crate::BinaryOperator::ExclusiveOr)
+                                            }
+                                            _ => None,
+                                        },
+                                        // and_expression
+                                        |lexer, context| {
+                                            context.parse_binary_op(
+                                                lexer,
+                                                |token| match token {
+                                                    Token::Operation('&') => {
+                                                        Some(crate::BinaryOperator::And)
+                                                    }
+                                                    _ => None,
+                                                },
+                                                |lexer, context| {
+                                                    this.equality_expression(lexer, context)
+                                                },
+                                            )
+                                        },
+                                    )
+                                },
+                            )
+                        },
+                    )
+                },
+            )?;
+            this.pop_rule_span(lexer);
+            Ok(handle)
+        })
     }
 
     fn optionally_typed_ident<'a>(
@@ -2190,6 +2196,9 @@ impl Parser {
                 Some(ast::GlobalDeclKind::ConstAssert(condition))
             }
             (Token::End, _) => return Ok(()),
+            (Token::UnterminatedBlockComment(_), span) => {
+                return Err(Box::new(Error::UnterminatedBlockComment(span)))
+            }
             other => {
                 return Err(Box::new(Error::Unexpected(
                     other.1,
@@ -2197,6 +2206,12 @@ impl Parser {
                 )))
             }
         };
+
+        if let Some(must_use_span) = must_use.value {
+            if !matches!(kind.as_ref(), Some(ast::GlobalDeclKind::Fn(_))) {
+                return Err(Box::new(Error::FunctionMustUseOnNonFunction(must_use_span)));
+            }
+        }
 
         if let Some(kind) = kind {
             out.decls.append(
@@ -2262,7 +2277,7 @@ impl Parser {
                             };
                             // Check if the required capability is supported
                             let required_capability = extension.capability();
-                            if !options.capabilities.contains(required_capability) {
+                            if !options.capabilities.intersects(required_capability) {
                                 return Err(Box::new(Error::EnableExtensionNotSupported {
                                     kind,
                                     span,

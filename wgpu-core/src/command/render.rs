@@ -38,13 +38,14 @@ use crate::{
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
     resource::{
-        DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
+        Buffer, DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
         MissingTextureUsageError, ParentDevice, QuerySet, RawResourceAccess, ResourceErrorIdent,
         Texture, TextureView, TextureViewNotRenderableReason,
     },
     snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker, UsageScope},
-    validation, Label,
+    validation::{self, check_workgroup_sizes},
+    Label,
 };
 
 #[cfg(feature = "serde")]
@@ -408,8 +409,8 @@ pub(crate) struct VertexLimits {
 
 impl VertexLimits {
     pub(crate) fn new(
-        buffer_sizes: impl Iterator<Item = Option<BufferAddress>>,
-        pipeline_steps: &[VertexStep],
+        buffer_sizes: impl ExactSizeIterator<Item = Option<BufferAddress>>,
+        pipeline_steps: &[Option<VertexStep>],
     ) -> Self {
         // Implements the validation from https://gpuweb.github.io/gpuweb/#dom-gpurendercommandsmixin-draw
         // Except that the formula is shuffled to extract the number of vertices in order
@@ -423,6 +424,10 @@ impl VertexLimits {
         let mut instance_limit_slot = 0;
 
         for (idx, (buffer_size, step)) in buffer_sizes.zip(pipeline_steps).enumerate() {
+            let Some(step) = step else {
+                continue;
+            };
+
             let Some(buffer_size) = buffer_size else {
                 // Missing required vertex buffer
                 return Self::default();
@@ -504,15 +509,118 @@ impl VertexLimits {
     }
 }
 
+/// State of a single vertex buffer slot.
+#[derive(Debug)]
+pub(crate) struct VertexSlot {
+    pub(crate) buffer: Arc<Buffer>,
+    pub(crate) range: Range<BufferAddress>,
+    pub(crate) is_dirty: bool,
+}
+
+/// Vertex buffer tracking state, shared between render passes and render bundles.
+///
+/// Tracks which vertex buffer slots are set, and caches the vertex and instance limits
+/// derived from those buffers and the current pipeline, avoiding recomputation on each draw.
 #[derive(Debug, Default)]
-struct VertexState {
-    buffer_sizes: [Option<BufferAddress>; hal::MAX_VERTEX_BUFFERS],
-    limits: VertexLimits,
+pub(crate) struct VertexState {
+    slots: [Option<VertexSlot>; hal::MAX_VERTEX_BUFFERS],
+    pub(crate) limits: VertexLimits,
 }
 
 impl VertexState {
-    fn update_limits(&mut self, pipeline_steps: &[VertexStep]) {
-        self.limits = VertexLimits::new(self.buffer_sizes.iter().copied(), pipeline_steps);
+    /// Set a vertex buffer slot, marking it dirty.
+    pub(crate) fn set_buffer(
+        &mut self,
+        slot: usize,
+        buffer: Arc<Buffer>,
+        range: Range<BufferAddress>,
+    ) {
+        self.slots[slot] = Some(VertexSlot {
+            buffer,
+            range,
+            is_dirty: true,
+        });
+    }
+
+    /// Clear a vertex buffer slot.
+    pub(crate) fn clear_buffer(&mut self, slot: usize) {
+        self.slots[slot] = None;
+    }
+
+    /// Recompute the cached vertex and instance limits based on the current slots and pipeline.
+    pub(crate) fn update_limits(&mut self, pipeline_steps: &[Option<VertexStep>]) {
+        self.limits = VertexLimits::new(
+            self.slots
+                .iter()
+                .map(|s| s.as_ref().map(|s| s.range.end - s.range.start)),
+            pipeline_steps,
+        );
+    }
+
+    fn last_assigned_index(&self) -> Option<usize> {
+        self.slots
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| s.as_ref().map(|_| i))
+            .next_back()
+    }
+
+    pub(super) fn validate(
+        &self,
+        pipeline: &RenderPipeline,
+        binder: &Binder,
+    ) -> Result<(), DrawError> {
+        // Check all needed vertex buffers have been bound
+        for index in pipeline
+            .vertex_steps
+            .iter()
+            .enumerate()
+            .filter_map(|(index, step)| step.map(|_| index))
+        {
+            if self.slots[index].is_none() {
+                return Err(DrawError::MissingVertexBuffer {
+                    pipeline: pipeline.error_ident(),
+                    index,
+                });
+            }
+        }
+
+        let bind_group_space_used = binder.last_assigned_index().map_or(0, |i| i + 1);
+        let vertex_buffer_space_used = self.last_assigned_index().map_or(0, |i| i + 1);
+
+        let bind_groups_plus_vertex_buffers =
+            u32::try_from(bind_group_space_used + vertex_buffer_space_used).unwrap();
+        if bind_groups_plus_vertex_buffers
+            > pipeline.device.limits.max_bind_groups_plus_vertex_buffers
+        {
+            return Err(DrawError::TooManyBindGroupsPlusVertexBuffers {
+                given: bind_groups_plus_vertex_buffers,
+                limit: pipeline.device.limits.max_bind_groups_plus_vertex_buffers,
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Call `f` for each dirty slot with `(slot_index, buffer, offset, size)` and mark them clean.
+    pub(crate) fn flush<F>(&mut self, mut f: F)
+    where
+        F: FnMut(u32, &Arc<Buffer>, BufferAddress, Option<BufferSize>),
+    {
+        for (i, slot) in self.slots.iter_mut().enumerate() {
+            let Some(slot) = slot.as_mut() else { continue };
+            if !slot.is_dirty {
+                continue;
+            }
+            slot.is_dirty = false;
+            let size = slot.range.end - slot.range.start;
+            f(
+                i as u32,
+                &slot.buffer,
+                slot.range.start,
+                BufferSize::new(size),
+            );
+        }
     }
 }
 
@@ -528,6 +636,10 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
 
     pass: pass::PassState<'scope, 'snatch_guard, 'cmd_enc>,
 
+    /// A bitmask, tracking which 4-byte slots have been written via `set_immediates`.
+    /// Checked against the pipeline's required slots before each draw call.
+    immediate_slots_set: naga::valid::ImmediateSlots,
+
     active_occlusion_query: Option<(Arc<QuerySet>, u32)>,
     active_pipeline_statistics_query: Option<(Arc<QuerySet>, u32)>,
 }
@@ -542,20 +654,7 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
                 return Err(DrawError::MissingBlendConstant);
             }
 
-            // Determine how many vertex buffers have already been bound
-            let vertex_buffer_count = self
-                .vertex
-                .buffer_sizes
-                .iter()
-                .take_while(|v| v.is_some())
-                .count() as u32;
-            // Compare with the needed quantity
-            if vertex_buffer_count < pipeline.vertex_steps.len() as u32 {
-                return Err(DrawError::MissingVertexBuffer {
-                    pipeline: pipeline.error_ident(),
-                    index: vertex_buffer_count,
-                });
-            }
+            self.vertex.validate(pipeline.as_ref(), &self.pass.binder)?;
 
             if family == DrawCommandFamily::DrawIndexed {
                 // Pipeline expects an index buffer
@@ -580,6 +679,16 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
                     wanted_mesh_pipeline: !pipeline.is_mesh,
                 });
             }
+            if !self
+                .immediate_slots_set
+                .contains(pipeline.immediate_slots_required)
+            {
+                return Err(DrawError::MissingImmediateData {
+                    missing: pipeline
+                        .immediate_slots_required
+                        .difference(self.immediate_slots_set),
+                });
+            }
             Ok(())
         } else {
             Err(DrawError::MissingPipeline(pass::MissingPipeline))
@@ -601,6 +710,31 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         self.pipeline = None;
         self.index.reset();
         self.vertex = Default::default();
+        self.immediate_slots_set = Default::default();
+    }
+
+    /// Flush dirty vertex buffer slots to the HAL encoder in preparation for a draw call.
+    fn flush_vertex_buffers(&mut self) -> Result<(), RenderPassErrorInner> {
+        let vertex = &mut self.vertex;
+        let raw_encoder: &mut dyn hal::DynCommandEncoder = self.pass.base.raw_encoder;
+        let snatch_guard = self.pass.base.snatch_guard;
+        let mut result = Ok(());
+        vertex.flush(|slot, buffer, offset, size| {
+            if result.is_err() {
+                return;
+            }
+            match buffer.try_raw(snatch_guard) {
+                Ok(raw) => unsafe {
+                    // SAFETY: The offset and size were validated in set_vertex_buffer.
+                    raw_encoder.set_vertex_buffer(
+                        slot,
+                        hal::BufferBinding::new_unchecked(raw, offset, size),
+                    );
+                },
+                Err(e) => result = Err(e.into()),
+            }
+        });
+        result
     }
 }
 
@@ -756,17 +890,17 @@ pub enum RenderPassErrorInner {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("Indirect buffer offset {0:?} is not a multiple of 4")]
     UnalignedIndirectBufferOffset(BufferAddress),
-    #[error("Indirect draw uses bytes {offset}..{end_offset} using count {count} which overruns indirect buffer of size {buffer_size}")]
+    #[error("Indirect draw arguments of {args_size} bytes (count = {count}) starting at {offset} would overrun buffer size of {buffer_size}")]
     IndirectBufferOverrun {
         count: u32,
         offset: u64,
-        end_offset: u64,
+        args_size: u64,
         buffer_size: u64,
     },
-    #[error("Indirect draw uses bytes {begin_count_offset}..{end_count_offset} which overruns indirect buffer of size {count_buffer_size}")]
+    #[error("Indirect draw count of {count_bytes} bytes starting at {begin_count_offset} would overrun buffer of size {count_buffer_size}")]
     IndirectCountBufferOverrun {
+        count_bytes: u64,
         begin_count_offset: u64,
-        end_count_offset: u64,
         count_buffer_size: u64,
     },
     #[error(transparent)]
@@ -1189,7 +1323,15 @@ impl RenderPassInfo {
                     .flags
                     .contains(wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL)
             {
-                wgt::TextureUses::DEPTH_STENCIL_READ | wgt::TextureUses::RESOURCE
+                // If the texture supports TEXTURE_BINDING, it can be used as a shader
+                // resource and a read-only depth attachment simultaneously. But if it
+                // doesn't support TEXTURE_BINDING, don't attempt to transition it to a
+                // shader resource state, because DX12 will raise an error.
+                if view.desc.usage.contains(TextureUsages::TEXTURE_BINDING) {
+                    wgt::TextureUses::DEPTH_STENCIL_READ | wgt::TextureUses::RESOURCE
+                } else {
+                    wgt::TextureUses::DEPTH_STENCIL_READ
+                }
             } else {
                 wgt::TextureUses::DEPTH_STENCIL_WRITE
             };
@@ -1957,6 +2099,8 @@ pub(super) fn encode_render_pass(
                 string_offset: 0,
             },
 
+            immediate_slots_set: Default::default(),
+
             active_occlusion_query: None,
             active_pipeline_statistics_query: None,
         };
@@ -2033,6 +2177,8 @@ pub(super) fn encode_render_pass(
                         |_| {},
                     )
                     .map_pass_err(scope)?;
+                    state.immediate_slots_set |=
+                        naga::valid::ImmediateSlots::from_range(offset, size_bytes);
                 }
                 ArcRenderCommand::SetScissor(rect) => {
                     let scope = PassErrorScope::SetScissorRect;
@@ -2399,7 +2545,7 @@ fn set_pipeline(
 fn set_index_buffer(
     state: &mut State,
     device: &Arc<Device>,
-    buffer: Arc<crate::resource::Buffer>,
+    buffer: Arc<Buffer>,
     index_format: IndexFormat,
     offset: u64,
     size: Option<BufferSize>,
@@ -2452,22 +2598,18 @@ fn set_vertex_buffer(
     state: &mut State,
     device: &Arc<Device>,
     slot: u32,
-    buffer: Arc<crate::resource::Buffer>,
+    buffer: Option<Arc<Buffer>>,
     offset: u64,
     size: Option<BufferSize>,
 ) -> Result<(), RenderPassErrorInner> {
-    api_log!(
-        "RenderPass::set_vertex_buffer {slot} {}",
-        buffer.error_ident()
-    );
-
-    state
-        .pass
-        .scope
-        .buffers
-        .merge_single(&buffer, wgt::BufferUses::VERTEX)?;
-
-    buffer.same_device(device)?;
+    if let Some(ref buffer) = buffer {
+        api_log!(
+            "RenderPass::set_vertex_buffer {slot} {}",
+            buffer.error_ident()
+        );
+    } else {
+        api_log!("RenderPass::set_vertex_buffer {slot} None");
+    }
 
     let max_vertex_buffers = state.pass.base.device.limits.max_vertex_buffers;
     if slot >= max_vertex_buffers {
@@ -2478,30 +2620,64 @@ fn set_vertex_buffer(
         .into());
     }
 
-    buffer.check_usage(BufferUsages::VERTEX)?;
+    if let Some(buffer) = buffer {
+        buffer.same_device(device)?;
+        buffer.check_usage(BufferUsages::VERTEX)?;
 
-    if !offset.is_multiple_of(wgt::VERTEX_ALIGNMENT) {
-        return Err(RenderCommandError::UnalignedVertexBuffer { slot, offset }.into());
-    }
-    let (binding, buffer_size) = buffer
-        .binding(offset, size, state.pass.base.snatch_guard)
-        .map_err(RenderCommandError::from)?;
-    state.vertex.buffer_sizes[slot as usize] = Some(buffer_size);
+        if !offset.is_multiple_of(wgt::VERTEX_ALIGNMENT) {
+            return Err(RenderCommandError::UnalignedVertexBuffer { slot, offset }.into());
+        }
+        let binding_size = buffer
+            .resolve_binding_size(offset, size)
+            .map_err(RenderCommandError::from)?;
+        let buffer_range = offset..(offset + binding_size);
 
-    state.pass.base.buffer_memory_init_actions.extend(
-        buffer.initialization_status.read().create_action(
-            &buffer,
-            offset..(offset + buffer_size),
-            MemoryInitKind::NeedsInitializedMemory,
-        ),
-    );
+        state
+            .pass
+            .scope
+            .buffers
+            .merge_single(&buffer, wgt::BufferUses::VERTEX)?;
 
-    unsafe {
-        hal::DynCommandEncoder::set_vertex_buffer(state.pass.base.raw_encoder, slot, binding);
+        state.pass.base.buffer_memory_init_actions.extend(
+            buffer.initialization_status.read().create_action(
+                &buffer,
+                buffer_range.clone(),
+                MemoryInitKind::NeedsInitializedMemory,
+            ),
+        );
+
+        state
+            .vertex
+            .set_buffer(slot as usize, buffer, buffer_range.clone());
+        if let Some(pipeline) = state.pipeline.as_ref() {
+            state.vertex.update_limits(&pipeline.vertex_steps);
+        }
+    } else {
+        if offset != 0 {
+            return Err(RenderCommandError::from(
+                crate::binding_model::BindingError::UnbindingVertexBufferOffsetNotZero {
+                    slot,
+                    offset,
+                },
+            )
+            .into());
+        }
+        if let Some(size) = size {
+            return Err(RenderCommandError::from(
+                crate::binding_model::BindingError::UnbindingVertexBufferSizeNotZero {
+                    slot,
+                    size: size.get(),
+                },
+            )
+            .into());
+        }
+
+        state.vertex.clear_buffer(slot as usize);
+        if let Some(pipeline) = state.pipeline.as_ref() {
+            state.vertex.update_limits(&pipeline.vertex_steps);
+        }
     }
-    if let Some(pipeline) = state.pipeline.as_ref() {
-        state.vertex.update_limits(&pipeline.vertex_steps);
-    }
+
     Ok(())
 }
 
@@ -2641,6 +2817,7 @@ fn draw(
     api_log!("RenderPass::draw {vertex_count} {instance_count} {first_vertex} {first_instance}");
 
     state.is_ready(DrawCommandFamily::Draw)?;
+    state.flush_vertex_buffers()?;
     state.flush_bindings()?;
 
     state
@@ -2676,6 +2853,7 @@ fn draw_indexed(
     api_log!("RenderPass::draw_indexed {index_count} {instance_count} {first_index} {base_vertex} {first_instance}");
 
     state.is_ready(DrawCommandFamily::DrawIndexed)?;
+    state.flush_vertex_buffers()?;
     state.flush_bindings()?;
 
     let last_index = first_index as u64 + index_count as u64;
@@ -2719,33 +2897,30 @@ fn draw_mesh_tasks(
     state.flush_bindings()?;
     validate_mesh_draw_multiview(state)?;
 
-    let groups_size_limit = state
-        .pass
-        .base
-        .device
-        .limits
-        .max_task_mesh_workgroups_per_dimension;
-    let max_groups = state
-        .pass
-        .base
-        .device
-        .limits
-        .max_task_mesh_workgroup_total_count;
-    if group_count_x > groups_size_limit
-        || group_count_y > groups_size_limit
-        || group_count_z > groups_size_limit
-        || group_count_x * group_count_y * group_count_z > max_groups
-    {
-        return Err(DrawError::InvalidGroupSize {
-            current: [group_count_x, group_count_y, group_count_z],
-            limit: groups_size_limit,
-            max_total: max_groups,
-        }
-        .into());
-    }
+    let limits = &state.pass.base.device.limits;
+    let (groups_size_limit, max_groups) = if state.pipeline.as_ref().unwrap().has_task_shader {
+        (
+            limits.max_task_workgroups_per_dimension,
+            limits.max_task_workgroup_total_count,
+        )
+    } else {
+        (
+            limits.max_mesh_workgroups_per_dimension,
+            limits.max_mesh_workgroup_total_count,
+        )
+    };
+
+    let total_count = check_workgroup_sizes(
+        &[group_count_x, group_count_y, group_count_z],
+        &[groups_size_limit, groups_size_limit, groups_size_limit],
+        "max_task_mesh_workgroups_per_dimension",
+        max_groups,
+        "max_task_mesh_workgroup_total_count",
+    )
+    .map_err(|err| RenderPassErrorInner::Draw(err.into()))?;
 
     unsafe {
-        if group_count_x > 0 && group_count_y > 0 && group_count_z > 0 {
+        if total_count > 0 {
             state.pass.base.raw_encoder.draw_mesh_tasks(
                 group_count_x,
                 group_count_y,
@@ -2760,7 +2935,7 @@ fn multi_draw_indirect(
     state: &mut State,
     indirect_draw_validation_batcher: &mut crate::indirect_validation::DrawBatcher,
     device: &Arc<Device>,
-    indirect_buffer: Arc<crate::resource::Buffer>,
+    indirect_buffer: Arc<Buffer>,
     offset: u64,
     count: u32,
     family: DrawCommandFamily,
@@ -2771,6 +2946,7 @@ fn multi_draw_indirect(
     );
 
     state.is_ready(family)?;
+    state.flush_vertex_buffers()?;
     state.flush_bindings()?;
 
     if family == DrawCommandFamily::DrawMeshTasks {
@@ -2791,22 +2967,23 @@ fn multi_draw_indirect(
         return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
     }
 
-    let stride = get_stride_of_indirect_args(family);
-
-    let end_offset = offset + stride * count as u64;
-    if end_offset > indirect_buffer.size {
-        return Err(RenderPassErrorInner::IndirectBufferOverrun {
-            count,
-            offset,
-            end_offset,
-            buffer_size: indirect_buffer.size,
-        });
-    }
+    let stride = get_src_stride_of_indirect_args(family);
+    let args_size = match stride.checked_mul(u64::from(count)) {
+        Some(sz) if sz <= indirect_buffer.size && indirect_buffer.size - sz >= offset => sz,
+        args_size => {
+            return Err(RenderPassErrorInner::IndirectBufferOverrun {
+                count,
+                offset,
+                args_size: args_size.unwrap_or(u64::MAX),
+                buffer_size: indirect_buffer.size,
+            });
+        }
+    };
 
     state.pass.base.buffer_memory_init_actions.extend(
         indirect_buffer.initialization_status.read().create_action(
             &indirect_buffer,
-            offset..end_offset,
+            offset..offset + args_size,
             MemoryInitKind::NeedsInitializedMemory,
         ),
     );
@@ -2851,7 +3028,7 @@ fn multi_draw_indirect(
             indirect_draw_validation_resources: &'a mut crate::indirect_validation::DrawResources,
             indirect_draw_validation_batcher: &'a mut crate::indirect_validation::DrawBatcher,
 
-            indirect_buffer: Arc<crate::resource::Buffer>,
+            indirect_buffer: Arc<Buffer>,
             family: DrawCommandFamily,
             vertex_or_index_limit: u64,
             instance_limit: u64,
@@ -2909,10 +3086,15 @@ fn multi_draw_indirect(
             let draw_data = draw_ctx.add(offset + stride * i as u64)?;
 
             if draw_data.buffer_index == current_draw_data.buffer_index {
-                debug_assert_eq!(
-                    draw_data.offset,
-                    current_draw_data.offset + stride * current_draw_data.count as u64
-                );
+                #[cfg(debug_assertions)]
+                {
+                    let dst_stride =
+                        get_dst_stride_of_indirect_args(state.pass.base.device.backend(), family);
+                    debug_assert_eq!(
+                        draw_data.offset,
+                        current_draw_data.offset + dst_stride * current_draw_data.count as u64
+                    );
+                }
                 current_draw_data.count += 1;
             } else {
                 draw_ctx.draw(current_draw_data);
@@ -2943,9 +3125,9 @@ fn multi_draw_indirect(
 fn multi_draw_indirect_count(
     state: &mut State,
     device: &Arc<Device>,
-    indirect_buffer: Arc<crate::resource::Buffer>,
+    indirect_buffer: Arc<Buffer>,
     offset: u64,
-    count_buffer: Arc<crate::resource::Buffer>,
+    count_buffer: Arc<Buffer>,
     count_buffer_offset: u64,
     max_count: u32,
     family: DrawCommandFamily,
@@ -2957,13 +3139,14 @@ fn multi_draw_indirect_count(
     );
 
     state.is_ready(family)?;
+    state.flush_vertex_buffers()?;
     state.flush_bindings()?;
 
     if family == DrawCommandFamily::DrawMeshTasks {
         validate_mesh_draw_multiview(state)?;
     }
 
-    let stride = get_stride_of_indirect_args(family);
+    let stride = get_src_stride_of_indirect_args(family);
 
     state
         .pass
@@ -3001,36 +3184,39 @@ fn multi_draw_indirect_count(
         return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
     }
 
-    let end_offset = offset + stride * max_count as u64;
-    if end_offset > indirect_buffer.size {
-        return Err(RenderPassErrorInner::IndirectBufferOverrun {
-            count: 1,
-            offset,
-            end_offset,
-            buffer_size: indirect_buffer.size,
-        });
-    }
+    let args_size = match stride.checked_mul(u64::from(max_count)) {
+        Some(sz) if sz <= indirect_buffer.size && indirect_buffer.size - sz >= offset => sz,
+        args_size => {
+            return Err(RenderPassErrorInner::IndirectBufferOverrun {
+                count: 1,
+                offset,
+                args_size: args_size.unwrap_or(u64::MAX),
+                buffer_size: indirect_buffer.size,
+            });
+        }
+    };
+
     state.pass.base.buffer_memory_init_actions.extend(
         indirect_buffer.initialization_status.read().create_action(
             &indirect_buffer,
-            offset..end_offset,
+            offset..offset + args_size,
             MemoryInitKind::NeedsInitializedMemory,
         ),
     );
 
     let begin_count_offset = count_buffer_offset;
-    let end_count_offset = count_buffer_offset + 4;
-    if end_count_offset > count_buffer.size {
+    let count_bytes = 4;
+    if count_buffer.size < count_bytes || count_buffer.size - count_bytes < count_buffer_offset {
         return Err(RenderPassErrorInner::IndirectCountBufferOverrun {
             begin_count_offset,
-            end_count_offset,
+            count_bytes: 4,
             count_buffer_size: count_buffer.size,
         });
     }
     state.pass.base.buffer_memory_init_actions.extend(
         count_buffer.initialization_status.read().create_action(
             &count_buffer,
-            count_buffer_offset..end_count_offset,
+            count_buffer_offset..count_buffer_offset + count_bytes,
             MemoryInitKind::NeedsInitializedMemory,
         ),
     );
@@ -3250,16 +3436,22 @@ impl Global {
         &self,
         pass: &mut RenderPass,
         slot: u32,
-        buffer_id: id::BufferId,
+        buffer_id: Option<id::BufferId>,
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) -> Result<(), PassStateError> {
         let scope = PassErrorScope::SetVertexBuffer;
         let base = pass_base!(pass, scope);
 
+        let buffer = if let Some(buffer_id) = buffer_id {
+            Some(pass_try!(base, scope, self.resolve_buffer_id(buffer_id)))
+        } else {
+            None
+        };
+
         base.commands.push(ArcRenderCommand::SetVertexBuffer {
             slot,
-            buffer: pass_try!(base, scope, self.resolve_buffer_id(buffer_id)),
+            buffer,
             offset,
             size,
         });
@@ -3832,10 +4024,23 @@ impl Global {
     }
 }
 
-pub(crate) const fn get_stride_of_indirect_args(family: DrawCommandFamily) -> u64 {
+pub(crate) const fn get_src_stride_of_indirect_args(family: DrawCommandFamily) -> u64 {
     match family {
         DrawCommandFamily::Draw => size_of::<wgt::DrawIndirectArgs>() as u64,
         DrawCommandFamily::DrawIndexed => size_of::<wgt::DrawIndexedIndirectArgs>() as u64,
         DrawCommandFamily::DrawMeshTasks => size_of::<wgt::DispatchIndirectArgs>() as u64,
     }
+}
+
+pub(crate) const fn get_dst_stride_of_indirect_args(
+    backend: wgt::Backend,
+    family: DrawCommandFamily,
+) -> u64 {
+    // space for D3D12 special constants
+    let extra = if matches!(backend, wgt::Backend::Dx12) {
+        3 * size_of::<u32>() as u64
+    } else {
+        0
+    };
+    extra + get_src_stride_of_indirect_args(family)
 }

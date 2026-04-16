@@ -52,7 +52,17 @@ const SHADER: &str = r#"
 
 #[gpu_test]
 static ARRAY_SIZE_OVERRIDES: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().limits(wgpu::Limits::default()))
+    .parameters(
+        TestParameters::default()
+            .limits(wgpu::Limits::default())
+            // https://github.com/gfx-rs/wgpu/issues/9184
+            .expect_fail(
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline")
+                    .panic("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
+            ),
+    )
     .run_async(move |ctx| async move {
         array_size_overrides(&ctx, None, &[534], false).await;
         array_size_overrides(&ctx, Some(14), &[286480122], false).await;
@@ -146,7 +156,7 @@ async fn array_size_overrides(
     mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
     ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
 
-    let mapped = mapping_buffer.slice(..).get_mapped_range();
+    let mapped = mapping_buffer.slice(..).get_mapped_range().unwrap();
 
     let typed: &[u32] = bytemuck::cast_slice(&mapped);
     assert_eq!(typed, out);

@@ -10,7 +10,7 @@
 to breaking changes, suggestions for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040).
 Large changes may mean that this documentation may be out of date.
 
-***This is not*** an introduction to raytracing, and assumes basic prior knowledge, to look at the fundamentals look at
+**_This is not_** an introduction to raytracing, and assumes basic prior knowledge, to look at the fundamentals look at
 an [introduction](https://developer.nvidia.com/blog/introduction-nvidia-rtx-directx-ray-tracing/).
 
 ## `wgpu`'s raytracing API:
@@ -31,6 +31,7 @@ bits may be set, and a mask to filter hits in the shader.
 
 A [`Blas`] must be built in either the same build as any [`Tlas`] it is used to build or an earlier build call.
 Before a [`Tlas`] is used in a shader it must
+
 - have been built
 - have all [`Blas`]es that it was last built with to have last been built in either the same build as
   this [`Tlas`] or an earlier build call.
@@ -53,6 +54,7 @@ again.
 An example of compaction being run when [`Blas`]es are ready, this would be in a situation when memory was not a major
 problem, otherwise (e.g. if you get an out of memory error) you should compact immediately (and switching all
 non-compacted [`Blas`]es to compacted ones).
+
 ```rust
 use std::iter;
 use wgpu::Blas;
@@ -64,7 +66,7 @@ struct BlasToBeCompacted {
 }
 
 fn render(/*whatever args you need to render*/) {
-  /* additional code to prepare the renderer */ 
+  /* additional code to prepare the renderer */
   //An iterator of whatever BLASes you have called `prepare_compaction_async` on.
   let blas_s_pending_compaction: impl Iterator<Item = BlasToBeCompacted> = iter::empty();
   for blas_to_be_compacted in blas_s_pending_compaction {
@@ -151,8 +153,9 @@ getCandidateHitVertexPositions(rq: ptr<function, ray_query<vertex_return>>) -> a
 > [!CAUTION]
 >
 > #### ⚠️Undefined behavior ⚠️:
+>
 > - Calling `rayQueryGetCommittedIntersection` or `rayQueryGetCandidateIntersection` when `rayQueryProceed` has not been
-> called on this ray query since it was initialized (or if the ray query has not been previously initialized).
+>   called on this ray query since it was initialized (or if the ray query has not been previously initialized).
 > - Calling `rayQueryGetCommittedIntersection` when `rayQueryProceed`'s latest return on this ray query is considered
 >   `Candidate`.
 > - Calling `rayQueryGetCandidateIntersection` when `rayQueryProceed`'s latest return on this ray query is considered
@@ -171,7 +174,7 @@ getCandidateHitVertexPositions(rq: ptr<function, ray_query<vertex_return>>) -> a
 >   `RAY_QUERY_INTERSECTION_TRIANGLE`,
 >   or when `rayQueryProceed`'s latest return on this ray query is not considered `Candidate`.
 >
-> *this is only known undefined behaviour, and will be worked around in the future.
+> \*this is only known undefined behaviour, and will be worked around in the future.
 
 ```wgsl
 struct RayDesc {
@@ -277,6 +280,7 @@ const RAY_QUERY_INTERSECTION_AABB = 3;
 ### Ray Tracing Pipelines
 
 Functions
+
 ```wgsl
 // Begins to check where (if anywhere) the ray defined by `ray_desc` hits in `acceleration_structure` calling through the `any_hit` shaders and `closest_hit` shader if something was hit or the `miss` shader if no hit was found
 traceRay<T>(acceleration_structure: acceleration_structure, ray_desc: RayDesc, payload: ptr<ray_payload, T>)
@@ -285,11 +289,13 @@ traceRay<T>(acceleration_structure: acceleration_structure, ray_desc: RayDesc, p
 > [!CAUTION]
 >
 > #### ⚠️Undefined behavior ⚠️:
+>
 > Calling `traceRay` inside another `traceRay` more than `max_recursion_depth` times
 >
-> *this is only known undefined behaviour, and will be worked around in the future.
+> \*this is only known undefined behaviour, and will be worked around in the future.
 
 New shader stages
+
 ```wgsl
 // First stage to be called, allowed to call `traceRay`
 @ray_generation
@@ -307,13 +313,13 @@ fn ch() {}
 @miss
 fn miss() {}
 ```
+
 ### Acceleration structure tags
 
 These are tags that can be added to a acceleration structure (`acceleration_structure` ->
 `acceleration_structure<... insert tags here! ...>`) and to a ray query (`ray_query` ->
 `ray_query<... insert tags here! ...>`). These require more features.
 
-
-| Tag | Requirements | Description |
-| --- | ------------ | -- |
-| `vertex_return`| `enable wgpu_ray_query_vertex_return` | Allows getting the vertices of the hit triangle when using ray queries |
+| Tag             | Requirements                          | Description                                                            |
+| --------------- | ------------------------------------- | ---------------------------------------------------------------------- |
+| `vertex_return` | `enable wgpu_ray_query_vertex_return` | Allows getting the vertices of the hit triangle when using ray queries |

@@ -10,9 +10,14 @@
 
 extern crate wgpu_hal as hal;
 
-#[cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos")))]
+#[cfg(not(any(
+    target_arch = "wasm32",
+    target_os = "ios",
+    target_os = "visionos",
+    target_env = "ohos"
+)))]
 fn main() {
-    use std::{ffi::CString, num::NonZeroU32};
+    use std::ffi::CString;
 
     use glutin::{
         config::GlConfig as _,
@@ -21,28 +26,21 @@ fn main() {
         surface::GlSurface as _,
     };
     use glutin_winit::GlWindow as _;
-    use rwh_05::HasRawWindowHandle as _;
+    use raw_window_handle::HasWindowHandle as _;
+    use winit::{
+        application::ApplicationHandler,
+        event::{KeyEvent, WindowEvent},
+        event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+        keyboard::{Key, NamedKey},
+        window::Window,
+    };
 
     env_logger::init();
     println!("Initializing external GL context");
 
-    let event_loop = winit::event_loop::EventLoop::new().unwrap();
-    // Only Windows requires the window to be present before creating the display.
-    // Other platforms don't really need one.
-    let window_builder = cfg!(windows).then(|| {
-        winit::window::WindowBuilder::new()
-            .with_title("wgpu raw GLES example (press Escape to exit)")
-    });
-
-    // The template will match only the configurations supporting rendering
-    // to Windows.
-    let template = glutin::config::ConfigTemplateBuilder::new();
-
-    let display_builder = glutin_winit::DisplayBuilder::new().with_window_builder(window_builder);
-
-    // Find the config with the maximum number of samples, so our triangle will be
-    // smooth.
-    pub fn gl_config_picker(
+    /// Find the config with the maximum number of samples, so our triangle will be
+    /// smooth.
+    fn gl_config_picker(
         configs: Box<dyn Iterator<Item = glutin::config::Config> + '_>,
     ) -> glutin::config::Config {
         configs
@@ -56,140 +54,141 @@ fn main() {
             .expect("Failed to find a matching config")
     }
 
-    let (mut window, gl_config) = display_builder
-        .build(&event_loop, template, gl_config_picker)
-        .expect("Failed to build window and config from display");
+    struct App {
+        gl_config: Option<glutin::config::Config>,
+        not_current_gl_context: Option<glutin::context::NotCurrentContext>,
+        state: Option<(
+            glutin::context::PossiblyCurrentContext,
+            glutin::surface::Surface<glutin::surface::WindowSurface>,
+            Window,
+        )>,
+        exposed: Option<hal::ExposedAdapter<hal::api::Gles>>,
+    }
 
-    println!("Picked a config with {} samples", gl_config.num_samples());
+    impl App {
+        fn new() -> Self {
+            Self {
+                gl_config: None,
+                not_current_gl_context: None,
+                state: None,
+                exposed: None,
+            }
+        }
+    }
 
-    let raw_window_handle = window.as_ref().map(|window| window.raw_window_handle());
+    impl ApplicationHandler for App {
+        fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+            // First call: create display, pick config, create GL context.
+            if self.gl_config.is_none() {
+                // Only Windows requires the window to be present before creating the display.
+                // Other platforms don't really need one.
+                let window_attributes = cfg!(windows).then(|| {
+                    Window::default_attributes()
+                        .with_title("wgpu raw GLES example (press Escape to exit)")
+                });
 
-    // XXX The display could be obtained from any object created by it, so we can
-    // query it from the config.
-    let gl_display = gl_config.display();
+                let template = glutin::config::ConfigTemplateBuilder::new();
 
-    // Glutin tries to create an OpenGL context by default.  Force it to use any version of GLES.
-    let context_attributes = glutin::context::ContextAttributesBuilder::new()
-        // wgpu expects GLES 3.0+.
-        .with_context_api(glutin::context::ContextApi::Gles(Some(Version::new(3, 0))))
-        .build(raw_window_handle);
+                let display_builder =
+                    glutin_winit::DisplayBuilder::new().with_window_attributes(window_attributes);
 
-    let mut not_current_gl_context = Some(unsafe {
-        gl_display
-            .create_context(&gl_config, &context_attributes)
-            .expect("failed to create context")
-    });
+                let (window, gl_config) = display_builder
+                    .build(event_loop, template, gl_config_picker)
+                    .expect("Failed to build window and config from display");
 
-    let mut state = None;
+                println!("Picked a config with {} samples", gl_config.num_samples());
 
-    // Only needs to be loaded once
-    let mut exposed = None;
+                let raw_window_handle = window
+                    .as_ref()
+                    .and_then(|window| window.window_handle().ok())
+                    .map(|handle| handle.as_raw());
 
-    event_loop
-        .run(move |event, window_target| {
-            use winit::{
-                event::{Event, KeyEvent, WindowEvent},
-                event_loop::ControlFlow,
-                keyboard::{Key, NamedKey},
-            };
-            window_target.set_control_flow(ControlFlow::Wait);
+                let gl_display = gl_config.display();
+
+                // Glutin tries to create an OpenGL context by default.
+                // Force it to use any version of GLES.
+                let context_attributes = glutin::context::ContextAttributesBuilder::new()
+                    // wgpu expects GLES 3.0+.
+                    .with_context_api(glutin::context::ContextApi::Gles(Some(Version::new(3, 0))))
+                    .build(raw_window_handle);
+
+                let gl_context = unsafe {
+                    gl_display
+                        .create_context(&gl_config, &context_attributes)
+                        .expect("failed to create context")
+                };
+
+                self.not_current_gl_context = Some(gl_context);
+                self.gl_config = Some(gl_config);
+
+                // On Windows, the window was already created by DisplayBuilder.
+                if let Some(window) = window {
+                    self.create_surface(event_loop, window);
+                    return;
+                }
+            }
+
+            // Create window + surface (non-Windows first call, or Android re-resume).
+            if self.state.is_none() {
+                let gl_config = self.gl_config.as_ref().unwrap();
+                let window = glutin_winit::finalize_window(
+                    event_loop,
+                    Window::default_attributes()
+                        .with_title("wgpu raw GLES example (press Escape to exit)"),
+                    gl_config,
+                )
+                .unwrap();
+                self.create_surface(event_loop, window);
+            }
+        }
+
+        fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
+            // This event is only raised on Android, where the backing NativeWindow for a GL
+            // Surface can appear and disappear at any moment.
+            println!("Android window removed");
+
+            // Destroy the GL Surface and un-current the GL Context before ndk-glue releases
+            // the window back to the system.
+            if let Some((gl_context, ..)) = self.state.take() {
+                assert!(self
+                    .not_current_gl_context
+                    .replace(gl_context.make_not_current().unwrap())
+                    .is_none());
+            }
+        }
+
+        fn window_event(
+            &mut self,
+            event_loop: &ActiveEventLoop,
+            _window_id: winit::window::WindowId,
+            event: WindowEvent,
+        ) {
+            event_loop.set_control_flow(ControlFlow::Wait);
 
             match event {
-                // Event::LoopExiting => (),
-                Event::WindowEvent {
-                    window_id: _,
+                WindowEvent::CloseRequested
+                | WindowEvent::KeyboardInput {
                     event:
-                        WindowEvent::CloseRequested
-                        | WindowEvent::KeyboardInput {
-                            event:
-                                KeyEvent {
-                                    logical_key: Key::Named(NamedKey::Escape),
-                                    ..
-                                },
+                        KeyEvent {
+                            logical_key: Key::Named(NamedKey::Escape),
                             ..
                         },
-                } => window_target.exit(),
-                Event::Resumed => {
-                    let window = window.take().unwrap_or_else(|| {
-                        let window_builder = winit::window::WindowBuilder::new()
-                            .with_title("wgpu raw GLES example (press Escape to exit)");
-                        glutin_winit::finalize_window(window_target, window_builder, &gl_config)
-                            .unwrap()
-                    });
-
-                    let attrs = window.build_surface_attributes(Default::default());
-                    let gl_surface = unsafe {
-                        gl_config
-                            .display()
-                            .create_window_surface(&gl_config, &attrs)
-                            .expect("Cannot create GL WindowSurface")
-                    };
-
-                    // Make it current.
-                    let gl_context = not_current_gl_context
-                        .take()
-                        .unwrap()
-                        .make_current(&gl_surface)
-                        .expect("GL context cannot be made current with WindowSurface");
-
-                    // The context needs to be current for the Renderer to set up shaders and
-                    // buffers. It also performs function loading, which needs a current context on
-                    // WGL.
-                    println!("Hooking up to wgpu-hal");
-                    exposed.get_or_insert_with(|| {
-                        unsafe {
-                            <hal::api::Gles as hal::Api>::Adapter::new_external(
-                                |name| {
-                                    // XXX: On WGL this should only be called after the context was made current
-                                    gl_config
-                                        .display()
-                                        .get_proc_address(&CString::new(name).expect(name))
-                                },
-                                wgpu_types::GlBackendOptions::default(),
-                            )
-                        }
-                        .expect("GL adapter can't be initialized")
-                    });
-
-                    assert!(state.replace((gl_context, gl_surface, window)).is_none());
-                }
-                Event::Suspended => {
-                    // This event is only raised on Android, where the backing NativeWindow for a GL
-                    // Surface can appear and disappear at any moment.
-                    println!("Android window removed");
-
-                    // Destroy the GL Surface and un-current the GL Context before ndk-glue releases
-                    // the window back to the system.
-                    let (gl_context, ..) = state.take().unwrap();
-                    assert!(not_current_gl_context
-                        .replace(gl_context.make_not_current().unwrap())
-                        .is_none());
-                }
-                Event::WindowEvent {
-                    window_id: _,
-                    event: WindowEvent::Resized(size),
-                } => {
+                    ..
+                } => event_loop.exit(),
+                WindowEvent::Resized(size) => {
                     if size.width != 0 && size.height != 0 {
-                        // Some platforms like EGL require resizing GL surface to update the size
+                        // Some platforms like EGL require resizing GL surface to update the size.
                         // Notable platforms here are Wayland and macOS, other don't require it
                         // and the function is no-op, but it's wise to resize it for portability
                         // reasons.
-                        if let Some((gl_context, gl_surface, _)) = &state {
-                            gl_surface.resize(
-                                gl_context,
-                                NonZeroU32::new(size.width).unwrap(),
-                                NonZeroU32::new(size.height).unwrap(),
-                            );
-                            // XXX: If there's a state for fill_screen(), this would need to be updated too.
+                        if let Some((gl_context, gl_surface, window)) = &self.state {
+                            window.resize_surface(gl_surface, gl_context);
                         }
                     }
                 }
-                Event::WindowEvent {
-                    window_id: _,
-                    event: WindowEvent::RedrawRequested,
-                } => {
+                WindowEvent::RedrawRequested => {
                     if let (Some(exposed), Some((gl_context, gl_surface, window))) =
-                        (&exposed, &state)
+                        (&self.exposed, &self.state)
                     {
                         let inner_size = window.inner_size();
 
@@ -203,7 +202,60 @@ fn main() {
                 }
                 _ => (),
             }
-        })
+        }
+    }
+
+    impl App {
+        fn create_surface(&mut self, _event_loop: &ActiveEventLoop, window: Window) {
+            let gl_config = self.gl_config.as_ref().unwrap();
+
+            let attrs = window
+                .build_surface_attributes(Default::default())
+                .expect("Failed to build surface attributes");
+            let gl_surface = unsafe {
+                gl_config
+                    .display()
+                    .create_window_surface(gl_config, &attrs)
+                    .expect("Cannot create GL WindowSurface")
+            };
+
+            // Make it current.
+            let gl_context = self
+                .not_current_gl_context
+                .take()
+                .unwrap()
+                .make_current(&gl_surface)
+                .expect("GL context cannot be made current with WindowSurface");
+
+            // The context needs to be current for the Renderer to set up shaders and
+            // buffers. It also performs function loading, which needs a current context on
+            // WGL.
+            println!("Hooking up to wgpu-hal");
+            self.exposed.get_or_insert_with(|| {
+                unsafe {
+                    <hal::api::Gles as hal::Api>::Adapter::new_external(
+                        |name| {
+                            // XXX: On WGL this should only be called after the context was
+                            // made current
+                            gl_config
+                                .display()
+                                .get_proc_address(&CString::new(name).expect(name))
+                        },
+                        wgpu_types::GlBackendOptions::default(),
+                    )
+                }
+                .expect("GL adapter can't be initialized")
+            });
+
+            window.request_redraw();
+            self.state = Some((gl_context, gl_surface, window));
+        }
+    }
+
+    let event_loop = EventLoop::new().unwrap();
+    let mut app = App::new();
+    event_loop
+        .run_app(&mut app)
         .expect("Couldn't run event loop");
 }
 
@@ -260,10 +312,11 @@ fn main() {
 #[cfg(any(
     all(target_arch = "wasm32", not(target_os = "emscripten")),
     target_os = "ios",
-    target_os = "visionos"
+    target_os = "visionos",
+    target_env = "ohos"
 ))]
 fn main() {
-    eprintln!("This example is not supported on Windows and non-emscripten wasm32")
+    eprintln!("This example is not supported on this platform")
 }
 
 #[cfg(not(any(

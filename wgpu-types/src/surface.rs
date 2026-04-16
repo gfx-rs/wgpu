@@ -278,8 +278,9 @@ pub enum SurfaceStatus {
     Outdated,
     /// The surface under the swap chain is lost.
     Lost,
-    /// The surface status is not known since `Surface::get_current_texture` previously failed.
-    Unknown,
+    /// `Surface::get_current_texture` has hit a validation error which was caught
+    /// by a error scope.
+    Validation,
 }
 
 /// Nanosecond timestamp used by the presentation engine.

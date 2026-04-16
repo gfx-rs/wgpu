@@ -20,10 +20,12 @@ use core::{
     ptr::NonNull,
 };
 
+use crate::link_to_wgpu_item;
+
 /// Like `&'a mut T`, but allows only write operations.
 ///
-/// This pointer type is obtained from [`BufferViewMut`][crate::BufferViewMut] and
-/// [`QueueWriteBufferView`][crate::QueueWriteBufferView].
+/// This pointer type is obtained from [`BufferViewMut`] and
+/// [`QueueWriteBufferView`].
 /// It is an unfortunate necessity due to the fact that mapped GPU memory may be [write combining],
 /// which means it cannot work normally with all of the things that Rust `&mut` access allows you to
 /// do.
@@ -38,6 +40,8 @@ use core::{
 // FIXME: Add an introduction to the necessity of explicit reborrowing.
 ///
 /// [write combining]: https://en.wikipedia.org/wiki/Write_combining
+#[doc = link_to_wgpu_item!(struct BufferViewMut)]
+#[doc = link_to_wgpu_item!(struct QueueWriteBufferView)]
 pub struct WriteOnly<'a, T: ?Sized> {
     /// The data which this write-only reference allows **writing** to.
     ///
@@ -92,7 +96,7 @@ impl<'a, T: ?Sized> WriteOnly<'a, T> {
     /// “de-initialize” the memory.
     #[inline]
     #[must_use]
-    pub unsafe fn new(ptr: NonNull<T>) -> Self {
+    pub const unsafe fn new(ptr: NonNull<T>) -> Self {
         Self {
             ptr,
             _phantom: PhantomData,
@@ -107,6 +111,7 @@ impl<'a, T: ?Sized> WriteOnly<'a, T> {
     /// # Example
     ///
     /// ```
+    /// # use wgpu_types as wgpu;
     /// fn write_numbers(slice: wgpu::WriteOnly<[u32]>) {
     ///     for (i, mut elem) in slice.into_iter().enumerate() {
     ///         elem.write(i as u32);
@@ -119,7 +124,7 @@ impl<'a, T: ?Sized> WriteOnly<'a, T> {
     /// ```
     #[inline]
     #[must_use]
-    pub fn from_mut(reference: &mut T) -> Self {
+    pub const fn from_mut(reference: &mut T) -> Self {
         // SAFETY: `&mut`’s safety conditions imply ours.
         // FIXME: Use `NonNull::from_mut()` when MSRV ≥ 1.89.0
         unsafe { Self::new(NonNull::new_unchecked(&raw mut *reference)) }
@@ -131,7 +136,7 @@ impl<'a, T: ?Sized> WriteOnly<'a, T> {
     /// For slices, use [`copy_from_slice()`][Self::copy_from_slice] or
     /// [`write_iter()`][Self::write_iter] instead.
     #[inline]
-    pub fn write(self, value: T)
+    pub const fn write(self, value: T)
     where
         // Ideally, we want "does not have a destructor" to avoid any need for dropping (which
         // would imply reading) or forgetting the values that write operations overwrite.
@@ -165,7 +170,7 @@ impl<'a, T: ?Sized> WriteOnly<'a, T> {
     ///
     /// [write combining]: https://en.wikipedia.org/wiki/Write_combining
     #[inline]
-    pub fn as_raw_ptr(&mut self) -> NonNull<T> {
+    pub const fn as_raw_ptr(&mut self) -> NonNull<T> {
         self.ptr
     }
 }
@@ -177,6 +182,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// # Example
     ///
     /// ```
+    /// # use wgpu_types as wgpu;
     /// let example_slice: &mut [u8] = &mut [0; 10];
     /// assert_eq!(wgpu::WriteOnly::from_mut(example_slice).len(), example_slice.len());
     /// ```
@@ -203,6 +209,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// # Example
     ///
     /// ```
+    /// # use wgpu_types as wgpu;
     /// // Ordinarily you would get a `WriteOnly` from `wgpu::Buffer` instead.
     /// let mut data: [u8; 9] = [0; 9];
     /// let mut wo = wgpu::WriteOnly::from_mut(data.as_mut_slice());
@@ -259,6 +266,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// # Example
     ///
     /// ```
+    /// # use wgpu_types as wgpu;
     /// // Ordinarily you would get a `WriteOnly` from `wgpu::Buffer` instead.
     /// let mut buf: [u8; 10] = [0; 10];
     /// let wo = wgpu::WriteOnly::from_mut(buf.as_mut_slice());
@@ -305,6 +313,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// # Example
     ///
     /// ```
+    /// # use wgpu_types as wgpu;
     /// // Ordinarily you would get a `WriteOnly` from `wgpu::Buffer` instead.
     /// let mut buf = vec![0; 10];
     /// let mut wo = wgpu::WriteOnly::from_mut(buf.as_mut_slice());
@@ -357,6 +366,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// # Example
     ///
     /// ```
+    /// # use wgpu_types as wgpu;
     /// // Ordinarily you would get a `WriteOnly` from `wgpu::Buffer` instead.
     /// let mut buf = vec![0; 5];
     /// let mut wo = wgpu::WriteOnly::from_mut(buf.as_mut_slice());
@@ -415,6 +425,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// (If a transformation is not required, use [`WriteOnly::copy_from_slice()`].)
     ///
     /// ```
+    /// # use wgpu_types as wgpu;
     /// fn write_text_as_chars(text: &str, output: wgpu::WriteOnly<[u8]>) {
     ///     let (mut output, _remainder) = output.into_chunks::<{ size_of::<u32>() }>();
     ///     output.write_iter(text.chars().map(|ch| (ch as u32).to_ne_bytes()));
@@ -480,7 +491,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     ///
     /// Otherwise, if `mid > len`, returns [`Err`] with the original slice.
     #[inline]
-    pub fn split_at_checked(self, mid: usize) -> Result<(Self, Self), Self> {
+    pub const fn split_at_checked(self, mid: usize) -> Result<(Self, Self), Self> {
         if mid <= self.len() {
             let Self { ptr, _phantom: _ } = self;
             let element_ptr = ptr.cast::<T>();
@@ -573,7 +584,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// Returns `None` if `self` is empty.
     #[inline]
     #[must_use]
-    pub fn split_off_first(&mut self) -> Option<WriteOnly<'a, T>> {
+    pub const fn split_off_first(&mut self) -> Option<WriteOnly<'a, T>> {
         let len = self.len();
         if let Some(new_len) = len.checked_sub(1) {
             let ptr: NonNull<T> = self.as_raw_element_ptr();
@@ -594,7 +605,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// Returns `None` if `self` is empty.
     #[inline]
     #[must_use]
-    pub fn split_off_last(&mut self) -> Option<WriteOnly<'a, T>> {
+    pub const fn split_off_last(&mut self) -> Option<WriteOnly<'a, T>> {
         let len = self.len();
         if let Some(new_len) = len.checked_sub(1) {
             let ptr: NonNull<T> = self.as_raw_element_ptr();
@@ -664,7 +675,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// See [`WriteOnly::as_raw_ptr()`] for information on how this pointer is, or is not,
     /// sound to use.
     #[inline]
-    pub fn as_raw_element_ptr(&mut self) -> NonNull<T> {
+    pub const fn as_raw_element_ptr(&mut self) -> NonNull<T> {
         self.ptr.cast::<T>()
     }
 }
@@ -878,6 +889,28 @@ mod tests {
         let wo = WriteOnly::from_mut(&mut val);
         wo.write(2);
         assert_eq!(val, 2);
+    }
+
+    /// Test that we can construct an empty `WriteOnly` in const eval.
+    const _: WriteOnly<'static, [u8]> = WriteOnly::from_mut(&mut []);
+
+    /// Test that we can use a non-empty `WriteOnly` in const eval.
+    #[test]
+    fn const_write() {
+        let output = const {
+            let mut array = [0u8; 4];
+            let mut wo = WriteOnly::from_mut(array.as_mut_slice());
+
+            // We can't use iterators in const yet, but we can do this.
+            wo.split_off_first().unwrap().write(1);
+            wo.split_off_first().unwrap().write(2);
+            wo.split_off_first().unwrap().write(3);
+            wo.split_off_first().unwrap().write(4);
+
+            array
+        };
+
+        assert_eq!(output, [1, 2, 3, 4]);
     }
 
     #[test]

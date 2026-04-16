@@ -1685,7 +1685,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 }
                 Op::ExtInst => {
                     use crate::MathFunction as Mf;
-                    use spirv::GLOp as Glo;
+                    use spirv::GlslStd450Op as Glo;
 
                     let base_wc = 5;
                     inst.expect_at_least(base_wc)?;

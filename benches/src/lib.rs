@@ -1,5 +1,8 @@
 #![cfg(not(target_arch = "wasm32"))]
-#![expect(clippy::disallowed_types)] // We're outside of the main wgpu codebase
+#![expect(
+    clippy::disallowed_types,
+    reason = "We're outside of the main wgpu codebase"
+)]
 
 //! Benchmarking framework for `wgpu`.
 //!
@@ -134,7 +137,7 @@ pub fn main(benchmarks: Vec<Benchmark>) {
     // test mode, so we need to accept it.
     let _no_capture = args.contains("--no-capture");
 
-    #[expect(clippy::manual_map)] // So much clearer this way
+    #[expect(clippy::manual_map, reason = "So much clearer this way")]
     let mut override_iterations = if let Some(iters) = args.opt_value_from_str("--iters").unwrap() {
         Some(LoopControl::Iterations(iters))
     } else if let Some(seconds) = args.opt_value_from_str("--time").unwrap() {

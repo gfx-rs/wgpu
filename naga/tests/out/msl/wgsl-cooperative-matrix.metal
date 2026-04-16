@@ -22,7 +22,7 @@ metal::simdgroup_float8x8 NagaCooperativeMultiplyAdd(const thread metal::simdgro
 }
 
 
-kernel void main_(
+[[max_total_threads_per_threadgroup(64)]] kernel void main_(
   device type_3& ext [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {

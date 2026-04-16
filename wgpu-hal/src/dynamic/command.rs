@@ -183,8 +183,12 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &dyn DynComputePipeline);
 
-    unsafe fn dispatch(&mut self, count: [u32; 3]);
-    unsafe fn dispatch_indirect(&mut self, buffer: &dyn DynBuffer, offset: wgt::BufferAddress);
+    unsafe fn dispatch_workgroups(&mut self, count: [u32; 3]);
+    unsafe fn dispatch_workgroups_indirect(
+        &mut self,
+        buffer: &dyn DynBuffer,
+        offset: wgt::BufferAddress,
+    );
 
     unsafe fn build_acceleration_structures<'a>(
         &mut self,
@@ -606,13 +610,17 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
         unsafe { C::set_compute_pipeline(self, pipeline) };
     }
 
-    unsafe fn dispatch(&mut self, count: [u32; 3]) {
-        unsafe { C::dispatch(self, count) };
+    unsafe fn dispatch_workgroups(&mut self, count: [u32; 3]) {
+        unsafe { C::dispatch_workgroups(self, count) };
     }
 
-    unsafe fn dispatch_indirect(&mut self, buffer: &dyn DynBuffer, offset: wgt::BufferAddress) {
+    unsafe fn dispatch_workgroups_indirect(
+        &mut self,
+        buffer: &dyn DynBuffer,
+        offset: wgt::BufferAddress,
+    ) {
         let buffer = buffer.expect_downcast_ref();
-        unsafe { C::dispatch_indirect(self, buffer, offset) };
+        unsafe { C::dispatch_workgroups_indirect(self, buffer, offset) };
     }
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &dyn DynRenderPipeline) {

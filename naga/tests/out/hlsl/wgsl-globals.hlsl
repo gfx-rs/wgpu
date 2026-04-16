@@ -110,9 +110,9 @@ uint NagaBufferLength(ByteAddressBuffer buffer)
 }
 
 [numthreads(1, 1, 1)]
-void main(uint3 __local_invocation_id : SV_GroupThreadID)
+void main(uint local_invocation_index : SV_GroupIndex)
 {
-    if (all(__local_invocation_id == uint3(0u, 0u, 0u))) {
+    if (local_invocation_index == 0) {
         wg = (float[10])0;
         at_1 = (uint)0;
     }
@@ -137,6 +137,6 @@ void main(uint3 __local_invocation_id : SV_GroupThreadID)
     wg[2] = _e43;
     alignment.Store(12, asuint(4.0));
     wg[1] = float(((NagaBufferLength(dummy) - 0) / 8));
-    at_1 = 2u;
+    { uint dummy_1 = 0; InterlockedExchange(at_1, 2u, dummy_1); }
     return;
 }

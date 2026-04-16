@@ -185,11 +185,7 @@ impl Corpus {
                 let instance_flags = instance_desc.flags;
                 let instance = wgc::instance::Instance::new("test", instance_desc, None);
                 let adapter = match instance.request_adapter(
-                    &wgt::RequestAdapterOptions {
-                        power_preference: wgt::PowerPreference::None,
-                        force_fallback_adapter: false,
-                        compatible_surface: None,
-                    },
+                    &wgt::RequestAdapterOptions::default(),
                     wgt::Backends::from(backend),
                 ) {
                     Ok(adapter) => Arc::new(adapter),

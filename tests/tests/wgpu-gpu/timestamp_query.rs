@@ -124,7 +124,7 @@ fn timestamp_query(ctx: TestingContext) {
     ctx.device
         .poll(wgpu::PollType::wait_indefinitely())
         .unwrap();
-    let query_buffer_view = mapping_buffer.slice(..).get_mapped_range();
+    let query_buffer_view = mapping_buffer.slice(..).get_mapped_range().unwrap();
     let query_data: &[u64] = bytemuck::cast_slice(&query_buffer_view);
 
     for i in 0..ITERATIONS {

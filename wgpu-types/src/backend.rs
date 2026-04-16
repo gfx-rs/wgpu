@@ -382,6 +382,154 @@ impl ForceShaderModelToken {
     }
 }
 
+/// Behavior when the Agility SDK fails to load.
+///
+/// See [`Dx12AgilitySDK`] for details on the Agility SDK.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Dx12AgilitySDKLoadFailure {
+    /// Log a warning and fall back to the system-installed D3D12 runtime.
+    ///
+    /// This is the default behavior and is appropriate for most applications.
+    #[default]
+    Fallback,
+    /// Fail instance creation entirely if the Agility SDK cannot be loaded.
+    ///
+    /// Use this in environments where you are shipping the Agility SDK alongside your application
+    /// and want to ensure that it is being loaded correctly.
+    Error,
+}
+
+impl Dx12AgilitySDKLoadFailure {
+    /// Read the load failure behavior from the environment variable
+    /// `WGPU_DX12_AGILITY_SDK_REQUIRE`.
+    ///
+    /// When set to `1`, returns [`Error`](Self::Error).
+    /// When set to `0`, returns [`Fallback`](Self::Fallback).
+    #[must_use]
+    pub fn from_env() -> Option<Self> {
+        let value = crate::env::var("WGPU_DX12_AGILITY_SDK_REQUIRE")?;
+        match value.as_str() {
+            "1" => Some(Self::Error),
+            "0" => Some(Self::Fallback),
+            _ => None,
+        }
+    }
+
+    /// Takes the given setting, modifies it based on the
+    /// `WGPU_DX12_AGILITY_SDK_REQUIRE` environment variable, and returns the result.
+    ///
+    /// See [`from_env`](Self::from_env) for more information.
+    #[must_use]
+    pub fn with_env(self) -> Self {
+        if let Some(v) = Self::from_env() {
+            v
+        } else {
+            self
+        }
+    }
+}
+
+/// Configuration for loading a specific [DirectX 12 Agility SDK] runtime.
+///
+/// The Agility SDK allows applications to ship a newer version of the D3D12 runtime
+/// (`D3D12Core.dll`) alongside the application, enabling access to the latest D3D12
+/// features without waiting for the OS to update its built-in runtime. This is the
+/// standard way for games and applications to adopt new D3D12 functionality on older
+/// Windows versions.
+///
+/// Downloads and release notes are available at the [DirectX 12 Agility SDK] page.
+///
+/// wgpu loads the Agility SDK via the [Independent Devices API], which allows
+/// specifying the SDK path and version at runtime without requiring exported constants
+/// or developer mode. The [`sdk_version`](Self::sdk_version) must match the version of
+/// the `D3D12Core.dll` in the provided path exactly, or loading will fail, irrespective of
+/// the OS's built-in runtime version.
+///
+/// If the shipped SDK is older than the system runtime, the system runtime will be used.
+/// This allows applications to ship a minimum SDK version while still benefiting from SDK updates on the user's system.
+///
+/// If the Agility SDK fails to load (version mismatch, missing DLL, unsupported OS,
+/// etc.), the behavior is controlled by [`on_load_failure`](Self::on_load_failure).
+/// By default, wgpu logs a warning and falls back to the system-installed D3D12 runtime.
+/// Set it to [`Error`](Dx12AgilitySDKLoadFailure::Error) to fail instance creation instead
+/// (useful in CI/testing).
+///
+/// ## OS requirements
+///
+/// The Independent Devices API requires a Windows update from August/September 2023
+/// or newer:
+///
+/// - [Windows 11 21H2+ (KB5029332)][win11-21h2]
+/// - [Windows 10 22H2+ (KB5029331)][win10-22h2]
+/// - [Windows Server 2022+ (KB5030216)][server-2022]
+///
+/// On older OS builds the Agility SDK will not load and wgpu will log a warning and
+/// fall back to the system runtime (or error, per [`on_load_failure`](Self::on_load_failure)).
+///
+/// [DirectX 12 Agility SDK]: https://devblogs.microsoft.com/directx/directx12agility/
+/// [Independent Devices API]: https://devblogs.microsoft.com/directx/d3d12-independent-devices/
+/// [win11-21h2]: https://support.microsoft.com/en-us/topic/august-22-2023-kb5029332-os-build-22000-2360-preview-8f8aec64-77b4-4225-9a0f-f0153204ae28
+/// [win10-22h2]: https://support.microsoft.com/en-gb/topic/august-22-2023-kb5029331-os-build-19045-3393-preview-9f6c1dbd-0ee6-469b-af24-f9d0bf35ca18
+/// [server-2022]: https://support.microsoft.com/en-au/topic/september-12-2023-kb5030216-os-build-20348-1970-34d4aff3-fd05-4270-b288-4ab6379c7f81
+#[derive(Clone, Debug)]
+pub struct Dx12AgilitySDK {
+    /// The Agility SDK version number (e.g., 614 for SDK version 1.614.0).
+    ///
+    /// This must match the version of the `D3D12Core.dll` at [`sdk_path`](Self::sdk_path)
+    /// exactly, or the runtime will fail to load.
+    pub sdk_version: u32,
+    /// Path to the directory containing the Agility SDK's `D3D12Core.dll`.
+    pub sdk_path: String,
+    /// What to do if the Agility SDK fails to load.
+    ///
+    /// Defaults to [`Fallback`](Dx12AgilitySDKLoadFailure::Fallback).
+    ///
+    /// Can also be set via the `WGPU_DX12_AGILITY_SDK_REQUIRE` environment variable
+    /// (`1` for [`Error`](Dx12AgilitySDKLoadFailure::Error),
+    /// `0` for [`Fallback`](Dx12AgilitySDKLoadFailure::Fallback)).
+    pub on_load_failure: Dx12AgilitySDKLoadFailure,
+}
+
+impl Dx12AgilitySDK {
+    /// Read Agility SDK configuration from environment variables.
+    ///
+    /// Reads `WGPU_DX12_AGILITY_SDK_PATH`, `WGPU_DX12_AGILITY_SDK_VERSION`,
+    /// and `WGPU_DX12_AGILITY_SDK_REQUIRE`.
+    /// Both path and version must be set for this to return `Some`.
+    #[must_use]
+    pub fn from_env() -> Option<Self> {
+        let sdk_path = crate::env::var("WGPU_DX12_AGILITY_SDK_PATH")?;
+        let sdk_version_str = crate::env::var("WGPU_DX12_AGILITY_SDK_VERSION")?;
+        let sdk_version = sdk_version_str.parse::<u32>().ok()?;
+        let on_load_failure = Dx12AgilitySDKLoadFailure::from_env().unwrap_or_default();
+        Some(Self {
+            sdk_version,
+            sdk_path,
+            on_load_failure,
+        })
+    }
+
+    /// Takes the given configuration, overrides fields with environment variables if present,
+    /// and returns the result.
+    ///
+    /// Reads `WGPU_DX12_AGILITY_SDK_PATH`, `WGPU_DX12_AGILITY_SDK_VERSION`,
+    /// and `WGPU_DX12_AGILITY_SDK_REQUIRE`.
+    /// Each variable overrides the corresponding field independently.
+    #[must_use]
+    pub fn with_env(mut self) -> Self {
+        if let Some(sdk_path) = crate::env::var("WGPU_DX12_AGILITY_SDK_PATH") {
+            self.sdk_path = sdk_path;
+        }
+        if let Some(sdk_version_str) = crate::env::var("WGPU_DX12_AGILITY_SDK_VERSION") {
+            if let Ok(sdk_version) = sdk_version_str.parse::<u32>() {
+                self.sdk_version = sdk_version;
+            }
+        }
+        self.on_load_failure = self.on_load_failure.with_env();
+        self
+    }
+}
+
 /// Configuration for the DX12 backend.
 ///
 /// Part of [`BackendOptions`].
@@ -398,6 +546,15 @@ pub struct Dx12BackendOptions {
     ///
     /// This does not override the device's shader model version, only the external shader compiler's version.
     pub force_shader_model: ForceShaderModelToken,
+    /// Optional Agility SDK configuration for using the Independent Devices API.
+    ///
+    /// When set, wgpu will attempt to load the specified D3D12 runtime via the
+    /// Independent Devices API. If the API is unavailable or the configuration is
+    /// invalid, it falls back to the system-installed D3D12 runtime.
+    ///
+    /// Can also be set via `WGPU_DX12_AGILITY_SDK_PATH` and `WGPU_DX12_AGILITY_SDK_VERSION`
+    /// environment variables.
+    pub agility_sdk: Option<Dx12AgilitySDK>,
 }
 
 impl Dx12BackendOptions {
@@ -410,11 +567,13 @@ impl Dx12BackendOptions {
         let presentation_system = Dx12SwapchainKind::from_env().unwrap_or_default();
         let latency_waitable_object =
             Dx12UseFrameLatencyWaitableObject::from_env().unwrap_or_default();
+        let agility_sdk = Dx12AgilitySDK::from_env();
         Self {
             shader_compiler: compiler,
             presentation_system,
             latency_waitable_object,
             force_shader_model: ForceShaderModelToken::default(),
+            agility_sdk,
         }
     }
 
@@ -426,11 +585,16 @@ impl Dx12BackendOptions {
         let shader_compiler = self.shader_compiler.with_env();
         let presentation_system = self.presentation_system.with_env();
         let latency_waitable_object = self.latency_waitable_object.with_env();
+        let agility_sdk = self
+            .agility_sdk
+            .map(|s| s.with_env())
+            .or_else(Dx12AgilitySDK::from_env);
         Self {
             shader_compiler,
             presentation_system,
             latency_waitable_object,
             force_shader_model: ForceShaderModelToken::default(),
+            agility_sdk,
         }
     }
 }
@@ -446,9 +610,32 @@ pub struct NoopBackendOptions {
     /// it must not be used when not expected. Therefore, it will not be used unless explicitly
     /// enabled.
     pub enable: bool,
+
+    /// Specify the reported limits values. If `None`, reports maximally permissive limits.
+    pub limits: Option<crate::Limits>,
+
+    /// Specify the reported feature support. If `None`, reports support for all features.
+    pub features: Option<crate::Features>,
+
+    /// Specify the reported device type. If `None`, uses [`crate::DeviceType::Other`].
+    pub device_type: Option<crate::DeviceType>,
+
+    /// Specify the reported minimum subgroup size.
+    pub subgroup_min_size: Option<u32>,
+
+    /// Specify the reported maximum subgroup size.
+    pub subgroup_max_size: Option<u32>,
 }
 
 impl NoopBackendOptions {
+    /// Enable the noop backend.
+    pub fn enabled() -> Self {
+        Self {
+            enable: true,
+            ..Default::default()
+        }
+    }
+
     /// Choose whether the noop backend is enabled from the environment.
     ///
     /// It will be enabled if the environment variable `WGPU_NOOP_BACKEND` has the value `1`
@@ -457,6 +644,7 @@ impl NoopBackendOptions {
     pub fn from_env_or_default() -> Self {
         Self {
             enable: Self::enable_from_env().unwrap_or(false),
+            ..Default::default()
         }
     }
 
@@ -468,6 +656,7 @@ impl NoopBackendOptions {
     pub fn with_env(self) -> Self {
         Self {
             enable: Self::enable_from_env().unwrap_or(self.enable),
+            ..self
         }
     }
 

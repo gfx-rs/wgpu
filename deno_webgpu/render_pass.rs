@@ -347,7 +347,7 @@ impl GPURenderPassEncoder {
   fn set_vertex_buffer(
     &self,
     #[webidl(options(enforce_range = true))] slot: u32,
-    #[webidl] buffer: Ptr<GPUBuffer>, // TODO(wgpu): support nullable buffer
+    #[webidl] buffer: Nullable<Ptr<GPUBuffer>>,
     #[webidl(default = 0, options(enforce_range = true))] offset: u64,
     #[webidl(options(enforce_range = true))] size: Option<u64>,
   ) {
@@ -356,7 +356,7 @@ impl GPURenderPassEncoder {
       .render_pass_set_vertex_buffer(
         &mut self.render_pass.borrow_mut(),
         slot,
-        buffer.id,
+        buffer.into_option().map(|buffer| buffer.id),
         offset,
         size.and_then(NonZeroU64::new),
       )

@@ -157,6 +157,20 @@ impl FailureCase {
         }
     }
 
+    /// Tests running on the KosmicKrisp Vulkan driver on macOS.
+    pub fn kosmic_krisp() -> Self {
+        FailureCase {
+            backends: Some(wgpu::Backends::VULKAN),
+            driver: Some("KosmicKrisp"),
+            ..FailureCase::default()
+        }
+    }
+
+    /// Tests running on either Vulkan driver on macOS.
+    pub fn mac_vulkan(f: impl Fn(FailureCase) -> FailureCase) -> Vec<Self> {
+        vec![f(FailureCase::molten_vk()), f(FailureCase::kosmic_krisp())]
+    }
+
     /// Return the reasons why this case should fail.
     pub fn reasons(&self) -> &[FailureReason] {
         if self.reasons.is_empty() {
@@ -305,7 +319,7 @@ impl FailureReason {
     };
 
     /// Match a validation error.
-    #[allow(dead_code)] // Not constructed on wasm
+    #[allow(dead_code, reason = "Not constructed on wasm")]
     pub fn validation_error() -> Self {
         Self {
             kind: Some(FailureResultKind::ValidationError),
@@ -350,7 +364,7 @@ pub enum FailureBehavior {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum FailureResultKind {
-    #[allow(dead_code)] // Not constructed on wasm
+    #[allow(dead_code, reason = "Not constructed on wasm")]
     ValidationError,
     Panic,
 }
@@ -380,7 +394,7 @@ impl FailureResult {
     }
 
     /// Failure result is a validation error.
-    #[allow(dead_code)] // Not constructed on wasm
+    #[allow(dead_code, reason = "Not constructed on wasm")]
     pub(super) fn validation_error() -> Self {
         Self {
             kind: FailureResultKind::ValidationError,

@@ -183,11 +183,11 @@ impl RenderpassState {
 
         let mut vertex_buffer_layouts = Vec::with_capacity(VERTEX_BUFFERS_PER_DRAW as usize);
         for attributes in &vertex_buffer_attributes {
-            vertex_buffer_layouts.push(wgpu::VertexBufferLayout {
+            vertex_buffer_layouts.push(Some(wgpu::VertexBufferLayout {
                 array_stride: 16,
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes,
-            });
+            }));
         }
 
         let pipeline =

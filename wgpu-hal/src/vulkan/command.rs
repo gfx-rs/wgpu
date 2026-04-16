@@ -609,7 +609,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                                 // index buffer we need to have IndexType::NONE_KHR as our index type.
                                 .index_type(vk::IndexType::NONE_KHR)
                                 .vertex_data(vk::DeviceOrHostAddressConstKHR {
-                                    device_address: get_device_address(triangles.vertex_buffer),
+                                    device_address: get_device_address(triangles.vertex_buffer)
+                                        + (triangles.first_vertex as u64 * triangles.vertex_stride),
                                 })
                                 .vertex_format(conv::map_vertex_format(triangles.vertex_format))
                                 .max_vertex(triangles.vertex_count)
@@ -626,12 +627,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
                             range = range
                                 .primitive_count(indices.count / 3)
-                                .primitive_offset(indices.offset)
-                                .first_vertex(triangles.first_vertex);
+                                .primitive_offset(indices.offset);
                         } else {
-                            range = range
-                                .primitive_count(triangles.vertex_count / 3)
-                                .first_vertex(triangles.first_vertex);
+                            range = range.primitive_count(triangles.vertex_count / 3);
                         }
 
                         if let Some(ref transform) = triangles.transform {
@@ -1342,14 +1340,18 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
     }
 
-    unsafe fn dispatch(&mut self, count: [u32; 3]) {
+    unsafe fn dispatch_workgroups(&mut self, count: [u32; 3]) {
         unsafe {
             self.device
                 .raw
                 .cmd_dispatch(self.active, count[0], count[1], count[2])
         };
     }
-    unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
+    unsafe fn dispatch_workgroups_indirect(
+        &mut self,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+    ) {
         unsafe {
             self.device
                 .raw

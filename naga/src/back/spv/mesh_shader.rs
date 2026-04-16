@@ -662,7 +662,7 @@ impl super::Writer {
                 let id = self.id_gen.next();
                 block.body.push(Instruction::ext_inst_gl_op(
                     self.gl450_ext_inst_id,
-                    spirv::GLOp::UMin,
+                    spirv::GlslStd450Op::UMin,
                     u32_id,
                     id,
                     &[before_min_id, max],

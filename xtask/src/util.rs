@@ -111,6 +111,11 @@ fn parse_git_version_output(output: &str) -> anyhow::Result<GitVersion> {
         .split_once(".windows")
         .map_or(raw_version, |(before, _after)| before);
 
+    let raw_version = raw_version
+        .split_once("(Apple")
+        .map_or(raw_version, |(before, _after)| before)
+        .trim();
+
     let parsed = GitVersion::try_from(
         raw_version
             .splitn(3, '.')
@@ -155,6 +160,7 @@ fn test_git_version_parsing() {
     test_ok!("git version 0.255.0", [0, 255, 0]);
     test_ok!("git version 4.5.6", [4, 5, 6]);
     test_ok!("git version 2.3.0.windows.1", [2, 3, 0]);
+    test_ok!("git version 2.50.1 (Apple Git-155)", [2, 50, 1]);
 
     macro_rules! test_err {
         ($input:expr, $msg:expr) => {

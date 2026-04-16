@@ -4,6 +4,7 @@ This is an application that allows replaying the `wgpu` workloads recorded elsew
 the same revision as an application was linking to, or otherwise, the data may fail to load.
 
 Launch as:
+
 ```rust
 play <trace-dir>
 ```

@@ -118,7 +118,7 @@ pub struct PhysicalDeviceFeatures {
     /// Features provided by `VK_EXT_subgroup_size_control`, promoted to Vulkan 1.3.
     subgroup_size_control: Option<vk::PhysicalDeviceSubgroupSizeControlFeatures<'static>>,
 
-    /// Features proved by `VK_KHR_maintenance4`, needed for mesh shaders
+    /// Features provided by `VK_KHR_maintenance4`, promoted to Vulkan 1.3.
     maintenance4: Option<vk::PhysicalDeviceMaintenance4FeaturesKHR<'static>>,
 
     /// Features proved by `VK_EXT_mesh_shader`
@@ -355,7 +355,7 @@ impl PhysicalDeviceFeatures {
                 .shader_int64(requested_features.contains(wgt::Features::SHADER_INT64))
                 .shader_int16(requested_features.contains(wgt::Features::SHADER_I16))
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
-                .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
+                .geometry_shader(requested_features.contains(wgt::Features::PRIMITIVE_INDEX))
                 .depth_clamp(requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL))
                 .dual_src_blend(requested_features.contains(wgt::Features::DUAL_SOURCE_BLENDING)),
             descriptor_indexing: if requested_features.intersects(INDEXING_FEATURES) {
@@ -553,9 +553,11 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            maintenance4: if enabled_extensions.contains(&khr::maintenance4::NAME) {
+            maintenance4: if device_api_version >= vk::API_VERSION_1_3
+                || enabled_extensions.contains(&khr::maintenance4::NAME)
+            {
                 let needed = requested_features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER);
-                Some(vk::PhysicalDeviceMaintenance4FeaturesKHR::default().maintenance4(needed))
+                Some(vk::PhysicalDeviceMaintenance4Features::default().maintenance4(needed))
             } else {
                 None
             },
@@ -616,9 +618,10 @@ impl PhysicalDeviceFeatures {
                 None
             },
             shader_draw_parameters: if device_api_version >= vk::API_VERSION_1_1 {
+                let needed = requested_features.contains(wgt::Features::SHADER_DRAW_INDEX);
                 Some(
                     vk::PhysicalDeviceShaderDrawParametersFeatures::default()
-                        .shader_draw_parameters(true),
+                        .shader_draw_parameters(needed),
                 )
             } else {
                 None
@@ -670,7 +673,8 @@ impl PhysicalDeviceFeatures {
             | Df::VIEW_FORMATS
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
             | Df::NONBLOCKING_QUERY_RESOLVE
-            | Df::SHADER_F16_IN_F32;
+            | Df::SHADER_F16_IN_F32
+            | Df::MSL2_1;
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,
@@ -736,7 +740,7 @@ impl PhysicalDeviceFeatures {
         features.set(F::SHADER_INT64, self.core.shader_int64 != 0);
         features.set(F::SHADER_I16, self.core.shader_int16 != 0);
 
-        features.set(F::SHADER_PRIMITIVE_INDEX, self.core.geometry_shader != 0);
+        features.set(F::PRIMITIVE_INDEX, self.core.geometry_shader != 0);
 
         if let Some(ref shader_atomic_int64) = self.shader_atomic_int64 {
             features.set(
@@ -1017,6 +1021,16 @@ impl PhysicalDeviceFeatures {
             caps.supports_extension(khr::external_memory_win32::NAME),
         );
         features.set(
+            F::VULKAN_EXTERNAL_MEMORY_FD,
+            caps.supports_extension(khr::external_memory_fd::NAME),
+        );
+        features.set(
+            F::VULKAN_EXTERNAL_MEMORY_DMA_BUF,
+            caps.supports_extension(khr::external_memory_fd::NAME)
+                && caps.supports_extension(ext::external_memory_dma_buf::NAME)
+                && caps.supports_extension(ext::image_drm_format_modifier::NAME),
+        );
+        features.set(
             F::EXPERIMENTAL_MESH_SHADER,
             caps.supports_extension(ext::mesh_shader::NAME),
         );
@@ -1088,6 +1102,10 @@ pub struct PhysicalDeviceProperties {
     /// Additional `vk::PhysicalDevice` properties from the
     /// `VK_KHR_maintenance3` extension, promoted to Vulkan 1.1.
     maintenance_3: Option<vk::PhysicalDeviceMaintenance3Properties<'static>>,
+
+    /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_KHR_maintenance4` extension, promoted to Vulkan 1.3.
+    maintenance_4: Option<vk::PhysicalDeviceMaintenance4Properties<'static>>,
 
     /// Additional `vk::PhysicalDevice` properties from the
     /// `VK_EXT_descriptor_indexing` extension, promoted to Vulkan 1.2.
@@ -1237,6 +1255,11 @@ impl PhysicalDeviceProperties {
         }
 
         if self.device_api_version < vk::API_VERSION_1_3 {
+            // Optional `VK_KHR_maintenance4`
+            if self.supports_extension(khr::maintenance4::NAME) {
+                extensions.push(khr::maintenance4::NAME);
+            }
+
             // Optional `VK_EXT_image_robustness`
             if self.supports_extension(ext::image_robustness::NAME) {
                 extensions.push(ext::image_robustness::NAME);
@@ -1245,10 +1268,6 @@ impl PhysicalDeviceProperties {
             // Require `VK_EXT_subgroup_size_control` if the associated feature was requested
             if requested_features.contains(wgt::Features::SUBGROUP) {
                 extensions.push(ext::subgroup_size_control::NAME);
-            }
-
-            if requested_features.intersects(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
-                extensions.push(khr::maintenance4::NAME);
             }
 
             // Optional `VK_KHR_shader_integer_dot_product`
@@ -1280,6 +1299,11 @@ impl PhysicalDeviceProperties {
         // Optional `VK_EXT_external_memory_dma`
         if self.supports_extension(ext::external_memory_dma_buf::NAME) {
             extensions.push(ext::external_memory_dma_buf::NAME);
+        }
+
+        // Optional `VK_EXT_image_drm_format_modifier`
+        if self.supports_extension(ext::image_drm_format_modifier::NAME) {
+            extensions.push(ext::image_drm_format_modifier::NAME);
         }
 
         // Optional `VK_EXT_memory_budget`
@@ -1367,13 +1391,14 @@ impl PhysicalDeviceProperties {
     fn to_wgpu_limits(&self) -> wgt::Limits {
         let limits = &self.properties.limits;
 
-        let max_compute_workgroup_sizes = limits.max_compute_work_group_size;
-        let max_compute_workgroups_per_dimension = limits.max_compute_work_group_count[0]
-            .min(limits.max_compute_work_group_count[1])
-            .min(limits.max_compute_work_group_count[2]);
+        // Default is only implemented for tuples up to a certain size.
         let (
-            mut max_task_mesh_workgroup_total_count,
-            mut max_task_mesh_workgroups_per_dimension,
+            mut max_task_workgroup_total_count,
+            mut max_task_workgroups_per_dimension,
+            mut max_mesh_workgroup_total_count,
+            mut max_mesh_workgroups_per_dimension,
+        ) = Default::default();
+        let (
             mut max_task_invocations_per_workgroup,
             mut max_task_invocations_per_dimension,
             mut max_mesh_invocations_per_workgroup,
@@ -1385,15 +1410,12 @@ impl PhysicalDeviceProperties {
             mut max_mesh_multiview_view_count,
         ) = Default::default();
         if let Some(m) = self.mesh_shader {
-            max_task_mesh_workgroup_total_count = m
-                .max_task_work_group_total_count
-                .min(m.max_mesh_work_group_total_count);
-            max_task_mesh_workgroups_per_dimension = m
-                .max_task_work_group_count
-                .into_iter()
-                .chain(m.max_mesh_work_group_count)
-                .min()
-                .unwrap();
+            max_task_workgroup_total_count = m.max_task_work_group_total_count;
+            max_task_workgroups_per_dimension =
+                m.max_task_work_group_count.into_iter().min().unwrap();
+            max_mesh_workgroup_total_count = m.max_mesh_work_group_total_count;
+            max_mesh_workgroups_per_dimension =
+                m.max_mesh_work_group_count.into_iter().min().unwrap();
             max_task_invocations_per_workgroup = m.max_task_work_group_invocations;
             max_task_invocations_per_dimension =
                 m.max_task_work_group_size.into_iter().min().unwrap();
@@ -1407,15 +1429,27 @@ impl PhysicalDeviceProperties {
             max_mesh_multiview_view_count = m.max_mesh_multiview_view_count;
         }
 
+        let max_memory_allocation_size = self
+            .maintenance_3
+            .map(|maintenance_3| maintenance_3.max_memory_allocation_size)
+            .unwrap_or(u64::MAX);
+        let max_buffer_size = self
+            .maintenance_4
+            .map(|maintenance_4| maintenance_4.max_buffer_size)
+            .unwrap_or(u64::MAX);
+        let max_buffer_size = max_buffer_size.min(max_memory_allocation_size);
+
         // Prevent very large buffers on mesa and most android devices, and in all cases
         // don't risk confusing JS by exceeding the range of a double.
         let is_nvidia = self.properties.vendor_id == crate::auxil::db::nvidia::VENDOR;
-        let max_buffer_size =
+        let max_buffer_size_cap =
             if (cfg!(target_os = "linux") || cfg!(target_os = "android")) && !is_nvidia {
                 i32::MAX as u64
             } else {
                 1u64 << 52
             };
+
+        let max_buffer_size = max_buffer_size.min(max_buffer_size_cap);
 
         let mut max_binding_array_elements = 0;
         let mut max_sampler_binding_array_elements = 0;
@@ -1435,16 +1469,85 @@ impl PhysicalDeviceProperties {
                 .min(descriptor_indexing.max_per_stage_descriptor_update_after_bind_samplers);
         }
 
-        // TODO: programmatically determine this, if possible. It's unclear whether we can
-        // as of https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447.
-        //
-        // In theory some tilers may not support this much. We can't tell however, and
-        // the driver will throw a DEVICE_REMOVED if it goes too high in usage. This is fine.
-        //
-        // 16 bytes per sample is the maximum size for a color attachment.
-        let max_color_attachment_bytes_per_sample =
-            limits.max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
+        const MAX_SHADER_STAGES_PER_PIPELINE: u32 = 2;
 
+        // When summed, the 3 limits below must be under Vulkan's maxFragmentCombinedOutputResources.
+        // https://gpuweb.github.io/gpuweb/correspondence/#vulkan-maxFragmentCombinedOutputResources
+        //
+        // - maxStorageTexturesPerShaderStage, WebGPU default: 4
+        // - maxStorageBuffersPerShaderStage, WebGPU default: 8
+        // - maxColorAttachments, WebGPU default: 8
+        //
+        // However, maxFragmentCombinedOutputResources should be ignored on
+        // intel/nvidia/amd/imgtec since it's not reported correctly.
+        //
+        // https://github.com/gpuweb/gpuweb/issues/3631#issuecomment-1498747606
+        // https://github.com/gpuweb/gpuweb/issues/4018
+        let mut max_storage_textures_per_shader_stage = limits
+            .max_per_stage_descriptor_storage_images
+            .min(limits.max_descriptor_set_storage_images / MAX_SHADER_STAGES_PER_PIPELINE);
+        let mut max_storage_buffers_per_shader_stage = limits
+            .max_per_stage_descriptor_storage_buffers
+            .min(limits.max_descriptor_set_storage_buffers / MAX_SHADER_STAGES_PER_PIPELINE);
+        let mut max_color_attachments = limits
+            .max_color_attachments
+            .min(limits.max_fragment_output_attachments);
+
+        let ignore_max_fragment_combined_output_resources_by_device = [
+            crate::auxil::db::intel::VENDOR,
+            crate::auxil::db::nvidia::VENDOR,
+            crate::auxil::db::amd::VENDOR,
+            crate::auxil::db::imgtec::VENDOR,
+        ]
+        .contains(&self.properties.vendor_id);
+        let ignore_max_fragment_combined_output_resources_by_driver = self
+            .driver
+            .map(|driver| [vk::DriverId::MESA_AGXV].contains(&driver.driver_id))
+            .unwrap_or_default();
+        let ignore_max_fragment_combined_output_resources =
+            ignore_max_fragment_combined_output_resources_by_device
+                || ignore_max_fragment_combined_output_resources_by_driver;
+
+        if !ignore_max_fragment_combined_output_resources {
+            crate::auxil::cap_limits_to_be_under_the_sum_limit(
+                [
+                    &mut max_storage_textures_per_shader_stage,
+                    &mut max_storage_buffers_per_shader_stage,
+                    &mut max_color_attachments,
+                ],
+                limits.max_fragment_combined_output_resources,
+            );
+        }
+
+        // When summed, the 5 limits below must be under Vulkan's maxPerStageResources.
+        //
+        // - maxUniformBuffersPerShaderStage, WebGPU default: 12
+        // - maxSampledTexturesPerShaderStage, WebGPU default: 16
+        // - maxStorageTexturesPerShaderStage, WebGPU default: 4
+        // - maxStorageBuffersPerShaderStage, WebGPU default: 8
+        // - maxColorAttachments, WebGPU default: 8
+        //
+        // Note: Vulkan's texel buffers and input attachments also count towards
+        // maxPerStageResources but we don't make use of them.
+        let mut max_sampled_textures_per_shader_stage = limits
+            .max_per_stage_descriptor_sampled_images
+            .min(limits.max_descriptor_set_sampled_images / MAX_SHADER_STAGES_PER_PIPELINE);
+        let mut max_uniform_buffers_per_shader_stage = limits
+            .max_per_stage_descriptor_uniform_buffers
+            .min(limits.max_descriptor_set_uniform_buffers / MAX_SHADER_STAGES_PER_PIPELINE);
+
+        crate::auxil::cap_limits_to_be_under_the_sum_limit(
+            [
+                &mut max_sampled_textures_per_shader_stage,
+                &mut max_uniform_buffers_per_shader_stage,
+                &mut max_storage_textures_per_shader_stage,
+                &mut max_storage_buffers_per_shader_stage,
+                &mut max_color_attachments,
+            ],
+            limits.max_per_stage_resources,
+        );
+
+        // Acceleration structure limits
         let mut max_blas_geometry_count = 0;
         let mut max_blas_primitive_count = 0;
         let mut max_tlas_instance_count = 0;
@@ -1453,31 +1556,131 @@ impl PhysicalDeviceProperties {
             max_blas_geometry_count = properties.max_geometry_count as u32;
             max_blas_primitive_count = properties.max_primitive_count as u32;
             max_tlas_instance_count = properties.max_instance_count as u32;
-            max_acceleration_structures_per_shader_stage =
-                properties.max_per_stage_descriptor_acceleration_structures;
+            max_acceleration_structures_per_shader_stage = properties
+                .max_per_stage_descriptor_acceleration_structures
+                .min(
+                    properties.max_descriptor_set_acceleration_structures
+                        / MAX_SHADER_STAGES_PER_PIPELINE,
+                );
         }
+
+        // When summed, the 6 limits below must be under Vulkan's
+        // maxPerSetDescriptors / MAX_SHADER_STAGES_PER_PIPELINE.
+        //
+        // - maxUniformBuffersPerShaderStage, WebGPU default: 12
+        // - maxSampledTexturesPerShaderStage, WebGPU default: 16
+        // - maxStorageTexturesPerShaderStage, WebGPU default: 4
+        // - maxStorageBuffersPerShaderStage, WebGPU default: 8
+        // - maxSamplersPerShaderStage, WebGPU default: 16
+        // - maxAccelerationStructuresPerShaderStage, Native only
+        //
+        // Note: All Vulkan's descriptor types count towards maxPerSetDescriptors but
+        // we don't use all of them.
+        // See https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#interfaces-resources-limits
+        let max_per_set_descriptors = self
+            .maintenance_3
+            .map(|maintenance_3| maintenance_3.max_per_set_descriptors)
+            // The lowest value seen in reports is 312, use 256 as a safe default.
+            // https://vulkan.gpuinfo.org/displayextensionproperty.php?extensionname=VK_KHR_maintenance3&extensionproperty=maxPerSetDescriptors&platform=all
+            // https://vulkan.gpuinfo.org/displaycoreproperty.php?core=1.1&name=maxPerSetDescriptors&platform=all
+            .unwrap_or(256);
+
+        let mut max_samplers_per_shader_stage = limits
+            .max_per_stage_descriptor_samplers
+            .min(limits.max_descriptor_set_samplers / MAX_SHADER_STAGES_PER_PIPELINE);
+
+        crate::auxil::cap_limits_to_be_under_the_sum_limit(
+            [
+                &mut max_sampled_textures_per_shader_stage,
+                &mut max_uniform_buffers_per_shader_stage,
+                &mut max_storage_textures_per_shader_stage,
+                &mut max_storage_buffers_per_shader_stage,
+                &mut max_samplers_per_shader_stage,
+                &mut max_acceleration_structures_per_shader_stage,
+            ],
+            max_per_set_descriptors / MAX_SHADER_STAGES_PER_PIPELINE,
+        );
+
+        // Use max(default, maxPerSetDescriptors) since the spec requires this
+        // limit to be at least 1000. This is ok because we already lowered
+        // all the other relevant per stage limits so their sum is lower
+        // than maxPerSetDescriptors.
+        let max_bindings_per_bind_group = 1000.max(max_per_set_descriptors);
+
+        // TODO: programmatically determine this, if possible. It's unclear whether we can
+        // as of https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447.
+        //
+        // In theory some tilers may not support this much. We can't tell however, and
+        // the driver will throw a DEVICE_REMOVED if it goes too high in usage. This is fine.
+        let max_color_attachment_bytes_per_sample =
+            max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
         let max_multiview_view_count = self
             .multiview
             .map(|a| a.max_multiview_view_count.min(32))
             .unwrap_or(0);
 
-        crate::auxil::apply_hal_limits(wgt::Limits {
+        crate::auxil::adjust_raw_limits(wgt::Limits {
+            //
+            // WebGPU LIMITS:
+            // Based on https://gpuweb.github.io/gpuweb/correspondence/#limits
+            //
             max_texture_dimension_1d: limits.max_image_dimension1_d,
-            max_texture_dimension_2d: limits.max_image_dimension2_d,
+            max_texture_dimension_2d: limits
+                .max_image_dimension2_d
+                .min(limits.max_image_dimension_cube)
+                .min(limits.max_framebuffer_width)
+                .min(limits.max_framebuffer_height),
             max_texture_dimension_3d: limits.max_image_dimension3_d,
             max_texture_array_layers: limits.max_image_array_layers,
             max_bind_groups: limits.max_bound_descriptor_sets,
-            max_bindings_per_bind_group: wgt::Limits::default().max_bindings_per_bind_group,
+            // No limit.
+            max_bind_groups_plus_vertex_buffers: u32::MAX,
+            max_bindings_per_bind_group,
             max_dynamic_uniform_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_uniform_buffers_dynamic,
             max_dynamic_storage_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_storage_buffers_dynamic,
-            max_sampled_textures_per_shader_stage: limits.max_per_stage_descriptor_sampled_images,
-            max_samplers_per_shader_stage: limits.max_per_stage_descriptor_samplers,
-            max_storage_buffers_per_shader_stage: limits.max_per_stage_descriptor_storage_buffers,
-            max_storage_textures_per_shader_stage: limits.max_per_stage_descriptor_storage_images,
-            max_uniform_buffers_per_shader_stage: limits.max_per_stage_descriptor_uniform_buffers,
+            max_samplers_per_shader_stage,
+            max_sampled_textures_per_shader_stage,
+            max_storage_textures_per_shader_stage,
+            max_storage_buffers_per_shader_stage,
+            max_uniform_buffers_per_shader_stage,
+            max_vertex_buffers: limits.max_vertex_input_bindings,
+            max_buffer_size,
+            max_uniform_buffer_binding_size: limits
+                .max_uniform_buffer_range
+                .min(crate::auxil::MAX_I32_BINDING_SIZE)
+                .into(),
+            max_storage_buffer_binding_size: limits
+                .max_storage_buffer_range
+                .min(crate::auxil::MAX_I32_BINDING_SIZE)
+                .into(),
+            min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
+            min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
+            max_vertex_attributes: limits.max_vertex_input_attributes,
+            max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,
+            max_inter_stage_shader_variables: limits
+                .max_vertex_output_components
+                .min(limits.max_fragment_input_components)
+                / 4
+                - 1, // -1 for position
+            max_color_attachments,
+            max_color_attachment_bytes_per_sample,
+            max_compute_workgroup_storage_size: limits.max_compute_shared_memory_size,
+            max_compute_invocations_per_workgroup: limits.max_compute_work_group_invocations,
+            max_compute_workgroup_size_x: limits.max_compute_work_group_size[0],
+            max_compute_workgroup_size_y: limits.max_compute_work_group_size[1],
+            max_compute_workgroup_size_z: limits.max_compute_work_group_size[2],
+            max_compute_workgroups_per_dimension: limits.max_compute_work_group_count[0]
+                .min(limits.max_compute_work_group_count[1])
+                .min(limits.max_compute_work_group_count[2]),
+            max_immediate_size: limits.max_push_constants_size,
+            //
+            // NATIVE (Non-WebGPU) LIMITS:
+            //
+            max_non_sampler_bindings: u32::MAX,
+
             max_binding_array_elements_per_shader_stage: max_binding_array_elements,
             max_binding_array_sampler_elements_per_shader_stage: max_sampler_binding_array_elements,
             max_binding_array_acceleration_structure_elements_per_shader_stage: if self
@@ -1488,37 +1691,12 @@ impl PhysicalDeviceProperties {
             } else {
                 0
             },
-            max_uniform_buffer_binding_size: limits
-                .max_uniform_buffer_range
-                .min(crate::auxil::MAX_I32_BINDING_SIZE)
-                .into(),
-            max_storage_buffer_binding_size: limits
-                .max_storage_buffer_range
-                .min(crate::auxil::MAX_I32_BINDING_SIZE)
-                .into(),
-            max_vertex_buffers: limits.max_vertex_input_bindings,
-            max_vertex_attributes: limits.max_vertex_input_attributes,
-            max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,
-            max_immediate_size: limits.max_push_constants_size,
-            max_inter_stage_shader_variables: limits
-                .max_vertex_output_components
-                .min(limits.max_fragment_input_components)
-                / 4,
-            min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
-            min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
-            max_color_attachments: limits.max_color_attachments,
-            max_color_attachment_bytes_per_sample,
-            max_compute_workgroup_storage_size: limits.max_compute_shared_memory_size,
-            max_compute_invocations_per_workgroup: limits.max_compute_work_group_invocations,
-            max_compute_workgroup_size_x: max_compute_workgroup_sizes[0],
-            max_compute_workgroup_size_y: max_compute_workgroup_sizes[1],
-            max_compute_workgroup_size_z: max_compute_workgroup_sizes[2],
-            max_compute_workgroups_per_dimension,
-            max_buffer_size,
-            max_non_sampler_bindings: u32::MAX,
 
-            max_task_mesh_workgroup_total_count,
-            max_task_mesh_workgroups_per_dimension,
+            max_task_workgroup_total_count,
+            max_task_workgroups_per_dimension,
+            max_mesh_workgroup_total_count,
+            max_mesh_workgroups_per_dimension,
+
             max_task_invocations_per_workgroup,
             max_task_invocations_per_dimension,
 
@@ -1602,6 +1780,8 @@ impl super::InstanceShared {
                 // Get these now to avoid borrowing conflicts later
                 let supports_maintenance3 = capabilities.device_api_version >= vk::API_VERSION_1_1
                     || capabilities.supports_extension(khr::maintenance3::NAME);
+                let supports_maintenance4 = capabilities.device_api_version >= vk::API_VERSION_1_3
+                    || capabilities.supports_extension(khr::maintenance4::NAME);
                 let supports_descriptor_indexing = capabilities.device_api_version
                     >= vk::API_VERSION_1_2
                     || capabilities.supports_extension(ext::descriptor_indexing::NAME);
@@ -1625,6 +1805,13 @@ impl super::InstanceShared {
                     let next = capabilities
                         .maintenance_3
                         .insert(vk::PhysicalDeviceMaintenance3Properties::default());
+                    properties2 = properties2.push_next(next);
+                }
+
+                if supports_maintenance4 {
+                    let next = capabilities
+                        .maintenance_4
+                        .insert(vk::PhysicalDeviceMaintenance4Properties::default());
                     properties2 = properties2.push_next(next);
                 }
 
@@ -1830,6 +2017,16 @@ impl super::InstanceShared {
                 features2 = features2.push_next(next);
             }
 
+            // `VK_KHR_maintenance4` is promoted to 1.3
+            if capabilities.device_api_version >= vk::API_VERSION_1_3
+                || capabilities.supports_extension(khr::maintenance4::NAME)
+            {
+                let next = features
+                    .maintenance4
+                    .insert(vk::PhysicalDeviceMaintenance4Features::default());
+                features2 = features2.push_next(next);
+            }
+
             // `VK_KHR_zero_initialize_workgroup_memory` is promoted to 1.3
             if capabilities.device_api_version >= vk::API_VERSION_1_3
                 || capabilities.supports_extension(khr::zero_initialize_workgroup_memory::NAME)
@@ -1924,6 +2121,14 @@ impl super::Instance {
                 .contains(vk::MemoryPropertyFlags::LAZILY_ALLOCATED)
         });
 
+        let device_type = match phd_capabilities.properties.device_type {
+            vk::PhysicalDeviceType::OTHER => wgt::DeviceType::Other,
+            vk::PhysicalDeviceType::INTEGRATED_GPU => wgt::DeviceType::IntegratedGpu,
+            vk::PhysicalDeviceType::DISCRETE_GPU => wgt::DeviceType::DiscreteGpu,
+            vk::PhysicalDeviceType::VIRTUAL_GPU => wgt::DeviceType::VirtualGpu,
+            vk::PhysicalDeviceType::CPU => wgt::DeviceType::Cpu,
+            _ => wgt::DeviceType::Other,
+        };
         let info = wgt::AdapterInfo {
             name: {
                 phd_capabilities
@@ -1936,14 +2141,6 @@ impl super::Instance {
             },
             vendor: phd_capabilities.properties.vendor_id,
             device: phd_capabilities.properties.device_id,
-            device_type: match phd_capabilities.properties.device_type {
-                vk::PhysicalDeviceType::OTHER => wgt::DeviceType::Other,
-                vk::PhysicalDeviceType::INTEGRATED_GPU => wgt::DeviceType::IntegratedGpu,
-                vk::PhysicalDeviceType::DISCRETE_GPU => wgt::DeviceType::DiscreteGpu,
-                vk::PhysicalDeviceType::VIRTUAL_GPU => wgt::DeviceType::VirtualGpu,
-                vk::PhysicalDeviceType::CPU => wgt::DeviceType::Cpu,
-                _ => wgt::DeviceType::Other,
-            },
             device_pci_bus_id: phd_capabilities
                 .pci_bus_info
                 .filter(|info| info.pci_bus != 0 || info.pci_device != 0)
@@ -1972,7 +2169,6 @@ impl super::Instance {
                     .unwrap_or("?")
                     .to_owned()
             },
-            backend: wgt::Backend::Vulkan,
             subgroup_min_size: phd_capabilities
                 .subgroup_size_control
                 .map(|subgroup_size| subgroup_size.min_subgroup_size)
@@ -1982,6 +2178,7 @@ impl super::Instance {
                 .map(|subgroup_size| subgroup_size.max_subgroup_size)
                 .unwrap_or(wgt::MAXIMUM_SUBGROUP_MAX_SIZE),
             transient_saves_memory: supports_lazily_allocated,
+            ..wgt::AdapterInfo::new(device_type, wgt::Backend::Vulkan)
         };
         let mut workarounds = super::Workarounds::empty();
         {
@@ -2327,6 +2524,14 @@ impl super::Adapter {
         } else {
             None
         };
+        let external_memory_fd_fn = if enabled_extensions.contains(&khr::external_memory_fd::NAME) {
+            Some(khr::external_memory_fd::Device::new(
+                &self.instance.raw,
+                &raw_device,
+            ))
+        } else {
+            None
+        };
 
         let naga_options = {
             use naga::back::spv;
@@ -2361,7 +2566,7 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::MultiView);
             }
 
-            if features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX) {
+            if features.contains(wgt::Features::PRIMITIVE_INDEX) {
                 capabilities.push(spv::Capability::Geometry);
             }
 
@@ -2522,8 +2727,8 @@ impl super::Adapter {
                 binding_map: BTreeMap::default(),
                 debug_info: None,
                 task_dispatch_limits: Some(naga::back::TaskDispatchLimits {
-                    max_mesh_workgroups_per_dim: limits.max_task_mesh_workgroups_per_dimension,
-                    max_mesh_workgroups_total: limits.max_task_mesh_workgroup_total_count,
+                    max_mesh_workgroups_per_dim: limits.max_mesh_workgroups_per_dimension,
+                    max_mesh_workgroups_total: limits.max_mesh_workgroup_total_count,
                 }),
                 mesh_shader_primitive_indices_clamp: true,
             }
@@ -2570,6 +2775,7 @@ impl super::Adapter {
                 timeline_semaphore: timeline_semaphore_fn,
                 ray_tracing: ray_tracing_fns,
                 mesh_shading: mesh_shading_fns,
+                external_memory_fd: external_memory_fd_fn,
             },
             pipeline_cache_validation_key,
             vendor_id: self.phd_capabilities.properties.vendor_id,
@@ -2878,6 +3084,18 @@ impl crate::Adapter for super::Adapter {
         {
             wgt::PresentationTimestamp::INVALID_TIMESTAMP
         }
+    }
+
+    fn get_ordered_buffer_usages(&self) -> wgt::BufferUses {
+        wgt::BufferUses::INCLUSIVE | wgt::BufferUses::MAP_WRITE
+    }
+
+    // Vulkan makes very few execution ordering guarantees
+    // see https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#synchronization-implicit
+    // We just don't want to insert barriers between inclusive uses
+    // See https://github.com/gfx-rs/wgpu/issues/8853
+    fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
+        wgt::TextureUses::INCLUSIVE
     }
 }
 

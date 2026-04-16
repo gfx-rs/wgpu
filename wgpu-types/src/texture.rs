@@ -251,11 +251,6 @@ bitflags::bitflags! {
         /// The combination of states that a texture must exclusively be in.
         /// cbindgen:ignore
         const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
-        /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
-        /// If a usage is ordered, then if the texture state doesn't change between draw calls, there
-        /// are no barriers needed for synchronization.
-        /// cbindgen:ignore
-        const ORDERED = Self::INCLUSIVE.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits();
 
         /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource
         const COMPLEX = 1 << 13;
@@ -976,7 +971,7 @@ impl ImageSubresourceRange {
     #[must_use]
     pub fn mip_range(&self, mip_level_count: u32) -> Range<u32> {
         self.base_mip_level..match self.mip_level_count {
-            Some(mip_level_count) => self.base_mip_level + mip_level_count,
+            Some(mip_level_count) => self.base_mip_level.saturating_add(mip_level_count),
             None => mip_level_count,
         }
     }
@@ -985,7 +980,7 @@ impl ImageSubresourceRange {
     #[must_use]
     pub fn layer_range(&self, array_layer_count: u32) -> Range<u32> {
         self.base_array_layer..match self.array_layer_count {
-            Some(array_layer_count) => self.base_array_layer + array_layer_count,
+            Some(array_layer_count) => self.base_array_layer.saturating_add(array_layer_count),
             None => array_layer_count,
         }
     }

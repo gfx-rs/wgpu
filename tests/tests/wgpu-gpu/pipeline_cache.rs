@@ -183,7 +183,7 @@ async fn validate_pipeline(
         .await
         .unwrap();
 
-    let data = cpu_buffer.slice(..).get_mapped_range();
+    let data = cpu_buffer.slice(..).get_mapped_range().unwrap();
 
     let arrays: &[u32] = bytemuck::cast_slice(&data);
 

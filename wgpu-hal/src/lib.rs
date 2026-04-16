@@ -430,7 +430,7 @@ pub(crate) struct AllocationSizes {
 }
 
 impl AllocationSizes {
-    #[allow(dead_code)] // may be unused on some platforms
+    #[allow(dead_code, reason = "may be unused on some platforms")]
     pub(crate) fn from_memory_hints(memory_hints: &wgt::MemoryHints) -> Self {
         // TODO: the allocator's configuration should take hardware capability into
         // account.
@@ -483,13 +483,13 @@ impl From<AllocationSizes> for gpu_allocator::AllocationSizes {
     }
 }
 
-#[allow(dead_code)] // may be unused on some platforms
+#[allow(dead_code, reason = "may be unused on some platforms")]
 #[cold]
 fn hal_usage_error<T: fmt::Display>(txt: T) -> ! {
     panic!("wgpu-hal invariant was violated (usage error): {txt}")
 }
 
-#[allow(dead_code)] // may be unused on some platforms
+#[allow(dead_code, reason = "may be unused on some platforms")]
 #[cold]
 fn hal_internal_error<T: fmt::Display>(txt: T) -> ! {
     panic!("wgpu-hal ran into a preventable internal error: {txt}")
@@ -555,14 +555,14 @@ pub struct InstanceError {
 }
 
 impl InstanceError {
-    #[allow(dead_code)] // may be unused on some platforms
+    #[allow(dead_code, reason = "may be unused on some platforms")]
     pub(crate) fn new(message: String) -> Self {
         Self {
             message,
             source: None,
         }
     }
-    #[allow(dead_code)] // may be unused on some platforms
+    #[allow(dead_code, reason = "may be unused on some platforms")]
     pub(crate) fn with_source(message: String, source: impl Error + Send + Sync + 'static) -> Self {
         cfg_if::cfg_if! {
             if #[cfg(supports_ptr_atomics)] {
@@ -794,6 +794,16 @@ pub trait Adapter: WasmNotSendSync {
     ///
     /// [`PresentationTimestamp`]: wgt::PresentationTimestamp
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
+
+    /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
+    /// If a usage is ordered, then if the buffer state doesn't change between draw calls,
+    /// there are no barriers needed for synchronization.
+    fn get_ordered_buffer_usages(&self) -> wgt::BufferUses;
+
+    /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
+    /// If a usage is ordered, then if the buffer state doesn't change between draw calls,
+    /// there are no barriers needed for synchronization.
+    fn get_ordered_texture_usages(&self) -> wgt::TextureUses;
 }
 
 /// A connection to a GPU and a pool of resources to use with it.
@@ -1091,7 +1101,7 @@ pub trait Device: WasmNotSendSync {
     /// Calling `wait` with a lower [`FenceValue`] than `fence`'s current value
     /// returns immediately.
     ///
-    /// If `timeout` is provided, the function will block indefinitely or until
+    /// If `timeout` is not provided, the function will block indefinitely or until
     /// an error is encountered.
     ///
     /// Returns `Ok(true)` on success and `Ok(false)` on timeout.
@@ -1235,11 +1245,45 @@ pub trait Queue: WasmNotSendSync {
         surface_textures: &[&<Self::A as Api>::SurfaceTexture],
         signal_fence: (&mut <Self::A as Api>::Fence, FenceValue),
     ) -> Result<(), DeviceError>;
+    /// Present a surface texture to the screen.
+    ///
+    /// This consumes the surface texture, returning it to the swapchain.
+    ///
+    /// # Safety
+    ///
+    /// - `texture` must have been acquired from `surface` via
+    ///   [`Surface::acquire_texture`] and not yet presented or discarded.
+    /// - `surface` must be configured for use with the [`Device`][d] associated
+    ///   with this [`Queue`].
+    /// - `texture` must be in the "present" state. Either:
+    ///   - It was passed in [`submit`][s]'s `surface_textures` argument
+    ///     (which transitions it to the present state), or
+    ///   - The caller has otherwise transitioned it (e.g. via a clear +
+    ///     barrier to `PRESENT` for textures that were never rendered to).
+    /// - Any command buffers that write to `texture` must have been submitted
+    ///   via [`submit`][s] before this call. The submissions do not need to
+    ///   have completed on the GPU; platform-level synchronization handles the
+    ///   ordering between rendering and display.
+    /// - Must be externally synchronized with all other queue operations
+    ///   ([`submit`][s], [`present`][Queue::present],
+    ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue.
+    ///
+    /// [d]: Api::Device
+    /// [s]: Queue::submit
     unsafe fn present(
         &self,
         surface: &<Self::A as Api>::Surface,
         texture: <Self::A as Api>::SurfaceTexture,
     ) -> Result<(), SurfaceError>;
+    /// Block until all previously submitted work on this queue has completed,
+    /// including any pending presentations.
+    ///
+    /// # Safety
+    ///
+    /// - Must be externally synchronized with all other queue operations
+    ///   ([`submit`][Queue::submit], [`present`][Queue::present],
+    ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue.
+    unsafe fn wait_for_idle(&self) -> Result<(), DeviceError>;
     unsafe fn get_timestamp_period(&self) -> f32;
 }
 
@@ -1679,8 +1723,8 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &<Self::A as Api>::ComputePipeline);
 
-    unsafe fn dispatch(&mut self, count: [u32; 3]);
-    unsafe fn dispatch_indirect(
+    unsafe fn dispatch_workgroups(&mut self, count: [u32; 3]);
+    unsafe fn dispatch_workgroups_indirect(
         &mut self,
         buffer: &<Self::A as Api>::Buffer,
         offset: wgt::BufferAddress,
@@ -1921,7 +1965,7 @@ pub struct Alignments {
     pub uniform_bounds_check_alignment: wgt::BufferSize,
 
     /// The size of the raw TLAS instance
-    pub raw_tlas_instance_size: usize,
+    pub raw_tlas_instance_size: u32,
 
     /// What the scratch buffer for building an acceleration structure must be aligned to
     pub ray_tracing_scratch_buffer_alignment: u32,
@@ -2351,24 +2395,21 @@ pub enum ShaderInput<'a> {
     Naga(NagaShader),
     MetalLib {
         file: &'a [u8],
-        num_workgroups: (u32, u32, u32),
+        num_workgroups: hashbrown::HashMap<String, (u32, u32, u32)>,
     },
     Msl {
         shader: &'a str,
-        num_workgroups: (u32, u32, u32),
+        num_workgroups: hashbrown::HashMap<String, (u32, u32, u32)>,
     },
     SpirV(&'a [u32]),
     Dxil {
         shader: &'a [u8],
-        num_workgroups: (u32, u32, u32),
     },
     Hlsl {
         shader: &'a str,
-        num_workgroups: (u32, u32, u32),
     },
     Glsl {
         shader: &'a str,
-        num_workgroups: (u32, u32, u32),
     },
 }
 
@@ -2454,7 +2495,7 @@ pub struct VertexBufferLayout<'a> {
 pub enum VertexProcessor<'a, M: DynShaderModule + ?Sized> {
     Standard {
         /// The format of any vertex buffers used with this pipeline.
-        vertex_buffers: &'a [VertexBufferLayout<'a>],
+        vertex_buffers: &'a [Option<VertexBufferLayout<'a>>],
         /// The vertex stage for this pipeline.
         vertex_stage: ProgrammableStage<'a, M>,
     },

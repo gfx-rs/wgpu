@@ -93,6 +93,12 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgpu: true,
     },
     ExampleDesc {
+        name: "render_with_compute",
+        function: wgpu_examples::render_with_compute::main,
+        webgl: false,
+        webgpu: true,
+    },
+    ExampleDesc {
         name: "repeated_compute",
         function: wgpu_examples::repeated_compute::main,
         webgl: false, // No compute
@@ -151,6 +157,12 @@ const EXAMPLES: &[ExampleDesc] = &[
         function: wgpu_examples::water::main,
         webgl: false, // No RODS
         webgpu: true,
+    },
+    ExampleDesc {
+        name: "ray_aabb_compute",
+        function: wgpu_examples::ray_aabb_compute::main,
+        webgl: false,
+        webgpu: false,
     },
     ExampleDesc {
         name: "ray_cube_compute",

@@ -221,7 +221,7 @@ impl Writer {
         let clamp_id = self.id_gen.next();
         body.push(Instruction::ext_inst_gl_op(
             self.gl450_ext_inst_id,
-            spirv::GLOp::FClamp,
+            spirv::GlslStd450Op::FClamp,
             float_type_id,
             clamp_id,
             &[original_id, zero_scalar_id, one_scalar_id],
@@ -1264,7 +1264,7 @@ impl BlockContext<'_> {
             } => {
                 use crate::MathFunction as Mf;
                 enum MathOp {
-                    Ext(spirv::GLOp),
+                    Ext(spirv::GlslStd450Op),
                     Custom(Instruction),
                 }
 
@@ -1289,8 +1289,10 @@ impl BlockContext<'_> {
                     // comparison
                     Mf::Abs => {
                         match arg_scalar_kind {
-                            Some(crate::ScalarKind::Float) => MathOp::Ext(spirv::GLOp::FAbs),
-                            Some(crate::ScalarKind::Sint) => MathOp::Ext(spirv::GLOp::SAbs),
+                            Some(crate::ScalarKind::Float) => {
+                                MathOp::Ext(spirv::GlslStd450Op::FAbs)
+                            }
+                            Some(crate::ScalarKind::Sint) => MathOp::Ext(spirv::GlslStd450Op::SAbs),
                             Some(crate::ScalarKind::Uint) => {
                                 MathOp::Custom(Instruction::unary(
                                     spirv::Op::CopyObject, // do nothing
@@ -1303,29 +1305,29 @@ impl BlockContext<'_> {
                         }
                     }
                     Mf::Min => MathOp::Ext(match arg_scalar_kind {
-                        Some(crate::ScalarKind::Float) => spirv::GLOp::FMin,
-                        Some(crate::ScalarKind::Sint) => spirv::GLOp::SMin,
-                        Some(crate::ScalarKind::Uint) => spirv::GLOp::UMin,
+                        Some(crate::ScalarKind::Float) => spirv::GlslStd450Op::FMin,
+                        Some(crate::ScalarKind::Sint) => spirv::GlslStd450Op::SMin,
+                        Some(crate::ScalarKind::Uint) => spirv::GlslStd450Op::UMin,
                         other => unimplemented!("Unexpected min({:?})", other),
                     }),
                     Mf::Max => MathOp::Ext(match arg_scalar_kind {
-                        Some(crate::ScalarKind::Float) => spirv::GLOp::FMax,
-                        Some(crate::ScalarKind::Sint) => spirv::GLOp::SMax,
-                        Some(crate::ScalarKind::Uint) => spirv::GLOp::UMax,
+                        Some(crate::ScalarKind::Float) => spirv::GlslStd450Op::FMax,
+                        Some(crate::ScalarKind::Sint) => spirv::GlslStd450Op::SMax,
+                        Some(crate::ScalarKind::Uint) => spirv::GlslStd450Op::UMax,
                         other => unimplemented!("Unexpected max({:?})", other),
                     }),
                     Mf::Clamp => match arg_scalar_kind {
                         // Clamp is undefined if min > max. In practice this means it can use a median-of-three
                         // instruction to determine the value. This is fine according to the WGSL spec for float
                         // clamp, but integer clamp _must_ use min-max. As such we write out min/max.
-                        Some(crate::ScalarKind::Float) => MathOp::Ext(spirv::GLOp::FClamp),
+                        Some(crate::ScalarKind::Float) => MathOp::Ext(spirv::GlslStd450Op::FClamp),
                         Some(_) => {
                             let (min_op, max_op) = match arg_scalar_kind {
                                 Some(crate::ScalarKind::Sint) => {
-                                    (spirv::GLOp::SMin, spirv::GLOp::SMax)
+                                    (spirv::GlslStd450Op::SMin, spirv::GlslStd450Op::SMax)
                                 }
                                 Some(crate::ScalarKind::Uint) => {
-                                    (spirv::GLOp::UMin, spirv::GLOp::UMax)
+                                    (spirv::GlslStd450Op::UMin, spirv::GlslStd450Op::UMax)
                                 }
                                 _ => unreachable!(),
                             };
@@ -1375,37 +1377,37 @@ impl BlockContext<'_> {
 
                         MathOp::Custom(Instruction::ext_inst_gl_op(
                             self.writer.gl450_ext_inst_id,
-                            spirv::GLOp::FClamp,
+                            spirv::GlslStd450Op::FClamp,
                             result_type_id,
                             id,
                             &[arg0_id, arg1_id, arg2_id],
                         ))
                     }
                     // trigonometry
-                    Mf::Sin => MathOp::Ext(spirv::GLOp::Sin),
-                    Mf::Sinh => MathOp::Ext(spirv::GLOp::Sinh),
-                    Mf::Asin => MathOp::Ext(spirv::GLOp::Asin),
-                    Mf::Cos => MathOp::Ext(spirv::GLOp::Cos),
-                    Mf::Cosh => MathOp::Ext(spirv::GLOp::Cosh),
-                    Mf::Acos => MathOp::Ext(spirv::GLOp::Acos),
-                    Mf::Tan => MathOp::Ext(spirv::GLOp::Tan),
-                    Mf::Tanh => MathOp::Ext(spirv::GLOp::Tanh),
-                    Mf::Atan => MathOp::Ext(spirv::GLOp::Atan),
-                    Mf::Atan2 => MathOp::Ext(spirv::GLOp::Atan2),
-                    Mf::Asinh => MathOp::Ext(spirv::GLOp::Asinh),
-                    Mf::Acosh => MathOp::Ext(spirv::GLOp::Acosh),
-                    Mf::Atanh => MathOp::Ext(spirv::GLOp::Atanh),
-                    Mf::Radians => MathOp::Ext(spirv::GLOp::Radians),
-                    Mf::Degrees => MathOp::Ext(spirv::GLOp::Degrees),
+                    Mf::Sin => MathOp::Ext(spirv::GlslStd450Op::Sin),
+                    Mf::Sinh => MathOp::Ext(spirv::GlslStd450Op::Sinh),
+                    Mf::Asin => MathOp::Ext(spirv::GlslStd450Op::Asin),
+                    Mf::Cos => MathOp::Ext(spirv::GlslStd450Op::Cos),
+                    Mf::Cosh => MathOp::Ext(spirv::GlslStd450Op::Cosh),
+                    Mf::Acos => MathOp::Ext(spirv::GlslStd450Op::Acos),
+                    Mf::Tan => MathOp::Ext(spirv::GlslStd450Op::Tan),
+                    Mf::Tanh => MathOp::Ext(spirv::GlslStd450Op::Tanh),
+                    Mf::Atan => MathOp::Ext(spirv::GlslStd450Op::Atan),
+                    Mf::Atan2 => MathOp::Ext(spirv::GlslStd450Op::Atan2),
+                    Mf::Asinh => MathOp::Ext(spirv::GlslStd450Op::Asinh),
+                    Mf::Acosh => MathOp::Ext(spirv::GlslStd450Op::Acosh),
+                    Mf::Atanh => MathOp::Ext(spirv::GlslStd450Op::Atanh),
+                    Mf::Radians => MathOp::Ext(spirv::GlslStd450Op::Radians),
+                    Mf::Degrees => MathOp::Ext(spirv::GlslStd450Op::Degrees),
                     // decomposition
-                    Mf::Ceil => MathOp::Ext(spirv::GLOp::Ceil),
-                    Mf::Round => MathOp::Ext(spirv::GLOp::RoundEven),
-                    Mf::Floor => MathOp::Ext(spirv::GLOp::Floor),
-                    Mf::Fract => MathOp::Ext(spirv::GLOp::Fract),
-                    Mf::Trunc => MathOp::Ext(spirv::GLOp::Trunc),
-                    Mf::Modf => MathOp::Ext(spirv::GLOp::ModfStruct),
-                    Mf::Frexp => MathOp::Ext(spirv::GLOp::FrexpStruct),
-                    Mf::Ldexp => MathOp::Ext(spirv::GLOp::Ldexp),
+                    Mf::Ceil => MathOp::Ext(spirv::GlslStd450Op::Ceil),
+                    Mf::Round => MathOp::Ext(spirv::GlslStd450Op::RoundEven),
+                    Mf::Floor => MathOp::Ext(spirv::GlslStd450Op::Floor),
+                    Mf::Fract => MathOp::Ext(spirv::GlslStd450Op::Fract),
+                    Mf::Trunc => MathOp::Ext(spirv::GlslStd450Op::Trunc),
+                    Mf::Modf => MathOp::Ext(spirv::GlslStd450Op::ModfStruct),
+                    Mf::Frexp => MathOp::Ext(spirv::GlslStd450Op::FrexpStruct),
+                    Mf::Ldexp => MathOp::Ext(spirv::GlslStd450Op::Ldexp),
                     // geometry
                     Mf::Dot => match *self.fun_info[arg].ty.inner_with(&self.ir_module.types) {
                         crate::TypeInner::Vector {
@@ -1545,26 +1547,26 @@ impl BlockContext<'_> {
                         arg0_id,
                         arg1_id,
                     )),
-                    Mf::Cross => MathOp::Ext(spirv::GLOp::Cross),
-                    Mf::Distance => MathOp::Ext(spirv::GLOp::Distance),
-                    Mf::Length => MathOp::Ext(spirv::GLOp::Length),
-                    Mf::Normalize => MathOp::Ext(spirv::GLOp::Normalize),
-                    Mf::FaceForward => MathOp::Ext(spirv::GLOp::FaceForward),
-                    Mf::Reflect => MathOp::Ext(spirv::GLOp::Reflect),
-                    Mf::Refract => MathOp::Ext(spirv::GLOp::Refract),
+                    Mf::Cross => MathOp::Ext(spirv::GlslStd450Op::Cross),
+                    Mf::Distance => MathOp::Ext(spirv::GlslStd450Op::Distance),
+                    Mf::Length => MathOp::Ext(spirv::GlslStd450Op::Length),
+                    Mf::Normalize => MathOp::Ext(spirv::GlslStd450Op::Normalize),
+                    Mf::FaceForward => MathOp::Ext(spirv::GlslStd450Op::FaceForward),
+                    Mf::Reflect => MathOp::Ext(spirv::GlslStd450Op::Reflect),
+                    Mf::Refract => MathOp::Ext(spirv::GlslStd450Op::Refract),
                     // exponent
-                    Mf::Exp => MathOp::Ext(spirv::GLOp::Exp),
-                    Mf::Exp2 => MathOp::Ext(spirv::GLOp::Exp2),
-                    Mf::Log => MathOp::Ext(spirv::GLOp::Log),
-                    Mf::Log2 => MathOp::Ext(spirv::GLOp::Log2),
-                    Mf::Pow => MathOp::Ext(spirv::GLOp::Pow),
+                    Mf::Exp => MathOp::Ext(spirv::GlslStd450Op::Exp),
+                    Mf::Exp2 => MathOp::Ext(spirv::GlslStd450Op::Exp2),
+                    Mf::Log => MathOp::Ext(spirv::GlslStd450Op::Log),
+                    Mf::Log2 => MathOp::Ext(spirv::GlslStd450Op::Log2),
+                    Mf::Pow => MathOp::Ext(spirv::GlslStd450Op::Pow),
                     // computational
                     Mf::Sign => MathOp::Ext(match arg_scalar_kind {
-                        Some(crate::ScalarKind::Float) => spirv::GLOp::FSign,
-                        Some(crate::ScalarKind::Sint) => spirv::GLOp::SSign,
+                        Some(crate::ScalarKind::Float) => spirv::GlslStd450Op::FSign,
+                        Some(crate::ScalarKind::Sint) => spirv::GlslStd450Op::SSign,
                         other => unimplemented!("Unexpected sign({:?})", other),
                     }),
-                    Mf::Fma => MathOp::Ext(spirv::GLOp::Fma),
+                    Mf::Fma => MathOp::Ext(spirv::GlslStd450Op::Fma),
                     Mf::Mix => {
                         let selector = arg2.unwrap();
                         let selector_ty =
@@ -1589,27 +1591,27 @@ impl BlockContext<'_> {
 
                                 MathOp::Custom(Instruction::ext_inst_gl_op(
                                     self.writer.gl450_ext_inst_id,
-                                    spirv::GLOp::FMix,
+                                    spirv::GlslStd450Op::FMix,
                                     result_type_id,
                                     id,
                                     &[arg0_id, arg1_id, selector_id],
                                 ))
                             }
-                            _ => MathOp::Ext(spirv::GLOp::FMix),
+                            _ => MathOp::Ext(spirv::GlslStd450Op::FMix),
                         }
                     }
-                    Mf::Step => MathOp::Ext(spirv::GLOp::Step),
-                    Mf::SmoothStep => MathOp::Ext(spirv::GLOp::SmoothStep),
-                    Mf::Sqrt => MathOp::Ext(spirv::GLOp::Sqrt),
-                    Mf::InverseSqrt => MathOp::Ext(spirv::GLOp::InverseSqrt),
-                    Mf::Inverse => MathOp::Ext(spirv::GLOp::MatrixInverse),
+                    Mf::Step => MathOp::Ext(spirv::GlslStd450Op::Step),
+                    Mf::SmoothStep => MathOp::Ext(spirv::GlslStd450Op::SmoothStep),
+                    Mf::Sqrt => MathOp::Ext(spirv::GlslStd450Op::Sqrt),
+                    Mf::InverseSqrt => MathOp::Ext(spirv::GlslStd450Op::InverseSqrt),
+                    Mf::Inverse => MathOp::Ext(spirv::GlslStd450Op::MatrixInverse),
                     Mf::Transpose => MathOp::Custom(Instruction::unary(
                         spirv::Op::Transpose,
                         result_type_id,
                         id,
                         arg0_id,
                     )),
-                    Mf::Determinant => MathOp::Ext(spirv::GLOp::Determinant),
+                    Mf::Determinant => MathOp::Ext(spirv::GlslStd450Op::Determinant),
                     Mf::QuantizeToF16 => MathOp::Custom(Instruction::unary(
                         spirv::Op::QuantizeToF16,
                         result_type_id,
@@ -1646,7 +1648,7 @@ impl BlockContext<'_> {
                         let lsb_id = self.gen_id();
                         block.body.push(Instruction::ext_inst_gl_op(
                             self.writer.gl450_ext_inst_id,
-                            spirv::GLOp::FindILsb,
+                            spirv::GlslStd450Op::FindILsb,
                             result_type_id,
                             lsb_id,
                             &[arg0_id],
@@ -1654,7 +1656,7 @@ impl BlockContext<'_> {
 
                         MathOp::Custom(Instruction::ext_inst_gl_op(
                             self.writer.gl450_ext_inst_id,
-                            spirv::GLOp::UMin,
+                            spirv::GlslStd450Op::UMin,
                             result_type_id,
                             id,
                             &[uint_id, lsb_id],
@@ -1696,9 +1698,9 @@ impl BlockContext<'_> {
                         block.body.push(Instruction::ext_inst_gl_op(
                             self.writer.gl450_ext_inst_id,
                             if width != 4 {
-                                spirv::GLOp::FindILsb
+                                spirv::GlslStd450Op::FindILsb
                             } else {
-                                spirv::GLOp::FindUMsb
+                                spirv::GlslStd450Op::FindUMsb
                             },
                             int_type_id,
                             msb_id,
@@ -1752,7 +1754,7 @@ impl BlockContext<'_> {
                         let offset_id = self.gen_id();
                         block.body.push(Instruction::ext_inst_gl_op(
                             self.writer.gl450_ext_inst_id,
-                            spirv::GLOp::UMin,
+                            spirv::GlslStd450Op::UMin,
                             u32_type,
                             offset_id,
                             &[arg1_id, width_constant],
@@ -1772,7 +1774,7 @@ impl BlockContext<'_> {
                         let count_id = self.gen_id();
                         block.body.push(Instruction::ext_inst_gl_op(
                             self.writer.gl450_ext_inst_id,
-                            spirv::GLOp::UMin,
+                            spirv::GlslStd450Op::UMin,
                             u32_type,
                             count_id,
                             &[arg2_id, max_count_id],
@@ -1802,7 +1804,7 @@ impl BlockContext<'_> {
                         let offset_id = self.gen_id();
                         block.body.push(Instruction::ext_inst_gl_op(
                             self.writer.gl450_ext_inst_id,
-                            spirv::GLOp::UMin,
+                            spirv::GlslStd450Op::UMin,
                             u32_type,
                             offset_id,
                             &[arg2_id, width_constant],
@@ -1822,7 +1824,7 @@ impl BlockContext<'_> {
                         let count_id = self.gen_id();
                         block.body.push(Instruction::ext_inst_gl_op(
                             self.writer.gl450_ext_inst_id,
-                            spirv::GLOp::UMin,
+                            spirv::GlslStd450Op::UMin,
                             u32_type,
                             count_id,
                             &[arg3_id, max_count_id],
@@ -1838,12 +1840,12 @@ impl BlockContext<'_> {
                             count_id,
                         ))
                     }
-                    Mf::FirstTrailingBit => MathOp::Ext(spirv::GLOp::FindILsb),
+                    Mf::FirstTrailingBit => MathOp::Ext(spirv::GlslStd450Op::FindILsb),
                     Mf::FirstLeadingBit => {
                         if arg_ty.scalar_width() == Some(4) {
                             let thing = match arg_scalar_kind {
-                                Some(crate::ScalarKind::Uint) => spirv::GLOp::FindUMsb,
-                                Some(crate::ScalarKind::Sint) => spirv::GLOp::FindSMsb,
+                                Some(crate::ScalarKind::Uint) => spirv::GlslStd450Op::FindUMsb,
+                                Some(crate::ScalarKind::Sint) => spirv::GlslStd450Op::FindSMsb,
                                 other => unimplemented!("Unexpected firstLeadingBit({:?})", other),
                             };
                             MathOp::Ext(thing)
@@ -1851,11 +1853,11 @@ impl BlockContext<'_> {
                             unreachable!("This is validated out until a polyfill is implemented. https://github.com/gfx-rs/wgpu/issues/5276");
                         }
                     }
-                    Mf::Pack4x8unorm => MathOp::Ext(spirv::GLOp::PackUnorm4x8),
-                    Mf::Pack4x8snorm => MathOp::Ext(spirv::GLOp::PackSnorm4x8),
-                    Mf::Pack2x16float => MathOp::Ext(spirv::GLOp::PackHalf2x16),
-                    Mf::Pack2x16unorm => MathOp::Ext(spirv::GLOp::PackUnorm2x16),
-                    Mf::Pack2x16snorm => MathOp::Ext(spirv::GLOp::PackSnorm2x16),
+                    Mf::Pack4x8unorm => MathOp::Ext(spirv::GlslStd450Op::PackUnorm4x8),
+                    Mf::Pack4x8snorm => MathOp::Ext(spirv::GlslStd450Op::PackSnorm4x8),
+                    Mf::Pack2x16float => MathOp::Ext(spirv::GlslStd450Op::PackHalf2x16),
+                    Mf::Pack2x16unorm => MathOp::Ext(spirv::GlslStd450Op::PackUnorm2x16),
+                    Mf::Pack2x16snorm => MathOp::Ext(spirv::GlslStd450Op::PackSnorm2x16),
                     fun @ (Mf::Pack4xI8 | Mf::Pack4xU8 | Mf::Pack4xI8Clamp | Mf::Pack4xU8Clamp) => {
                         let is_signed = matches!(fun, Mf::Pack4xI8 | Mf::Pack4xI8Clamp);
                         let should_clamp = matches!(fun, Mf::Pack4xI8Clamp | Mf::Pack4xU8Clamp);
@@ -1883,11 +1885,11 @@ impl BlockContext<'_> {
 
                         MathOp::Custom(last_instruction)
                     }
-                    Mf::Unpack4x8unorm => MathOp::Ext(spirv::GLOp::UnpackUnorm4x8),
-                    Mf::Unpack4x8snorm => MathOp::Ext(spirv::GLOp::UnpackSnorm4x8),
-                    Mf::Unpack2x16float => MathOp::Ext(spirv::GLOp::UnpackHalf2x16),
-                    Mf::Unpack2x16unorm => MathOp::Ext(spirv::GLOp::UnpackUnorm2x16),
-                    Mf::Unpack2x16snorm => MathOp::Ext(spirv::GLOp::UnpackSnorm2x16),
+                    Mf::Unpack4x8unorm => MathOp::Ext(spirv::GlslStd450Op::UnpackUnorm4x8),
+                    Mf::Unpack4x8snorm => MathOp::Ext(spirv::GlslStd450Op::UnpackSnorm4x8),
+                    Mf::Unpack2x16float => MathOp::Ext(spirv::GlslStd450Op::UnpackHalf2x16),
+                    Mf::Unpack2x16unorm => MathOp::Ext(spirv::GlslStd450Op::UnpackUnorm2x16),
+                    Mf::Unpack2x16snorm => MathOp::Ext(spirv::GlslStd450Op::UnpackSnorm2x16),
                     fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
                         let is_signed = matches!(fun, Mf::Unpack4xI8);
 
@@ -2402,7 +2404,7 @@ impl BlockContext<'_> {
                 let clamp_id = self.gen_id();
                 block.body.push(Instruction::ext_inst_gl_op(
                     self.writer.gl450_ext_inst_id,
-                    spirv::GLOp::FClamp,
+                    spirv::GlslStd450Op::FClamp,
                     expr_type_id,
                     clamp_id,
                     &[expr_id, min_const_id, max_const_id],
@@ -3168,13 +3170,13 @@ impl BlockContext<'_> {
                 (
                     crate::Literal::I32(-128),
                     crate::Literal::I32(127),
-                    spirv::GLOp::SClamp,
+                    spirv::GlslStd450Op::SClamp,
                 )
             } else {
                 (
                     crate::Literal::U32(0),
                     crate::Literal::U32(255),
-                    spirv::GLOp::UClamp,
+                    spirv::GlslStd450Op::UClamp,
                 )
             };
             let [min, max] = [min, max].map(|lit| {
@@ -3268,13 +3270,13 @@ impl BlockContext<'_> {
                     (
                         crate::Literal::I32(-128),
                         crate::Literal::I32(127),
-                        spirv::GLOp::SClamp,
+                        spirv::GlslStd450Op::SClamp,
                     )
                 } else {
                     (
                         crate::Literal::U32(0),
                         crate::Literal::U32(255),
-                        spirv::GLOp::UClamp,
+                        spirv::GlslStd450Op::UClamp,
                     )
                 };
                 let [min, max] = [min, max].map(|lit| self.writer.get_constant_scalar(lit));

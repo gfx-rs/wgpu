@@ -86,13 +86,14 @@ impl ParseError {
         cfg_if::cfg_if! {
             if #[cfg(feature = "termcolor")] {
                 let writer = term::termcolor::StandardStream::stderr(term::termcolor::ColorChoice::Auto);
+                term::emit_to_write_style(&mut writer.lock(), &config, &files, &self.diagnostic())
+                    .expect("cannot write error");
             } else {
                 let writer = std::io::stderr();
+                term::emit_to_io_write(&mut writer.lock(), &config, &files, &self.diagnostic())
+                    .expect("cannot write error");
             }
         }
-
-        term::emit(&mut writer.lock(), &config, &files, &self.diagnostic())
-            .expect("cannot write error");
     }
 
     /// Emits a summary of the error to a string.
@@ -101,16 +102,16 @@ impl ParseError {
     }
 
     /// Emits a summary of the error to a string.
-    pub fn emit_to_string_with_path<P>(&self, source: &str, path: P) -> String
-    where
-        P: AsRef<std::path::Path>,
-    {
-        let path = path.as_ref().display().to_string();
+    ///
+    /// `path` gives the filename to attribute the error to in the
+    /// output; this function does not try to access the file.
+    pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String {
         let files = SimpleFile::new(path, replace_control_chars(source));
         let config = term::Config::default();
 
         let mut writer = crate::error::DiagnosticBuffer::new();
-        term::emit(writer.inner_mut(), &config, &files, &self.diagnostic())
+        writer
+            .emit_to_self(&config, &files, &self.diagnostic())
             .expect("cannot write error");
         writer.into_string()
     }
@@ -218,6 +219,7 @@ pub(crate) enum Error<'a> {
     UnknownLanguageExtension(Span, &'a str),
     UnknownDiagnosticRuleName(Span),
     SizeAttributeTooLow(Span, u32),
+    SizeAttributeRequiresFixedFootprint(Span),
     AlignAttributeTooLow(Span, Alignment),
     NonPowerOfTwoAlignAttribute(Span),
     InconsistentBinding(Span),
@@ -233,6 +235,7 @@ pub(crate) enum Error<'a> {
     InvalidAddrOfOperand(Span),
     InvalidAtomicPointer(Span),
     InvalidAtomicOperandType(Span),
+    InvalidAtomicAccess(Span),
     InvalidRayQueryPointer(Span),
     NotPointer(Span),
     NotReference(&'static str, Span),
@@ -359,6 +362,7 @@ pub(crate) enum Error<'a> {
     FunctionReturnsVoid(Span),
     FunctionMustUseUnused(Span),
     FunctionMustUseReturnsVoid(Span, Span),
+    FunctionMustUseOnNonFunction(Span),
     InvalidWorkGroupUniformLoad(Span),
     Internal(&'static str),
     ExpectedConstExprConcreteIntegerScalar(Span),
@@ -439,6 +443,7 @@ pub(crate) enum Error<'a> {
     },
     UnexpectedExprForTypeExpression(Span),
     MissingIncomingPayload(Span),
+    UnterminatedBlockComment(Span),
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -480,8 +485,7 @@ pub(crate) struct AutoConversionLeafScalarError {
 pub(crate) struct ConcretizationFailedError {
     pub expr_span: Span,
     pub expr_type: String,
-    pub scalar: String,
-    pub inner: ConstantEvaluatorError,
+    pub concretization_preferences: Vec<(String, ConstantEvaluatorError)>,
 }
 
 impl<'a> Error<'a> {
@@ -514,6 +518,7 @@ impl<'a> Error<'a> {
                         Token::DocComment(s) => format!("doc comment ('{s}')"),
                         Token::ModuleDocComment(s) => format!("module doc comment ('{s}')"),
                         Token::End => "end".to_string(),
+                        Token::UnterminatedBlockComment(s) => format!("unterminated doc comment ('{s}'")
                     },
                     ExpectedToken::Identifier => "identifier".to_string(),
                     ExpectedToken::LhsExpression => "LHS expression (identifier component_or_swizzle_specifier?, (`lhs_expression`) component_or_swizzle_specifier?, &`lhs_expression`, *`lhs_expression`)".to_string(),
@@ -752,6 +757,11 @@ impl<'a> Error<'a> {
                 labels: vec![(bad_span, format!("must be at least {min_size}").into())],
                 notes: vec![],
             },
+            Error::SizeAttributeRequiresFixedFootprint(bad_span) => ParseError {
+                message: "@size attribute requires a type with creation-fixed footprint".to_string(),
+                labels: vec![(bad_span, "type does not have creation-fixed footprint".into())],
+                notes: vec![],
+            },
             Error::AlignAttributeTooLow(bad_span, min_align) => ParseError {
                 message: format!("struct member alignment must be at least {min_align}"),
                 labels: vec![(bad_span, format!("must be at least {min_align}").into())],
@@ -821,6 +831,11 @@ impl<'a> Error<'a> {
             Error::InvalidAtomicOperandType(span) => ParseError {
                 message: "atomic operand type is inconsistent with the operation".to_string(),
                 labels: vec![(span, "atomic operand type is invalid".into())],
+                notes: vec![],
+            },
+            Error::InvalidAtomicAccess(span) => ParseError {
+                message: "atomic variables cannot be accessed directly; use atomic built-in functions".to_string(),
+                labels: vec![(span, "direct access to atomic variable is not allowed".into())],
                 notes: vec![],
             },
             Error::InvalidRayQueryPointer(span) => ParseError {
@@ -1063,6 +1078,13 @@ impl<'a> Error<'a> {
                     "declare a return type or remove the attribute".into(),
                 ],
             },
+            Error::FunctionMustUseOnNonFunction(attr) => ParseError {
+                message: "attribute `@must_use` is only valid on function declarations".into(),
+                labels: vec![(attr, "".into())],
+                notes: vec![
+                    "place `@must_use` on a function declaration with a return type".into(),
+                ],
+            },
             Error::InvalidWorkGroupUniformLoad(span) => ParseError {
                 message: "incorrect type passed to workgroupUniformLoad".into(),
                 labels: vec![(span, "".into())],
@@ -1161,19 +1183,20 @@ impl<'a> Error<'a> {
                 let ConcretizationFailedError {
                     expr_span,
                     ref expr_type,
-                    ref scalar,
-                    ref inner,
+                    ref concretization_preferences,
                 } = **error;
                 ParseError {
-                    message: format!("failed to convert expression to a concrete type: {inner}"),
+                    message: "failed to convert expression to a concrete type".to_string(),
                     labels: vec![(
                         expr_span,
                         format!("this expression has type {expr_type}").into(),
                     )],
-                    notes: vec![format!(
-                        "the expression should have been converted to have {} scalar type",
-                        scalar
-                    )],
+                    notes: concretization_preferences
+                        .iter()
+                        .map(|&(ref scalar, ref err)|
+                            format!("the expression couldn't be converted to have {scalar} scalar type: {err}")
+                        )
+                        .collect(),
                 }
             }
             Error::ExceededLimitForNestedBraces { span, limit } => ParseError {
@@ -1498,6 +1521,14 @@ impl<'a> Error<'a> {
                 )],
                 notes: vec![],
             },
+            Error::UnterminatedBlockComment(span) => ParseError {
+                message: "unterminated block comment".to_string(),
+                labels: vec![(
+                    span,
+                    "must be closed with `*/`".into(),
+                )],
+                notes: vec![],
+            }
         }
     }
 }

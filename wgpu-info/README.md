@@ -1,6 +1,6 @@
 # wgpu-info
 
-This is a command line utility that does two different functions. 
+This is a command line utility that does two different functions.
 
 #### Listing Adapters
 

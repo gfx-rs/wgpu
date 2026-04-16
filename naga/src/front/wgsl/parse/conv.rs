@@ -99,7 +99,7 @@ pub fn map_built_in(
         "vertex_index" => crate::BuiltIn::VertexIndex,
         "instance_index" => crate::BuiltIn::InstanceIndex,
         "view_index" => crate::BuiltIn::ViewIndex,
-        "clip_distances" => crate::BuiltIn::ClipDistance,
+        "clip_distances" => crate::BuiltIn::ClipDistances,
         // fragment
         "front_facing" => crate::BuiltIn::FrontFacing,
         "frag_depth" => crate::BuiltIn::FragDepth,
@@ -148,7 +148,7 @@ pub fn map_built_in(
         _ => return Err(Box::new(Error::UnknownBuiltin(span))),
     };
     match built_in {
-        crate::BuiltIn::ClipDistance => {
+        crate::BuiltIn::ClipDistances => {
             enable_extensions.require(ImplementedEnableExtension::ClipDistances, span)?
         }
         crate::BuiltIn::PrimitiveIndex => {
@@ -172,12 +172,19 @@ pub fn map_built_in(
     Ok(built_in)
 }
 
-pub fn map_interpolation(word: &str, span: Span) -> Result<'_, crate::Interpolation> {
+pub fn map_interpolation(
+    enable_extensions: &EnableExtensions,
+    word: &str,
+    span: Span,
+) -> Result<'static, crate::Interpolation> {
     match word {
         "linear" => Ok(crate::Interpolation::Linear),
         "flat" => Ok(crate::Interpolation::Flat),
         "perspective" => Ok(crate::Interpolation::Perspective),
-        "per_vertex" => Ok(crate::Interpolation::PerVertex),
+        "per_vertex" => {
+            enable_extensions.require(ImplementedEnableExtension::WgpuPerVertex, span)?;
+            Ok(crate::Interpolation::PerVertex)
+        }
         _ => Err(Box::new(Error::UnknownAttribute(span))),
     }
 }
@@ -575,6 +582,9 @@ pub fn map_predeclared_type(
         ]),
         PredeclaredType::TypeGenerator(TypeGenerator::CooperativeMatrix { .. }) => {
             Some(&[ImplementedEnableExtension::WgpuCooperativeMatrix])
+        }
+        PredeclaredType::TypeGenerator(TypeGenerator::BindingArray) => {
+            Some(&[ImplementedEnableExtension::WgpuBindingArray])
         }
         _ => None,
     };

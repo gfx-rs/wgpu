@@ -1,3 +1,4 @@
+enable wgpu_binding_array;
 struct VertexInput {
     @location(0) position: vec2<f32>,
     @location(1) tex_coord: vec2<f32>,

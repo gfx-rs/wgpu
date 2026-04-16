@@ -14,6 +14,10 @@ const GL_UNMASKED_VENDOR_WEBGL: u32 = 0x9245;
 const GL_UNMASKED_RENDERER_WEBGL: u32 = 0x9246;
 
 impl super::Adapter {
+    pub fn get_glsl_version(&self) -> naga::back::glsl::Version {
+        self.shared.shading_language_version
+    }
+
     /// Note that this function is intentionally lenient in regards to parsing,
     /// and will try to recover at least the first two version numbers without
     /// resulting in an `Err`.
@@ -184,15 +188,8 @@ impl super::Adapter {
         wgt::AdapterInfo {
             name: renderer_orig,
             vendor: vendor_id,
-            device: 0,
-            device_type: inferred_device_type,
-            driver: "".to_owned(),
-            device_pci_bus_id: String::new(),
             driver_info: version,
-            backend: wgt::Backend::Gl,
-            subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
-            subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
-            transient_saves_memory: false,
+            ..wgt::AdapterInfo::new(inferred_device_type, wgt::Backend::Gl)
         }
     }
 
@@ -390,7 +387,8 @@ impl super::Adapter {
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | wgt::DownlevelFlags::COMPARISON_SAMPLERS
-            | wgt::DownlevelFlags::SHADER_F16_IN_F32;
+            | wgt::DownlevelFlags::SHADER_F16_IN_F32
+            | wgt::DownlevelFlags::MSL2_1;
         downlevel_flags.set(
             wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES,
             supports_cube_array,
@@ -451,7 +449,8 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::CLEAR_TEXTURE
             | wgt::Features::IMMEDIATES
-            | wgt::Features::DEPTH32FLOAT_STENCIL8;
+            | wgt::Features::DEPTH32FLOAT_STENCIL8
+            | wgt::Features::PASSTHROUGH_SHADERS;
         features.set(
             wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO,
             extensions.contains("GL_EXT_texture_border_clamp")
@@ -480,7 +479,7 @@ impl super::Adapter {
             full_ver.is_some() || extensions.contains("GL_EXT_clip_cull_distance"),
         );
         features.set(
-            wgt::Features::SHADER_PRIMITIVE_INDEX,
+            wgt::Features::PRIMITIVE_INDEX,
             supported((3, 2), (3, 2))
                 || extensions.contains("OES_geometry_shader")
                 || extensions.contains("GL_ARB_geometry_shader4"),
@@ -663,6 +662,10 @@ impl super::Adapter {
             // that's the only way to get gl_InstanceID to work correctly.
             features.set(wgt::Features::INDIRECT_FIRST_INSTANCE, supported);
         }
+        private_caps.set(
+            super::PrivateCapabilities::MULTISAMPLED_RENDER_TO_TEXTURE,
+            extensions.contains("GL_EXT_multisampled_render_to_texture"),
+        );
 
         // GLSL ES 3.10+ / GLSL 4.30+ natively support coherent/volatile qualifiers
         // on storage buffers. These were introduced alongside storage buffer support.
@@ -704,15 +707,18 @@ impl super::Adapter {
         let max_color_attachment_bytes_per_sample =
             max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
-        let limits = crate::auxil::apply_hal_limits(wgt::Limits {
+        let limits = crate::auxil::adjust_raw_limits(wgt::Limits {
             max_texture_dimension_1d: max_texture_size,
             max_texture_dimension_2d: max_texture_size,
             max_texture_dimension_3d: max_texture_3d_size,
             max_texture_array_layers: unsafe {
                 gl.get_parameter_i32(glow::MAX_ARRAY_TEXTURE_LAYERS)
             } as u32,
-            max_bind_groups: crate::MAX_BIND_GROUPS as u32,
-            max_bindings_per_bind_group: 65535,
+            max_bind_groups: u32::MAX,
+            // No limit.
+            max_bind_groups_plus_vertex_buffers: u32::MAX,
+            // No limit.
+            max_bindings_per_bind_group: u32::MAX,
             max_dynamic_uniform_buffers_per_pipeline_layout: max_uniform_buffers_per_shader_stage,
             max_dynamic_storage_buffers_per_pipeline_layout: max_storage_buffers_per_shader_stage,
             max_sampled_textures_per_shader_stage: super::MAX_TEXTURE_SLOTS as u32,
@@ -820,8 +826,10 @@ impl super::Adapter {
             max_buffer_size: i32::MAX as u64,
             max_non_sampler_bindings: u32::MAX,
 
-            max_task_mesh_workgroup_total_count: 0,
-            max_task_mesh_workgroups_per_dimension: 0,
+            max_task_workgroup_total_count: 0,
+            max_task_workgroups_per_dimension: 0,
+            max_mesh_workgroup_total_count: 0,
+            max_mesh_workgroups_per_dimension: 0,
             max_task_invocations_per_workgroup: 0,
             max_task_invocations_per_dimension: 0,
             max_mesh_invocations_per_workgroup: 0,
@@ -1279,6 +1287,17 @@ impl crate::Adapter for super::Adapter {
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         wgt::PresentationTimestamp::INVALID_TIMESTAMP
+    }
+
+    fn get_ordered_buffer_usages(&self) -> wgt::BufferUses {
+        wgt::BufferUses::INCLUSIVE | wgt::BufferUses::MAP_WRITE
+    }
+
+    // Don't put barriers between inclusive uses
+    fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
+        wgt::TextureUses::INCLUSIVE
+            | wgt::TextureUses::COLOR_TARGET
+            | wgt::TextureUses::DEPTH_STENCIL_WRITE
     }
 }
 

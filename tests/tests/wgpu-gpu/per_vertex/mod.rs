@@ -35,7 +35,13 @@ static PER_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::SHADER_PER_VERTEX),
+            .features(wgpu::Features::SHADER_PER_VERTEX)
+            // https://github.com/gfx-rs/wgpu/issues/9184
+            .expect_fail(
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("could not be compiled into pipeline")
+                    .panic("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
+            ),
     )
     .run_async(per_vertex);
 
@@ -77,7 +83,7 @@ async fn per_vertex(ctx: TestingContext) {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
-                buffers: &[wgpu::VertexBufferLayout {
+                buffers: &[Some(wgpu::VertexBufferLayout {
                     array_stride: 12,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &[wgpu::VertexAttribute {
@@ -85,7 +91,7 @@ async fn per_vertex(ctx: TestingContext) {
                         offset: 0,
                         shader_location: 0,
                     }],
-                }],
+                })],
             },
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleStrip,
@@ -174,6 +180,6 @@ async fn per_vertex(ctx: TestingContext) {
         64, 191, 127, 255, // bottom right
     ];
     readback_buffer
-        .assert_buffer_contents(&ctx, &expected)
+        .assert_buffer_contents_imprecise(&ctx, &expected, 1)
         .await;
 }

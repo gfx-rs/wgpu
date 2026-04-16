@@ -4,7 +4,7 @@ use std::{thread, time};
 
 use bytemuck::TransparentWrapper;
 use objc2::{
-    available, msg_send,
+    available,
     rc::{autoreleasepool, Retained},
     runtime::ProtocolObject,
 };
@@ -16,7 +16,7 @@ use objc2_metal::{
     MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode, MTLDepthStencilDescriptor,
     MTLDevice, MTLFunction, MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion,
     MTLLibrary, MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
-    MTLPipelineBufferDescriptorArray, MTLPixelFormat, MTLPrimitiveTopologyClass,
+    MTLPipelineBufferDescriptorArray, MTLPipelineOption, MTLPixelFormat, MTLPrimitiveTopologyClass,
     MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
     MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
     MTLSamplerMipFilter, MTLSamplerState, MTLSize, MTLStencilDescriptor, MTLStorageMode,
@@ -24,7 +24,7 @@ use objc2_metal::{
     MTLVertexStepFunction,
 };
 
-use super::{conv, PassthroughShader, ShaderModuleSource};
+use super::{adapter::VERTEX_BUFFER_SLOT_START, conv, PassthroughShader, ShaderModuleSource};
 use crate::{auxil::map_naga_stage, TlasInstance};
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
@@ -158,7 +158,7 @@ impl super::Device {
 
                 let ep_resources = &layout.per_stage_map[naga_stage];
 
-                let bounds_check_policy = if stage.module.bounds_checks.bounds_checks {
+                let bounds_check_policy = if stage.module.runtime_checks.bounds_checks {
                     naga::proc::BoundsCheckPolicy::Restrict
                 } else {
                     naga::proc::BoundsCheckPolicy::Unchecked
@@ -178,8 +178,9 @@ impl super::Device {
                         MTLLanguageVersion::Version3_0 => (3, 0),
                         MTLLanguageVersion::Version3_1 => (3, 1),
                         MTLLanguageVersion::Version3_2 => (3, 2),
+                        MTLLanguageVersion::Version4_0 => (4, 0),
                         // Newer version, fall back to 3.2
-                        _ => (3, 2),
+                        _ => (4, 0),
                     },
                     inline_samplers: Default::default(),
                     spirv_cross_compatibility: false,
@@ -196,7 +197,21 @@ impl super::Device {
                         binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                     },
                     zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
-                    force_loop_bounding: stage.module.bounds_checks.force_loop_bounding,
+                    force_loop_bounding: stage.module.runtime_checks.force_loop_bounding,
+                    task_dispatch_limits: stage
+                        .module
+                        .runtime_checks
+                        .task_shader_dispatch_tracking
+                        .then_some(naga::back::TaskDispatchLimits {
+                            max_mesh_workgroups_per_dim: self
+                                .limits
+                                .max_mesh_workgroups_per_dimension,
+                            max_mesh_workgroups_total: self.limits.max_mesh_workgroup_total_count,
+                        }),
+                    mesh_shader_primitive_indices_clamp: stage
+                        .module
+                        .runtime_checks
+                        .mesh_shader_primitive_indices_clamp,
                 };
 
                 let pipeline_options = naga::back::msl::PipelineOptions {
@@ -325,21 +340,24 @@ impl super::Device {
                     immutable_buffer_mask,
                 })
             }
-            ShaderModuleSource::Passthrough(ref shader) => Ok(CompiledShader {
-                library: shader.library.clone(),
-                function: shader
-                    .library
-                    .newFunctionWithName(&NSString::from_str(stage.entry_point))
-                    .ok_or(crate::PipelineError::EntryPoint(naga_stage))?,
-                wg_size: MTLSize {
-                    width: shader.num_workgroups.0 as usize,
-                    height: shader.num_workgroups.1 as usize,
-                    depth: shader.num_workgroups.2 as usize,
-                },
-                wg_memory_sizes: vec![],
-                sized_bindings: vec![],
-                immutable_buffer_mask: 0,
-            }),
+            ShaderModuleSource::Passthrough(ref shader) => {
+                let size = shader.num_workgroups[stage.entry_point];
+                Ok(CompiledShader {
+                    library: shader.library.clone(),
+                    function: shader
+                        .library
+                        .newFunctionWithName(&NSString::from_str(stage.entry_point))
+                        .ok_or(crate::PipelineError::EntryPoint(naga_stage))?,
+                    wg_size: MTLSize {
+                        width: size.0 as usize,
+                        height: size.1 as usize,
+                        depth: size.2 as usize,
+                    },
+                    wg_memory_sizes: vec![],
+                    sized_bindings: vec![],
+                    immutable_buffer_mask: 0,
+                })
+            }
         }
     }
 
@@ -376,11 +394,15 @@ impl super::Device {
     pub unsafe fn device_from_raw(
         raw: Retained<ProtocolObject<dyn MTLDevice>>,
         features: wgt::Features,
+        limits: &wgt::Limits,
     ) -> super::Device {
+        let capabilities_query = super::CapabilitiesQuery::new(&raw);
+        let shared = super::AdapterShared::new(raw, &capabilities_query);
         super::Device {
-            shared: Arc::new(super::AdapterShared::new(raw)),
+            shared: Arc::new(shared),
             features,
             counters: Default::default(),
+            limits: limits.clone(),
         }
     }
 
@@ -458,7 +480,10 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> DeviceResult<super::Texture> {
-        let mtl_format = self.shared.private_caps.map_format(desc.format);
+        let mtl_format = self
+            .shared
+            .private_texture_format_caps
+            .map_format(desc.format);
 
         autoreleasepool(|_| {
             let descriptor = MTLTextureDescriptor::new();
@@ -468,7 +493,15 @@ impl crate::Device for super::Device {
                 wgt::TextureDimension::D2 => {
                     if desc.sample_count > 1 {
                         unsafe { descriptor.setSampleCount(desc.sample_count as usize) };
-                        MTLTextureType::Type2DMultisample
+
+                        if desc.size.depth_or_array_layers > 1 {
+                            unsafe {
+                                descriptor.setArrayLength(desc.size.depth_or_array_layers as usize)
+                            };
+                            MTLTextureType::Type2DMultisampleArray
+                        } else {
+                            MTLTextureType::Type2DMultisample
+                        }
                     } else if desc.size.depth_or_array_layers > 1 {
                         unsafe {
                             descriptor.setArrayLength(desc.size.depth_or_array_layers as usize)
@@ -535,7 +568,9 @@ impl crate::Device for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> DeviceResult<super::TextureView> {
-        let raw_type = if texture.raw_type == MTLTextureType::Type2DMultisample {
+        let raw_type = if texture.raw_type == MTLTextureType::Type2DMultisample
+            || texture.raw_type == MTLTextureType::Type2DMultisampleArray
+        {
             texture.raw_type
         } else {
             conv::map_texture_view_dimension(desc.dimension)
@@ -545,10 +580,14 @@ impl crate::Device for super::Device {
 
         let raw_format = self
             .shared
-            .private_caps
+            .private_texture_format_caps
             .map_view_format(desc.format, aspects);
 
-        let format_equal = raw_format == self.shared.private_caps.map_format(texture.format);
+        let format_equal = raw_format
+            == self
+                .shared
+                .private_texture_format_caps
+                .map_format(texture.format);
         let type_equal = raw_type == texture.raw_type;
         let range_full_resource =
             desc.range
@@ -682,7 +721,7 @@ impl crate::Device for super::Device {
         self.counters.command_encoders.add(1);
         Ok(super::CommandEncoder {
             shared: Arc::clone(&self.shared),
-            raw_queue: Arc::clone(&desc.queue.raw),
+            queue_shared: Arc::clone(&desc.queue.shared),
             raw_cmd_buf: None,
             state: super::CommandState::default(),
             temp: super::Temp::default(),
@@ -845,14 +884,6 @@ impl crate::Device for super::Device {
                 info.sizes_buffer = Some(info.counters.buffers);
                 info.counters.buffers += 1;
             }
-
-            if info.counters.buffers > self.shared.private_caps.max_buffers_per_stage
-                || info.counters.textures > self.shared.private_caps.max_textures_per_stage
-                || info.counters.samplers > self.shared.private_caps.max_samplers_per_stage
-            {
-                log::error!("Resource limit exceeded: {info:?}");
-                return Err(crate::DeviceError::OutOfMemory);
-            }
         }
 
         let immediates_infos = stage_data.map_ref(|info| {
@@ -861,8 +892,6 @@ impl crate::Device for super::Device {
                 buffer_index,
             })
         });
-
-        let total_counters = stage_data.map_ref(|info| info.counters.clone());
 
         let per_stage_map = stage_data.map(|info| naga::back::msl::EntryPointResources {
             immediates_buffer: info
@@ -879,7 +908,6 @@ impl crate::Device for super::Device {
         Ok(super::PipelineLayout {
             bind_group_infos,
             immediates_infos,
-            total_counters,
             total_immediates: desc.immediate_size,
             per_stage_map,
         })
@@ -1138,7 +1166,7 @@ impl crate::Device for super::Device {
         match shader {
             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
                 source: ShaderModuleSource::Naga(naga),
-                bounds_checks: desc.runtime_checks,
+                runtime_checks: desc.runtime_checks,
             }),
             crate::ShaderInput::MetalLib {
                 file,
@@ -1156,7 +1184,7 @@ impl crate::Device for super::Device {
                         num_workgroups,
                     }),
                     // This goes unused for passthrough shaders
-                    bounds_checks: wgt::ShaderRuntimeChecks::unchecked(),
+                    runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
                 })
             }
             crate::ShaderInput::Msl {
@@ -1175,8 +1203,7 @@ impl crate::Device for super::Device {
                         library,
                         num_workgroups,
                     }),
-                    // This goes unused for passthrough shaders
-                    bounds_checks: wgt::ShaderRuntimeChecks::unchecked(),
+                    runtime_checks: desc.runtime_checks,
                 })
             }
             crate::ShaderInput::SpirV(_)
@@ -1271,6 +1298,9 @@ impl crate::Device for super::Device {
                     let mut vertex_buffer_mappings =
                         Vec::<naga::back::msl::VertexBufferMapping>::new();
                     for (i, vbl) in vertex_buffers.iter().enumerate() {
+                        let Some(vbl) = vbl else {
+                            continue;
+                        };
                         let mut attributes = Vec::<naga::back::msl::AttributeMapping>::new();
                         for attribute in vbl.attributes.iter() {
                             attributes.push(naga::back::msl::AttributeMapping {
@@ -1281,7 +1311,7 @@ impl crate::Device for super::Device {
                         }
 
                         let mapping = naga::back::msl::VertexBufferMapping {
-                            id: self.shared.private_caps.max_vertex_buffers - 1 - i as u32,
+                            id: VERTEX_BUFFER_SLOT_START + i as u32,
                             stride: if vbl.array_stride > 0 {
                                 vbl.array_stride.try_into().unwrap()
                             } else {
@@ -1341,27 +1371,15 @@ impl crate::Device for super::Device {
                         });
                     }
 
-                    // Validate vertex buffer count
-                    if desc.layout.total_counters.vs.buffers + (vertex_buffers.len() as u32)
-                        > self.shared.private_caps.max_vertex_buffers
-                    {
-                        let msg = format!(
-                            "pipeline needs too many buffers in the vertex stage: {} vertex and {} layout",
-                            vertex_buffers.len(),
-                            desc.layout.total_counters.vs.buffers
-                        );
-                        return Err(crate::PipelineError::Linkage(
-                            wgt::ShaderStages::VERTEX,
-                            msg,
-                        ));
-                    }
-
                     // Set the pipeline vertex buffer info
                     if !vertex_buffers.is_empty() {
                         let vertex_descriptor = MTLVertexDescriptor::new();
                         for (i, vb) in vertex_buffers.iter().enumerate() {
-                            let buffer_index =
-                                self.shared.private_caps.max_vertex_buffers as usize - 1 - i;
+                            let Some(vb) = vb else {
+                                continue;
+                            };
+
+                            let buffer_index = VERTEX_BUFFER_SLOT_START as usize + i;
                             let buffer_desc = unsafe {
                                 vertex_descriptor
                                     .layouts()
@@ -1536,7 +1554,10 @@ impl crate::Device for super::Device {
                     continue;
                 };
 
-                let raw_format = self.shared.private_caps.map_format(ct.format);
+                let raw_format = self
+                    .shared
+                    .private_texture_format_caps
+                    .map_format(ct.format);
                 at_descriptor.setPixelFormat(raw_format);
                 at_descriptor.setWriteMask(conv::map_color_write(ct.write_mask));
 
@@ -1558,7 +1579,10 @@ impl crate::Device for super::Device {
             // Setup depth stencil state
             let depth_stencil = match desc.depth_stencil {
                 Some(ref ds) => {
-                    let raw_format = self.shared.private_caps.map_format(ds.format);
+                    let raw_format = self
+                        .shared
+                        .private_texture_format_caps
+                        .map_format(ds.format);
                     let aspects = crate::FormatAspects::from(ds.format);
                     if aspects.contains(crate::FormatAspects::DEPTH) {
                         descriptor.setDepthAttachmentPixelFormat(raw_format);
@@ -1610,15 +1634,14 @@ impl crate::Device for super::Device {
                     .shared
                     .device
                     .newRenderPipelineStateWithDescriptor_error(&d),
-                MetalGenericRenderPipelineDescriptor::Mesh(d) => {
-                    // TODO(https://github.com/gfx-rs/wgpu/issues/8944):
-                    // `newRenderPipelineStateWithMeshDescriptor:error:` is
-                    // not exposed on `MTLDevice`, is this always correct?
-                    let device = &self.shared.device;
-                    unsafe {
-                        msg_send![device, newRenderPipelineStateWithMeshDescriptor: &*d, error: _]
-                    }
-                }
+                MetalGenericRenderPipelineDescriptor::Mesh(d) => self
+                    .shared
+                    .device
+                    .newRenderPipelineStateWithMeshDescriptor_options_reflection_error(
+                        &d,
+                        MTLPipelineOption::empty(),
+                        None,
+                    ),
             }
             .map_err(|e| {
                 crate::PipelineError::Linkage(
@@ -1670,6 +1693,7 @@ impl crate::Device for super::Device {
 
             let module = desc.stage.module;
             let cs = if let ShaderModuleSource::Passthrough(passthrough_desc) = &module.source {
+                let size = passthrough_desc.num_workgroups[desc.stage.entry_point];
                 CompiledShader {
                     library: passthrough_desc.library.clone(),
                     function: passthrough_desc
@@ -1677,9 +1701,9 @@ impl crate::Device for super::Device {
                         .newFunctionWithName(&NSString::from_str(desc.stage.entry_point))
                         .ok_or(crate::PipelineError::EntryPoint(naga::ShaderStage::Compute))?,
                     wg_size: MTLSize {
-                        width: passthrough_desc.num_workgroups.0 as usize,
-                        height: passthrough_desc.num_workgroups.1 as usize,
-                        depth: passthrough_desc.num_workgroups.2 as usize,
+                        width: size.0 as usize,
+                        height: size.1 as usize,
+                        depth: size.2 as usize,
                     },
                     wg_memory_sizes: vec![],
                     sized_bindings: vec![],
@@ -1716,13 +1740,14 @@ impl crate::Device for super::Device {
                 descriptor.setLabel(Some(&NSString::from_str(name)));
             }
 
-            // TODO(https://github.com/gfx-rs/wgpu/issues/8944):
-            // `newComputePipelineStateWithDescriptor:error:` is not exposed
-            // on `MTLDevice`, is this always correct?
-            let device = &self.shared.device;
-            let raw = unsafe {
-                msg_send![device, newComputePipelineStateWithDescriptor: &*descriptor, error: _]
-            };
+            let raw = self
+                .shared
+                .device
+                .newComputePipelineStateWithDescriptor_options_reflection_error(
+                    &descriptor,
+                    MTLPipelineOption::empty(),
+                    None,
+                );
 
             let raw: Retained<ProtocolObject<dyn MTLComputePipelineState>> =
                 raw.map_err(|e: Retained<NSError>| {
@@ -1833,7 +1858,7 @@ impl crate::Device for super::Device {
         self.counters.fences.add(1);
         // https://developer.apple.com/documentation/metal/mtlsharedevent
         let shared_event = if available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0) {
-            Some(self.shared.device.newSharedEvent().unwrap())
+            self.shared.device.newSharedEvent() // This should be supported on said devices, but some sandbox environments may still restrict it, making it return `None`.
         } else {
             None
         };

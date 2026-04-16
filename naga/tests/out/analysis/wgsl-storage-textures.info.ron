@@ -184,6 +184,7 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            immediate_slots_used: (0),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -396,6 +397,7 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            immediate_slots_used: (0),
         ),
     ],
     const_expression_types: [],

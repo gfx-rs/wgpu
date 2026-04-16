@@ -16,8 +16,10 @@ pub(super) struct State {
     primitive: super::PrimitiveState,
     index_format: wgt::IndexFormat,
     index_offset: wgt::BufferAddress,
-    vertex_buffers:
-        [(super::VertexBufferDesc, Option<super::BufferBinding>); crate::MAX_VERTEX_BUFFERS],
+    vertex_buffers: [(
+        Option<super::VertexBufferDesc>,
+        Option<super::BufferBinding>,
+    ); crate::MAX_VERTEX_BUFFERS],
     vertex_attributes: ArrayVec<super::AttributeDesc, { super::MAX_VERTEX_ATTRIBUTES }>,
     color_targets: ArrayVec<super::ColorTargetDesc, { crate::MAX_COLOR_ATTACHMENTS }>,
     stencil: super::StencilState,
@@ -139,9 +141,9 @@ impl super::CommandEncoder {
                     continue;
                 }
                 let (buffer_desc, vb) = match *pair {
+                    (Some(ref vb_desc), Some(ref vb)) => (vb_desc.clone(), vb),
                     // Not all dirty bindings are necessarily filled. Some may be unused.
-                    (_, None) => continue,
-                    (ref vb_desc, Some(ref vb)) => (vb_desc.clone(), vb),
+                    (_, _) => continue,
                 };
                 let instance_offset = match buffer_desc.step {
                     wgt::VertexStepMode::Vertex => 0,
@@ -166,9 +168,9 @@ impl super::CommandEncoder {
                 }
                 let (buffer_desc, vb) =
                     match self.state.vertex_buffers[attribute.buffer_index as usize] {
+                        (Some(ref vb_desc), Some(ref vb)) => (vb_desc.clone(), vb),
                         // Not all dirty bindings are necessarily filled. Some may be unused.
-                        (_, None) => continue,
-                        (ref vb_desc, Some(ref vb)) => (vb_desc.clone(), vb),
+                        (_, _) => continue,
                     };
 
                 let mut attribute_desc = attribute.clone();
@@ -556,10 +558,30 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 for (i, cat) in desc.color_attachments.iter().enumerate() {
                     if let Some(cat) = cat.as_ref() {
                         let attachment = glow::COLOR_ATTACHMENT0 + i as u32;
+                        // Try to use the multisampled render-to-texture extension to avoid resolving
+                        if let Some(ref rat) = cat.resolve_target {
+                            if matches!(rat.view.inner, super::TextureInner::Texture { .. })
+                                && self.private_caps.contains(
+                                    super::PrivateCapabilities::MULTISAMPLED_RENDER_TO_TEXTURE,
+                                )
+                                && !cat.ops.contains(crate::AttachmentOps::STORE)
+                                // Extension specifies that only COLOR_ATTACHMENT0 is valid
+                                && i == 0
+                            {
+                                self.cmd_buffer.commands.push(C::BindAttachment {
+                                    attachment,
+                                    view: rat.view.clone(),
+                                    depth_slice: None,
+                                    sample_count: desc.sample_count,
+                                });
+                                continue;
+                            }
+                        }
                         self.cmd_buffer.commands.push(C::BindAttachment {
                             attachment,
                             view: cat.target.view.clone(),
                             depth_slice: cat.depth_slice,
+                            sample_count: 1,
                         });
                         if let Some(ref rat) = cat.resolve_target {
                             self.state
@@ -582,6 +604,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         attachment,
                         view: dsat.target.view.clone(),
                         depth_slice: None,
+                        sample_count: 1,
                     });
                     if aspects.contains(crate::FormatAspects::DEPTH)
                         && dsat.depth_ops.contains(crate::AttachmentOps::STORE_DISCARD)
@@ -854,7 +877,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .contains(super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT)
         {
             for vat in pipeline.vertex_attributes.iter() {
-                let vb = &pipeline.vertex_buffers[vat.buffer_index as usize];
+                let vb = pipeline.vertex_buffers[vat.buffer_index as usize]
+                    .as_ref()
+                    .unwrap();
                 // set the layout
                 self.cmd_buffer.commands.push(C::SetVertexAttribute {
                     buffer: None,
@@ -888,12 +913,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .zip(pipeline.vertex_buffers.iter())
             .enumerate()
         {
+            let Some(pipe_desc) = pipe_desc else {
+                continue;
+            };
             if pipe_desc.step == wgt::VertexStepMode::Instance {
                 self.state.instance_vbuf_mask |= 1 << index;
             }
-            if state_desc != pipe_desc {
+            if state_desc.as_ref() != Some(pipe_desc) {
                 self.state.dirty_vbuf_mask |= 1 << index;
-                *state_desc = pipe_desc.clone();
+                *state_desc = Some(pipe_desc.clone());
             }
         }
 
@@ -1052,7 +1080,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         instance_count: u32,
     ) {
         self.prepare_draw(first_instance);
-        #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
+        #[allow(
+            clippy::clone_on_copy,
+            reason = "False positive when cloning glow::UniformLocation"
+        )]
         self.cmd_buffer.commands.push(C::Draw {
             topology: self.state.topology,
             first_vertex,
@@ -1076,7 +1107,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
             wgt::IndexFormat::Uint32 => (4, glow::UNSIGNED_INT),
         };
         let index_offset = self.state.index_offset + index_size * first_index as wgt::BufferAddress;
-        #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
+        #[allow(
+            clippy::clone_on_copy,
+            reason = "False positive when cloning glow::UniformLocation"
+        )]
         self.cmd_buffer.commands.push(C::DrawIndexed {
             topology: self.state.topology,
             index_type,
@@ -1106,7 +1140,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         for draw in 0..draw_count as wgt::BufferAddress {
             let indirect_offset =
                 offset + draw * size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
-            #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
+            #[allow(
+                clippy::clone_on_copy,
+                reason = "False positive when cloning glow::UniformLocation"
+            )]
             self.cmd_buffer.commands.push(C::DrawIndirect {
                 topology: self.state.topology,
                 indirect_buf: buffer.raw.unwrap(),
@@ -1129,7 +1166,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         for draw in 0..draw_count as wgt::BufferAddress {
             let indirect_offset =
                 offset + draw * size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
-            #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
+            #[allow(
+                clippy::clone_on_copy,
+                reason = "False positive when cloning glow::UniformLocation"
+            )]
             self.cmd_buffer.commands.push(C::DrawIndexedIndirect {
                 topology: self.state.topology,
                 index_type,
@@ -1212,14 +1252,18 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.set_pipeline_inner(&pipeline.inner);
     }
 
-    unsafe fn dispatch(&mut self, count: [u32; 3]) {
+    unsafe fn dispatch_workgroups(&mut self, count: [u32; 3]) {
         // Empty dispatches are invalid in OpenGL, but valid in WebGPU.
         if count.contains(&0) {
             return;
         }
         self.cmd_buffer.commands.push(C::Dispatch(count));
     }
-    unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
+    unsafe fn dispatch_workgroups_indirect(
+        &mut self,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+    ) {
         self.cmd_buffer.commands.push(C::DispatchIndirect {
             indirect_buf: buffer.raw.unwrap(),
             indirect_offset: offset,

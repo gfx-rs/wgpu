@@ -25,7 +25,13 @@ static BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestConfigurati
             .limits(Limits {
                 max_binding_array_elements_per_shader_stage: 16,
                 ..Limits::default()
-            }),
+            })
+            // https://github.com/gfx-rs/wgpu/issues/9184
+            .expect_fail(
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline"),
+            ),
     )
     .run_async(|ctx| async move { binding_array_sampled_textures(ctx, false).await });
 
@@ -42,7 +48,13 @@ static PARTIAL_BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestCon
             .limits(Limits {
                 max_binding_array_elements_per_shader_stage: 32,
                 ..Limits::default()
-            }),
+            })
+            // https://github.com/gfx-rs/wgpu/issues/9184
+            .expect_fail(
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline"),
+            ),
     )
     .run_async(|ctx| async move { binding_array_sampled_textures(ctx, false).await });
 
@@ -53,6 +65,7 @@ static PARTIAL_BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestCon
 /// output due to non-native support for non-uniform indexing within a WARP.
 async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bool) {
     let shader = r#"
+        enable wgpu_binding_array;
         @group(0) @binding(0)
         var textures: binding_array<texture_2d<f32>>;
 
