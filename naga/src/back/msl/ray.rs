@@ -8,10 +8,10 @@ use crate::{
     back::{
         self,
         msl::{
-            writer::{StatementContext, TypeContext, WrappedFunction},
-            BackendResult, Error, Writer,
+            writer::{NameKeyExt, StatementContext, TypeContext, WrappedFunction},
+            BackendResult, Error, Writer, NAMESPACE,
         },
-        Baked,
+        Baked, INDENT,
     },
     Handle,
 };
@@ -24,8 +24,25 @@ pub(super) fn metal_intersector_ty() -> String {
 }
 
 pub(super) const INTERSECTION_FUNCTION_NAME: &str = "ray_query_get_intersection";
+pub(crate) const RAY_QUERY_TRACKER_VARIABLE_PREFIX: &str = "naga_query_init_tracker_for_";
 
 impl<W: Write> Writer<W> {
+    fn write_not_finite(&mut self, expr: &str) -> BackendResult {
+        self.write_contains_flags(&format!("as_type<uint>({expr})"), 0x7f800000)
+    }
+
+    fn write_nan(&mut self, expr: &str) -> BackendResult {
+        write!(self.out, "(")?;
+        self.write_not_finite(expr)?;
+        write!(self.out, " && ((as_type<uint>({expr}) & 0x7fffff) != 0))")?;
+        Ok(())
+    }
+
+    fn write_contains_flags(&mut self, expr: &str, flags: u32) -> BackendResult {
+        write!(self.out, "(({expr} & {flags}) == {flags})")?;
+        Ok(())
+    }
+
     /// Writes a function to get the current intersection from the ray query
     ///
     /// Like other backends, this is needed to have a single branch for constructing
@@ -152,6 +169,28 @@ impl<W: Write> Writer<W> {
             return Err(Error::UnsupportedRayTracing);
         }
 
+        // There are three possibilities for a ptr to be:
+        // 1. A variable
+        // 2. A function argument
+        // 3. part of a struct
+        //
+        // 2 and 3 are not possible, a ray query (in naga IR)
+        // is not allowed to be passed into a function, and
+        // all languages disallow it in a struct (you get fun results if
+        // you try it :) ).
+        //
+        // Therefore, the ray query expression must be a variable.
+        let crate::Expression::LocalVariable(query_var) =
+            context.expression.function.expressions[query]
+        else {
+            unreachable!()
+        };
+
+        let tracker_expr_name = format!(
+            "{RAY_QUERY_TRACKER_VARIABLE_PREFIX}{}",
+            self.names[&crate::proc::NameKey::local(context.expression.origin, query_var)]
+        );
+
         // TODO: check for misuse.
         match *fun {
             crate::RayQueryFunction::Initialize {
@@ -193,24 +232,37 @@ impl<W: Write> Writer<W> {
                     // Determine whether or not to cull opaque/non-opaques
                     let f_opaque = back::RayFlag::CULL_OPAQUE.bits();
                     let f_no_opaque = back::RayFlag::CULL_NO_OPAQUE.bits();
+                    writeln!(self.out, "{inner_level}{RT_NAMESPACE}::opacity_cull_mode cull_mode = 
+{inner_level}{INDENT}(desc.flags & {f_opaque}) != 0 ? {RT_NAMESPACE}::opacity_cull_mode::opaque : (
+{inner_level}{INDENT}{INDENT}(desc.flags & {f_no_opaque}) != 0 ? {RT_NAMESPACE}::opacity_cull_mode::non_opaque : {RT_NAMESPACE}::opacity_cull_mode::none
+{inner_level}{INDENT});")?;
                     writeln!(
                         self.out,
-                        "{inner_level}params.set_opacity_cull_mode(
-{inner_level}    (desc.flags & {f_opaque}) != 0 ? {RT_NAMESPACE}::opacity_cull_mode::opaque : (
-{inner_level}        (desc.flags & {f_no_opaque}) != 0 ? {RT_NAMESPACE}::opacity_cull_mode::non_opaque : {RT_NAMESPACE}::opacity_cull_mode::none
-{inner_level}    )
-{inner_level});"
+                        "{inner_level}params.set_opacity_cull_mode(cull_mode);"
                     )?;
+
+                    if self.ray_query_initialization_tracking {
+                        writeln!(self.out, "{inner_level}bool force_opacity = cull_mode == {RT_NAMESPACE}::opacity_cull_mode::none;")?;
+                    }
                 }
                 {
+                    let mut current_level = inner_level;
+                    if self.ray_query_initialization_tracking {
+                        writeln!(self.out, "{inner_level}if (force_opacity) {{")?;
+                        current_level = current_level.next();
+                    }
                     // Determine whether to force a particular opacity
                     let f_opaque = back::RayFlag::OPAQUE.bits();
                     let f_no_opaque = back::RayFlag::NO_OPAQUE.bits();
-                    writeln!(self.out, "{inner_level}params.force_opacity(
-{inner_level}    (desc.flags & {f_opaque}) != 0 ? {RT_NAMESPACE}::forced_opacity::opaque : (
-{inner_level}        (desc.flags & {f_no_opaque}) != 0 ? {RT_NAMESPACE}::forced_opacity::non_opaque : {RT_NAMESPACE}::forced_opacity::none
-{inner_level}    )
-{inner_level});")?;
+                    writeln!(self.out, "{current_level}params.force_opacity(
+{current_level}    (desc.flags & {f_opaque}) != 0 ? {RT_NAMESPACE}::forced_opacity::opaque : (
+{current_level}        (desc.flags & {f_no_opaque}) != 0 ? {RT_NAMESPACE}::forced_opacity::non_opaque : {RT_NAMESPACE}::forced_opacity::none
+{current_level}    )
+{current_level});")?;
+
+                    if self.ray_query_initialization_tracking {
+                        writeln!(self.out, "{inner_level}}}")?;
+                    }
                 }
                 {
                     let flag = back::RayFlag::TERMINATE_ON_FIRST_HIT.bits();
@@ -225,7 +277,46 @@ impl<W: Write> Writer<W> {
                     "{inner_level}{RT_NAMESPACE}::ray ray = {RT_NAMESPACE}::ray(desc.origin, desc.dir, desc.tmin, desc.tmax);"
                 )?;
 
-                write!(self.out, "{inner_level}")?;
+                let mut init_level = inner_level;
+
+                // The `reset` function is virtually undocumented (many of the Metal ray tracing functions lack it), so to be safe,
+                // this assumes an invalid ray is UB (NOTE: invalid ray behaviour is defined for intersectors).
+                if self.ray_query_initialization_tracking {
+                    write!(self.out, "{inner_level}bool invalid_nan_infs = ")?;
+                    // tmax needs special handling because it can be INF
+                    for (idx, &field_access) in [
+                        "origin.x", "origin.y", "origin.z", "dir.x", "dir.y", "dir.z", "tmin",
+                    ]
+                    .iter()
+                    .enumerate()
+                    {
+                        if idx != 0 {
+                            write!(self.out, " || ")?;
+                        }
+
+                        self.write_not_finite(&format!("desc.{field_access}"))?;
+                    }
+
+                    write!(self.out, " || ")?;
+                    self.write_nan("desc.tmax")?;
+                    writeln!(self.out, ";")?;
+
+                    // Metal also requires that tmax >= 0.0, but if tmax >= tmin and tmin >= 0.0, tmax must be >= 0.0
+                    writeln!(self.out, "{inner_level}bool invalid_t = (desc.tmin > desc.tmax) || (desc.tmin < 0.0);")?;
+                    // Metal requires that the length of the direction is not 0.0. This is the case only when all the
+                    // components are zero.
+                    //
+                    // Use absolute to cover signed zero.
+                    writeln!(self.out, "{inner_level}bool invalid_dir = {NAMESPACE}::all({NAMESPACE}::abs(desc.dir) == 0.0);")?;
+
+                    writeln!(
+                        self.out,
+                        "{inner_level}if (!(invalid_dir || invalid_t || invalid_nan_infs)) {{"
+                    )?;
+                    init_level = init_level.next();
+                }
+
+                write!(self.out, "{init_level}")?;
                 // A ray query can by initialized in metal by either using a "non-default constructor"
                 // or by calling reset. Ray queries cannot be assigned to in metal, so reset needs to
                 // be called.
@@ -233,15 +324,41 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ".reset(ray,")?;
                 self.put_expression(acceleration_structure, &context.expression, true)?;
                 writeln!(self.out, ", desc.cull_mask, params);")?;
+                if self.ray_query_initialization_tracking {
+                    writeln!(
+                        self.out,
+                        "{init_level}{tracker_expr_name} = {};",
+                        back::RayQueryPoint::INITIALIZED.bits()
+                    )?;
+                    writeln!(self.out, "{inner_level}}}")?;
+                }
                 writeln!(self.out, "{level}}}")?;
             }
             crate::RayQueryFunction::Proceed { result } => {
-                write!(self.out, "{level}")?;
+                let mut current_level = level;
+                write!(self.out, "{current_level}")?;
                 let name = Baked(result).to_string();
                 self.start_baking_expression(result, &context.expression, &name)?;
-                self.named_expressions.insert(result, name);
+                self.named_expressions.insert(result, name.clone());
+
+                writeln!(self.out, "false;")?;
+
+                if self.ray_query_initialization_tracking {
+                    write!(self.out, "{level}if ")?;
+                    self.write_contains_flags(
+                        &tracker_expr_name,
+                        back::RayQueryPoint::INITIALIZED.bits(),
+                    )?;
+                    writeln!(self.out, " {{")?;
+                    current_level = current_level.next();
+                }
+                write!(self.out, "{current_level}{name} = ")?;
                 self.put_expression(query, &context.expression, true)?;
                 writeln!(self.out, ".next();")?;
+                if self.ray_query_initialization_tracking {
+                    writeln!(self.out, "{current_level}{tracker_expr_name} = {tracker_expr_name} | ({name} ? {}: {});", back::RayQueryPoint::PROCEED.bits(), (back::RayQueryPoint::PROCEED | back::RayQueryPoint::FINISHED_TRAVERSAL).bits())?;
+                    writeln!(self.out, "{level}}}")?;
+                }
             }
             crate::RayQueryFunction::GenerateIntersection { hit_t } => {
                 write!(self.out, "{level}")?;

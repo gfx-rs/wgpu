@@ -52,25 +52,35 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
   metal::raytracing::instance_acceleration_structure acc_struct [[user(fake0)]]
 ) {
     metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> rq_1 = {};
+    uint naga_query_init_tracker_for_rq_1 = 0u;
     metal::float3 pos = metal::float3(0.0);
     metal::float3 dir = metal::float3(0.0, 1.0, 0.0);
     RayDesc _e12 = RayDesc {4u, 255u, 0.1, 100.0, pos, dir};
     {
         RayDesc desc = _e12;
         metal::raytracing::intersection_params params;
-        params.set_opacity_cull_mode(
+        metal::raytracing::opacity_cull_mode cull_mode = 
             (desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (
                 (desc.flags & 128) != 0 ? metal::raytracing::opacity_cull_mode::non_opaque : metal::raytracing::opacity_cull_mode::none
-            )
-        );
-        params.force_opacity(
-            (desc.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (
-                (desc.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none
-            )
-        );
+            );
+        params.set_opacity_cull_mode(cull_mode);
+        bool force_opacity = cull_mode == metal::raytracing::opacity_cull_mode::none;
+        if (force_opacity) {
+            params.force_opacity(
+                (desc.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (
+                    (desc.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none
+                )
+            );
+        }
         params.accept_any_intersection((desc.flags & 4) != 0);
         metal::raytracing::ray ray = metal::raytracing::ray(desc.origin, desc.dir, desc.tmin, desc.tmax);
-        rq_1.reset(ray,acc_struct, desc.cull_mask, params);
+        bool invalid_nan_infs = ((as_type<uint>(desc.origin.x) & 2139095040) == 2139095040) || ((as_type<uint>(desc.origin.y) & 2139095040) == 2139095040) || ((as_type<uint>(desc.origin.z) & 2139095040) == 2139095040) || ((as_type<uint>(desc.dir.x) & 2139095040) == 2139095040) || ((as_type<uint>(desc.dir.y) & 2139095040) == 2139095040) || ((as_type<uint>(desc.dir.z) & 2139095040) == 2139095040) || ((as_type<uint>(desc.tmin) & 2139095040) == 2139095040) || (((as_type<uint>(desc.tmax) & 2139095040) == 2139095040) && ((as_type<uint>(desc.tmax) & 0x7fffff) != 0));
+        bool invalid_t = (desc.tmin > desc.tmax) || (desc.tmin < 0.0);
+        bool invalid_dir = metal::all(metal::abs(desc.dir) == 0.0);
+        if (!(invalid_dir || invalid_t || invalid_nan_infs)) {
+            rq_1.reset(ray,acc_struct, desc.cull_mask, params);
+            naga_query_init_tracker_for_rq_1 = 1;
+        }
     }
     RayIntersection intersection = ray_query_get_intersection_false(rq_1);
     if (intersection.kind == 3u) {
