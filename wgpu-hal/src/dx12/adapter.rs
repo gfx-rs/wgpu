@@ -13,9 +13,10 @@ use windows::{
         },
         Foundation::{GetLastError, ERROR_NO_MORE_ITEMS},
         Graphics::{Direct3D, Direct3D12, Dxgi},
-        UI::WindowsAndMessaging,
     },
 };
+#[cfg(not(any(__WINRT__, target_vendor = "uwp")))]
+use windows::Win32::UI::WindowsAndMessaging;
 
 use super::D3D12Lib;
 use crate::{
@@ -1275,6 +1276,7 @@ impl crate::Adapter for super::Adapter {
     ) -> Option<crate::SurfaceCapabilities> {
         let current_extent = {
             match surface.target {
+                #[cfg(not(any(__WINRT__, target_vendor = "uwp")))]
                 SurfaceTarget::WndHandle(wnd_handle)
                 | SurfaceTarget::VisualFromWndHandle {
                     handle: wnd_handle, ..
@@ -1292,6 +1294,8 @@ impl crate::Adapter for super::Adapter {
                         None
                     }
                 }
+                #[cfg(any(__WINRT__, target_vendor = "uwp"))]
+                SurfaceTarget::WndHandle(_) | SurfaceTarget::VisualFromWndHandle { .. } => None,
                 SurfaceTarget::Visual(_)
                 | SurfaceTarget::SurfaceHandle(_)
                 | SurfaceTarget::SwapChainPanel(_)

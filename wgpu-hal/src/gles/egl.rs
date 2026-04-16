@@ -31,9 +31,9 @@ type EglInstance = khronos_egl::Instance<khronos_egl::Static>;
 
 type EglLabel = *const ffi::c_void;
 
-#[cfg(unix)]
+#[cfg(all(unix, not(windows)))]
 type WaylandWindow = *mut wayland_sys::egl::wl_egl_window;
-#[cfg(not(unix))]
+#[cfg(not(all(unix, not(windows))))]
 type WaylandWindow = *mut ffi::c_void;
 
 #[allow(clippy::upper_case_acronyms)]
@@ -85,7 +85,7 @@ unsafe extern "system" fn egl_debug_proc(
     log::log!(log_severity, "EGL '{command}' code 0x{error:x}: {message}",);
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(windows)))]
 unsafe fn resize_wayland_window(window: WaylandWindow, width: i32, height: i32) {
     wayland_sys::ffi_dispatch!(
         wayland_sys::egl::wayland_egl_handle(),
@@ -98,12 +98,7 @@ unsafe fn resize_wayland_window(window: WaylandWindow, width: i32, height: i32) 
     );
 }
 
-#[cfg(not(unix))]
-unsafe fn resize_wayland_window(_window: WaylandWindow, _width: i32, _height: i32) {
-    unreachable!("Wayland EGL windows are only available on unix targets");
-}
-
-#[cfg(unix)]
+#[cfg(all(unix, not(windows)))]
 unsafe fn create_wayland_window(
     surface: *mut ffi::c_void,
     width: i32,
@@ -118,27 +113,13 @@ unsafe fn create_wayland_window(
     )
 }
 
-#[cfg(not(unix))]
-unsafe fn create_wayland_window(
-    _surface: *mut ffi::c_void,
-    _width: i32,
-    _height: i32,
-) -> WaylandWindow {
-    unreachable!("Wayland EGL windows are only available on unix targets");
-}
-
-#[cfg(unix)]
+#[cfg(all(unix, not(windows)))]
 unsafe fn destroy_wayland_window(window: WaylandWindow) {
     wayland_sys::ffi_dispatch!(
         wayland_sys::egl::wayland_egl_handle(),
         wl_egl_window_destroy,
         window,
     );
-}
-
-#[cfg(not(unix))]
-unsafe fn destroy_wayland_window(_window: WaylandWindow) {
-    unreachable!("Wayland EGL windows are only available on unix targets");
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -505,10 +486,10 @@ impl Inner {
 
         let (config, supports_native_window) = choose_config(&egl, display, srgb_kind)?;
 
-        #[cfg(all(windows, target_vendor = "uwp"))]
+        #[cfg(all(windows, any(__WINRT__, target_vendor = "uwp")))]
         let supports_opengl = false;
 
-        #[cfg(not(all(windows, target_vendor = "uwp")))]
+        #[cfg(not(all(windows, any(__WINRT__, target_vendor = "uwp"))))]
         let supports_opengl = if version >= (1, 4) {
             let client_apis = egl
                 .query_string(Some(display), khronos_egl::CLIENT_APIS)
@@ -1281,6 +1262,7 @@ impl crate::Surface for Surface {
 
         let (surface, wl_window) = match unsafe { self.unconfigure_impl(device) } {
             Some((sc, wl_window)) => {
+                #[cfg(all(unix, not(windows)))]
                 if let Some(window) = wl_window {
                     unsafe {
                         resize_wayland_window(
@@ -1294,7 +1276,10 @@ impl crate::Surface for Surface {
                 (sc, wl_window)
             }
             None => {
+                #[cfg(all(unix, not(windows)))]
                 let mut wl_window = None;
+                #[cfg(not(all(unix, not(windows))))]
+                let wl_window = None;
                 let (mut temp_xlib_handle, mut temp_xcb_handle);
                 let native_window_ptr = match (self.wsi.kind, self.raw_window_handle) {
                     (WindowKind::Unknown | WindowKind::X11, Rwh::Xlib(handle)) => {
@@ -1313,7 +1298,7 @@ impl crate::Surface for Surface {
                         handle.a_native_window.as_ptr()
                     }
                     (WindowKind::Unknown, Rwh::OhosNdk(handle)) => handle.native_window.as_ptr(),
-                    #[cfg(unix)]
+                    #[cfg(all(unix, not(windows)))]
                     (WindowKind::Wayland, Rwh::Wayland(handle)) => {
                         let window = unsafe {
                             create_wayland_window(
@@ -1476,12 +1461,13 @@ impl crate::Surface for Surface {
     }
 
     unsafe fn unconfigure(&self, device: &super::Device) {
-        if let Some((surface, wl_window)) = unsafe { self.unconfigure_impl(device) } {
+        if let Some((surface, _wl_window)) = unsafe { self.unconfigure_impl(device) } {
             self.egl
                 .instance
                 .destroy_surface(self.egl.display, surface)
                 .unwrap();
-            if let Some(window) = wl_window {
+            #[cfg(all(unix, not(windows)))]
+            if let Some(window) = _wl_window {
                 unsafe { destroy_wayland_window(window) };
             }
         }

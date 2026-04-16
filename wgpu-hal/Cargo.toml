@@ -120,14 +120,10 @@ gles = [
     "dep:wasm-bindgen",
     "dep:wayland-sys",
     "dep:web-sys",
+    "dep:windows",
     "dep:windows-result",
     "naga/glsl-out",
     "wgpu-types/web",
-    "windows-result/std",                   # Need to enable this for the `Error` impl on `windows_result::Error` to work.
-    "windows/Win32_Graphics_Gdi",
-    "windows/Win32_Graphics_OpenGL",
-    "windows/Win32_System_LibraryLoader",
-    "windows/Win32_UI_WindowsAndMessaging",
 ]
 ## Enables the DX12 backend when targeting Windows.
 dx12 = [
@@ -262,12 +258,20 @@ drm = { version = "0.15", optional = true }
 # Backend: Dx12 and GLES
 windows = { workspace = true, optional = true }
 windows-core = { workspace = true, optional = true }
-windows-result = { workspace = true, optional = true }
 # Backend: Dx12
 bit-set = { workspace = true, optional = true }
 range-alloc = { workspace = true, optional = true }
 once_cell = { workspace = true, optional = true, features = ["std"] }
-# backend: GLES
+
+[target.'cfg(all(windows, not(target_vendor = "uwp")))'.dependencies]
+# Desktop Windows-only GLES / WGL surface support.
+windows = { workspace = true, optional = true, features = [
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_OpenGL",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_WindowsAndMessaging",
+] }
+windows-result = { workspace = true, optional = true, features = ["std"] }
 glutin_wgl_sys = { workspace = true, optional = true }
 
 ### Platform: x86/x86_64 Windows ###
