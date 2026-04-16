@@ -3,7 +3,7 @@ use core::{ptr, sync::atomic::AtomicU64};
 use std::thread;
 
 use parking_lot::Mutex;
-#[cfg(not(any(__WINRT__, target_vendor = "uwp")))]
+#[cfg(not(windows_uwp))]
 use windows::Win32::UI::WindowsAndMessaging;
 use windows::{
     core::Interface as _,
@@ -1276,7 +1276,7 @@ impl crate::Adapter for super::Adapter {
     ) -> Option<crate::SurfaceCapabilities> {
         let current_extent = {
             match surface.target {
-                #[cfg(not(any(__WINRT__, target_vendor = "uwp")))]
+                #[cfg(not(windows_uwp))]
                 SurfaceTarget::WndHandle(wnd_handle)
                 | SurfaceTarget::VisualFromWndHandle {
                     handle: wnd_handle, ..
@@ -1294,7 +1294,7 @@ impl crate::Adapter for super::Adapter {
                         None
                     }
                 }
-                #[cfg(any(__WINRT__, target_vendor = "uwp"))]
+                #[cfg(windows_uwp)]
                 SurfaceTarget::WndHandle(_) | SurfaceTarget::VisualFromWndHandle { .. } => None,
                 SurfaceTarget::Visual(_)
                 | SurfaceTarget::SurfaceHandle(_)

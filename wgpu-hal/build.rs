@@ -1,15 +1,14 @@
 fn main() {
-    // WinRT/UWP builds may pass --cfg __WINRT__ via rustflags.
-    // Re-emit it from the build script so cfg-gated GLES routing
-    // reliably sees it, and register it for check-cfg to avoid warnings.
-    println!("cargo:rustc-check-cfg=cfg(__WINRT__)");
+    // Legacy WinRT builds may still pass `--cfg __WINRT__` via rustflags.
+    // Normalize both that legacy cfg and true UWP targets into one internal cfg alias.
+    println!("cargo:rustc-check-cfg=cfg(windows_uwp)");
     println!("cargo:rerun-if-env-changed=CARGO_ENCODED_RUSTFLAGS");
     println!("cargo:rerun-if-env-changed=RUSTFLAGS");
     {
         let encoded = std::env::var("CARGO_ENCODED_RUSTFLAGS").unwrap_or_default();
         let plain = std::env::var("RUSTFLAGS").unwrap_or_default();
         if encoded.contains("__WINRT__") || plain.contains("__WINRT__") {
-            println!("cargo:rustc-cfg=__WINRT__");
+            println!("cargo:rustc-cfg=windows_uwp");
         }
     }
 
@@ -35,6 +34,7 @@ fn main() {
                 target_os = "emscripten"
             )
         ) },
+        windows_uwp: { all(target_os = "windows", target_vendor = "uwp") },
         metal: { all(target_vendor = "apple", feature = "metal") },
         vulkan: { all(not(target_arch = "wasm32"), feature = "vulkan") },
         drm: { all(
