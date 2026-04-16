@@ -297,7 +297,10 @@ impl GPUSupportedLimits {
     self.0.max_bind_groups
   }
 
-  // TODO(@crowlKats): support max_bind_groups_plus_vertex_buffers
+  #[getter]
+  fn maxBindGroupsPlusVertexBuffers(&self) -> u32 {
+    self.0.max_bind_groups_plus_vertex_buffers
+  }
 
   #[getter]
   fn maxBindingsPerBindGroup(&self) -> u32 {

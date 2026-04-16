@@ -111,7 +111,7 @@ use crate::{
     hub::Hub,
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
-    pipeline::{PipelineFlags, RenderPipeline, VertexStep},
+    pipeline::{PipelineFlags, RenderPipeline},
     resource::{
         Buffer, DestroyedResourceError, Fallible, InvalidResourceError, Labeled, ParentDevice,
         RawResourceAccess, TrackingData,
@@ -662,17 +662,17 @@ fn set_pipeline(
         return Err(RenderCommandError::IncompatibleStencilAccess(pipeline.error_ident()).into());
     }
 
-    let pipeline_state = PipelineState::new(&pipeline);
-
     state
         .commands
         .push(ArcRenderCommand::SetPipeline(pipeline.clone()));
 
-    state.pipeline = Some(pipeline_state);
+    state.pipeline = Some(pipeline.clone());
 
     state
         .binder
         .change_pipeline_layout(&pipeline.layout, &pipeline.late_sized_buffer_groups);
+
+    state.vertex.update_limits(&pipeline.vertex_steps);
 
     state.trackers.render_pipelines.insert_single(pipeline);
     Ok(())
@@ -722,7 +722,7 @@ fn set_vertex_buffer(
     state: &mut State,
     buffer_guard: &crate::storage::Storage<Fallible<Buffer>>,
     slot: u32,
-    buffer_id: id::Id<id::markers::Buffer>,
+    buffer_id: Option<id::Id<id::markers::Buffer>>,
     offset: u64,
     size: Option<NonZeroU64>,
 ) -> Result<(), RenderBundleErrorInner> {
@@ -735,29 +735,60 @@ fn set_vertex_buffer(
         .into());
     }
 
-    let buffer = buffer_guard.get(buffer_id).get()?;
+    if let Some(buffer_id) = buffer_id {
+        let buffer = buffer_guard.get(buffer_id).get()?;
 
-    state
-        .trackers
-        .buffers
-        .merge_single(&buffer, wgt::BufferUses::VERTEX)?;
+        state
+            .trackers
+            .buffers
+            .merge_single(&buffer, wgt::BufferUses::VERTEX)?;
 
-    buffer.same_device(&state.device)?;
-    buffer.check_usage(wgt::BufferUsages::VERTEX)?;
+        buffer.same_device(&state.device)?;
+        buffer.check_usage(wgt::BufferUsages::VERTEX)?;
 
-    if !offset.is_multiple_of(wgt::VERTEX_ALIGNMENT) {
-        return Err(RenderCommandError::UnalignedVertexBuffer { slot, offset }.into());
+        if !offset.is_multiple_of(wgt::VERTEX_ALIGNMENT) {
+            return Err(RenderCommandError::UnalignedVertexBuffer { slot, offset }.into());
+        }
+        let binding_size = buffer.resolve_binding_size(offset, size)?;
+        let buffer_range = offset..(offset + binding_size);
+
+        state
+            .buffer_memory_init_actions
+            .extend(buffer.initialization_status.read().create_action(
+                &buffer,
+                buffer_range.clone(),
+                MemoryInitKind::NeedsInitializedMemory,
+            ));
+        state.vertex.set_buffer(slot as usize, buffer, buffer_range);
+        if let Some(pipeline) = state.pipeline.as_deref() {
+            state.vertex.update_limits(&pipeline.vertex_steps);
+        }
+    } else {
+        if offset != 0 {
+            return Err(RenderCommandError::from(
+                crate::binding_model::BindingError::UnbindingVertexBufferOffsetNotZero {
+                    slot,
+                    offset,
+                },
+            )
+            .into());
+        }
+        if let Some(size) = size {
+            return Err(RenderCommandError::from(
+                crate::binding_model::BindingError::UnbindingVertexBufferSizeNotZero {
+                    slot,
+                    size: size.get(),
+                },
+            )
+            .into());
+        }
+
+        state.vertex.clear_buffer(slot as usize);
+        if let Some(pipeline) = state.pipeline.as_deref() {
+            state.vertex.update_limits(&pipeline.vertex_steps);
+        }
     }
-    let end = offset + buffer.resolve_binding_size(offset, size)?;
 
-    state
-        .buffer_memory_init_actions
-        .extend(buffer.initialization_status.read().create_action(
-            &buffer,
-            offset..end.get(),
-            MemoryInitKind::NeedsInitializedMemory,
-        ));
-    state.vertex[slot as usize] = Some(VertexState::new(buffer, offset..end.get()));
     Ok(())
 }
 
@@ -767,10 +798,12 @@ fn set_immediates(
     size_bytes: u32,
     values_offset: Option<u32>,
 ) -> Result<(), RenderBundleErrorInner> {
-    let pipeline_state = state.pipeline()?;
-
-    pipeline_state
+    let pipeline = state
         .pipeline
+        .as_deref()
+        .ok_or(DrawError::MissingPipeline(pass::MissingPipeline))?;
+
+    pipeline
         .layout
         .validate_immediates_ranges(offset, size_bytes)?;
 
@@ -791,14 +824,18 @@ fn draw(
     first_instance: u32,
 ) -> Result<(), RenderBundleErrorInner> {
     state.is_ready(DrawCommandFamily::Draw)?;
-    let pipeline = state.pipeline()?;
 
-    let vertex_limits = super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.steps);
-    vertex_limits.validate_vertex_limit(first_vertex, vertex_count)?;
-    vertex_limits.validate_instance_limit(first_instance, instance_count)?;
+    state
+        .vertex
+        .limits
+        .validate_vertex_limit(first_vertex, vertex_count)?;
+    state
+        .vertex
+        .limits
+        .validate_instance_limit(first_instance, instance_count)?;
 
     if instance_count > 0 && vertex_count > 0 {
-        state.flush_vertices();
+        state.flush_vertex_buffers();
         state.flush_bindings();
         state.commands.push(ArcRenderCommand::Draw {
             vertex_count,
@@ -819,11 +856,8 @@ fn draw_indexed(
     first_instance: u32,
 ) -> Result<(), RenderBundleErrorInner> {
     state.is_ready(DrawCommandFamily::DrawIndexed)?;
-    let pipeline = state.pipeline()?;
 
     let index = state.index.as_ref().unwrap();
-
-    let vertex_limits = super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.steps);
 
     let last_index = first_index as u64 + index_count as u64;
     let index_limit = index.limit();
@@ -834,11 +868,14 @@ fn draw_indexed(
         }
         .into());
     }
-    vertex_limits.validate_instance_limit(first_instance, instance_count)?;
+    state
+        .vertex
+        .limits
+        .validate_instance_limit(first_instance, instance_count)?;
 
     if instance_count > 0 && index_count > 0 {
         state.flush_index();
-        state.flush_vertices();
+        state.flush_vertex_buffers();
         state.flush_bindings();
         state.commands.push(ArcRenderCommand::DrawIndexed {
             index_count,
@@ -860,18 +897,17 @@ fn draw_mesh_tasks(
     state.is_ready(DrawCommandFamily::DrawMeshTasks)?;
 
     let limits = &state.device.limits;
-    let (groups_size_limit, max_groups) =
-        if state.pipeline.as_ref().unwrap().pipeline.has_task_shader {
-            (
-                limits.max_task_workgroups_per_dimension,
-                limits.max_task_workgroup_total_count,
-            )
-        } else {
-            (
-                limits.max_mesh_workgroups_per_dimension,
-                limits.max_mesh_workgroup_total_count,
-            )
-        };
+    let (groups_size_limit, max_groups) = if state.pipeline.as_ref().unwrap().has_task_shader {
+        (
+            limits.max_task_workgroups_per_dimension,
+            limits.max_task_workgroup_total_count,
+        )
+    } else {
+        (
+            limits.max_mesh_workgroups_per_dimension,
+            limits.max_mesh_workgroup_total_count,
+        )
+    };
 
     let total_count = check_workgroup_sizes(
         &[group_count_x, group_count_y, group_count_z],
@@ -905,14 +941,10 @@ fn multi_draw_indirect(
         .device
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
 
-    let pipeline = state.pipeline()?;
-
     let buffer = buffer_guard.get(buffer_id).get()?;
 
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
-
-    let vertex_limits = super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.steps);
 
     let stride = super::get_src_stride_of_indirect_args(family);
     // TODO(https://github.com/gfx-rs/wgpu/issues/8051): It would be better to report this
@@ -932,9 +964,9 @@ fn multi_draw_indirect(
         state.commands.extend(index.flush());
         index.limit()
     } else {
-        vertex_limits.vertex_limit
+        state.vertex.limits.vertex_limit
     };
-    let instance_limit = vertex_limits.instance_limit;
+    let instance_limit = state.vertex.limits.instance_limit;
 
     let buffer_uses = if state.device.indirect_validation.is_some() {
         wgt::BufferUses::STORAGE_READ_ONLY
@@ -944,7 +976,7 @@ fn multi_draw_indirect(
 
     state.trackers.buffers.merge_single(&buffer, buffer_uses)?;
 
-    state.flush_vertices();
+    state.flush_vertex_buffers();
     state.flush_bindings();
     state.commands.push(ArcRenderCommand::DrawIndirect {
         buffer,
@@ -1111,7 +1143,7 @@ impl RenderBundle {
                     offset,
                     size,
                 } => {
-                    let buffer = buffer.try_raw(snatch_guard)?;
+                    let buffer = buffer.as_ref().unwrap().try_raw(snatch_guard)?;
                     // SAFETY: The binding size was checked against the buffer size
                     // in `set_vertex_buffer` and again in `VertexState::flush`.
                     let bb = hal::BufferBinding::new_unchecked(buffer, *offset, *size);
@@ -1324,68 +1356,6 @@ impl IndexState {
 ///
 /// [`flush`]: IndexState::flush
 #[derive(Debug)]
-struct VertexState {
-    buffer: Arc<Buffer>,
-    range: Range<wgt::BufferAddress>,
-    is_dirty: bool,
-}
-
-impl VertexState {
-    /// Create a new `VertexState`.
-    ///
-    /// The `range` must be contained within `buffer`.
-    fn new(buffer: Arc<Buffer>, range: Range<wgt::BufferAddress>) -> Self {
-        Self {
-            buffer,
-            range,
-            is_dirty: true,
-        }
-    }
-
-    /// Generate a `SetVertexBuffer` command for this slot, if necessary.
-    ///
-    /// `slot` is the index of the vertex buffer slot that `self` tracks.
-    fn flush(&mut self, slot: u32) -> Option<ArcRenderCommand> {
-        let binding_size = self
-            .range
-            .end
-            .checked_sub(self.range.start)
-            .filter(|_| self.range.end <= self.buffer.size)
-            .expect("vertex range must be contained in buffer");
-
-        if self.is_dirty {
-            self.is_dirty = false;
-            Some(ArcRenderCommand::SetVertexBuffer {
-                slot,
-                buffer: self.buffer.clone(),
-                offset: self.range.start,
-                size: NonZeroU64::new(binding_size),
-            })
-        } else {
-            None
-        }
-    }
-}
-
-/// The bundle's current pipeline, and some cached information needed for validation.
-struct PipelineState {
-    /// The pipeline
-    pipeline: Arc<RenderPipeline>,
-
-    /// How this pipeline's vertex shader traverses each vertex buffer, indexed
-    /// by vertex buffer slot number.
-    steps: Vec<VertexStep>,
-}
-
-impl PipelineState {
-    fn new(pipeline: &Arc<RenderPipeline>) -> Self {
-        Self {
-            pipeline: pipeline.clone(),
-            steps: pipeline.vertex_steps.to_vec(),
-        }
-    }
-}
-
 /// State for analyzing and cleaning up bundle command streams.
 ///
 /// To minimize state updates, [`RenderBundleEncoder::finish`]
@@ -1401,10 +1371,10 @@ struct State {
     trackers: RenderBundleScope,
 
     /// The currently set pipeline, if any.
-    pipeline: Option<PipelineState>,
+    pipeline: Option<Arc<RenderPipeline>>,
 
     /// The state of each vertex buffer slot.
-    vertex: [Option<VertexState>; hal::MAX_VERTEX_BUFFERS],
+    vertex: super::VertexState,
 
     /// The current index buffer, if one has been set. We flush this state
     /// before indexed draw commands.
@@ -1430,13 +1400,6 @@ struct State {
 }
 
 impl State {
-    /// Return the current pipeline state. Return an error if none is set.
-    fn pipeline(&self) -> Result<&PipelineState, RenderBundleErrorInner> {
-        self.pipeline
-            .as_ref()
-            .ok_or(DrawError::MissingPipeline(pass::MissingPipeline).into())
-    }
-
     /// Set the bundle's current index buffer and its associated parameters.
     fn set_index_buffer(
         &mut self,
@@ -1470,13 +1433,17 @@ impl State {
         self.commands.extend(commands);
     }
 
-    fn flush_vertices(&mut self) {
-        let commands = self
-            .vertex
-            .iter_mut()
-            .enumerate()
-            .flat_map(|(i, vs)| vs.as_mut().and_then(|vs| vs.flush(i as u32)));
-        self.commands.extend(commands);
+    fn flush_vertex_buffers(&mut self) {
+        let vertex = &mut self.vertex;
+        let commands = &mut self.commands;
+        vertex.flush(|slot, buffer, offset, size| {
+            commands.push(ArcRenderCommand::SetVertexBuffer {
+                slot,
+                buffer: Some(buffer.clone()),
+                offset,
+                size,
+            });
+        });
     }
 
     /// Validation for a draw command.
@@ -1484,12 +1451,12 @@ impl State {
     /// This should be further deduplicated with similar validation on render/compute passes.
     fn is_ready(&mut self, family: DrawCommandFamily) -> Result<(), DrawError> {
         if let Some(pipeline) = self.pipeline.as_ref() {
-            self.binder
-                .check_compatibility(pipeline.pipeline.as_ref())?;
+            self.binder.check_compatibility(pipeline.as_ref())?;
             self.binder.check_late_buffer_bindings()?;
 
+            self.vertex.validate(pipeline.as_ref(), &self.binder)?;
+
             if family == DrawCommandFamily::DrawIndexed {
-                let pipeline = &pipeline.pipeline;
                 let index_format = match &self.index {
                     Some(index) => index.format,
                     None => return Err(DrawError::MissingIndexBuffer),
@@ -1507,11 +1474,10 @@ impl State {
 
             if !self
                 .immediate_slots_set
-                .contains(pipeline.pipeline.immediate_slots_required)
+                .contains(pipeline.immediate_slots_required)
             {
                 return Err(DrawError::MissingImmediateData {
                     missing: pipeline
-                        .pipeline
                         .immediate_slots_required
                         .difference(self.immediate_slots_set),
                 });
@@ -1545,12 +1511,6 @@ impl State {
                     num_dynamic_offsets: dynamic_offsets.len(),
                 }
             }));
-    }
-
-    fn vertex_buffer_sizes(&self) -> impl Iterator<Item = Option<wgt::BufferAddress>> + '_ {
-        self.vertex
-            .iter()
-            .map(|vbs| vbs.as_ref().map(|vbs| vbs.range.end - vbs.range.start))
     }
 }
 
@@ -1681,7 +1641,7 @@ pub mod bundle_ffi {
     pub fn wgpu_render_bundle_set_vertex_buffer(
         bundle: &mut RenderBundleEncoder,
         slot: u32,
-        buffer_id: id::BufferId,
+        buffer_id: Option<id::BufferId>,
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {

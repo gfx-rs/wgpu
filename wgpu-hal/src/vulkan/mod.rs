@@ -1365,6 +1365,11 @@ impl crate::Queue for Queue {
     unsafe fn get_timestamp_period(&self) -> f32 {
         self.device.timestamp_period
     }
+
+    unsafe fn wait_for_idle(&self) -> Result<(), crate::DeviceError> {
+        unsafe { self.device.raw.queue_wait_idle(self.raw) }
+            .map_err(map_host_device_oom_and_lost_err)
+    }
 }
 
 impl Queue {

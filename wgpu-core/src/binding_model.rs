@@ -118,15 +118,20 @@ pub enum BindingError {
         offset: wgt::BufferAddress,
         buffer_size: u64,
     },
+    #[error("Unbinding vertex buffer at slot {slot} expects offset to be 0. However an offset of {offset} was provided.")]
+    UnbindingVertexBufferOffsetNotZero { slot: u32, offset: u64 },
+    #[error("Unbinding vertex buffer at slot {slot} expects size to be 0. However a size of {size} was provided.")]
+    UnbindingVertexBufferSizeNotZero { slot: u32, size: u64 },
 }
 
 impl WebGpuError for BindingError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
             Self::DestroyedResource(e) => e.webgpu_error_type(),
-            Self::BindingRangeTooLarge { .. } | Self::BindingOffsetTooLarge { .. } => {
-                ErrorType::Validation
-            }
+            Self::BindingRangeTooLarge { .. }
+            | Self::BindingOffsetTooLarge { .. }
+            | BindingError::UnbindingVertexBufferOffsetNotZero { .. }
+            | BindingError::UnbindingVertexBufferSizeNotZero { .. } => ErrorType::Validation,
         }
     }
 }

@@ -112,7 +112,7 @@ pub struct VertexState<'a> {
     ///
     /// The attribute locations and types specified in this layout must match the
     /// locations and types of the inputs to the `entry_point` function.
-    pub buffers: &'a [VertexBufferLayout<'a>],
+    pub buffers: &'a [Option<VertexBufferLayout<'a>>],
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(VertexState<'_>: Send, Sync);

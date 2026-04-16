@@ -122,6 +122,7 @@ const WEB_SYS_FEATURES_NEEDED: &[&str] = &[
     "GpuSamplerBindingType",
     "GpuSamplerDescriptor",
     "GpuShaderModule",
+    "GpuShaderModuleCompilationHint",
     "GpuShaderModuleDescriptor",
     "GpuStencilFaceState",
     "GpuStencilOperation",
@@ -302,7 +303,8 @@ pub(crate) fn run_vendor_web_sys(shell: Shell, mut args: Arguments) -> anyhow::R
         #![allow(unused_imports, non_snake_case)]\n"
     );
 
-    module_file_contents.push_str("use web_sys::{Event, EventTarget};\n");
+    module_file_contents
+        .push_str("use web_sys::{Event, EventTarget, HtmlCanvasElement, HtmlImageElement, HtmlVideoElement, OffscreenCanvas, ImageBitmap, ImageData, VideoFrame};\n");
 
     for &feature in WEB_SYS_FEATURES_NEEDED {
         module_file_contents.push_str(&format!("mod gen_{feature};\n"));

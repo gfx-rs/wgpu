@@ -739,7 +739,8 @@ pub enum LoadOp<V> {
     ///
     /// - All pixels in the render target must be written to before
     ///   any read or a [`StoreOp::Store`] occurs.
-    DontCare(#[cfg_attr(feature = "serde", serde(skip))] LoadOpDontCare) = 2,
+    #[cfg_attr(feature = "serde", serde(skip))] // unsafe to use, so cannot be (de)serialized
+    DontCare(LoadOpDontCare) = 2,
 }
 
 impl<V> LoadOp<V> {

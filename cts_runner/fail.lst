@@ -23,7 +23,9 @@ webgpu:api,validation,createBindGroup:texture,resource_state:* // crash, https:/
 webgpu:api,validation,createView:texture_state:* // 0%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_ranges:* // ***, https://github.com/gfx-rs/wgpu/issues/8118
 webgpu:api,validation,encoding,cmds,debug:* // 92%, https://github.com/gfx-rs/wgpu/issues/8039
-webgpu:api,validation,encoding,cmds,render,* // https://github.com/gfx-rs/wgpu/issues/7912
+webgpu:api,validation,encoding,cmds,render,draw:max_draw_count:* // https://github.com/gfx-rs/wgpu/issues/8737
+webgpu:api,validation,encoding,cmds,render,indirect_draw:indirect_offset_alignment:* // render bundle
+webgpu:api,validation,encoding,cmds,render,indirect_draw:indirect_offset_oob:* // unwrap on None in wgpu-core/src/indirect_validation/draw.rs:432:18
 webgpu:api,validation,encoding,cmds,setBindGroup:dynamic_offsets_match_expectations_in_pass_encoder:* // deno unwrap
 webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="compute%20pass";state="destroyed";* // https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="render%20bundle";state="destroyed";* // https://github.com/gfx-rs/wgpu/issues/7881
@@ -48,8 +50,6 @@ webgpu:api,validation,render_pipeline,inter_stage:* // 15%, inter-stage type val
 webgpu:api,validation,render_pipeline,misc:external_texture:* // 0%, no external texture in deno
 webgpu:api,validation,render_pipeline,multisample_state:* // 60%, https://github.com/gfx-rs/wgpu/issues/8779
 webgpu:api,validation,render_pipeline,overrides:* // 17%, missing validation: invalid pipeline constant identifiers silently ignored
-webgpu:api,validation,render_pipeline,vertex_state:max_vertex_attribute_limit:* // 0%, empty vertex buffers not counted, GPUInternalError no message
-webgpu:api,validation,render_pipeline,vertex_state:max_vertex_buffer_limit:* // 0%, empty vertex buffers not counted toward limit
 webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_contained_in_stride:* // fails on metal in CI https://github.com/gfx-rs/wgpu/issues/8312
 webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_offset_alignment:* // fails on metal in CI
 webgpu:api,validation,resource_usages,texture,in_pass_encoder:subresources_and_binding_types_combination_for_color:* // 92%, https://github.com/gfx-rs/wgpu/issues/3126

@@ -984,6 +984,28 @@ fn matrix_constructor_inferred() {
     );
 }
 
+#[test]
+fn recursion_depth_expression() {
+    check(
+        include_str!("deep-expression.wgsl"),
+        r#"error: internal WGSL front end error
+ = note: Parser recursion limit exceeded
+
+"#,
+    );
+}
+
+#[test]
+fn recursion_depth_template() {
+    check(
+        include_str!("deep-template.wgsl"),
+        r#"error: internal WGSL front end error
+ = note: Parser recursion limit exceeded
+
+"#,
+    );
+}
+
 /// Check the result of validating a WGSL program against a pattern.
 ///
 /// Unless you are generating code programmatically, the

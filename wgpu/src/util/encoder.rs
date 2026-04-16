@@ -38,7 +38,7 @@ pub trait RenderEncoder<'a> {
     ///
     /// [`draw`]: RenderEncoder::draw
     /// [`draw_indexed`]: RenderEncoder::draw_indexed
-    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>);
+    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: Option<BufferSlice<'a>>);
 
     /// Draws primitives from the active vertex buffer(s).
     ///
@@ -106,7 +106,7 @@ impl<'a> RenderEncoder<'a> for RenderPass<'a> {
     }
 
     #[inline(always)]
-    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
+    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: Option<BufferSlice<'a>>) {
         Self::set_vertex_buffer(self, slot, buffer_slice);
     }
 
@@ -162,7 +162,7 @@ impl<'a> RenderEncoder<'a> for RenderBundleEncoder<'a> {
     }
 
     #[inline(always)]
-    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
+    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: Option<BufferSlice<'a>>) {
         Self::set_vertex_buffer(self, slot, buffer_slice);
     }
 

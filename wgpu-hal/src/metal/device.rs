@@ -1298,6 +1298,9 @@ impl crate::Device for super::Device {
                     let mut vertex_buffer_mappings =
                         Vec::<naga::back::msl::VertexBufferMapping>::new();
                     for (i, vbl) in vertex_buffers.iter().enumerate() {
+                        let Some(vbl) = vbl else {
+                            continue;
+                        };
                         let mut attributes = Vec::<naga::back::msl::AttributeMapping>::new();
                         for attribute in vbl.attributes.iter() {
                             attributes.push(naga::back::msl::AttributeMapping {
@@ -1372,6 +1375,10 @@ impl crate::Device for super::Device {
                     if !vertex_buffers.is_empty() {
                         let vertex_descriptor = MTLVertexDescriptor::new();
                         for (i, vb) in vertex_buffers.iter().enumerate() {
+                            let Some(vb) = vb else {
+                                continue;
+                            };
+
                             let buffer_index = VERTEX_BUFFER_SLOT_START as usize + i;
                             let buffer_desc = unsafe {
                                 vertex_descriptor
