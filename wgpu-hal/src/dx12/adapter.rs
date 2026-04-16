@@ -3,6 +3,8 @@ use core::{ptr, sync::atomic::AtomicU64};
 use std::thread;
 
 use parking_lot::Mutex;
+#[cfg(not(any(__WINRT__, target_vendor = "uwp")))]
+use windows::Win32::UI::WindowsAndMessaging;
 use windows::{
     core::Interface as _,
     Win32::{
@@ -15,8 +17,6 @@ use windows::{
         Graphics::{Direct3D, Direct3D12, Dxgi},
     },
 };
-#[cfg(not(any(__WINRT__, target_vendor = "uwp")))]
-use windows::Win32::UI::WindowsAndMessaging;
 
 use super::D3D12Lib;
 use crate::{
