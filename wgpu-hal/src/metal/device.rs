@@ -212,6 +212,10 @@ impl super::Device {
                         .module
                         .runtime_checks
                         .mesh_shader_primitive_indices_clamp,
+                    ray_query_initialization_tracking: stage
+                        .module
+                        .runtime_checks
+                        .ray_query_initialization_tracking,
                 };
 
                 let pipeline_options = naga::back::msl::PipelineOptions {

@@ -319,6 +319,8 @@ pub struct Options {
     pub task_dispatch_limits: Option<TaskDispatchLimits>,
     /// Whether to validate the output of a mesh shader workgroup.
     pub mesh_shader_primitive_indices_clamp: bool,
+    /// Whether to validate ray query calls
+    pub ray_query_initialization_tracking: bool,
 }
 
 impl Default for Options {
@@ -334,6 +336,7 @@ impl Default for Options {
             force_loop_bounding: true,
             task_dispatch_limits: None,
             mesh_shader_primitive_indices_clamp: true,
+            ray_query_initialization_tracking: true,
         }
     }
 }

@@ -53,6 +53,7 @@ impl<W: Write> Writer<W> {
         &mut self,
         module: &crate::Module,
         committed: bool,
+        options: &super::Options,
     ) -> BackendResult {
         let wrapped = WrappedFunction::RayQueryGetIntersection { committed };
         if !self.wrapped_functions.insert(wrapped) {
@@ -82,7 +83,7 @@ impl<W: Write> Writer<W> {
             "{base_level}{intersection} intersection = {intersection} {{}};"
         )?;
 
-        if self.ray_query_initialization_tracking {
+        if options.ray_query_initialization_tracking {
             write!(self.out, "{base_level}if (")?;
             if committed {
                 self.write_contains_flags(
@@ -177,7 +178,7 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "{base_level}{INDENT}intersection.world_to_object = intersector.get_{ty}_world_to_object_transform();")?;
         writeln!(self.out, "{base_level}}}")?;
 
-        if self.ray_query_initialization_tracking {
+        if options.ray_query_initialization_tracking {
             writeln!(self.out, "{INDENT}}}")?;
         }
 
@@ -275,13 +276,13 @@ impl<W: Write> Writer<W> {
                         "{inner_level}params.set_opacity_cull_mode(cull_mode);"
                     )?;
 
-                    if self.ray_query_initialization_tracking {
+                    if context.expression.ray_query_initialization_tracking {
                         writeln!(self.out, "{inner_level}bool force_opacity = cull_mode == {RT_NAMESPACE}::opacity_cull_mode::none;")?;
                     }
                 }
                 {
                     let mut current_level = inner_level;
-                    if self.ray_query_initialization_tracking {
+                    if context.expression.ray_query_initialization_tracking {
                         writeln!(self.out, "{inner_level}if (force_opacity) {{")?;
                         current_level = current_level.next();
                     }
@@ -294,7 +295,7 @@ impl<W: Write> Writer<W> {
 {current_level}    )
 {current_level});")?;
 
-                    if self.ray_query_initialization_tracking {
+                    if context.expression.ray_query_initialization_tracking {
                         writeln!(self.out, "{inner_level}}}")?;
                     }
                 }
@@ -315,7 +316,7 @@ impl<W: Write> Writer<W> {
 
                 // The `reset` function is virtually undocumented (many of the Metal ray tracing functions lack it), so to be safe,
                 // this assumes an invalid ray is UB (NOTE: invalid ray behaviour is defined for intersectors).
-                if self.ray_query_initialization_tracking {
+                if context.expression.ray_query_initialization_tracking {
                     write!(self.out, "{inner_level}bool invalid_nan_infs = ")?;
                     // tmax needs special handling because it can be INF
                     for (idx, &field_access) in [
@@ -358,7 +359,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ".reset(ray,")?;
                 self.put_expression(acceleration_structure, &context.expression, true)?;
                 writeln!(self.out, ", desc.cull_mask, params);")?;
-                if self.ray_query_initialization_tracking {
+                if context.expression.ray_query_initialization_tracking {
                     writeln!(
                         self.out,
                         "{init_level}{tracker_expr_name} = {};",
@@ -381,7 +382,7 @@ impl<W: Write> Writer<W> {
 
                 writeln!(self.out, "false;")?;
 
-                if self.ray_query_initialization_tracking {
+                if context.expression.ray_query_initialization_tracking {
                     write!(self.out, "{level}if ")?;
                     self.write_contains_flags(
                         &tracker_expr_name,
@@ -393,14 +394,14 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{current_level}{name} = ")?;
                 self.put_expression(query, &context.expression, true)?;
                 writeln!(self.out, ".next();")?;
-                if self.ray_query_initialization_tracking {
+                if context.expression.ray_query_initialization_tracking {
                     writeln!(self.out, "{current_level}{tracker_expr_name} = {tracker_expr_name} | ({name} ? {}: {});", back::RayQueryPoint::PROCEED.bits(), (back::RayQueryPoint::PROCEED | back::RayQueryPoint::FINISHED_TRAVERSAL).bits())?;
                     writeln!(self.out, "{level}}}")?;
                 }
             }
             crate::RayQueryFunction::GenerateIntersection { hit_t } => {
                 let mut current_level = level;
-                if self.ray_query_initialization_tracking {
+                if context.expression.ray_query_initialization_tracking {
                     write!(self.out, "{level}if (")?;
                     self.write_contains_flags(
                         &tracker_expr_name,
@@ -436,7 +437,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ".commit_bounding_box_intersection(")?;
                 self.put_expression(hit_t, &context.expression, true)?;
                 writeln!(self.out, ");")?;
-                if self.ray_query_initialization_tracking {
+                if context.expression.ray_query_initialization_tracking {
                     writeln!(
                         self.out,
                         "{level}{INDENT}}}
@@ -446,7 +447,7 @@ impl<W: Write> Writer<W> {
             }
             crate::RayQueryFunction::ConfirmIntersection => {
                 let mut current_level = level;
-                if self.ray_query_initialization_tracking {
+                if context.expression.ray_query_initialization_tracking {
                     write!(self.out, "{level}if (")?;
                     self.write_contains_flags(
                         &tracker_expr_name,
@@ -466,7 +467,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{level}")?;
                 self.put_expression(query, &context.expression, true)?;
                 writeln!(self.out, ".commit_triangle_intersection();")?;
-                if self.ray_query_initialization_tracking {
+                if context.expression.ray_query_initialization_tracking {
                     writeln!(
                         self.out,
                         "{level}{INDENT}}}
@@ -476,7 +477,7 @@ impl<W: Write> Writer<W> {
             }
             crate::RayQueryFunction::Terminate => {
                 let mut current_level = level;
-                if self.ray_query_initialization_tracking {
+                if context.expression.ray_query_initialization_tracking {
                     write!(self.out, "{level}if (")?;
                     self.write_contains_flags(
                         &tracker_expr_name,
@@ -495,7 +496,7 @@ impl<W: Write> Writer<W> {
                 // Terminate appears to map to abort in spirv-cross, but metal only documents
                 // the existence of this method, not what it does.
                 writeln!(self.out, ".abort();")?;
-                if self.ray_query_initialization_tracking {
+                if context.expression.ray_query_initialization_tracking {
                     writeln!(self.out, "{level}}}")?;
                 }
             }

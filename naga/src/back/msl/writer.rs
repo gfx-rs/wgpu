@@ -540,7 +540,6 @@ pub struct Writer<W> {
     /// padding inserted **before** them (i.e. between fields at index - 1 and index)
     pub(super) struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
     pub(super) needs_object_memory_barriers: bool,
-    pub(super) ray_query_initialization_tracking: bool,
 }
 
 impl crate::Scalar {
@@ -801,6 +800,7 @@ pub(super) struct ExpressionContext<'a> {
     pub(super) guarded_indices: HandleSet<crate::Expression>,
     /// See [`Writer::gen_force_bounded_loop_statements`] for details.
     pub(super) force_loop_bounding: bool,
+    pub(super) ray_query_initialization_tracking: bool,
 }
 
 impl<'a> ExpressionContext<'a> {
@@ -899,7 +899,6 @@ impl<W: Write> Writer<W> {
             put_block_stack_pointers: Default::default(),
             struct_member_pads: FastHashSet::default(),
             needs_object_memory_barriers: false,
-            ray_query_initialization_tracking: true,
         }
     }
 
@@ -6540,6 +6539,7 @@ template <typename A>
         &mut self,
         module: &crate::Module,
         func_ctx: &back::FunctionCtx,
+        options: &Options,
     ) -> BackendResult {
         for (expr_handle, expr) in func_ctx.expressions.iter() {
             match *expr {
@@ -6629,7 +6629,7 @@ template <typename A>
                     self.write_wrapped_cooperative_multiply_add(module, func_ctx, space, a, b)?;
                 }
                 crate::Expression::RayQueryGetIntersection { committed, .. } => {
-                    self.write_rq_get_intersection_function(module, committed)?;
+                    self.write_rq_get_intersection_function(module, committed, options)?;
                 }
                 _ => {}
             }
@@ -6765,7 +6765,7 @@ template <typename A>
             };
 
             writeln!(self.out)?;
-            self.write_wrapped_functions(module, &ctx)?;
+            self.write_wrapped_functions(module, &ctx, options)?;
 
             let fun_info = &mod_info[fun_handle];
             pass_through_globals.clear();
@@ -6860,6 +6860,7 @@ template <typename A>
                     mod_info,
                     pipeline_options,
                     force_loop_bounding: options.force_loop_bounding,
+                    ray_query_initialization_tracking: options.ray_query_initialization_tracking,
                 },
                 result_struct: None,
             };
@@ -6903,7 +6904,7 @@ template <typename A>
                 named_expressions: &fun.named_expressions,
             };
 
-            self.write_wrapped_functions(module, &ctx)?;
+            self.write_wrapped_functions(module, &ctx, options)?;
 
             let (em_str, in_mode, out_mode, can_vertex_pull) = match ep.stage {
                 crate::ShaderStage::Vertex => (
@@ -8078,6 +8079,7 @@ template <typename A>
                     mod_info,
                     pipeline_options,
                     force_loop_bounding: options.force_loop_bounding,
+                    ray_query_initialization_tracking: options.ray_query_initialization_tracking,
                 },
                 result_struct: if ep.stage == crate::ShaderStage::Task {
                     None
