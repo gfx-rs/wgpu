@@ -2936,13 +2936,26 @@ impl<W: Write> Writer<W> {
                     return Err(Error::UnsupportedRayTracing);
                 }
 
+                // See comment in `write_ray_query_stmt` for why this is valid
+                let crate::Expression::LocalVariable(query_var) =
+                    context.function.expressions[query]
+                else {
+                    unreachable!()
+                };
+
+                let tracker_expr_name = format!(
+                    "{}{}",
+                    super::ray::RAY_QUERY_TRACKER_VARIABLE_PREFIX,
+                    self.names[&NameKey::local(context.origin, query_var)]
+                );
+
                 write!(
                     self.out,
                     "{}_{committed}(",
                     super::ray::INTERSECTION_FUNCTION_NAME
                 )?;
                 self.put_expression(query, context, true)?;
-                write!(self.out, ")")?;
+                write!(self.out, ", {tracker_expr_name})")?;
             }
             crate::Expression::CooperativeLoad { ref data, .. } => {
                 if context.lang_version < (2, 3) {

@@ -70,90 +70,118 @@ impl<W: Write> Writer<W> {
             access: crate::StorageAccess::empty(),
             first_time: false,
         };
-        let level = back::Level(1);
+        let mut base_level = back::Level(1);
         writeln!(
             self.out,
-            "{intersection} {INTERSECTION_FUNCTION_NAME}_{committed}({} intersector) {{",
+            "{intersection} {INTERSECTION_FUNCTION_NAME}_{committed}({} intersector, uint intersector_tracker) {{",
             metal_intersector_ty()
         )?;
         // Initialize the intersection to its default values (which should be zero).
         writeln!(
             self.out,
-            "{level}{intersection} intersection = {intersection} {{}};"
+            "{base_level}{intersection} intersection = {intersection} {{}};"
         )?;
-        writeln!(self.out, "{level}{RT_NAMESPACE}::intersection_type ty = intersector.get_{ty}_intersection_type();")?;
+
+        if self.ray_query_initialization_tracking {
+            write!(self.out, "{base_level}if (")?;
+            if committed {
+                self.write_contains_flags(
+                    "intersector_tracker",
+                    back::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+                )?;
+            } else {
+                self.write_contains_flags(
+                    "intersector_tracker",
+                    back::RayQueryPoint::PROCEED.bits(),
+                )?;
+                write!(self.out, " && !")?;
+                self.write_contains_flags(
+                    "intersector_tracker",
+                    back::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+                )?;
+            }
+            writeln!(self.out, ") {{")?;
+            base_level = base_level.next();
+        }
+
+        writeln!(self.out, "{base_level}{RT_NAMESPACE}::intersection_type ty = intersector.get_{ty}_intersection_type();")?;
         // If the ray hit a triangle, call all methods that require that and set the intersection type.
         writeln!(
             self.out,
-            "{level}if (ty == {RT_NAMESPACE}::intersection_type::triangle) {{"
+            "{base_level}if (ty == {RT_NAMESPACE}::intersection_type::triangle) {{"
         )?;
         writeln!(
             self.out,
-            "{level}{level}intersection.kind = {};",
+            "{base_level}{INDENT}intersection.kind = {};",
             crate::RayQueryIntersection::Triangle as u32
         )?;
         if !committed {
             writeln!(
                 self.out,
-                "{level}{level}intersection.t = intersector.get_candidate_triangle_distance();"
+                "{base_level}{INDENT}intersection.t = intersector.get_candidate_triangle_distance();"
             )?;
         }
-        writeln!(self.out, "{level}{level}intersection.barycentrics = intersector.get_{ty}_triangle_barycentric_coord();")?;
+        writeln!(self.out, "{base_level}{INDENT}intersection.barycentrics = intersector.get_{ty}_triangle_barycentric_coord();")?;
         writeln!(
             self.out,
-            "{level}{level}intersection.front_face = intersector.is_{ty}_triangle_front_facing();"
+            "{base_level}{INDENT}intersection.front_face = intersector.is_{ty}_triangle_front_facing();"
         )?;
         // Otherwise, if the ray hit an AABB (called a bounding box in metal) set the intersection type
         // (which depends on whether this is a committed or candidate intersection).
         writeln!(
             self.out,
-            "{level}}} else if (ty == {RT_NAMESPACE}::intersection_type::bounding_box) {{"
+            "{base_level}}} else if (ty == {RT_NAMESPACE}::intersection_type::bounding_box) {{"
         )?;
         if committed {
             writeln!(
                 self.out,
-                "{level}{level}intersection.kind = {};",
+                "{base_level}{INDENT}intersection.kind = {};",
                 crate::RayQueryIntersection::Generated as u32
             )?;
         } else {
             writeln!(
                 self.out,
-                "{level}{level}intersection.kind = {};",
+                "{base_level}{INDENT}intersection.kind = {};",
                 crate::RayQueryIntersection::Aabb as u32
             )?;
         }
-        writeln!(self.out, "{level}}}")?;
+        writeln!(self.out, "{base_level}}}")?;
 
         // If the ray hit anything at all, call all methods that require that.
         writeln!(
             self.out,
-            "{level}if (ty != {RT_NAMESPACE}::intersection_type::none) {{"
+            "{base_level}if (ty != {RT_NAMESPACE}::intersection_type::none) {{"
         )?;
         if committed {
             writeln!(
                 self.out,
-                "{level}{level}intersection.t = intersector.get_committed_distance();"
+                "{base_level}{INDENT}intersection.t = intersector.get_committed_distance();"
             )?;
         }
-        writeln!(self.out, "{level}{level}intersection.instance_custom_data = intersector.get_{ty}_user_instance_id();")?;
+        writeln!(self.out, "{base_level}{INDENT}intersection.instance_custom_data = intersector.get_{ty}_user_instance_id();")?;
         writeln!(
             self.out,
-            "{level}{level}intersection.instance_index = intersector.get_{ty}_instance_id();"
+            "{base_level}{INDENT}intersection.instance_index = intersector.get_{ty}_instance_id();"
         )?;
         // Metal does not appear to support obtaining the intersection offset from a ray query.
         //writeln!(self.out, "{level}{level}intersection.sbt_record_offset = intersector.get_{ty}_user_instance_id();")?;
         writeln!(
             self.out,
-            "{level}{level}intersection.geometry_index = intersector.get_{ty}_geometry_id();"
+            "{base_level}{INDENT}intersection.geometry_index = intersector.get_{ty}_geometry_id();"
         )?;
         writeln!(
             self.out,
-            "{level}{level}intersection.primitive_index = intersector.get_{ty}_primitive_id();"
+            "{base_level}{INDENT}intersection.primitive_index = intersector.get_{ty}_primitive_id();"
         )?;
-        writeln!(self.out, "{level}{level}intersection.object_to_world = intersector.get_{ty}_object_to_world_transform();")?;
-        writeln!(self.out, "{level}{level}intersection.world_to_object = intersector.get_{ty}_world_to_object_transform();")?;
-        writeln!(self.out, "{level}}}")?;
-        writeln!(self.out, "{level}return intersection;")?;
+        writeln!(self.out, "{base_level}{INDENT}intersection.object_to_world = intersector.get_{ty}_object_to_world_transform();")?;
+        writeln!(self.out, "{base_level}{INDENT}intersection.world_to_object = intersector.get_{ty}_world_to_object_transform();")?;
+        writeln!(self.out, "{base_level}}}")?;
+
+        if self.ray_query_initialization_tracking {
+            writeln!(self.out, "{INDENT}}}")?;
+        }
+
+        writeln!(self.out, "{INDENT}return intersection;")?;
         writeln!(self.out, "}}")?;
 
         Ok(())

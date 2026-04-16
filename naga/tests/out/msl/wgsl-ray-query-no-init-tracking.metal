@@ -32,24 +32,26 @@ struct Output {
     metal::float3 normal;
 };
 
-RayIntersection ray_query_get_intersection_true(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector) {
+RayIntersection ray_query_get_intersection_true(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector, uint intersector_tracker) {
     RayIntersection intersection = RayIntersection {};
-    metal::raytracing::intersection_type ty = intersector.get_committed_intersection_type();
-    if (ty == metal::raytracing::intersection_type::triangle) {
-        intersection.kind = 1;
-        intersection.barycentrics = intersector.get_committed_triangle_barycentric_coord();
-        intersection.front_face = intersector.is_committed_triangle_front_facing();
-    } else if (ty == metal::raytracing::intersection_type::bounding_box) {
-        intersection.kind = 2;
-    }
-    if (ty != metal::raytracing::intersection_type::none) {
-        intersection.t = intersector.get_committed_distance();
-        intersection.instance_custom_data = intersector.get_committed_user_instance_id();
-        intersection.instance_index = intersector.get_committed_instance_id();
-        intersection.geometry_index = intersector.get_committed_geometry_id();
-        intersection.primitive_index = intersector.get_committed_primitive_id();
-        intersection.object_to_world = intersector.get_committed_object_to_world_transform();
-        intersection.world_to_object = intersector.get_committed_world_to_object_transform();
+    if (((intersector_tracker & 4) == 4)) {
+        metal::raytracing::intersection_type ty = intersector.get_committed_intersection_type();
+        if (ty == metal::raytracing::intersection_type::triangle) {
+            intersection.kind = 1;
+            intersection.barycentrics = intersector.get_committed_triangle_barycentric_coord();
+            intersection.front_face = intersector.is_committed_triangle_front_facing();
+        } else if (ty == metal::raytracing::intersection_type::bounding_box) {
+            intersection.kind = 2;
+        }
+        if (ty != metal::raytracing::intersection_type::none) {
+            intersection.t = intersector.get_committed_distance();
+            intersection.instance_custom_data = intersector.get_committed_user_instance_id();
+            intersection.instance_index = intersector.get_committed_instance_id();
+            intersection.geometry_index = intersector.get_committed_geometry_id();
+            intersection.primitive_index = intersector.get_committed_primitive_id();
+            intersection.object_to_world = intersector.get_committed_object_to_world_transform();
+            intersection.world_to_object = intersector.get_committed_world_to_object_transform();
+        }
     }
     return intersection;
 }
@@ -103,7 +105,7 @@ RayIntersection query_loop(
             break;
         }
     }
-    return ray_query_get_intersection_true(rq_1);
+    return ray_query_get_intersection_true(rq_1, naga_query_init_tracker_for_rq_1);
 }
 
 metal::float3 get_torus_normal(
@@ -129,24 +131,26 @@ metal::float3 get_torus_normal(
     return;
 }
 
-RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector) {
+RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector, uint intersector_tracker) {
     RayIntersection intersection = RayIntersection {};
-    metal::raytracing::intersection_type ty = intersector.get_candidate_intersection_type();
-    if (ty == metal::raytracing::intersection_type::triangle) {
-        intersection.kind = 1;
-        intersection.t = intersector.get_candidate_triangle_distance();
-        intersection.barycentrics = intersector.get_candidate_triangle_barycentric_coord();
-        intersection.front_face = intersector.is_candidate_triangle_front_facing();
-    } else if (ty == metal::raytracing::intersection_type::bounding_box) {
-        intersection.kind = 3;
-    }
-    if (ty != metal::raytracing::intersection_type::none) {
-        intersection.instance_custom_data = intersector.get_candidate_user_instance_id();
-        intersection.instance_index = intersector.get_candidate_instance_id();
-        intersection.geometry_index = intersector.get_candidate_geometry_id();
-        intersection.primitive_index = intersector.get_candidate_primitive_id();
-        intersection.object_to_world = intersector.get_candidate_object_to_world_transform();
-        intersection.world_to_object = intersector.get_candidate_world_to_object_transform();
+    if (((intersector_tracker & 2) == 2) && !((intersector_tracker & 4) == 4)) {
+        metal::raytracing::intersection_type ty = intersector.get_candidate_intersection_type();
+        if (ty == metal::raytracing::intersection_type::triangle) {
+            intersection.kind = 1;
+            intersection.t = intersector.get_candidate_triangle_distance();
+            intersection.barycentrics = intersector.get_candidate_triangle_barycentric_coord();
+            intersection.front_face = intersector.is_candidate_triangle_front_facing();
+        } else if (ty == metal::raytracing::intersection_type::bounding_box) {
+            intersection.kind = 3;
+        }
+        if (ty != metal::raytracing::intersection_type::none) {
+            intersection.instance_custom_data = intersector.get_candidate_user_instance_id();
+            intersection.instance_index = intersector.get_candidate_instance_id();
+            intersection.geometry_index = intersector.get_candidate_geometry_id();
+            intersection.primitive_index = intersector.get_candidate_primitive_id();
+            intersection.object_to_world = intersector.get_candidate_object_to_world_transform();
+            intersection.world_to_object = intersector.get_candidate_world_to_object_transform();
+        }
     }
     return intersection;
 }
@@ -187,7 +191,7 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
             naga_query_tmax_tracker_for_rq = desc.tmax;
         }
     }
-    RayIntersection intersection_1 = ray_query_get_intersection_false(rq);
+    RayIntersection intersection_1 = ray_query_get_intersection_false(rq, naga_query_init_tracker_for_rq);
     if (intersection_1.kind == 3u) {
         if (((naga_query_init_tracker_for_rq & 2) == 2) && !((naga_query_init_tracker_for_rq & 4) == 4)) {
             float current_max_t = naga_query_tmax_tracker_for_rq;
