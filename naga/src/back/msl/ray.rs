@@ -25,6 +25,7 @@ pub(super) fn metal_intersector_ty() -> String {
 
 pub(super) const INTERSECTION_FUNCTION_NAME: &str = "ray_query_get_intersection";
 pub(crate) const RAY_QUERY_TRACKER_VARIABLE_PREFIX: &str = "naga_query_init_tracker_for_";
+pub(crate) const RAY_QUERY_T_MAX_TRACKER_VARIABLE_PREFIX: &str = "naga_query_tmax_tracker_for_";
 
 impl<W: Write> Writer<W> {
     fn write_not_finite(&mut self, expr: &str) -> BackendResult {
@@ -191,6 +192,11 @@ impl<W: Write> Writer<W> {
             self.names[&crate::proc::NameKey::local(context.expression.origin, query_var)]
         );
 
+        let tmax_tracker_expr_name = format!(
+            "{RAY_QUERY_T_MAX_TRACKER_VARIABLE_PREFIX}{}",
+            self.names[&crate::proc::NameKey::local(context.expression.origin, query_var)]
+        );
+
         // TODO: check for misuse.
         match *fun {
             crate::RayQueryFunction::Initialize {
@@ -330,6 +336,10 @@ impl<W: Write> Writer<W> {
                         "{init_level}{tracker_expr_name} = {};",
                         back::RayQueryPoint::INITIALIZED.bits()
                     )?;
+                    writeln!(
+                        self.out,
+                        "{init_level}{tmax_tracker_expr_name} = desc.tmax;"
+                    )?;
                     writeln!(self.out, "{inner_level}}}")?;
                 }
                 writeln!(self.out, "{level}}}")?;
@@ -361,23 +371,105 @@ impl<W: Write> Writer<W> {
                 }
             }
             crate::RayQueryFunction::GenerateIntersection { hit_t } => {
-                write!(self.out, "{level}")?;
+                let mut current_level = level;
+                if self.ray_query_initialization_tracking {
+                    write!(self.out, "{level}if (")?;
+                    self.write_contains_flags(
+                        &tracker_expr_name,
+                        back::RayQueryPoint::PROCEED.bits(),
+                    )?;
+                    write!(self.out, " && !")?;
+                    self.write_contains_flags(
+                        &tracker_expr_name,
+                        back::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+                    )?;
+                    writeln!(self.out, ") {{")?;
+                    current_level = current_level.next();
+                    write!(
+                        self.out,
+                        "{current_level}float current_max_t = {tmax_tracker_expr_name};
+{current_level}if ("
+                    )?;
+                    self.put_expression(query, &context.expression, true)?;
+                    write!(self.out, ".get_committed_intersection_type() != {RT_NAMESPACE}::intersection_type::none) {{
+{current_level}{INDENT}current_max_t = ")?;
+                    self.put_expression(query, &context.expression, true)?;
+                    write!(
+                        self.out,
+                        ".get_committed_distance();
+{current_level}}}
+{current_level}if ("
+                    )?;
+                    self.put_expression(query, &context.expression, true)?;
+                    write!(self.out, ".get_candidate_intersection_type() == {RT_NAMESPACE}::intersection_type::bounding_box) {{")?;
+                }
+                write!(self.out, "{current_level}")?;
                 self.put_expression(query, &context.expression, true)?;
                 write!(self.out, ".commit_bounding_box_intersection(")?;
                 self.put_expression(hit_t, &context.expression, true)?;
                 writeln!(self.out, ");")?;
+                if self.ray_query_initialization_tracking {
+                    writeln!(
+                        self.out,
+                        "{level}{INDENT}}}
+{level}}}"
+                    )?;
+                }
             }
             crate::RayQueryFunction::ConfirmIntersection => {
+                let mut current_level = level;
+                if self.ray_query_initialization_tracking {
+                    write!(self.out, "{level}if (")?;
+                    self.write_contains_flags(
+                        &tracker_expr_name,
+                        back::RayQueryPoint::PROCEED.bits(),
+                    )?;
+                    write!(self.out, " && !")?;
+                    self.write_contains_flags(
+                        &tracker_expr_name,
+                        back::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+                    )?;
+                    writeln!(self.out, ") {{")?;
+                    current_level = current_level.next();
+                    write!(self.out, "{current_level}if (")?;
+                    self.put_expression(query, &context.expression, true)?;
+                    write!(self.out, ".get_candidate_intersection_type() == {RT_NAMESPACE}::intersection_type::triangle) {{")?;
+                }
                 write!(self.out, "{level}")?;
                 self.put_expression(query, &context.expression, true)?;
                 writeln!(self.out, ".commit_triangle_intersection();")?;
+                if self.ray_query_initialization_tracking {
+                    writeln!(
+                        self.out,
+                        "{level}{INDENT}}}
+{level}}}"
+                    )?;
+                }
             }
             crate::RayQueryFunction::Terminate => {
-                write!(self.out, "{level}")?;
+                let mut current_level = level;
+                if self.ray_query_initialization_tracking {
+                    write!(self.out, "{level}if (")?;
+                    self.write_contains_flags(
+                        &tracker_expr_name,
+                        back::RayQueryPoint::PROCEED.bits(),
+                    )?;
+                    write!(self.out, " && !")?;
+                    self.write_contains_flags(
+                        &tracker_expr_name,
+                        back::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+                    )?;
+                    writeln!(self.out, ") {{")?;
+                    current_level = current_level.next();
+                }
+                write!(self.out, "{current_level}")?;
                 self.put_expression(query, &context.expression, true)?;
                 // Terminate appears to map to abort in spirv-cross, but metal only documents
                 // the existence of this method, not what it does.
                 writeln!(self.out, ".abort();")?;
+                if self.ray_query_initialization_tracking {
+                    writeln!(self.out, "{level}}}")?;
+                }
             }
         }
 

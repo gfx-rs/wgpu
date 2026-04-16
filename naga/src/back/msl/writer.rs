@@ -1127,6 +1127,14 @@ impl<W: Write> Writer<W> {
                     super::ray::RAY_QUERY_TRACKER_VARIABLE_PREFIX,
                     self.names[&name_key]
                 )?;
+
+                writeln!(
+                    self.out,
+                    "{}float {}{} = 0.0;",
+                    back::INDENT,
+                    super::ray::RAY_QUERY_T_MAX_TRACKER_VARIABLE_PREFIX,
+                    self.names[&name_key]
+                )?;
             }
         }
         Ok(())
@@ -4378,6 +4386,7 @@ impl<W: Write> Writer<W> {
                 CLAMPED_LOD_LOAD_PREFIX,
                 super::ray::INTERSECTION_FUNCTION_NAME,
                 super::ray::RAY_QUERY_TRACKER_VARIABLE_PREFIX,
+                super::ray::RAY_QUERY_T_MAX_TRACKER_VARIABLE_PREFIX,
             ],
             &mut self.names,
         );

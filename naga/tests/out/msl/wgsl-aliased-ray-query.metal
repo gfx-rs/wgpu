@@ -53,6 +53,7 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
 ) {
     metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> rq_1 = {};
     uint naga_query_init_tracker_for_rq_1 = 0u;
+    float naga_query_tmax_tracker_for_rq_1 = 0.0;
     metal::float3 pos = metal::float3(0.0);
     metal::float3 dir = metal::float3(0.0, 1.0, 0.0);
     RayDesc _e12 = RayDesc {4u, 255u, 0.1, 100.0, pos, dir};
@@ -80,18 +81,31 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
         if (!(invalid_dir || invalid_t || invalid_nan_infs)) {
             rq_1.reset(ray,acc_struct, desc.cull_mask, params);
             naga_query_init_tracker_for_rq_1 = 1;
+            naga_query_tmax_tracker_for_rq_1 = desc.tmax;
         }
     }
     RayIntersection intersection = ray_query_get_intersection_false(rq_1);
     if (intersection.kind == 3u) {
-        rq_1.commit_bounding_box_intersection(10.0);
+        if (((naga_query_init_tracker_for_rq_1 & 2) == 2) && !((naga_query_init_tracker_for_rq_1 & 4) == 4)) {
+            float current_max_t = naga_query_tmax_tracker_for_rq_1;
+            if (rq_1.get_committed_intersection_type() != metal::raytracing::intersection_type::none) {
+                current_max_t = rq_1.get_committed_distance();
+            }
+            if (rq_1.get_candidate_intersection_type() == metal::raytracing::intersection_type::bounding_box) {            rq_1.commit_bounding_box_intersection(10.0);
+            }
+        }
         return;
     } else {
         if (intersection.kind == 1u) {
-            rq_1.commit_triangle_intersection();
+            if (((naga_query_init_tracker_for_rq_1 & 2) == 2) && !((naga_query_init_tracker_for_rq_1 & 4) == 4)) {
+                if (rq_1.get_candidate_intersection_type() == metal::raytracing::intersection_type::triangle) {            rq_1.commit_triangle_intersection();
+                }
+            }
             return;
         } else {
-            rq_1.abort();
+            if (((naga_query_init_tracker_for_rq_1 & 2) == 2) && !((naga_query_init_tracker_for_rq_1 & 4) == 4)) {
+                rq_1.abort();
+            }
             return;
         }
     }
