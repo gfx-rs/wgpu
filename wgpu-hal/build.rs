@@ -1,17 +1,4 @@
 fn main() {
-    // Legacy WinRT builds may still pass `--cfg __WINRT__` via rustflags.
-    // Normalize both that legacy cfg and true UWP targets into one internal cfg alias.
-    println!("cargo:rustc-check-cfg=cfg(windows_uwp)");
-    println!("cargo:rerun-if-env-changed=CARGO_ENCODED_RUSTFLAGS");
-    println!("cargo:rerun-if-env-changed=RUSTFLAGS");
-    {
-        let encoded = std::env::var("CARGO_ENCODED_RUSTFLAGS").unwrap_or_default();
-        let plain = std::env::var("RUSTFLAGS").unwrap_or_default();
-        if encoded.contains("__WINRT__") || plain.contains("__WINRT__") {
-            println!("cargo:rustc-cfg=windows_uwp");
-        }
-    }
-
     cfg_aliases::cfg_aliases! {
         native: { not(target_arch = "wasm32") },
         send_sync: { any(
@@ -21,6 +8,7 @@ fn main() {
         webgl: { all(target_arch = "wasm32", not(target_os = "emscripten"), gles) },
         Emscripten: { all(target_os = "emscripten", gles) },
         dx12: { all(target_os = "windows", feature = "dx12") },
+        windows_uwp: { all(target_os = "windows", target_vendor = "uwp") },
         gles: { all(feature = "gles") },
         // Within the GL ES backend, use `std` and be Send + Sync only if we are using a target
         // that, among the ones where the GL ES backend is supported, has `std`.
@@ -34,7 +22,6 @@ fn main() {
                 target_os = "emscripten"
             )
         ) },
-        windows_uwp: { all(target_os = "windows", target_vendor = "uwp") },
         metal: { all(target_vendor = "apple", feature = "metal") },
         vulkan: { all(not(target_arch = "wasm32"), feature = "vulkan") },
         drm: { all(
