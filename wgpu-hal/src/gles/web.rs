@@ -204,6 +204,17 @@ impl super::Adapter {
             )
         }
     }
+
+    pub fn adapter_context(&self) -> &AdapterContext {
+        &self.shared.context
+    }
+}
+
+impl super::Device {
+    /// Returns the underlying WebGL2 `AdapterContext`.
+    pub fn context(&self) -> &AdapterContext {
+        &self.shared.context
+    }
 }
 
 #[derive(Debug)]
