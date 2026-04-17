@@ -1,12 +1,12 @@
 use crate::ray_tracing::{acceleration_structure_limits, AsBuildContext};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    include_wgsl, Backends, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor,
+    include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor, InstanceFlags,
 };
 use wgpu::{AccelerationStructureFlags, BufferUsages};
 use wgpu_macros::gpu_test;
-use wgpu_test::{FailureCase, GpuTestInitializer};
+use wgpu_test::GpuTestInitializer;
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
 
 const STRUCT_SIZE: wgpu::BufferAddress = 176;
@@ -114,9 +114,9 @@ static PREVENT_INVALID_RAY_QUERY_CALLS: GpuTestConfiguration = GpuTestConfigurat
             .limits(acceleration_structure_limits())
             .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
             // Otherwise, mistakes in the generated code won't be caught.
-            .instance_flags(InstanceFlags::GPU_BASED_VALIDATION)
-            // not yet implemented in metal
-            .skip(FailureCase::backend(Backends::METAL)),
+            .instance_flags(InstanceFlags::GPU_BASED_VALIDATION),
+        // Don't disable metal shader validation because the shader validation
+        // is important here and the results from the ray query don't matter.
     )
     .run_sync(prevent_invalid_ray_query_calls);
 
