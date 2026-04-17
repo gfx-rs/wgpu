@@ -59,6 +59,7 @@ serde = { workspace = true, default-features = false, features = [
     "alloc",
     "derive",
 ], optional = true }
+static_assertions.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = { workspace = true, optional = true, default-features = false }

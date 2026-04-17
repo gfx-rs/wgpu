@@ -469,8 +469,8 @@ impl IntoTrace for ArcComputeCommand {
                 size_bytes,
                 values_offset,
             },
-            C::Dispatch(groups) => C::Dispatch(groups),
-            C::DispatchIndirect { buffer, offset } => C::DispatchIndirect {
+            C::DispatchWorkgroups(groups) => C::DispatchWorkgroups(groups),
+            C::DispatchWorkgroupsIndirect { buffer, offset } => C::DispatchWorkgroupsIndirect {
                 buffer: buffer.into_trace(),
                 offset,
             },

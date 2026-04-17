@@ -29,9 +29,13 @@ person(s) who reviewed your changes. This will make sure it gets re-added to the
 
 **Checklist**
 
-- [ ] Run `cargo fmt`.
-- [ ] Run `taplo format`.
-- [ ] Run `cargo clippy --tests`. If applicable, add:
-  - [ ] `--target wasm32-unknown-unknown`
-- [ ] Run `cargo xtask test` to run tests.
-- [ ] If this contains user-facing changes, add a `CHANGELOG.md` entry. <!-- See instructions at the top of `CHANGELOG.md`. -->
+<!-- Note that checking all the boxes is not necessary to open a PR. -->
+
+- [ ] I self-reviewed and fully understand this PR.
+- [ ] WebGPU implementations built with `wgpu` may be affected behaviorally.
+- [ ] Validation and feature gates are in place to confine behavioral changes.
+- [ ] Tests demonstrate the validation and altered logic works. <!-- See `docs/testing.md` -->
+- [ ] `CHANGELOG.md` entries for the user-facing effects of this change are present. <!-- See instructions at the top of `CHANGELOG.md`. -->
+- [ ] The PR is minimal, and doesn't make sense to land as multiple PRs.
+- [ ] Commits are logically scoped and individually reviewable.
+- [ ] The PR description has enough context to understand the motivation and solution implemented.

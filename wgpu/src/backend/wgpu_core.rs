@@ -1338,10 +1338,12 @@ impl dispatch::DeviceInterface for CoreDevice {
             .vertex
             .buffers
             .iter()
-            .map(|vbuf| pipe::VertexBufferLayout {
-                array_stride: vbuf.array_stride,
-                step_mode: vbuf.step_mode,
-                attributes: Borrowed(vbuf.attributes),
+            .map(|vbuf| {
+                vbuf.as_ref().map(|vbuf| pipe::VertexBufferLayout {
+                    array_stride: vbuf.array_stride,
+                    step_mode: vbuf.step_mode,
+                    attributes: Borrowed(vbuf.attributes),
+                })
             })
             .collect();
 
@@ -2141,6 +2143,17 @@ impl dispatch::QueueInterface for CoreQueue {
             }
             .into(),
         )
+    }
+
+    fn present(&self, detail: &dispatch::DispatchSurfaceOutputDetail) {
+        let detail = detail.as_core();
+        match self.context.0.surface_present(detail.surface_id) {
+            Ok(_status) => (),
+            Err(err) => {
+                self.context
+                    .handle_error_nolabel(&self.error_sink, err, "Queue::present");
+            }
+        }
     }
 }
 
@@ -3227,19 +3240,17 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &dispatch::DispatchBuffer,
+        buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     ) {
-        let buffer = buffer.as_core();
+        let buffer = buffer.map(|buffer| buffer.as_core().id);
 
-        if let Err(cause) = self.context.0.render_pass_set_vertex_buffer(
-            &mut self.pass,
-            slot,
-            buffer.id,
-            offset,
-            size,
-        ) {
+        if let Err(cause) =
+            self.context
+                .0
+                .render_pass_set_vertex_buffer(&mut self.pass, slot, buffer, offset, size)
+        {
             self.context.handle_error(
                 &self.error_sink,
                 cause,
@@ -3812,13 +3823,13 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &dispatch::DispatchBuffer,
+        buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     ) {
-        let buffer = buffer.as_core();
+        let buffer = buffer.map(|buffer| buffer.as_core().id);
 
-        wgpu_render_bundle_set_vertex_buffer(&mut self.encoder, slot, buffer.id, offset, size)
+        wgpu_render_bundle_set_vertex_buffer(&mut self.encoder, slot, buffer, offset, size)
     }
 
     fn set_immediates(&mut self, offset: u32, data: &[u8]) {
@@ -3991,22 +4002,13 @@ impl Drop for CoreSurface {
 }
 
 impl dispatch::SurfaceOutputDetailInterface for CoreSurfaceOutputDetail {
-    fn present(&self) {
-        match self.context.0.surface_present(self.surface_id) {
-            Ok(_status) => (),
-            Err(err) => {
-                self.context
-                    .handle_error_nolabel(&self.error_sink, err, "Surface::present");
-            }
-        }
-    }
-
     fn texture_discard(&self) {
         match self.context.0.surface_texture_discard(self.surface_id) {
             Ok(_status) => (),
-            Err(err) => self
-                .context
-                .handle_error_fatal(err, "Surface::discard_texture"),
+            Err(err) => {
+                self.context
+                    .handle_error_nolabel(&self.error_sink, err, "Surface::discard_texture")
+            }
         }
     }
 }

@@ -196,11 +196,11 @@ impl crate::framework::Example for Example {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
-                buffers: &[VertexBufferLayout {
+                buffers: &[Some(VertexBufferLayout {
                     array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
                     step_mode: Default::default(),
                     attributes: &vertex_attr_array![0 => Float32x3, 1 => Float32x3],
-                }],
+                })],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,

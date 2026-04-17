@@ -42,6 +42,26 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major changes
+
+#### Optional vertex buffer slots
+
+This allows gaps in `VertexState`'s `buffers` and adds support for unbinding vertex buffers, bringing us in compliance with the WebGPU spec. As a result of this, `VertexState`'s `buffers` field now has type of `&[Option<VertexBufferLayout>]`. To migrate, wrap vertex buffer layouts in `Some`:
+
+```diff
+  let vertex_state = wgpu::VertexState {
+      module: &vs_module,
+      entry_point: Some("vs_main"),
+      compilation_options: wgpu::PipelineCompilationOptions::default(),
+      buffers: &[
+-         &vertex_buffer_layout
++         Some(&vertex_buffer_layout)
+      ],
+  };
+```
+
+By @teoxoy in [#9351](https://github.com/gfx-rs/wgpu/pull/9351).
+
 ### Added/New Features
 
 #### General
@@ -74,17 +94,25 @@ Bottom level categories:
 - Add support for RawWindowHandle::Drm on unix, conditional on the `"drm"` feature.
   - DRM support by @rectalogic in [#9182](https://github.com/gfx-rs/wgpu/pull/9182).
   - Conditional compilation by @jimblandy in [#9390](https://github.com/gfx-rs/wgpu/pull/9390)
+- Fixed alignment and MatrixStride for mat2x2 in SPIR-V uniform blocks. By @39ali [#9369](https://github.com/gfx-rs/wgpu/pull/9369).
 
 ### Changes
 
 #### General
 
+- `SurfaceTexture::present()` has been replaced by `Queue::present(surface_texture)`. By @inner-daemons and @atlv24 in [#9361](https://github.com/gfx-rs/wgpu/pull/9361).
 - `Features::CLIP_DISTANCE`, `naga::Capabilities::CLIP_DISTANCE`, and `naga::BuiltIn::ClipDistance` have been renamed to `CLIP_DISTANCES` and `ClipDistances` (viz., pluralized) as appropriate, to match the WebGPU spec. By @ErichDonGubler in [#9267](https://github.com/gfx-rs/wgpu/pull/9267).
 - Added more granular limits for mesh shaders. By @inner-daemons in [#8739](https://github.com/gfx-rs/wgpu/pull/8739).
 - Added new `InvalidWorkgroupSizeError`, which is now used by `DrawError::InvalidGroupSize` and `StageError::InvalidWorkgroupSize`. By @andyleiserson in [#9357](https://github.com/gfx-rs/wgpu/pull/9357).
 - Zero-size `Queue::write_buffer` now returns an error if the offset is invalid or the buffer lacks `COPY_DST`. By @39ali in [#9374](https://github.com/gfx-rs/wgpu/pull/9374).
 - `Buffer::get_mapped_range` and variants now return `Result<_, MapRangeError>>` instead of panicking, in line with WebGPU spec. By @atlv24 in [#9281](https://github.com/gfx-rs/wgpu/pull/9281).
 - Passthrough shaders now require a list of entry points when being created. by @inner-daemons in [#9064](https://github.com/gfx-rs/wgpu/pull/9064).
+- BREAKING: The `dispatch` and `dispatch_indirect` methods on pass and bundle encoders have been renamed to `dispatch_workgroups` and `dispatch_workgroups_indirect`, respectively, to match the WebGPU spec. By @ErichDonGubler in [#9362](https://github.com/gfx-rs/wgpu/pull/9362).
+- `LoadOp::DontCare` can no longer be deserialized, and the `LoadOpDontCare` token no longer implements `Default`. This ensures that `DontCare` can only be used with `unsafe`, as intended. By @kpreid in [#9428](https://github.com/gfx-rs/wgpu/pull/9428).
+- Minor changes to various error enums to support improved validation. By @andyleiserson in [#9357](https://github.com/gfx-rs/wgpu/pull/9357), [#9363](https://github.com/gfx-rs/wgpu/pull/9363), and [#9425](https://github.com/gfx-rs/wgpu/pull/9425):
+  - Added new `InvalidWorkgroupSizeError`, which is now used by `DrawError::InvalidGroupSize` and `StageError::InvalidWorkgroupSize`.
+  - Added `BuildAccelerationStructureError` variant `OffsetLimitedTo4GB` and changed `IndirectBufferOverrun` to contain offset and size rather than start and end offsets.
+  - `IndexFormat::byte_size` now returns `u32` instead of `usize`.
 
 #### Validation
 
@@ -95,10 +123,15 @@ Bottom level categories:
 
 - Prefix `FeatureLevel` and `ShaderModel` enum variants with `V` instead of `_`. By @teoxoy in [#9337](https://github.com/gfx-rs/wgpu/pull/9337).
 
+#### naga
+
+- Switched from using an `intersector` to using an `intersection_query` on metal so AABBs and non-opaque triangles can be handled. By @Vecvec in [#9304](https://github.com/gfx-rs/wgpu/pull/9304).
+
 ### Bug Fixes
 
 #### General
 
+- Fix `SYNC-HAZARD-WRITE-AFTER-PRESENT` on Vulkan when a surface texture is presented without being rendered to. By @inner-daemons and @atlv24 in [#9361](https://github.com/gfx-rs/wgpu/pull/9361).
 - Fix incorrect checks for dynamic binding bounds when calling an encoder's `set_bind_group` in passes and bundles. By @ErichDonGubler in [#9308](https://github.com/gfx-rs/wgpu/pull/9308).
 
 #### naga
@@ -110,16 +143,28 @@ Bottom level categories:
 - Fixed handling of unterminated block comments. By @BKDaugherty in [#9356](https://github.com/gfx-rs/wgpu/pull/9356).
 - Enforce that `@must_use` appear only on function declarations. By @dnsn021 in [#9367](https://github.com/gfx-rs/wgpu/pull/9367).
 - Fix typo in `naga::back::msl::Error::UnsupportedWritable*` variant names. By @ErichDonGubler in [#9376](https://github.com/gfx-rs/wgpu/pull/9376).
+- Added support for `enable wgpu_binding_array;`. By @39ali in [#9298](https://github.com/gfx-rs/wgpu/pull/9298).
 
 #### Vulkan
 
 - Fixed `SHADER_I16` not enabling `storage_buffer16_bit_access` or `storage_input_output16`, causing Vulkan validation errors when using 16-bit integers in buffers. By @JMS55 in [#9412](https://github.com/gfx-rs/wgpu/pull/9412).
 - Fixed validation errors when frames take longer than the specified swapchain acquire timeout. By @atlv24 in [#9405](https://github.com/gfx-rs/wgpu/pull/9405).
+- Fixed limits on Mesa's Honeykrisp / Asahi Linux. By @im-0 in [#9393](https://github.com/gfx-rs/wgpu/pull/9393).
 
 #### dx12
 
 - Fixed use of a texture view without `TextureUsage::TEXTURE_BINDING` as a read-only depth attachment. By @andyleiserson in [#9346](https://github.com/gfx-rs/wgpu/pull/9346).
 - Fixed a `debug_assert` during stride validation for indirect multi draw. By @kristoff3r in [#9332](https://github.com/gfx-rs/wgpu/pull/9332)
+
+#### Metal
+
+- Fix crash on fence creation when running in a MacOS Seatbelt sandbox. By @wumpf in [#9415](https://github.com/gfx-rs/wgpu/pull/9415)
+
+### Dependency Updates
+
+#### WebGPU
+
+- Upgrade vendored `wasm-bindgen` WebGPU bindings to 0.2.115 and adapt the `webgpu` backend to the new API. `ExternalImageSource::VideoFrame` no longer requires `--cfg=web_sys_unstable_apis`, as `web_sys::VideoFrame` is now stable. The GLES backend still requires the cfg to upload `VideoFrame`s, since `glow` still needs to adapt. By @evilpie in [#9090](https://github.com/gfx-rs/wgpu/pull/9090).
 
 ## v29.0.1 (2026-03-26)
 

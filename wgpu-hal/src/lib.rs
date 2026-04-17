@@ -1245,11 +1245,45 @@ pub trait Queue: WasmNotSendSync {
         surface_textures: &[&<Self::A as Api>::SurfaceTexture],
         signal_fence: (&mut <Self::A as Api>::Fence, FenceValue),
     ) -> Result<(), DeviceError>;
+    /// Present a surface texture to the screen.
+    ///
+    /// This consumes the surface texture, returning it to the swapchain.
+    ///
+    /// # Safety
+    ///
+    /// - `texture` must have been acquired from `surface` via
+    ///   [`Surface::acquire_texture`] and not yet presented or discarded.
+    /// - `surface` must be configured for use with the [`Device`][d] associated
+    ///   with this [`Queue`].
+    /// - `texture` must be in the "present" state. Either:
+    ///   - It was passed in [`submit`][s]'s `surface_textures` argument
+    ///     (which transitions it to the present state), or
+    ///   - The caller has otherwise transitioned it (e.g. via a clear +
+    ///     barrier to `PRESENT` for textures that were never rendered to).
+    /// - Any command buffers that write to `texture` must have been submitted
+    ///   via [`submit`][s] before this call. The submissions do not need to
+    ///   have completed on the GPU; platform-level synchronization handles the
+    ///   ordering between rendering and display.
+    /// - Must be externally synchronized with all other queue operations
+    ///   ([`submit`][s], [`present`][Queue::present],
+    ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue.
+    ///
+    /// [d]: Api::Device
+    /// [s]: Queue::submit
     unsafe fn present(
         &self,
         surface: &<Self::A as Api>::Surface,
         texture: <Self::A as Api>::SurfaceTexture,
     ) -> Result<(), SurfaceError>;
+    /// Block until all previously submitted work on this queue has completed,
+    /// including any pending presentations.
+    ///
+    /// # Safety
+    ///
+    /// - Must be externally synchronized with all other queue operations
+    ///   ([`submit`][Queue::submit], [`present`][Queue::present],
+    ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue.
+    unsafe fn wait_for_idle(&self) -> Result<(), DeviceError>;
     unsafe fn get_timestamp_period(&self) -> f32;
 }
 
@@ -1689,8 +1723,8 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &<Self::A as Api>::ComputePipeline);
 
-    unsafe fn dispatch(&mut self, count: [u32; 3]);
-    unsafe fn dispatch_indirect(
+    unsafe fn dispatch_workgroups(&mut self, count: [u32; 3]);
+    unsafe fn dispatch_workgroups_indirect(
         &mut self,
         buffer: &<Self::A as Api>::Buffer,
         offset: wgt::BufferAddress,
@@ -2461,7 +2495,7 @@ pub struct VertexBufferLayout<'a> {
 pub enum VertexProcessor<'a, M: DynShaderModule + ?Sized> {
     Standard {
         /// The format of any vertex buffers used with this pipeline.
-        vertex_buffers: &'a [VertexBufferLayout<'a>],
+        vertex_buffers: &'a [Option<VertexBufferLayout<'a>>],
         /// The vertex stage for this pipeline.
         vertex_stage: ProgrammableStage<'a, M>,
     },

@@ -52,6 +52,7 @@ static PARTIAL_BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestCon
 
 async fn binding_array_storage_textures(ctx: TestingContext, partially_bound: bool) {
     let shader = r#"
+        enable wgpu_binding_array;
         @group(0) @binding(0)
         var textures: binding_array<texture_storage_2d<rgba8unorm, read_write> >;
 

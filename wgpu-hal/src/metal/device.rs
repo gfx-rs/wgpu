@@ -1298,6 +1298,9 @@ impl crate::Device for super::Device {
                     let mut vertex_buffer_mappings =
                         Vec::<naga::back::msl::VertexBufferMapping>::new();
                     for (i, vbl) in vertex_buffers.iter().enumerate() {
+                        let Some(vbl) = vbl else {
+                            continue;
+                        };
                         let mut attributes = Vec::<naga::back::msl::AttributeMapping>::new();
                         for attribute in vbl.attributes.iter() {
                             attributes.push(naga::back::msl::AttributeMapping {
@@ -1372,6 +1375,10 @@ impl crate::Device for super::Device {
                     if !vertex_buffers.is_empty() {
                         let vertex_descriptor = MTLVertexDescriptor::new();
                         for (i, vb) in vertex_buffers.iter().enumerate() {
+                            let Some(vb) = vb else {
+                                continue;
+                            };
+
                             let buffer_index = VERTEX_BUFFER_SLOT_START as usize + i;
                             let buffer_desc = unsafe {
                                 vertex_descriptor
@@ -1390,7 +1397,10 @@ impl crate::Device for super::Device {
                                     .max()
                                     .unwrap_or(0);
                                 unsafe {
-                                    buffer_desc.setStride(wgt::math::align_to(stride as _, 4))
+                                    buffer_desc.setStride(wgt::math::align_to(
+                                        NSUInteger::try_from(stride).unwrap(),
+                                        4,
+                                    ))
                                 };
                                 buffer_desc.setStepFunction(MTLVertexStepFunction::Constant);
                                 unsafe { buffer_desc.setStepRate(0) };
@@ -1851,7 +1861,7 @@ impl crate::Device for super::Device {
         self.counters.fences.add(1);
         // https://developer.apple.com/documentation/metal/mtlsharedevent
         let shared_event = if available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0) {
-            Some(self.shared.device.newSharedEvent().unwrap())
+            self.shared.device.newSharedEvent() // This should be supported on said devices, but some sandbox environments may still restrict it, making it return `None`.
         } else {
             None
         };

@@ -261,6 +261,8 @@ pub trait QueueInterface: CommonTraits {
     fn on_submitted_work_done(&self, callback: BoxSubmittedWorkDoneCallback);
 
     fn compact_blas(&self, blas: &DispatchBlas) -> (Option<u64>, DispatchBlas);
+
+    fn present(&self, detail: &DispatchSurfaceOutputDetail);
 }
 
 pub trait ShaderModuleInterface: CommonTraits {
@@ -436,7 +438,7 @@ pub trait RenderPassInterface: CommonTraits + Drop {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &DispatchBuffer,
+        buffer: Option<&DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     );
@@ -547,7 +549,7 @@ pub trait RenderBundleEncoderInterface: CommonTraits {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &DispatchBuffer,
+        buffer: Option<&DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     );
@@ -588,7 +590,6 @@ pub trait SurfaceInterface: CommonTraits {
 }
 
 pub trait SurfaceOutputDetailInterface: CommonTraits {
-    fn present(&self);
     fn texture_discard(&self);
 }
 

@@ -277,7 +277,7 @@ pub(crate) fn buckets() -> impl Iterator<Item = &'static Bucket> {
 // are to avoid introducing platform or backend dependencies.
 //
 // **`max_vertex_attributes`:** While there is broad support for 32, Intel hardware with
-// Vulkan only supports 29.
+// Vulkan only supports 29; the D3D12 backend is also limited to 30.
 // See <https://gitlab.freedesktop.org/mesa/mesa/-/blob/465c186fc5f72c51bda943ac0e19f6512f8e6262/src/intel/vulkan/anv_private.h#L188>.
 //
 // **`max_dynamic_{storage,uniform}_buffers_per_pipeline_layout`:** These are limited to
@@ -291,7 +291,7 @@ const UPLEVEL: Bucket = Bucket {
     name: "uplevel-defaults",
     limits: Limits {
         max_bind_groups: 8,
-        // wgpu does not implement max_bind_groups_plus_vertex_buffers
+        // use default max_bind_groups_plus_vertex_buffers
         // use default max_bindings_per_bind_group
         max_buffer_size: 1 << 30, // 1 GB
         max_color_attachment_bytes_per_sample: 64,
@@ -345,7 +345,7 @@ const UPLEVEL: Bucket = Bucket {
         .union(Features::RG11B10UFLOAT_RENDERABLE)
         .union(Features::BGRA8UNORM_STORAGE)
         .union(Features::FLOAT32_FILTERABLE)
-        // FLOAT32_BLENDABLE not implemented in wgpu dx12 backend; https://github.com/gfx-rs/wgpu/issues/6555
+        .union(Features::FLOAT32_BLENDABLE)
         // CLIP_DISTANCES not implemented in wgpu dx12 backend; https://github.com/gfx-rs/wgpu/issues/6236
         .union(Features::DUAL_SOURCE_BLENDING)
         // TIER1/TIER2 not implemented in wgpu; https://github.com/gfx-rs/wgpu/issues/8122
@@ -376,7 +376,6 @@ const BUCKET_M1: Bucket = Bucket {
         .union(Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D)
         .union(Features::TEXTURE_COMPRESSION_ETC2)
         .union(Features::SHADER_F16)
-        .union(Features::FLOAT32_BLENDABLE)
         .union(Features::CLIP_DISTANCES),
 };
 
@@ -389,7 +388,7 @@ const BUCKET_A2: Bucket = Bucket {
         max_sampled_textures_per_shader_stage: 48,
         max_storage_buffer_binding_size: 1 << 30, // 1 GB,
         max_storage_buffers_per_shader_stage: 16,
-        max_vertex_attributes: 32,
+        max_vertex_attributes: 30,
         ..UPLEVEL.limits
     },
     info: BucketedAdapterInfo {
@@ -427,7 +426,7 @@ const BUCKET_N1: Bucket = Bucket {
         max_sampled_textures_per_shader_stage: 48,
         max_storage_buffer_binding_size: 1 << 30, // 1 GB,
         max_storage_buffers_per_shader_stage: 16,
-        max_vertex_attributes: 32,
+        max_vertex_attributes: 30,
         ..UPLEVEL.limits
     },
     info: BucketedAdapterInfo {
@@ -446,7 +445,7 @@ const BUCKET_A1: Bucket = Bucket {
         max_sampled_textures_per_shader_stage: 48,
         max_storage_buffer_binding_size: 1 << 30, // 1 GB,
         max_storage_buffers_per_shader_stage: 16,
-        max_vertex_attributes: 32,
+        max_vertex_attributes: 30,
         ..UPLEVEL.limits
     },
     info: BucketedAdapterInfo {
@@ -466,7 +465,7 @@ const BUCKET_NO_F16: Bucket = Bucket {
         max_sampled_textures_per_shader_stage: 48,
         max_storage_buffer_binding_size: 1 << 30, // 1 GB
         max_storage_buffers_per_shader_stage: 16,
-        max_vertex_attributes: 32,
+        max_vertex_attributes: 30,
         ..UPLEVEL.limits
     },
     info: BucketedAdapterInfo {
@@ -504,7 +503,7 @@ const BUCKET_WARP: Bucket = Bucket {
         max_color_attachment_bytes_per_sample: 128,
         max_sampled_textures_per_shader_stage: 48,
         max_storage_buffers_per_shader_stage: 16,
-        max_vertex_attributes: 32,
+        max_vertex_attributes: 30,
         ..UPLEVEL.limits
     },
     info: BucketedAdapterInfo {

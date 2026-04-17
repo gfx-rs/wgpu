@@ -182,7 +182,7 @@ pub fn map_interpolation(
         "flat" => Ok(crate::Interpolation::Flat),
         "perspective" => Ok(crate::Interpolation::Perspective),
         "per_vertex" => {
-            enable_extensions.require(ImplementedEnableExtension::PerVertex, span)?;
+            enable_extensions.require(ImplementedEnableExtension::WgpuPerVertex, span)?;
             Ok(crate::Interpolation::PerVertex)
         }
         _ => Err(Box::new(Error::UnknownAttribute(span))),
@@ -587,6 +587,9 @@ pub fn map_predeclared_type(
         ]),
         PredeclaredType::TypeGenerator(TypeGenerator::CooperativeMatrix { .. }) => {
             Some(&[ImplementedEnableExtension::WgpuCooperativeMatrix])
+        }
+        PredeclaredType::TypeGenerator(TypeGenerator::BindingArray) => {
+            Some(&[ImplementedEnableExtension::WgpuBindingArray])
         }
         _ => None,
     };

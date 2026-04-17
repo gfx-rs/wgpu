@@ -380,6 +380,10 @@ impl QueueInterface for CustomQueue {
     fn compact_blas(&self, _blas: &DispatchBlas) -> (Option<u64>, DispatchBlas) {
         unimplemented!()
     }
+
+    fn present(&self, _detail: &wgpu::custom::DispatchSurfaceOutputDetail) {
+        unimplemented!()
+    }
 }
 
 #[derive(Debug)]

@@ -1999,6 +1999,9 @@ impl crate::Device for super::Device {
         {
             vertex_buffers = Vec::with_capacity(desc_vertex_buffers.len());
             for (i, vb) in desc_vertex_buffers.iter().enumerate() {
+                let Some(vb) = vb else {
+                    continue;
+                };
                 vertex_buffers.push(vk::VertexInputBindingDescription {
                     binding: i as u32,
                     stride: vb.array_stride as u32,

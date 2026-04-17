@@ -536,6 +536,10 @@ impl super::Queue {
                                 v,
                             );
                         },
+                        #[cfg(not(web_sys_unstable_apis))]
+                        wgt::ExternalImageSource::VideoFrame(_) => {
+                            unimplemented!("web_sys_unstable_apis is needed for glow")
+                        }
                         #[cfg(web_sys_unstable_apis)]
                         wgt::ExternalImageSource::VideoFrame(ref v) => unsafe {
                             gl.tex_sub_image_3d_with_video_frame(
@@ -627,6 +631,10 @@ impl super::Queue {
                                 v,
                             )
                         },
+                        #[cfg(not(web_sys_unstable_apis))]
+                        wgt::ExternalImageSource::VideoFrame(_) => {
+                            unimplemented!("web_sys_unstable_apis is needed for glow")
+                        }
                         #[cfg(web_sys_unstable_apis)]
                         wgt::ExternalImageSource::VideoFrame(ref v) => unsafe {
                             gl.tex_sub_image_2d_with_video_frame_and_width_and_height(
@@ -1954,6 +1962,12 @@ impl crate::Queue for super::Queue {
 
     unsafe fn get_timestamp_period(&self) -> f32 {
         1.0
+    }
+
+    unsafe fn wait_for_idle(&self) -> Result<(), crate::DeviceError> {
+        let gl = &self.shared.context.lock();
+        unsafe { gl.finish() };
+        Ok(())
     }
 }
 

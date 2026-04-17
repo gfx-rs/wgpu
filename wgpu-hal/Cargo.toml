@@ -316,6 +316,7 @@ web-sys = { workspace = true, optional = true, features = [
     "HtmlCanvasElement",
     "WebGl2RenderingContext",
     "OffscreenCanvas",
+    "VideoFrame",
 ] }
 js-sys = { workspace = true, optional = true, default-features = true }
 

@@ -764,13 +764,14 @@ pub(super) fn encode_compute_pass(
                 state.immediate_slots_set |=
                     naga::valid::ImmediateSlots::from_range(offset, size_bytes);
             }
-            ArcComputeCommand::Dispatch(groups) => {
+            ArcComputeCommand::DispatchWorkgroups(groups) => {
                 let scope = PassErrorScope::Dispatch { indirect: false };
-                dispatch(&mut state, groups).map_pass_err(scope)?;
+                dispatch_workgroups(&mut state, groups).map_pass_err(scope)?;
             }
-            ArcComputeCommand::DispatchIndirect { buffer, offset } => {
+            ArcComputeCommand::DispatchWorkgroupsIndirect { buffer, offset } => {
                 let scope = PassErrorScope::Dispatch { indirect: true };
-                dispatch_indirect(&mut state, device, buffer, offset).map_pass_err(scope)?;
+                dispatch_workgroups_indirect(&mut state, device, buffer, offset)
+                    .map_pass_err(scope)?;
             }
             ArcComputeCommand::PushDebugGroup { color: _, len } => {
                 pass::push_debug_group(&mut state.pass, &base.string_data, len);
@@ -929,7 +930,7 @@ fn set_pipeline(
     )
 }
 
-fn dispatch(state: &mut State, groups: [u32; 3]) -> Result<(), ComputePassErrorInner> {
+fn dispatch_workgroups(state: &mut State, groups: [u32; 3]) -> Result<(), ComputePassErrorInner> {
     api_log!("ComputePass::dispatch {groups:?}");
 
     state.is_ready()?;
@@ -953,12 +954,12 @@ fn dispatch(state: &mut State, groups: [u32; 3]) -> Result<(), ComputePassErrorI
     }
 
     unsafe {
-        state.pass.base.raw_encoder.dispatch(groups);
+        state.pass.base.raw_encoder.dispatch_workgroups(groups);
     }
     Ok(())
 }
 
-fn dispatch_indirect(
+fn dispatch_workgroups_indirect(
     state: &mut State,
     device: &Arc<Device>,
     buffer: Arc<Buffer>,
@@ -1076,7 +1077,7 @@ fn dispatch_indirect(
         }
 
         unsafe {
-            state.pass.base.raw_encoder.dispatch([1, 1, 1]);
+            state.pass.base.raw_encoder.dispatch_workgroups([1, 1, 1]);
         }
 
         // reset state
@@ -1134,7 +1135,7 @@ fn dispatch_indirect(
                 .pass
                 .base
                 .raw_encoder
-                .dispatch_indirect(params.dst_buffer, 0);
+                .dispatch_workgroups_indirect(params.dst_buffer, 0);
         }
     } else {
         state.flush_bindings(Some(&buffer), true)?;
@@ -1145,7 +1146,7 @@ fn dispatch_indirect(
                 .pass
                 .base
                 .raw_encoder
-                .dispatch_indirect(buf_raw, offset);
+                .dispatch_workgroups_indirect(buf_raw, offset);
         }
     }
 
@@ -1290,7 +1291,9 @@ impl Global {
 
         pass_base!(pass, scope)
             .commands
-            .push(ArcComputeCommand::Dispatch([groups_x, groups_y, groups_z]));
+            .push(ArcComputeCommand::DispatchWorkgroups([
+                groups_x, groups_y, groups_z,
+            ]));
 
         Ok(())
     }
@@ -1308,7 +1311,7 @@ impl Global {
         let buffer = pass_try!(base, scope, hub.buffers.get(buffer_id).get());
 
         base.commands
-            .push(ArcComputeCommand::DispatchIndirect { buffer, offset });
+            .push(ArcComputeCommand::DispatchWorkgroupsIndirect { buffer, offset });
 
         Ok(())
     }
