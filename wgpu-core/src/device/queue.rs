@@ -1243,6 +1243,18 @@ impl Queue {
         Ok(())
     }
 
+    fn flush_pending_writes(&self) -> Result<Option<SubmissionIndex>, DeviceError> {
+        let snatch_guard = self.device.snatchable_lock.read();
+        let (submission, submit_index) = self.allocate_submission(snatch_guard);
+        let pending_writes = self.pending_writes.lock();
+        if pending_writes.is_recording {
+            submission.submit(pending_writes)?;
+            Ok(Some(submit_index))
+        } else {
+            Ok(None)
+        }
+    }
+
     #[cfg(feature = "trace")]
     fn trace_submission(
         &self,
@@ -1673,7 +1685,12 @@ impl Queue {
         closure: SubmittedWorkDoneClosure,
     ) -> Option<SubmissionIndex> {
         api_log!("Queue::on_submitted_work_done");
-        //TODO: flush pending writes
+
+        // A `DeviceError` means we're losing the device anyways, so we can ignore it here
+        // (mostly to avoid a breaking change to the `on_submitted_work_done` signature
+        // for an error case that it is unlikely the caller will be able to handle).
+        let _: Result<_, DeviceError> = self.flush_pending_writes();
+
         self.lock_life().add_work_done_closure(closure)
     }
 
@@ -1911,7 +1928,6 @@ impl Global {
     ) -> SubmissionIndex {
         api_log!("Queue::on_submitted_work_done {queue_id:?}");
 
-        //TODO: flush pending writes
         let queue = self.hub.queues.get(queue_id);
         let result = queue.on_submitted_work_done(closure);
         result.unwrap_or(0) // '0' means no wait is necessary
