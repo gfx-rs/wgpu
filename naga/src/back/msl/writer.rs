@@ -5763,10 +5763,13 @@ template <typename A>
                         self.put_literal(min_val)?;
                         writeln!(self.out, " & rhs == {lp}-1{rp}) | (rhs == {lp}0{rp}));")?
                     }
-                    crate::ScalarKind::Uint => writeln!(
-                        self.out,
-                        "{level}return lhs / metal::select(rhs, {lp}1{rp}, rhs == {lp}0{rp});"
-                    )?,
+                    crate::ScalarKind::Uint => {
+                        let suffix = if scalar.width < 4 { "" } else { "u" };
+                        writeln!(
+                            self.out,
+                            "{level}return lhs / metal::select(rhs, {lp}1{suffix}{rp}, rhs == {lp}0{suffix}{rp});"
+                        )?
+                    }
                     _ => unreachable!(),
                 }
                 writeln!(self.out, "}}")?;
@@ -5848,10 +5851,13 @@ template <typename A>
                         writeln!(self.out, " & rhs == {lp}-1{rp}) | (rhs == {lp}0{rp}));")?;
                         writeln!(self.out, "{level}return lhs - (lhs / divisor) * divisor;")?
                     }
-                    crate::ScalarKind::Uint => writeln!(
-                        self.out,
-                        "{level}return lhs % metal::select(rhs, {lp}1{rp}, rhs == {lp}0{rp});"
-                    )?,
+                    crate::ScalarKind::Uint => {
+                        let suffix = if scalar.width < 4 { "" } else { "u" };
+                        writeln!(
+                            self.out,
+                            "{level}return lhs % metal::select(rhs, {lp}1{suffix}{rp}, rhs == {lp}0{suffix}{rp});"
+                        )?
+                    }
                     _ => unreachable!(),
                 }
                 writeln!(self.out, "}}")?;
@@ -5931,7 +5937,11 @@ template <typename A>
 
                 writeln!(self.out, "{type_name} {ABS_FUNCTION}({type_name} val) {{")?;
                 let level = back::Level(1);
-                let zero = if scalar.width < 4 { format!("{type_name}(0)") } else { "0".to_string() };
+                let zero = if scalar.width < 4 {
+                    format!("{type_name}(0)")
+                } else {
+                    "0".to_string()
+                };
                 writeln!(self.out, "{level}return metal::select(as_type<{type_name}>(static_cast<{unsigned_type_name}>(-as_type<{unsigned_type_name}>(val))), val, val >= {zero});")?;
                 writeln!(self.out, "}}")?;
                 writeln!(self.out)?;

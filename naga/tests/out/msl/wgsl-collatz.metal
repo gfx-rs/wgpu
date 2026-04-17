@@ -14,11 +14,11 @@ struct PrimeIndices {
 };
 
 uint naga_mod(uint lhs, uint rhs) {
-    return lhs % metal::select(rhs, 1, rhs == 0);
+    return lhs % metal::select(rhs, 1u, rhs == 0u);
 }
 
 uint naga_div(uint lhs, uint rhs) {
-    return lhs / metal::select(rhs, 1, rhs == 0);
+    return lhs / metal::select(rhs, 1u, rhs == 0u);
 }
 
 uint collatz_iterations(

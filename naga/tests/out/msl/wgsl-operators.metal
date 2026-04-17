@@ -157,7 +157,7 @@ int naga_div(int lhs, int rhs) {
 }
 
 uint naga_div(uint lhs, uint rhs) {
-    return lhs / metal::select(rhs, 1, rhs == 0);
+    return lhs / metal::select(rhs, 1u, rhs == 0u);
 }
 
 metal::int2 naga_div(metal::int2 lhs, metal::int2 rhs) {
@@ -165,7 +165,7 @@ metal::int2 naga_div(metal::int2 lhs, metal::int2 rhs) {
 }
 
 metal::uint3 naga_div(metal::uint3 lhs, metal::uint3 rhs) {
-    return lhs / metal::select(rhs, 1, rhs == 0);
+    return lhs / metal::select(rhs, 1u, rhs == 0u);
 }
 
 int naga_mod(int lhs, int rhs) {
@@ -174,7 +174,7 @@ int naga_mod(int lhs, int rhs) {
 }
 
 uint naga_mod(uint lhs, uint rhs) {
-    return lhs % metal::select(rhs, 1, rhs == 0);
+    return lhs % metal::select(rhs, 1u, rhs == 0u);
 }
 
 metal::int2 naga_mod(metal::int2 lhs, metal::int2 rhs) {
@@ -183,15 +183,15 @@ metal::int2 naga_mod(metal::int2 lhs, metal::int2 rhs) {
 }
 
 metal::uint3 naga_mod(metal::uint3 lhs, metal::uint3 rhs) {
-    return lhs % metal::select(rhs, 1, rhs == 0);
+    return lhs % metal::select(rhs, 1u, rhs == 0u);
 }
 
 metal::uint2 naga_div(metal::uint2 lhs, metal::uint2 rhs) {
-    return lhs / metal::select(rhs, 1, rhs == 0);
+    return lhs / metal::select(rhs, 1u, rhs == 0u);
 }
 
 metal::uint2 naga_mod(metal::uint2 lhs, metal::uint2 rhs) {
-    return lhs % metal::select(rhs, 1, rhs == 0);
+    return lhs % metal::select(rhs, 1u, rhs == 0u);
 }
 
 void arithmetic(
