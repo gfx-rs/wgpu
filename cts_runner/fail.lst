@@ -128,7 +128,6 @@ webgpu:shader,validation,parse,literal:* // 96%, https://github.com/gfx-rs/wgpu/
 webgpu:shader,validation,parse,shadow_builtins:* // 83%, function param shadowing parser issue; determinant const-eval; texture_external capability missing
 webgpu:shader,validation,shader_io,align:* // 98%, @align(2^31) accepted but exceeds i32::MAX per WGSL spec
 webgpu:shader,validation,shader_io,id:* // 97%, @id on const
-webgpu:shader,validation,shader_io,interpolate:*
 webgpu:shader,validation,shader_io,layout_constraints:* // 99%, struct alignment not inferred from @align on members
 webgpu:shader,validation,shader_io,locations:stage_inout:* // 66%, invalid usage @location in compute shaders
 webgpu:shader,validation,shader_io,pipeline_stage:* // 92%, stage attributes incorrectly accepted on var<private> and var<storage>
