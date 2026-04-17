@@ -522,6 +522,9 @@ impl crate::Device for super::Device {
             {
                 MTLStorageMode::Memoryless
             } else if cfg!(target_pointer_width = "32") {
+                // There are no Apple OSes that support both 32bit applications and Metal,
+                // so this branch is guaranteed to be just be ILP32 devices.
+                //
                 // On arm64_32 (watchOS ILP32), the AGXMetalS4 driver (A13/S6 GPU)
                 // crashes in copyFromTexture:toBuffer: on Private textures — null
                 // deref at offset 0x50 in the driver's internal texture state. Use
