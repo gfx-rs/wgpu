@@ -729,7 +729,7 @@ type ProgramCache = FastHashMap<ProgramCacheKey, Result<Arc<PipelineInner>, crat
 pub struct RenderPipeline {
     inner: Arc<PipelineInner>,
     primitive: wgt::PrimitiveState,
-    vertex_buffers: Box<[VertexBufferDesc]>,
+    vertex_buffers: Box<[Option<VertexBufferDesc>]>,
     vertex_attributes: Box<[AttributeDesc]>,
     color_targets: Box<[ColorTargetDesc]>,
     depth: Option<DepthState>,

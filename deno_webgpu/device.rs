@@ -834,9 +834,8 @@ impl GPUDevice {
           .buffers
           .into_iter()
           .map(|b| {
-            b.into_option().map_or_else(
-              wgpu_core::pipeline::VertexBufferLayout::default,
-              |layout| wgpu_core::pipeline::VertexBufferLayout {
+            b.into_option().map(|layout| {
+              wgpu_core::pipeline::VertexBufferLayout {
                 array_stride: layout.array_stride,
                 step_mode: layout.step_mode.into(),
                 attributes: Cow::Owned(
@@ -850,8 +849,8 @@ impl GPUDevice {
                     })
                     .collect(),
                 ),
-              },
-            )
+              }
+            })
           })
           .collect(),
       ),

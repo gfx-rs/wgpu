@@ -818,6 +818,7 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_texture_dimension_3d: limits.max_texture_dimension_3d(),
         max_texture_array_layers: limits.max_texture_array_layers(),
         max_bind_groups: limits.max_bind_groups(),
+        max_bind_groups_plus_vertex_buffers: limits.max_bind_groups_plus_vertex_buffers(),
         max_bindings_per_bind_group: limits.max_bindings_per_bind_group(),
         max_dynamic_uniform_buffers_per_pipeline_layout: limits
             .max_dynamic_uniform_buffers_per_pipeline_layout(),
@@ -885,13 +886,17 @@ fn map_adapter_info(adapter_info: &webgpu_sys::GpuAdapterInfo) -> wgt::AdapterIn
         name: adapter_info.description().to_string(),
         vendor: 0,
         device: 0,
-        device_type: wgt::DeviceType::Other,
+        device_type: if adapter_info.is_fallback_adapter() {
+            wgt::DeviceType::Cpu
+        } else {
+            wgt::DeviceType::Other
+        },
         device_pci_bus_id: String::new(),
         driver: String::new(),
         driver_info: String::new(),
         backend: wgt::Backend::BrowserWebGpu,
-        subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
-        subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
+        subgroup_min_size: adapter_info.subgroup_min_size(),
+        subgroup_max_size: adapter_info.subgroup_max_size(),
         transient_saves_memory: false,
         limit_bucket: None,
     }
@@ -925,7 +930,7 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object<js_sys::Number> {
         (maxTextureDimension3D, max_texture_dimension_3d),
         (maxTextureArrayLayers, max_texture_array_layers),
         (maxBindGroups, max_bind_groups),
-        // TODO: (maxBindGroupsPlusVertexBuffers, max_bind_groups_plus_vertex_buffers),
+        (maxBindGroupsPlusVertexBuffers, max_bind_groups_plus_vertex_buffers),
         (maxBindingsPerBindGroup, max_bindings_per_bind_group),
         (maxDynamicUniformBuffersPerPipelineLayout, max_dynamic_uniform_buffers_per_pipeline_layout),
         (maxDynamicStorageBuffersPerPipelineLayout, max_dynamic_storage_buffers_per_pipeline_layout),
@@ -2214,25 +2219,28 @@ impl dispatch::DeviceInterface for WebDevice {
             .vertex
             .buffers
             .iter()
-            .map(|vbuf| {
-                let mapped_attributes = vbuf
-                    .attributes
-                    .iter()
-                    .map(|attr| {
-                        webgpu_sys::GpuVertexAttribute::new_with_f64(
-                            map_vertex_format(attr.format),
-                            attr.offset as f64,
-                            attr.shader_location,
-                        )
-                    })
-                    .collect::<Vec<webgpu_sys::GpuVertexAttribute>>();
+            .map(|vbuf| match vbuf {
+                Some(vbuf) => {
+                    let mapped_attributes = vbuf
+                        .attributes
+                        .iter()
+                        .map(|attr| {
+                            webgpu_sys::GpuVertexAttribute::new_with_f64(
+                                map_vertex_format(attr.format),
+                                attr.offset as f64,
+                                attr.shader_location,
+                            )
+                        })
+                        .collect::<Vec<webgpu_sys::GpuVertexAttribute>>();
 
-                let mapped_vbuf = webgpu_sys::GpuVertexBufferLayout::new_with_f64(
-                    vbuf.array_stride as f64,
-                    &mapped_attributes,
-                );
-                mapped_vbuf.set_step_mode(map_vertex_step_mode(vbuf.step_mode));
-                js_sys::JsOption::wrap(mapped_vbuf)
+                    let mapped_vbuf = webgpu_sys::GpuVertexBufferLayout::new_with_f64(
+                        vbuf.array_stride as f64,
+                        &mapped_attributes,
+                    );
+                    mapped_vbuf.set_step_mode(map_vertex_step_mode(vbuf.step_mode));
+                    js_sys::JsOption::wrap(mapped_vbuf)
+                }
+                None => js_sys::JsOption::new(),
             })
             .collect::<Vec<js_sys::JsOption<webgpu_sys::GpuVertexBufferLayout>>>();
 
@@ -2779,6 +2787,10 @@ impl dispatch::QueueInterface for WebQueue {
         _blas: &dispatch::DispatchBlas,
     ) -> (Option<u64>, dispatch::DispatchBlas) {
         unimplemented!("Raytracing not implemented for web")
+    }
+
+    fn present(&self, _detail: &dispatch::DispatchSurfaceOutputDetail) {
+        // Swapchain is presented automatically on the web.
     }
 }
 impl Drop for WebQueue {
@@ -3512,22 +3524,22 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &dispatch::DispatchBuffer,
+        buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     ) {
-        let buffer = buffer.as_webgpu();
+        let buffer = buffer.map(|buffer| &buffer.as_webgpu().inner);
 
         if let Some(size) = size {
             self.inner.set_vertex_buffer_with_f64_and_f64(
                 slot,
-                Some(&buffer.inner),
+                buffer,
                 offset as f64,
                 size.get() as f64,
             );
         } else {
             self.inner
-                .set_vertex_buffer_with_f64(slot, Some(&buffer.inner), offset as f64);
+                .set_vertex_buffer_with_f64(slot, buffer, offset as f64);
         }
     }
 
@@ -3803,22 +3815,22 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &dispatch::DispatchBuffer,
+        buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     ) {
-        let buffer = buffer.as_webgpu();
+        let buffer = buffer.map(|buffer| &buffer.as_webgpu().inner);
 
         if let Some(size) = size {
             self.inner.set_vertex_buffer_with_f64_and_f64(
                 slot,
-                Some(&buffer.inner),
+                buffer,
                 offset as f64,
                 size.get() as f64,
             );
         } else {
             self.inner
-                .set_vertex_buffer_with_f64(slot, Some(&buffer.inner), offset as f64);
+                .set_vertex_buffer_with_f64(slot, buffer, offset as f64);
         }
     }
 
@@ -4006,10 +4018,6 @@ impl Drop for WebSurface {
 }
 
 impl dispatch::SurfaceOutputDetailInterface for WebSurfaceOutputDetail {
-    fn present(&self) {
-        // Swapchain is presented automatically on the web.
-    }
-
     fn texture_discard(&self) {
         // Can't really discard the texture on the web.
     }

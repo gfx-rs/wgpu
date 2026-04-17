@@ -822,6 +822,9 @@ impl Writer {
         ir_module: &crate::Module,
         r#type: Handle<crate::Type>,
     ) -> Result<(), Error> {
+        if !self.std140_compat_uniform_types.contains_key(&r#type) {
+            return Ok(());
+        }
         // Check if we've already emitted this function.
         let wrapped = WrappedFunction::ConvertFromStd140CompatType { r#type };
         let function_id = match self.wrapped_functions.entry(wrapped) {
@@ -897,9 +900,7 @@ impl Writer {
                 self.write_wrapped_convert_from_std140_compat_type(ir_module, base)?;
 
                 let element_type_id = self.get_handle_type_id(base);
-                let std140_element_type_id = self.std140_compat_uniform_types[&base].type_id;
-                let element_conversion_function_id = self.wrapped_functions
-                    [&WrappedFunction::ConvertFromStd140CompatType { r#type: base }];
+                let std140_info = self.std140_compat_uniform_types.get(&base);
                 let mut element_ids = Vec::new();
                 let size = match size.resolve(ir_module.to_ctx())? {
                     crate::proc::IndexableLength::Known(size) => size,
@@ -911,20 +912,31 @@ impl Writer {
                 };
                 for i in 0..size {
                     let std140_element_id = self.id_gen.next();
+                    let std140_element_type_id =
+                        std140_info.map_or(element_type_id, |info| info.type_id);
                     block.body.push(Instruction::composite_extract(
                         std140_element_type_id,
                         std140_element_id,
                         param_id,
                         &[i],
                     ));
-                    let element_id = self.id_gen.next();
-                    block.body.push(Instruction::function_call(
-                        element_type_id,
-                        element_id,
-                        element_conversion_function_id,
-                        &[std140_element_id],
-                    ));
-                    element_ids.push(element_id);
+
+                    // Only call the conversion function if a compatibility mapping actually exists.
+                    let final_element_id = if std140_info.is_some() {
+                        let conversion_fn_id = self.wrapped_functions
+                            [&WrappedFunction::ConvertFromStd140CompatType { r#type: base }];
+                        let id = self.id_gen.next();
+                        block.body.push(Instruction::function_call(
+                            element_type_id,
+                            id,
+                            conversion_fn_id,
+                            &[std140_element_id],
+                        ));
+                        id
+                    } else {
+                        std140_element_type_id
+                    };
+                    element_ids.push(final_element_id);
                 }
                 let result_id = self.id_gen.next();
                 block.body.push(Instruction::composite_construct(
@@ -1000,7 +1012,6 @@ impl Writer {
                                     next_index += 1;
                                 }
                                 None => {
-                                    let member_id = self.id_gen.next();
                                     block.body.push(Instruction::composite_extract(
                                         member_type_id,
                                         member_id,

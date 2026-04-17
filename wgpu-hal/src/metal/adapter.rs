@@ -1316,9 +1316,11 @@ impl super::CapabilitiesQuery {
             max_texture_dimension_2d: self.max_texture_size as u32,
             max_texture_dimension_3d: self.max_texture_3d_size as u32,
             max_texture_array_layers: self.max_texture_layers as u32,
-            // No real limit.
-            max_bind_groups: 8,
-            // No real limit.
+            // No limit.
+            max_bind_groups: u32::MAX,
+            // No limit. Once we start using argument buffers we should set this appropriately.
+            max_bind_groups_plus_vertex_buffers: u32::MAX,
+            // No limit.
             max_bindings_per_bind_group: u32::MAX,
             // No limit, use maxUniformBuffersPerShaderStage.
             max_dynamic_uniform_buffers_per_pipeline_layout: MAX_UNIFORM_BUFFERS_PER_SHADER_STAGE,

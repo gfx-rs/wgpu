@@ -53,7 +53,7 @@ impl crate::framework::Example for Example {
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
-        let vertex_buffers = [wgpu::VertexBufferLayout {
+        let vertex_buffers = [Some(wgpu::VertexBufferLayout {
             array_stride: vertex_size as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[wgpu::VertexAttribute {
@@ -61,7 +61,7 @@ impl crate::framework::Example for Example {
                 offset: 0,
                 shader_location: 0,
             }],
-        }];
+        })];
 
         let mask_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,

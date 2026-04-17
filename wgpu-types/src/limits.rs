@@ -22,6 +22,7 @@ macro_rules! with_limits {
         $macro_name!(max_texture_dimension_3d, Ordering::Less);
         $macro_name!(max_texture_array_layers, Ordering::Less);
         $macro_name!(max_bind_groups, Ordering::Less);
+        $macro_name!(max_bind_groups_plus_vertex_buffers, Ordering::Less);
         $macro_name!(max_bindings_per_bind_group, Ordering::Less);
         $macro_name!(
             max_dynamic_uniform_buffers_per_pipeline_layout,
@@ -146,6 +147,9 @@ pub struct Limits {
     pub max_texture_array_layers: u32,
     /// Amount of bind groups that can be attached to a pipeline at the same time. Defaults to 4. Higher is "better".
     pub max_bind_groups: u32,
+    /// The maximum number of bind group and vertex buffer slots used simultaneously, counting any empty slots below the highest index.
+    /// Defaults to 24. Higher is "better".
+    pub max_bind_groups_plus_vertex_buffers: u32,
     /// Maximum binding index allowed in `create_bind_group_layout`. Defaults to 1000. Higher is "better".
     pub max_bindings_per_bind_group: u32,
     /// Amount of uniform buffer bindings that can be dynamic in a single pipeline. Defaults to 8. Higher is "better".
@@ -333,6 +337,7 @@ impl Limits {
     ///     max_texture_dimension_3d: 2048,
     ///     max_texture_array_layers: 256,
     ///     max_bind_groups: 4,
+    ///     max_bind_groups_plus_vertex_buffers: 24,
     ///     max_bindings_per_bind_group: 1000,
     ///     max_dynamic_uniform_buffers_per_pipeline_layout: 8,
     ///     max_dynamic_storage_buffers_per_pipeline_layout: 4,
@@ -394,6 +399,7 @@ impl Limits {
             max_texture_dimension_3d: 2048,
             max_texture_array_layers: 256,
             max_bind_groups: 4,
+            max_bind_groups_plus_vertex_buffers: 24,
             max_bindings_per_bind_group: 1000,
             max_dynamic_uniform_buffers_per_pipeline_layout: 8,
             max_dynamic_storage_buffers_per_pipeline_layout: 4,
@@ -459,6 +465,7 @@ impl Limits {
     ///     max_texture_dimension_3d: 256, // *
     ///     max_texture_array_layers: 256,
     ///     max_bind_groups: 4,
+    ///     max_bind_groups_plus_vertex_buffers: 24,
     ///     max_bindings_per_bind_group: 1000,
     ///     max_dynamic_uniform_buffers_per_pipeline_layout: 8,
     ///     max_dynamic_storage_buffers_per_pipeline_layout: 4,
@@ -540,6 +547,7 @@ impl Limits {
     ///     max_texture_dimension_3d: 256, // *
     ///     max_texture_array_layers: 256,
     ///     max_bind_groups: 4,
+    ///     max_bind_groups_plus_vertex_buffers: 24,
     ///     max_bindings_per_bind_group: 1000,
     ///     max_dynamic_uniform_buffers_per_pipeline_layout: 8,
     ///     max_dynamic_storage_buffers_per_pipeline_layout: 0, // +
@@ -637,6 +645,7 @@ impl Limits {
             max_texture_dimension_3d: ALLOC_MAX_U32,
             max_texture_array_layers: ALLOC_MAX_U32,
             max_bind_groups: ALLOC_MAX_U32,
+            max_bind_groups_plus_vertex_buffers: ALLOC_MAX_U32,
             max_bindings_per_bind_group: ALLOC_MAX_U32,
             max_dynamic_uniform_buffers_per_pipeline_layout: ALLOC_MAX_U32,
             max_dynamic_storage_buffers_per_pipeline_layout: ALLOC_MAX_U32,

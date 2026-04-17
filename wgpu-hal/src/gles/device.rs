@@ -1439,19 +1439,24 @@ impl crate::Device for super::Device {
             let mut buffers = Vec::new();
             let mut attributes = Vec::new();
             for (index, vb_layout) in vertex_buffers.iter().enumerate() {
-                buffers.push(super::VertexBufferDesc {
-                    step: vb_layout.step_mode,
-                    stride: vb_layout.array_stride as u32,
-                });
-                for vat in vb_layout.attributes.iter() {
-                    let format_desc = conv::describe_vertex_format(vat.format);
-                    attributes.push(super::AttributeDesc {
-                        location: vat.shader_location,
-                        offset: vat.offset as u32,
-                        buffer_index: index as u32,
-                        format_desc,
-                    });
-                }
+                let vb_desc = if let Some(vb_layout) = vb_layout {
+                    for vat in vb_layout.attributes.iter() {
+                        let format_desc = conv::describe_vertex_format(vat.format);
+                        attributes.push(super::AttributeDesc {
+                            location: vat.shader_location,
+                            offset: vat.offset as u32,
+                            buffer_index: index as u32,
+                            format_desc,
+                        });
+                    }
+                    Some(super::VertexBufferDesc {
+                        step: vb_layout.step_mode,
+                        stride: vb_layout.array_stride as u32,
+                    })
+                } else {
+                    None
+                };
+                buffers.push(vb_desc);
             }
             (buffers.into_boxed_slice(), attributes.into_boxed_slice())
         };

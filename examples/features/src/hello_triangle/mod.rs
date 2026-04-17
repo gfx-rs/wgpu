@@ -300,7 +300,7 @@ impl ApplicationHandler<TriangleAction> for App {
                 if let Some(window) = &self.window {
                     window.pre_present_notify();
                 }
-                frame.present();
+                wgpu_state.queue.present(frame);
             }
             WindowEvent::Occluded(is_occluded) => {
                 if !is_occluded {

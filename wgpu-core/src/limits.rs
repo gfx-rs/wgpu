@@ -291,7 +291,7 @@ const UPLEVEL: Bucket = Bucket {
     name: "uplevel-defaults",
     limits: Limits {
         max_bind_groups: 8,
-        // wgpu does not implement max_bind_groups_plus_vertex_buffers
+        // use default max_bind_groups_plus_vertex_buffers
         // use default max_bindings_per_bind_group
         max_buffer_size: 1 << 30, // 1 GB
         max_color_attachment_bytes_per_sample: 64,
@@ -345,7 +345,7 @@ const UPLEVEL: Bucket = Bucket {
         .union(Features::RG11B10UFLOAT_RENDERABLE)
         .union(Features::BGRA8UNORM_STORAGE)
         .union(Features::FLOAT32_FILTERABLE)
-        // FLOAT32_BLENDABLE not implemented in wgpu dx12 backend; https://github.com/gfx-rs/wgpu/issues/6555
+        .union(Features::FLOAT32_BLENDABLE)
         // CLIP_DISTANCES not implemented in wgpu dx12 backend; https://github.com/gfx-rs/wgpu/issues/6236
         .union(Features::DUAL_SOURCE_BLENDING)
         // TIER1/TIER2 not implemented in wgpu; https://github.com/gfx-rs/wgpu/issues/8122
@@ -376,7 +376,6 @@ const BUCKET_M1: Bucket = Bucket {
         .union(Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D)
         .union(Features::TEXTURE_COMPRESSION_ETC2)
         .union(Features::SHADER_F16)
-        .union(Features::FLOAT32_BLENDABLE)
         .union(Features::CLIP_DISTANCES),
 };
 
