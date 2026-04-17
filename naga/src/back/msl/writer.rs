@@ -5673,10 +5673,20 @@ template <typename A>
 
                 writeln!(self.out, "{type_name} {NEG_FUNCTION}({type_name} val) {{")?;
                 let level = back::Level(1);
-                writeln!(
-                    self.out,
-                    "{level}return as_type<{type_name}>(static_cast<{unsigned_type_name}>(-as_type<{unsigned_type_name}>(val)));"
-                )?;
+                // For sub-32-bit types, C++ integer promotion widens
+                // `-as_type<ushort>(val)` to `int`, so we need static_cast
+                // to truncate back before the outer as_type bitcast.
+                if scalar.width < 4 {
+                    writeln!(
+                        self.out,
+                        "{level}return as_type<{type_name}>(static_cast<{unsigned_type_name}>(-as_type<{unsigned_type_name}>(val)));"
+                    )?;
+                } else {
+                    writeln!(
+                        self.out,
+                        "{level}return as_type<{type_name}>(-as_type<{unsigned_type_name}>(val));"
+                    )?;
+                }
                 writeln!(self.out, "}}")?;
                 writeln!(self.out)?;
             }
@@ -5942,7 +5952,14 @@ template <typename A>
                 } else {
                     "0".to_string()
                 };
-                writeln!(self.out, "{level}return metal::select(as_type<{type_name}>(static_cast<{unsigned_type_name}>(-as_type<{unsigned_type_name}>(val))), val, val >= {zero});")?;
+                let neg_expr = if scalar.width < 4 {
+                    format!(
+                        "static_cast<{unsigned_type_name}>(-as_type<{unsigned_type_name}>(val))"
+                    )
+                } else {
+                    format!("-as_type<{unsigned_type_name}>(val)")
+                };
+                writeln!(self.out, "{level}return metal::select(as_type<{type_name}>({neg_expr}), val, val >= {zero});")?;
                 writeln!(self.out, "}}")?;
                 writeln!(self.out)?;
             }

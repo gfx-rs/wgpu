@@ -40,7 +40,7 @@ long naga_f2i64(float value) {
 }
 
 long naga_abs(long val) {
-    return metal::select(as_type<long>(static_cast<ulong>(-as_type<ulong>(val))), val, val >= 0);
+    return metal::select(as_type<long>(-as_type<ulong>(val)), val, val >= 0);
 }
 
 long naga_dot_long2(metal::long2 a, metal::long2 b) {

@@ -149,7 +149,7 @@ void logical(
 }
 
 metal::int2 naga_neg(metal::int2 val) {
-    return as_type<metal::int2>(static_cast<metal::uint2>(-as_type<metal::uint2>(val)));
+    return as_type<metal::int2>(-as_type<metal::uint2>(val));
 }
 
 int naga_div(int lhs, int rhs) {
@@ -384,7 +384,7 @@ void assignment(
 }
 
 int naga_neg(int val) {
-    return as_type<int>(static_cast<uint>(-as_type<uint>(val)));
+    return as_type<int>(-as_type<uint>(val));
 }
 
 void negation_avoids_prefix_decrement(
