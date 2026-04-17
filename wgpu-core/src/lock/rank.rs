@@ -136,11 +136,6 @@ define_lock_ranks! {
         // Uncomment this to see an interesting cycle.
         // COMMAND_BUFFER_DATA,
     }
-    rank BUFFER_MAP_STATE "Buffer::map_state" followed by {
-        QUEUE_PENDING_WRITES,
-        DEVICE_TRACE,
-        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
-    }
     rank DEVICE_FENCE "Device::fence" followed by {
         DEVICE_COMMAND_INDICES,
         QUEUE_LIFE_TRACKER,
@@ -154,6 +149,10 @@ define_lock_ranks! {
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
     rank QUEUE_PENDING_WRITES "Queue::pending_writes" followed by {
+        BUFFER_MAP_STATE,
+        DEVICE_TRACKERS,
+        COMMAND_ALLOCATOR_FREE_ENCODERS,
+        BUFFER_INITIALIZATION_STATUS,
         TEXTURE_INITIALIZATION_STATUS,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
@@ -164,8 +163,15 @@ define_lock_ranks! {
         TEXTURE_CLEAR_MODE,
     }
     rank QUEUE_LIFE_TRACKER "Queue::life_tracker" followed by {
+        BUFFER_MAP_STATE,
+        BUFFER_INITIALIZATION_STATUS,
+        BUFFER_POOL,
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         DEVICE_DEFERRED_DESTROY,
+        DEVICE_TRACE,
+        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
+    }
+    rank BUFFER_MAP_STATE "Buffer::map_state" followed by {
         DEVICE_TRACE,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }

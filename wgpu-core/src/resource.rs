@@ -887,7 +887,8 @@ impl Buffer {
         let device = &self.device;
         let snatch_guard = device.snatchable_lock.read();
         let raw_buf = self.try_raw(&snatch_guard)?;
-        match mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle) {
+        let map_state = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
+        match map_state {
             BufferMapState::Init { staging_buffer } => {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
