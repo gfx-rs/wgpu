@@ -96,7 +96,7 @@ macro_rules! with_limits {
 ///
 /// We provide three different defaults.
 /// - [`Limits::downlevel_defaults()`]. This is a set of limits that is guaranteed to work on almost
-///   all backends, including "downlevel" backends such as OpenGL, other than WebGL. For
+///   all backends, including the "downlevel" OpenGL backend, but excluding WebGL2. For
 ///   most applications we recommend using these limits, assuming they are high enough for your
 ///   application, and you do not intend to support WebGL.
 /// - [`Limits::downlevel_webgl2_defaults()`] This is a set of limits that is lower even than the
