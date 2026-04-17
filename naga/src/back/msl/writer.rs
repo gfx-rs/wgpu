@@ -5736,6 +5736,14 @@ template <typename A>
                     "{type_name} {DIV_FUNCTION}({type_name} lhs, {type_name} rhs) {{"
                 )?;
                 let level = back::Level(1);
+                // Sub-32-bit types need typed literal wrappers (e.g. `short(1)`)
+                // to avoid ambiguous metal::select overloads. For >= 32-bit,
+                // bare literals like `1`, `-1`, `0` are unambiguous.
+                let (lp, rp) = if scalar.width < 4 {
+                    (format!("{type_name}("), ")".to_string())
+                } else {
+                    (String::new(), String::new())
+                };
                 match scalar.kind {
                     crate::ScalarKind::Sint => {
                         let min_val = match scalar.width {
@@ -5750,14 +5758,14 @@ template <typename A>
                         };
                         write!(
                             self.out,
-                            "{level}return lhs / metal::select(rhs, {type_name}(1), (lhs == "
+                            "{level}return lhs / metal::select(rhs, {lp}1{rp}, (lhs == "
                         )?;
                         self.put_literal(min_val)?;
-                        writeln!(self.out, " & rhs == {type_name}(-1)) | (rhs == {type_name}(0)));")?
+                        writeln!(self.out, " & rhs == {lp}-1{rp}) | (rhs == {lp}0{rp}));")?
                     }
                     crate::ScalarKind::Uint => writeln!(
                         self.out,
-                        "{level}return lhs / metal::select(rhs, {type_name}(1), rhs == {type_name}(0));"
+                        "{level}return lhs / metal::select(rhs, {lp}1{rp}, rhs == {lp}0{rp});"
                     )?,
                     _ => unreachable!(),
                 }
@@ -5815,6 +5823,11 @@ template <typename A>
                     "{type_name} {MOD_FUNCTION}({type_name} lhs, {type_name} rhs) {{"
                 )?;
                 let level = back::Level(1);
+                let (lp, rp) = if scalar.width < 4 {
+                    (format!("{type_name}("), ")".to_string())
+                } else {
+                    (String::new(), String::new())
+                };
                 match scalar.kind {
                     crate::ScalarKind::Sint => {
                         let min_val = match scalar.width {
@@ -5829,15 +5842,15 @@ template <typename A>
                         };
                         write!(
                             self.out,
-                            "{level}{rhs_type_name} divisor = metal::select(rhs, {type_name}(1), (lhs == "
+                            "{level}{rhs_type_name} divisor = metal::select(rhs, {lp}1{rp}, (lhs == "
                         )?;
                         self.put_literal(min_val)?;
-                        writeln!(self.out, " & rhs == {type_name}(-1)) | (rhs == {type_name}(0)));")?;
+                        writeln!(self.out, " & rhs == {lp}-1{rp}) | (rhs == {lp}0{rp}));")?;
                         writeln!(self.out, "{level}return lhs - (lhs / divisor) * divisor;")?
                     }
                     crate::ScalarKind::Uint => writeln!(
                         self.out,
-                        "{level}return lhs % metal::select(rhs, {type_name}(1), rhs == {type_name}(0));"
+                        "{level}return lhs % metal::select(rhs, {lp}1{rp}, rhs == {lp}0{rp});"
                     )?,
                     _ => unreachable!(),
                 }
@@ -5918,7 +5931,8 @@ template <typename A>
 
                 writeln!(self.out, "{type_name} {ABS_FUNCTION}({type_name} val) {{")?;
                 let level = back::Level(1);
-                writeln!(self.out, "{level}return metal::select(as_type<{type_name}>(static_cast<{unsigned_type_name}>(-as_type<{unsigned_type_name}>(val))), val, val >= {type_name}(0));")?;
+                let zero = if scalar.width < 4 { format!("{type_name}(0)") } else { "0".to_string() };
+                writeln!(self.out, "{level}return metal::select(as_type<{type_name}>(static_cast<{unsigned_type_name}>(-as_type<{unsigned_type_name}>(val))), val, val >= {zero});")?;
                 writeln!(self.out, "}}")?;
                 writeln!(self.out)?;
             }
