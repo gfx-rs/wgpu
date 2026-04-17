@@ -907,7 +907,7 @@ impl Dx12UseFrameLatencyWaitableObject {
 
 /// Selects which OpenGL ES 3 minor version to request.
 ///
-/// When using ANGLE as an OpenGL ES/EGL implementation, explicitly requesting `Version1` can provide a non-conformant ES 3.1 on APIs like D3D11.
+/// When using ANGLE as an OpenGL ES/EGL implementation, explicitly requesting `Version1` can provide a non-conformant ES 3.1.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub enum Gles3MinorVersion {
     /// No explicit minor version is requested, the driver automatically picks the highest available.
