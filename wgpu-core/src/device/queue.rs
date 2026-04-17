@@ -220,7 +220,7 @@ impl Queue {
         };
 
         self.submit_with_pending_writes(
-            &mut pending_writes,
+            pending_writes,
             Vec::new(),
             surface_textures,
             fence.as_mut(),
@@ -1435,10 +1435,10 @@ impl Queue {
                 }
             }
 
-            let mut pending_writes = self.pending_writes.lock();
+            let pending_writes = self.pending_writes.lock();
 
             if let Err(e) = self.submit_with_pending_writes(
-                &mut pending_writes,
+                pending_writes,
                 active_executions,
                 submit_surface_textures_owned,
                 fence.as_mut(),
@@ -1449,8 +1449,6 @@ impl Queue {
             }
 
             drop(command_index_guard);
-
-            drop(pending_writes);
 
             profiling::scope!("cleanup");
 
@@ -1497,7 +1495,7 @@ impl Queue {
     /// Advances `last_successful_submission_index` and registers the submission with the lifetime tracker.
     fn submit_with_pending_writes(
         &self,
-        pending_writes: &mut PendingWrites,
+        mut pending_writes: MutexGuard<'_, PendingWrites>,
         mut active_executions: Vec<EncoderInFlight>,
         mut surface_textures: FastHashMap<*const Texture, Arc<Texture>>,
         fence: &mut dyn hal::DynFence,
@@ -1578,6 +1576,9 @@ impl Queue {
                 .last_successful_submission_index
                 .fetch_max(submit_index, Ordering::SeqCst);
         }
+
+        drop(pending_writes);
+
         // this will register the new submission to the life time tracker
         self.lock_life()
             .track_submission(submit_index, active_executions);
