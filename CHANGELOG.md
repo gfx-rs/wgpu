@@ -153,6 +153,7 @@ By @andyleiserson in [#9321](https://github.com/gfx-rs/wgpu/pull/9321).
 #### naga
 
 - Switched from using an `intersector` to using an `intersection_query` on metal so AABBs and non-opaque triangles can be handled. By @Vecvec in [#9304](https://github.com/gfx-rs/wgpu/pull/9304).
+- Guard against invalid calls to ray query functions on Metal. By @Vecvec in [#9442](https://github.com/gfx-rs/wgpu/pull/9442).
 
 ### Bug Fixes
 
