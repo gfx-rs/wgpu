@@ -591,9 +591,48 @@ impl Buffer {
         ))
     }
 
-    /// Returns the mapping callback in case of error so that the callback can be fired outside
-    /// of the locks that are held in this function.
+    /// Schedule buffer mapping.
+    ///
+    /// `op.callback` is guaranteed to be called, regardless of the outcome.
     pub fn map_async(
+        self: &Arc<Self>,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferAddress>,
+        op: BufferMapOperation,
+    ) -> Result<SubmissionIndex, BufferAccessError> {
+        self.try_map_async(offset, size, op)
+            .map_err(|(mut operation, err)| {
+                if let Some(callback) = operation.callback.take() {
+                    callback(Err(err.clone()));
+                }
+                err
+            })
+    }
+
+    /// Try to schedule buffer mapping.
+    ///
+    /// The outcome of this function is one of the following:
+    /// - If there is a queue, and nothing pending in the queue that uses the
+    ///   buffer in question, the buffer is added to `Queue::ready_to_map`, and
+    ///   will be mapped the next time `Device::maintain` is called. The
+    ///   queue assumes responsibility for calling the callback, and this
+    ///   function returns `Ok(0)`, but the buffer has not yet been mapped.
+    /// - If there is a queue, and something is pending in the queue that uses
+    ///   the buffer in question, the buffer is scheduled for mapping after that
+    ///   submission completes. The queue assumes responsibility for calling the
+    ///   callback, and this function returns `Ok(index)` with the index of the
+    ///   submission that must complete. The buffer has not yet been mapped.
+    /// - If there is no queue, the buffer is mapped and the callback is called
+    ///   immediately. The return value is `Ok(0)`.
+    /// - Regardless of the queue state, if there is an error that terminates
+    ///   the buffer mapping attempt, this function returns the callback along
+    ///   with the error, and the caller is responsible for calling the
+    ///   callback.
+    ///
+    /// A return value of `Ok(0)` roughly means that no wait is necessary,
+    /// but it does not necessarily mean that the buffer has already been
+    /// mapped.
+    fn try_map_async(
         self: &Arc<Self>,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
