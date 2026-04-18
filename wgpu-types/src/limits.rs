@@ -96,7 +96,7 @@ macro_rules! with_limits {
 ///
 /// We provide three different defaults.
 /// - [`Limits::downlevel_defaults()`]. This is a set of limits that is guaranteed to work on almost
-///   all backends, including "downlevel" backends such as OpenGL and D3D11, other than WebGL. For
+///   all backends, including the "downlevel" OpenGL backend, but excluding WebGL2. For
 ///   most applications we recommend using these limits, assuming they are high enough for your
 ///   application, and you do not intend to support WebGL.
 /// - [`Limits::downlevel_webgl2_defaults()`] This is a set of limits that is lower even than the
@@ -454,7 +454,7 @@ impl Limits {
         }
     }
 
-    /// These default limits are guaranteed to be compatible with GLES-3.1, and D3D11
+    /// These default limits are guaranteed to be compatible with GLES-3.1.
     ///
     /// Those limits are as follows (different from default are marked with *):
     /// ```rust
@@ -535,7 +535,7 @@ impl Limits {
         }
     }
 
-    /// These default limits are guaranteed to be compatible with GLES-3.0, and D3D11, and WebGL2
+    /// These default limits are guaranteed to be compatible with GLES-3.0 and WebGL2
     ///
     /// Those limits are as follows (different from `downlevel_defaults` are marked with +,
     /// *'s from `downlevel_defaults` shown as well.):

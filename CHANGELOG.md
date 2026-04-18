@@ -62,6 +62,29 @@ This allows gaps in `VertexState`'s `buffers` and adds support for unbinding ver
 
 By @teoxoy in [#9351](https://github.com/gfx-rs/wgpu/pull/9351).
 
+#### Integer shader I/O no longer defaults to `@interpolate(flat)`
+
+To align with shading language specifications, `naga` no longer assumes that integer-typed shader I/O should have `flat` interpolation, i.e., should not be interpolated. Even though flat interpolation is the only choice for integer I/O, it must be still specified explicitly.
+
+WGSL:
+
+```diff
+ struct FragmentInput {
+     @location(0) tex_coord: vec2<f32>,
+-    @location(1) index: i32,
++    @location(1) @interpolate(flat) index: i32,
+ }
+```
+
+GLSL:
+
+```diff
+-layout(location = 1) in int index;
++layout(location = 1) flat in int index;
+```
+
+By @andyleiserson in [#9321](https://github.com/gfx-rs/wgpu/pull/9321).
+
 ### Added/New Features
 
 #### General

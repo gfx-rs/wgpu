@@ -23,7 +23,7 @@ var samp_comp: binding_array<sampler_comparison, 5>;
 var<uniform> uni: UniformIndex;
 
 struct FragmentIn {
-    @location(0) index: u32,
+    @location(0) @interpolate(flat) index: u32,
 };
 
 @fragment
