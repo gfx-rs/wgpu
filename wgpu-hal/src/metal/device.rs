@@ -563,6 +563,37 @@ impl crate::Device for super::Device {
         self.counters.textures.add(1);
     }
 
+    unsafe fn map_texture(
+        &self,
+        texture: &<Self::A as crate::Api>::Texture,
+    ) -> Result<(), crate::DeviceError> {
+        Ok(())
+    }
+
+    unsafe fn unmap_texture(&self, texture: &<Self::A as crate::Api>::Texture) {}
+
+    unsafe fn copy_memory_to_texture<T>(
+        &mut self,
+        src: &[u8],
+        dst: &<Self::A as crate::Api>::Texture,
+        regions: T,
+    ) where
+        T: Iterator<Item = crate::HostTextureCopy>,
+    {
+        todo!()
+    }
+
+    unsafe fn copy_texture_to_memory<T>(
+        &mut self,
+        src: &<Self::A as crate::Api>::Texture,
+        dst: &mut [u8],
+        regions: T,
+    ) where
+        T: Iterator<Item = crate::HostTextureCopy>,
+    {
+        todo!()
+    }
+
     unsafe fn create_texture_view(
         &self,
         texture: &super::Texture,
