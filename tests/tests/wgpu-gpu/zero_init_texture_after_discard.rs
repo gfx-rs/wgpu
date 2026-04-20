@@ -142,6 +142,7 @@ impl<'ctx> TestCase<'ctx> {
                 | TextureUsages::RENDER_ATTACHMENT
                 | extra_usages,
             view_formats: &[],
+            mapped_at_creation: false,
         });
 
         // Clear using a write_texture operation. We could also clear using a render_pass clear.

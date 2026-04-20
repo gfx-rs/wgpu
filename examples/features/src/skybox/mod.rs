@@ -83,6 +83,7 @@ impl Example {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT,
             label: None,
             view_formats: &[],
+            mapped_at_creation: false,
         });
 
         depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
@@ -332,6 +333,7 @@ impl crate::framework::Example for Example {
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 label: None,
                 view_formats: &[],
+                mapped_at_creation: false,
             },
             // KTX2 stores mip levels in mip major order.
             wgpu::util::TextureDataOrder::MipMajor,

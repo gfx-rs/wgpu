@@ -261,6 +261,7 @@ impl crate::framework::Example for Example {
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                mapped_at_creation: false,
             });
             queue.write_texture(
                 texture.as_image_copy(),

@@ -25,6 +25,7 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new()
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            mapped_at_creation: false,
         });
         let t2 = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -39,6 +40,7 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new()
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            mapped_at_creation: false,
         });
 
         fail(

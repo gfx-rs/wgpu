@@ -248,6 +248,7 @@ impl crate::framework::Example for Example {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            mapped_at_creation: false,
         });
 
         let sampler = device.create_sampler(&SamplerDescriptor {

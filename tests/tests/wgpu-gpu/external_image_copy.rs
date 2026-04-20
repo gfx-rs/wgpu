@@ -262,6 +262,7 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                         | wgpu::TextureUsages::COPY_DST
                         | wgpu::TextureUsages::COPY_SRC,
                     view_formats: &[],
+                    mapped_at_creation: false,
                 });
 
                 fail_if(

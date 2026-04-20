@@ -42,6 +42,7 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
             format: wgpu::TextureFormat::Bgra8Unorm,
             usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            mapped_at_creation: false,
         });
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor {

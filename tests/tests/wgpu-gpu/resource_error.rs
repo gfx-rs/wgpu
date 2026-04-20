@@ -57,6 +57,7 @@ static BAD_TEXTURE: GpuTestConfiguration = GpuTestConfiguration::new()
                     format: wgpu::TextureFormat::Rgba8UnormSrgb,
                     usage: wgpu::TextureUsages::all(),
                     view_formats: &[],
+                    mapped_at_creation: false,
                 })
             },
             Some("dimension x is zero"),

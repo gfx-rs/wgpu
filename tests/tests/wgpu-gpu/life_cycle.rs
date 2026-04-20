@@ -105,6 +105,7 @@ static TEXTURE_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
             format: wgpu::TextureFormat::Rgba8Snorm,
             usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            mapped_at_creation: false,
         });
 
         texture.destroy();
@@ -184,6 +185,7 @@ static TEXTURE_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguratio
                 | wgpu::TextureUsages::COPY_SRC
                 | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            mapped_at_creation: false,
         };
 
         let texture_1 = ctx.device.create_texture(&descriptor);

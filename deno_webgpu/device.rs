@@ -227,6 +227,7 @@ impl GPUDevice {
         .into_iter()
         .map(Into::into)
         .collect(),
+      mapped_at_creation: false,
     };
 
     let (id, err) =
