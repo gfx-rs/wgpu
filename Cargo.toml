@@ -141,7 +141,7 @@ indexmap = { version = "2.11.4", default-features = false }
 indicatif = "0.18"
 itertools = { version = "0.14" }
 jobserver = "0.1"
-ktx2 = "0.4"
+ktx2 = "0.5"
 libc = { version = "0.2.172", default-features = false }
 # See https://github.com/rust-fuzz/libfuzzer/issues/126
 libfuzzer-sys = ">0.4.0,<=0.4.7"
