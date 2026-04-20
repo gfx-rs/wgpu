@@ -300,6 +300,8 @@ impl crate::CommandEncoder for CommandBuffer {
         dependencies: &[&Resource],
     ) {
     }
+
+    unsafe fn pre_texture_map(&mut self, texture: &<Self::A as crate::Api>::Texture) {}
 }
 
 impl Command {

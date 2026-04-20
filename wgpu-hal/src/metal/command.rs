@@ -8,8 +8,8 @@ use objc2_metal::{
     MTLBlitPassDescriptor, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandEncoder,
     MTLCommandQueue, MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLCounterDontSample,
     MTLDevice, MTLLoadAction, MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor,
-    MTLResidencySet, MTLResidencySetDescriptor, MTLSamplerState, MTLScissorRect, MTLSize,
-    MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping, MTLViewport,
+    MTLResidencySet, MTLResidencySetDescriptor, MTLResource, MTLSamplerState, MTLScissorRect,
+    MTLSize, MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping, MTLViewport,
     MTLVisibilityResultMode,
 };
 
@@ -1882,6 +1882,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
             residency_set.addAllocation(ProtocolObject::from_ref(&*dependency.raw));
         }
         residency_set.commit();
+    }
+
+    unsafe fn pre_texture_map(&mut self, texture: &<Self::A as crate::Api>::Texture) {
+        let encoder = self.enter_blit();
+        let texture_as_resource: &ProtocolObject<dyn MTLResource> =
+            ProtocolObject::from_ref(texture.raw_handle());
+        encoder.synchronizeResource(texture_as_resource);
     }
 }
 

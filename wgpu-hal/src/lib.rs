@@ -1788,6 +1788,8 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         command_buffers: &[&<Self::A as Api>::CommandBuffer],
         dependencies: &[&<Self::A as Api>::AccelerationStructure],
     );
+    /// Used by metal to flush GPU writes to the CPU. This won't be called for textures mapped at creation.
+    unsafe fn pre_texture_map(&mut self, texture: &<Self::A as Api>::Texture);
 }
 
 bitflags!(

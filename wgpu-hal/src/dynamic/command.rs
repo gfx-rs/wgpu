@@ -218,6 +218,7 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         command_buffers: &[Box<dyn DynCommandBuffer>],
         dependencies: &[&dyn DynAccelerationStructure],
     );
+    unsafe fn pre_texture_map(&mut self, texture: &dyn DynTexture);
 }
 
 impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
@@ -723,6 +724,11 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
             .map(|dependency| dependency.expect_downcast_ref())
             .collect();
         unsafe { C::set_acceleration_structure_dependencies(&command_buffers, &dependencies) }
+    }
+
+    unsafe fn pre_texture_map(&mut self, texture: &dyn DynTexture) {
+        let texture = texture.expect_downcast_ref();
+        unsafe { C::pre_texture_map(self, texture) }
     }
 }
 

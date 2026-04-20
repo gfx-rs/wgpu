@@ -264,7 +264,7 @@ impl<D: Device + DynResource> DynDevice for D {
         regions: &[HostTextureCopy],
     ) {
         let src = src.expect_downcast_ref();
-        unsafe { D::copy_texture_to_memory(self, src, dst, regions.into_iter().cloned()) };
+        unsafe { D::copy_texture_to_memory(self, src, dst, regions.iter().cloned()) };
     }
 
     unsafe fn copy_memory_to_texture(
@@ -274,7 +274,7 @@ impl<D: Device + DynResource> DynDevice for D {
         regions: &[HostTextureCopy],
     ) {
         let dst = dst.expect_downcast_ref();
-        unsafe { D::copy_memory_to_texture(self, src, dst, regions.into_iter().cloned()) };
+        unsafe { D::copy_memory_to_texture(self, src, dst, regions.iter().cloned()) };
     }
 
     unsafe fn create_texture_view(

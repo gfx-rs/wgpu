@@ -1317,4 +1317,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) {
         unimplemented!()
     }
+
+    unsafe fn pre_texture_map(&mut self, _texture: &<Self::A as crate::Api>::Texture) {
+        unreachable!()
+    }
 }
