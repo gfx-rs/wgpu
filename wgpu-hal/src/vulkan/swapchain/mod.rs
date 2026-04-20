@@ -32,7 +32,7 @@ pub(super) trait Surface: Send + Sync + 'static {
 pub(super) trait Swapchain: Send + Sync + 'static {
     /// Releases all resources associated with the swapchain, without
     /// destroying the swapchain itself. Must be called before calling
-    /// either [`Surface::create_swapchain`] or [`Swapchain::delete_swapchain`].
+    /// either [`Surface::create_swapchain`] or dropping the swapchain.
     ///
     /// The swapchain must not be in use when this is called.
     unsafe fn release_resources(&mut self, device: &super::Device);
