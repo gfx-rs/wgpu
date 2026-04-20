@@ -34,13 +34,15 @@ impl NativeSurface {
     }
 }
 
-impl Surface for NativeSurface {
-    unsafe fn delete_surface(self: Box<Self>) {
+impl Drop for NativeSurface {
+    fn drop(&mut self) {
         unsafe {
             self.functor.destroy_surface(self.raw, None);
         }
     }
+}
 
+impl Surface for NativeSurface {
     fn surface_capabilities(
         &self,
         adapter: &crate::vulkan::Adapter,
@@ -336,6 +338,14 @@ pub(crate) struct NativeSwapchain {
     next_present_time: Option<vk::PresentTimeGOOGLE>,
 }
 
+impl Drop for NativeSwapchain {
+    fn drop(&mut self) {
+        unsafe {
+            self.functor.destroy_swapchain(self.raw, None);
+        }
+    }
+}
+
 impl Swapchain for NativeSwapchain {
     unsafe fn release_resources(&mut self, device: &crate::vulkan::Device) {
         profiling::scope!("Swapchain::release_resources");
@@ -372,10 +382,6 @@ impl Swapchain for NativeSwapchain {
 
             unsafe { mutex_removed.destroy(&device.shared.raw) };
         }
-    }
-
-    unsafe fn delete_swapchain(self: Box<Self>) {
-        unsafe { self.functor.destroy_swapchain(self.raw, None) };
     }
 
     unsafe fn acquire(

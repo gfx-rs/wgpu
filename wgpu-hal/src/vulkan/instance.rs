@@ -2,7 +2,6 @@ use alloc::{borrow::ToOwned as _, boxed::Box, ffi::CString, string::String, sync
 use core::{
     ffi::{c_void, CStr},
     marker::PhantomData,
-    mem::ManuallyDrop,
     slice,
     str::FromStr,
 };
@@ -550,8 +549,8 @@ impl super::Instance {
             crate::vulkan::swapchain::NativeSurface::from_vk_surface_khr(self, surface);
 
         super::Surface {
-            inner: ManuallyDrop::new(Box::new(native_surface)),
             swapchain: RwLock::new(None),
+            inner: Box::new(native_surface),
         }
     }
 
@@ -988,12 +987,6 @@ impl crate::Instance for super::Instance {
     }
 }
 
-impl Drop for super::Surface {
-    fn drop(&mut self) {
-        unsafe { ManuallyDrop::take(&mut self.inner).delete_surface() };
-    }
-}
-
 impl crate::Surface for super::Surface {
     type A = super::Api;
 
@@ -1020,7 +1013,6 @@ impl crate::Surface for super::Surface {
         if let Some(mut sc) = self.swapchain.write().take() {
             // SAFETY: `unconfigure`'s contract guarantees there are no resources derived from the swapchain in use.
             unsafe { sc.release_resources(device) };
-            unsafe { sc.delete_swapchain() };
         }
     }
 
