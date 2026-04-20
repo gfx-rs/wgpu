@@ -37,7 +37,7 @@
         CreatePipelineLayout(PointerId(0x10), (
             label: Some("empty"),
             bind_group_layouts: [
-                PointerId(0x10),
+                Some(PointerId(0x10)),
             ],
             immediate_size: 0,
         )),
@@ -50,7 +50,7 @@
             data: File("empty.wgsl"),
         ),
         CreateComputePipeline(
-            id: PointerId(0x10),
+            id: Some(PointerId(0x10)),
             desc: (
                 label: None,
                 layout: Some(PointerId(0x10)),

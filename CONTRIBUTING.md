@@ -6,6 +6,20 @@ First of all, welcome to the wgpu community! 👋 We're glad you want to
 contribute. If you are unfamiliar with the wgpu project, we recommend you read
 [`GOVERNANCE.md`] for an overview of its goals, and how it's governed.
 
+## Table of Contents
+
+- [Documentation Overview](#documentation-overview)
+- [Talking to other humans in the wgpu project](#talking-to-other-humans-in-the-wgpu-project)
+- ["What can I work on?" as a new contributor](#what-can-i-work-on-as-a-new-contributor)
+- [Setting up a wgpu development environment](#setting-up-a-wgpu-development-environment)
+- [What to expect when you file an issue](#what-to-expect-when-you-file-an-issue)
+- [Pull requests](#pull-requests)
+  - [Change Ownership](#change-ownership)
+  - [LLMs (AI)](#llms-ai)
+  - [Designing new features](#designing-new-features)
+  - [Undue Burden](#undue-burden)
+  - [Large pull requests are risky](#large-pull-requests-are-risky)
+
 ## Documentation Overview:
 
 - [`GOVERNANCE.md`]: An overview of the wgpu project's goals and governance.
@@ -27,7 +41,6 @@ The wgpu project has multiple official platforms for community engagement:
 - The Matrix channel [`wgpu:matrix.org`](https://matrix.to/#/#wgpu:matrix.org)
   is dedicated to informal chat about contributions the project. It is
   particularly useful for:
-
   - Saying hello, and introducing yourself.
   - Validating contributions (i.e., determining if they'll be accepted,
     ensuring your approach is correct, making sure you aren't wasting effort,
@@ -45,7 +58,6 @@ The wgpu project has multiple official platforms for community engagement:
 
 - [GitHub issues] are used to discuss open development questions and track work
   the community intends to complete; this might include:
-
   - Work that needs resolution via pull requests (see below)
     - Bug reports
     - Feature requests
@@ -64,12 +76,11 @@ The wgpu project has multiple official platforms for community engagement:
   happen on Google Meet and happen on Wednesday at 11:00 US Eastern Standard
   Time and last approximately an hour. Remember to obey the
   [`CODE_OF_CONDUCT.md`] in the meeting.
-
   - [Meeting Notes]
   - [Meeting Link]
+
 - [GitHub discussions]: TODO: Experimentally used by some enthusiastic members
   of our community. Not supported officially.
-  
 
 [GitHub discussions]: https://github.com/gfx-rs/wgpu/discussions
 [GitHub issues]: https://github.com/gfx-rs/wgpu/issues
@@ -77,12 +88,6 @@ The wgpu project has multiple official platforms for community engagement:
 [Meeting Notes]: https://docs.google.com/document/d/1Z3qjy3m7eAYaTsh2n-iKxLV4Hjc6wZxgukzdQOgVH1c/edit?usp=sharing
 [Meeting Link]: https://meet.google.com/ubo-ztcw-gwf
 [`CODE_OF_CONDUCT.md`]: ./CODE_OF_CONDUCT.md
-
-## Contributing to wgpu
-
-Community response to contributions are, in general, prioritized based on their
-relevance to wgpu's mission and decision-making groups' interest (see
-[`GOVERNANCE.md`]).
 
 ### "What can I work on?" as a new contributor
 
@@ -151,14 +156,28 @@ TODO
 You can see some common things that PR reviewers are going to look for in
 [`docs/review-checklist.md`].
 
-A draft pull request is taken to be not yet ready for review. Marking
-drafts as such helps the maintainers triage review work.
+A draft pull request is taken to be not yet ready for review and as such
+is not included in our weekly triage meetings. If you need a review before
+being taken out of draft, please let one of us know.
 
 The `Assigned` field on a pull request indicates who has taken
 responsibility for shepherding it through the review process, not who
 is responsible for authoring it. The assignee is usually the reviewer,
 but they can also delegate the review to someone else. The intent of
 assignment is simply to ensure that pull requests don't get neglected.
+
+#### Change Ownership
+
+PR authors must be able to understand, justify, and explain all proposed
+changes. After a PR is accepted, both the reviewer and author must
+understand it as a positive change to the codebase.
+
+#### LLMs (AI)
+
+Using LLMs and AIs to generate code that is part of a contribution is allowed.
+However, the author submitting the PR must fully adhere to [Change Ownership](#change-ownership) rules.
+The author is responsible for the code, regardless of how it was created.
+Do not use "LLM generated" as a justification for low quality code.
 
 #### Designing new features
 
@@ -174,6 +193,12 @@ maintainership before you invest yourself too heavily. Try to build a
 consensus on the approach, including API changes, shader language
 extensions, implementation architecture, error handling, testing
 plans, benchmarking, and so on.
+
+#### Undue Burden
+
+We reserve the right to close any PRs that cause an undue burden on
+the maintainership. This could include, but is not limited to, [massive PRs](#large-pull-requests-are-risky),
+[LLM slop](#llms-ai), or contributions not in good faith.
 
 #### Large pull requests are risky
 
@@ -202,12 +227,12 @@ These problems are serious enough that maintainers may choose to
 reject large, complex pull requests, regardless of the value of the
 feature or the technical merit of the code.
 
-The problem isn't really the *size* of the pull request: a simple
+The problem isn't really the _size_ of the pull request: a simple
 rename, with no changes to functionality, might touch hundreds of
 files, but be easy to review. Or, a change to naga might affect dozens
 of snapshot test output files, without being hard to understand.
 
-Rather, the problem is the *complexity* of the pull request: how many
+Rather, the problem is the _complexity_ of the pull request: how many
 moving pieces does the reviewer need to assess at once? In our
 experience, almost every large change can be pared down by separating
 out:
@@ -218,7 +243,6 @@ out:
 - Helpers and utilities that can be used elsewhere in the code base,
   even if they don't show their full value until the whole thing is
   merged.
-  
 - Renames and code motion with no semantic effect, like changes to
   types or behavior. When putting these in a separate pull request
   would be awkward, they should at least be segregated into their own

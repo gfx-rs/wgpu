@@ -267,8 +267,9 @@ impl crate::CommandEncoder for CommandBuffer {
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &Resource) {}
 
-    unsafe fn dispatch(&mut self, count: [u32; 3]) {}
-    unsafe fn dispatch_indirect(&mut self, buffer: &Buffer, offset: wgt::BufferAddress) {}
+    unsafe fn dispatch_workgroups(&mut self, count: [u32; 3]) {}
+    unsafe fn dispatch_workgroups_indirect(&mut self, buffer: &Buffer, offset: wgt::BufferAddress) {
+    }
 
     unsafe fn build_acceleration_structures<'a, T>(
         &mut self,
@@ -291,6 +292,12 @@ impl crate::CommandEncoder for CommandBuffer {
         src: &Resource,
         dst: &Resource,
         copy: wgt::AccelerationStructureCopy,
+    ) {
+    }
+
+    unsafe fn set_acceleration_structure_dependencies(
+        command_buffers: &[&CommandBuffer],
+        dependencies: &[&Resource],
     ) {
     }
 }

@@ -242,7 +242,7 @@ async fn assert_compute_pass_executed_normally(
         .await
         .unwrap();
 
-    let data = cpu_buffer.slice(..).get_mapped_range();
+    let data = cpu_buffer.slice(..).get_mapped_range().unwrap();
 
     let floats: &[f32] = bytemuck::cast_slice(&data);
     assert_eq!(floats, [2.0, 4.0, 6.0, 8.0]);
@@ -322,7 +322,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
         .device
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline_layout"),
-            bind_group_layouts: &[&bgl],
+            bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
         });
 

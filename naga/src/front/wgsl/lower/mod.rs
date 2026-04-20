@@ -901,8 +901,15 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     ) -> Result<'source, Handle<ir::Expression>> {
         match expr {
             Typed::Reference(pointer) => {
-                let load = ir::Expression::Load { pointer };
                 let span = self.get_expression_span(pointer);
+
+                // Reject direct access to atomic variables that does not go
+                // through a built-in function.
+                if resolve_inner!(self, pointer).is_atomic_pointer(&self.module.types) {
+                    return Err(Box::new(Error::InvalidAtomicAccess(span)));
+                }
+
+                let load = ir::Expression::Load { pointer };
                 self.append_expression(load, span)
             }
             Typed::Plain(handle) => Ok(handle),
@@ -1348,6 +1355,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             binding,
                             ty,
                             init: initializer,
+                            memory_decorations: v.memory_decorations,
                         },
                         span,
                     );
@@ -1811,13 +1819,27 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let mut ectx = ctx.as_expression(block, &mut emitter);
 
-                    let (_ty, initializer) = self.type_and_init(
+                    let (ty, initializer) = self.type_and_init(
                         l.name,
                         Some(l.init),
                         explicit_ty,
                         AbstractRule::Concretize,
                         &mut ectx,
                     )?;
+
+                    // We have this special check here for `let` declarations because the
+                    // validator doesn't check them (they are comingled with other things in
+                    // `named_expressions`; see <https://github.com/gfx-rs/wgpu/issues/7393>).
+                    // The check could go in `type_and_init`, but then we'd have to
+                    // distinguish whether override-sized is allowed. The error ought to use
+                    // the type's span, but `module.types.get_span(ty)` is `Span::UNDEFINED`
+                    // (see <https://github.com/gfx-rs/wgpu/issues/7951>).
+                    if ctx.module.types[ty]
+                        .inner
+                        .is_dynamically_sized(&ctx.module.types)
+                    {
+                        return Err(Box::new(Error::TypeNotConstructible(l.name.span)));
+                    }
 
                     // We passed `Some()` to `type_and_init`, so we
                     // will get a lowered initializer expression back.
@@ -2139,6 +2161,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .pointer_automatically_convertible_scalar(&ectx.module.types),
                 };
 
+                // Need to emit the LHS _before_ the RHS so that it is evaluated first.
+                let op_assign = if let Some(op) = op {
+                    Some((op, ectx.apply_load_rule(target)?))
+                } else {
+                    None
+                };
+
                 let value = self.expression_for_abstract(value, &mut ectx)?;
                 let mut value = match target_scalar {
                     Some(target_scalar) => ectx.try_automatic_conversion_for_leaf_scalar(
@@ -2149,9 +2178,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     None => value,
                 };
 
-                let value = match op {
-                    Some(op) => {
-                        let mut left = ectx.apply_load_rule(target)?;
+                let value = match op_assign {
+                    Some((op, mut left)) => {
                         ectx.binary_op_splat(op, &mut left, &mut value)?;
                         ectx.append_expression(
                             ir::Expression::Binary {
@@ -4575,6 +4603,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
             let member_size = if let Some(size_expr) = member.size {
                 let (size, span) = self.const_u32(size_expr, &mut ctx.as_const())?;
+                if let ir::TypeInner::Array {
+                    size: ir::ArraySize::Dynamic | ir::ArraySize::Pending(_),
+                    ..
+                } = ctx.module.types[ty].inner
+                {
+                    return Err(Box::new(Error::SizeAttributeRequiresFixedFootprint(span)));
+                }
                 if size < member_min_size {
                     return Err(Box::new(Error::SizeAttributeTooLow(span, member_min_size)));
                 } else {

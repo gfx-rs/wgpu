@@ -382,8 +382,7 @@ impl Swapchain for NativeSwapchain {
         &mut self,
         timeout: Option<core::time::Duration>,
         fence: &crate::vulkan::Fence,
-    ) -> Result<Option<crate::AcquiredSurfaceTexture<crate::api::Vulkan>>, crate::SurfaceError>
-    {
+    ) -> Result<crate::AcquiredSurfaceTexture<crate::api::Vulkan>, crate::SurfaceError> {
         let mut timeout_ns = match timeout {
             Some(duration) => duration.as_nanos() as u64,
             None => u64::MAX,
@@ -421,11 +420,14 @@ impl Swapchain for NativeSwapchain {
         // thus waited for `locked_swapchain_semaphores.acquire`, wait for all
         // of them to finish, thus ensuring that it's okay to pass `acquire` to
         // `vkAcquireNextImageKHR` again.
-        self.device.wait_for_fence(
+        let completed = self.device.wait_for_fence(
             fence,
             acquire_semaphore_guard.previously_used_submission_index,
             timeout_ns,
         )?;
+        if !completed {
+            return Err(crate::SurfaceError::Timeout);
+        }
 
         // will block if no image is available
         let (index, suboptimal) = match unsafe {
@@ -445,7 +447,7 @@ impl Swapchain for NativeSwapchain {
             Ok(pair) => pair,
             Err(error) => {
                 return match error {
-                    vk::Result::TIMEOUT => Ok(None),
+                    vk::Result::TIMEOUT => Err(crate::SurfaceError::Timeout),
                     vk::Result::NOT_READY | vk::Result::ERROR_OUT_OF_DATE_KHR => {
                         Err(crate::SurfaceError::Outdated)
                     }
@@ -513,10 +515,10 @@ impl Swapchain for NativeSwapchain {
                 present_semaphores: present_semaphore_arc,
             }),
         };
-        Ok(Some(crate::AcquiredSurfaceTexture {
+        Ok(crate::AcquiredSurfaceTexture {
             texture,
             suboptimal,
-        }))
+        })
     }
 
     unsafe fn discard_texture(

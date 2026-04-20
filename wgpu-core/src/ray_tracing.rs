@@ -48,19 +48,21 @@ pub enum CreateBlasError {
         "Limit `max_blas_primitive_count` is {0}, but the BLAS had a maximum of {1} primitives"
     )]
     TooManyPrimitives(u32, u32),
+    #[error("AABB geometry stride {0} is invalid (must be >= {1} and a multiple of 8)")]
+    InvalidAabbStride(BufferAddress, BufferAddress),
 }
 
 impl WebGpuError for CreateBlasError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::MissingFeatures(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
             Self::MissingIndexData
             | Self::InvalidVertexFormat(..)
             | Self::TooManyGeometries(..)
-            | Self::TooManyPrimitives(..) => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::TooManyPrimitives(..)
+            | Self::InvalidAabbStride(..) => ErrorType::Validation,
+        }
     }
 }
 
@@ -78,12 +80,11 @@ pub enum CreateTlasError {
 
 impl WebGpuError for CreateTlasError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::MissingFeatures(e) => e,
-            Self::DisallowedFlag(..) | Self::TooManyInstances(..) => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
+            Self::DisallowedFlag(..) | Self::TooManyInstances(..) => ErrorType::Validation,
+        }
     }
 }
 
@@ -109,9 +110,24 @@ pub enum BuildAccelerationStructureError {
     MissingFeatures(#[from] MissingFeatures),
 
     #[error(
-        "Buffer {0:?} size is insufficient for provided size information (size: {1}, required: {2}"
+        "Data range of {region_size} B starting at offset {offset} would overrun the size {buffer_size} of buffer {buffer_ident:?}"
     )]
-    InsufficientBufferSize(ResourceErrorIdent, u64, u64),
+    InsufficientBufferSize {
+        buffer_ident: ResourceErrorIdent,
+        offset: BufferAddress,
+        region_size: BufferAddress,
+        buffer_size: BufferAddress,
+    },
+
+    #[error(
+        "Offset {offset}, computed as {count} times {stride} B, exceeds the maximum addressable offset 2^32 - 1 within buffer {buffer_ident:?}"
+    )]
+    OffsetLimitedTo4GB {
+        buffer_ident: ResourceErrorIdent,
+        offset: BufferAddress,
+        count: BufferAddress,
+        stride: BufferAddress,
+    },
 
     #[error("Buffer {0:?} associated offset doesn't align with the index type")]
     UnalignedIndexBufferOffset(ResourceErrorIdent),
@@ -183,18 +199,33 @@ pub enum BuildAccelerationStructureError {
         "Tlas {0:?} dependent {1:?} is missing AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN"
     )]
     TlasDependentMissingVertexReturn(ResourceErrorIdent, ResourceErrorIdent),
+
+    #[error("Blas {0:?} geometry kind at creation does not match build (triangles vs AABBs)")]
+    BlasGeometryKindMismatch(ResourceErrorIdent),
+
+    #[error(
+        "Blas {0:?} build AABB primitive count is greater than creation count (creation: {1}, build: {2})"
+    )]
+    IncompatibleBlasAabbPrimitiveCount(ResourceErrorIdent, u32, u32),
+
+    #[error("Blas {0:?} AABB primitive offset must be a multiple of 8")]
+    UnalignedAabbPrimitiveOffset(ResourceErrorIdent),
+
+    #[error("Blas {0:?} AABB stride is invalid (must be >= {1} and a multiple of 8)")]
+    InvalidAabbStride(ResourceErrorIdent, BufferAddress),
 }
 
 impl WebGpuError for BuildAccelerationStructureError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::EncoderState(e) => e,
-            Self::Device(e) => e,
-            Self::InvalidResource(e) => e,
-            Self::DestroyedResource(e) => e,
-            Self::MissingBufferUsage(e) => e,
-            Self::MissingFeatures(e) => e,
-            Self::InsufficientBufferSize(..)
+        match self {
+            Self::EncoderState(e) => e.webgpu_error_type(),
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
+            Self::MissingBufferUsage(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
+            Self::InsufficientBufferSize { .. }
+            | Self::OffsetLimitedTo4GB { .. }
             | Self::UnalignedIndexBufferOffset(..)
             | Self::UnalignedTransformBufferOffset(..)
             | Self::InvalidIndexCount(..)
@@ -214,9 +245,12 @@ impl WebGpuError for BuildAccelerationStructureError {
             | Self::TlasInstanceCountExceeded(..)
             | Self::TransformMissing(..)
             | Self::UseTransformMissing(..)
-            | Self::TlasDependentMissingVertexReturn(..) => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::TlasDependentMissingVertexReturn(..)
+            | Self::BlasGeometryKindMismatch(..)
+            | Self::IncompatibleBlasAabbPrimitiveCount(..)
+            | Self::UnalignedAabbPrimitiveOffset(..)
+            | Self::InvalidAabbStride(..) => ErrorType::Validation,
+        }
     }
 }
 
@@ -237,13 +271,12 @@ pub enum ValidateAsActionsError {
 
 impl WebGpuError for ValidateAsActionsError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::DestroyedResource(e) => e,
+        match self {
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
             Self::UsedUnbuiltTlas(..) | Self::UsedUnbuiltBlas(..) | Self::BlasNewerThenTlas(..) => {
-                return ErrorType::Validation
+                ErrorType::Validation
             }
-        };
-        e.webgpu_error_type()
+        }
     }
 }
 
@@ -259,8 +292,17 @@ pub struct BlasTriangleGeometry<'a> {
     pub transform_buffer_offset: Option<BufferAddress>,
 }
 
+#[derive(Debug)]
+pub struct BlasAabbGeometry<'a> {
+    pub size: &'a wgt::BlasAABBGeometrySizeDescriptor,
+    pub stride: BufferAddress,
+    pub aabb_buffer: BufferId,
+    pub primitive_offset: u32,
+}
+
 pub enum BlasGeometries<'a> {
     TriangleGeometries(Box<dyn Iterator<Item = BlasTriangleGeometry<'a>> + 'a>),
+    AabbGeometries(Box<dyn Iterator<Item = BlasAabbGeometry<'a>> + 'a>),
 }
 
 pub struct BlasBuildEntry<'a> {
@@ -336,8 +378,21 @@ pub type TraceBlasTriangleGeometry = OwnedBlasTriangleGeometry<IdReferences>;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
+pub struct OwnedBlasAabbGeometry<R: ReferenceType> {
+    pub size: wgt::BlasAABBGeometrySizeDescriptor,
+    pub stride: BufferAddress,
+    pub aabb_buffer: R::Buffer,
+    pub primitive_offset: u32,
+}
+
+pub type ArcBlasAabbGeometry = OwnedBlasAabbGeometry<ArcReferences>;
+pub type TraceBlasAabbGeometry = OwnedBlasAabbGeometry<IdReferences>;
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
 pub enum OwnedBlasGeometries<R: ReferenceType> {
     TriangleGeometries(Vec<OwnedBlasTriangleGeometry<R>>),
+    AabbGeometries(Vec<OwnedBlasAabbGeometry<R>>),
 }
 
 pub type ArcBlasGeometries = OwnedBlasGeometries<ArcReferences>;
@@ -404,15 +459,14 @@ pub enum BlasPrepareCompactError {
 
 impl WebGpuError for BlasPrepareCompactError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::InvalidResource(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
             Self::CompactionPreparingAlready
             | Self::DoubleCompaction
             | Self::NotBuilt
-            | Self::CompactionUnsupported => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::CompactionUnsupported => ErrorType::Validation,
+        }
     }
 }
 
@@ -439,15 +493,14 @@ pub enum CompactBlasError {
 
 impl WebGpuError for CompactBlasError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Encoder(e) => e,
-            Self::Device(e) => e,
-            Self::InvalidResource(e) => e,
-            Self::DestroyedResource(e) => e,
-            Self::MissingFeatures(e) => e,
-            Self::BlasNotReady => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+        match self {
+            Self::Encoder(e) => e.webgpu_error_type(),
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
+            Self::BlasNotReady => ErrorType::Validation,
+        }
     }
 }
 

@@ -12,6 +12,13 @@ use crate::{Buffer, Label};
 pub type BlasTriangleGeometrySizeDescriptor = wgt::BlasTriangleGeometrySizeDescriptor;
 static_assertions::assert_impl_all!(BlasTriangleGeometrySizeDescriptor: Send, Sync);
 
+/// Descriptor for the size defining attributes of an AABB geometry group in a bottom level acceleration structure.
+pub type BlasAABBGeometrySizeDescriptor = wgt::BlasAABBGeometrySizeDescriptor;
+static_assertions::assert_impl_all!(BlasAABBGeometrySizeDescriptor: Send, Sync);
+
+/// Minimum stride for AABB geometry (24 bytes: two `vec3<f32>`).
+pub use wgt::AABB_GEOMETRY_MIN_STRIDE;
+
 /// Descriptor for the size defining attributes, for a bottom level acceleration structure.
 pub type BlasGeometrySizeDescriptors = wgt::BlasGeometrySizeDescriptors;
 static_assertions::assert_impl_all!(BlasGeometrySizeDescriptors: Send, Sync);
@@ -116,10 +123,29 @@ pub struct BlasTriangleGeometry<'a> {
 }
 static_assertions::assert_impl_all!(BlasTriangleGeometry<'_>: WasmNotSendSync);
 
+/// Definition for an axis-aligned bounding box geometry group for a bottom level acceleration structure.
+///
+/// Buffer data must contain `size.primitive_count` primitives at `primitive_offset`, each `size.stride` bytes,
+/// with `stride` at least [`AABB_GEOMETRY_MIN_STRIDE`] and a multiple of 8.
+pub struct BlasAabbGeometry<'a> {
+    /// Sub descriptor for the size defining attributes of this geometry.
+    pub size: &'a BlasAABBGeometrySizeDescriptor,
+    /// Stride in bytes between consecutive AABB primitives in the buffer (at least
+    /// [`AABB_GEOMETRY_MIN_STRIDE`], and must be a multiple of 8).
+    pub stride: wgt::BufferAddress,
+    /// Buffer containing packed AABB primitives (layout determined by `size.stride`).
+    pub aabb_buffer: &'a Buffer,
+    /// Byte offset to the first AABB primitive (must be a multiple of 8).
+    pub primitive_offset: u32,
+}
+static_assertions::assert_impl_all!(BlasAabbGeometry<'_>: WasmNotSendSync);
+
 /// Contains the sets of geometry that go into a [Blas].
 pub enum BlasGeometries<'a> {
     /// Triangle geometry variant.
     TriangleGeometries(Vec<BlasTriangleGeometry<'a>>),
+    /// Procedural AABB geometry variant.
+    AabbGeometries(Vec<BlasAabbGeometry<'a>>),
 }
 static_assertions::assert_impl_all!(BlasGeometries<'_>: WasmNotSendSync);
 
@@ -230,6 +256,20 @@ pub struct ContextBlasTriangleGeometry<'a> {
 pub enum ContextBlasGeometries<'a> {
     /// Triangle geometries.
     TriangleGeometries(Box<dyn Iterator<Item = ContextBlasTriangleGeometry<'a>> + 'a>),
+    /// AABB geometries.
+    AabbGeometries(Box<dyn Iterator<Item = ContextBlasAabbGeometry<'a>> + 'a>),
+}
+
+/// Context version of [BlasAabbGeometry].
+pub struct ContextBlasAabbGeometry<'a> {
+    #[expect(dead_code)]
+    pub(crate) size: &'a BlasAABBGeometrySizeDescriptor,
+    #[expect(dead_code)]
+    pub(crate) stride: wgt::BufferAddress,
+    #[expect(dead_code)]
+    pub(crate) aabb_buffer: &'a dispatch::DispatchBuffer,
+    #[expect(dead_code)]
+    pub(crate) primitive_offset: u32,
 }
 
 /// Context version see [BlasBuildEntry].

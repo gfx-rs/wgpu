@@ -299,6 +299,8 @@ struct DeviceExtensionFunctions {
     timeline_semaphore: Option<ExtensionFn<khr::timeline_semaphore::Device>>,
     ray_tracing: Option<RayTracingDeviceExtensionFunctions>,
     mesh_shading: Option<ext::mesh_shader::Device>,
+    #[cfg_attr(not(unix), allow(dead_code))]
+    external_memory_fd: Option<khr::external_memory_fd::Device>,
 }
 
 struct RayTracingDeviceExtensionFunctions {
@@ -495,6 +497,8 @@ struct DeviceShared {
     /// As above, for texture views.
     texture_view_identity_factory: ResourceIdentityFactory<vk::ImageView>,
 
+    empty_descriptor_set_layout: vk::DescriptorSetLayout,
+
     // The `drop_guard` field must be the last field of this struct so it is dropped last.
     // Do not add new fields after it.
     drop_guard: Option<crate::DropGuard>,
@@ -505,6 +509,10 @@ impl Drop for DeviceShared {
         for &raw in self.render_passes.lock().values() {
             unsafe { self.raw.destroy_render_pass(raw, None) };
         }
+        unsafe {
+            self.raw
+                .destroy_descriptor_set_layout(self.empty_descriptor_set_layout, None)
+        };
         if self.drop_guard.is_none() {
             unsafe { self.raw.destroy_device(None) };
         }
@@ -1357,6 +1365,11 @@ impl crate::Queue for Queue {
     unsafe fn get_timestamp_period(&self) -> f32 {
         self.device.timestamp_period
     }
+
+    unsafe fn wait_for_idle(&self) -> Result<(), crate::DeviceError> {
+        unsafe { self.device.raw.queue_wait_idle(self.raw) }
+            .map_err(map_host_device_oom_and_lost_err)
+    }
 }
 
 impl Queue {
@@ -1371,6 +1384,14 @@ impl Queue {
         } else {
             guard.push_signal(SemaphoreType::Binary(semaphore));
         }
+    }
+
+    /// Remove `semaphore` from the pending signal list if it is still present.
+    ///
+    /// Returns `true` if the semaphore was found and removed. If the submit
+    /// already consumed it, this is a harmless no-op that returns `false`.
+    pub fn remove_signal_semaphore(&self, semaphore: vk::Semaphore) -> bool {
+        self.signal_semaphores.lock().remove(semaphore)
     }
 }
 

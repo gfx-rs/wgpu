@@ -9,6 +9,8 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
         NV12_TEXTURE_CREATION_SAMPLING,
         P010_TEXTURE_CREATION_SAMPLING,
         NV12_TEXTURE_RENDERING,
+        NV12_TEXTURE_COPYING,
+        P010_TEXTURE_COPYING,
     ]);
 }
 
@@ -337,4 +339,98 @@ static NV12_TEXTURE_RENDERING: GpuTestConfiguration = GpuTestConfiguration::new(
             (&y_view, wgpu::TextureFormat::R8Unorm),
             (&uv_view, wgpu::TextureFormat::Rg8Unorm),
         );
+    });
+
+/// Ensures that copying NV12 texture to NV12 texture works as expected
+#[gpu_test]
+static NV12_TEXTURE_COPYING: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::TEXTURE_FORMAT_NV12)
+            .enable_noop(),
+    )
+    .run_sync(|ctx| {
+        let size = wgpu::Extent3d {
+            width: 256,
+            height: 256,
+            depth_or_array_layers: 1,
+        };
+        let input_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            dimension: wgpu::TextureDimension::D2,
+            size,
+            format: wgpu::TextureFormat::NV12,
+            usage: wgpu::TextureUsages::COPY_SRC,
+            mip_level_count: 1,
+            sample_count: 1,
+            view_formats: &[],
+        });
+        let output_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            dimension: wgpu::TextureDimension::D2,
+            size,
+            format: wgpu::TextureFormat::NV12,
+            usage: wgpu::TextureUsages::COPY_DST,
+            mip_level_count: 1,
+            sample_count: 1,
+            view_formats: &[],
+        });
+
+        let mut command_encoder = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        command_encoder.copy_texture_to_texture(
+            input_texture.as_image_copy(),
+            output_texture.as_image_copy(),
+            size,
+        );
+        ctx.queue.submit([command_encoder.finish()]);
+    });
+
+/// Ensures that copying P010 texture to P010 texture works as expected
+#[gpu_test]
+static P010_TEXTURE_COPYING: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(
+                wgpu::Features::TEXTURE_FORMAT_P010 | wgpu::Features::TEXTURE_FORMAT_16BIT_NORM,
+            )
+            .enable_noop(),
+    )
+    .run_sync(|ctx| {
+        let size = wgpu::Extent3d {
+            width: 256,
+            height: 256,
+            depth_or_array_layers: 1,
+        };
+        let input_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            dimension: wgpu::TextureDimension::D2,
+            size,
+            format: wgpu::TextureFormat::P010,
+            usage: wgpu::TextureUsages::COPY_SRC,
+            mip_level_count: 1,
+            sample_count: 1,
+            view_formats: &[],
+        });
+        let output_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            dimension: wgpu::TextureDimension::D2,
+            size,
+            format: wgpu::TextureFormat::P010,
+            usage: wgpu::TextureUsages::COPY_DST,
+            mip_level_count: 1,
+            sample_count: 1,
+            view_formats: &[],
+        });
+
+        let mut command_encoder = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        command_encoder.copy_texture_to_texture(
+            input_texture.as_image_copy(),
+            output_texture.as_image_copy(),
+            size,
+        );
+        ctx.queue.submit([command_encoder.finish()]);
     });

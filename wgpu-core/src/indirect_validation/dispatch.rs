@@ -1,6 +1,7 @@
 use super::CreateIndirectValidationPipelineError;
 use crate::{
     device::DeviceError,
+    hal_label,
     pipeline::{CreateComputePipelineError, CreateShaderModuleError},
 };
 use alloc::{boxed::Box, format, string::ToString as _};
@@ -40,6 +41,7 @@ pub struct Params<'a> {
 impl Dispatch {
     pub(super) fn new(
         device: &dyn hal::DynDevice,
+        instance_flags: wgt::InstanceFlags,
         limits: &wgt::Limits,
     ) -> Result<Self, CreateIndirectValidationPipelineError> {
         let max_compute_workgroups_per_dimension = limits.max_compute_workgroups_per_dimension;
@@ -109,7 +111,10 @@ impl Dispatch {
             debug_source: None,
         });
         let hal_desc = hal::ShaderModuleDescriptor {
-            label: None,
+            label: hal_label(
+                Some("(wgpu internal) Indirect dispatch validation shader module"),
+                instance_flags,
+            ),
             runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
         };
         let module =
@@ -126,7 +131,10 @@ impl Dispatch {
             })?;
 
         let dst_bind_group_layout_desc = hal::BindGroupLayoutDescriptor {
-            label: None,
+            label: hal_label(
+                Some("(wgpu internal) Indirect dispatch validation destination bind group layout"),
+                instance_flags,
+            ),
             flags: hal::BindGroupLayoutFlags::empty(),
             entries: &[wgt::BindGroupLayoutEntry {
                 binding: 0,
@@ -146,7 +154,10 @@ impl Dispatch {
         };
 
         let src_bind_group_layout_desc = hal::BindGroupLayoutDescriptor {
-            label: None,
+            label: hal_label(
+                Some("(wgpu internal) Indirect dispatch validation source bind group layout"),
+                instance_flags,
+            ),
             flags: hal::BindGroupLayoutFlags::empty(),
             entries: &[wgt::BindGroupLayoutEntry {
                 binding: 0,
@@ -166,11 +177,14 @@ impl Dispatch {
         };
 
         let pipeline_layout_desc = hal::PipelineLayoutDescriptor {
-            label: None,
+            label: hal_label(
+                Some("(wgpu internal) Indirect dispatch validation pipeline layout"),
+                instance_flags,
+            ),
             flags: hal::PipelineLayoutFlags::empty(),
             bind_group_layouts: &[
-                dst_bind_group_layout.as_ref(),
-                src_bind_group_layout.as_ref(),
+                Some(dst_bind_group_layout.as_ref()),
+                Some(src_bind_group_layout.as_ref()),
             ],
             immediate_size: 4,
         };
@@ -181,7 +195,10 @@ impl Dispatch {
         };
 
         let pipeline_desc = hal::ComputePipelineDescriptor {
-            label: None,
+            label: hal_label(
+                Some("(wgpu internal) Indirect dispatch validation pipeline"),
+                instance_flags,
+            ),
             layout: pipeline_layout.as_ref(),
             stage: hal::ProgrammableStage {
                 module: module.as_ref(),
@@ -208,7 +225,10 @@ impl Dispatch {
             })?;
 
         let dst_buffer_desc = hal::BufferDescriptor {
-            label: None,
+            label: hal_label(
+                Some("(wgpu internal) Indirect dispatch validation destination buffer"),
+                instance_flags,
+            ),
             size: DST_BUFFER_SIZE.get(),
             usage: wgt::BufferUses::INDIRECT | wgt::BufferUses::STORAGE_READ_WRITE,
             memory_flags: hal::MemoryFlags::empty(),
@@ -217,7 +237,10 @@ impl Dispatch {
             unsafe { device.create_buffer(&dst_buffer_desc) }.map_err(DeviceError::from_hal)?;
 
         let dst_bind_group_desc = hal::BindGroupDescriptor {
-            label: None,
+            label: hal_label(
+                Some("(wgpu internal) Indirect dispatch validation destination bind group"),
+                instance_flags,
+            ),
             layout: dst_bind_group_layout.as_ref(),
             entries: &[hal::BindGroupEntry {
                 binding: 0,
@@ -259,13 +282,17 @@ impl Dispatch {
         limits: &wgt::Limits,
         buffer_size: u64,
         buffer: &dyn hal::DynBuffer,
+        instance_flags: wgt::InstanceFlags,
     ) -> Result<Option<Box<dyn hal::DynBindGroup>>, DeviceError> {
         let binding_size = calculate_src_buffer_binding_size(buffer_size, limits);
         let Some(binding_size) = NonZeroU64::new(binding_size) else {
             return Ok(None);
         };
         let hal_desc = hal::BindGroupDescriptor {
-            label: None,
+            label: hal_label(
+                Some("(wgpu internal) Indirect dispatch validation source bind group"),
+                instance_flags,
+            ),
             layout: self.src_bind_group_layout.as_ref(),
             entries: &[hal::BindGroupEntry {
                 binding: 0,

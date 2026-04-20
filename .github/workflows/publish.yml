@@ -62,6 +62,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: publish-build
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Build examples
         run: cargo xtask run-wasm --no-serve

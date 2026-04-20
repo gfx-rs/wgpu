@@ -117,6 +117,119 @@ impl Queue {
         self.life_tracker.lock()
     }
 
+    /// Ensure the surface texture is in the PRESENT state, clearing it if it was never rendered to.
+    /// Submits any necessary work to the GPU before the HAL present call.
+    ///
+    /// See <https://github.com/gfx-rs/wgpu/issues/6748>
+    pub(crate) fn prepare_surface_texture_for_present(
+        &self,
+        texture: &Arc<Texture>,
+    ) -> Result<(), DeviceError> {
+        let device = &self.device;
+        let snatch_guard = device.snatchable_lock.read();
+
+        // If the texture is uninitialized it needs to be cleared before presenting
+        let needs_clear = {
+            let status = texture.initialization_status.read();
+            status
+                .mips
+                .first()
+                .is_some_and(|mip| mip.check(0..1).is_some())
+        };
+
+        // Fence lock must be acquired after the snatch lock and before
+        // pending_writes to match the lock ordering in Queue::submit.
+        let mut fence = device.fence.write();
+        let mut pending_writes = self.pending_writes.lock();
+
+        if needs_clear {
+            let encoder = pending_writes.activate();
+            let mut trackers = device.trackers.lock();
+            crate::command::clear_texture(
+                texture,
+                TextureInitRange {
+                    mip_range: 0..1,
+                    layer_range: 0..1,
+                },
+                encoder,
+                &mut trackers.textures,
+                &device.alignments,
+                device.zero_buffer.as_ref(),
+                &snatch_guard,
+                device.instance_flags,
+            )
+            .map_err(|e| match e {
+                ClearError::Device(e) => e,
+                _ => DeviceError::Lost,
+            })?;
+            texture.initialization_status.write().mips[0].drain(0..1);
+        }
+
+        // Transition the texture to PRESENT in the device tracker.
+        // If it's already in PRESENT, this produces no barriers and we can skip the submission.
+        //
+        // This has to be after any clear_texture call because clear_texture modifies the tracker state internally.
+        // Computing transitions afterward ensures they reflect the actual current state.
+        let pending = {
+            let mut trackers = device.trackers.lock();
+            let pending: Vec<track::PendingTransition<wgt::TextureUses>> = trackers
+                .textures
+                .set_single(
+                    texture,
+                    texture.full_range.clone(),
+                    wgt::TextureUses::PRESENT,
+                )
+                .collect();
+            pending
+        };
+
+        if pending.is_empty() {
+            return Ok(());
+        }
+
+        // Emit the transition barriers to PRESENT.
+        {
+            let raw_texture = texture
+                .try_raw(&snatch_guard)
+                .map_err(|_| DeviceError::Lost)?;
+            let barriers: Vec<hal::TextureBarrier<'_, dyn hal::DynTexture>> = pending
+                .into_iter()
+                .map(|pt| pt.into_hal(raw_texture))
+                .collect();
+
+            let encoder = pending_writes.activate();
+            // SAFETY:
+            // - The encoder is in the recording state after `activate()`
+            // - The texture is kept alive by the Arc from `acquired_texture`
+            unsafe {
+                encoder.transition_textures(&barriers);
+            }
+        }
+
+        // Keep the texture alive in the submission so its clear_view isn't
+        // destroyed before the GPU finishes the submitted commands.
+        pending_writes.insert_texture(texture);
+
+        // Flush pending writes through the standard submission path.
+        let mut surface_textures = FastHashMap::default();
+        surface_textures.insert(Arc::as_ptr(texture), texture.clone());
+
+        let submit_index = {
+            let mut indices = device.command_indices.write();
+            indices.active_submission_index += 1;
+            indices.active_submission_index
+        };
+
+        self.submit_with_pending_writes(
+            &mut pending_writes,
+            Vec::new(),
+            surface_textures,
+            fence.as_mut(),
+            submit_index,
+            &snatch_guard,
+        )
+    }
+
     pub(crate) fn maintain(
         &self,
         submission_index: u64,
@@ -158,80 +271,22 @@ impl Drop for Queue {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
 
+        // On Vulkan, pending presents are not tracked by fences.
+        // wait_for_idle covers both fence-tracked submissions and pending presents.
+        match unsafe { self.raw.wait_for_idle() } {
+            Ok(()) => {}
+            Err(hal::DeviceError::Lost) => {
+                self.device.handle_hal_error(hal::DeviceError::Lost);
+            }
+            Err(e) => {
+                panic!("Unexpected error while waiting for queue idle on drop: {e:?}");
+            }
+        }
+
         let last_successful_submission_index = self
             .device
             .last_successful_submission_index
             .load(Ordering::Acquire);
-
-        let fence = self.device.fence.read();
-
-        // Try waiting on the last submission using the following sequence of timeouts
-        let timeouts_in_ms = [100, 200, 400, 800, 1600, 3200];
-
-        for (i, timeout_ms) in timeouts_in_ms.into_iter().enumerate() {
-            let is_last_iter = i == timeouts_in_ms.len() - 1;
-
-            api_log!(
-                "Waiting on last submission. try: {}/{}. timeout: {}ms",
-                i + 1,
-                timeouts_in_ms.len(),
-                timeout_ms
-            );
-
-            let wait_res = unsafe {
-                self.device.raw().wait(
-                    fence.as_ref(),
-                    last_successful_submission_index,
-                    #[cfg(not(target_arch = "wasm32"))]
-                    Some(core::time::Duration::from_millis(timeout_ms)),
-                    #[cfg(target_arch = "wasm32")]
-                    Some(core::time::Duration::ZERO), // WebKit and Chromium don't support a non-0 timeout
-                )
-            };
-            // Note: If we don't panic below we are in UB land (destroying resources while they are still in use by the GPU).
-            match wait_res {
-                Ok(true) => break,
-                Ok(false) => {
-                    // It's fine that we timed out on WebGL; GL objects can be deleted early as they
-                    // will be kept around by the driver if GPU work hasn't finished.
-                    // Moreover, the way we emulate read mappings on WebGL allows us to execute map_buffer earlier than on other
-                    // backends since getBufferSubData is synchronous with respect to the other previously enqueued GL commands.
-                    // Relying on this behavior breaks the clean abstraction wgpu-hal tries to maintain and
-                    // we should find ways to improve this. See https://github.com/gfx-rs/wgpu/issues/6538.
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        break;
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        if is_last_iter {
-                            panic!(
-                                "We timed out while waiting on the last successful submission to complete!"
-                            );
-                        }
-                    }
-                }
-                Err(e) => match e {
-                    hal::DeviceError::OutOfMemory => {
-                        if is_last_iter {
-                            panic!(
-                                "We ran into an OOM error while waiting on the last successful submission to complete!"
-                            );
-                        }
-                    }
-                    hal::DeviceError::Lost => {
-                        self.device.handle_hal_error(e); // will lose the device
-                        break;
-                    }
-                    hal::DeviceError::Unexpected => {
-                        panic!(
-                            "We ran into an unexpected error while waiting on the last successful submission to complete!"
-                        );
-                    }
-                },
-            }
-        }
-        drop(fence);
 
         let snatch_guard = self.device.snatchable_lock.read();
         let (submission_closures, mapping_closures, blas_compact_ready_closures, queue_empty) =
@@ -409,7 +464,7 @@ impl PendingWrites {
                     api: crate::command::EncodingApi::InternalUse,
                     label: "(wgpu internal) PendingWrites command encoder".into(),
                 },
-                trackers: Tracker::new(),
+                trackers: Tracker::new(device.ordered_buffer_usages, device.ordered_texture_usages),
                 temp_resources: mem::take(&mut self.temp_resources),
                 _indirect_draw_validation_resources: crate::indirect_validation::DrawResources::new(
                     device.clone(),
@@ -470,14 +525,13 @@ pub enum QueueWriteError {
 
 impl WebGpuError for QueueWriteError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Queue(e) => e,
-            Self::Transfer(e) => e,
-            Self::MemoryInitFailure(e) => e,
-            Self::DestroyedResource(e) => e,
-            Self::InvalidResource(e) => e,
-        };
-        e.webgpu_error_type()
+        match self {
+            Self::Queue(e) => e.webgpu_error_type(),
+            Self::Transfer(e) => e.webgpu_error_type(),
+            Self::MemoryInitFailure(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+        }
     }
 }
 
@@ -502,17 +556,14 @@ pub enum QueueSubmitError {
 
 impl WebGpuError for QueueSubmitError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Queue(e) => e,
-            Self::Unmap(e) => e,
-            Self::CommandEncoder(e) => e,
-            Self::ValidateAsActionsError(e) => e,
-            Self::InvalidResource(e) => e,
-            Self::DestroyedResource(_) | Self::BufferStillMapped(_) => {
-                return ErrorType::Validation
-            }
-        };
-        e.webgpu_error_type()
+        match self {
+            Self::Queue(e) => e.webgpu_error_type(),
+            Self::Unmap(e) => e.webgpu_error_type(),
+            Self::CommandEncoder(e) => e.webgpu_error_type(),
+            Self::ValidateAsActionsError(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(_) | Self::BufferStillMapped(_) => ErrorType::Validation,
+        }
     }
 }
 
@@ -537,8 +588,12 @@ impl Queue {
         let data_size = if let Some(data_size) = wgt::BufferSize::new(data_size) {
             data_size
         } else {
-            // This must happen after parameter validation (so that errors are reported
-            // as required by the spec), but before any side effects.
+            // even though a zero-length write is a no-op and no copy operation will occur,
+            // we must still validate the copy operation. This ensures that invalid
+            // API calls—like writing to a mapped buffer or out-of-bounds offsets—are
+            // caught consistently, even if no data is actually moved.
+            self.validate_write_buffer_impl(buffer.as_ref(), buffer_offset, 0)?;
+
             log::trace!("Ignoring write_buffer of size 0");
             return Ok(());
         };
@@ -639,7 +694,7 @@ impl Queue {
 
         let buffer = buffer.get()?;
 
-        self.validate_write_buffer_impl(&buffer, buffer_offset, buffer_size)?;
+        self.validate_write_buffer_impl(&buffer, buffer_offset, buffer_size.into())?;
 
         Ok(())
     }
@@ -648,22 +703,30 @@ impl Queue {
         &self,
         buffer: &Buffer,
         buffer_offset: u64,
-        buffer_size: wgt::BufferSize,
+        buffer_size: u64,
     ) -> Result<(), TransferError> {
         if !matches!(&*buffer.map_state.lock(), BufferMapState::Idle) {
             return Err(TransferError::BufferNotAvailable);
         }
         buffer.check_usage(wgt::BufferUsages::COPY_DST)?;
-        if !buffer_size.get().is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
-            return Err(TransferError::UnalignedCopySize(buffer_size.get()));
+        if !buffer_size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
+            return Err(TransferError::UnalignedCopySize(buffer_size));
         }
         if !buffer_offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             return Err(TransferError::UnalignedBufferOffset(buffer_offset));
         }
-        if buffer_offset + buffer_size.get() > buffer.size {
-            return Err(TransferError::BufferOverrun {
+
+        if buffer_offset > buffer.size {
+            return Err(TransferError::BufferStartOffsetOverrun {
                 start_offset: buffer_offset,
-                end_offset: buffer_offset + buffer_size.get(),
+                buffer_size: buffer.size,
+                side: CopySide::Destination,
+            });
+        }
+        if buffer_size > buffer.size - buffer_offset {
+            return Err(TransferError::BufferEndOffsetOverrun {
+                start_offset: buffer_offset,
+                size: buffer_size,
                 buffer_size: buffer.size,
                 side: CopySide::Destination,
             });
@@ -693,7 +756,7 @@ impl Queue {
 
         self.same_device_as(buffer.as_ref())?;
 
-        self.validate_write_buffer_impl(&buffer, buffer_offset, staging_buffer.size)?;
+        self.validate_write_buffer_impl(&buffer, buffer_offset, staging_buffer.size.into())?;
 
         let region = hal::BufferCopy {
             src_offset: 0,
@@ -864,6 +927,7 @@ impl Queue {
             self.device.alignments.buffer_copy_pitch.get() as u32,
             block_size,
         );
+        assert!(u32::MAX - bytes_in_last_row >= bytes_per_row_alignment);
         let stage_bytes_per_row = wgt::math::align_to(bytes_in_last_row, bytes_per_row_alignment);
 
         // Platform validation requires that the staging buffer always be
@@ -879,17 +943,21 @@ impl Queue {
         } else {
             profiling::scope!("copy chunked");
             // Copy row by row into the optimal alignment.
-            let block_rows_in_copy =
-                (size.depth_or_array_layers - 1) * rows_per_image + height_in_blocks;
-            let stage_size =
-                wgt::BufferSize::new(stage_bytes_per_row as u64 * block_rows_in_copy as u64)
-                    .unwrap();
+            let block_rows_in_copy = u64::from(size.depth_or_array_layers - 1)
+                * u64::from(rows_per_image)
+                + u64::from(height_in_blocks);
+            // The copy size was validated against the source buffer, however,
+            // `stage_bytes_per_row` can differ, so let's be paranoid.
+            let stage_size = u64::from(stage_bytes_per_row)
+                .checked_mul(block_rows_in_copy)
+                .and_then(wgt::BufferSize::new)
+                .unwrap();
             let mut staging_buffer = StagingBuffer::new(&self.device, stage_size)?;
-            for layer in 0..size.depth_or_array_layers {
-                let rows_offset = layer * rows_per_image;
-                for row in rows_offset..rows_offset + height_in_blocks {
-                    let src_offset = data_layout.offset as u32 + row * bytes_per_row;
-                    let dst_offset = row * stage_bytes_per_row;
+            for layer in 0..u64::from(size.depth_or_array_layers) {
+                let rows_offset = layer * u64::from(rows_per_image);
+                for row in rows_offset..rows_offset + u64::from(height_in_blocks) {
+                    let src_offset = data_layout.offset + row * u64::from(bytes_per_row);
+                    let dst_offset = row * u64::from(stage_bytes_per_row);
                     unsafe {
                         staging_buffer.write_with_offset(
                             data,
@@ -1012,20 +1080,20 @@ impl Queue {
             .into());
         }
 
-        if source.origin.x + size.width > src_width {
+        if source.origin.x > src_width || src_width - source.origin.x < size.width {
             return Err(TransferError::TextureOverrun {
                 start_offset: source.origin.x,
-                end_offset: source.origin.x + size.width,
+                end_offset: source.origin.x.saturating_add(size.width),
                 texture_size: src_width,
                 dimension: crate::resource::TextureErrorDimension::X,
                 side: CopySide::Source,
             }
             .into());
         }
-        if source.origin.y + size.height > src_height {
+        if source.origin.y > src_height || src_height - source.origin.y < size.height {
             return Err(TransferError::TextureOverrun {
                 start_offset: source.origin.y,
-                end_offset: source.origin.y + size.height,
+                end_offset: source.origin.y.saturating_add(size.height),
                 texture_size: src_height,
                 dimension: crate::resource::TextureErrorDimension::Y,
                 side: CopySide::Source,
@@ -1273,6 +1341,7 @@ impl Queue {
                                     self.trace_submission(submit_index, commands);
                                 }
 
+                                cmd_buf_data.set_acceleration_structure_dependencies(&snatch_guard);
                                 cmd_buf_data.into_baked_commands()
                             }
                             Err(err) => {
@@ -1369,100 +1438,22 @@ impl Queue {
 
             let mut pending_writes = self.pending_writes.lock();
 
-            {
-                used_surface_textures.set_size(self.device.tracker_indices.textures.size());
-                for texture in pending_writes.dst_textures.values() {
-                    match texture.try_inner(&snatch_guard) {
-                        Ok(TextureInner::Native { .. }) => {}
-                        Ok(TextureInner::Surface { .. }) => {
-                            // Compare the Arcs by pointer as Textures don't implement Eq
-                            submit_surface_textures_owned
-                                .insert(Arc::as_ptr(texture), texture.clone());
-
-                            unsafe {
-                                used_surface_textures
-                                    .merge_single(texture, None, wgt::TextureUses::PRESENT)
-                                    .unwrap()
-                            };
-                        }
-                        // The texture must not have been destroyed when its usage here was
-                        // encoded. If it was destroyed after that, then it was transferred
-                        // to `pending_writes.temp_resources` at the time of destruction, so
-                        // we are still okay to use it.
-                        Err(DestroyedResourceError(_)) => {}
-                    }
-                }
-
-                if !used_surface_textures.is_empty() {
-                    let mut trackers = self.device.trackers.lock();
-
-                    let texture_barriers = trackers
-                        .textures
-                        .set_from_usage_scope_and_drain_transitions(
-                            &used_surface_textures,
-                            &snatch_guard,
-                        )
-                        .collect::<Vec<_>>();
-                    unsafe {
-                        pending_writes
-                            .command_encoder
-                            .transition_textures(&texture_barriers);
-                    };
-                }
+            if let Err(e) = self.submit_with_pending_writes(
+                &mut pending_writes,
+                active_executions,
+                submit_surface_textures_owned,
+                fence.as_mut(),
+                submit_index,
+                &snatch_guard,
+            ) {
+                break 'error Err(e.into());
             }
 
-            match pending_writes.pre_submit(&self.device.command_allocator, &self.device, self) {
-                Ok(Some(pending_execution)) => {
-                    active_executions.insert(0, pending_execution);
-                }
-                Ok(None) => {}
-                Err(e) => break 'error Err(e.into()),
-            }
-            let hal_command_buffers = active_executions
-                .iter()
-                .flat_map(|e| e.inner.list.iter().map(|b| b.as_ref()))
-                .collect::<Vec<_>>();
+            drop(command_index_guard);
 
-            {
-                let mut submit_surface_textures =
-                    SmallVec::<[&dyn hal::DynSurfaceTexture; 2]>::with_capacity(
-                        submit_surface_textures_owned.len(),
-                    );
-
-                for texture in submit_surface_textures_owned.values() {
-                    let raw = match texture.inner.get(&snatch_guard) {
-                        Some(TextureInner::Surface { raw, .. }) => raw.as_ref(),
-                        _ => unreachable!(),
-                    };
-                    submit_surface_textures.push(raw);
-                }
-
-                if let Err(e) = unsafe {
-                    self.raw().submit(
-                        &hal_command_buffers,
-                        &submit_surface_textures,
-                        (fence.as_mut(), submit_index),
-                    )
-                }
-                .map_err(|e| self.device.handle_hal_error(e))
-                {
-                    break 'error Err(e.into());
-                }
-
-                drop(command_index_guard);
-
-                // Advance the successful submission index.
-                self.device
-                    .last_successful_submission_index
-                    .fetch_max(submit_index, Ordering::SeqCst);
-            }
+            drop(pending_writes);
 
             profiling::scope!("cleanup");
-
-            // this will register the new submission to the life time tracker
-            self.lock_life()
-                .track_submission(submit_index, active_executions);
-            drop(pending_writes);
 
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
@@ -1500,6 +1491,99 @@ impl Queue {
         api_log!("Queue::submit returned submit index {submit_index}");
 
         Ok(submit_index)
+    }
+
+    /// Flush pending writes and any additional command encoders as a HAL submission.
+    ///
+    /// Advances `last_successful_submission_index` and registers the submission with the lifetime tracker.
+    fn submit_with_pending_writes(
+        &self,
+        pending_writes: &mut PendingWrites,
+        mut active_executions: Vec<EncoderInFlight>,
+        mut surface_textures: FastHashMap<*const Texture, Arc<Texture>>,
+        fence: &mut dyn hal::DynFence,
+        submit_index: SubmissionIndex,
+        snatch_guard: &SnatchGuard,
+    ) -> Result<(), DeviceError> {
+        let mut used_surface_textures = track::TextureUsageScope::default();
+        used_surface_textures.set_size(self.device.tracker_indices.textures.size());
+        for texture in pending_writes.dst_textures.values() {
+            match texture.try_inner(snatch_guard) {
+                Ok(TextureInner::Native { .. }) => {}
+                Ok(TextureInner::Surface { .. }) => {
+                    // Compare the Arcs by pointer as Textures don't implement Eq
+                    surface_textures.insert(Arc::as_ptr(texture), texture.clone());
+
+                    unsafe {
+                        used_surface_textures
+                            .merge_single(texture, None, wgt::TextureUses::PRESENT)
+                            .unwrap()
+                    };
+                }
+                // The texture must not have been destroyed when its usage here was
+                // encoded. If it was destroyed after that, then it was transferred
+                // to `pending_writes.temp_resources` at the time of destruction, so
+                // we are still okay to use it.
+                Err(DestroyedResourceError(_)) => {}
+            }
+        }
+
+        if !used_surface_textures.is_empty() {
+            let mut trackers = self.device.trackers.lock();
+
+            let texture_barriers = trackers
+                .textures
+                .set_from_usage_scope_and_drain_transitions(&used_surface_textures, snatch_guard)
+                .collect::<Vec<_>>();
+            unsafe {
+                pending_writes
+                    .command_encoder
+                    .transition_textures(&texture_barriers);
+            };
+        }
+
+        match pending_writes.pre_submit(&self.device.command_allocator, &self.device, self) {
+            Ok(Some(pending_execution)) => {
+                active_executions.insert(0, pending_execution);
+            }
+            Ok(None) => {}
+            Err(e) => return Err(e),
+        }
+        let hal_command_buffers = active_executions
+            .iter()
+            .flat_map(|e| e.inner.list.iter().map(|b| b.as_ref()))
+            .collect::<Vec<_>>();
+
+        {
+            let mut submit_surface_textures =
+                SmallVec::<[&dyn hal::DynSurfaceTexture; 2]>::with_capacity(surface_textures.len());
+            for texture in surface_textures.values() {
+                let raw = match texture.inner.get(snatch_guard) {
+                    Some(TextureInner::Surface { raw, .. }) => raw.as_ref(),
+                    _ => unreachable!(),
+                };
+                submit_surface_textures.push(raw);
+            }
+
+            unsafe {
+                self.raw().submit(
+                    &hal_command_buffers,
+                    &submit_surface_textures,
+                    (fence, submit_index),
+                )
+            }
+            .map_err(|e| self.device.handle_hal_error(e))?;
+
+            // Advance the successful submission index.
+            self.device
+                .last_successful_submission_index
+                .fetch_max(submit_index, Ordering::SeqCst);
+        }
+        // this will register the new submission to the life time tracker
+        self.lock_life()
+            .track_submission(submit_index, active_executions);
+
+        Ok(())
     }
 
     pub fn get_timestamp_period(&self) -> f32 {
@@ -1612,12 +1696,13 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *queue.device.trace.lock() {
             use crate::device::trace::DataKind;
-            let range = buffer_offset..buffer_offset + data.len() as u64;
+            let size = data.len() as u64;
             let data = trace.make_binary(DataKind::Bin, data);
             trace.add(Action::WriteBuffer {
                 id: buffer.to_trace(),
                 data,
-                range,
+                offset: buffer_offset,
+                size,
                 queued: true,
             });
         }

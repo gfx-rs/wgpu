@@ -72,7 +72,14 @@ impl DownloadBuffer {
                     return;
                 }
 
-                let mapped_range = download.inner.get_mapped_range(0..size);
+                let mapped_range = match download.inner.get_mapped_range(0..size) {
+                    Ok(range) => range,
+                    Err(e) => {
+                        callback(Err(super::BufferAsyncError));
+                        log::error!("Failed to get mapped range: {e}");
+                        return;
+                    }
+                };
                 callback(Ok(Self {
                     _gpu_buffer: download,
                     mapped_range,
@@ -84,7 +91,8 @@ impl DownloadBuffer {
 impl core::ops::Deref for DownloadBuffer {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
-        self.mapped_range.slice()
+        // SAFETY: `self.mapped_range` is always a read mapping
+        unsafe { self.mapped_range.read_slice() }
     }
 }
 

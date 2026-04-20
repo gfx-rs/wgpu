@@ -593,6 +593,14 @@ enum LookupRayQueryFunction {
     Terminate,
 }
 
+// Just one supported function right now, more in the future.
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
+enum LookupRaytracingFunction {
+    TraceRay {
+        payload: Handle<crate::GlobalVariable>,
+    },
+}
+
 #[derive(Debug)]
 enum Dimension {
     Scalar,
@@ -962,6 +970,10 @@ pub struct Writer {
 
     ray_query_functions: crate::FastHashMap<LookupRayQueryFunction, Word>,
 
+    ray_tracing_functions: crate::FastHashMap<LookupRaytracingFunction, Word>,
+
+    has_ray_tracing_pipeline: bool,
+
     /// F16 I/O polyfill manager for handling `f16` input/output variables
     /// when `StorageInputOutput16` capability is not available.
     io_f16_polyfills: f16_polyfill::F16IoPolyfill,
@@ -970,14 +982,12 @@ pub struct Writer {
     debug_printf: Option<Word>,
     pub(crate) ray_query_initialization_tracking: bool,
 
-    /// Limits to the mesh shader dispatch group a task workgroup can dispatch.
-    ///
-    /// Metal for example limits to 1024 workgroups per task shader dispatch. Dispatching more is
-    /// undefined behavior, so this would validate that to dispatch zero workgroups.
+    /// Whether the arguments to trace ray should be validated
+    pub(crate) trace_ray_argument_validation: bool,
+
+    /// See docs in [`Options`]
     task_dispatch_limits: Option<TaskDispatchLimits>,
-    /// If true, naga may generate checks that the primitive indices are valid in the output.
-    ///
-    /// Currently this validation is unimplemented.
+    /// See docs in [`Options`]
     mesh_shader_primitive_indices_clamp: bool,
 }
 
@@ -1017,6 +1027,13 @@ bitflags::bitflags! {
         /// Note: VK_KHR_shader_non_semantic_info must be enabled. This will have no
         /// effect if `options.ray_query_initialization_tracking` is set to false.
         const PRINT_ON_RAY_QUERY_INITIALIZATION_FAIL = 0x20;
+
+        /// Instead of silently failing if the arguments to `traceRays` are
+        /// invalid, uses debug printf extension to print to the command line
+        ///
+        /// Note: VK_KHR_shader_non_semantic_info must be enabled. This will have no
+        /// effect if `options.trace_ray_argument_validation` is set to false.
+        const PRINT_ON_TRACE_RAYS_FAIL = 0x40;
     }
 }
 
@@ -1078,14 +1095,24 @@ pub struct Options<'a> {
     /// misuse.
     pub ray_query_initialization_tracking: bool,
 
+    /// If set, arguments to `traceRays` calls will be validated.
+    pub trace_ray_argument_validation: bool,
+
     /// Whether to use the `StorageInputOutput16` capability for `f16` shader I/O.
     /// When false, `f16` I/O is polyfilled using `f32` types with conversions.
     pub use_storage_input_output_16: bool,
 
     pub debug_info: Option<DebugInfo<'a>>,
 
+    /// Limits to the mesh shader dispatch group a task workgroup can dispatch.
+    ///
+    /// Metal for example limits to 1024 workgroups per task shader dispatch. Dispatching more is
+    /// undefined behavior, so this would validate that to dispatch zero workgroups.
     pub task_dispatch_limits: Option<TaskDispatchLimits>,
 
+    /// If true, naga may generate checks that the primitive indices are valid in the output.
+    ///
+    /// Currently this validation is unimplemented.
     pub mesh_shader_primitive_indices_clamp: bool,
 }
 
@@ -1107,6 +1134,7 @@ impl Default for Options<'_> {
             zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode::Polyfill,
             force_loop_bounding: true,
             ray_query_initialization_tracking: true,
+            trace_ray_argument_validation: true,
             use_storage_input_output_16: true,
             debug_info: None,
             task_dispatch_limits: None,
@@ -1145,4 +1173,52 @@ pub fn write_vec(
         &mut words,
     )?;
     Ok(words)
+}
+
+pub fn supported_capabilities() -> crate::valid::Capabilities {
+    use crate::valid::Capabilities as Caps;
+
+    Caps::IMMEDIATES
+        | Caps::FLOAT64
+        | Caps::PRIMITIVE_INDEX
+        | Caps::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+        | Caps::BUFFER_BINDING_ARRAY
+        | Caps::STORAGE_TEXTURE_BINDING_ARRAY
+        | Caps::STORAGE_BUFFER_BINDING_ARRAY
+        | Caps::ACCELERATION_STRUCTURE_BINDING_ARRAY
+        | Caps::CLIP_DISTANCES
+        // No cull distance
+        | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
+        | Caps::MULTIVIEW
+        | Caps::EARLY_DEPTH_TEST
+        | Caps::MULTISAMPLED_SHADING
+        | Caps::RAY_QUERY
+        | Caps::DUAL_SOURCE_BLENDING
+        | Caps::CUBE_ARRAY_TEXTURES
+        | Caps::SHADER_INT64
+        | Caps::SUBGROUP
+        | Caps::SUBGROUP_BARRIER
+        | Caps::SUBGROUP_VERTEX_STAGE
+        | Caps::SHADER_INT64_ATOMIC_MIN_MAX
+        | Caps::SHADER_INT64_ATOMIC_ALL_OPS
+        | Caps::SHADER_FLOAT32_ATOMIC
+        | Caps::TEXTURE_ATOMIC
+        | Caps::TEXTURE_INT64_ATOMIC
+        | Caps::RAY_HIT_VERTEX_POSITION
+        | Caps::SHADER_FLOAT16
+        // No TEXTURE_EXTERNAL
+        | Caps::SHADER_FLOAT16_IN_FLOAT32
+        | Caps::SHADER_BARYCENTRICS
+        | Caps::MESH_SHADER
+        | Caps::MESH_SHADER_POINT_TOPOLOGY
+        | Caps::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        // No BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        | Caps::STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        | Caps::STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        | Caps::COOPERATIVE_MATRIX
+        | Caps::PER_VERTEX
+        | Caps::RAY_TRACING_PIPELINE
+        | Caps::DRAW_INDEX
+        | Caps::MEMORY_DECORATION_COHERENT
+        | Caps::MEMORY_DECORATION_VOLATILE
 }

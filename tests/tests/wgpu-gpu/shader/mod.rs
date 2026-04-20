@@ -279,7 +279,7 @@ async fn shader_input_output_test(
         .device
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&bgl],
+            bind_group_layouts: &[Some(&bgl)],
             immediate_size: match storage_type {
                 InputStorageType::Immediate => MAX_BUFFER_SIZE as u32,
                 _ => 0,
@@ -376,7 +376,7 @@ async fn shader_input_output_test(
         mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
         ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
 
-        let mapped = mapping_buffer.slice(..).get_mapped_range();
+        let mapped = mapping_buffer.slice(..).get_mapped_range().unwrap();
 
         let typed: &[u32] = bytemuck::cast_slice(&mapped);
 

@@ -11,14 +11,13 @@ struct Structure {
 
 struct main_Input {
 };
-kernel void main_(
+[[max_total_threads_per_threadgroup(1)]] kernel void main_(
   uint num_subgroups [[simdgroups_per_threadgroup]]
 , uint subgroup_size [[threads_per_simdgroup]]
 , uint subgroup_id [[simdgroup_index_in_threadgroup]]
 , uint subgroup_invocation_id [[thread_index_in_simdgroup]]
 ) {
     const Structure sizes = { num_subgroups, subgroup_size };
-    metal::simdgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::uint4 unnamed = metal::uint4((uint64_t)metal::simd_ballot((subgroup_invocation_id & 1u) == 1u), 0, 0, 0);
     metal::uint4 unnamed_1 = metal::uint4((uint64_t)metal::simd_ballot(true), 0, 0, 0);
     bool unnamed_2 = metal::simd_all(subgroup_invocation_id != 0u);

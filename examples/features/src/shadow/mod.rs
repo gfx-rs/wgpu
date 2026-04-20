@@ -438,11 +438,11 @@ impl crate::framework::Example for Example {
         });
 
         let vertex_attr = wgpu::vertex_attr_array![0 => Sint8x4, 1 => Sint8x4];
-        let vb_desc = wgpu::VertexBufferLayout {
+        let vertex_buffers = [Some(wgpu::VertexBufferLayout {
             array_stride: vertex_size as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &vertex_attr,
-        };
+        })];
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
@@ -465,7 +465,7 @@ impl crate::framework::Example for Example {
                 });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("shadow"),
-                bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
+                bind_group_layouts: &[Some(&bind_group_layout), Some(&local_bind_group_layout)],
                 immediate_size: 0,
             });
 
@@ -494,7 +494,7 @@ impl crate::framework::Example for Example {
                     module: &shader,
                     entry_point: Some("vs_bake"),
                     compilation_options: Default::default(),
-                    buffers: std::slice::from_ref(&vb_desc),
+                    buffers: &vertex_buffers,
                 },
                 fragment: None,
                 primitive: wgpu::PrimitiveState {
@@ -508,8 +508,8 @@ impl crate::framework::Example for Example {
                 },
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: Self::SHADOW_FORMAT,
-                    depth_write_enabled: true,
-                    depth_compare: wgpu::CompareFunction::LessEqual,
+                    depth_write_enabled: Some(true),
+                    depth_compare: Some(wgpu::CompareFunction::LessEqual),
                     stencil: wgpu::StencilState::default(),
                     bias: wgpu::DepthBiasState {
                         constant: 2, // corresponds to bilinear filtering
@@ -581,7 +581,7 @@ impl crate::framework::Example for Example {
                 });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("main"),
-                bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
+                bind_group_layouts: &[Some(&bind_group_layout), Some(&local_bind_group_layout)],
                 immediate_size: 0,
             });
 
@@ -628,7 +628,7 @@ impl crate::framework::Example for Example {
                     module: &shader,
                     entry_point: Some("vs_main"),
                     compilation_options: Default::default(),
-                    buffers: &[vb_desc],
+                    buffers: &vertex_buffers,
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
@@ -647,8 +647,8 @@ impl crate::framework::Example for Example {
                 },
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: Self::DEPTH_FORMAT,
-                    depth_write_enabled: true,
-                    depth_compare: wgpu::CompareFunction::Less,
+                    depth_write_enabled: Some(true),
+                    depth_compare: Some(wgpu::CompareFunction::Less),
                     stencil: wgpu::StencilState::default(),
                     bias: wgpu::DepthBiasState::default(),
                 }),

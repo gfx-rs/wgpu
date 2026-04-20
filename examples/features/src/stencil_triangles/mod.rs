@@ -53,7 +53,7 @@ impl crate::framework::Example for Example {
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
-        let vertex_buffers = [wgpu::VertexBufferLayout {
+        let vertex_buffers = [Some(wgpu::VertexBufferLayout {
             array_stride: vertex_size as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[wgpu::VertexAttribute {
@@ -61,7 +61,7 @@ impl crate::framework::Example for Example {
                 offset: 0,
                 shader_location: 0,
             }],
-        }];
+        })];
 
         let mask_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -83,11 +83,9 @@ impl crate::framework::Example for Example {
                 })],
             }),
             primitive: Default::default(),
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: wgpu::TextureFormat::Stencil8,
-                depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::Always,
-                stencil: wgpu::StencilState {
+            depth_stencil: Some(wgpu::DepthStencilState::stencil(
+                wgpu::TextureFormat::Stencil8,
+                wgpu::StencilState {
                     front: wgpu::StencilFaceState {
                         compare: wgpu::CompareFunction::Always,
                         pass_op: wgpu::StencilOperation::Replace,
@@ -97,8 +95,7 @@ impl crate::framework::Example for Example {
                     read_mask: !0,
                     write_mask: !0,
                 },
-                bias: Default::default(),
-            }),
+            )),
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
             cache: None,
@@ -120,11 +117,9 @@ impl crate::framework::Example for Example {
                 targets: &[Some(config.view_formats[0].into())],
             }),
             primitive: Default::default(),
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: wgpu::TextureFormat::Stencil8,
-                depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::Always,
-                stencil: wgpu::StencilState {
+            depth_stencil: Some(wgpu::DepthStencilState::stencil(
+                wgpu::TextureFormat::Stencil8,
+                wgpu::StencilState {
                     front: wgpu::StencilFaceState {
                         compare: wgpu::CompareFunction::Greater,
                         ..Default::default()
@@ -133,8 +128,7 @@ impl crate::framework::Example for Example {
                     read_mask: !0,
                     write_mask: !0,
                 },
-                bias: Default::default(),
-            }),
+            )),
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
             cache: None,

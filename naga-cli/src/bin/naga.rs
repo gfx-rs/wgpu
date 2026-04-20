@@ -575,6 +575,10 @@ fn run() -> anyhow::Result<()> {
 
     params.spv_out.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
     params.spv_out.task_dispatch_limits = args.task_limits.0;
+    params.msl.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
+    params.msl.task_dispatch_limits = args.task_limits.0;
+    params.hlsl.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
+    params.hlsl.task_dispatch_limits = args.task_limits.0;
 
     if args.bulk_validate {
         return bulk_validate(&args, &params);
@@ -628,19 +632,21 @@ fn run() -> anyhow::Result<()> {
     let output_paths = files;
 
     // Decide which capabilities our output formats can support.
-    let validation_caps =
-        output_paths
-            .clone()
-            .fold(naga::valid::Capabilities::all(), |caps, path| {
-                use naga::valid::Capabilities as C;
-                let missing = match Path::new(path).extension().and_then(|ex| ex.to_str()) {
-                    Some("wgsl") => C::CLIP_DISTANCE | C::CULL_DISTANCE,
-                    Some("metal") => C::CULL_DISTANCE,
-                    Some("hlsl") => C::empty(),
-                    _ => C::TEXTURE_EXTERNAL,
-                };
-                caps & !missing
-            });
+    let validation_caps = output_paths
+        .clone()
+        .fold(params.capabilities, |caps, path| {
+            use naga::valid::Capabilities as C;
+            let allowed = match Path::new(path).extension().and_then(|ex| ex.to_str()) {
+                Some("wgsl") => naga::back::wgsl::supported_capabilities(),
+                Some("metal") => naga::back::msl::supported_capabilities(),
+                Some("hlsl") => naga::back::hlsl::supported_capabilities(),
+                Some("spv") | Some("spirv") => naga::back::spv::supported_capabilities(),
+                Some("glsl") | Some("frag") | Some("vert") | Some("comp") | Some("task")
+                | Some("mesh") => naga::back::glsl::supported_capabilities(),
+                _ => C::all() - C::TEXTURE_EXTERNAL,
+            };
+            caps & allowed
+        });
 
     // Validate the IR before compaction.
     let info = match naga::valid::Validator::new(params.validation_flags, validation_caps)
@@ -767,7 +773,7 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
                 Err(ref e) => {
                     let message = anyhow!(
                         "Could not parse WGSL:\n{}",
-                        e.emit_to_string_with_path(&input, input_path)
+                        e.emit_to_string_with_path(&input, &input_path.display().to_string())
                     );
                     return Err(message);
                 }

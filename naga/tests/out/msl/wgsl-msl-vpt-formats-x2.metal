@@ -53,6 +53,10 @@ struct VertexInput {
     metal::int2 v_sint32x4_;
     metal::float2 v_unorm10_10_10_2_;
     metal::float2 v_unorm8x4_bgra;
+    metal::half2 v_float16_as_f16_;
+    metal::half2 v_float16x2_as_f16_;
+    metal::half2 v_float16x4_as_f16_;
+    char _pad44[4];
 };
 uint unpackUint8_(metal::uchar b0) {
     return uint(b0);
@@ -181,7 +185,7 @@ metal::float4 unpackUnorm8x4Bgra(metal::uchar b0, metal::uchar b1, metal::uchar 
 struct render_vertexOutput {
     metal::float4 position [[position]];
 };
-struct vb_1_type { metal::uchar data[644]; };
+struct vb_1_type { metal::uchar data[704]; };
 vertex render_vertexOutput render_vertex(
   uint v_id [[vertex_id]]
 , const device vb_1_type* vb_1_in [[buffer(1)]]
@@ -228,7 +232,10 @@ vertex render_vertexOutput render_vertex(
     metal::int2 v_sint32x4_ = {};
     metal::float2 v_unorm10_10_10_2_ = {};
     metal::float2 v_unorm8x4_bgra = {};
-    if (v_id < (_buffer_sizes.buffer_size1 / 644)) {
+    metal::half2 v_float16_as_f16_ = {};
+    metal::half2 v_float16x2_as_f16_ = {};
+    metal::half2 v_float16x4_as_f16_ = {};
+    if (v_id < (_buffer_sizes.buffer_size1 / 704)) {
         const vb_1_type vb_1_elem = vb_1_in[v_id];
         // metal::uint2 <- Uint8
         v_uint8_ = metal::uint2(unpackUint8_(vb_1_elem.data[0]), 0);
@@ -300,8 +307,13 @@ vertex render_vertexOutput render_vertex(
         v_unorm10_10_10_2_ = unpackUnorm10_10_10_2_(vb_1_elem.data[624], vb_1_elem.data[625], vb_1_elem.data[626], vb_1_elem.data[627]).xy;
         // metal::float2 <- Unorm8x4Bgra
         v_unorm8x4_bgra = unpackUnorm8x4Bgra(vb_1_elem.data[640], vb_1_elem.data[641], vb_1_elem.data[642], vb_1_elem.data[643]).xy;
+        // metal::half2 <- Float16
+        v_float16_as_f16_ = metal::half2(half(unpackFloat16_(vb_1_elem.data[656], vb_1_elem.data[657])), 0.0);
+        v_float16x2_as_f16_ = metal::half2(unpackFloat16x2_(vb_1_elem.data[672], vb_1_elem.data[673], vb_1_elem.data[674], vb_1_elem.data[675]));
+        // metal::half2 <- Float16x4
+        v_float16x4_as_f16_ = metal::half4(unpackFloat16x4_(vb_1_elem.data[688], vb_1_elem.data[689], vb_1_elem.data[690], vb_1_elem.data[691], vb_1_elem.data[692], vb_1_elem.data[693], vb_1_elem.data[694], vb_1_elem.data[695])).xy;
     }
-    const VertexInput v_in = { v_uint8_, v_uint8x2_, v_uint8x4_, v_sint8_, v_sint8x2_, v_sint8x4_, v_unorm8_, v_unorm8x2_, v_unorm8x4_, v_snorm8_, v_snorm8x2_, v_snorm8x4_, v_uint16_, v_uint16x2_, v_uint16x4_, v_sint16_, v_sint16x2_, v_sint16x4_, v_unorm16_, v_unorm16x2_, v_unorm16x4_, v_snorm16_, v_snorm16x2_, v_snorm16x4_, v_float16_, v_float16x2_, v_float16x4_, v_float32_, v_float32x2_, v_float32x3_, v_float32x4_, v_uint32_, v_uint32x2_, v_uint32x3_, v_uint32x4_, v_sint32_, v_sint32x2_, v_sint32x3_, v_sint32x4_, v_unorm10_10_10_2_, v_unorm8x4_bgra };
+    const VertexInput v_in = { v_uint8_, v_uint8x2_, v_uint8x4_, v_sint8_, v_sint8x2_, v_sint8x4_, v_unorm8_, v_unorm8x2_, v_unorm8x4_, v_snorm8_, v_snorm8x2_, v_snorm8x4_, v_uint16_, v_uint16x2_, v_uint16x4_, v_sint16_, v_sint16x2_, v_sint16x4_, v_unorm16_, v_unorm16x2_, v_unorm16x4_, v_snorm16_, v_snorm16x2_, v_snorm16x4_, v_float16_, v_float16x2_, v_float16x4_, v_float32_, v_float32x2_, v_float32x3_, v_float32x4_, v_uint32_, v_uint32x2_, v_uint32x3_, v_uint32x4_, v_sint32_, v_sint32x2_, v_sint32x3_, v_sint32x4_, v_unorm10_10_10_2_, v_unorm8x4_bgra, v_float16_as_f16_, v_float16x2_as_f16_, v_float16x4_as_f16_ };
     const auto _tmp = VertexOutput {metal::float4(v_in.v_float32_.x)};
     return render_vertexOutput { _tmp.position };
 }

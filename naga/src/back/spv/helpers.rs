@@ -56,7 +56,12 @@ pub(super) const fn map_storage_class(space: crate::AddressSpace) -> spirv::Stor
         crate::AddressSpace::WorkGroup => spirv::StorageClass::Workgroup,
         crate::AddressSpace::Immediate => spirv::StorageClass::PushConstant,
         crate::AddressSpace::TaskPayload => spirv::StorageClass::TaskPayloadWorkgroupEXT,
-        crate::AddressSpace::IncomingRayPayload | crate::AddressSpace::RayPayload => unreachable!(),
+        // We can't require capabilities here but we request capabilities on the ray pipeline stages
+        // and when writing global variables - global variables because we may be writing an
+        // uncompacted module and pipeline stages for all other cases because these can only be
+        //accessed in a ray tracing pipeline stage.
+        crate::AddressSpace::RayPayload => spirv::StorageClass::RayPayloadKHR,
+        crate::AddressSpace::IncomingRayPayload => spirv::StorageClass::IncomingRayPayloadKHR,
     }
 }
 
@@ -189,8 +194,8 @@ impl StrUnstable for str {
                 .iter()
                 .rposition(|b| b.is_utf8_char_boundary_polyfill());
 
-            // SAFETY: we know that the character boundary will be within four bytes
-            unsafe { lower_bound + new_index.unwrap_unchecked() }
+            // We know that the character boundary will be within four bytes.
+            lower_bound + new_index.unwrap()
         }
     }
 }

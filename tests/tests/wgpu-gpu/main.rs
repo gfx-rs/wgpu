@@ -5,6 +5,7 @@ mod regression {
     pub mod issue_4122;
     pub mod issue_4485;
     pub mod issue_4514;
+    pub mod issue_5231_9343;
     pub mod issue_5553;
     pub mod issue_6317;
     pub mod issue_6467;
@@ -22,6 +23,7 @@ mod clear_texture;
 mod clip_distances;
 mod cloneable_types;
 mod compute_pass_ownership;
+mod compute_pass_transition_resources;
 mod create_surface_error;
 mod device;
 mod dispatch_workgroups_indirect;
@@ -39,6 +41,7 @@ mod life_cycle;
 mod mem_leaks;
 mod mesh_shader;
 mod multiview;
+mod naga_capabilities;
 mod occlusion_query;
 mod oob_indexing;
 mod oom;
@@ -128,6 +131,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     regression::issue_4122::all_tests(&mut tests);
     regression::issue_4485::all_tests(&mut tests);
     regression::issue_4514::all_tests(&mut tests);
+    regression::issue_5231_9343::all_tests(&mut tests);
     regression::issue_5553::all_tests(&mut tests);
     regression::issue_6317::all_tests(&mut tests);
     regression::issue_6467::all_tests(&mut tests);
@@ -152,11 +156,13 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     transfer::all_tests(&mut tests);
     transient::all_tests(&mut tests);
     transition_resources::all_tests(&mut tests);
+    compute_pass_transition_resources::all_tests(&mut tests);
     vertex_formats::all_tests(&mut tests);
     vertex_indices::all_tests(&mut tests);
     vertex_state::all_tests(&mut tests);
     write_texture::all_tests(&mut tests);
     zero_init_texture_after_discard::all_tests(&mut tests);
+    naga_capabilities::all_tests(&mut tests);
 
     tests
 }

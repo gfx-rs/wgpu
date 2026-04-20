@@ -63,10 +63,10 @@ impl Device {
         let instance = Instance::new(InstanceDescriptor {
             backends: Backends::NOOP,
             backend_options: BackendOptions {
-                noop: NoopBackendOptions { enable: true },
+                noop: NoopBackendOptions::enabled(),
                 ..Default::default()
             },
-            ..Default::default()
+            ..InstanceDescriptor::new_without_display_handle()
         });
 
         // Both of these futures are trivial and should complete instantaneously,

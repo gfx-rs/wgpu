@@ -88,3 +88,9 @@ impl crate::AtomicFunction {
         }
     }
 }
+
+pub const fn supported_capabilities() -> crate::valid::Capabilities {
+    // WGSL regurgitation supports almost everything, though browser webgpu can't parse most of these.
+    use crate::valid::Capabilities as Caps;
+    Caps::all()
+}

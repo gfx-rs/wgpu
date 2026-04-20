@@ -11,7 +11,36 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
 
     let targets = params.targets.unwrap();
 
-    let capabilities = params.capabilities.unwrap_or_default();
+    let mut capabilities = params.capabilities.unwrap_or_default();
+    {
+        let mut allowed_capabilities = naga::valid::Capabilities::all();
+        if targets.contains(Targets::GLSL) {
+            allowed_capabilities &= naga::back::glsl::supported_capabilities();
+        }
+        if targets.contains(Targets::HLSL) {
+            allowed_capabilities &= naga::back::hlsl::supported_capabilities();
+        }
+        if targets.contains(Targets::SPIRV) {
+            allowed_capabilities &= naga::back::spv::supported_capabilities();
+        }
+        if targets.contains(Targets::WGSL) {
+            allowed_capabilities &= naga::back::wgsl::supported_capabilities();
+        }
+        if targets.contains(Targets::METAL) {
+            allowed_capabilities &= naga::back::msl::supported_capabilities();
+        }
+        if capabilities == naga::valid::Capabilities::all() {
+            capabilities = allowed_capabilities;
+        } else {
+            let diff = capabilities - allowed_capabilities;
+            if !diff.is_empty() {
+                panic!(
+                    "Invalid capabilities for backends on shader {name}: used {diff:?} which aren't supported by one of the targets.
+Note: this is an issue with snapshot configuration, not code. If you added a new capability, add it to `supported_capabilities()` in each backend where it is supported"
+                );
+            }
+        }
+    }
 
     {
         if targets.contains(Targets::IR) {
@@ -102,8 +131,8 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
             &info,
             &params.msl,
             &params.msl_pipeline,
-            params.bounds_check_policies,
             &params.pipeline_constants,
+            &shared_info,
         );
     }
 
@@ -161,6 +190,7 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
             &params.hlsl,
             &params.pipeline_constants,
             frag_ep,
+            &shared_info,
         );
     }
 
@@ -237,8 +267,8 @@ fn write_output_msl(
     info: &naga::valid::ModuleInfo,
     options: &naga::back::msl::Options,
     pipeline_options: &naga::back::msl::PipelineOptions,
-    bounds_check_policies: naga::proc::BoundsCheckPolicies,
     pipeline_constants: &naga::back::PipelineConstants,
+    shared_options: &WriterSharedOptions,
 ) {
     use naga::back::msl;
 
@@ -249,7 +279,9 @@ fn write_output_msl(
             .expect("override evaluation failed");
 
     let mut options = options.clone();
-    options.bounds_check_policies = bounds_check_policies;
+    options.bounds_check_policies = shared_options.bounds_checks_policies;
+    options.mesh_shader_primitive_indices_clamp = shared_options.mesh_output_validation;
+    options.task_dispatch_limits = shared_options.task_limits;
     let (string, tr_info) = msl::write_string(&module, &info, &options, pipeline_options)
         .unwrap_or_else(|err| panic!("Metal write failed: {err}"));
 
@@ -310,6 +342,7 @@ fn write_output_hlsl(
     options: &naga::back::hlsl::Options,
     pipeline_constants: &naga::back::PipelineConstants,
     frag_ep: Option<naga::back::hlsl::FragmentEntryPoint>,
+    shared_info: &WriterSharedOptions,
 ) {
     use naga::back::hlsl;
 
@@ -319,9 +352,13 @@ fn write_output_hlsl(
         naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
             .expect("override evaluation failed");
 
+    let mut options = options.clone();
+    options.mesh_shader_primitive_indices_clamp = shared_info.mesh_output_validation;
+    options.task_dispatch_limits = shared_info.task_limits;
+
     let mut buffer = String::new();
     let pipeline_options = Default::default();
-    let mut writer = hlsl::Writer::new(&mut buffer, options, &pipeline_options);
+    let mut writer = hlsl::Writer::new(&mut buffer, &options, &pipeline_options);
     let reflection_info = writer
         .write(&module, &info, frag_ep.as_ref())
         .expect("HLSL write failed");
@@ -341,9 +378,9 @@ fn write_output_hlsl(
             naga::ShaderStage::Vertex => &mut config.vertex,
             naga::ShaderStage::Fragment => &mut config.fragment,
             naga::ShaderStage::Compute => &mut config.compute,
-            naga::ShaderStage::Task
-            | naga::ShaderStage::Mesh
-            | naga::ShaderStage::RayGeneration
+            naga::ShaderStage::Task => &mut config.task,
+            naga::ShaderStage::Mesh => &mut config.mesh,
+            naga::ShaderStage::RayGeneration
             | naga::ShaderStage::AnyHit
             | naga::ShaderStage::ClosestHit
             | naga::ShaderStage::Miss => unreachable!(),
@@ -397,7 +434,10 @@ fn convert_snapshots_wgsl() {
             Ok(mut module) => check_targets(&input, &mut module, Some(&source)),
             Err(e) => panic!(
                 "{}",
-                e.emit_to_string_with_path(&source, input.input_path(DIR_IN))
+                e.emit_to_string_with_path(
+                    &source,
+                    &input.input_path(DIR_IN).display().to_string()
+                )
             ),
         }
     }

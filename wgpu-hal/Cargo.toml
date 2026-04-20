@@ -75,10 +75,8 @@ metal = [
     "naga/msl-out",
     "dep:arrayvec",
     "dep:block2",
-    "dep:dispatch2",
-    "dep:hashbrown",
+    "dep:bytemuck",
     "dep:libc",
-    "dep:log",
     "dep:objc2",
     "dep:objc2-core-foundation",
     "dep:objc2-foundation",
@@ -96,10 +94,8 @@ vulkan = [
     "dep:ash",
     "dep:bytemuck",
     "dep:gpu-descriptor",
-    "dep:hashbrown",
     "dep:libc",
     "dep:libloading",
-    "dep:log",
     "dep:ordered-float",
     "dep:parking_lot",
     "dep:profiling",
@@ -110,49 +106,48 @@ vulkan = [
     "windows/Win32",
 ]
 gles = [
-    "naga/glsl-out",
     "dep:arrayvec",
     "dep:bytemuck",
     "dep:glow",
     "dep:glutin_wgl_sys",
-    "dep:hashbrown",
     "dep:js-sys",
     "dep:khronos-egl",
-    "dep:wayland-sys",
     "dep:libloading",
-    "dep:log",
     "dep:ndk-sys",
     "dep:objc2",
     "dep:parking_lot",
     "dep:profiling",
     "dep:wasm-bindgen",
+    "dep:wayland-sys",
     "dep:web-sys",
+    "dep:windows-result",
+    "naga/glsl-out",
     "wgpu-types/web",
-    "windows/Win32_Graphics_OpenGL",
+    "windows-result/std",                   # Need to enable this for the `Error` impl on `windows_result::Error` to work.
     "windows/Win32_Graphics_Gdi",
+    "windows/Win32_Graphics_OpenGL",
     "windows/Win32_System_LibraryLoader",
     "windows/Win32_UI_WindowsAndMessaging",
 ]
 ## Enables the DX12 backend when targeting Windows.
 dx12 = [
-    "naga/hlsl-out",
     "dep:arrayvec",
     "dep:bit-set",
     "dep:bytemuck",
-    "dep:hashbrown",
+    "dep:gpu-allocator",
     "dep:libloading",
-    "dep:log",
-    "dep:ordered-float",
     "dep:once_cell",
+    "dep:ordered-float",
     "dep:parking_lot",
     "dep:profiling",
     "dep:range-alloc",
     "dep:windows-core",
-    "dep:gpu-allocator",
     "gpu-allocator/d3d12",
+    "naga/hlsl-out",
+    "once_cell/std",
     "windows/Win32_Devices_DeviceAndDriverInstallation",
-    "windows/Win32_Graphics_Direct3D_Fxc",
     "windows/Win32_Graphics_Direct3D_Dxc",
+    "windows/Win32_Graphics_Direct3D_Fxc",
     "windows/Win32_Graphics_Direct3D",
     "windows/Win32_Graphics_Direct3D12",
     "windows/Win32_Graphics_DirectComposition",
@@ -170,7 +165,7 @@ dx12 = [
 ###########################
 
 static-dxc = ["dep:mach-dxcompiler-rs"]
-renderdoc = ["dep:libloading", "dep:renderdoc-sys", "dep:log"]
+renderdoc = ["dep:libloading", "dep:renderdoc-sys"]
 fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
@@ -204,20 +199,21 @@ required-features = ["gles"]
 
 [dependencies]
 naga.workspace = true
+wgpu-naga-bridge.workspace = true
 wgpu-types = { workspace = true, default-features = false }
 
 # Dependencies in the lib and empty backend
 bitflags.workspace = true
 cfg-if.workspace = true
-raw-window-handle.workspace = true
+log = { workspace = true }
 parking_lot = { workspace = true, optional = true }
+raw-window-handle.workspace = true
 thiserror.workspace = true
 
 # Target agnostic dependencies used only in backends.
 arrayvec = { workspace = true, optional = true }
 bytemuck = { workspace = true, optional = true, features = ["derive"] }
-hashbrown = { workspace = true, optional = true }
-log = { workspace = true, optional = true }
+hashbrown = { workspace = true }
 ordered-float = { workspace = true, optional = true }
 profiling = { workspace = true, optional = true, default-features = false }
 
@@ -254,6 +250,10 @@ wayland-sys = { version = "0.31.3", features = [
     "egl",
 ], optional = true }
 
+## Support creating textures from DRM display/window handles.
+[target.'cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))'.dependencies]
+drm = { version = "0.15", optional = true }
+
 #########################
 ### Platform: Windows ###
 #########################
@@ -262,6 +262,7 @@ wayland-sys = { version = "0.31.3", features = [
 # Backend: Dx12 and GLES
 windows = { workspace = true, optional = true }
 windows-core = { workspace = true, optional = true }
+windows-result = { workspace = true, optional = true }
 # Backend: Dx12
 bit-set = { workspace = true, optional = true }
 range-alloc = { workspace = true, optional = true }
@@ -284,7 +285,7 @@ mach-dxcompiler-rs = { workspace = true, optional = true }
 [target.'cfg(target_vendor = "apple")'.dependencies]
 # Backend: Metal
 block2 = { workspace = true, optional = true }
-dispatch2 = { workspace = true, optional = true }
+bytemuck = { workspace = true, optional = true }
 objc2 = { workspace = true, optional = true }
 objc2-core-foundation = { workspace = true, optional = true }
 objc2-foundation = { workspace = true, optional = true }
@@ -315,6 +316,7 @@ web-sys = { workspace = true, optional = true, features = [
     "HtmlCanvasElement",
     "WebGl2RenderingContext",
     "OffscreenCanvas",
+    "VideoFrame",
 ] }
 js-sys = { workspace = true, optional = true, default-features = true }
 
@@ -345,14 +347,10 @@ cfg_aliases.workspace = true
 [dev-dependencies]
 env_logger.workspace = true
 glam.workspace = true                                            # for ray-traced-triangle example
-log.workspace = true
 naga = { workspace = true, features = ["wgsl-in", "termcolor"] }
 winit.workspace = true                                           # for "halmark" example
 
 ### Platform: Windows + MacOS + Linux for "raw-gles" example ###
-[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos")))'.dev-dependencies]
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos", target_env = "ohos")))'.dev-dependencies]
 glutin-winit = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
 glutin = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
-# temporary compatibility for glutin-winit
-rwh_05.workspace = true
-winit = { workspace = true, features = ["rwh_05"] }

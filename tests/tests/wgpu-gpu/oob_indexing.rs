@@ -17,7 +17,14 @@ static RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET: GpuTestConfiguration = GpuTestCo
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .skip(FailureCase::backend(Backends::GL)),
+            .skip(FailureCase::backend(Backends::GL))
+            // https://github.com/gfx-rs/wgpu/issues/9184
+            .expect_fail(
+                FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline")
+                    .panic("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
+            ),
     )
     .run_async(|ctx| async move {
         let test_resources = TestResources::new(&ctx);
@@ -52,7 +59,11 @@ static RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET: GpuTestConfiguration = GpuTestCo
             .await
             .unwrap();
 
-        let view = test_resources.readback_buffer.slice(..).get_mapped_range();
+        let view = test_resources
+            .readback_buffer
+            .slice(..)
+            .get_mapped_range()
+            .unwrap();
 
         let current_res: [u32; 12] = *bytemuck::from_bytes(&view);
         drop(view);
@@ -177,7 +188,7 @@ impl TestResources {
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[&bgl],
+                bind_group_layouts: &[Some(&bgl)],
                 immediate_size: 0,
             });
 
@@ -341,7 +352,7 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
         .device
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&bgl],
+            bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
         });
 
@@ -455,7 +466,7 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
         .await
         .unwrap();
 
-    let view = readback_buffer.slice(..).get_mapped_range();
+    let view = readback_buffer.slice(..).get_mapped_range().unwrap();
 
     let current_res: [u32; 3] = *bytemuck::from_bytes(&view);
     drop(view);

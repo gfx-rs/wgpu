@@ -1,4 +1,5 @@
 **/*.frag
 **/*.vert
+deno_webgpu/**/*.js
 naga/tests/in/
 naga/tests/out/

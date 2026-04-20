@@ -94,6 +94,7 @@ impl Writer {
             zero_initialize_workgroup_memory: options.zero_initialize_workgroup_memory,
             force_loop_bounding: options.force_loop_bounding,
             ray_query_initialization_tracking: options.ray_query_initialization_tracking,
+            trace_ray_argument_validation: options.trace_ray_argument_validation,
             use_storage_input_output_16: options.use_storage_input_output_16,
             void_type,
             tuple_of_u32s_ty_id: None,
@@ -111,6 +112,8 @@ impl Writer {
             gl450_ext_inst_id,
             temp_list: Vec::new(),
             ray_query_functions: crate::FastHashMap::default(),
+            ray_tracing_functions: crate::FastHashMap::default(),
+            has_ray_tracing_pipeline: false,
             io_f16_polyfills: super::f16_polyfill::F16IoPolyfill::new(
                 options.use_storage_input_output_16,
             ),
@@ -171,6 +174,7 @@ impl Writer {
             zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
             force_loop_bounding: self.force_loop_bounding,
             ray_query_initialization_tracking: self.ray_query_initialization_tracking,
+            trace_ray_argument_validation: self.trace_ray_argument_validation,
             use_storage_input_output_16: self.use_storage_input_output_16,
             capabilities_available: take(&mut self.capabilities_available),
             fake_missing_bindings: self.fake_missing_bindings,
@@ -203,6 +207,8 @@ impl Writer {
             saved_cached: take(&mut self.saved_cached).reclaim(),
             temp_list: take(&mut self.temp_list).reclaim(),
             ray_query_functions: take(&mut self.ray_query_functions).reclaim(),
+            ray_tracing_functions: take(&mut self.ray_tracing_functions).reclaim(),
+            has_ray_tracing_pipeline: false,
             io_f16_polyfills: take(&mut self.io_f16_polyfills).reclaim(),
             debug_printf: None,
         };
@@ -822,6 +828,9 @@ impl Writer {
         ir_module: &crate::Module,
         r#type: Handle<crate::Type>,
     ) -> Result<(), Error> {
+        if !self.std140_compat_uniform_types.contains_key(&r#type) {
+            return Ok(());
+        }
         // Check if we've already emitted this function.
         let wrapped = WrappedFunction::ConvertFromStd140CompatType { r#type };
         let function_id = match self.wrapped_functions.entry(wrapped) {
@@ -897,9 +906,7 @@ impl Writer {
                 self.write_wrapped_convert_from_std140_compat_type(ir_module, base)?;
 
                 let element_type_id = self.get_handle_type_id(base);
-                let std140_element_type_id = self.std140_compat_uniform_types[&base].type_id;
-                let element_conversion_function_id = self.wrapped_functions
-                    [&WrappedFunction::ConvertFromStd140CompatType { r#type: base }];
+                let std140_info = self.std140_compat_uniform_types.get(&base);
                 let mut element_ids = Vec::new();
                 let size = match size.resolve(ir_module.to_ctx())? {
                     crate::proc::IndexableLength::Known(size) => size,
@@ -911,20 +918,31 @@ impl Writer {
                 };
                 for i in 0..size {
                     let std140_element_id = self.id_gen.next();
+                    let std140_element_type_id =
+                        std140_info.map_or(element_type_id, |info| info.type_id);
                     block.body.push(Instruction::composite_extract(
                         std140_element_type_id,
                         std140_element_id,
                         param_id,
                         &[i],
                     ));
-                    let element_id = self.id_gen.next();
-                    block.body.push(Instruction::function_call(
-                        element_type_id,
-                        element_id,
-                        element_conversion_function_id,
-                        &[std140_element_id],
-                    ));
-                    element_ids.push(element_id);
+
+                    // Only call the conversion function if a compatibility mapping actually exists.
+                    let final_element_id = if std140_info.is_some() {
+                        let conversion_fn_id = self.wrapped_functions
+                            [&WrappedFunction::ConvertFromStd140CompatType { r#type: base }];
+                        let id = self.id_gen.next();
+                        block.body.push(Instruction::function_call(
+                            element_type_id,
+                            id,
+                            conversion_fn_id,
+                            &[std140_element_id],
+                        ));
+                        id
+                    } else {
+                        std140_element_type_id
+                    };
+                    element_ids.push(final_element_id);
                 }
                 let result_id = self.id_gen.next();
                 block.body.push(Instruction::composite_construct(
@@ -1000,7 +1018,6 @@ impl Writer {
                                     next_index += 1;
                                 }
                                 None => {
-                                    let member_id = self.id_gen.next();
                                     block.body.push(Instruction::composite_extract(
                                         member_type_id,
                                         member_id,
@@ -1846,10 +1863,22 @@ impl Writer {
                 .to_words(&mut self.logical_layout.execution_modes);
                 spirv::ExecutionModel::MeshEXT
             }
-            crate::ShaderStage::RayGeneration
-            | crate::ShaderStage::AnyHit
-            | crate::ShaderStage::ClosestHit
-            | crate::ShaderStage::Miss => unreachable!(),
+            crate::ShaderStage::RayGeneration => {
+                self.require_any("ray tracing pipelines", &[spirv::Capability::RayTracingKHR])?;
+                spirv::ExecutionModel::RayGenerationKHR
+            }
+            crate::ShaderStage::AnyHit => {
+                self.require_any("ray tracing pipelines", &[spirv::Capability::RayTracingKHR])?;
+                spirv::ExecutionModel::AnyHitKHR
+            }
+            crate::ShaderStage::ClosestHit => {
+                self.require_any("ray tracing pipelines", &[spirv::Capability::RayTracingKHR])?;
+                spirv::ExecutionModel::ClosestHitKHR
+            }
+            crate::ShaderStage::Miss => {
+                self.require_any("ray tracing pipelines", &[spirv::Capability::RayTracingKHR])?;
+                spirv::ExecutionModel::MissKHR
+            }
         };
         //self.check(exec_model.required_capabilities())?;
 
@@ -1949,7 +1978,16 @@ impl Writer {
                 }
             }
             crate::TypeInner::AccelerationStructure { .. } => {
-                self.require_any("Acceleration Structure", &[spirv::Capability::RayQueryKHR])?;
+                self.require_any(
+                    "Acceleration Structure",
+                    // unless we use this conditional, the ray query snapshot
+                    // tests pick the wrong capability
+                    &[if self.has_ray_tracing_pipeline {
+                        spirv::Capability::RayTracingKHR
+                    } else {
+                        spirv::Capability::RayQueryKHR
+                    }],
+                )?;
             }
             crate::TypeInner::RayQuery { .. } => {
                 self.require_any("Ray Query", &[spirv::Capability::RayQueryKHR])?;
@@ -3071,9 +3109,9 @@ impl Writer {
                     // vertex
                     Bi::BaseInstance => BuiltIn::BaseInstance,
                     Bi::BaseVertex => BuiltIn::BaseVertex,
-                    Bi::ClipDistance => {
+                    Bi::ClipDistances => {
                         self.require_any(
-                            "`clip_distance` built-in",
+                            "`clip_distances` built-in",
                             &[spirv::Capability::ClipDistance],
                         )?;
                         BuiltIn::ClipDistance
@@ -3187,19 +3225,20 @@ impl Writer {
                     Bi::VertexCount | Bi::Vertices | Bi::PrimitiveCount | Bi::Primitives => {
                         unreachable!()
                     }
-                    Bi::RayInvocationId
-                    | Bi::NumRayInvocations
-                    | Bi::InstanceCustomData
-                    | Bi::GeometryIndex
-                    | Bi::WorldRayOrigin
-                    | Bi::WorldRayDirection
-                    | Bi::ObjectRayOrigin
-                    | Bi::ObjectRayDirection
-                    | Bi::RayTmin
-                    | Bi::RayTCurrentMax
-                    | Bi::ObjectToWorld
-                    | Bi::WorldToObject
-                    | Bi::HitKind => unreachable!(),
+                    // ray tracing pipeline
+                    Bi::RayInvocationId => BuiltIn::LaunchIdKHR,
+                    Bi::NumRayInvocations => BuiltIn::LaunchSizeKHR,
+                    Bi::InstanceCustomData => BuiltIn::InstanceCustomIndexKHR,
+                    Bi::GeometryIndex => BuiltIn::RayGeometryIndexKHR,
+                    Bi::WorldRayOrigin => BuiltIn::WorldRayOriginKHR,
+                    Bi::WorldRayDirection => BuiltIn::WorldRayDirectionKHR,
+                    Bi::ObjectRayOrigin => BuiltIn::ObjectRayOriginKHR,
+                    Bi::ObjectRayDirection => BuiltIn::ObjectRayDirectionKHR,
+                    Bi::RayTmin => BuiltIn::RayTminKHR,
+                    Bi::RayTCurrentMax => BuiltIn::RayTmaxKHR,
+                    Bi::ObjectToWorld => BuiltIn::ObjectToWorldKHR,
+                    Bi::WorldToObject => BuiltIn::WorldToObjectKHR,
+                    Bi::HitKind => BuiltIn::HitKindKHR,
                 };
 
                 use crate::ScalarKind as Sk;
@@ -3286,7 +3325,26 @@ impl Writer {
         let id = self.id_gen.next();
         let class = map_storage_class(global_variable.space);
 
+        if let crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload =
+            global_variable.space
+        {
+            self.require_any("ray tracing pipelines", &[spirv::Capability::RayTracingKHR])?;
+        }
+
         //self.check(class.required_capabilities())?;
+
+        if global_variable
+            .memory_decorations
+            .contains(crate::MemoryDecorations::COHERENT)
+        {
+            self.decorate(id, Decoration::Coherent, &[]);
+        }
+        if global_variable
+            .memory_decorations
+            .contains(crate::MemoryDecorations::VOLATILE)
+        {
+            self.decorate(id, Decoration::Volatile, &[]);
+        }
 
         if self.flags.contains(WriterFlags::DEBUG) {
             if let Some(ref name) = global_variable.name {
@@ -3551,18 +3609,13 @@ impl Writer {
             .iter()
             .flat_map(|entry| entry.function.arguments.iter())
             .any(|arg| has_view_index_check(ir_module, arg.binding.as_ref(), arg.ty));
-        let mut has_ray_query = ir_module.special_types.ray_desc.is_some()
-            | ir_module.special_types.ray_intersection.is_some();
         let has_vertex_return = ir_module.special_types.ray_vertex_return.is_some();
 
-        for (_, &crate::Type { ref inner, .. }) in ir_module.types.iter() {
-            // spirv does not know whether these have vertex return - that is done by us
-            if let &crate::TypeInner::AccelerationStructure { .. }
-            | &crate::TypeInner::RayQuery { .. } = inner
-            {
-                has_ray_query = true
-            }
-        }
+        let rt_uses = ir_module.uses_ray_tracing(ep_index);
+        let has_ray_query = rt_uses.queries;
+        let has_ray_tracing_pipeline = rt_uses.pipelines;
+
+        self.has_ray_tracing_pipeline = has_ray_tracing_pipeline;
 
         if self.physical_layout.version < 0x10300 && has_storage_buffers {
             // enable the storage buffer class on < SPV-1.3
@@ -3588,6 +3641,10 @@ impl Writer {
             if lang_version.0 <= 1 && lang_version.1 < 4 {
                 return Err(Error::SpirvVersionTooLow(1, 4));
             }
+        }
+        if has_ray_tracing_pipeline {
+            Instruction::extension("SPV_KHR_ray_tracing")
+                .to_words(&mut self.logical_layout.extensions)
         }
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")

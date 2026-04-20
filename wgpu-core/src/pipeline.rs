@@ -1,7 +1,7 @@
 use alloc::{
-    borrow::Cow,
+    borrow::{Cow, ToOwned},
     boxed::Box,
-    string::{String, ToString as _},
+    string::String,
     sync::Arc,
     vec::Vec,
 };
@@ -22,13 +22,15 @@ use crate::{
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
     resource::{InvalidResourceError, Labeled, TrackingData},
-    resource_log, validation, Label,
+    resource_log,
+    validation::{self, ShaderMetaData},
+    Label,
 };
 
 /// Information about buffer bindings, which
 /// is validated against the shader (and pipeline)
 /// at draw time as opposed to initialization time.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct LateSizedBufferGroup {
     // The order has to match `BindGroup::late_buffer_binding_sizes`.
     pub(crate) shader_sizes: Vec<wgt::BufferAddress>,
@@ -64,7 +66,7 @@ pub type ShaderModuleDescriptorPassthrough<'a> =
 pub struct ShaderModule {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynShaderModule>>,
     pub(crate) device: Arc<Device>,
-    pub(crate) interface: Option<validation::Interface>,
+    pub(crate) interface: ShaderMetaData,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
 }
@@ -95,11 +97,29 @@ impl ShaderModule {
         stage: naga::ShaderStage,
         entry_point: Option<&str>,
     ) -> Result<String, validation::StageError> {
-        match &self.interface {
-            Some(interface) => interface.finalize_entry_point_name(stage, entry_point),
-            None => entry_point
-                .map(|ep| ep.to_string())
-                .ok_or(validation::StageError::NoEntryPointFound),
+        match self.interface {
+            ShaderMetaData::Interface(ref interface) => {
+                interface.finalize_entry_point_name(stage, entry_point)
+            }
+            ShaderMetaData::Passthrough(ref interface) => {
+                if let Some(ep) = entry_point {
+                    if interface.entry_point_names.contains(ep) {
+                        Ok(ep.to_owned())
+                    } else {
+                        Err(validation::StageError::MissingEntryPoint(ep.to_owned()))
+                    }
+                } else {
+                    if interface.entry_point_names.len() != 1 {
+                        return Err(validation::StageError::MultipleEntryPointsFound);
+                    }
+                    Ok(interface
+                        .entry_point_names
+                        .iter()
+                        .next()
+                        .unwrap()
+                        .to_owned())
+                }
+            }
         }
     }
 }
@@ -135,26 +155,31 @@ pub enum CreateShaderModuleError {
     },
     #[error("Generic shader passthrough does not contain any code compatible with this backend.")]
     NotCompiledForBackend,
+    #[error(
+        "Generic passthrough shaders which use GLSL or DXIL must contain exactly one entry point."
+    )]
+    IncorrectPassthroughEntryPointCount,
 }
 
 impl WebGpuError for CreateShaderModuleError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::MissingFeatures(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
 
-            Self::Generation => return ErrorType::Internal,
+            Self::Generation => ErrorType::Internal,
 
-            Self::Validation(..) | Self::InvalidGroupIndex { .. } => return ErrorType::Validation,
+            Self::Validation(..)
+            | Self::InvalidGroupIndex { .. }
+            | Self::IncorrectPassthroughEntryPointCount
+            | Self::NotCompiledForBackend => ErrorType::Validation,
             #[cfg(feature = "wgsl")]
-            Self::Parsing(..) => return ErrorType::Validation,
+            Self::Parsing(..) => ErrorType::Validation,
             #[cfg(feature = "glsl")]
-            Self::ParsingGlsl(..) => return ErrorType::Validation,
+            Self::ParsingGlsl(..) => ErrorType::Validation,
             #[cfg(feature = "spirv")]
-            Self::ParsingSpirV(..) => return ErrorType::Validation,
-            Self::NotCompiledForBackend => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            Self::ParsingSpirV(..) => ErrorType::Validation,
+        }
     }
 }
 
@@ -208,13 +233,12 @@ pub enum ImplicitLayoutError {
 
 impl WebGpuError for ImplicitLayoutError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::ReflectionError(_) => return ErrorType::Validation,
-            Self::BindGroup(e) => e,
-            Self::Pipeline(e) => e,
-            Self::Passthrough(_) => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+        match self {
+            Self::ReflectionError(_) => ErrorType::Validation,
+            Self::BindGroup(e) => e.webgpu_error_type(),
+            Self::Pipeline(e) => e.webgpu_error_type(),
+            Self::Passthrough(_) => ErrorType::Validation,
+        }
     }
 }
 
@@ -261,16 +285,15 @@ pub enum CreateComputePipelineError {
 
 impl WebGpuError for CreateComputePipelineError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::InvalidResource(e) => e,
-            Self::MissingDownlevelFlags(e) => e,
-            Self::Implicit(e) => e,
-            Self::Stage(e) => e,
-            Self::Internal(_) => return ErrorType::Internal,
-            Self::PipelineConstants(_) => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
+            Self::Implicit(e) => e.webgpu_error_type(),
+            Self::Stage(e) => e.webgpu_error_type(),
+            Self::Internal(_) => ErrorType::Internal,
+            Self::PipelineConstants(_) => ErrorType::Validation,
+        }
     }
 }
 
@@ -281,6 +304,7 @@ pub struct ComputePipeline {
     pub(crate) device: Arc<Device>,
     pub(crate) _shader_module: Arc<ShaderModule>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
+    pub(crate) immediate_slots_required: naga::valid::ImmediateSlots,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
@@ -312,11 +336,7 @@ impl ComputePipeline {
         self: &Arc<Self>,
         index: u32,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
-        self.layout
-            .bind_group_layouts
-            .get(index as usize)
-            .cloned()
-            .ok_or(GetBindGroupLayoutError::InvalidGroupIndex(index))
+        self.layout.get_bind_group_layout(index, self.into())
     }
 }
 
@@ -333,12 +353,11 @@ pub enum CreatePipelineCacheError {
 
 impl WebGpuError for CreatePipelineCacheError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::Validation(e) => e,
-            Self::MissingFeatures(e) => e,
-        };
-        e.webgpu_error_type()
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::Validation(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
+        }
     }
 }
 
@@ -403,7 +422,7 @@ pub struct VertexState<'a, SM = ShaderModuleId> {
     /// The compiled vertex stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a, SM>,
     /// The format of any vertex buffers used with this pipeline.
-    pub buffers: Cow<'a, [VertexBufferLayout<'a>]>,
+    pub buffers: Cow<'a, [Option<VertexBufferLayout<'a>>]>,
 }
 
 /// cbindgen:ignore
@@ -627,6 +646,18 @@ pub enum ColorStateError {
     },
     #[error("Invalid write mask {0:?}")]
     InvalidWriteMask(wgt::ColorWrites),
+    #[error("Using the blend factor {factor:?} for render target {target} is not possible. Only the first render target may be used when dual-source blending.")]
+    BlendFactorOnUnsupportedTarget {
+        factor: wgt::BlendFactor,
+        target: u32,
+    },
+    #[error(
+        "Blend factor {factor:?} for render target {target} is not valid. Blend factor must be `one` when using min/max blend operations."
+    )]
+    InvalidMinMaxBlendFactor {
+        factor: wgt::BlendFactor,
+        target: u32,
+    },
 }
 
 #[derive(Clone, Debug, Error)]
@@ -644,6 +675,10 @@ pub enum DepthStencilStateError {
     InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
     #[error("Depth bias is not compatible with non-triangle topology {0:?}")]
     DepthBiasWithIncompatibleTopology(wgt::PrimitiveTopology),
+    #[error("Depth compare function must be specified for depth format {0:?}")]
+    MissingDepthCompare(wgt::TextureFormat),
+    #[error("Depth write enabled must be specified for depth format {0:?}")]
+    MissingDepthWriteEnabled(wgt::TextureFormat),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -663,6 +698,8 @@ pub enum CreateRenderPipelineError {
     InvalidSampleCount(u32),
     #[error("The number of vertex buffers {given} exceeds the limit {limit}")]
     TooManyVertexBuffers { given: u32, limit: u32 },
+    #[error("The number of bind groups + vertex buffers {given} exceeds the limit {limit}")]
+    TooManyBindGroupsPlusVertexBuffers { given: u32, limit: u32 },
     #[error("The total number of vertex attributes {given} exceeds the limit {limit}")]
     TooManyVertexAttributes { given: u32, limit: u32 },
     #[error("Vertex attribute location {given} must be less than limit {limit}")]
@@ -716,11 +753,8 @@ pub enum CreateRenderPipelineError {
     },
     #[error("In the provided shader, the type given for group {group} binding {binding} has a size of {size}. As the device does not support `DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED`, the type must have a size that is a multiple of 16 bytes.")]
     UnalignedShader { group: u32, binding: u32, size: u64 },
-    #[error("Using the blend factor {factor:?} for render target {target} is not possible. Only the first render target may be used when dual-source blending.")]
-    BlendFactorOnUnsupportedTarget {
-        factor: wgt::BlendFactor,
-        target: u32,
-    },
+    #[error("Dual-source blending requires exactly one color target, but {count} color targets are present")]
+    DualSourceBlendingWithMultipleColorTargets { count: usize },
     #[error("{}", concat!(
         "At least one color attachment or depth-stencil attachment was expected, ",
         "but no render target for the pipeline was specified."
@@ -732,13 +766,13 @@ pub enum CreateRenderPipelineError {
 
 impl WebGpuError for CreateRenderPipelineError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::InvalidResource(e) => e,
-            Self::MissingFeatures(e) => e,
-            Self::MissingDownlevelFlags(e) => e,
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
+            Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
 
-            Self::Internal { .. } => return ErrorType::Internal,
+            Self::Internal { .. } => ErrorType::Internal,
 
             Self::ColorAttachment(_)
             | Self::Implicit(_)
@@ -746,6 +780,7 @@ impl WebGpuError for CreateRenderPipelineError {
             | Self::DepthStencilState(_)
             | Self::InvalidSampleCount(_)
             | Self::TooManyVertexBuffers { .. }
+            | Self::TooManyBindGroupsPlusVertexBuffers { .. }
             | Self::TooManyVertexAttributes { .. }
             | Self::VertexAttributeLocationTooLarge { .. }
             | Self::VertexStrideTooLarge { .. }
@@ -756,12 +791,11 @@ impl WebGpuError for CreateRenderPipelineError {
             | Self::ConservativeRasterizationNonFillPolygonMode
             | Self::Stage { .. }
             | Self::UnalignedShader { .. }
-            | Self::BlendFactorOnUnsupportedTarget { .. }
+            | Self::DualSourceBlendingWithMultipleColorTargets { .. }
             | Self::NoTargetSpecified
             | Self::PipelineConstants { .. }
-            | Self::VertexAttributeStrideTooLarge { .. } => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
+            | Self::VertexAttributeStrideTooLarge { .. } => ErrorType::Validation,
+        }
     }
 }
 
@@ -809,13 +843,15 @@ pub struct RenderPipeline {
     pub(crate) flags: PipelineFlags,
     pub(crate) topology: wgt::PrimitiveTopology,
     pub(crate) strip_index_format: Option<wgt::IndexFormat>,
-    pub(crate) vertex_steps: Vec<VertexStep>,
+    pub(crate) vertex_steps: Vec<Option<VertexStep>>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
+    pub(crate) immediate_slots_required: naga::valid::ImmediateSlots,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     /// Whether this is a mesh shader pipeline
     pub(crate) is_mesh: bool,
+    pub(crate) has_task_shader: bool,
 }
 
 impl Drop for RenderPipeline {
@@ -844,10 +880,6 @@ impl RenderPipeline {
         self: &Arc<Self>,
         index: u32,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
-        self.layout
-            .bind_group_layouts
-            .get(index as usize)
-            .cloned()
-            .ok_or(GetBindGroupLayoutError::InvalidGroupIndex(index))
+        self.layout.get_bind_group_layout(index, self.into())
     }
 }

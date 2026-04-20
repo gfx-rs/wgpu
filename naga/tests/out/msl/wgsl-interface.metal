@@ -69,7 +69,7 @@ fragment fragment_Output fragment_(
 
 struct computeInput {
 };
-kernel void compute(
+[[max_total_threads_per_threadgroup(1)]] kernel void compute(
   metal::uint3 global_id [[thread_position_in_grid]]
 , metal::uint3 local_id [[thread_position_in_threadgroup]]
 , uint local_index [[thread_index_in_threadgroup]]
@@ -77,7 +77,7 @@ kernel void compute(
 , metal::uint3 num_wgs [[threadgroups_per_grid]]
 , threadgroup type_4& output
 ) {
-    if (metal::all(local_id == metal::uint3(0u))) {
+    if (local_index == 0u) {
         output = {};
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);

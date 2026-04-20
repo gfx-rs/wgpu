@@ -37,7 +37,7 @@ void test_atomic_compare_exchange_i32_()
         }
         {
             uint _e6 = i;
-            int _e8 = asint(arr_i32_.Load(_e6*4));
+            int _e8; arr_i32_.InterlockedOr(_e6*4, 0, _e8);
             old = _e8;
             exchanged = false;
             uint2 loop_bound_1 = uint2(4294967295u, 4294967295u);
@@ -89,7 +89,7 @@ void test_atomic_compare_exchange_u32_()
         }
         {
             uint _e6 = i_1;
-            uint _e8 = asuint(arr_u32_.Load(_e6*4));
+            uint _e8; arr_u32_.InterlockedOr(_e6*4, 0, _e8);
             old_1 = _e8;
             exchanged_1 = false;
             uint2 loop_bound_3 = uint2(4294967295u, 4294967295u);

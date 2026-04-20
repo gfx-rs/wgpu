@@ -43,7 +43,7 @@ async fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
         .unwrap();
 
     let buffer_slice = cpu_buffer.slice(..);
-    let buffer_data = buffer_slice.get_mapped_range();
+    let buffer_data = buffer_slice.get_mapped_range().unwrap();
 
     let first_clear_byte = buffer_data
         .iter()

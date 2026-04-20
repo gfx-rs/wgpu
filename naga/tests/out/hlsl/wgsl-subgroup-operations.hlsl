@@ -4,14 +4,14 @@ struct Structure {
 };
 
 struct ComputeInput_main {
-    uint __local_invocation_index : SV_GroupIndex;
+    uint local_invocation_index : SV_GroupIndex;
 };
 
 [numthreads(1, 1, 1)]
 void main(ComputeInput_main computeinput_main)
 {
     Structure sizes = { (1u + WaveGetLaneCount() - 1u) / WaveGetLaneCount(), WaveGetLaneCount() };
-    uint subgroup_id = computeinput_main.__local_invocation_index / WaveGetLaneCount();
+    uint subgroup_id = computeinput_main.local_invocation_index / WaveGetLaneCount();
     uint subgroup_invocation_id = WaveGetLaneIndex();
     const uint4 _e7 = WaveActiveBallot(((subgroup_invocation_id & 1u) == 1u));
     const uint4 _e8 = WaveActiveBallot(true);

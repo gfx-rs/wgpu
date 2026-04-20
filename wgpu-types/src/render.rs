@@ -192,6 +192,20 @@ impl BlendState {
         color: BlendComponent::OVER,
         alpha: BlendComponent::OVER,
     };
+
+    /// Blend mode that does standard additive blending.
+    pub const ADDITIVE: Self = Self {
+        color: BlendComponent {
+            src_factor: BlendFactor::One,
+            dst_factor: BlendFactor::One,
+            operation: BlendOperation::Add,
+        },
+        alpha: BlendComponent {
+            src_factor: BlendFactor::One,
+            dst_factor: BlendFactor::One,
+            operation: BlendOperation::Add,
+        },
+    };
 }
 
 /// Describes the color state of a render pipeline.
@@ -456,7 +470,7 @@ pub enum IndexFormat {
 
 impl IndexFormat {
     /// Returns the size in bytes of the index format
-    pub fn byte_size(&self) -> usize {
+    pub fn byte_size(&self) -> u32 {
         match self {
             IndexFormat::Uint16 => 2,
             IndexFormat::Uint32 => 4,
@@ -554,7 +568,7 @@ impl Default for StencilFaceState {
 /// Corresponds to [WebGPU `GPUCompareFunction`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpucomparefunction).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum CompareFunction {
@@ -577,6 +591,7 @@ pub enum CompareFunction {
     /// Function passes if new value is greater than or equal to existing value
     GreaterEqual = 7,
     /// Function always passes
+    #[default]
     Always = 8,
 }
 
@@ -724,7 +739,8 @@ pub enum LoadOp<V> {
     ///
     /// - All pixels in the render target must be written to before
     ///   any read or a [`StoreOp::Store`] occurs.
-    DontCare(#[cfg_attr(feature = "serde", serde(skip))] LoadOpDontCare) = 2,
+    #[cfg_attr(feature = "serde", serde(skip))] // unsafe to use, so cannot be (de)serialized
+    DontCare(LoadOpDontCare) = 2,
 }
 
 impl<V> LoadOp<V> {
@@ -807,10 +823,18 @@ pub struct DepthStencilState {
     ///
     #[doc = link_to_wgpu_docs!(["CEbrp"]: "struct.CommandEncoder.html#method.begin_render_pass")]
     pub format: crate::TextureFormat,
-    /// If disabled, depth will not be written to.
-    pub depth_write_enabled: bool,
+    /// Whether to write updated depth values to the depth attachment.
+    ///
+    /// If `format` is a depth or depth/stencil format, then this must be `Some`.
+    /// Otherwise, specifying `None` is preferred, but `Some(false)` is also
+    /// accepted.
+    pub depth_write_enabled: Option<bool>,
     /// Comparison function used to compare depth values in the depth test.
-    pub depth_compare: CompareFunction,
+    ///
+    /// If `depth_write_enabled` is `Some(true)` or if `depth_fail_op` for either
+    /// stencil face is not `Keep`, then this must be `Some`. Otherwise, specifying
+    /// `None` is preferred, but `Some(CompareFunction::Always)` is also accepted.
+    pub depth_compare: Option<CompareFunction>,
     /// Stencil state.
     #[cfg_attr(feature = "serde", serde(default))]
     pub stencil: StencilState,
@@ -820,16 +844,34 @@ pub struct DepthStencilState {
 }
 
 impl DepthStencilState {
+    /// Construct `DepthStencilState` for a stencil operation with no depth operation.
+    ///
+    /// Panics if `format` does not have a stencil aspect.
+    pub fn stencil(format: crate::TextureFormat, stencil: StencilState) -> DepthStencilState {
+        assert!(
+            format.has_stencil_aspect(),
+            "{format:?} is not a stencil format"
+        );
+        DepthStencilState {
+            format,
+            depth_write_enabled: None,
+            depth_compare: None,
+            stencil,
+            bias: DepthBiasState::default(),
+        }
+    }
+
     /// Returns true if the depth testing is enabled.
     #[must_use]
     pub fn is_depth_enabled(&self) -> bool {
-        self.depth_compare != CompareFunction::Always || self.depth_write_enabled
+        self.depth_compare.unwrap_or_default() != CompareFunction::Always
+            || self.depth_write_enabled.unwrap_or_default()
     }
 
     /// Returns true if the state doesn't mutate the depth buffer.
     #[must_use]
     pub fn is_depth_read_only(&self) -> bool {
-        !self.depth_write_enabled
+        !self.depth_write_enabled.unwrap_or_default()
     }
 
     /// Returns true if the state doesn't mutate the stencil.
@@ -950,7 +992,7 @@ impl DrawIndexedIndirectArgs {
     }
 }
 
-/// Argument buffer layout for `dispatch_indirect` commands.
+/// Argument buffer layout for `dispatch_workgroups_indirect` commands.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
 pub struct DispatchIndirectArgs {

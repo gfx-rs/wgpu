@@ -99,7 +99,7 @@ async fn run() {
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
-        bind_group_layouts: &[&bind_group_layout],
+        bind_group_layouts: &[Some(&bind_group_layout)],
         immediate_size: 0,
     });
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -173,7 +173,9 @@ async fn get_data<T: bytemuck::Pod>(
     buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap());
     device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
     receiver.recv_async().await.unwrap().unwrap();
-    output.copy_from_slice(bytemuck::cast_slice(&buffer_slice.get_mapped_range()[..]));
+    let data: Vec<T> =
+        bytemuck::allocation::pod_collect_to_vec(&buffer_slice.get_mapped_range().unwrap()[..]);
+    output.copy_from_slice(&data);
     staging_buffer.unmap();
 }
 

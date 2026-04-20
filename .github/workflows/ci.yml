@@ -244,6 +244,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: (Linux `aarch64`) Install `aarch64-linux-gnu` `g++`
         if: matrix.target == 'aarch64-unknown-linux-gnu'
@@ -334,6 +335,13 @@ jobs:
           # If we don't check this then errors inside `profiling::scope!()` will not be caught.
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --benches --all-features --features test-build-with-profiling
 
+          # Check wgpu-hal with main backends in isolation to catch missing feature/dependencies activations which may be overlooked when they are dragged in via other features.
+          # (best effort: in theory we'd need to test all combinations)
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features vulkan
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features gles
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features metal
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features dx12
+
           # build docs
           cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
 
@@ -409,6 +417,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: wgpu-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Reduce MSRV on dependencies
         shell: bash
@@ -481,6 +490,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: core-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Reduce MSRV on dependencies
         shell: bash
@@ -628,6 +638,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
           workspaces: |
             . -> target
 
@@ -640,6 +651,10 @@ jobs:
         uses: ./.github/actions/install-warp
         with:
           target-dir: "target/llvm-cov-target/debug"
+
+      - name: (Windows) Install Agility SDK
+        if: matrix.os == 'windows-2022'
+        uses: ./.github/actions/install-agility-sdk
 
       - name: (Windows) Install Mesa
         if: matrix.os == 'windows-2022'
@@ -680,7 +695,7 @@ jobs:
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
         run: git add . && git diff --exit-code HEAD naga/tests/out
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         name: Upload comparison images
         if: always() # We want artifacts even if the tests fail.
         with:
@@ -708,7 +723,7 @@ jobs:
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
@@ -735,6 +750,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: doctests-${{ env.CACHE_SUFFIX }}
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Run doctests
         shell: bash
@@ -742,6 +758,41 @@ jobs:
           set -e
 
           cargo --locked test --doc
+
+  miri:
+    # runtime is normally 2 minutes
+    timeout-minutes: 10
+
+    name: Miri (limited scope)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      # Miri is *only* available on nightly.
+      - name: Install nightly toolchain
+
+        run: |
+          rustup toolchain install nightly --no-self-update --profile=minimal --component miri
+          rustup override set nightly
+          cargo -V
+
+      - name: Caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: miri-${{ env.CACHE_SUFFIX }}
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
+
+      - name: Run Miri on selected tests
+        shell: bash
+        run: |
+          set -e
+
+          # Note: this is a *smaller* set of tests than `cargo xtask miri` runs;
+          # it is ones that are both important and cheap.
+          # Consider expanding it to include some API tests with the noop backend.
+          cargo miri test --package=wgpu --no-default-features -- write_only
 
   fmt:
     # runtime is normally 15 seconds
@@ -759,6 +810,15 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
+      # NOTE: Keep this above the others, because this will fail if there are _any_ changes to
+      # files, even ones this step doesn't modify.
+      - name: "Format `**/*.{md,js,html,yml}` files"
+        uses: creyD/prettier_action@v4.6
+        with:
+          prettier_version: 3.8.1
+          prettier_options: --check --write .
+          dry: true
+
       - name: Run `cargo fmt`
         run: |
           cargo --locked fmt -- --check
@@ -772,7 +832,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.43.4
+        uses: crate-ci/typos@v1.45.0
 
   check-cts-runner:
     # runtime is normally 2 minutes
@@ -804,6 +864,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: cts-runner-${{ env.CACHE_SUFFIX }}
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Build Deno
         run: |

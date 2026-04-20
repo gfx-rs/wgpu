@@ -326,9 +326,9 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
             }],
         });
 
-    let mut bgl_references: Vec<_> = bind_group_layouts.iter().collect();
+    let mut bgl_references: Vec<_> = bind_group_layouts.iter().map(Some).collect();
 
-    bgl_references.push(&output_bgl);
+    bgl_references.push(Some(&output_bgl));
 
     let pipeline_layout = ctx
         .device
@@ -545,7 +545,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
         .poll(wgpu::PollType::wait_indefinitely())
         .unwrap();
 
-    let buffer_data = buffer_slice.get_mapped_range();
+    let buffer_data = buffer_slice.get_mapped_range().unwrap();
 
     let f32_buffer: &[f32] = bytemuck::cast_slice(&buffer_data);
 

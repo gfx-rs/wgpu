@@ -1,6 +1,9 @@
-// A lot of the code can be unused based on configuration flags,
-// the corresponding warnings aren't helpful.
-#![allow(dead_code, unused_imports)]
+#![allow(
+    dead_code,
+    unused_imports,
+    reason = "A lot of the code can be unused based on configuration flags; \
+        the corresponding warnings aren't helpful."
+)]
 
 use core::fmt::Write;
 
@@ -175,6 +178,7 @@ impl SpirvOutParameters {
             use_storage_input_output_16: self.use_storage_input_output_16,
             task_dispatch_limits: shared_info.task_limits,
             mesh_shader_primitive_indices_clamp: shared_info.mesh_output_validation,
+            trace_ray_argument_validation: true,
         }
     }
 }

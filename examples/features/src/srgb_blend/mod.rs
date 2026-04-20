@@ -91,7 +91,7 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
 
@@ -104,7 +104,7 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
-        let vertex_buffers = [wgpu::VertexBufferLayout {
+        let vertex_buffers = [Some(wgpu::VertexBufferLayout {
             array_stride: vertex_size as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
@@ -119,7 +119,7 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
                     shader_location: 1,
                 },
             ],
-        }];
+        })];
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,

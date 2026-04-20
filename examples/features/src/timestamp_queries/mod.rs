@@ -181,8 +181,9 @@ impl Queries {
             let timestamp_view = self
                 .destination_buffer
                 .slice(..(size_of::<u64>() as wgpu::BufferAddress * self.num_queries))
-                .get_mapped_range();
-            bytemuck::cast_slice(&timestamp_view).to_vec()
+                .get_mapped_range()
+                .unwrap();
+            bytemuck::allocation::pod_collect_to_vec(&timestamp_view)
         };
 
         self.destination_buffer.unmap();
@@ -193,7 +194,8 @@ impl Queries {
 
 async fn run() {
     // Instantiates instance of wgpu
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::from_env_or_default());
+    let instance =
+        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
 
     // `request_adapter` instantiates the general connection to the GPU
     let adapter = instance

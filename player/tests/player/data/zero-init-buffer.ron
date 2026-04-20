@@ -68,10 +68,8 @@
         WriteBuffer(
             id: PointerId(0x120),
             data: File("data1.bin"),
-            range: (
-                start: 4,
-                end: 20,
-            ),
+            offset: 4,
+            size: 16,
             queued: true,
         ),
         CreateShaderModule(
@@ -122,12 +120,12 @@
         CreatePipelineLayout(PointerId(0x10), (
             label: None,
             bind_group_layouts: [
-                PointerId(0x10),
+                Some(PointerId(0x10)),
             ],
             immediate_size: 0,
         )),
         CreateComputePipeline(
-            id: PointerId(0x10),
+            id: Some(PointerId(0x10)),
             desc: (
                 label: None,
                 layout: Some(PointerId(0x10)),
@@ -151,7 +149,7 @@
                             num_dynamic_offsets: 0,
                             bind_group: Some(PointerId(0x10)),
                         ),
-                        Dispatch((4, 1, 1)),
+                        DispatchWorkgroups((4, 1, 1)),
                     ],
                     dynamic_offsets: [],
                     string_data: [],

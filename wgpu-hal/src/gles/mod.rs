@@ -232,6 +232,8 @@ bitflags::bitflags! {
         ///
         /// When this is true, instance offset emulation via vertex buffer rebinding and a shader uniform will be disabled.
         const FULLY_FEATURED_INSTANCING = 1 << 16;
+        /// Supports direct multisampled rendering to a texture without needing a resolve texture.
+        const MULTISAMPLED_RENDER_TO_TEXTURE = 1 << 17;
     }
 }
 
@@ -553,15 +555,18 @@ struct BindGroupLayoutInfo {
 
 #[derive(Debug)]
 pub struct PipelineLayout {
-    group_infos: Box<[BindGroupLayoutInfo]>,
+    group_infos: Box<[Option<BindGroupLayoutInfo>]>,
     naga_options: naga::back::glsl::Options,
 }
 
 impl crate::DynPipelineLayout for PipelineLayout {}
 
 impl PipelineLayout {
+    /// # Panics
+    /// If the pipeline layout does not contain a bind group layout used by
+    /// the resource binding.
     fn get_slot(&self, br: &naga::ResourceBinding) -> u8 {
-        let group_info = &self.group_infos[br.group as usize];
+        let group_info = self.group_infos[br.group as usize].as_ref().unwrap();
         group_info.binding_to_slot[br.binding as usize]
     }
 }
@@ -602,8 +607,14 @@ impl crate::DynBindGroup for BindGroup {}
 type ShaderId = u32;
 
 #[derive(Debug)]
+pub enum ShaderModuleSource {
+    Naga(crate::NagaShader),
+    Passthrough { source: String },
+}
+
+#[derive(Debug)]
 pub struct ShaderModule {
-    source: crate::NagaShader,
+    source: ShaderModuleSource,
     label: Option<String>,
     id: ShaderId,
 }
@@ -709,7 +720,7 @@ struct ProgramStage {
 #[derive(PartialEq, Eq, Hash)]
 struct ProgramCacheKey {
     stages: ArrayVec<ProgramStage, 3>,
-    group_to_binding_to_slot: Box<[Box<[u8]>]>,
+    group_to_binding_to_slot: Box<[Option<Box<[u8]>>]>,
 }
 
 type ProgramCache = FastHashMap<ProgramCacheKey, Result<Arc<PipelineInner>, crate::PipelineError>>;
@@ -718,7 +729,7 @@ type ProgramCache = FastHashMap<ProgramCacheKey, Result<Arc<PipelineInner>, crat
 pub struct RenderPipeline {
     inner: Arc<PipelineInner>,
     primitive: wgt::PrimitiveState,
-    vertex_buffers: Box<[VertexBufferDesc]>,
+    vertex_buffers: Box<[Option<VertexBufferDesc>]>,
     vertex_attributes: Box<[AttributeDesc]>,
     color_targets: Box<[ColorTargetDesc]>,
     depth: Option<DepthState>,
@@ -919,6 +930,7 @@ enum Command {
         attachment: u32,
         view: TextureView,
         depth_slice: Option<u32>,
+        sample_count: u32,
     },
     ResolveAttachment {
         attachment: u32,

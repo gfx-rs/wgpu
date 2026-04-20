@@ -82,7 +82,7 @@ async fn barycentric(ctx: TestingContext, no_perspective: bool) {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
-                buffers: &[wgpu::VertexBufferLayout {
+                buffers: &[Some(wgpu::VertexBufferLayout {
                     array_stride: 8,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &[wgpu::VertexAttribute {
@@ -90,7 +90,7 @@ async fn barycentric(ctx: TestingContext, no_perspective: bool) {
                         offset: 0,
                         shader_location: 0,
                     }],
-                }],
+                })],
             },
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,

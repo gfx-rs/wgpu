@@ -417,11 +417,13 @@ impl crate::framework::Example for Example {
             let timestamp_view = query_sets
                 .mapping_buffer
                 .slice(..size_of::<TimestampQueries>() as wgpu::BufferAddress)
-                .get_mapped_range();
+                .get_mapped_range()
+                .unwrap();
             let pipeline_stats_view = query_sets
                 .mapping_buffer
                 .slice(pipeline_statistics_offset()..)
-                .get_mapped_range();
+                .get_mapped_range()
+                .unwrap();
             // Convert the raw data into a useful structure
             let timestamp_data: &TimestampQueries = bytemuck::from_bytes(&timestamp_view);
             let pipeline_stats_data: &PipelineStatisticsQueries =

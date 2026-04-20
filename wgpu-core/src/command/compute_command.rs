@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 #[cfg(feature = "serde")]
 use crate::command::serde_object_reference_struct;
 use crate::command::{ArcReferences, ReferenceType};
@@ -34,9 +36,9 @@ pub enum ComputeCommand<R: ReferenceType> {
         values_offset: u32,
     },
 
-    Dispatch([u32; 3]),
+    DispatchWorkgroups([u32; 3]),
 
-    DispatchIndirect {
+    DispatchWorkgroupsIndirect {
         buffer: R::Buffer,
         offset: wgt::BufferAddress,
     },
@@ -64,6 +66,11 @@ pub enum ComputeCommand<R: ReferenceType> {
     },
 
     EndPipelineStatisticsQuery,
+
+    TransitionResources {
+        buffer_transitions: Vec<wgt::BufferTransition<R::Buffer>>,
+        texture_transitions: Vec<wgt::TextureTransition<R::TextureView>>,
+    },
 }
 
 /// cbindgen:ignore

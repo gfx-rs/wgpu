@@ -8,9 +8,9 @@ groupshared int wg_signed;
 groupshared AtomicStruct wg_struct;
 
 [numthreads(64, 1, 1)]
-void test_atomic_workgroup_uniform_load(uint3 workgroup_id : SV_GroupID, uint3 local_id : SV_GroupThreadID, uint3 __local_invocation_id : SV_GroupThreadID)
+void test_atomic_workgroup_uniform_load(uint3 workgroup_id : SV_GroupID, uint3 local_id : SV_GroupThreadID, uint local_invocation_index : SV_GroupIndex)
 {
-    if (all(__local_invocation_id == uint3(0u, 0u, 0u))) {
+    if (local_invocation_index == 0) {
         wg_scalar = (uint)0;
         wg_signed = (int)0;
         wg_struct = (AtomicStruct)0;
@@ -23,7 +23,7 @@ void test_atomic_workgroup_uniform_load(uint3 workgroup_id : SV_GroupID, uint3 l
     uint active_tile_index = (workgroup_id.x + (workgroup_id.y * 32768u));
     uint _e11; InterlockedOr(wg_scalar, uint((active_tile_index >= 64u)), _e11);
     int _e14; InterlockedAdd(wg_signed, int(1), _e14);
-    wg_struct.atomic_scalar = 1u;
+    { uint dummy = 0; InterlockedExchange(wg_struct.atomic_scalar, 1u, dummy); }
     int _e22; InterlockedAdd(wg_struct.atomic_arr[0], int(1), _e22);
     GroupMemoryBarrierWithGroupSync();
     GroupMemoryBarrierWithGroupSync();

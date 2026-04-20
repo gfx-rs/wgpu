@@ -24,6 +24,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
         EXTRA_FORMAT_BUILD,
         MISALIGNED_BUILD,
         TOO_SMALL_STRIDE_BUILD,
+        BLAS_FIRST_VERTEX,
     ]);
 }
 
@@ -846,4 +847,65 @@ fn test_as_build_format_stride(
     if !invalid_combination {
         ctx.queue.submit([command_buffer]);
     }
+}
+
+#[gpu_test]
+static BLAS_FIRST_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .limits(acceleration_structure_limits())
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY),
+    )
+    .run_sync(blas_first_vertex);
+
+fn blas_first_vertex(ctx: TestingContext) {
+    let blas_size = BlasTriangleGeometrySizeDescriptor {
+        vertex_format: VertexFormat::Float32x3,
+        vertex_count: 3,
+        index_format: None,
+        index_count: None,
+        flags: AccelerationStructureGeometryFlags::empty(),
+    };
+
+    let blas = ctx.device.create_blas(
+        &CreateBlasDescriptor {
+            label: Some("BLAS"),
+            flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: AccelerationStructureUpdateMode::Build,
+        },
+        BlasGeometrySizeDescriptors::Triangles {
+            descriptors: vec![blas_size.clone()],
+        },
+    );
+
+    let large_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Large blas building buffer"),
+        size: (size_of::<[f32; 3]>() * 12) as _,
+        usage: BufferUsages::BLAS_INPUT,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default());
+
+    let entry = BlasBuildEntry {
+        blas: &blas,
+        geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
+            size: &blas_size,
+            vertex_buffer: &large_buffer,
+            // Leaves 3 at the end to build with.
+            first_vertex: 9,
+            vertex_stride: size_of::<[f32; 3]>() as BufferAddress,
+            index_buffer: None,
+            first_index: None,
+            transform_buffer: None,
+            transform_buffer_offset: None,
+        }]),
+    };
+
+    encoder.build_acceleration_structures([&entry], []);
+
+    ctx.queue.submit([encoder.finish()]);
 }

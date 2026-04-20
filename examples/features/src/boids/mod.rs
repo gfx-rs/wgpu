@@ -106,7 +106,7 @@ impl crate::framework::Example for Example {
         let compute_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compute"),
-                bind_group_layouts: &[&compute_bind_group_layout],
+                bind_group_layouts: &[Some(&compute_bind_group_layout)],
                 immediate_size: 0,
             });
 
@@ -127,16 +127,16 @@ impl crate::framework::Example for Example {
                 entry_point: Some("main_vs"),
                 compilation_options: Default::default(),
                 buffers: &[
-                    wgpu::VertexBufferLayout {
+                    Some(wgpu::VertexBufferLayout {
                         array_stride: 4 * 4,
                         step_mode: wgpu::VertexStepMode::Instance,
                         attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2],
-                    },
-                    wgpu::VertexBufferLayout {
+                    }),
+                    Some(wgpu::VertexBufferLayout {
                         array_stride: 2 * 4,
                         step_mode: wgpu::VertexStepMode::Vertex,
                         attributes: &wgpu::vertex_attr_array![2 => Float32x2],
-                    },
+                    }),
                 ],
             },
             fragment: Some(wgpu::FragmentState {

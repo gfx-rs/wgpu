@@ -286,7 +286,7 @@ impl TextureCopyParameters {
         // by copying it one row at a time.
         let mut texel_vector: Vec<C> = Vec::new();
         {
-            let mapped: &[u8] = &buffer.slice(..).get_mapped_range();
+            let mapped: &[u8] = &buffer.slice(..).get_mapped_range().unwrap();
             for row in 0..self.row_count() {
                 let byte_start_of_row = (self.padded_bytes_per_row()) as usize * row;
                 texel_vector.extend(bytemuck::cast_slice::<u8, C>(

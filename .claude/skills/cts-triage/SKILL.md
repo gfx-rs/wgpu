@@ -48,6 +48,7 @@ cargo xtask cts 'webgpu:api,validation,category:subcategory:*' 2>&1 | grep -E "(
 ```
 
 Track the pass rate for each subcategory. This helps you identify:
+
 - What's already working (don't break it!)
 - Where the failures are concentrated
 - Which issues affect multiple categories
@@ -61,6 +62,7 @@ cargo xtask cts 'webgpu:api,validation,category:subcategory:*' 2>&1 | grep "\[fa
 ```
 
 Look for patterns:
+
 - **Format-specific failures**: May indicate missing format capability checks
 - **Parameter-specific failures**: Validation missing for specific parameter combinations
 
@@ -73,6 +75,7 @@ cargo xtask cts 'webgpu:api,validation,category:subcategory:specific_test' 2>&1 
 ```
 
 Look for:
+
 - **"EXPECTATION FAILED: DID NOT REJECT"**: wgpu is accepting invalid input (validation gap)
 - **"Validation succeeded unexpectedly"**: Similar to above
 - **"Unexpected validation error occurred"**: wgpu is rejecting valid input
@@ -87,6 +90,7 @@ grep -A 40 "test_name" cts/src/webgpu/api/validation/path/file.spec.ts
 ```
 
 The test source shows:
+
 - What configurations are being tested
 - What the expected behavior is (pass/fail)
 - The validation rules from the WebGPU spec
@@ -97,21 +101,25 @@ The test source shows:
 Group failures into categories:
 
 **High Priority - Validation Gaps:**
+
 - wgpu accepts invalid configurations that should fail
 - Security or correctness implications
 - Example: Accepting wrong texture formats, missing aspect checks
 
 **Medium Priority - Spec Compliance:**
+
 - Edge cases not handled correctly
 - Optional field validation issues
 - Example: depthCompare optional field handling
 
 **Low Priority - Minor Gaps:**
+
 - Less common scenarios
 - Limited real-world impact
 - Example: Depth bias with non-triangle topologies
 
 **Known Issues - Skip:**
+
 - Known failure patterns (documented in AGENTS.md)
 - Track count but don't try to fix
 
@@ -120,6 +128,7 @@ Group failures into categories:
 For validation gaps, find where validation should happen:
 
 1. **Search for existing validation:**
+
    ```bash
    grep -n "relevant_keyword" wgpu-core/src/device/resource.rs
    ```
@@ -130,6 +139,7 @@ For validation gaps, find where validation should happen:
    - Look for existing validation patterns you can follow
 
 3. **Check for helper functions:**
+
    ```bash
    grep "fn is_" wgpu-types/src/texture/format.rs
    ```
@@ -162,25 +172,31 @@ Do not write information about changes you have made to the triage document. Onl
 **Overall Status:** XP/YF/ZS (%/%/%)
 
 ## Passing Sub-suites ✅
+
 [List sub-suites that have no failures (all pass or skip)]
 
 ## Remaining Issues ⚠️
+
 [List sub-suites that have failures and if it can be stated concisely, a summary of the issue]
 
 ## Issue Detail
+
 [List detail of any investigation into failures. Do not go into detail about passed suites, just list the failures.]
 
 ### 1. title, e.g. a distinguishing word from the test selector
+
 **Test selector:** `webgpu:api,validation,render_pipeline,depth_stencil_state:format:*`
 **What it tests:** [Description]
 **Example failure:**
 [a selector for a single failing test, e.g.:]
+
 ```
 webgpu:api,validation,render_pipeline,depth_stencil_state:depthCompare_optional:isAsync=false;format="stencil8"
 ```
 
 **Error:**
 [error message from the failing tests, e.g.:]
+
 ```
 Unexpected validation error occurred: Depth/stencil state is invalid:
 Format Stencil8 does not have a depth aspect, but depth test/write is enabled
@@ -194,6 +210,7 @@ The validation is triggering incorrectly. When `depthCompare` is undefined/missi
 [Your proposed fix. Again, do not speculate. Only state the fix if it is obvious from the root cause analysis, or if you have done specific investigation into how to fix it.]
 
 ### 2. title
+
 [repeat as needed for additional issues]
 ````
 
@@ -202,6 +219,7 @@ The validation is triggering incorrectly. When `depthCompare` is undefined/missi
 For fixed tests that are now passing, add them to `cts_runner/test.lst`:
 
 1. **Use wildcards** to minimize lines:
+
    ```
    webgpu:api,validation,category:subcategory:isAsync=false;*
    ```
@@ -237,26 +255,31 @@ noted here with "do not attempt to fix", then stop and ask the user before
 attempting to fix.
 
 **Pattern: Format-specific failures**
+
 - Check if format validation is missing
 - Look for `is_depth_stencil_format()`, `is_color_format()` etc.
 - May need to add format capability checks
 
 **Pattern: Aspect-related failures**
+
 - Check if code validates format aspects (DEPTH, STENCIL, COLOR)
 - Use `hal::FormatAspects::from(format)` to check
 - Validate operations match available aspects
 
 **Pattern: Optional field failures**
+
 - May be WebGPU optional field semantics issue
 - Check if undefined in JS becomes a default value in Rust
 - May need to distinguish "not set" from "set to default"
 
 **Pattern: Atomics accepted incorrectly**
+
 - Naga allows referencing an atomic directly in an expression
 - Should only allow accessing via `atomicLoad`, `atomicStore`, etc.
 - Only investigate as necessary to confirm this is the issue. Do not attempt to fix. Refer user to https://github.com/gfx-rs/wgpu/issues/5474.
 
 **Pattern: Error reporting for destroyed resources**
+
 - Tests that check for validation errors when a destroyed resource is used. `wgpu` often reports these errors later than WebGPU requires, causing the tests to fail.
 - `wgpu` may report these errors earlier than it should, causing the test to fail with an unexpected validation error.
 - Look for:

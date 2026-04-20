@@ -8,6 +8,7 @@ use winit::{
 };
 
 struct State {
+    instance: wgpu::Instance,
     window: Arc<Window>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -18,9 +19,9 @@ struct State {
 
 impl State {
     async fn new(display: OwnedDisplayHandle, window: Arc<Window>) -> State {
-        let instance = wgpu::Instance::new(
-            wgpu::InstanceDescriptor::default().with_display_handle(Box::new(display)),
-        );
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_with_display_handle(
+            Box::new(display),
+        ));
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions::default())
             .await
@@ -37,6 +38,7 @@ impl State {
         let surface_format = cap.formats[0];
 
         let state = State {
+            instance,
             window,
             device,
             queue,
@@ -78,11 +80,30 @@ impl State {
     }
 
     fn render(&mut self) {
-        // Create texture view
-        let surface_texture = self
-            .surface
-            .get_current_texture()
-            .expect("failed to acquire next swapchain texture");
+        // Create texture view.
+        // NOTE: We must handle Timeout because the surface may be unavailable
+        // (e.g., when the window is occluded on macOS).
+        let surface_texture = match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(texture) => texture,
+            wgpu::CurrentSurfaceTexture::Occluded | wgpu::CurrentSurfaceTexture::Timeout => return,
+            wgpu::CurrentSurfaceTexture::Suboptimal(texture) => {
+                drop(texture);
+                self.configure_surface();
+                return;
+            }
+            wgpu::CurrentSurfaceTexture::Outdated => {
+                self.configure_surface();
+                return;
+            }
+            wgpu::CurrentSurfaceTexture::Validation => {
+                unreachable!("No error scope registered, so validation errors will panic")
+            }
+            wgpu::CurrentSurfaceTexture::Lost => {
+                self.surface = self.instance.create_surface(self.window.clone()).unwrap();
+                self.configure_surface();
+                return;
+            }
+        };
         let texture_view = surface_texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor {
@@ -120,7 +141,7 @@ impl State {
         // Submit the command in the queue to execute
         self.queue.submit([encoder.finish()]);
         self.window.pre_present_notify();
-        surface_texture.present();
+        self.queue.present(surface_texture);
     }
 }
 

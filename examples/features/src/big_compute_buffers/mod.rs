@@ -85,8 +85,9 @@ pub async fn execute_gpu_inner(
     let mut data = Vec::new();
     for staging_buffer in &staging_buffers {
         let slice = staging_buffer.slice(..);
-        let mapped = slice.get_mapped_range();
-        data.extend_from_slice(bytemuck::cast_slice(&mapped));
+        let mapped = slice.get_mapped_range().unwrap();
+        let chunk: Vec<f32> = bytemuck::allocation::pod_collect_to_vec(&mapped);
+        data.extend_from_slice(&chunk);
         drop(mapped);
         staging_buffer.unmap();
     }
@@ -126,7 +127,7 @@ fn setup_pipeline(
 ) -> wgpu::ComputePipeline {
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Compute Pipeline Layout"),
-        bind_group_layouts: &[&bind_group_layout],
+        bind_group_layouts: &[Some(&bind_group_layout)],
         immediate_size: 0,
     });
 

@@ -7,7 +7,7 @@ struct VSOut {
     float4 position [[position]];
 };
 
-vertex VSOut vertex_main(uint vid [[vertex_id]]) {
+vertex VSOut vs_main(uint vid [[vertex_id]]) {
     VSOut out;
 
     float2 positions[3] = {
@@ -20,6 +20,6 @@ vertex VSOut vertex_main(uint vid [[vertex_id]]) {
     return out;
 }
 
-fragment float4 fragment_main(VSOut in [[stage_in]]) {
+fragment float4 fs_main(VSOut in [[stage_in]]) {
     return float4(1.0, 1.0, 1.0, 1.0);
 }

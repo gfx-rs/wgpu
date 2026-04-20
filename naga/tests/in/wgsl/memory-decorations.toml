@@ -1,0 +1,8 @@
+capabilities = "MEMORY_DECORATION_COHERENT | MEMORY_DECORATION_VOLATILE"
+targets = "SPIRV | GLSL | WGSL"
+
+[spv]
+version = [1, 0]
+
+[glsl]
+version = { Desktop = 430 }

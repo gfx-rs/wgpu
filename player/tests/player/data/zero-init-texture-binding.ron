@@ -115,7 +115,7 @@
         CreatePipelineLayout(PointerId(0x10), (
             label: None,
             bind_group_layouts: [
-                PointerId(0x10),
+                Some(PointerId(0x10)),
             ],
             immediate_size: 0,
         )),
@@ -128,7 +128,7 @@
             data: File("zero-init-texture-binding.wgsl"),
         ),
         CreateComputePipeline(
-            id: PointerId(0x10),
+            id: Some(PointerId(0x10)),
             desc: (
                 label: None,
                 layout: Some(PointerId(0x10)),
@@ -152,7 +152,7 @@
                             num_dynamic_offsets: 0,
                             bind_group: Some(PointerId(0x10)),
                         ),
-                        Dispatch((4, 1, 1)),
+                        DispatchWorkgroups((4, 1, 1)),
                     ],
                     dynamic_offsets: [],
                     string_data: [],

@@ -107,13 +107,21 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// [`draw`]: RenderBundleEncoder::draw
     /// [`draw_indexed`]: RenderBundleEncoder::draw_indexed
-    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
-        self.inner.set_vertex_buffer(
-            slot,
-            &buffer_slice.buffer.inner,
-            buffer_slice.offset,
-            Some(buffer_slice.size),
-        );
+    pub fn set_vertex_buffer<'b, B>(&mut self, slot: u32, buffer_slice: B)
+    where
+        Option<BufferSlice<'b>>: From<B>,
+    {
+        let buffer_slice: Option<BufferSlice<'b>> = buffer_slice.into();
+        if let Some(buffer_slice) = buffer_slice {
+            self.inner.set_vertex_buffer(
+                slot,
+                Some(&buffer_slice.buffer.inner),
+                buffer_slice.offset,
+                Some(buffer_slice.size),
+            );
+        } else {
+            self.inner.set_vertex_buffer(slot, None, 0, None);
+        }
     }
 
     /// Draws primitives from the active vertex buffer(s).

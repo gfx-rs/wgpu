@@ -344,15 +344,52 @@ impl crate::TypeInner {
         left.as_ref().unwrap_or(self) == right.as_ref().unwrap_or(rhs)
     }
 
+    /// Returns true if `self` is runtime- or override-sized.
     pub fn is_dynamically_sized(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
         use crate::TypeInner as Ti;
         match *self {
-            Ti::Array { size, .. } => size == crate::ArraySize::Dynamic,
+            Ti::Array {
+                size: crate::ArraySize::Constant(_),
+                ..
+            } => false,
+            Ti::Array {
+                size: crate::ArraySize::Pending(_) | crate::ArraySize::Dynamic,
+                ..
+            } => true,
             Ti::Struct { ref members, .. } => members
                 .last()
                 .map(|last| types[last.ty].inner.is_dynamically_sized(types))
                 .unwrap_or(false),
             _ => false,
+        }
+    }
+
+    /// Returns true if `self` is a constructible type.
+    pub fn is_constructible(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
+        use crate::TypeInner as Ti;
+        match *self {
+            Ti::Array { base, size, .. } => {
+                let fixed_size = match size {
+                    ir::ArraySize::Constant(_) => true,
+                    ir::ArraySize::Pending(_) | ir::ArraySize::Dynamic => false,
+                };
+                fixed_size && types[base].inner.is_constructible(types)
+            }
+            Ti::Struct { ref members, .. } => members
+                .iter()
+                .all(|member| types[member.ty].inner.is_constructible(types)),
+            Ti::Atomic(_)
+            | Ti::Pointer { .. }
+            | Ti::ValuePointer { .. }
+            | Ti::Image { .. }
+            | Ti::Sampler { .. }
+            | Ti::AccelerationStructure { .. }
+            | Ti::BindingArray { .. } => false,
+            Ti::Scalar(_)
+            | Ti::Vector { .. }
+            | Ti::Matrix { .. }
+            | Ti::RayQuery { .. }
+            | Ti::CooperativeMatrix { .. } => true,
         }
     }
 
@@ -385,8 +422,8 @@ impl crate::TypeInner {
         })
     }
 
-    /// If the type is a Vector or a Scalar return a tuple of the vector size (or None
-    /// for Scalars), and the scalar kind. Returns (None, None) for other types.
+    /// If the type is a scalar or vector (not a matrix), return a tuple of the vector
+    /// size (or `None` for scalars), and the scalar kind. Returns `None` for other types.
     pub const fn vector_size_and_scalar(
         &self,
     ) -> Option<(Option<crate::VectorSize>, crate::Scalar)> {

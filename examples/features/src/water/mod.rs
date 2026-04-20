@@ -427,14 +427,14 @@ impl crate::framework::Example for Example {
         let water_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("water"),
-                bind_group_layouts: &[&water_bind_group_layout],
+                bind_group_layouts: &[Some(&water_bind_group_layout)],
                 immediate_size: 0,
             });
 
         let terrain_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("terrain"),
-                bind_group_layouts: &[&terrain_bind_group_layout],
+                bind_group_layouts: &[Some(&terrain_bind_group_layout)],
                 immediate_size: 0,
             });
 
@@ -512,11 +512,11 @@ impl crate::framework::Example for Example {
                 // ensured by tagging on either a `#[repr(C)]` onto a
                 // struct, or a `#[repr(transparent)]` if it only contains
                 // one item, which is itself `repr(C)`.
-                buffers: &[wgpu::VertexBufferLayout {
+                buffers: &[Some(wgpu::VertexBufferLayout {
                     array_stride: water_vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![0 => Sint16x2, 1 => Sint8x4],
-                }],
+                })],
             },
             // Fragment shader and output targets
             fragment: Some(wgpu::FragmentState {
@@ -555,13 +555,12 @@ impl crate::framework::Example for Example {
             // will work. Since this is water, we need to read from the
             // depth buffer both as a texture in the shader, and as an
             // input attachment to do depth-testing. We don't write, so
-            // depth_write_enabled is set to false. This is called
-            // RODS or read-only depth stencil.
+            // depth_write_enabled is set to false. This is called RODS,
+            // or read-only depth stencil. Here, we don't use stencil.
             depth_stencil: Some(wgpu::DepthStencilState {
-                // We don't use stencil.
                 format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::Less,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),
@@ -580,11 +579,11 @@ impl crate::framework::Example for Example {
                 module: &terrain_module,
                 entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
-                buffers: &[wgpu::VertexBufferLayout {
+                buffers: &[Some(wgpu::VertexBufferLayout {
                     array_stride: terrain_vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Unorm8x4],
-                }],
+                })],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &terrain_module,
@@ -599,8 +598,8 @@ impl crate::framework::Example for Example {
             },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),

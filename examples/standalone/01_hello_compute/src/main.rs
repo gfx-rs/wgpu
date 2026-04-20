@@ -38,7 +38,7 @@ fn main() {
     // We first initialize an wgpu `Instance`, which contains any "global" state wgpu needs.
     //
     // This is what loads the vulkan/dx12/metal/opengl libraries.
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
 
     // We then create an `Adapter` which represents a physical gpu in the system. It allows
     // us to query information about it and create a `Device` from it.
@@ -167,7 +167,7 @@ fn main() {
     // The pipeline layout describes the bind groups that a pipeline expects
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
-        bind_group_layouts: &[&bind_group_layout],
+        bind_group_layouts: &[Some(&bind_group_layout)],
         immediate_size: 0,
     });
 
@@ -245,9 +245,9 @@ fn main() {
     device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
     // We can now read the data from the buffer.
-    let data = buffer_slice.get_mapped_range();
-    // Convert the data back to a slice of f32.
-    let result: &[f32] = bytemuck::cast_slice(&data);
+    let data = buffer_slice.get_mapped_range().unwrap();
+    // Convert the data back to f32 via an aligned copy.
+    let result: Vec<f32> = bytemuck::allocation::pod_collect_to_vec(&data);
 
     // Print out the result.
     println!("Result: {result:?}");

@@ -52,6 +52,7 @@ static PARTIAL_BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestCon
 
 async fn binding_array_storage_textures(ctx: TestingContext, partially_bound: bool) {
     let shader = r#"
+        enable wgpu_binding_array;
         @group(0) @binding(0)
         var textures: binding_array<texture_storage_2d<rgba8unorm, read_write> >;
 
@@ -173,7 +174,7 @@ async fn binding_array_storage_textures(ctx: TestingContext, partially_bound: bo
         .device
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
 

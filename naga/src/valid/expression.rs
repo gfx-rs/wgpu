@@ -1,13 +1,10 @@
 use super::{compose::validate_compose, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags};
 use crate::arena::UniqueArena;
-use crate::valid::expression::builtin::validate_zero_value;
 use crate::{
     arena::Handle,
     proc::OverloadSet as _,
     proc::{IndexableLengthError, ResolveError},
 };
-
-pub mod builtin;
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -38,8 +35,8 @@ pub enum ExpressionError {
     InvalidSwizzleComponent(crate::SwizzleComponent, crate::VectorSize),
     #[error(transparent)]
     Compose(#[from] super::ComposeError),
-    #[error(transparent)]
-    ZeroValue(#[from] super::ZeroValueError),
+    #[error("Cannot construct zero value of {0:?} because it is not a constructible type")]
+    InvalidZeroValue(Handle<crate::Type>),
     #[error(transparent)]
     IndexableLength(#[from] IndexableLengthError),
     #[error("Operation {0:?} can't work with {1:?}")]
@@ -92,8 +89,14 @@ pub enum ExpressionError {
     InvalidDerivative,
     #[error("Image array index parameter is misplaced")]
     InvalidImageArrayIndex,
-    #[error("Inappropriate sample or level-of-detail index for texel access")]
-    InvalidImageOtherIndex,
+    #[error("Cannot textureLoad from a specific multisample sample on a non-multisampled image.")]
+    InvalidImageSampleSelector,
+    #[error("Cannot textureLoad from a multisampled image without specifying a sample.")]
+    MissingImageSampleSelector,
+    #[error("Cannot textureLoad with a specific mip level on a non-mipmapped image.")]
+    InvalidImageLevelSelector,
+    #[error("Cannot textureLoad from a mipmapped image without specifying a level.")]
+    MissingImageLevelSelector,
     #[error("Image array index type of {0:?} is not an integer scalar")]
     InvalidImageArrayIndexType(Handle<crate::Expression>),
     #[error("Image sample or level-of-detail index's type of {0:?} is not an integer scalar")]
@@ -153,6 +156,8 @@ pub enum ExpressionError {
         lhs_type: crate::TypeInner,
         rhs_expr: Handle<crate::Expression>,
     },
+    #[error("Division by zero")]
+    DivideByZero,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -316,6 +321,60 @@ impl super::Validator {
         }
     }
 
+    /// Return an error if a constant divisor in `right` evaluates to zero for
+    /// an integer division or remainder operation.
+    ///
+    /// This function promises to return an error in cases where (1) the
+    /// expression is well-typed, (2) `left_ty` is a concrete integer or a
+    /// vector, and (3) `right` is a const-expression that evaluates to zero.
+    /// It does not return an error in cases where the expression is not
+    /// well-typed (e.g. vector dimension mismatch), because those will be
+    /// rejected elsewhere.
+    fn validate_constant_divisor(
+        left_ty: &crate::TypeInner,
+        right: Handle<crate::Expression>,
+        module: &crate::Module,
+        function: &crate::Function,
+    ) -> Result<(), ExpressionError> {
+        fn contains_zero(
+            handle: Handle<crate::Expression>,
+            expressions: &crate::Arena<crate::Expression>,
+            module: &crate::Module,
+        ) -> bool {
+            match expressions[handle] {
+                crate::Expression::Literal(_) | crate::Expression::ZeroValue(_) => module
+                    .to_ctx()
+                    .get_const_val_from::<u32, _>(handle, expressions)
+                    .ok()
+                    .is_some_and(|v| v == 0),
+                crate::Expression::Splat { value, .. } => contains_zero(value, expressions, module),
+                crate::Expression::Compose { ref components, .. } => components
+                    .iter()
+                    .any(|&comp| contains_zero(comp, expressions, module)),
+                crate::Expression::Constant(c) => {
+                    contains_zero(module.constants[c].init, &module.global_expressions, module)
+                }
+                _ => false,
+            }
+        }
+
+        let Some((_, scalar)) = left_ty.vector_size_and_scalar() else {
+            return Ok(());
+        };
+        if !matches!(
+            scalar.kind,
+            crate::ScalarKind::Sint | crate::ScalarKind::Uint
+        ) {
+            return Ok(());
+        }
+
+        if contains_zero(right, &function.expressions, module) {
+            Err(ExpressionError::DivideByZero)
+        } else {
+            Ok(())
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn validate_expression(
         &self,
@@ -424,7 +483,7 @@ impl super::Validator {
 
                 let limit = resolve_index_limit(module, base, &resolver[base], true)?;
                 if index >= limit {
-                    return Err(ExpressionError::IndexOutOfBounds(base, limit));
+                    return Err(ExpressionError::IndexOutOfBounds(base, index));
                 }
                 ShaderStages::all()
             }
@@ -460,7 +519,9 @@ impl super::Validator {
             }
             E::Constant(_) | E::Override(_) => ShaderStages::all(),
             E::ZeroValue(ty) => {
-                validate_zero_value(ty, module.to_ctx())?;
+                if !mod_info[ty].contains(TypeFlags::CONSTRUCTIBLE) {
+                    return Err(ExpressionError::InvalidZeroValue(ty));
+                }
                 ShaderStages::all()
             }
             E::Compose { ref components, ty } => {
@@ -802,8 +863,11 @@ impl super::Validator {
                             return Err(ExpressionError::InvalidImageOtherIndexType(sample));
                         }
                     }
-                    _ => {
-                        return Err(ExpressionError::InvalidImageOtherIndex);
+                    (Some(_), false) => {
+                        return Err(ExpressionError::InvalidImageSampleSelector);
+                    }
+                    (None, true) => {
+                        return Err(ExpressionError::MissingImageSampleSelector);
                     }
                 }
 
@@ -816,8 +880,11 @@ impl super::Validator {
                         }) => {}
                         _ => return Err(ExpressionError::InvalidImageArrayIndexType(level)),
                     },
-                    _ => {
-                        return Err(ExpressionError::InvalidImageOtherIndex);
+                    (Some(_), false) => {
+                        return Err(ExpressionError::InvalidImageLevelSelector);
+                    }
+                    (None, true) => {
+                        return Err(ExpressionError::MissingImageLevelSelector);
                     }
                 }
                 ShaderStages::all()
@@ -853,15 +920,14 @@ impl super::Validator {
             }
             E::Unary { op, expr } => {
                 use crate::UnaryOperator as Uo;
-                let inner = &resolver[expr];
-                match (op, inner.scalar_kind()) {
-                    (Uo::Negate, Some(Sk::Float | Sk::Sint))
-                    | (Uo::LogicalNot, Some(Sk::Bool))
-                    | (Uo::BitwiseNot, Some(Sk::Sint | Sk::Uint)) => {}
-                    other => {
-                        log::debug!("Op {op:?} kind {other:?}");
-                        return Err(ExpressionError::InvalidUnaryOperandType(op, expr));
-                    }
+                let Some((_, scalar)) = resolver[expr].vector_size_and_scalar() else {
+                    return Err(ExpressionError::InvalidUnaryOperandType(op, expr));
+                };
+                match (op, scalar.kind) {
+                    (Uo::Negate, Sk::Float | Sk::Sint) => {}
+                    (Uo::LogicalNot, Sk::Bool) => {}
+                    (Uo::BitwiseNot, Sk::Sint | Sk::Uint) => {}
+                    _ => return Err(ExpressionError::InvalidUnaryOperandType(op, expr)),
                 }
                 ShaderStages::all()
             }
@@ -1061,6 +1127,10 @@ impl super::Validator {
                 if matches!(op, Bo::ShiftLeft | Bo::ShiftRight) {
                     Self::validate_constant_shift_amounts(left_inner, right, module, function)?;
                 }
+                // For integer division or remainder, check if the constant divisor is zero
+                if matches!(op, Bo::Divide | Bo::Modulo) {
+                    Self::validate_constant_divisor(left_inner, right, module, function)?;
+                }
                 ShaderStages::all()
             }
             E::Select {
@@ -1112,18 +1182,13 @@ impl super::Validator {
                 ShaderStages::all()
             }
             E::Derivative { expr, .. } => {
-                match resolver[expr] {
-                    Ti::Scalar(Sc {
-                        kind: Sk::Float, ..
-                    })
-                    | Ti::Vector {
-                        scalar:
-                            Sc {
-                                kind: Sk::Float, ..
-                            },
-                        ..
-                    } => {}
-                    _ => return Err(ExpressionError::InvalidDerivative),
+                let Some((_, scalar)) = resolver[expr].vector_size_and_scalar() else {
+                    return Err(ExpressionError::InvalidDerivative);
+                };
+                if scalar.kind != Sk::Float || scalar.width < 4 {
+                    // Derivatives are not supported for `f16`, although support may be added
+                    // in the future, see https://github.com/gpuweb/gpuweb/issues/5482.
+                    return Err(ExpressionError::InvalidDerivative);
                 }
                 ShaderStages::FRAGMENT
             }

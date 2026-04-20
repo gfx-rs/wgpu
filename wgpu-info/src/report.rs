@@ -1,13 +1,12 @@
 use std::io;
 
+use exhaust::Exhaust;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use wgpu::{
     AdapterInfo, DownlevelCapabilities, Dx12Compiler, Features, Limits, TextureFormat,
     TextureFormatFeatures,
 };
-
-use crate::texture;
 
 /// Report specifying the capabilities of the GPUs on the system.
 ///
@@ -20,7 +19,7 @@ pub struct GpuReport {
 impl GpuReport {
     pub fn generate() -> Self {
         let instance = wgpu::Instance::new({
-            let mut desc = wgpu::InstanceDescriptor::default();
+            let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
             desc.backend_options.dx12.shader_compiler = Dx12Compiler::StaticDxc;
             desc.flags = wgpu::InstanceFlags::debugging();
             desc.with_env()
@@ -33,8 +32,7 @@ impl GpuReport {
             let features = adapter.features();
             let limits = adapter.limits();
             let downlevel_caps = adapter.get_downlevel_capabilities();
-            let texture_format_features = texture::TEXTURE_FORMAT_LIST
-                .into_iter()
+            let texture_format_features = wgpu::TextureFormat::exhaust()
                 .map(|format| (format, adapter.get_texture_format_features(format)))
                 .collect();
 

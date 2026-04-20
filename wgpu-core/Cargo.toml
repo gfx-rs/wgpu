@@ -149,6 +149,9 @@ vulkan-portability = ["wgpu-core-deps-apple/vulkan-portability"]
 ## Renderdoc integration, only available on Windows, Linux, and Android
 renderdoc = ["wgpu-core-deps-windows-linux-android/renderdoc"]
 
+## Support creating textures from DRM display/window handles.
+drm = ["wgpu-core-deps-windows-linux-android/drm"]
+
 ## Enable the `noop` backend.
 # TODO(https://github.com/gfx-rs/wgpu/issues/7120): there should be a hal feature
 noop = []
@@ -167,6 +170,7 @@ wgpu-core-deps-windows-linux-android = { workspace = true, optional = true }
 
 [dependencies]
 naga.workspace = true
+wgpu-naga-bridge.workspace = true
 wgpu-hal.workspace = true
 wgpu-types.workspace = true
 

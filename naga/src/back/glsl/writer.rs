@@ -699,6 +699,18 @@ impl<'a, W: Write> Writer<'a, W> {
 
         if let crate::AddressSpace::Storage { access } = global.space {
             self.write_storage_access(access)?;
+            if global
+                .memory_decorations
+                .contains(crate::MemoryDecorations::COHERENT)
+            {
+                write!(self.out, "coherent ")?;
+            }
+            if global
+                .memory_decorations
+                .contains(crate::MemoryDecorations::VOLATILE)
+            {
+                write!(self.out, "volatile ")?;
+            }
         }
 
         if let Some(storage_qualifier) = glsl_storage_qualifier(global.space) {
@@ -1072,7 +1084,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             }
                         }
                     }
-                    crate::BuiltIn::ClipDistance => {
+                    crate::BuiltIn::ClipDistances => {
                         // Re-declare `gl_ClipDistance` with number of clip planes.
                         let TypeInner::Array { size, .. } = self.module.types[ty].inner else {
                             unreachable!();
@@ -1978,10 +1990,21 @@ impl<'a, W: Write> Writer<'a, W> {
             // Stores in glsl are just variable assignments written as `pointer = value;`
             Statement::Store { pointer, value } => {
                 write!(self.out, "{level}")?;
-                self.write_expr(pointer, ctx)?;
-                write!(self.out, " = ")?;
-                self.write_expr(value, ctx)?;
-                writeln!(self.out, ";")?
+                let is_atomic_pointer = ctx
+                    .resolve_type(pointer, &self.module.types)
+                    .is_atomic_pointer(&self.module.types);
+                if is_atomic_pointer {
+                    write!(self.out, "atomicExchange(")?;
+                    self.write_expr(pointer, ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(value, ctx)?;
+                    writeln!(self.out, ");")?
+                } else {
+                    self.write_expr(pointer, ctx)?;
+                    write!(self.out, " = ")?;
+                    self.write_expr(value, ctx)?;
+                    writeln!(self.out, ";")?
+                }
             }
             Statement::WorkGroupUniformLoad { pointer, result } => {
                 // GLSL doesn't have pointers, which means that this backend needs to ensure that
@@ -2475,7 +2498,27 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, "{}", self.names[&ctx.name_key(handle)])?
             }
             // glsl has no pointers so there's no load operation, just write the pointer expression
-            Expression::Load { pointer } => self.write_expr(pointer, ctx)?,
+            Expression::Load { pointer } => {
+                let ty_inner = ctx.resolve_type(pointer, &self.module.types);
+                if ty_inner.is_atomic_pointer(&self.module.types) {
+                    let mut suffix = "";
+                    if let TypeInner::Pointer { base, .. } = *ty_inner {
+                        if let TypeInner::Atomic(scalar) = self.module.types[base].inner {
+                            suffix = match (scalar.kind, scalar.width) {
+                                (crate::ScalarKind::Uint, 8) => "ul",
+                                (crate::ScalarKind::Sint, 8) => "l",
+                                (crate::ScalarKind::Uint, _) => "u",
+                                _ => "",
+                            };
+                        }
+                    }
+                    write!(self.out, "atomicOr(")?;
+                    self.write_expr(pointer, ctx)?;
+                    write!(self.out, ", 0{})", suffix)?
+                } else {
+                    self.write_expr(pointer, ctx)?
+                }
+            }
             // `ImageSample` is a bit complicated compared to the rest of the IR.
             //
             // First there are three variations depending whether the sample level is explicitly set,

@@ -89,6 +89,11 @@ pub enum Token<'a> {
     /// A module-level doc comment, beginning with `//!` or `/*!`.
     ModuleDocComment(&'a str),
 
+    /// A block comment that is incomplete, and has not been closed with */.
+    ///
+    /// It's expected that the parser will consider this to be an error.
+    UnterminatedBlockComment(&'a str),
+
     /// The end of the input.
     End,
 }
@@ -360,7 +365,7 @@ fn consume_token(
                         }
                     }
 
-                    (Token::End, "")
+                    (Token::UnterminatedBlockComment(input), "")
                 }
                 Some('=') => (Token::AssignmentOperation(cur), chars.as_str()),
                 _ => (Token::Operation(cur), og_chars),
@@ -511,14 +516,7 @@ impl<'a> Lexer<'a> {
         extension: ImplementedEnableExtension,
         span: Span,
     ) -> Result<'static, ()> {
-        if self.enable_extensions.contains(extension) {
-            Ok(())
-        } else {
-            Err(Box::new(Error::EnableExtensionNotEnabled {
-                kind: extension.into(),
-                span,
-            }))
-        }
+        self.enable_extensions.require(extension, span)
     }
 
     /// Calls the function with a lexer and returns the result of the function as well as the span for everything the function parsed
@@ -1268,5 +1266,13 @@ fn test_doc_comments_module() {
             Token::Word("const"),
             Token::ModuleDocComment("//! After anything else is not."),
         ],
+    );
+}
+
+#[test]
+fn test_block_comment_unclosed() {
+    sub_test_with_and_without_doc_comments(
+        "/** Unclosed Doc Comment",
+        &[Token::UnterminatedBlockComment("/** Unclosed Doc Comment")],
     );
 }

@@ -26,13 +26,23 @@ impl NativeTest {
         adapter_report: AdapterReport,
         adapter_index: usize,
     ) -> Self {
-        let backend = adapter_report.info.backend;
         let device_name = &adapter_report.info.name;
+        let backend = adapter_report.info.backend;
+        let driver = &adapter_report.info.driver;
+        let report_driver_as_backend = [
+            (wgpu::Backend::Vulkan, "MoltenVK"),
+            (wgpu::Backend::Vulkan, "KosmicKrisp"),
+        ];
+        let backend_str = if report_driver_as_backend.contains(&(backend, driver.as_ref())) {
+            driver.clone()
+        } else {
+            format!("{backend:?}")
+        };
 
         let test_info = TestInfo::from_configuration(&config, &adapter_report);
 
         let full_name = format!(
-            "[{running_msg}] [{backend:?}/{device_name}/{adapter_index}] {base_name}",
+            "[{running_msg}] [{backend_str}/{device_name}/{adapter_index}] {base_name}",
             running_msg = test_info.running_msg,
             base_name = config.name,
         );
@@ -52,9 +62,15 @@ impl NativeTest {
 
                 let env_value = if metal_validation { "1" } else { "0" };
                 std::env::set_var("MTL_DEBUG_LAYER", env_value);
-                if std::env::var("GITHUB_ACTIONS").as_deref() != Ok("true") {
+                if std::env::var("GITHUB_ACTIONS").as_deref() != Ok("true")
+                    && !config.params.disable_mtl_shader_validation
+                {
                     // Metal Shader Validation is entirely broken in the paravirtualized CI environment.
                     std::env::set_var("MTL_SHADER_VALIDATION", env_value);
+                } else if config.params.disable_mtl_shader_validation {
+                    // For ray tracing, where MTL_SHADER_VALIDATION causes acceleration structure ids to be
+                    // completely incorrect.
+                    std::env::set_var("MTL_SHADER_VALIDATION", "0");
                 }
 
                 execute_test(Some(&adapter_report), config, Some(test_info)).await;

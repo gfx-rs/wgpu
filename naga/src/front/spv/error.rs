@@ -8,11 +8,9 @@ use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
 
 use super::ModuleState;
-use crate::{
-    arena::Handle,
-    error::{replace_control_chars, ErrorWrite},
-    front::atomic_upgrade,
-};
+#[cfg(feature = "stderr")]
+use crate::error::ErrorWrite;
+use crate::{arena::Handle, error::replace_control_chars, front::atomic_upgrade};
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
@@ -107,8 +105,10 @@ pub enum Error {
     InvalidGlobalVar(crate::Expression),
     #[error("invalid image/sampler expression {0:?}")]
     InvalidImageExpression(crate::Expression),
-    #[error("image write without format is not currently supported. See https://github.com/gfx-rs/wgpu/issues/6797")]
-    InvalidImageWriteType,
+    #[error("cannot create a OpTypeImage as both a depth and storage image")]
+    InvalidImageDepthStorage,
+    #[error("image read/write without format is not currently supported. See https://github.com/gfx-rs/wgpu/issues/6797")]
+    InvalidStorageImageWithoutFormat,
     #[error("invalid image base type {0:?}")]
     InvalidImageBaseType(Handle<crate::Type>),
     #[error("invalid image {0:?}")]
@@ -157,22 +157,36 @@ pub enum Error {
 }
 
 impl Error {
+    #[cfg(feature = "stderr")]
     pub fn emit_to_writer(&self, writer: &mut impl ErrorWrite, source: &str) {
-        self.emit_to_writer_with_path(writer, source, "glsl");
+        self.emit_to_writer_with_path(writer, source, "spv");
     }
 
+    #[cfg(feature = "stderr")]
     pub fn emit_to_writer_with_path(&self, writer: &mut impl ErrorWrite, source: &str, path: &str) {
         let path = path.to_string();
         let files = SimpleFile::new(path, replace_control_chars(source));
         let config = term::Config::default();
         let diagnostic = Diagnostic::error().with_message(format!("{self:?}"));
 
-        term::emit(writer, &config, &files, &diagnostic).expect("cannot write error");
+        crate::error::emit_to_writer(writer, &config, &files, &diagnostic)
+            .expect("cannot write error");
     }
 
     pub fn emit_to_string(&self, source: &str) -> String {
+        self.emit_to_string_with_path(source, "spv")
+    }
+
+    pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String {
+        let path = path.to_string();
+        let files = SimpleFile::new(path, replace_control_chars(source));
+        let config = term::Config::default();
+        let diagnostic = Diagnostic::error().with_message(format!("{self:?}"));
+
         let mut writer = crate::error::DiagnosticBuffer::new();
-        self.emit_to_writer(writer.inner_mut(), source);
+        writer
+            .emit_to_self(&config, &files, &diagnostic)
+            .expect("cannot write error");
         writer.into_string()
     }
 }

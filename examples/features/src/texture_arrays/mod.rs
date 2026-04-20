@@ -327,7 +327,7 @@ impl crate::framework::Example for Example {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("main"),
-            bind_group_layouts: &[&bind_group_layout, &uniform_bind_group_layout],
+            bind_group_layouts: &[Some(&bind_group_layout), Some(&uniform_bind_group_layout)],
             immediate_size: 0,
         });
 
@@ -340,11 +340,11 @@ impl crate::framework::Example for Example {
                 module: &base_shader_module,
                 entry_point: Some("vert_main"),
                 compilation_options: Default::default(),
-                buffers: &[wgpu::VertexBufferLayout {
+                buffers: &[Some(wgpu::VertexBufferLayout {
                     array_stride: vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Sint32],
-                }],
+                })],
             },
             fragment: Some(wgpu::FragmentState {
                 module: fragment_shader_module,
@@ -439,7 +439,13 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
     height: 768,
     optional_features: wgpu::Features::empty(),
     base_test_parameters: wgpu_test::TestParameters::default()
-        .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION),
+        .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
+        // https://github.com/gfx-rs/wgpu/issues/9184
+        .expect_fail(
+            wgpu_test::FailureCase::molten_vk()
+                .validation_error("Shader library compile failed")
+                .validation_error("could not be compiled into pipeline"),
+        ),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.0001)],
     _phantom: std::marker::PhantomData::<Example>,
 };
@@ -454,7 +460,13 @@ pub static TEST_UNIFORM: crate::framework::ExampleTestParams =
         height: 768,
         optional_features: wgpu::Features::empty(),
         base_test_parameters: wgpu_test::TestParameters::default()
-            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION),
+            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
+            // https://github.com/gfx-rs/wgpu/issues/9184
+            .expect_fail(
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline"),
+            ),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.0001)],
         _phantom: std::marker::PhantomData::<Example>,
     };
@@ -470,7 +482,13 @@ pub static TEST_NON_UNIFORM: crate::framework::ExampleTestParams =
         optional_features:
             wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
         base_test_parameters: wgpu_test::TestParameters::default()
-            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION),
+            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
+            // https://github.com/gfx-rs/wgpu/issues/9184
+            .expect_fail(
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline"),
+            ),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.0001)],
         _phantom: std::marker::PhantomData::<Example>,
     };

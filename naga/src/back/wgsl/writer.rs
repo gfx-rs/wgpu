@@ -36,6 +36,7 @@ enum Attribute {
     MeshStage(String),
     TaskPayload(String),
     PerPrimitive,
+    IncomingRayPayload(String),
 }
 
 /// The WGSL form that `write_expr_with_indirection` should use to render a Naga
@@ -243,10 +244,17 @@ impl<W: Write> Writer<W> {
                         Attribute::WorkGroupSize(ep.workgroup_size),
                     ]
                 }
-                ShaderStage::RayGeneration
-                | ShaderStage::AnyHit
-                | ShaderStage::ClosestHit
-                | ShaderStage::Miss => unreachable!(),
+                ShaderStage::RayGeneration => vec![Attribute::Stage(ShaderStage::RayGeneration)],
+                ShaderStage::AnyHit | ShaderStage::ClosestHit | ShaderStage::Miss => {
+                    let payload_name = module.global_variables[ep.incoming_ray_payload.unwrap()]
+                        .name
+                        .clone()
+                        .unwrap();
+                    vec![
+                        Attribute::Stage(ep.stage),
+                        Attribute::IncomingRayPayload(payload_name),
+                    ]
+                }
             };
             self.write_attributes(&attributes)?;
             // Add a newline after attribute
@@ -287,6 +295,9 @@ impl<W: Write> Writer<W> {
             primitive_index: bool,
             cooperative_matrix: bool,
             draw_index: bool,
+            ray_tracing_pipeline: bool,
+            per_vertex: bool,
+            binding_array: bool,
         }
         let mut needed = RequiredEnabled {
             mesh_shaders: module.uses_mesh_shaders(),
@@ -300,7 +311,7 @@ impl<W: Write> Writer<W> {
             } => {
                 needed.dual_source_blending = true;
             }
-            crate::Binding::BuiltIn(crate::BuiltIn::ClipDistance) => {
+            crate::Binding::BuiltIn(crate::BuiltIn::ClipDistances) => {
                 needed.clip_distances = true;
             }
             crate::Binding::BuiltIn(crate::BuiltIn::PrimitiveIndex) => {
@@ -312,7 +323,29 @@ impl<W: Write> Writer<W> {
             } => {
                 needed.mesh_shaders = true;
             }
+            crate::Binding::Location {
+                interpolation: Some(crate::Interpolation::PerVertex),
+                ..
+            } => {
+                needed.per_vertex = true;
+            }
             crate::Binding::BuiltIn(crate::BuiltIn::DrawIndex) => needed.draw_index = true,
+            crate::Binding::BuiltIn(
+                crate::BuiltIn::RayInvocationId
+                | crate::BuiltIn::NumRayInvocations
+                | crate::BuiltIn::InstanceCustomData
+                | crate::BuiltIn::GeometryIndex
+                | crate::BuiltIn::WorldRayOrigin
+                | crate::BuiltIn::WorldRayDirection
+                | crate::BuiltIn::ObjectRayOrigin
+                | crate::BuiltIn::ObjectRayDirection
+                | crate::BuiltIn::RayTmin
+                | crate::BuiltIn::RayTCurrentMax
+                | crate::BuiltIn::ObjectToWorld
+                | crate::BuiltIn::WorldToObject,
+            ) => {
+                needed.ray_tracing_pipeline = true;
+            }
             _ => {}
         };
 
@@ -332,6 +365,12 @@ impl<W: Write> Writer<W> {
                 TypeInner::CooperativeMatrix { .. } => {
                     needed.cooperative_matrix = true;
                 }
+                TypeInner::AccelerationStructure { .. } => {
+                    needed.ray_tracing_pipeline = true;
+                }
+                TypeInner::BindingArray { .. } => {
+                    needed.binding_array = true;
+                }
                 _ => {}
             }
         }
@@ -348,6 +387,44 @@ impl<W: Write> Writer<W> {
             {
                 check_binding(arg, &mut needed);
             }
+        }
+
+        if module.global_variables.iter().any(|gv| {
+            gv.1.space == crate::AddressSpace::IncomingRayPayload
+                || gv.1.space == crate::AddressSpace::RayPayload
+        }) {
+            needed.ray_tracing_pipeline = true;
+        }
+
+        if module.entry_points.iter().any(|ep| {
+            matches!(
+                ep.stage,
+                ShaderStage::RayGeneration
+                    | ShaderStage::AnyHit
+                    | ShaderStage::ClosestHit
+                    | ShaderStage::Miss
+            )
+        }) {
+            needed.ray_tracing_pipeline = true;
+        }
+
+        if module.global_variables.iter().any(|gv| {
+            gv.1.space == crate::AddressSpace::IncomingRayPayload
+                || gv.1.space == crate::AddressSpace::RayPayload
+        }) {
+            needed.ray_tracing_pipeline = true;
+        }
+
+        if module.entry_points.iter().any(|ep| {
+            matches!(
+                ep.stage,
+                ShaderStage::RayGeneration
+                    | ShaderStage::AnyHit
+                    | ShaderStage::ClosestHit
+                    | ShaderStage::Miss
+            )
+        }) {
+            needed.ray_tracing_pipeline = true;
         }
 
         // Write required declarations
@@ -368,6 +445,10 @@ impl<W: Write> Writer<W> {
             writeln!(self.out, "enable wgpu_mesh_shader;")?;
             any_written = true;
         }
+        if needed.binding_array {
+            writeln!(self.out, "enable wgpu_binding_array;")?;
+            any_written = true;
+        }
         if needed.draw_index {
             writeln!(self.out, "enable draw_index;")?;
             any_written = true;
@@ -378,6 +459,14 @@ impl<W: Write> Writer<W> {
         }
         if needed.cooperative_matrix {
             writeln!(self.out, "enable wgpu_cooperative_matrix;")?;
+            any_written = true;
+        }
+        if needed.ray_tracing_pipeline {
+            writeln!(self.out, "enable wgpu_ray_tracing_pipeline;")?;
+            any_written = true;
+        }
+        if needed.per_vertex {
+            writeln!(self.out, "enable wgpu_per_vertex;")?;
             any_written = true;
         }
         if any_written {
@@ -501,10 +590,10 @@ impl<W: Write> Writer<W> {
                         ShaderStage::Task => "task",
                         //Handled by another variant in the Attribute enum, so this code should never be hit.
                         ShaderStage::Mesh => unreachable!(),
-                        ShaderStage::RayGeneration
-                        | ShaderStage::AnyHit
-                        | ShaderStage::ClosestHit
-                        | ShaderStage::Miss => unreachable!(),
+                        ShaderStage::RayGeneration => "ray_generation",
+                        ShaderStage::AnyHit => "any_hit",
+                        ShaderStage::ClosestHit => "closest_hit",
+                        ShaderStage::Miss => "miss",
                     };
 
                     write!(self.out, "@{stage_str} ")?;
@@ -542,6 +631,9 @@ impl<W: Write> Writer<W> {
                     write!(self.out, "@payload({payload_name}) ")?;
                 }
                 Attribute::PerPrimitive => write!(self.out, "@per_primitive ")?,
+                Attribute::IncomingRayPayload(ref payload_name) => {
+                    write!(self.out, "@incoming_payload({payload_name}) ")?;
+                }
             };
         }
         Ok(())
@@ -1103,7 +1195,21 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, data.stride, func_ctx)?;
                 writeln!(self.out, ");")?
             }
-            Statement::RayPipelineFunction(_) => unreachable!(),
+            Statement::RayPipelineFunction(fun) => match fun {
+                crate::RayPipelineFunction::TraceRay {
+                    acceleration_structure,
+                    descriptor,
+                    payload,
+                } => {
+                    write!(self.out, "{level}traceRay(")?;
+                    self.write_expr(module, acceleration_structure, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, descriptor, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, payload, func_ctx)?;
+                    writeln!(self.out, ");")?
+                }
+            },
         }
 
         Ok(())
@@ -1885,6 +1991,19 @@ impl<W: Write> Writer<W> {
                 Attribute::Binding(binding.binding),
             ])?;
             writeln!(self.out)?;
+        }
+
+        if global
+            .memory_decorations
+            .contains(crate::MemoryDecorations::COHERENT)
+        {
+            write!(self.out, "@coherent ")?;
+        }
+        if global
+            .memory_decorations
+            .contains(crate::MemoryDecorations::VOLATILE)
+        {
+            write!(self.out, "@volatile ")?;
         }
 
         // First write global name and address space if supported

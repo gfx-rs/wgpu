@@ -34,7 +34,6 @@ use crate::query_set::GPUQuerySet;
 use crate::render_bundle::GPURenderBundleEncoder;
 use crate::render_pipeline::GPURenderPipeline;
 use crate::shader::GPUCompilationInfo;
-use crate::webidl::features_to_feature_names;
 use crate::Instance;
 
 /// External memory associated with device and queue, to encourage V8 to garbage
@@ -104,7 +103,6 @@ impl GPUDevice {
   fn features(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
     self.features.get(scope, |scope| {
       let features = self.instance.device_features(self.id);
-      let features = features_to_feature_names(features);
       GPUSupportedFeatures::new(scope, features)
     })
   }
@@ -379,7 +377,11 @@ impl GPUDevice {
     let bind_group_layouts = descriptor
       .bind_group_layouts
       .into_iter()
-      .map(|bind_group_layout| bind_group_layout.id)
+      .map(|bind_group_layout| {
+        bind_group_layout
+          .into_option()
+          .map(|bind_group_layout| bind_group_layout.id)
+      })
       .collect();
 
     let wgpu_descriptor = wgpu_core::binding_model::PipelineLayoutDescriptor {
@@ -670,15 +672,9 @@ impl GPUDevice {
       multiview: None,
     };
 
-    let res =
-      wgpu_core::command::RenderBundleEncoder::new(&wgpu_descriptor, self.id);
-    let (encoder, err) = match res {
-      Ok(encoder) => (encoder, None),
-      Err(e) => (
-        wgpu_core::command::RenderBundleEncoder::dummy(self.id),
-        Some(e),
-      ),
-    };
+    let (encoder, err) = self
+      .instance
+      .device_create_render_bundle_encoder(self.id, &wgpu_descriptor);
 
     self.error_handler.push_error(err);
 
@@ -732,7 +728,7 @@ impl GPUDevice {
       .scopes
       .lock()
       .unwrap()
-      .push((filter, vec![]));
+      .push((filter, None));
   }
 
   #[async_method(fake)]
@@ -746,7 +742,7 @@ impl GPUDevice {
       return Ok(v8::Global::new(scope, val));
     }
 
-    let Some((_, errors)) = self.error_handler.scopes.lock().unwrap().pop()
+    let Some((_, error)) = self.error_handler.scopes.lock().unwrap().pop()
     else {
       return Err(JsErrorBox::new(
         "DOMExceptionOperationError",
@@ -754,7 +750,7 @@ impl GPUDevice {
       ));
     };
 
-    let val = if let Some(err) = errors.into_iter().next() {
+    let val = if let Some(err) = error {
       deno_core::error::to_v8_error(scope, &err)
     } else {
       v8::null(scope).into()
@@ -838,9 +834,8 @@ impl GPUDevice {
           .buffers
           .into_iter()
           .map(|b| {
-            b.into_option().map_or_else(
-              wgpu_core::pipeline::VertexBufferLayout::default,
-              |layout| wgpu_core::pipeline::VertexBufferLayout {
+            b.into_option().map(|layout| {
+              wgpu_core::pipeline::VertexBufferLayout {
                 array_stride: layout.array_stride,
                 step_mode: layout.step_mode.into(),
                 attributes: Cow::Owned(
@@ -854,8 +849,8 @@ impl GPUDevice {
                     })
                     .collect(),
                 ),
-              },
-            )
+              }
+            })
           })
           .collect(),
       ),
@@ -890,13 +885,8 @@ impl GPUDevice {
 
       wgpu_types::DepthStencilState {
         format: depth_stencil.format.into(),
-        depth_write_enabled: depth_stencil
-          .depth_write_enabled
-          .unwrap_or_default(),
-        depth_compare: depth_stencil
-          .depth_compare
-          .map(Into::into)
-          .unwrap_or(wgpu_types::CompareFunction::Never), // TODO(wgpu): should be optional here
+        depth_write_enabled: depth_stencil.depth_write_enabled,
+        depth_compare: depth_stencil.depth_compare.map(Into::into),
         stencil: wgpu_types::StencilState {
           front,
           back,

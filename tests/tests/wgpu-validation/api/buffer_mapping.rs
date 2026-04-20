@@ -1,6 +1,25 @@
-fn mapping_is_zeroed(array: &[u8]) {
-    for (i, &byte) in array.iter().enumerate() {
+// FIXME: Now that MAP_WRITE mappings are write-only,
+// the “mut” and “immutable” terminology is incorrect.
+
+fn read_mapping_is_zeroed(slice: &[u8]) {
+    for (i, &byte) in slice.iter().enumerate() {
         assert_eq!(byte, 0, "Byte at index {i} is not zero");
+    }
+}
+fn write_mapping_is_zeroed(mut slice: wgpu::WriteOnly<'_, [u8]>) {
+    let ptr = slice.as_raw_ptr().cast::<u8>();
+    for i in 0..slice.len() {
+        assert_eq!(
+            // SAFETY: it is not, in general, safe to read from a write mapping, but our goal here
+            // is specifically to verify the internally provided zeroedness.
+            //
+            // FIXME: Is the goal of these tests to ensure that zeroes are what is exposed to Rust,
+            // and not to ensure that zeroes get into the GPU buffer? If so, then we can delete
+            // them, or perhaps replace them with tests of mapping without writing, then reading.
+            unsafe { ptr.add(i).read() },
+            0,
+            "Byte at index {i} is not zero"
+        );
     }
 }
 
@@ -19,9 +38,9 @@ fn full_immutable_binding() {
     buffer.map_async(wgpu::MapMode::Read, .., |_| {});
     device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
-    let mapping = buffer.slice(..).get_mapped_range();
+    let mapping = buffer.slice(..).get_mapped_range().unwrap();
 
-    mapping_is_zeroed(&mapping);
+    read_mapping_is_zeroed(&mapping);
 
     drop(mapping);
 
@@ -40,9 +59,9 @@ fn full_mut_binding() {
         mapped_at_creation: true,
     });
 
-    let mapping = buffer.slice(..).get_mapped_range_mut();
+    let mut mapping = buffer.slice(..).get_mapped_range_mut().unwrap();
 
-    mapping_is_zeroed(&mapping);
+    write_mapping_is_zeroed(mapping.slice(..));
 
     drop(mapping);
 
@@ -64,11 +83,11 @@ fn split_immutable_binding() {
     buffer.map_async(wgpu::MapMode::Read, .., |_| {});
     device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
-    let mapping0 = buffer.slice(0..512).get_mapped_range();
-    let mapping1 = buffer.slice(512..1024).get_mapped_range();
+    let mapping0 = buffer.slice(0..512).get_mapped_range().unwrap();
+    let mapping1 = buffer.slice(512..1024).get_mapped_range().unwrap();
 
-    mapping_is_zeroed(&mapping0);
-    mapping_is_zeroed(&mapping1);
+    read_mapping_is_zeroed(&mapping0);
+    read_mapping_is_zeroed(&mapping1);
 
     drop(mapping0);
     drop(mapping1);
@@ -88,11 +107,11 @@ fn split_mut_binding() {
         mapped_at_creation: true,
     });
 
-    let mapping0 = buffer.slice(0..512).get_mapped_range_mut();
-    let mapping1 = buffer.slice(512..1024).get_mapped_range_mut();
+    let mut mapping0 = buffer.slice(0..512).get_mapped_range_mut().unwrap();
+    let mut mapping1 = buffer.slice(512..1024).get_mapped_range_mut().unwrap();
 
-    mapping_is_zeroed(&mapping0);
-    mapping_is_zeroed(&mapping1);
+    write_mapping_is_zeroed(mapping0.slice(..));
+    write_mapping_is_zeroed(mapping1.slice(..));
 
     drop(mapping0);
     drop(mapping1);
@@ -112,13 +131,12 @@ fn overlapping_ref_binding() {
         mapped_at_creation: true,
     });
 
-    let _mapping0 = buffer.slice(0..512).get_mapped_range();
-    let _mapping1 = buffer.slice(256..768).get_mapped_range();
+    let _mapping0 = buffer.slice(0..512).get_mapped_range().unwrap();
+    let _mapping1 = buffer.slice(256..768).get_mapped_range().unwrap();
 }
 
-/// Ensure that two overlapping mutably mapped ranges panics.
+/// Ensure that two overlapping mutably mapped ranges returns an error.
 #[test]
-#[should_panic(expected = "break Rust memory aliasing rules")]
 fn overlapping_mut_binding() {
     let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
 
@@ -129,14 +147,13 @@ fn overlapping_mut_binding() {
         mapped_at_creation: true,
     });
 
-    let _mapping0 = buffer.slice(0..512).get_mapped_range_mut();
-    let _mapping1 = buffer.slice(256..768).get_mapped_range_mut();
+    let _mapping0 = buffer.slice(0..512).get_mapped_range_mut().unwrap();
+    let result = buffer.slice(256..768).get_mapped_range_mut();
+    assert!(result.is_err());
 }
 
-/// Ensure that when you try to get a mapped range from an unmapped buffer, it panics with
-/// an error mentioning a completely unmapped buffer.
+/// Ensure that getting a mapped range from an unmapped buffer returns an error.
 #[test]
-#[should_panic(expected = "an unmapped buffer")]
 fn not_mapped() {
     let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
 
@@ -147,15 +164,12 @@ fn not_mapped() {
         mapped_at_creation: false,
     });
 
-    let _mapping = buffer.slice(..).get_mapped_range_mut();
+    let result = buffer.slice(..).get_mapped_range_mut();
+    assert!(result.is_err());
 }
 
-/// Ensure that when you partially map a buffer, then try to read outside of that range, it panics
-/// mentioning the mapped indices.
+/// Ensure that getting a mapped range outside the mapped region returns an error.
 #[test]
-#[should_panic(
-    expected = "Attempted to get range 512..1024 (Mutable), but the mapped range is 0..512"
-)]
 fn partially_mapped() {
     let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
 
@@ -169,8 +183,9 @@ fn partially_mapped() {
     buffer.map_async(wgpu::MapMode::Write, 0..512, |_| {});
     device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
-    let _mapping0 = buffer.slice(0..512).get_mapped_range_mut();
-    let _mapping1 = buffer.slice(512..1024).get_mapped_range_mut();
+    let _mapping0 = buffer.slice(0..512).get_mapped_range_mut().unwrap();
+    let result = buffer.slice(512..1024).get_mapped_range_mut();
+    assert!(result.is_err());
 }
 
 /// Ensure that you cannot unmap a buffer while there are still accessible mapped views.
@@ -186,6 +201,6 @@ fn unmap_while_visible() {
         mapped_at_creation: true,
     });
 
-    let _mapping0 = buffer.slice(..).get_mapped_range_mut();
+    let _mapping0 = buffer.slice(..).get_mapped_range_mut().unwrap();
     buffer.unmap();
 }

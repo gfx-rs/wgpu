@@ -98,7 +98,7 @@ async fn partial_update_test(ctx: TestingContext) {
         .device
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline_layout"),
-            bind_group_layouts: &[&bgl],
+            bind_group_layouts: &[Some(&bgl)],
             immediate_size: 32,
         });
 
@@ -151,7 +151,7 @@ async fn partial_update_test(ctx: TestingContext) {
         .await
         .unwrap();
 
-    let data = cpu_buffer.slice(..).get_mapped_range();
+    let data = cpu_buffer.slice(..).get_mapped_range().unwrap();
 
     let floats: &[f32] = bytemuck::cast_slice(&data);
 
@@ -193,7 +193,7 @@ const SHADER2: &str = "
 
     struct VertexOutput {
         @builtin(position) position: vec4f,
-        @location(0) index: u32,
+        @location(0) @interpolate(flat) index: u32,
     }
 
     @vertex fn vertex(
@@ -204,7 +204,7 @@ const SHADER2: &str = "
     }
 
     @fragment fn fragment(
-        @location(0) ix: u32,
+        @location(0) @interpolate(flat) ix: u32,
      ) -> @location(0) vec4f {
         result[ix + 4u] = immediates.fragment_constants[ix];
         return vec4f();
@@ -267,9 +267,9 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
     let render_pipeline_layout = ctx
         .device
         .create_pipeline_layout(&PipelineLayoutDescriptor {
-            bind_group_layouts: &[&bind_group_layout],
+            label: None,
+            bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 8 * size_of::<u32>() as u32,
-            ..Default::default()
         });
 
     let pipeline = ctx
@@ -367,7 +367,7 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
     ctx.async_poll(wgpu::PollType::wait_indefinitely())
         .await
         .unwrap();
-    let mapped_data = cpu_buffer.slice(..).get_mapped_range();
+    let mapped_data = cpu_buffer.slice(..).get_mapped_range().unwrap();
     let result = bytemuck::cast_slice::<u8, i32>(&mapped_data).to_vec();
     drop(mapped_data);
     cpu_buffer.unmap();

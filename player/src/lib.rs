@@ -14,7 +14,7 @@ use wgc::{
     binding_model::BindingResource,
     command::{ArcCommand, ArcReferences, BasePass, Command, PointerReferences},
     device::trace::{self, DataKind, DataLoader},
-    id::PointerId,
+    id::{Marker, PointerId},
 };
 
 pub struct Player {
@@ -84,6 +84,28 @@ impl Default for Player {
             samplers: HashMap::new(),
             blas_s: HashMap::new(),
             tlas_s: HashMap::new(),
+        }
+    }
+}
+
+fn process_result<T: Marker, U>(
+    op: &str,
+    map: &mut HashMap<PointerId<T>, U>,
+    id: Option<PointerId<T>>,
+    value: Result<U, impl std::error::Error>,
+) {
+    match (id, value) {
+        (Some(id), Ok(value)) => {
+            map.insert(id, value);
+        }
+        (Some(_), Err(err)) => {
+            panic!("{op} succeeded when recording, but failed on playback: {err}");
+        }
+        (None, Ok(_)) => {
+            panic!("{op} failed when recording, but succeeded on playback");
+        }
+        (None, Err(err)) => {
+            panic!("{op} failed when recording, and failed on playback: {err}");
         }
     }
 }
@@ -214,11 +236,11 @@ impl Player {
                     .expect("invalid bind group layout");
             }
             Action::CreatePipelineLayout(id, desc) => {
-                let bind_group_layouts: Vec<Arc<wgc::binding_model::BindGroupLayout>> = desc
+                let bind_group_layouts: Vec<_> = desc
                     .bind_group_layouts
                     .to_vec()
                     .into_iter()
-                    .map(|bgl_id| self.resolve_bind_group_layout_id(bgl_id))
+                    .map(|bgl_id| bgl_id.map(|bgl_id| self.resolve_bind_group_layout_id(bgl_id)))
                     .collect();
 
                 let resolved_desc = wgc::binding_model::ResolvedPipelineLayoutDescriptor {
@@ -269,7 +291,7 @@ impl Player {
                 id,
                 data,
                 label,
-                num_workgroups,
+                entry_points,
             } => {
                 let spirv = data.iter().find_map(|a| {
                     if a.kind() == DataKind::Spv {
@@ -281,27 +303,33 @@ impl Player {
                         None
                     }
                 });
-                let dxil = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::Dxil).then(|| loader.load(a)));
-                let hlsl = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::Hlsl).then(|| loader.load_utf8(a)));
-                let metallib = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::MetalLib).then(|| loader.load(a)));
-                let msl = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::Msl).then(|| loader.load_utf8(a)));
-                let glsl = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::Glsl).then(|| loader.load_utf8(a)));
-                let wgsl = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::Wgsl).then(|| loader.load_utf8(a)));
+                let dxil = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::Dxil).then(|| Cow::Owned(loader.load(a).into_owned()))
+                });
+                let hlsl = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::Hlsl)
+                        .then(|| Cow::Owned(loader.load_utf8(a).into_owned()))
+                });
+                let metallib = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::MetalLib)
+                        .then(|| Cow::Owned(loader.load(a).into_owned()))
+                });
+                let msl = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::Msl)
+                        .then(|| Cow::Owned(loader.load_utf8(a).into_owned()))
+                });
+                let glsl = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::Glsl)
+                        .then(|| Cow::Owned(loader.load_utf8(a).into_owned()))
+                });
+                let wgsl = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::Wgsl)
+                        .then(|| Cow::Owned(loader.load_utf8(a).into_owned()))
+                });
+
                 let desc = wgt::CreateShaderModuleDescriptorPassthrough {
                     label,
-                    num_workgroups,
+                    entry_points,
 
                     spirv,
                     dxil,
@@ -323,10 +351,13 @@ impl Player {
             }
             Action::CreateComputePipeline { id, desc } => {
                 let resolved_desc = self.resolve_compute_pipeline_descriptor(desc);
-                let pipeline = device
-                    .create_compute_pipeline(resolved_desc)
-                    .expect("create_compute_pipeline error");
-                self.compute_pipelines.insert(id, pipeline);
+                let pipeline = device.create_compute_pipeline(resolved_desc);
+                process_result(
+                    "create_compute_pipeline",
+                    &mut self.compute_pipelines,
+                    id,
+                    pipeline,
+                );
             }
             Action::DestroyComputePipeline(id) => {
                 self.compute_pipelines
@@ -338,10 +369,13 @@ impl Player {
                 // pipeline descriptor that can represent either a conventional
                 // pipeline or a mesh shading pipeline.
                 let resolved_desc = self.resolve_render_pipeline_descriptor(desc);
-                let pipeline = device
-                    .create_render_pipeline(resolved_desc)
-                    .expect("create_render_pipeline error");
-                self.render_pipelines.insert(id, pipeline);
+                let pipeline = device.create_render_pipeline(resolved_desc);
+                process_result(
+                    "create_render_pipeline",
+                    &mut self.render_pipelines,
+                    id,
+                    pipeline,
+                );
             }
             Action::DestroyRenderPipeline(id) => {
                 self.render_pipelines
@@ -377,19 +411,19 @@ impl Player {
             Action::WriteBuffer {
                 id,
                 data,
-                range,
+                offset,
+                size,
                 queued,
             } => {
                 let buffer = self.resolve_buffer_id(id);
                 let bin = loader.load(&data);
-                let size = (range.end - range.start) as usize;
                 if queued {
                     queue
-                        .write_buffer(buffer, range.start, &bin)
+                        .write_buffer(buffer, offset, &bin[..size.try_into().unwrap()])
                         .expect("Queue::write_buffer error");
                 } else {
                     device
-                        .set_buffer_data(&buffer, range.start, &bin[..size])
+                        .set_buffer_data(&buffer, offset, &bin[..size.try_into().unwrap()])
                         .expect("Device::set_buffer_data error");
                 }
             }
@@ -781,6 +815,16 @@ impl Player {
                         let tlas = self.resolve_tlas_id(tlas_id);
                         wgc::binding_model::ResolvedBindingResource::AccelerationStructure(tlas)
                     }
+                    BindingResource::AccelerationStructureArray(tlas_ids) => {
+                        let resolved_tlas: Vec<_> = tlas_ids
+                            .to_vec()
+                            .into_iter()
+                            .map(|id| self.resolve_tlas_id(id))
+                            .collect();
+                        wgc::binding_model::ResolvedBindingResource::AccelerationStructureArray(
+                            Cow::Owned(resolved_tlas),
+                        )
+                    }
                     BindingResource::ExternalTexture(external_texture_id) => {
                         let external_texture =
                             self.resolve_external_texture_id(external_texture_id);
@@ -1012,8 +1056,8 @@ impl Player {
                 size_bytes,
                 values_offset,
             },
-            C::Dispatch(groups) => C::Dispatch(groups),
-            C::DispatchIndirect { buffer, offset } => C::DispatchIndirect {
+            C::DispatchWorkgroups(groups) => C::DispatchWorkgroups(groups),
+            C::DispatchWorkgroupsIndirect { buffer, offset } => C::DispatchWorkgroupsIndirect {
                 buffer: self.resolve_buffer_id(buffer),
                 offset,
             },
@@ -1035,6 +1079,26 @@ impl Player {
                 query_index,
             },
             C::EndPipelineStatisticsQuery => C::EndPipelineStatisticsQuery,
+            C::TransitionResources {
+                buffer_transitions,
+                texture_transitions,
+            } => C::TransitionResources {
+                buffer_transitions: buffer_transitions
+                    .into_iter()
+                    .map(|buffer_transition| wgt::BufferTransition {
+                        buffer: self.resolve_buffer_id(buffer_transition.buffer),
+                        state: buffer_transition.state,
+                    })
+                    .collect(),
+                texture_transitions: texture_transitions
+                    .into_iter()
+                    .map(|texture_transition| wgt::TextureTransition {
+                        texture: self.resolve_texture_view_id(texture_transition.texture),
+                        selector: texture_transition.selector,
+                        state: texture_transition.state,
+                    })
+                    .collect(),
+            },
         }
     }
 
@@ -1072,7 +1136,7 @@ impl Player {
                 size,
             } => C::SetVertexBuffer {
                 slot,
-                buffer: self.resolve_buffer_id(buffer),
+                buffer: buffer.map(|buffer| self.resolve_buffer_id(buffer)),
                 offset,
                 size,
             },
@@ -1267,6 +1331,13 @@ impl Player {
                         .collect(),
                 )
             }
+            wgc::ray_tracing::OwnedBlasGeometries::AabbGeometries(geos) => {
+                wgc::ray_tracing::OwnedBlasGeometries::AabbGeometries(
+                    geos.into_iter()
+                        .map(|geo| self.resolve_blas_aabb_geometry(geo))
+                        .collect(),
+                )
+            }
         }
     }
 
@@ -1285,6 +1356,18 @@ impl Player {
             vertex_stride: geometry.vertex_stride,
             first_index: geometry.first_index,
             transform_buffer_offset: geometry.transform_buffer_offset,
+        }
+    }
+
+    fn resolve_blas_aabb_geometry(
+        &self,
+        geometry: wgc::ray_tracing::OwnedBlasAabbGeometry<PointerReferences>,
+    ) -> wgc::ray_tracing::OwnedBlasAabbGeometry<ArcReferences> {
+        wgc::ray_tracing::OwnedBlasAabbGeometry {
+            size: geometry.size,
+            stride: geometry.stride,
+            aabb_buffer: self.resolve_buffer_id(geometry.aabb_buffer),
+            primitive_offset: geometry.primitive_offset,
         }
     }
 

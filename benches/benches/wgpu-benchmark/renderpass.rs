@@ -150,7 +150,7 @@ impl RenderpassState {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: None,
-                    bind_group_layouts: &[&bind_group_layout],
+                    bind_group_layouts: &[Some(&bind_group_layout)],
                     immediate_size: 0,
                 });
 
@@ -183,11 +183,11 @@ impl RenderpassState {
 
         let mut vertex_buffer_layouts = Vec::with_capacity(VERTEX_BUFFERS_PER_DRAW as usize);
         for attributes in &vertex_buffer_attributes {
-            vertex_buffer_layouts.push(wgpu::VertexBufferLayout {
+            vertex_buffer_layouts.push(Some(wgpu::VertexBufferLayout {
                 array_stride: 16,
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes,
-            });
+            }));
         }
 
         let pipeline =
@@ -286,7 +286,7 @@ impl RenderpassState {
                     .device
                     .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                         label: None,
-                        bind_group_layouts: &[&bindless_bind_group_layout],
+                        bind_group_layouts: &[Some(&bindless_bind_group_layout)],
                         immediate_size: 0,
                     });
 
