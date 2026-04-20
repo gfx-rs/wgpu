@@ -990,6 +990,39 @@ pub trait Device: WasmNotSendSync {
     /// A hook for when a wgpu-core texture is created from a raw wgpu-hal texture.
     unsafe fn add_raw_texture(&self, texture: &<Self::A as Api>::Texture);
 
+    /// Map the texture so that it may be used on the host.
+    unsafe fn map_texture(&self, texture: &<Self::A as Api>::Texture) -> Result<(), DeviceError>;
+
+    /// Unmap the texture so that it may be used on the GPU.
+    unsafe fn unmap_texture(&self, texture: &<Self::A as Api>::Texture);
+
+    /// Host copy texture->texture
+    unsafe fn copy_texture_to_texture<T>(
+        &mut self,
+        src: &<Self::A as Api>::Texture,
+        dst: &<Self::A as Api>::Texture,
+        regions: T,
+    ) where
+        T: Iterator<Item = TextureCopy>;
+
+    /// Host copy texture->memory
+    unsafe fn copy_texture_to_memory<T>(
+        &mut self,
+        src: &<Self::A as Api>::Texture,
+        dst: &mut [u8],
+        regions: T,
+    ) where
+        T: Iterator<Item = HostTextureCopy>;
+
+    /// Host copy memory->texture
+    unsafe fn copy_memory_to_texture<T>(
+        &mut self,
+        src: &[u8],
+        dst: &<Self::A as Api>::Texture,
+        regions: T,
+    ) where
+        T: Iterator<Item = HostTextureCopy>;
+
     unsafe fn create_texture_view(
         &self,
         texture: &<Self::A as Api>::Texture,
@@ -2647,6 +2680,13 @@ pub struct TextureCopy {
 #[derive(Clone, Debug)]
 pub struct BufferTextureCopy {
     pub buffer_layout: wgt::TexelCopyBufferLayout,
+    pub texture_base: TextureCopyBase,
+    pub size: CopyExtent,
+}
+
+#[derive(Clone, Debug)]
+pub struct HostTextureCopy {
+    pub host_layout: wgt::TexelCopyBufferLayout,
     pub texture_base: TextureCopyBase,
     pub size: CopyExtent,
 }

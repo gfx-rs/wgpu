@@ -324,6 +324,40 @@ impl crate::Device for Context {
     }
     unsafe fn destroy_texture(&self, texture: Resource) {}
     unsafe fn add_raw_texture(&self, _texture: &Resource) {}
+    unsafe fn map_texture(
+        &self,
+        texture: &<Self::A as crate::Api>::Texture,
+    ) -> Result<(), crate::DeviceError> {
+        Ok(())
+    }
+    unsafe fn unmap_texture(&self, texture: &<Self::A as crate::Api>::Texture) {}
+    unsafe fn copy_texture_to_texture<T>(
+        &mut self,
+        src: &<Self::A as crate::Api>::Texture,
+        dst: &<Self::A as crate::Api>::Texture,
+        regions: T,
+    ) where
+        T: Iterator<Item = crate::TextureCopy>,
+    {
+    }
+    unsafe fn copy_memory_to_texture<T>(
+        &mut self,
+        src: &[u8],
+        dst: &<Self::A as crate::Api>::Texture,
+        regions: T,
+    ) where
+        T: Iterator<Item = crate::HostTextureCopy>,
+    {
+    }
+    unsafe fn copy_texture_to_memory<T>(
+        &mut self,
+        src: &<Self::A as crate::Api>::Texture,
+        dst: &mut [u8],
+        regions: T,
+    ) where
+        T: Iterator<Item = crate::HostTextureCopy>,
+    {
+    }
 
     unsafe fn create_texture_view(
         &self,
