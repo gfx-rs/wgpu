@@ -231,14 +231,6 @@ impl MappedTexture {
     ) {
         todo!()
     }
-    fn copy_from_texture(
-        &self,
-        destination_range: TexelCopyTextureInfoBase<()>,
-        source: TexelCopyTextureInfoBase<&MappedTexture>,
-        copy_size: Extent3d,
-    ) {
-        todo!()
-    }
 }
 
 /// Error occurred when trying to async map a texture.

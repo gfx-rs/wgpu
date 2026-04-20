@@ -331,15 +331,6 @@ impl crate::Device for Context {
         Ok(())
     }
     unsafe fn unmap_texture(&self, texture: &<Self::A as crate::Api>::Texture) {}
-    unsafe fn copy_texture_to_texture<T>(
-        &mut self,
-        src: &<Self::A as crate::Api>::Texture,
-        dst: &<Self::A as crate::Api>::Texture,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::TextureCopy>,
-    {
-    }
     unsafe fn copy_memory_to_texture<T>(
         &mut self,
         src: &[u8],

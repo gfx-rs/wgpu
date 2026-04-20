@@ -996,15 +996,6 @@ pub trait Device: WasmNotSendSync {
     /// Unmap the texture so that it may be used on the GPU.
     unsafe fn unmap_texture(&self, texture: &<Self::A as Api>::Texture);
 
-    /// Host copy texture->texture
-    unsafe fn copy_texture_to_texture<T>(
-        &mut self,
-        src: &<Self::A as Api>::Texture,
-        dst: &<Self::A as Api>::Texture,
-        regions: T,
-    ) where
-        T: Iterator<Item = TextureCopy>;
-
     /// Host copy texture->memory
     unsafe fn copy_texture_to_memory<T>(
         &mut self,

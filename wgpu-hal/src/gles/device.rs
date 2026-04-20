@@ -1047,16 +1047,6 @@ impl crate::Device for super::Device {
     unsafe fn unmap_texture(&self, _texture: &<Self::A as crate::Api>::Texture) {
         unreachable!()
     }
-    unsafe fn copy_texture_to_texture<T>(
-        &mut self,
-        _src: &<Self::A as crate::Api>::Texture,
-        _dst: &<Self::A as crate::Api>::Texture,
-        _regions: T,
-    ) where
-        T: Iterator<Item = crate::TextureCopy>,
-    {
-        unreachable!()
-    }
     unsafe fn copy_memory_to_texture<T>(
         &mut self,
         _src: &[u8],

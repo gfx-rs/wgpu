@@ -7,7 +7,7 @@ use crate::{
     GetAccelerationStructureBuildSizesDescriptor, HostTextureCopy, Label, MemoryRange,
     PipelineCacheDescriptor, PipelineCacheError, PipelineError, PipelineLayoutDescriptor,
     RenderPipelineDescriptor, SamplerDescriptor, ShaderError, ShaderInput, ShaderModuleDescriptor,
-    TextureCopy, TextureDescriptor, TextureViewDescriptor, TlasInstance,
+    TextureDescriptor, TextureViewDescriptor, TlasInstance,
 };
 
 use super::{
@@ -50,13 +50,6 @@ pub trait DynDevice: DynResource {
     /// Unmap the texture so that it may be used on the GPU.
     unsafe fn unmap_texture(&self, texture: &dyn DynTexture);
 
-    /// Host copy texture->texture
-    unsafe fn copy_texture_to_texture(
-        &mut self,
-        src: &dyn DynTexture,
-        dst: &dyn DynTexture,
-        regions: &[TextureCopy],
-    );
     /// Host copy texture->memory
     unsafe fn copy_texture_to_memory(
         &mut self,
@@ -262,17 +255,6 @@ impl<D: Device + DynResource> DynDevice for D {
     unsafe fn unmap_texture(&self, texture: &dyn DynTexture) {
         let texture = texture.expect_downcast_ref();
         unsafe { D::unmap_texture(self, texture) }
-    }
-
-    unsafe fn copy_texture_to_texture(
-        &mut self,
-        src: &dyn DynTexture,
-        dst: &dyn DynTexture,
-        regions: &[TextureCopy],
-    ) {
-        let src = src.expect_downcast_ref();
-        let dst = dst.expect_downcast_ref();
-        unsafe { D::copy_texture_to_texture(self, src, dst, regions.into_iter().cloned()) };
     }
 
     unsafe fn copy_texture_to_memory(
