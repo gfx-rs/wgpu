@@ -62,8 +62,8 @@ OpDecorate %13 Binding 0
 %33 = OpTypePointer Function %7
 %35 = OpConstant  %7  0
 %36 = OpTypePointer Function %5
-%39 = OpTypeVector %10 3
-%40 = OpTypeFunction %2 %32 %4 %8 %33 %36
+%39 = OpTypeFunction %2 %32 %4 %8 %33 %36
+%47 = OpTypeVector %10 3
 %68 = OpConstant  %7  256
 %71 = OpConstant  %7  512
 %76 = OpConstant  %7  16
@@ -85,31 +85,30 @@ OpDecorate %13 Binding 0
 %175 = OpConstant  %7  8
 %184 = OpTypeFunction %2 %32 %33 %5 %36
 %225 = OpTypeFunction %2 %32 %33
-%41 = OpFunction  %2  None %40
-%42 = OpFunctionParameter  %32
-%43 = OpFunctionParameter  %4
-%44 = OpFunctionParameter  %8
-%45 = OpFunctionParameter  %33
-%46 = OpFunctionParameter  %36
-%47 = OpLabel
-%48 = OpCompositeExtract  %7  %44 0
-%49 = OpCompositeExtract  %7  %44 1
-%50 = OpCompositeExtract  %5  %44 2
-%51 = OpCompositeExtract  %5  %44 3
-OpStore %46 %51
-%52 = OpCompositeExtract  %6  %44 4
-%53 = OpCompositeExtract  %6  %44 5
+%40 = OpFunction  %2  None %39
+%41 = OpFunctionParameter  %32
+%42 = OpFunctionParameter  %4
+%43 = OpFunctionParameter  %8
+%44 = OpFunctionParameter  %33
+%45 = OpFunctionParameter  %36
+%46 = OpLabel
+%48 = OpCompositeExtract  %7  %43 0
+%49 = OpCompositeExtract  %7  %43 1
+%50 = OpCompositeExtract  %5  %43 2
+%51 = OpCompositeExtract  %5  %43 3
+%52 = OpCompositeExtract  %6  %43 4
+%53 = OpCompositeExtract  %6  %43 5
 %54 = OpFOrdLessThanEqual  %10  %50 %51
 %55 = OpFOrdGreaterThanEqual  %10  %50 %19
-%56 = OpIsInf  %39  %52
+%56 = OpIsInf  %47  %52
 %57 = OpAny  %10  %56
-%58 = OpIsNan  %39  %52
+%58 = OpIsNan  %47  %52
 %59 = OpAny  %10  %58
 %60 = OpLogicalOr  %10  %59 %57
 %61 = OpLogicalNot  %10  %60
-%62 = OpIsInf  %39  %53
+%62 = OpIsInf  %47  %53
 %63 = OpAny  %10  %62
-%64 = OpIsNan  %39  %53
+%64 = OpIsNan  %47  %53
 %65 = OpAny  %10  %64
 %66 = OpLogicalOr  %10  %65 %63
 %67 = OpLogicalNot  %10  %66
@@ -155,11 +154,12 @@ OpStore %46 %51
 %114 = OpLogicalAnd  %10  %113 %67
 %115 = OpLogicalAnd  %10  %114 %75
 %116 = OpLogicalAnd  %10  %115 %87
+OpStore %45 %51
 OpSelectionMerge %117 None
 OpBranchConditional %116 %119 %118
 %119 = OpLabel
-OpRayQueryInitializeKHR %42 %43 %48 %49 %52 %50 %53 %51
-OpStore %45 %30
+OpRayQueryInitializeKHR %41 %42 %48 %49 %52 %50 %53 %51
+OpStore %44 %30
 OpBranch %117
 %118 = OpLabel
 OpBranch %117
@@ -335,7 +335,7 @@ OpFunctionEnd
 %18 = OpLoad  %4  %13
 OpBranch %38
 %38 = OpLabel
-%120 = OpFunctionCall  %2  %41 %31 %18 %27 %34 %37
+%120 = OpFunctionCall  %2  %40 %31 %18 %27 %34 %37
 %178 = OpFunctionCall  %12  %126 %31 %34
 %179 = OpCompositeExtract  %7  %178 0
 %180 = OpIEqual  %10  %179 %28

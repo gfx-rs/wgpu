@@ -936,7 +936,7 @@ impl crate::Device for super::Device {
         let mut bind_uav = hlsl::BindTarget::default();
         let mut parameters = Vec::new();
         let mut immediates_target = None;
-        let mut root_constant_info = None;
+        let mut immediates_info = None;
 
         if desc.immediate_size != 0 {
             let parameter_index = parameters.len();
@@ -954,9 +954,9 @@ impl crate::Device for super::Device {
             });
             let binding = bind_cbv;
             bind_cbv.register += 1;
-            root_constant_info = Some(super::RootConstantInfo {
+            immediates_info = Some(super::ImmediatesInfo {
                 root_index: parameter_index as u32,
-                range: 0..size,
+                size,
             });
             immediates_target = Some(binding);
 
@@ -1400,23 +1400,7 @@ impl crate::Device for super::Device {
                         },
                     },
                 };
-                let special_constant_buffer_args_len = {
-                    // Hack: construct a dummy value of the special constants buffer value we need to
-                    // fill, and calculate the size of each member.
-                    let super::RootElement::SpecialConstantBuffer {
-                        first_vertex,
-                        first_instance,
-                        other,
-                    } = (super::RootElement::SpecialConstantBuffer {
-                        first_vertex: 0,
-                        first_instance: 0,
-                        other: 0,
-                    })
-                    else {
-                        unreachable!();
-                    };
-                    size_of_val(&first_vertex) + size_of_val(&first_instance) + size_of_val(&other)
-                };
+                let special_constant_buffer_args_len = size_of::<super::SpecialConstants>();
 
                 let draw_mesh = if self
                     .features
@@ -1505,7 +1489,7 @@ impl crate::Device for super::Device {
                 signature: Some(raw),
                 total_root_elements: parameters.len() as super::RootIndex,
                 special_constants,
-                root_constant_info,
+                immediates_info,
                 sampler_heap_root_index,
             },
             bind_group_infos,

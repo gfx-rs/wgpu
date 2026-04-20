@@ -1,2 +1,2 @@
 capabilities = "RAY_TRACING_PIPELINE"
-targets = "WGSL"
+targets = "WGSL | SPIRV"
