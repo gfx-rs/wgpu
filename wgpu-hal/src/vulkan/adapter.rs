@@ -2563,6 +2563,14 @@ impl super::Adapter {
         } else {
             None
         };
+        let host_image_copy_fns = if enabled_extensions.contains(&ext::host_image_copy::NAME) {
+            Some(ext::host_image_copy::Device::new(
+                &self.instance.raw,
+                &raw_device,
+            ))
+        } else {
+            None
+        };
 
         let naga_options = {
             use naga::back::spv;
@@ -2808,6 +2816,7 @@ impl super::Adapter {
                 ray_tracing: ray_tracing_fns,
                 mesh_shading: mesh_shading_fns,
                 external_memory_fd: external_memory_fd_fn,
+                host_image_copy: host_image_copy_fns,
             },
             pipeline_cache_validation_key,
             vendor_id: self.phd_capabilities.properties.vendor_id,
