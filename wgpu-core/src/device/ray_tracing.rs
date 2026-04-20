@@ -333,7 +333,7 @@ impl Device {
             None => validation::BindingLayoutSource::new_derived(&self.limits),
         };
 
-        // The size the immediates will be if there is no pipeline layout 
+        // The size the immediates will be if there is no pipeline layout
         let mut derived_immediate_size = 0;
 
         let final_ray_gen_name;
@@ -524,7 +524,8 @@ impl Device {
                                     error: e,
                                 })?;
 
-                            derived_immediate_size = derived_immediate_size.max(interface.immediate_size);
+                            derived_immediate_size =
+                                derived_immediate_size.max(interface.immediate_size);
                         }
 
                         hal::ProgrammableStage {
@@ -561,7 +562,8 @@ impl Device {
                                         }
                                     })?;
 
-                                derived_immediate_size = derived_immediate_size.max(interface.immediate_size);
+                                derived_immediate_size =
+                                    derived_immediate_size.max(interface.immediate_size);
                             }
 
                             Some(hal::ProgrammableStage {

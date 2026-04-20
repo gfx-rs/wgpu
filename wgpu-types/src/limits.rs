@@ -91,6 +91,8 @@ macro_rules! with_limits {
         $macro_name!(max_multiview_view_count, Ordering::Less);
 
         $macro_name!(max_intersection_group_count, Ordering::Less);
+        $macro_name!(max_ray_dispatch_count, Ordering::Less);
+        $macro_name!(max_ray_recursion_depth, Ordering::Less);
     };
 }
 
