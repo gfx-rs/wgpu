@@ -509,6 +509,8 @@ pub struct TextureDescriptor<L, V> {
     ///
     /// Note: currently, only the srgb-ness is allowed to change. (ex: `Rgba8Unorm` texture + `Rgba8UnormSrgb` view)
     pub view_formats: V,
+    /// Whether the texture will start in a mapped state. If true, it must be explicitly unmapped before it can be used on the GPU.
+    pub mapped_at_creation: bool,
 }
 
 impl<L, V> TextureDescriptor<L, V> {
@@ -527,6 +529,7 @@ impl<L, V> TextureDescriptor<L, V> {
             format: self.format,
             usage: self.usage,
             view_formats: self.view_formats.clone(),
+            mapped_at_creation: self.mapped_at_creation,
         }
     }
 
@@ -549,6 +552,7 @@ impl<L, V> TextureDescriptor<L, V> {
             format: self.format,
             usage: self.usage,
             view_formats: v_fun(self.view_formats.clone()),
+            mapped_at_creation: self.mapped_at_creation,
         }
     }
 

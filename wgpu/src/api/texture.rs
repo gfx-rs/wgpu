@@ -178,14 +178,6 @@ impl Texture {
         self.descriptor.usage
     }
 
-    /// Map the texture so that it is usable in host image copies.
-    pub fn map_async(
-        &self,
-        callback: impl FnOnce(Result<(), TextureAsyncError>) + WasmNotSend + 'static,
-    ) {
-        todo!()
-    }
-
     /// Get the mapped handle. Panics if this texture isn't mapped.
     pub fn get_mapped(&self) -> MappedTexture {
         todo!()
