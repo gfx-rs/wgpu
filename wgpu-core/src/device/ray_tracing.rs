@@ -333,6 +333,9 @@ impl Device {
             None => validation::BindingLayoutSource::new_derived(&self.limits),
         };
 
+        // The size the immediates will be if there is no pipeline layout 
+        let mut derived_immediate_size = 0;
+
         let final_ray_gen_name;
         let ray_generation = {
             let stage = validation::ShaderStageForValidation::RayGeneration;
@@ -353,7 +356,7 @@ impl Device {
                     error: e,
                 })?;
 
-            if let Some(ref interface) = desc.ray_generation.module.interface {
+            if let Some(interface) = desc.ray_generation.module.interface.interface() {
                 io = interface
                     .check_stage(
                         &mut binding_layout_source,
@@ -361,11 +364,14 @@ impl Device {
                         &final_ray_gen_name,
                         stage,
                         io,
+                        None,
                     )
                     .map_err(|e| pipeline::CreateRayTracingPipelineError::Stage {
                         stage: stage_bit,
                         error: e,
                     })?;
+
+                derived_immediate_size = derived_immediate_size.max(interface.immediate_size);
             }
 
             hal::ProgrammableStage {
@@ -395,7 +401,7 @@ impl Device {
                     error: e,
                 })?;
 
-            if let Some(ref interface) = desc.miss.module.interface {
+            if let Some(interface) = desc.miss.module.interface.interface() {
                 io = interface
                     .check_stage(
                         &mut binding_layout_source,
@@ -403,11 +409,14 @@ impl Device {
                         &final_miss_name,
                         stage,
                         io,
+                        None,
                     )
                     .map_err(|e| pipeline::CreateRayTracingPipelineError::Stage {
                         stage: stage_bit,
                         error: e,
                     })?;
+
+                derived_immediate_size = derived_immediate_size.max(interface.immediate_size);
             }
 
             hal::ProgrammableStage {
@@ -500,7 +509,7 @@ impl Device {
                             validation::ShaderStageForValidation::ClosestHit { triangle: true };
 
                         let stage_bits = stage.to_wgt_bit();
-                        if let Some(ref interface) = closest_hit.module.interface {
+                        if let Some(interface) = closest_hit.module.interface.interface() {
                             io = interface
                                 .check_stage(
                                     &mut binding_layout_source,
@@ -508,11 +517,14 @@ impl Device {
                                     final_closest_name,
                                     stage,
                                     io,
+                                    None,
                                 )
                                 .map_err(|e| pipeline::CreateRayTracingPipelineError::Stage {
                                     stage: stage_bits,
                                     error: e,
                                 })?;
+
+                            derived_immediate_size = derived_immediate_size.max(interface.immediate_size);
                         }
 
                         hal::ProgrammableStage {
@@ -532,7 +544,7 @@ impl Device {
                             let final_any_name = final_any_name.as_ref().unwrap();
 
                             let stage_bits = stage.to_wgt_bit();
-                            if let Some(ref interface) = any_hit.module.interface {
+                            if let Some(interface) = any_hit.module.interface.interface() {
                                 io = interface
                                     .check_stage(
                                         &mut binding_layout_source,
@@ -540,6 +552,7 @@ impl Device {
                                         final_any_name,
                                         stage,
                                         io,
+                                        None,
                                     )
                                     .map_err(|e| {
                                         pipeline::CreateRayTracingPipelineError::Stage {
@@ -547,6 +560,8 @@ impl Device {
                                             error: e,
                                         }
                                     })?;
+
+                                derived_immediate_size = derived_immediate_size.max(interface.immediate_size);
                             }
 
                             Some(hal::ProgrammableStage {
@@ -587,7 +602,7 @@ impl Device {
         let pipeline_layout = match binding_layout_source {
             validation::BindingLayoutSource::Provided(layout) => layout,
             validation::BindingLayoutSource::Derived(entries) => {
-                self.create_derived_pipeline_layout(entries)?
+                self.create_derived_pipeline_layout(entries, derived_immediate_size)?
             }
         };
 

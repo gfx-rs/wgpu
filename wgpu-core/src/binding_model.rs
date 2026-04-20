@@ -737,6 +737,12 @@ impl From<&Arc<ComputePipeline>> for ExclusivePipeline {
     }
 }
 
+impl From<&Arc<RayTracingPipeline>> for ExclusivePipeline {
+    fn from(pipeline: &Arc<RayTracingPipeline>) -> Self {
+        Self::RayTracing(Arc::downgrade(pipeline))
+    }
+}
+
 impl fmt::Display for ExclusivePipeline {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

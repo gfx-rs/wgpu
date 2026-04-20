@@ -1823,7 +1823,7 @@ impl Global {
                     Ok(module) => module,
                     Err(e) => break 'error e.into(),
                 };
-                if module.interface.is_none() && layout.is_none() {
+                if module.interface.interface().is_none() && layout.is_none() {
                     break 'error pipeline::CreateRayTracingPipelineError::Implicit(
                         pipeline::ImplicitLayoutError::Passthrough(
                             wgt::ShaderStages::RAY_GENERATION,
@@ -1846,7 +1846,7 @@ impl Global {
                     Ok(module) => module,
                     Err(e) => break 'error e.into(),
                 };
-                if module.interface.is_none() && layout.is_none() {
+                if module.interface.interface().is_none() && layout.is_none() {
                     break 'error pipeline::CreateRayTracingPipelineError::Implicit(
                         pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::MISS),
                     );
@@ -1873,7 +1873,7 @@ impl Global {
                                 Ok(module) => module,
                                 Err(e) => break 'error e.into(),
                             };
-                            if module.interface.is_none() && layout.is_none() {
+                            if module.interface.interface().is_none() && layout.is_none() {
                                 break 'error pipeline::CreateRayTracingPipelineError::Implicit(
                                     pipeline::ImplicitLayoutError::Passthrough(
                                         wgt::ShaderStages::CLOSEST_HIT,
@@ -1896,7 +1896,7 @@ impl Global {
                                     Ok(module) => module,
                                     Err(e) => break 'error e.into(),
                                 };
-                                if module.interface.is_none() && layout.is_none() {
+                                if module.interface.interface().is_none() && layout.is_none() {
                                     break 'error pipeline::CreateRayTracingPipelineError::Implicit(
                                         pipeline::ImplicitLayoutError::Passthrough(
                                             wgt::ShaderStages::ANY_HIT,
