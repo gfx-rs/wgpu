@@ -1,5 +1,6 @@
 #[cfg(wgpu_core)]
 use core::ops::Deref;
+use core::{error, fmt};
 
 use crate::*;
 
@@ -176,6 +177,24 @@ impl Texture {
     pub fn usage(&self) -> TextureUsages {
         self.descriptor.usage
     }
+
+    /// Map the texture so that it is usable in host image copies.
+    pub fn map_async(
+        &self,
+        callback: impl FnOnce(Result<(), TextureAsyncError>) + WasmNotSend + 'static,
+    ) {
+        todo!()
+    }
+
+    /// Get the mapped handle. Panics if this texture isn't mapped.
+    pub fn get_mapped(&self) -> MappedTexture {
+        todo!()
+    }
+
+    /// Unmaps the texture so that it is usable on the GPU.
+    pub fn unmap(&self) {
+        todo!()
+    }
 }
 
 /// Describes a [`Texture`].
@@ -186,3 +205,51 @@ impl Texture {
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputexturedescriptor).
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, &'a [TextureFormat]>;
 static_assertions::assert_impl_all!(TextureDescriptor<'_>: Send, Sync);
+
+/// A mapped texture that can be copied to/from host memory.
+#[derive(Debug)]
+pub struct MappedTexture {
+    texture: Texture,
+}
+
+impl MappedTexture {
+    fn copy_to_memory(
+        &self,
+        source_range: TexelCopyTextureInfoBase<()>,
+        destination: &mut [u8],
+        destination_layout: TexelCopyBufferLayout,
+        copy_size: Extent3d,
+    ) {
+        todo!()
+    }
+    fn copy_from_memory(
+        &self,
+        destination_range: TexelCopyTextureInfoBase<()>,
+        source: &[u8],
+        source_layout: TexelCopyBufferLayout,
+        copy_size: Extent3d,
+    ) {
+        todo!()
+    }
+    fn copy_from_texture(
+        &self,
+        destination_range: TexelCopyTextureInfoBase<()>,
+        source: TexelCopyTextureInfoBase<&MappedTexture>,
+        copy_size: Extent3d,
+    ) {
+        todo!()
+    }
+}
+
+/// Error occurred when trying to async map a texture.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct TextureAsyncError;
+static_assertions::assert_impl_all!(TextureAsyncError: Send, Sync);
+
+impl fmt::Display for TextureAsyncError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Error occurred when trying to async map a texture")
+    }
+}
+
+impl error::Error for TextureAsyncError {}
