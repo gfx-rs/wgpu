@@ -17,8 +17,8 @@ use objc2_metal::{
     MTLDevice, MTLFunction, MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion,
     MTLLibrary, MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
     MTLPipelineBufferDescriptorArray, MTLPipelineOption, MTLPixelFormat, MTLPrimitiveTopologyClass,
-    MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
-    MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
+    MTLRegion, MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor,
+    MTLResource, MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
     MTLSamplerMipFilter, MTLSamplerState, MTLSize, MTLStencilDescriptor, MTLStorageMode,
     MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTriangleFillMode, MTLVertexDescriptor,
     MTLVertexStepFunction,
@@ -565,12 +565,12 @@ impl crate::Device for super::Device {
 
     unsafe fn map_texture(
         &self,
-        texture: &<Self::A as crate::Api>::Texture,
+        _texture: &<Self::A as crate::Api>::Texture,
     ) -> Result<(), crate::DeviceError> {
         Ok(())
     }
 
-    unsafe fn unmap_texture(&self, texture: &<Self::A as crate::Api>::Texture) {}
+    unsafe fn unmap_texture(&self, _texture: &<Self::A as crate::Api>::Texture) {}
 
     unsafe fn copy_memory_to_texture<T>(
         &mut self,
@@ -580,6 +580,41 @@ impl crate::Device for super::Device {
     ) where
         T: Iterator<Item = crate::HostTextureCopy>,
     {
+        for copy in regions {
+            let dst_origin = conv::map_origin(&copy.texture_base.origin);
+            // Metal expects buffer-texture copies in virtual sizes
+            let extent = copy
+                .texture_base
+                .max_copy_size(&dst.copy_size)
+                .min(&copy.size);
+            let bytes_per_row = copy.host_layout.bytes_per_row.unwrap_or(0) as u64;
+            let image_byte_stride = if extent.depth > 1 {
+                copy.host_layout
+                    .rows_per_image
+                    .map_or(0, |v| v as u64 * bytes_per_row)
+            } else {
+                // Don't pass a stride when updating a single layer, otherwise metal validation
+                // fails when updating a subset of the image due to the stride being larger than
+                // the amount of data to copy.
+                0
+            };
+            unsafe {
+                dst.raw
+                    .replaceRegion_mipmapLevel_slice_withBytes_bytesPerRow_bytesPerImage(
+                        MTLRegion {
+                            origin: dst_origin,
+                            size: conv::map_copy_extent(&extent),
+                        },
+                        copy.texture_base.mip_level as usize,
+                        copy.texture_base.array_layer as usize,
+                        NonNull::new(src.as_ptr() as *mut _)
+                            .unwrap()
+                            .byte_add(copy.host_layout.offset as usize),
+                        bytes_per_row as usize,
+                        image_byte_stride as usize,
+                    );
+            }
+        }
         todo!()
     }
 
@@ -591,6 +626,41 @@ impl crate::Device for super::Device {
     ) where
         T: Iterator<Item = crate::HostTextureCopy>,
     {
+        for copy in regions {
+            let src_origin = conv::map_origin(&copy.texture_base.origin);
+            // Metal expects buffer-texture copies in virtual sizes
+            let extent = copy
+                .texture_base
+                .max_copy_size(&src.copy_size)
+                .min(&copy.size);
+            let bytes_per_row = copy.host_layout.bytes_per_row.unwrap_or(0) as u64;
+            let image_byte_stride = if extent.depth > 1 {
+                copy.host_layout
+                    .rows_per_image
+                    .map_or(0, |v| v as u64 * bytes_per_row)
+            } else {
+                // Don't pass a stride when updating a single layer, otherwise metal validation
+                // fails when updating a subset of the image due to the stride being larger than
+                // the amount of data to copy.
+                0
+            };
+            unsafe {
+                src.raw
+                    .getBytes_bytesPerRow_bytesPerImage_fromRegion_mipmapLevel_slice(
+                        NonNull::new(dst.as_mut_ptr().cast())
+                            .unwrap()
+                            .byte_add(copy.host_layout.offset as usize),
+                        bytes_per_row as usize,
+                        image_byte_stride as usize,
+                        MTLRegion {
+                            origin: src_origin,
+                            size: conv::map_copy_extent(&extent),
+                        },
+                        copy.texture_base.mip_level as usize,
+                        copy.texture_base.array_layer as usize,
+                    );
+            }
+        }
         todo!()
     }
 
