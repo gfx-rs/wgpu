@@ -2064,7 +2064,7 @@ impl Global {
         self.hub.queues.remove(queue_id);
     }
 
-    /// `op.callback` is guaranteed to be called.
+    /// `op.callback` is always called, even in case of errors.
     pub fn buffer_map_async(
         &self,
         buffer_id: id::BufferId,
@@ -2077,20 +2077,9 @@ impl Global {
 
         let hub = &self.hub;
 
-        let map_result = match hub.buffers.get(buffer_id).get() {
-            Ok(buffer) => buffer.map_async(offset, size, op),
-            Err(e) => Err((op, e.into())),
-        };
+        let buffer = hub.buffers.get(buffer_id).get()?;
 
-        match map_result {
-            Ok(submission_index) => Ok(submission_index),
-            Err((mut operation, err)) => {
-                if let Some(callback) = operation.callback.take() {
-                    callback(Err(err.clone()));
-                }
-                Err(err)
-            }
-        }
+        buffer.map_async(offset, size, op)
     }
 
     pub fn buffer_get_mapped_range(
