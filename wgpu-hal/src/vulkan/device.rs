@@ -1314,7 +1314,7 @@ impl crate::Device for super::Device {
     unsafe fn unmap_texture(&self, _texture: &<Self::A as crate::Api>::Texture) {}
 
     unsafe fn copy_memory_to_texture<T>(
-        &mut self,
+        &self,
         src: &[u8],
         dst: &<Self::A as crate::Api>::Texture,
         regions: T,
@@ -1367,7 +1367,7 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn copy_texture_to_memory<T>(
-        &mut self,
+        &self,
         src: &<Self::A as crate::Api>::Texture,
         dst: &mut [u8],
         regions: T,

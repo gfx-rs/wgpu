@@ -205,23 +205,34 @@ pub struct MappedTexture {
 }
 
 impl MappedTexture {
-    fn copy_to_memory(
+    pub fn copy_to_memory(
         &self,
         source_range: TexelCopyTextureInfoBase<()>,
         destination: &mut [u8],
         destination_layout: TexelCopyBufferLayout,
         copy_size: Extent3d,
     ) {
-        todo!()
+        self.texture.inner.copy_texture_to_memory(
+            &source_range,
+            destination,
+            destination_layout,
+            &copy_size,
+        );
     }
-    fn copy_from_memory(
+
+    pub fn copy_from_memory(
         &self,
         destination_range: TexelCopyTextureInfoBase<()>,
         source: &[u8],
         source_layout: TexelCopyBufferLayout,
         copy_size: Extent3d,
     ) {
-        todo!()
+        self.texture.inner.copy_memory_to_texture(
+            &destination_range,
+            source,
+            source_layout,
+            &copy_size,
+        );
     }
 }
 

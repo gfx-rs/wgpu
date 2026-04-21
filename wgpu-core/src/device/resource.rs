@@ -1515,6 +1515,17 @@ impl Device {
             }
         }
 
+        if desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE) {
+            let incompatible = wgt::TextureUsages::TRANSIENT;
+            let bad = desc.usage & incompatible;
+            if !bad.is_empty() {
+                return Err(CreateTextureError::IncompatibleUsage(
+                    wgt::TextureUsages::HOST_VISIBLE,
+                    bad,
+                ));
+            }
+        }
+
         let format_features = self
             .describe_format_features(desc.format)
             .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;

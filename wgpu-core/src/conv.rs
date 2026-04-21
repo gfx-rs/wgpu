@@ -133,6 +133,10 @@ pub fn map_texture_usage(
         wgt::TextureUses::TRANSIENT,
         usage.contains(wgt::TextureUsages::TRANSIENT),
     );
+    u.set(
+        wgt::TextureUses::HOST_COPY,
+        usage.contains(wgt::TextureUsages::HOST_VISIBLE),
+    );
     u
 }
 

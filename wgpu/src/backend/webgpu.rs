@@ -2931,6 +2931,26 @@ impl dispatch::TextureInterface for WebTexture {
     fn destroy(&self) {
         self.inner.destroy();
     }
+
+    fn copy_texture_to_memory(
+        &self,
+        _source: &wgt::TexelCopyTextureInfo<()>,
+        _destination: &mut [u8],
+        _layout: wgt::TexelCopyBufferLayout,
+        _size: &wgt::Extent3d,
+    ) {
+        unimplemented!("copy_texture_to_memory not supported on WebGPU");
+    }
+
+    fn copy_memory_to_texture(
+        &self,
+        _destination: &wgt::TexelCopyTextureInfo<()>,
+        _source: &[u8],
+        _layout: wgt::TexelCopyBufferLayout,
+        _size: &wgt::Extent3d,
+    ) {
+        unimplemented!("copy_memory_to_texture not supported on WebGPU");
+    }
 }
 impl Drop for WebTexture {
     fn drop(&mut self) {

@@ -1293,6 +1293,10 @@ pub struct Texture {
     pub(crate) clear_mode: RwLock<TextureClearMode>,
     pub(crate) views: Mutex<WeakVec<TextureView>>,
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
+    /// True while the texture is host-mapped. Held as a mutex so concurrent
+    /// copies and unmap are serialized — callers lock for the duration of each
+    /// host-copy operation.
+    pub(crate) is_mapped: Mutex<bool>,
 }
 
 impl Texture {
@@ -1328,6 +1332,7 @@ impl Texture {
             clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
+            is_mapped: Mutex::new(rank::TEXTURE_MAP_STATE, false),
         }
     }
 

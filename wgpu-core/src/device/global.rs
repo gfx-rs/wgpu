@@ -11,7 +11,7 @@ use crate::{
     },
     command::{self, CommandEncoder},
     conv,
-    device::{life::WaitIdleError, DeviceError, DeviceLostClosure},
+    device::{life::WaitIdleError, DeviceError, DeviceLostClosure, HostTextureCopyError},
     global::Global,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     instance::{self, Adapter, Surface},
@@ -479,6 +479,150 @@ impl Global {
 
         let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
+    }
+
+    pub fn texture_copy_to_memory(
+        &self,
+        texture_id: id::TextureId,
+        source: &wgt::TexelCopyTextureInfo<()>,
+        destination: &mut [u8],
+        layout: wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    ) -> Result<(), HostTextureCopyError> {
+        profiling::scope!("Texture::copy_to_memory");
+        use crate::{
+            command::{
+                extract_texture_selector, validate_linear_texture_data,
+                validate_texture_copy_range, CopySide,
+            },
+            resource::RawResourceAccess as _,
+        };
+
+        let texture = self.hub.textures.get(texture_id).get()?;
+
+        texture
+            .device
+            .require_features(wgt::Features::HOST_IMAGE_COPY)?;
+
+        let map_state = texture.is_mapped.lock();
+        if !*map_state {
+            return Err(HostTextureCopyError::NotMapped);
+        }
+
+        let (hal_copy_size, array_layer_count) =
+            validate_texture_copy_range(source, &texture.desc, CopySide::Source, size)
+                .map_err(HostTextureCopyError::Transfer)?;
+
+        let (_, texture_base) = extract_texture_selector(source, size, &texture)
+            .map_err(HostTextureCopyError::Transfer)?;
+
+        let (_, bytes_per_array_layer, _) = validate_linear_texture_data(
+            &layout,
+            texture.desc.format,
+            source.aspect,
+            destination.len() as BufferAddress,
+            CopySide::Destination,
+            size,
+        )
+        .map_err(HostTextureCopyError::Transfer)?;
+
+        let snatch_guard = texture.device.snatchable_lock.read();
+        let raw_texture = texture.try_raw(&snatch_guard)?;
+        let raw_device = texture.device.raw();
+
+        let regions: Vec<hal::HostTextureCopy> = (0..array_layer_count)
+            .map(|rel| {
+                let mut base = texture_base.clone();
+                base.array_layer += rel;
+                let mut host_layout = layout;
+                host_layout.offset += rel as u64 * bytes_per_array_layer;
+                hal::HostTextureCopy {
+                    host_layout,
+                    texture_base: base,
+                    size: hal_copy_size,
+                }
+            })
+            .collect();
+
+        unsafe {
+            raw_device
+                .copy_texture_to_memory(raw_texture, destination, &regions)
+                .map_err(|e| texture.device.handle_hal_error(e))?;
+        }
+
+        Ok(())
+    }
+
+    pub fn texture_copy_from_memory(
+        &self,
+        texture_id: id::TextureId,
+        destination: &wgt::TexelCopyTextureInfo<()>,
+        source: &[u8],
+        layout: wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    ) -> Result<(), HostTextureCopyError> {
+        profiling::scope!("Texture::copy_from_memory");
+        use crate::{
+            command::{
+                extract_texture_selector, validate_linear_texture_data,
+                validate_texture_copy_range, CopySide,
+            },
+            resource::RawResourceAccess as _,
+        };
+
+        let texture = self.hub.textures.get(texture_id).get()?;
+
+        texture
+            .device
+            .require_features(wgt::Features::HOST_IMAGE_COPY)?;
+
+        let map_state = texture.is_mapped.lock();
+        if !*map_state {
+            return Err(HostTextureCopyError::NotMapped);
+        }
+
+        let (hal_copy_size, array_layer_count) =
+            validate_texture_copy_range(destination, &texture.desc, CopySide::Destination, size)
+                .map_err(HostTextureCopyError::Transfer)?;
+
+        let (_, texture_base) = extract_texture_selector(destination, size, &texture)
+            .map_err(HostTextureCopyError::Transfer)?;
+
+        let (_, bytes_per_array_layer, _) = validate_linear_texture_data(
+            &layout,
+            texture.desc.format,
+            destination.aspect,
+            source.len() as BufferAddress,
+            CopySide::Source,
+            size,
+        )
+        .map_err(HostTextureCopyError::Transfer)?;
+
+        let snatch_guard = texture.device.snatchable_lock.read();
+        let raw_texture = texture.try_raw(&snatch_guard)?;
+        let raw_device = texture.device.raw();
+
+        let regions: Vec<hal::HostTextureCopy> = (0..array_layer_count)
+            .map(|rel| {
+                let mut base = texture_base.clone();
+                base.array_layer += rel;
+                let mut host_layout = layout;
+                host_layout.offset += rel as u64 * bytes_per_array_layer;
+                hal::HostTextureCopy {
+                    host_layout,
+                    texture_base: base,
+                    size: hal_copy_size,
+                }
+            })
+            .collect();
+
+        unsafe {
+            raw_device
+                .copy_memory_to_texture(source, raw_texture, &regions)
+                .map_err(|e| texture.device.handle_hal_error(e))?;
+        }
+
+        Ok(())
     }
 
     pub fn texture_view_drop(&self, texture_view_id: id::TextureViewId) {

@@ -185,7 +185,7 @@ pub fn map_texture_usage_to_state(usage: wgt::TextureUses) -> Direct3D12::D3D12_
     let mut state = Direct3D12::D3D12_RESOURCE_STATE_COMMON;
     //Note: `RESOLVE_SOURCE` and `RESOLVE_DEST` are not used here
     //Note: `PRESENT` is the same as `COMMON`
-    if usage == wgt::TextureUses::UNINITIALIZED {
+    if usage == wgt::TextureUses::UNINITIALIZED || usage == wgt::TextureUses::HOST_COPY {
         return state;
     }
 

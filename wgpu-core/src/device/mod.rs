@@ -358,6 +358,36 @@ impl DeviceError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum HostTextureCopyError {
+    #[error(transparent)]
+    InvalidResource(#[from] crate::resource::InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(#[from] crate::resource::DestroyedResourceError),
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
+    #[error(transparent)]
+    Transfer(crate::command::TransferError),
+    #[error("Texture is not mapped")]
+    NotMapped,
+}
+
+impl WebGpuError for HostTextureCopyError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
+            Self::Transfer(e) => e.webgpu_error_type(),
+            Self::NotMapped => ErrorType::Validation,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Error)]
 #[error("Features {0:?} are required but not enabled on the device")]
 pub struct MissingFeatures(pub wgt::Features);
 

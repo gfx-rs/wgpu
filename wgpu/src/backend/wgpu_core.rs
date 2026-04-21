@@ -2326,6 +2326,46 @@ impl dispatch::TextureInterface for CoreTexture {
     fn destroy(&self) {
         self.context.0.texture_destroy(self.id);
     }
+
+    fn copy_texture_to_memory(
+        &self,
+        source: &wgt::TexelCopyTextureInfo<()>,
+        destination: &mut [u8],
+        layout: wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    ) {
+        if let Err(cause) =
+            self.context
+                .0
+                .texture_copy_to_memory(self.id, source, destination, layout, size)
+        {
+            self.context.handle_error_nolabel(
+                &self.error_sink,
+                cause,
+                "Texture::copy_texture_to_memory",
+            );
+        }
+    }
+
+    fn copy_memory_to_texture(
+        &self,
+        destination: &wgt::TexelCopyTextureInfo<()>,
+        source: &[u8],
+        layout: wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    ) {
+        if let Err(cause) =
+            self.context
+                .0
+                .texture_copy_from_memory(self.id, destination, source, layout, size)
+        {
+            self.context.handle_error_nolabel(
+                &self.error_sink,
+                cause,
+                "Texture::copy_memory_to_texture",
+            );
+        }
+    }
 }
 
 impl Drop for CoreTexture {
@@ -2929,14 +2969,20 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
     fn map_texture_on_completion(
         &mut self,
         texture: &dispatch::DispatchTexture,
-        callback: dispatch::TextureMapCallback,
+        _callback: dispatch::TextureMapCallback,
     ) {
-        self.context.0.command_encoder_map_texture_on_completion(
-            self.id,
-            texture.as_core().id,
-            Box::new(|b: bool| callback(b.then_some(()).ok_or(crate::TextureAsyncError))),
-        );
-        todo!()
+        // TODO: wire up _callback to be called on queue completion
+        if let Err(cause) = self
+            .context
+            .0
+            .command_encoder_map_texture_on_completion(self.id, texture.as_core().id)
+        {
+            self.context.handle_error_nolabel(
+                &self.error_sink,
+                cause,
+                "CommandEncoder::map_texture_on_completion",
+            );
+        }
     }
 }
 

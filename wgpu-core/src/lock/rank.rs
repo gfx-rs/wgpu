@@ -142,6 +142,7 @@ define_lock_ranks! {
     rank RESOURCE_POOL_INNER "ResourcePool::inner" followed by { }
     rank SHARED_TRACKER_INDEX_ALLOCATOR_INNER "SharedTrackerIndexAllocator::inner" followed by { }
     rank SURFACE_PRESENTATION "Surface::presentation" followed by { }
+    rank TEXTURE_MAP_STATE "Texture::map_state" followed by { }
     rank TEXTURE_BIND_GROUPS "Texture::bind_groups" followed by { }
     rank TEXTURE_INITIALIZATION_STATUS "Texture::initialization_status" followed by { }
     rank TEXTURE_CLEAR_MODE "Texture::clear_mode" followed by { }

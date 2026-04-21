@@ -18,6 +18,7 @@ mod draw;
 mod encoder;
 mod encoder_command;
 pub mod ffi;
+mod map_texture;
 mod memory_init;
 mod pass;
 mod query;
@@ -55,6 +56,7 @@ pub use self::{
     compute_command::ArcComputeCommand,
     draw::{DrawError, Rect, RenderCommandError},
     encoder_command::{ArcCommand, ArcReferences, Command, IdReferences, ReferenceType},
+    map_texture::MapTextureOnCompletionError,
     query::{QueryError, QueryUseError, ResolveError, SimplifiedQueryType},
     render::{
         ArcRenderPassColorAttachment, AttachmentError, AttachmentErrorLocation,
@@ -835,6 +837,10 @@ pub struct CommandBufferMutable {
 
     pub(crate) commands: Vec<Command<ArcReferences>>,
 
+    /// Textures to transition to HOST_COPY state and call `pre_texture_map` on
+    /// at the very end of encoding, after all other commands.
+    pub(crate) textures_to_map_on_completion: Vec<Arc<crate::resource::Texture>>,
+
     /// If tracing, `command_encoder_finish` replaces the `Arc`s in `commands`
     /// with integer pointers, and moves them into `trace_commands`.
     #[cfg(feature = "trace")]
@@ -905,6 +911,7 @@ impl CommandEncoder {
                     indirect_draw_validation_resources:
                         crate::indirect_validation::DrawResources::new(device.clone()),
                     commands: Vec::new(),
+                    textures_to_map_on_completion: Vec::new(),
                     #[cfg(feature = "trace")]
                     trace_commands: if device.trace.lock().is_some() {
                         Some(Vec::new())
@@ -1211,6 +1218,25 @@ impl CommandEncoder {
             Err(CommandEncoderError::DebugGroupError(
                 DebugGroupError::MissingPop,
             ))?;
+        }
+
+        // Encode texture-map-on-completion operations after all other commands.
+        for texture in mem::take(&mut cmd_buf_data.textures_to_map_on_completion) {
+            let raw_encoder = cmd_buf_data.encoder.open_if_closed()?;
+            let mut state = EncodingState {
+                device,
+                raw_encoder,
+                tracker: &mut cmd_buf_data.trackers,
+                buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
+                texture_memory_actions: &mut cmd_buf_data.texture_memory_actions,
+                as_actions: &mut cmd_buf_data.as_actions,
+                temp_resources: &mut cmd_buf_data.temp_resources,
+                indirect_draw_validation_resources: &mut cmd_buf_data
+                    .indirect_draw_validation_resources,
+                snatch_guard: &snatch_guard,
+                debug_scope_depth: &mut debug_scope_depth,
+            };
+            map_texture::encode_map_texture_on_completion(&mut state, texture)?;
         }
 
         // Close the encoder, unless it was closed already by a render or compute pass.
@@ -1567,6 +1593,8 @@ pub enum CommandEncoderError {
     #[error(transparent)]
     TransitionResources(#[from] TransitionResourcesError),
     #[error(transparent)]
+    MapTextureOnCompletion(#[from] MapTextureOnCompletionError),
+    #[error(transparent)]
     ComputePass(#[from] ComputePassError),
     #[error(transparent)]
     RenderPass(#[from] RenderPassError),
@@ -1617,6 +1645,7 @@ impl WebGpuError for CommandEncoderError {
             Self::Query(e) => e.webgpu_error_type(),
             Self::BuildAccelerationStructure(e) => e.webgpu_error_type(),
             Self::TransitionResources(e) => e.webgpu_error_type(),
+            Self::MapTextureOnCompletion(e) => e.webgpu_error_type(),
             Self::ResourceUsage(e) => e.webgpu_error_type(),
             Self::ComputePass(e) => e.webgpu_error_type(),
             Self::RenderPass(e) => e.webgpu_error_type(),

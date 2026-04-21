@@ -253,14 +253,16 @@ bitflags::bitflags! {
         const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits() | Self::STORAGE_READ_ONLY.bits();
         /// The combination of states that a texture must exclusively be in.
         /// cbindgen:ignore
-        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
+        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits() | Self::HOST_COPY.bits();
 
         /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource
         const COMPLEX = 1 << 13;
         /// Flag used by the wgpu-core texture tracker to say that the tracker does not know the state of the sub-resource.
         /// This is different from UNINITIALIZED as that says the tracker does know, but the texture has not been initialized.
         const UNKNOWN = 1 << 14;
-        // TODO: mapped states
+        /// The texture is being prepared for CPU readback. Maps to GENERAL on Vulkan and COMMON on D3D12.
+        /// cbindgen:ignore
+        const HOST_COPY = 1 << 15;
     }
 }
 

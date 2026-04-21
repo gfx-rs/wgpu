@@ -998,7 +998,7 @@ pub trait Device: WasmNotSendSync {
 
     /// Host copy texture->memory
     unsafe fn copy_texture_to_memory<T>(
-        &mut self,
+        &self,
         src: &<Self::A as Api>::Texture,
         dst: &mut [u8],
         regions: T,
@@ -1008,7 +1008,7 @@ pub trait Device: WasmNotSendSync {
 
     /// Host copy memory->texture
     unsafe fn copy_memory_to_texture<T>(
-        &mut self,
+        &self,
         src: &[u8],
         dst: &<Self::A as Api>::Texture,
         regions: T,

@@ -52,14 +52,14 @@ pub trait DynDevice: DynResource {
 
     /// Host copy texture->memory
     unsafe fn copy_texture_to_memory(
-        &mut self,
+        &self,
         src: &dyn DynTexture,
         dst: &mut [u8],
         regions: &[HostTextureCopy],
     ) -> Result<(), DeviceError>;
     /// Host copy memory->texture
     unsafe fn copy_memory_to_texture(
-        &mut self,
+        &self,
         src: &[u8],
         dst: &dyn DynTexture,
         regions: &[HostTextureCopy],
@@ -258,7 +258,7 @@ impl<D: Device + DynResource> DynDevice for D {
     }
 
     unsafe fn copy_texture_to_memory(
-        &mut self,
+        &self,
         src: &dyn DynTexture,
         dst: &mut [u8],
         regions: &[HostTextureCopy],
@@ -268,7 +268,7 @@ impl<D: Device + DynResource> DynDevice for D {
     }
 
     unsafe fn copy_memory_to_texture(
-        &mut self,
+        &self,
         src: &[u8],
         dst: &dyn DynTexture,
         regions: &[HostTextureCopy],

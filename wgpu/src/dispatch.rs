@@ -297,6 +297,22 @@ pub trait TextureInterface: CommonTraits {
     fn create_view(&self, desc: &crate::TextureViewDescriptor<'_>) -> DispatchTextureView;
 
     fn destroy(&self);
+
+    fn copy_texture_to_memory(
+        &self,
+        source: &wgt::TexelCopyTextureInfo<()>,
+        destination: &mut [u8],
+        layout: wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    );
+
+    fn copy_memory_to_texture(
+        &self,
+        destination: &wgt::TexelCopyTextureInfo<()>,
+        source: &[u8],
+        layout: wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    );
 }
 pub trait ExternalTextureInterface: CommonTraits {
     fn destroy(&self);
