@@ -577,6 +577,7 @@ impl<L, V> TextureDescriptor<L, V> {
     ///   format: wgpu::TextureFormat::Rgba8Sint,
     ///   usage: wgpu::TextureUsages::empty(),
     ///   view_formats: &[],
+    ///   mapped_at_creation: false,
     /// };
     ///
     /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));
