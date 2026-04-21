@@ -34,6 +34,7 @@ mod encoder;
 mod external_image_copy;
 mod external_texture;
 mod float32_filterable;
+mod host_image_copy;
 mod image_atomics;
 mod immediates;
 mod instance;
@@ -104,6 +105,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     encoder::all_tests(&mut tests);
     external_texture::all_tests(&mut tests);
     float32_filterable::all_tests(&mut tests);
+    host_image_copy::all_tests(&mut tests);
     image_atomics::all_tests(&mut tests);
     instance::all_tests(&mut tests);
     life_cycle::all_tests(&mut tests);
