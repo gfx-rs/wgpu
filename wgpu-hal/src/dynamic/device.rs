@@ -56,14 +56,14 @@ pub trait DynDevice: DynResource {
         src: &dyn DynTexture,
         dst: &mut [u8],
         regions: &[HostTextureCopy],
-    );
+    ) -> Result<(), DeviceError>;
     /// Host copy memory->texture
     unsafe fn copy_memory_to_texture(
         &mut self,
         src: &[u8],
         dst: &dyn DynTexture,
         regions: &[HostTextureCopy],
-    );
+    ) -> Result<(), DeviceError>;
     unsafe fn create_texture_view(
         &self,
         texture: &dyn DynTexture,
@@ -262,9 +262,9 @@ impl<D: Device + DynResource> DynDevice for D {
         src: &dyn DynTexture,
         dst: &mut [u8],
         regions: &[HostTextureCopy],
-    ) {
+    ) -> Result<(), DeviceError> {
         let src = src.expect_downcast_ref();
-        unsafe { D::copy_texture_to_memory(self, src, dst, regions.iter().cloned()) };
+        unsafe { D::copy_texture_to_memory(self, src, dst, regions.iter().cloned()) }
     }
 
     unsafe fn copy_memory_to_texture(
@@ -272,9 +272,9 @@ impl<D: Device + DynResource> DynDevice for D {
         src: &[u8],
         dst: &dyn DynTexture,
         regions: &[HostTextureCopy],
-    ) {
+    ) -> Result<(), DeviceError> {
         let dst = dst.expect_downcast_ref();
-        unsafe { D::copy_memory_to_texture(self, src, dst, regions.iter().cloned()) };
+        unsafe { D::copy_memory_to_texture(self, src, dst, regions.iter().cloned()) }
     }
 
     unsafe fn create_texture_view(

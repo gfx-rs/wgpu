@@ -1002,7 +1002,8 @@ pub trait Device: WasmNotSendSync {
         src: &<Self::A as Api>::Texture,
         dst: &mut [u8],
         regions: T,
-    ) where
+    ) -> Result<(), DeviceError>
+    where
         T: Iterator<Item = HostTextureCopy>;
 
     /// Host copy memory->texture
@@ -1011,7 +1012,8 @@ pub trait Device: WasmNotSendSync {
         src: &[u8],
         dst: &<Self::A as Api>::Texture,
         regions: T,
-    ) where
+    ) -> Result<(), DeviceError>
+    where
         T: Iterator<Item = HostTextureCopy>;
 
     unsafe fn create_texture_view(

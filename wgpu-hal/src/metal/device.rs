@@ -577,7 +577,8 @@ impl crate::Device for super::Device {
         src: &[u8],
         dst: &<Self::A as crate::Api>::Texture,
         regions: T,
-    ) where
+    ) -> Result<(), crate::DeviceError>
+    where
         T: Iterator<Item = crate::HostTextureCopy>,
     {
         for copy in regions {
@@ -623,7 +624,8 @@ impl crate::Device for super::Device {
         src: &<Self::A as crate::Api>::Texture,
         dst: &mut [u8],
         regions: T,
-    ) where
+    ) -> Result<(), crate::DeviceError>
+    where
         T: Iterator<Item = crate::HostTextureCopy>,
     {
         for copy in regions {

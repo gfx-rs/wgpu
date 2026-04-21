@@ -1052,7 +1052,8 @@ impl crate::Device for super::Device {
         _src: &[u8],
         _dst: &<Self::A as crate::Api>::Texture,
         _regions: T,
-    ) where
+    ) -> Result<(), crate::DeviceError>
+    where
         T: Iterator<Item = crate::HostTextureCopy>,
     {
         unreachable!()
@@ -1062,7 +1063,8 @@ impl crate::Device for super::Device {
         _src: &<Self::A as crate::Api>::Texture,
         _dst: &mut [u8],
         _regions: T,
-    ) where
+    ) -> Result<(), crate::DeviceError>
+    where
         T: Iterator<Item = crate::HostTextureCopy>,
     {
         unreachable!()

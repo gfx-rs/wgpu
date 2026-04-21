@@ -336,18 +336,22 @@ impl crate::Device for Context {
         src: &[u8],
         dst: &<Self::A as crate::Api>::Texture,
         regions: T,
-    ) where
+    ) -> Result<(), crate::DeviceError>
+    where
         T: Iterator<Item = crate::HostTextureCopy>,
     {
+        Ok(())
     }
     unsafe fn copy_texture_to_memory<T>(
         &mut self,
         src: &<Self::A as crate::Api>::Texture,
         dst: &mut [u8],
         regions: T,
-    ) where
+    ) -> Result<(), crate::DeviceError>
+    where
         T: Iterator<Item = crate::HostTextureCopy>,
     {
+        Ok(())
     }
 
     unsafe fn create_texture_view(
