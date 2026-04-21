@@ -68,6 +68,11 @@ pub type BoxSubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static>;
 #[cfg(not(send_sync))]
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + 'static>;
+#[cfg(send_sync)]
+pub type TextureMapCallback =
+    Box<dyn FnOnce(Result<(), crate::TextureAsyncError>) + Send + 'static>;
+#[cfg(not(send_sync))]
+pub type TextureMapCallback = Box<dyn FnOnce(Result<(), crate::TextureAsyncError>) + 'static>;
 
 #[cfg(send_sync)]
 pub type BlasCompactCallback = Box<dyn FnOnce(Result<(), crate::BlasAsyncError>) + Send + 'static>;
@@ -385,6 +390,12 @@ pub trait CommandEncoderInterface: CommonTraits {
         &mut self,
         buffer_transitions: &mut dyn Iterator<Item = wgt::BufferTransition<&'a DispatchBuffer>>,
         texture_transitions: &mut dyn Iterator<Item = wgt::TextureTransition<&'a DispatchTexture>>,
+    );
+
+    fn map_texture_on_completion(
+        &mut self,
+        texture: &DispatchTexture,
+        callback: TextureMapCallback,
     );
 }
 pub trait ComputePassInterface: CommonTraits + Drop {

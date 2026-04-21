@@ -121,15 +121,6 @@ macro_rules! impl_deferred_command_buffer_actions {
             );
         }
 
-        /// Maps the texture upon command buffer submission and completion.
-        pub fn map_texture_on_submit(
-            &self,
-            texture: &api::Texture,
-            callback: impl FnOnce(Result<(), TextureAsyncError>) + WasmNotSend + 'static,
-        ) {
-            todo!()
-        }
-
         /// Registers a callback that is invoked when this command buffer’s work finishes
         /// executing on the GPU. When this callback runs, all mapped-buffer callbacks
         /// registered for the same submission are guaranteed to have been called.

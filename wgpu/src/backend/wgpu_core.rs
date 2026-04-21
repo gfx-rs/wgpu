@@ -2925,6 +2925,19 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             );
         }
     }
+
+    fn map_texture_on_completion(
+        &mut self,
+        texture: &dispatch::DispatchTexture,
+        callback: dispatch::TextureMapCallback,
+    ) {
+        self.context.0.command_encoder_map_texture_on_completion(
+            self.id,
+            texture.as_core().id,
+            Box::new(|b: bool| callback(b.then_some(()).ok_or(crate::TextureAsyncError))),
+        );
+        todo!()
+    }
 }
 
 impl Drop for CoreCommandEncoder {
