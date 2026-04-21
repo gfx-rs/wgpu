@@ -29,6 +29,7 @@
             format: "rgba8unorm",
             usage: "COPY_SRC | COPY_DST | STORAGE_BINDING | RENDER_ATTACHMENT",
             view_formats: [],
+            mapped_at_creation: false,
         )),
         CreateTextureView(
             id: PointerId(0x10),
