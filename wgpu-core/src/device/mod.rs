@@ -404,6 +404,8 @@ pub enum MapTextureError {
     NotMapped,
     #[error("Cannot unmap texture while MappedTexture handles still exist")]
     MappedHandlesExist,
+    #[error("Texture was not created with TextureUsages::HOST_VISIBLE")]
+    MissingHostVisibleUsage,
 }
 
 impl WebGpuError for MapTextureError {
@@ -413,9 +415,10 @@ impl WebGpuError for MapTextureError {
             Self::DestroyedResource(e) => e.webgpu_error_type(),
             Self::Device(e) => e.webgpu_error_type(),
             Self::MissingFeatures(e) => e.webgpu_error_type(),
-            Self::AlreadyMapped | Self::NotMapped | Self::MappedHandlesExist => {
-                ErrorType::Validation
-            }
+            Self::AlreadyMapped
+            | Self::NotMapped
+            | Self::MappedHandlesExist
+            | Self::MissingHostVisibleUsage => ErrorType::Validation,
         }
     }
 }

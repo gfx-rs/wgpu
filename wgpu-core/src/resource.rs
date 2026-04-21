@@ -1656,6 +1656,8 @@ pub enum CreateTextureError {
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
+    #[error("mapped_at_creation requires TextureUsages::HOST_VISIBLE")]
+    MappedAtCreationRequiresHostVisible,
 }
 
 crate::impl_resource_type!(Texture);
@@ -1690,7 +1692,8 @@ impl WebGpuError for CreateTextureError {
             | Self::InvalidMultisampledStorageBinding
             | Self::InvalidMultisampledFormat(_)
             | Self::InvalidSampleCount(..)
-            | Self::MultisampledNotRenderAttachment => ErrorType::Validation,
+            | Self::MultisampledNotRenderAttachment
+            | Self::MappedAtCreationRequiresHostVisible => ErrorType::Validation,
         }
     }
 }

@@ -1728,6 +1728,9 @@ impl Device {
         let texture = Arc::new(texture);
 
         if desc.mapped_at_creation {
+            if !desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE) {
+                return Err(resource::CreateTextureError::MappedAtCreationRequiresHostVisible);
+            }
             self.require_features(wgt::Features::HOST_IMAGE_COPY)
                 .map_err(|e| CreateTextureError::MissingFeatures(desc.format, e))?;
             *texture.map_state.lock() = resource::TextureMapState::Mapped(Arc::new(()));
