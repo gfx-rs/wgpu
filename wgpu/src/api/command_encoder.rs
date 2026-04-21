@@ -447,9 +447,9 @@ impl CommandEncoder {
     }
 
     /// Queue the texture to be mapped so that the it may be used by the host after completion of this command buffer.
-    pub fn map_texture_on_completion<'a>(
+    pub fn map_texture_on_completion(
         &mut self,
-        texture: &'a Texture,
+        texture: &Texture,
         callback: dispatch::TextureMapCallback,
     ) {
         self.inner

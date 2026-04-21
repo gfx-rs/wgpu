@@ -205,6 +205,7 @@ pub struct MappedTexture {
 }
 
 impl MappedTexture {
+    /// Copies from the texture directly into a slice on the host timeline.
     pub fn copy_to_memory(
         &self,
         source_range: TexelCopyTextureInfoBase<()>,
@@ -220,6 +221,7 @@ impl MappedTexture {
         );
     }
 
+    /// Copies to the image directly from a slice on the host timeline.
     pub fn copy_from_memory(
         &self,
         destination_range: TexelCopyTextureInfoBase<()>,
