@@ -2327,6 +2327,21 @@ impl dispatch::TextureInterface for CoreTexture {
         self.context.0.texture_destroy(self.id);
     }
 
+    fn is_mapped(&self) -> bool {
+        self.context.0.texture_is_mapped(self.id)
+    }
+
+    fn get_map_token(&self) -> Option<alloc::sync::Arc<()>> {
+        self.context.0.texture_get_map_token(self.id)
+    }
+
+    fn unmap(&self) {
+        if let Err(cause) = self.context.0.texture_unmap(self.id) {
+            self.context
+                .handle_error_nolabel(&self.error_sink, cause, "Texture::unmap");
+        }
+    }
+
     fn copy_texture_to_memory(
         &self,
         source: &wgt::TexelCopyTextureInfo<()>,

@@ -44,12 +44,6 @@ pub trait DynDevice: DynResource {
     unsafe fn destroy_texture(&self, texture: Box<dyn DynTexture>);
     unsafe fn add_raw_texture(&self, texture: &dyn DynTexture);
 
-    /// Map the texture so that it may be used on the host.
-    unsafe fn map_texture(&self, texture: &dyn DynTexture) -> Result<(), DeviceError>;
-
-    /// Unmap the texture so that it may be used on the GPU.
-    unsafe fn unmap_texture(&self, texture: &dyn DynTexture);
-
     /// Host copy texture->memory
     unsafe fn copy_texture_to_memory(
         &self,
@@ -245,16 +239,6 @@ impl<D: Device + DynResource> DynDevice for D {
     unsafe fn add_raw_texture(&self, texture: &dyn DynTexture) {
         let texture = texture.expect_downcast_ref();
         unsafe { D::add_raw_texture(self, texture) };
-    }
-
-    unsafe fn map_texture(&self, texture: &dyn DynTexture) -> Result<(), DeviceError> {
-        let texture = texture.expect_downcast_ref();
-        unsafe { D::map_texture(self, texture) }
-    }
-
-    unsafe fn unmap_texture(&self, texture: &dyn DynTexture) {
-        let texture = texture.expect_downcast_ref();
-        unsafe { D::unmap_texture(self, texture) }
     }
 
     unsafe fn copy_texture_to_memory(

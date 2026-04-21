@@ -11,7 +11,9 @@ use crate::{
     },
     command::{self, CommandEncoder},
     conv,
-    device::{life::WaitIdleError, DeviceError, DeviceLostClosure, HostTextureCopyError},
+    device::{
+        life::WaitIdleError, DeviceError, DeviceLostClosure, HostTextureCopyError, MapTextureError,
+    },
     global::Global,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     instance::{self, Adapter, Surface},
@@ -504,8 +506,10 @@ impl Global {
             .device
             .require_features(wgt::Features::HOST_IMAGE_COPY)?;
 
-        let map_state = texture.is_mapped.lock();
-        if !*map_state {
+        if !matches!(
+            *texture.map_state.lock(),
+            resource::TextureMapState::Mapped(_)
+        ) {
             return Err(HostTextureCopyError::NotMapped);
         }
 
@@ -576,8 +580,10 @@ impl Global {
             .device
             .require_features(wgt::Features::HOST_IMAGE_COPY)?;
 
-        let map_state = texture.is_mapped.lock();
-        if !*map_state {
+        if !matches!(
+            *texture.map_state.lock(),
+            resource::TextureMapState::Mapped(_)
+        ) {
             return Err(HostTextureCopyError::NotMapped);
         }
 
@@ -623,6 +629,65 @@ impl Global {
         }
 
         Ok(())
+    }
+
+    pub fn texture_map(&self, texture_id: id::TextureId) -> Result<(), MapTextureError> {
+        profiling::scope!("Texture::map");
+
+        let texture = self.hub.textures.get(texture_id).get()?;
+        texture
+            .device
+            .require_features(wgt::Features::HOST_IMAGE_COPY)?;
+
+        let mut map_state = texture.map_state.lock();
+        if matches!(*map_state, resource::TextureMapState::Mapped(_)) {
+            return Err(MapTextureError::AlreadyMapped);
+        }
+
+        *map_state = resource::TextureMapState::Mapped(Arc::new(()));
+        Ok(())
+    }
+
+    pub fn texture_unmap(&self, texture_id: id::TextureId) -> Result<(), MapTextureError> {
+        profiling::scope!("Texture::unmap");
+
+        let texture = self.hub.textures.get(texture_id).get()?;
+        let mut map_state = texture.map_state.lock();
+
+        let resource::TextureMapState::Mapped(ref arc) = *map_state else {
+            return Err(MapTextureError::NotMapped);
+        };
+        if Arc::strong_count(arc) > 1 {
+            return Err(MapTextureError::MappedHandlesExist);
+        }
+
+        *map_state = resource::TextureMapState::Unmapped;
+        Ok(())
+    }
+
+    /// Returns the shared map token if the texture is currently mapped, `None`
+    /// otherwise. The check and token creation happen under the same lock so
+    /// there is no TOCTOU window between `is_mapped` and `get_map_token`.
+    pub fn texture_get_map_token(&self, texture_id: id::TextureId) -> Option<Arc<()>> {
+        let Ok(texture) = self.hub.textures.get(texture_id).get() else {
+            return None;
+        };
+        let mut map_state = texture.map_state.lock();
+        let resource::TextureMapState::Mapped(ref mut arc) = *map_state else {
+            return None;
+        };
+        Some(arc.clone())
+    }
+
+    pub fn texture_is_mapped(&self, texture_id: id::TextureId) -> bool {
+        let Ok(texture) = self.hub.textures.get(texture_id).get() else {
+            return false;
+        };
+        let mapped = matches!(
+            *texture.map_state.lock(),
+            resource::TextureMapState::Mapped(_)
+        );
+        mapped
     }
 
     pub fn texture_view_drop(&self, texture_view_id: id::TextureViewId) {

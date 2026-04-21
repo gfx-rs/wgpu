@@ -298,6 +298,12 @@ pub trait TextureInterface: CommonTraits {
 
     fn destroy(&self);
 
+    fn is_mapped(&self) -> bool;
+
+    fn get_map_token(&self) -> Option<alloc::sync::Arc<()>>;
+
+    fn unmap(&self);
+
     fn copy_texture_to_memory(
         &self,
         source: &wgt::TexelCopyTextureInfo<()>,

@@ -324,13 +324,6 @@ impl crate::Device for Context {
     }
     unsafe fn destroy_texture(&self, texture: Resource) {}
     unsafe fn add_raw_texture(&self, _texture: &Resource) {}
-    unsafe fn map_texture(
-        &self,
-        texture: &<Self::A as crate::Api>::Texture,
-    ) -> Result<(), crate::DeviceError> {
-        Ok(())
-    }
-    unsafe fn unmap_texture(&self, texture: &<Self::A as crate::Api>::Texture) {}
     unsafe fn copy_memory_to_texture<T>(
         &self,
         src: &[u8],

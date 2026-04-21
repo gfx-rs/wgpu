@@ -180,12 +180,19 @@ impl Texture {
 
     /// Get the mapped handle. Panics if this texture isn't mapped.
     pub fn get_mapped(&self) -> MappedTexture {
-        todo!()
+        let token = self
+            .inner
+            .get_map_token()
+            .expect("Texture is not mapped");
+        MappedTexture {
+            texture: self.clone(),
+            _token: token,
+        }
     }
 
     /// Unmaps the texture so that it is usable on the GPU.
     pub fn unmap(&self) {
-        todo!()
+        self.inner.unmap();
     }
 }
 
@@ -199,9 +206,13 @@ pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, &'a [TextureF
 static_assertions::assert_impl_all!(TextureDescriptor<'_>: Send, Sync);
 
 /// A mapped texture that can be copied to/from host memory.
+///
+/// The parent [`Texture`] cannot be unmapped while any `MappedTexture` handle
+/// exists. Drop this handle before calling [`Texture::unmap`].
 #[derive(Debug)]
 pub struct MappedTexture {
     texture: Texture,
+    _token: alloc::sync::Arc<()>,
 }
 
 impl MappedTexture {

@@ -1262,6 +1262,16 @@ impl TextureInner {
     }
 }
 
+/// Tracks host-mapping state for a texture. Using one enum under one mutex
+/// prevents TOCTOU races between `is_mapped` checks and token creation.
+#[derive(Debug)]
+pub(crate) enum TextureMapState {
+    Unmapped,
+    /// Holds a `Arc` to the shared token; every live `MappedTexture` handle
+    /// holds a strong clone. `Weak::strong_count == 1` means it is safe to unmap.
+    Mapped(Arc<()>),
+}
+
 #[derive(Debug)]
 pub enum TextureClearMode {
     BufferCopy,
@@ -1293,10 +1303,10 @@ pub struct Texture {
     pub(crate) clear_mode: RwLock<TextureClearMode>,
     pub(crate) views: Mutex<WeakVec<TextureView>>,
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
-    /// True while the texture is host-mapped. Held as a mutex so concurrent
-    /// copies and unmap are serialized — callers lock for the duration of each
-    /// host-copy operation.
-    pub(crate) is_mapped: Mutex<bool>,
+    /// Tracks whether this texture is host-mapped and how many `MappedTexture`
+    /// handles are currently alive. A single mutex prevents TOCTOU races
+    /// between `is_mapped` checks and token creation.
+    pub(crate) map_state: Mutex<TextureMapState>,
 }
 
 impl Texture {
@@ -1332,7 +1342,7 @@ impl Texture {
             clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
-            is_mapped: Mutex::new(rank::TEXTURE_MAP_STATE, false),
+            map_state: Mutex::new(rank::TEXTURE_MAP_STATE, TextureMapState::Unmapped),
         }
     }
 

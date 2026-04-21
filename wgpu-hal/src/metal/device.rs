@@ -565,15 +565,6 @@ impl crate::Device for super::Device {
         self.counters.textures.add(1);
     }
 
-    unsafe fn map_texture(
-        &self,
-        _texture: &<Self::A as crate::Api>::Texture,
-    ) -> Result<(), crate::DeviceError> {
-        Ok(())
-    }
-
-    unsafe fn unmap_texture(&self, _texture: &<Self::A as crate::Api>::Texture) {}
-
     unsafe fn copy_memory_to_texture<T>(
         &self,
         src: &[u8],

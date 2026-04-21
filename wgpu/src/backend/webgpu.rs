@@ -2932,6 +2932,18 @@ impl dispatch::TextureInterface for WebTexture {
         self.inner.destroy();
     }
 
+    fn is_mapped(&self) -> bool {
+        false
+    }
+
+    fn get_map_token(&self) -> Option<alloc::sync::Arc<()>> {
+        None
+    }
+
+    fn unmap(&self) {
+        unimplemented!("texture unmap not supported on WebGPU");
+    }
+
     fn copy_texture_to_memory(
         &self,
         _source: &wgt::TexelCopyTextureInfo<()>,

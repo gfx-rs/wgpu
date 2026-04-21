@@ -990,12 +990,6 @@ pub trait Device: WasmNotSendSync {
     /// A hook for when a wgpu-core texture is created from a raw wgpu-hal texture.
     unsafe fn add_raw_texture(&self, texture: &<Self::A as Api>::Texture);
 
-    /// Map the texture so that it may be used on the host.
-    unsafe fn map_texture(&self, texture: &<Self::A as Api>::Texture) -> Result<(), DeviceError>;
-
-    /// Unmap the texture so that it may be used on the GPU.
-    unsafe fn unmap_texture(&self, texture: &<Self::A as Api>::Texture);
-
     /// Host copy texture->memory
     unsafe fn copy_texture_to_memory<T>(
         &self,

@@ -1524,6 +1524,8 @@ impl Device {
                     bad,
                 ));
             }
+            self.require_features(wgt::Features::HOST_IMAGE_COPY)
+                .map_err(|e| CreateTextureError::MissingFeatures(desc.format, e))?;
         }
 
         let format_features = self
@@ -1724,6 +1726,12 @@ impl Device {
         );
 
         let texture = Arc::new(texture);
+
+        if desc.mapped_at_creation {
+            self.require_features(wgt::Features::HOST_IMAGE_COPY)
+                .map_err(|e| CreateTextureError::MissingFeatures(desc.format, e))?;
+            *texture.map_state.lock() = resource::TextureMapState::Mapped(Arc::new(()));
+        }
 
         self.trackers
             .lock()
