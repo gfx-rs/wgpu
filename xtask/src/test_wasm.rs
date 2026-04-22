@@ -69,11 +69,11 @@ pub fn run_wasm_tests(
     let bins = [
         Bin {
             name: "wgpu-test",
-            build_args: vec!["-p", "wgpu-test", "--test", "wgpu-gpu"],
+            build_args: vec!["--package", "wgpu-test", "--test", "wgpu-gpu"],
         },
         Bin {
             name: "wgpu-examples",
-            build_args: vec!["-p", "wgpu-examples"],
+            build_args: vec!["--package", "wgpu-examples"],
         },
     ];
 
@@ -166,7 +166,7 @@ pub fn run_wasm_tests(
 
         shell
             .cmd("cargo")
-            .args(["nextest", "run", "-P", "wasm", "--test-threads", "5"])
+            .args(["nextest", "run", "--profile", "wasm", "--test-threads", "5"])
             .args(cargo_args)
             .env("RUSTFLAGS", "--cfg wasm_test")
             .run()?;
