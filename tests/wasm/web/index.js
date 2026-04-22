@@ -3,11 +3,14 @@ export async function start() {
   let name = url.searchParams.get("name");
   let wasm = url.searchParams.get("wasm");
 
-  const {
-    default: init,
-    run_test,
-    run_gpu_report,
-  } = await import(`./${wasm}.js`);
+  let wasm_paths = await (await fetch("./wasm_paths.json")).json();
+  let wasm_script = wasm_paths[wasm];
+
+  if (wasm_script == null) {
+    throw new Error("can't find wasm file");
+  }
+
+  const { default: init, run_test, run_gpu_report } = await import(wasm_script);
 
   init().then(async () => {
     if (name == null) {

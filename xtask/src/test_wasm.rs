@@ -25,6 +25,10 @@ fn parse_wasm_list(list_output: String) -> Option<String> {
 
     let map = list_output.get("rust-binaries")?.as_object();
 
+    // get path from this this structure:
+    // "rust-binaries": {
+    //   "some-package-name": {
+    //     "binary-path"
     Some(
         map.iter()
             .next()?
@@ -128,6 +132,18 @@ pub fn run_wasm_tests(
 
         sleep(Duration::from_millis(100));
     }
+
+    // Write a map from bin name to js path,
+    // just to avoid directly reading scripts based on a URL param
+    let paths = serde_json::Map::from_iter(
+        bins.iter()
+            .map(|bin| (bin.name.to_string(), format!("./{}.js", bin.name).into())),
+    );
+
+    shell.write_file(
+        "tests/wasm/dist/wasm_paths.json",
+        serde_json::to_string_pretty(&paths).unwrap(),
+    )?;
 
     if debug {
         let _ = server.0.wait();
