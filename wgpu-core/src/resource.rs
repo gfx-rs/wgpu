@@ -1264,12 +1264,25 @@ impl TextureInner {
 
 /// Tracks host-mapping state for a texture. Using one enum under one mutex
 /// prevents TOCTOU races between `is_mapped` checks and token creation.
-#[derive(Debug)]
 pub(crate) enum TextureMapState {
     Unmapped,
-    /// Holds a `Arc` to the shared token; every live `MappedTexture` handle
-    /// holds a strong clone. `Weak::strong_count == 1` means it is safe to unmap.
+    /// A `map_texture_on_completion` command has been recorded into an encoder
+    /// but the GPU submission has not yet completed. Holds the user callback
+    /// to fire when the submission finishes.
+    MappingQueued(Option<crate::device::TextureMapClosure>),
+    /// Fully host-mapped. Each live `MappedTexture` handle holds a clone of
+    /// the `Arc`; the unmap check uses `Arc::strong_count`.
     Mapped(Arc<()>),
+}
+
+impl fmt::Debug for TextureMapState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unmapped => write!(f, "Unmapped"),
+            Self::MappingQueued(_) => write!(f, "MappingQueued"),
+            Self::Mapped(_) => write!(f, "Mapped"),
+        }
+    }
 }
 
 #[derive(Debug)]

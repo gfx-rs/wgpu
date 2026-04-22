@@ -157,10 +157,16 @@ impl RenderPassContext {
 
 pub type BufferMapPendingClosure = (BufferMapOperation, BufferAccessResult);
 
+#[cfg(send_sync)]
+pub type TextureMapClosure = Box<dyn FnOnce() + Send + 'static>;
+#[cfg(not(send_sync))]
+pub type TextureMapClosure = Box<dyn FnOnce() + 'static>;
+
 #[derive(Default)]
 pub struct UserClosures {
     pub mappings: Vec<BufferMapPendingClosure>,
     pub blas_compact_ready: Vec<BlasCompactReadyPendingClosure>,
+    pub texture_map_closures: Vec<TextureMapClosure>,
     pub submissions: SmallVec<[queue::SubmittedWorkDoneClosure; 1]>,
     pub device_lost_invocations: SmallVec<[DeviceLostInvocation; 1]>,
 }
@@ -169,6 +175,7 @@ impl UserClosures {
     fn extend(&mut self, other: Self) {
         self.mappings.extend(other.mappings);
         self.blas_compact_ready.extend(other.blas_compact_ready);
+        self.texture_map_closures.extend(other.texture_map_closures);
         self.submissions.extend(other.submissions);
         self.device_lost_invocations
             .extend(other.device_lost_invocations);
@@ -189,6 +196,9 @@ impl UserClosures {
             if let Some(callback) = operation.take() {
                 callback(status);
             }
+        }
+        for closure in self.texture_map_closures {
+            closure();
         }
         for closure in self.submissions {
             closure();
@@ -398,14 +408,10 @@ pub enum MapTextureError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
-    #[error("Texture is already mapped")]
-    AlreadyMapped,
     #[error("Texture is not mapped")]
     NotMapped,
     #[error("Cannot unmap texture while MappedTexture handles still exist")]
     MappedHandlesExist,
-    #[error("Texture was not created with TextureUsages::HOST_VISIBLE")]
-    MissingHostVisibleUsage,
 }
 
 impl WebGpuError for MapTextureError {
@@ -415,10 +421,7 @@ impl WebGpuError for MapTextureError {
             Self::DestroyedResource(e) => e.webgpu_error_type(),
             Self::Device(e) => e.webgpu_error_type(),
             Self::MissingFeatures(e) => e.webgpu_error_type(),
-            Self::AlreadyMapped
-            | Self::NotMapped
-            | Self::MappedHandlesExist
-            | Self::MissingHostVisibleUsage => ErrorType::Validation,
+            Self::NotMapped | Self::MappedHandlesExist => ErrorType::Validation,
         }
     }
 }

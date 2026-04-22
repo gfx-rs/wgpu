@@ -631,24 +631,6 @@ impl Global {
         Ok(())
     }
 
-    pub fn texture_map(&self, texture_id: id::TextureId) -> Result<(), MapTextureError> {
-        profiling::scope!("Texture::map");
-
-        let texture = self.hub.textures.get(texture_id).get()?;
-        texture.device.require_features(wgt::Features::HOST_IMAGE_COPY)?;
-        if !texture.desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE) {
-            return Err(MapTextureError::MissingHostVisibleUsage);
-        }
-
-        let mut map_state = texture.map_state.lock();
-        if matches!(*map_state, resource::TextureMapState::Mapped(_)) {
-            return Err(MapTextureError::AlreadyMapped);
-        }
-
-        *map_state = resource::TextureMapState::Mapped(Arc::new(()));
-        Ok(())
-    }
-
     pub fn texture_unmap(&self, texture_id: id::TextureId) -> Result<(), MapTextureError> {
         profiling::scope!("Texture::unmap");
 

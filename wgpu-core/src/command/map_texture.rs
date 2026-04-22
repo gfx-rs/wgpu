@@ -5,11 +5,12 @@ use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
     command::{encoder::EncodingState, CommandEncoder, EncoderStateError, EncodingApi},
-    device::{DeviceError, MissingFeatures},
+    device::{DeviceError, MissingFeatures, TextureMapClosure},
     global::Global,
     id::{CommandEncoderId, TextureId},
     resource::{
         DestroyedResourceError, InvalidResourceError, ParentDevice as _, RawResourceAccess as _,
+        TextureMapState,
     },
     track::ResourceUsageCompatibilityError,
 };
@@ -19,6 +20,7 @@ impl Global {
         &self,
         command_encoder_id: CommandEncoderId,
         texture_id: TextureId,
+        callback: Option<TextureMapClosure>,
     ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::map_texture_on_completion");
 
@@ -39,6 +41,19 @@ impl Global {
                 {
                     return Err(MapTextureOnCompletionError::MissingHostVisibleUsage);
                 }
+
+                {
+                    let mut map_state = texture.map_state.lock();
+                    match &*map_state {
+                        TextureMapState::Unmapped => {
+                            *map_state = TextureMapState::MappingQueued(callback);
+                        }
+                        TextureMapState::MappingQueued(_) | TextureMapState::Mapped(_) => {
+                            return Err(MapTextureOnCompletionError::AlreadyMappedOrQueued);
+                        }
+                    }
+                }
+
                 buf.textures_to_map_on_completion.push(texture);
                 Ok(())
             },
@@ -90,6 +105,8 @@ pub enum MapTextureOnCompletionError {
     MissingFeatures(#[from] MissingFeatures),
     #[error("Texture was not created with TextureUsages::HOST_VISIBLE")]
     MissingHostVisibleUsage,
+    #[error("Texture is already mapped or queued for mapping")]
+    AlreadyMappedOrQueued,
 }
 
 impl WebGpuError for MapTextureOnCompletionError {
@@ -101,7 +118,7 @@ impl WebGpuError for MapTextureOnCompletionError {
             Self::DestroyedResource(e) => e.webgpu_error_type(),
             Self::ResourceUsage(e) => e.webgpu_error_type(),
             Self::MissingFeatures(e) => e.webgpu_error_type(),
-            Self::MissingHostVisibleUsage => ErrorType::Validation,
+            Self::MissingHostVisibleUsage | Self::AlreadyMappedOrQueued => ErrorType::Validation,
         }
     }
 }

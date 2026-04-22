@@ -806,6 +806,9 @@ pub(crate) struct BakedCommands {
     pub(crate) trackers: Tracker,
     pub(crate) temp_resources: Vec<TempResource>,
     pub(crate) indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
+    /// Textures that had `map_texture_on_completion` encoded; moved here from
+    /// `CommandBufferMutable` so queue submit can register them with the life tracker.
+    pub(crate) encoded_textures_to_map: Vec<Arc<crate::resource::Texture>>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
 }
@@ -840,6 +843,11 @@ pub struct CommandBufferMutable {
     /// Textures to transition to HOST_COPY state and call `pre_texture_map` on
     /// at the very end of encoding, after all other commands.
     pub(crate) textures_to_map_on_completion: Vec<Arc<crate::resource::Texture>>,
+    /// Textures for which `encode_map_texture_on_completion` has already been
+    /// called.  Populated by `finish_recording`; used by queue submit to
+    /// validate that `MappingQueued` textures belong to THIS command buffer
+    /// (and therefore are allowed) vs. some other command buffer (error).
+    pub(crate) encoded_textures_to_map: Vec<Arc<crate::resource::Texture>>,
 
     /// If tracing, `command_encoder_finish` replaces the `Arc`s in `commands`
     /// with integer pointers, and moves them into `trace_commands`.
@@ -854,6 +862,7 @@ impl CommandBufferMutable {
             trackers: self.trackers,
             temp_resources: self.temp_resources,
             indirect_draw_validation_resources: self.indirect_draw_validation_resources,
+            encoded_textures_to_map: self.encoded_textures_to_map,
             buffer_memory_init_actions: self.buffer_memory_init_actions,
             texture_memory_actions: self.texture_memory_actions,
         }
@@ -912,6 +921,7 @@ impl CommandEncoder {
                         crate::indirect_validation::DrawResources::new(device.clone()),
                     commands: Vec::new(),
                     textures_to_map_on_completion: Vec::new(),
+                    encoded_textures_to_map: Vec::new(),
                     #[cfg(feature = "trace")]
                     trace_commands: if device.trace.lock().is_some() {
                         Some(Vec::new())
@@ -1236,7 +1246,8 @@ impl CommandEncoder {
                 snatch_guard: &snatch_guard,
                 debug_scope_depth: &mut debug_scope_depth,
             };
-            map_texture::encode_map_texture_on_completion(&mut state, texture)?;
+            map_texture::encode_map_texture_on_completion(&mut state, texture.clone())?;
+            cmd_buf_data.encoded_textures_to_map.push(texture);
         }
 
         // Close the encoder, unless it was closed already by a render or compute pass.

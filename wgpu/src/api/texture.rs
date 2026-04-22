@@ -180,10 +180,7 @@ impl Texture {
 
     /// Get the mapped handle. Panics if this texture isn't mapped.
     pub fn get_mapped(&self) -> MappedTexture {
-        let token = self
-            .inner
-            .get_map_token()
-            .expect("Texture is not mapped");
+        let token = self.inner.get_map_token().expect("Texture is not mapped");
         MappedTexture {
             texture: self.clone(),
             _token: token,

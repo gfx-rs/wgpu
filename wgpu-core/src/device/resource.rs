@@ -912,6 +912,7 @@ impl Device {
                 user_closures.submissions,
                 user_closures.mappings,
                 user_closures.blas_compact_ready,
+                user_closures.texture_map_closures,
                 queue_empty,
             ) = queue_result;
             // DEADLOCK PREVENTION: We must drop `snatch_guard` before `queue` goes out of scope.
@@ -1729,7 +1730,7 @@ impl Device {
 
         if desc.mapped_at_creation {
             if !desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE) {
-                return Err(resource::CreateTextureError::MappedAtCreationRequiresHostVisible);
+                return Err(CreateTextureError::MappedAtCreationRequiresHostVisible);
             }
             self.require_features(wgt::Features::HOST_IMAGE_COPY)
                 .map_err(|e| CreateTextureError::MissingFeatures(desc.format, e))?;

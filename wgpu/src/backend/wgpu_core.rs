@@ -2984,14 +2984,15 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
     fn map_texture_on_completion(
         &mut self,
         texture: &dispatch::DispatchTexture,
-        _callback: dispatch::TextureMapCallback,
+        callback: dispatch::TextureMapCallback,
     ) {
-        // TODO: wire up _callback to be called on queue completion
-        if let Err(cause) = self
-            .context
-            .0
-            .command_encoder_map_texture_on_completion(self.id, texture.as_core().id)
-        {
+        let core_callback: wgpu_core::device::TextureMapClosure =
+            Box::new(move || callback(Ok(())));
+        if let Err(cause) = self.context.0.command_encoder_map_texture_on_completion(
+            self.id,
+            texture.as_core().id,
+            Some(core_callback),
+        ) {
             self.context.handle_error_nolabel(
                 &self.error_sink,
                 cause,

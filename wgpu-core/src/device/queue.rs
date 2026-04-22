@@ -36,7 +36,7 @@ use crate::{
         Blas, BlasCompactState, Buffer, BufferAccessError, BufferMapState, DestroyedBuffer,
         DestroyedResourceError, DestroyedTexture, Fallible, FlushedStagingBuffer,
         InvalidResourceError, Labeled, ParentDevice, ResourceErrorIdent, StagingBuffer, Texture,
-        TextureInner, Trackable, TrackingData,
+        TextureInner, TextureMapState, Trackable, TrackingData,
     },
     resource_log,
     scratch::ScratchBuffer,
@@ -227,6 +227,7 @@ impl Queue {
             fence.as_mut(),
             submit_index,
             &snatch_guard,
+            Vec::new(),
         )
     }
 
@@ -238,6 +239,7 @@ impl Queue {
         SmallVec<[SubmittedWorkDoneClosure; 1]>,
         Vec<super::BufferMapPendingClosure>,
         Vec<BlasCompactReadyPendingClosure>,
+        Vec<super::TextureMapClosure>,
         bool,
     ) {
         let mut life_tracker = self.lock_life();
@@ -245,6 +247,7 @@ impl Queue {
 
         let mapping_closures = life_tracker.handle_mapping(snatch_guard);
         let blas_closures = life_tracker.handle_compact_read_back();
+        let texture_map_closures = life_tracker.handle_texture_mapping();
 
         let queue_empty = life_tracker.queue_empty();
 
@@ -252,6 +255,7 @@ impl Queue {
             submission_closures,
             mapping_closures,
             blas_closures,
+            texture_map_closures,
             queue_empty,
         )
     }
@@ -289,8 +293,13 @@ impl Drop for Queue {
             .load(Ordering::Acquire);
 
         let snatch_guard = self.device.snatchable_lock.read();
-        let (submission_closures, mapping_closures, blas_compact_ready_closures, queue_empty) =
-            self.maintain(last_successful_submission_index, &snatch_guard);
+        let (
+            submission_closures,
+            mapping_closures,
+            blas_compact_ready_closures,
+            texture_map_closures,
+            queue_empty,
+        ) = self.maintain(last_successful_submission_index, &snatch_guard);
         drop(snatch_guard);
 
         assert!(queue_empty);
@@ -298,6 +307,7 @@ impl Drop for Queue {
         let closures = crate::device::UserClosures {
             mappings: mapping_closures,
             blas_compact_ready: blas_compact_ready_closures,
+            texture_map_closures,
             submissions: submission_closures,
             device_lost_invocations: SmallVec::new(),
         };
@@ -546,6 +556,8 @@ pub enum QueueSubmitError {
     Unmap(#[from] BufferAccessError),
     #[error("{0} is still mapped")]
     BufferStillMapped(ResourceErrorIdent),
+    #[error("{0} is still mapped on the CPU")]
+    TextureStillMapped(ResourceErrorIdent),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
@@ -562,7 +574,9 @@ impl WebGpuError for QueueSubmitError {
             Self::CommandEncoder(e) => e.webgpu_error_type(),
             Self::ValidateAsActionsError(e) => e.webgpu_error_type(),
             Self::InvalidResource(e) => e.webgpu_error_type(),
-            Self::DestroyedResource(_) | Self::BufferStillMapped(_) => ErrorType::Validation,
+            Self::DestroyedResource(_)
+            | Self::BufferStillMapped(_)
+            | Self::TextureStillMapped(_) => ErrorType::Validation,
         }
     }
 }
@@ -816,6 +830,11 @@ impl Queue {
 
         dst.check_usage(wgt::TextureUsages::COPY_DST)
             .map_err(TransferError::MissingTextureUsage)?;
+        if matches!(*dst.map_state.lock(), TextureMapState::Mapped(_)) {
+            return Err(QueueWriteError::Transfer(
+                TransferError::TextureNotAvailable,
+            ));
+        }
 
         // Note: Doing the copy range validation early is important because ensures that the
         // dimensions are not going to cause overflow in other parts of the validation.
@@ -1258,6 +1277,7 @@ impl Queue {
         api_log!("Queue::submit");
 
         let submit_index;
+        let mut textures_to_map_on_completion: Vec<Arc<Texture>> = Vec::new();
 
         let res = 'error: {
             let snatch_guard = self.device.snatchable_lock.read();
@@ -1418,6 +1438,8 @@ impl Queue {
                         }
 
                         // done
+                        textures_to_map_on_completion
+                            .extend(baked.encoded_textures_to_map.drain(..));
                         active_executions.push(EncoderInFlight {
                             inner: baked.encoder,
                             trackers: baked.trackers,
@@ -1445,6 +1467,7 @@ impl Queue {
                 fence.as_mut(),
                 submit_index,
                 &snatch_guard,
+                mem::take(&mut textures_to_map_on_completion),
             ) {
                 break 'error Err(e.into());
             }
@@ -1504,6 +1527,7 @@ impl Queue {
         fence: &mut dyn hal::DynFence,
         submit_index: SubmissionIndex,
         snatch_guard: &SnatchGuard,
+        textures_to_map: Vec<Arc<Texture>>,
     ) -> Result<(), DeviceError> {
         let mut used_surface_textures = track::TextureUsageScope::default();
         used_surface_textures.set_size(self.device.tracker_indices.textures.size());
@@ -1580,8 +1604,9 @@ impl Queue {
                 .fetch_max(submit_index, Ordering::SeqCst);
         }
         // this will register the new submission to the life time tracker
-        self.lock_life()
-            .track_submission(submit_index, active_executions);
+        let mut life = self.lock_life();
+        life.track_submission(submit_index, active_executions);
+        life.register_texture_maps(textures_to_map);
 
         Ok(())
     }
@@ -1918,6 +1943,25 @@ fn validate_command_buffer(
         {
             profiling::scope!("textures");
             for texture in cmd_buf_data.trackers.textures.used_resources() {
+                match &*texture.map_state.lock() {
+                    TextureMapState::Mapped(_) => {
+                        return Err(QueueSubmitError::TextureStillMapped(texture.error_ident()));
+                    }
+                    TextureMapState::MappingQueued(_) => {
+                        // Allow only if this command buffer is the one that queued
+                        // the mapping (its encoded_textures_to_map contains this texture).
+                        let is_own_map = cmd_buf_data
+                            .encoded_textures_to_map
+                            .iter()
+                            .any(|t| Arc::ptr_eq(t, texture));
+                        if !is_own_map {
+                            return Err(QueueSubmitError::TextureStillMapped(
+                                texture.error_ident(),
+                            ));
+                        }
+                    }
+                    TextureMapState::Unmapped => {}
+                }
                 let should_extend = match texture.try_inner(snatch_guard)? {
                     TextureInner::Native { .. } => false,
                     TextureInner::Surface { .. } => {

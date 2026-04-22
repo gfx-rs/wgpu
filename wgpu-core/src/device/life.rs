@@ -6,10 +6,10 @@ use thiserror::Error;
 use crate::{
     device::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
-        DeviceError,
+        DeviceError, TextureMapClosure,
     },
     ray_tracing::BlasCompactReadyPendingClosure,
-    resource::{Blas, Buffer, Texture, Trackable},
+    resource::{Blas, Buffer, Texture, TextureMapState, Trackable},
     snatch::SnatchGuard,
     SubmissionIndex,
 };
@@ -34,6 +34,9 @@ struct ActiveSubmission {
 
     /// BLASes to have their compacted size read back once this submission has completed.
     compact_read_back: Vec<Arc<Blas>>,
+
+    /// Textures to transition to host-mapped state once this submission completes.
+    textures_to_map: Vec<Arc<Texture>>,
 
     /// Command buffers used by this submission, and the encoder that owns them.
     ///
@@ -186,6 +189,10 @@ pub(crate) struct LifetimeTracker {
     /// queue submission still in flight.
     ready_to_compact: Vec<Arc<Blas>>,
 
+    /// Textures whose mapping submission has completed and are ready to be
+    /// transitioned to `TextureMapState::Mapped`.
+    ready_to_map_textures: Vec<Arc<Texture>>,
+
     /// Queue "on_submitted_work_done" closures that were initiated for while there is no
     /// currently pending submissions. These cannot be immediately invoked as they
     /// must happen _after_ all mapped buffer callbacks are mapped, so we defer them
@@ -199,6 +206,7 @@ impl LifetimeTracker {
             active: Vec::new(),
             ready_to_map: Vec::new(),
             ready_to_compact: Vec::new(),
+            ready_to_map_textures: Vec::new(),
             work_done_closures: SmallVec::new(),
         }
     }
@@ -214,6 +222,7 @@ impl LifetimeTracker {
             index,
             mapped: Vec::new(),
             compact_read_back: Vec::new(),
+            textures_to_map: Vec::new(),
             encoders,
             work_done_closures: SmallVec::new(),
         });
@@ -313,6 +322,7 @@ impl LifetimeTracker {
         for a in self.active.drain(..done_count) {
             self.ready_to_map.extend(a.mapped);
             self.ready_to_compact.extend(a.compact_read_back);
+            self.ready_to_map_textures.extend(a.textures_to_map);
             for encoder in a.encoders {
                 // This involves actually decrementing the ref count of all command buffer
                 // resources, so can be _very_ expensive.
@@ -406,5 +416,30 @@ impl LifetimeTracker {
             }
         }
         pending_callbacks
+    }
+
+    /// Transition textures in `self.ready_to_map_textures` to
+    /// `TextureMapState::Mapped` and collect their callbacks.
+    #[must_use]
+    pub(crate) fn handle_texture_mapping(&mut self) -> Vec<TextureMapClosure> {
+        let mut closures = Vec::new();
+        for texture in self.ready_to_map_textures.drain(..) {
+            let mut map_state = texture.map_state.lock();
+            if let TextureMapState::MappingQueued(cb) = &mut *map_state {
+                if let Some(cb) = cb.take() {
+                    closures.push(cb);
+                }
+                *map_state = TextureMapState::Mapped(Arc::new(()));
+            }
+        }
+        closures
+    }
+
+    /// Register textures from a submitted command buffer that are to be mapped
+    /// once the submission completes.
+    pub(crate) fn register_texture_maps(&mut self, textures: Vec<Arc<Texture>>) {
+        if let Some(submission) = self.active.last_mut() {
+            submission.textures_to_map.extend(textures);
+        }
     }
 }
