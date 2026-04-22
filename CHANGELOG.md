@@ -117,6 +117,7 @@ By @andyleiserson in [#9321](https://github.com/gfx-rs/wgpu/pull/9321).
   - DRM support by @rectalogic in [#9182](https://github.com/gfx-rs/wgpu/pull/9182).
   - Conditional compilation by @jimblandy in [#9390](https://github.com/gfx-rs/wgpu/pull/9390)
 - Fixed alignment and MatrixStride for mat2x2 in SPIR-V uniform blocks. By @39ali [#9369](https://github.com/gfx-rs/wgpu/pull/9369).
+- Add `wgpu_hal::vulkan::Buffer::raw_handle()` for retrieving the underlying `vk::Buffer` resource. By @WillowGriffiths in [#9459](https://github.com/gfx-rs/wgpu/pull/9459).
 
 #### naga
 
