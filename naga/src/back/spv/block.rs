@@ -4176,11 +4176,11 @@ impl BlockContext<'_> {
                             selection.finish(self, ());
                         }
                     };
-                },
+                }
                 Statement::RayPipelineFunction(ref fun) => {
                     self.write_ray_tracing_pipeline_function(fun, &mut block);
                 }
-                ,Statement::DebugPrintf {
+                Statement::DebugPrintf {
                     ref format,
                     ref arguments,
                 } => {
