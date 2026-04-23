@@ -1278,7 +1278,12 @@ impl crate::Device for super::Device {
         })?;
 
         if desc.mapped_at_creation {
-            let range = todo!();
+            let range = vk::ImageSubresourceRange::default()
+                .aspect_mask(conv::map_aspects(crate::FormatAspects::from(desc.format)))
+                .base_mip_level(0)
+                .level_count(desc.mip_level_count)
+                .base_array_layer(0)
+                .layer_count(desc.array_layer_count());
             unsafe {
                 self.shared
                     .extension_fns
