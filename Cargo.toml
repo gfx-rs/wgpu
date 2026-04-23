@@ -263,7 +263,7 @@ objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
     "CAMetalLayer",
     "objc2-metal",
 ] }
-raw-window-metal = "1.0"
+raw-window-metal = "1.2"
 
 # Vulkan dependencies
 android_system_properties = "0.1.1"
