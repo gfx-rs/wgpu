@@ -1277,6 +1277,26 @@ impl crate::Device for super::Device {
             unsafe { self.shared.raw.destroy_image(image.raw, None) };
         })?;
 
+        if desc.mapped_at_creation {
+            let range = todo!();
+            unsafe {
+                self.shared
+                    .extension_fns
+                    .host_image_copy
+                    .as_ref()
+                    .unwrap()
+                    .transition_image_layout(&[vk::HostImageLayoutTransitionInfoEXT::default()
+                        .image(image.raw)
+                        .subresource_range(range)
+                        .old_layout(vk::ImageLayout::UNDEFINED)
+                        .new_layout(vk::ImageLayout::GENERAL)])
+                    .map_err(super::map_host_device_oom_err)
+                    .inspect_err(|_| {
+                        self.shared.raw.destroy_image(image.raw, None);
+                    })?;
+            }
+        }
+
         Ok(unsafe {
             self.texture_from_raw(
                 image.raw,

@@ -1654,6 +1654,7 @@ impl Device {
             usage: hal_usage,
             memory_flags: hal::MemoryFlags::empty(),
             view_formats: hal_view_formats,
+            mapped_at_creation: desc.mapped_at_creation,
         };
 
         let raw_texture = unsafe { self.raw().create_texture(&hal_desc) }
@@ -1741,10 +1742,13 @@ impl Device {
             *texture.map_state.lock() = resource::TextureMapState::Mapped(Arc::new(()));
         }
 
-        self.trackers
-            .lock()
-            .textures
-            .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
+        let state = if desc.mapped_at_creation {
+            wgt::TextureUses::HOST_COPY
+        } else {
+            wgt::TextureUses::UNINITIALIZED
+        };
+
+        self.trackers.lock().textures.insert_single(&texture, state);
 
         Ok(texture)
     }

@@ -665,6 +665,7 @@ impl<A: hal::Api> Example<A> {
             usage: wgpu_types::TextureUses::STORAGE_READ_WRITE | wgpu_types::TextureUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::empty(),
             view_formats: vec![wgpu_types::TextureFormat::Rgba8Unorm],
+            mapped_at_creation: false,
         };
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
 
