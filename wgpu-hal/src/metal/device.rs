@@ -29,6 +29,14 @@ use crate::{auxil::map_naga_stage, TlasInstance};
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
+/// True on arm64_32 (watchOS ILP32) targets.
+///
+/// There are no Apple OSes that support both 32-bit applications and Metal,
+/// so `target_pointer_width = "32"` is a reliable proxy for ILP32 watchOS
+/// devices (Apple Watch S4–S9, SE, Ultra). Several AGXMetalS4 driver bugs
+/// require workarounds gated on this flag.
+const IS_WATCHOS_ILP32: bool = cfg!(target_pointer_width = "32");
+
 struct CompiledShader {
     library: Retained<ProtocolObject<dyn MTLLibrary>>,
     function: Retained<ProtocolObject<dyn MTLFunction>>,
@@ -521,14 +529,11 @@ impl crate::Device for super::Device {
                 && self.shared.private_caps.supports_memoryless_storage
             {
                 MTLStorageMode::Memoryless
-            } else if cfg!(target_pointer_width = "32") {
-                // There are no Apple OSes that support both 32bit applications and Metal,
-                // so this branch is guaranteed to be just be ILP32 devices.
-                //
-                // On arm64_32 (watchOS ILP32), the AGXMetalS4 driver (A13/S6 GPU)
-                // crashes in copyFromTexture:toBuffer: on Private textures — null
-                // deref at offset 0x50 in the driver's internal texture state. Use
-                // Shared storage which works correctly on Apple's unified memory
+            } else if IS_WATCHOS_ILP32 {
+                // The AGXMetalS4 driver (A13/S6 GPU) crashes in
+                // copyFromTexture:toBuffer: on Private textures — null deref at
+                // offset 0x50 in the driver's internal texture state. Use Shared
+                // storage which works correctly on Apple's unified memory
                 // architecture and matches what native Swift Metal code uses on
                 // these devices.
                 MTLStorageMode::Shared
@@ -1283,10 +1288,10 @@ impl crate::Device for super::Device {
             }
 
             // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
-            // Disabled on arm64_32 (watchOS ILP32): the AGXMetalS4 driver exhibits
-            // instability when mutability hints are combined with Shared storage
-            // mode textures. Conservative disable until broader device coverage.
-            let supports_mutability = !cfg!(target_pointer_width = "32")
+            // Disabled on watchOS ILP32: the AGXMetalS4 driver exhibits instability
+            // when mutability hints are combined with Shared storage mode textures.
+            // Conservative disable until broader device coverage.
+            let supports_mutability = !IS_WATCHOS_ILP32
                 && available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0);
 
             let (primitive_class, raw_primitive_type) =
