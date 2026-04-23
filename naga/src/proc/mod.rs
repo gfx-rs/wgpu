@@ -948,16 +948,16 @@ impl crate::AddressSpace {
     }
 }
 
-impl From<crate::ScalarKind> for nt::glsl::GlslScalarKind {
-    fn from(val: crate::ScalarKind) -> Self {
-        match val {
-            crate::ScalarKind::AbstractFloat => nt::glsl::GlslScalarKind::AbstractFloat,
-            crate::ScalarKind::AbstractInt => nt::glsl::GlslScalarKind::AbstractInt,
-            crate::ScalarKind::Bool => nt::glsl::GlslScalarKind::Bool,
+impl TryFrom<crate::ScalarKind> for nt::glsl::GlslScalarKind {
+    type Error = ();
+
+    fn try_from(value: crate::ScalarKind) -> Result<Self, Self::Error> {
+        Ok(match value {
             crate::ScalarKind::Sint => nt::glsl::GlslScalarKind::Sint,
             crate::ScalarKind::Uint => nt::glsl::GlslScalarKind::Uint,
             crate::ScalarKind::Float => nt::glsl::GlslScalarKind::Float,
-        }
+            _ => return Err(()),
+        })
     }
 }
 
@@ -971,12 +971,14 @@ impl From<crate::VectorSize> for nt::glsl::GlslVectorSize {
     }
 }
 
-impl From<crate::Scalar> for nt::glsl::GlslScalar {
-    fn from(val: crate::Scalar) -> Self {
-        nt::glsl::GlslScalar {
-            kind: val.kind.into(),
-            width: val.width,
-        }
+impl TryFrom<crate::Scalar> for nt::glsl::GlslScalar {
+    type Error = ();
+
+    fn try_from(value: crate::Scalar) -> Result<Self, Self::Error> {
+        Ok(nt::glsl::GlslScalar {
+            kind: value.kind.try_into()?,
+            width: value.width,
+        })
     }
 }
 
@@ -985,11 +987,11 @@ impl TryFrom<&crate::TypeInner> for nt::glsl::GlslUniformType {
     fn try_from(value: &crate::TypeInner) -> Result<Self, Self::Error> {
         match *value {
             crate::TypeInner::Scalar(scalar) => {
-                Ok(nt::glsl::GlslUniformType::Scalar(scalar.into()))
+                Ok(nt::glsl::GlslUniformType::Scalar(scalar.try_into()?))
             }
             crate::TypeInner::Vector { size, scalar } => Ok(nt::glsl::GlslUniformType::Vector {
                 size: size.into(),
-                scalar: scalar.into(),
+                scalar: scalar.try_into()?,
             }),
             crate::TypeInner::Matrix {
                 columns,
@@ -998,7 +1000,7 @@ impl TryFrom<&crate::TypeInner> for nt::glsl::GlslUniformType {
             } => Ok(nt::glsl::GlslUniformType::Matrix {
                 columns: columns.into(),
                 rows: rows.into(),
-                scalar: scalar.into(),
+                scalar: scalar.try_into()?,
             }),
             _ => Err(()),
         }

@@ -205,6 +205,10 @@ pub struct TaskDispatchLimits {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "lowercase")
+)]
 pub enum VertexFormat {
     /// One unsigned byte (u8). `u32` in shaders.
     Uint8 = 0,
@@ -236,7 +240,7 @@ pub enum VertexFormat {
     Uint16x2 = 13,
     /// Four unsigned shorts (u16). `vec4<u32>` in shaders.
     Uint16x4 = 14,
-    /// One signed short (u16). `i32` in shaders.
+    /// One signed short (i16). `i32` in shaders.
     Sint16 = 15,
     /// Two signed shorts (i16). `vec2<i32>` in shaders.
     Sint16x2 = 16,
@@ -248,7 +252,7 @@ pub enum VertexFormat {
     Unorm16x2 = 19,
     /// Four unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm16x4 = 20,
-    /// One signed short (i16). [-32767, 32767] converted to float [-1, 1] `f32` in shaders.
+    /// One signed short (i16). [32767, 32767] converted to float [-1, 1] `f32` in shaders.
     Snorm16 = 21,
     /// Two signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec2<f32>` in shaders.
     Snorm16x2 = 22,
@@ -300,13 +304,13 @@ pub enum VertexFormat {
     ///
     /// [`Features::VERTEX_ATTRIBUTE_64BIT`]: ../wgpu/struct.Features.html#associatedconstant.VERTEX_ATTRIBUTE_64BIT
     Float64x4 = 42,
-    /// Three unsigned 10-bit integers and one 2-bit integer, packed into a 32-bit integer (u32). [0, 1024] converted to float [0, 1] `vec4<f32>` in shaders.
+    /// Three unsigned 10-bit integers and one 2-bit integer, packed into a 32-bit integer (u32). [0, 1023] and [0, 3] converted to float [0, 1] `vec4<f32>` in shaders.
     #[cfg_attr(
         any(feature = "serialize", feature = "deserialize"),
         serde(rename = "unorm10-10-10-2")
     )]
     Unorm10_10_10_2 = 43,
-    /// Four unsigned 8-bit integers, packed into a 32-bit integer (u32). [0, 255] converted to float [0, 1] `vec4<f32>` in shaders.
+    /// Four unsigned 8-bit integers (u8) in BGRA. [0, 255] converted to float [0, 1] `vec4<f32>` RGBA in shaders.
     #[cfg_attr(
         any(feature = "serialize", feature = "deserialize"),
         serde(rename = "unorm8x4-bgra")

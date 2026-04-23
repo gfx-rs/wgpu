@@ -398,12 +398,12 @@ impl super::Device {
         layout: &super::PipelineLayout,
         #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
         multiview_mask: Option<NonZeroU32>,
-        glsl_version: naga::back::glsl::GlslVersion,
+        glsl_version: naga::back::glsl::Version,
         private_caps: PrivateCapabilities,
     ) -> Result<Arc<super::PipelineInner>, crate::PipelineError> {
         let glsl_version = match glsl_version {
-            naga::back::glsl::GlslVersion::Embedded { version, .. } => format!("{version} es"),
-            naga::back::glsl::GlslVersion::Desktop(version) => format!("{version}"),
+            naga::back::glsl::Version::Embedded { version, .. } => format!("{version} es"),
+            naga::back::glsl::Version::Desktop(version) => format!("{version}"),
         };
         let program = unsafe { gl.create_program() }.unwrap();
         #[cfg(native)]

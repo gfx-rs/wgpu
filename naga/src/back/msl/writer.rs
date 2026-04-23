@@ -5568,7 +5568,6 @@ template <typename A>
                 writeln!(self.out, "}}")?;
                 Ok((name, 4, Some(VectorSize::Quad), Scalar::F32))
             }
-            // These are treated as f32 by the shader.
             Float64 | Float64x2 | Float64x3 | Float64x4 => unreachable!(),
         }
     }

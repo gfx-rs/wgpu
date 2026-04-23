@@ -406,7 +406,7 @@ fn is_gles(ctx: &TestingContext) -> bool {
             return false;
         };
         let version = dev.get_glsl_version();
-        matches!(version, naga::back::glsl::GlslVersion::Embedded { .. })
+        matches!(version, naga::back::glsl::Version::Embedded { .. })
     }
 }
 

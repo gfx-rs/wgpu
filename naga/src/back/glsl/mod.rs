@@ -179,7 +179,7 @@ bitflags::bitflags! {
 #[cfg_attr(feature = "deserialize", serde(default))]
 pub struct Options {
     /// The GLSL version to be used.
-    pub version: GlslVersion,
+    pub version: Version,
     /// Configuration flags for the [`Writer`].
     pub writer_flags: WriterFlags,
     /// Map of resources association to binding locations.
@@ -195,7 +195,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Options {
-            version: GlslVersion::new_gles(310),
+            version: Version::new_gles(310),
             writer_flags: WriterFlags::ADJUST_COORDINATE_SPACE,
             binding_map: BindingMap::default(),
             zero_initialize_workgroup_memory: true,
@@ -408,7 +408,7 @@ pub enum Error {
     /// A error occurred while writing to the output.
     #[error("Format error")]
     FmtError(#[from] FmtError),
-    /// The specified [`GlslVersion`] doesn't have all required [`Features`].
+    /// The specified [`Version`] doesn't have all required [`Features`].
     ///
     /// Contains the missing [`Features`].
     #[error("The selected version doesn't support {0:?}")]
@@ -417,7 +417,7 @@ pub enum Error {
     /// once in the entry point, which isn't supported.
     #[error("Multiple immediates aren't supported")]
     MultipleImmediateData,
-    /// The specified [`GlslVersion`] isn't supported.
+    /// The specified [`Version`] isn't supported.
     #[error("The specified version isn't supported")]
     VersionNotSupported,
     /// The entry point couldn't be found.
