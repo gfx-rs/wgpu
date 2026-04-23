@@ -178,6 +178,7 @@ impl SpirvOutParameters {
             use_storage_input_output_16: self.use_storage_input_output_16,
             task_dispatch_limits: shared_info.task_limits,
             mesh_shader_primitive_indices_clamp: shared_info.mesh_output_validation,
+            trace_ray_argument_validation: true,
         }
     }
 }

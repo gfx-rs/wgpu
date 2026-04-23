@@ -2731,6 +2731,7 @@ impl super::Adapter {
                     max_mesh_workgroups_total: limits.max_mesh_workgroup_total_count,
                 }),
                 mesh_shader_primitive_indices_clamp: true,
+                trace_ray_argument_validation: true,
             }
         };
 

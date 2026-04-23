@@ -948,6 +948,55 @@ impl crate::Module {
         }
         false
     }
+
+    pub fn uses_ray_tracing(&self, ep_index: Option<usize>) -> RayTracingUses {
+        let mut uses = RayTracingUses::default();
+        // Whether this uses ray tracing (unknown whether the usage is pipelines or ray queries).
+        let mut uses_ray_tracing = self.special_types.ray_desc.is_some();
+
+        uses.queries |= self.special_types.ray_intersection.is_some();
+
+        for (_, &crate::Type { ref inner, .. }) in self.types.iter() {
+            // Backends do not know whether these have vertex return - that is done by us
+            match *inner {
+                crate::TypeInner::AccelerationStructure { .. } => {
+                    uses_ray_tracing = true;
+                }
+                crate::TypeInner::RayQuery { .. } => uses.queries = true,
+                _ => {}
+            }
+        }
+
+        for (index, ep) in self.entry_points.iter().enumerate() {
+            if ep_index.is_some() && ep_index != Some(index) {
+                continue;
+            }
+
+            // if we have a ray tracing pipeline shader we are definitely using
+            // pipelines, otherwise, if we have a ray tracing type, we might
+            // be using it in the shader (which would require ray queries),
+            // so we should use queries.
+            if matches!(
+                ep.stage,
+                crate::ShaderStage::RayGeneration
+                    | crate::ShaderStage::AnyHit
+                    | crate::ShaderStage::ClosestHit
+                    | crate::ShaderStage::Miss
+            ) {
+                uses.pipelines = true;
+            } else {
+                uses.queries |= uses_ray_tracing;
+            }
+        }
+
+        uses
+    }
+}
+
+#[derive(Default, Copy, Clone)]
+pub struct RayTracingUses {
+    pub pipelines: bool,
+    pub queries: bool,
 }
 
 impl crate::MeshOutputTopology {

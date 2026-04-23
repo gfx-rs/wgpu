@@ -234,6 +234,8 @@ pub enum FunctionError {
     InvalidPayloadAddressSpace(crate::AddressSpace),
     #[error("The payload type ({0:?}) passed to `traceRay` does not match the previous one {1:?}")]
     MismatchedPayloadType(Handle<crate::Type>, Handle<crate::Type>),
+    #[error("The payload passed to `traceRay` must be a pointer directly to a global variable")]
+    PayloadPointerNotGlobal,
 }
 
 bitflags::bitflags! {
@@ -1733,6 +1735,13 @@ impl super::Validator {
                                 return Err(FunctionError::InvalidPayloadType
                                     .with_span_handle(payload, context.expressions))
                             }
+                        };
+
+                        // spir-v requires a direct reference to a global variable.
+                        let crate::Expression::GlobalVariable(_) = context.expressions[payload]
+                        else {
+                            return Err(FunctionError::PayloadPointerNotGlobal
+                                .with_span_handle(payload, context.expressions));
                         };
 
                         let ty = *self

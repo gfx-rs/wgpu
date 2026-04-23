@@ -509,6 +509,10 @@ crate::impl_dyn_resource!(
 
 // Limited by D3D12's root signature size of 64. Each element takes 1 or 2 entries.
 const MAX_ROOT_ELEMENTS: usize = 64;
+/// See comment in [`Adapter::expose`].
+/// You must change the math in the comment before you update this value.
+const MAX_IMMEDIATE_SIZE: u32 = 128;
+const MAX_IMMEDIATES: usize = MAX_IMMEDIATE_SIZE as usize / 4;
 const ZERO_BUFFER_SIZE: wgt::BufferAddress = 256 << 10;
 
 pub struct Instance {
@@ -821,31 +825,51 @@ struct PassResolve {
     format: Dxgi::Common::DXGI_FORMAT,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct SpecialConstants {
+    /// The first vertex in an indirect draw call, _or_ the `x` of a compute dispatch.
+    first_vertex_or_x: i32,
+    /// The first instance in an indirect draw call, _or_ the `y` of a compute dispatch.
+    first_instance_or_y: u32,
+    /// Unused in an indirect draw call, _or_ the `z` of a compute dispatch.
+    unused_or_z: u32,
+}
+
+impl SpecialConstants {
+    fn from_indirect_draw_call_params(first_vertex: i32, first_instance: u32) -> Self {
+        Self {
+            first_vertex_or_x: first_vertex,
+            first_instance_or_y: first_instance,
+            unused_or_z: 0,
+        }
+    }
+
+    fn from_compute_dispatch_params(workgroup_count: [u32; 3]) -> Self {
+        Self {
+            first_vertex_or_x: workgroup_count[0] as i32,
+            first_instance_or_y: workgroup_count[1],
+            unused_or_z: workgroup_count[2],
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum RootElement {
     Empty,
-    Constant,
-    SpecialConstantBuffer {
-        /// The first vertex in an indirect draw call, _or_ the `x` of a compute dispatch.
-        first_vertex: i32,
-        /// The first instance in an indirect draw call, _or_ the `y` of a compute dispatch.
-        first_instance: u32,
-        /// Unused in an indirect draw call, _or_ the `z` of a compute dispatch.
-        other: u32,
-    },
-    /// Descriptor table.
-    Table(Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE),
-    /// Descriptor for an uniform buffer that has dynamic offset.
+    Immediates,
+    SpecialConstants(SpecialConstants),
+    DescriptorTable(Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE),
+    /// Descriptor table referring to the entire sampler heap.
+    SamplerHeapDescriptorTable,
+    /// Root descriptor for a uniform buffer binding that has a dynamic offset.
     DynamicUniformBuffer {
         address: Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE,
     },
-    /// Descriptor table referring to the entire sampler heap.
-    SamplerHeap,
-    /// Root constants for dynamic offsets.
+    /// Root constants for storage buffer bindings with dynamic offsets.
     ///
     /// start..end is the range of values in [`PassState::dynamic_storage_buffer_offsets`]
     /// that will be used to update the root constants.
-    DynamicOffsetsBuffer {
+    DynamicStorageBufferOffsets {
         start: usize,
         end: usize,
     },
@@ -863,7 +887,7 @@ struct PassState {
     resolves: ArrayVec<PassResolve, { crate::MAX_COLOR_ATTACHMENTS }>,
     layout: PipelineLayoutShared,
     root_elements: [RootElement; MAX_ROOT_ELEMENTS],
-    constant_data: [u32; MAX_ROOT_ELEMENTS],
+    immediates: [u32; MAX_IMMEDIATES],
     dynamic_storage_buffer_offsets: Vec<u32>,
     dirty_root_elements: u64,
     vertex_buffers: [Direct3D12::D3D12_VERTEX_BUFFER_VIEW; crate::MAX_VERTEX_BUFFERS],
@@ -871,10 +895,8 @@ struct PassState {
     kind: PassKind,
 }
 
-#[test]
-fn test_dirty_mask() {
-    assert_eq!(MAX_ROOT_ELEMENTS, u64::BITS as usize);
-}
+// `root_elements` size must match `dirty_root_elements` bit size
+const _: () = assert!(MAX_ROOT_ELEMENTS == u64::BITS as usize);
 
 impl PassState {
     fn new() -> Self {
@@ -885,11 +907,11 @@ impl PassState {
                 signature: None,
                 total_root_elements: 0,
                 special_constants: None,
-                root_constant_info: None,
+                immediates_info: None,
                 sampler_heap_root_index: None,
             },
             root_elements: [RootElement::Empty; MAX_ROOT_ELEMENTS],
-            constant_data: [0; MAX_ROOT_ELEMENTS],
+            immediates: [0; MAX_IMMEDIATES],
             dynamic_storage_buffer_offsets: Vec::new(),
             dirty_root_elements: 0,
             vertex_buffers: [Default::default(); crate::MAX_VERTEX_BUFFERS],
@@ -1148,9 +1170,9 @@ struct BindGroupInfo {
 }
 
 #[derive(Debug, Clone)]
-struct RootConstantInfo {
+struct ImmediatesInfo {
     root_index: RootIndex,
-    range: core::ops::Range<u32>,
+    size: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -1164,7 +1186,7 @@ struct PipelineLayoutShared {
     signature: Option<Direct3D12::ID3D12RootSignature>,
     total_root_elements: RootIndex,
     special_constants: Option<PipelineLayoutSpecialConstants>,
-    root_constant_info: Option<RootConstantInfo>,
+    immediates_info: Option<ImmediatesInfo>,
     sampler_heap_root_index: Option<RootIndex>,
 }
 

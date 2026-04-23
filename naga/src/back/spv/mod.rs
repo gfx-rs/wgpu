@@ -593,6 +593,14 @@ enum LookupRayQueryFunction {
     Terminate,
 }
 
+// Just one supported function right now, more in the future.
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
+enum LookupRaytracingFunction {
+    TraceRay {
+        payload: Handle<crate::GlobalVariable>,
+    },
+}
+
 #[derive(Debug)]
 enum Dimension {
     Scalar,
@@ -962,6 +970,10 @@ pub struct Writer {
 
     ray_query_functions: crate::FastHashMap<LookupRayQueryFunction, Word>,
 
+    ray_tracing_functions: crate::FastHashMap<LookupRaytracingFunction, Word>,
+
+    has_ray_tracing_pipeline: bool,
+
     /// F16 I/O polyfill manager for handling `f16` input/output variables
     /// when `StorageInputOutput16` capability is not available.
     io_f16_polyfills: f16_polyfill::F16IoPolyfill,
@@ -969,6 +981,9 @@ pub struct Writer {
     /// Non semantic debug printf extension `OpExtInstImport`
     debug_printf: Option<Word>,
     pub(crate) ray_query_initialization_tracking: bool,
+
+    /// Whether the arguments to trace ray should be validated
+    pub(crate) trace_ray_argument_validation: bool,
 
     /// See docs in [`Options`]
     task_dispatch_limits: Option<TaskDispatchLimits>,
@@ -1012,6 +1027,13 @@ bitflags::bitflags! {
         /// Note: VK_KHR_shader_non_semantic_info must be enabled. This will have no
         /// effect if `options.ray_query_initialization_tracking` is set to false.
         const PRINT_ON_RAY_QUERY_INITIALIZATION_FAIL = 0x20;
+
+        /// Instead of silently failing if the arguments to `traceRays` are
+        /// invalid, uses debug printf extension to print to the command line
+        ///
+        /// Note: VK_KHR_shader_non_semantic_info must be enabled. This will have no
+        /// effect if `options.trace_ray_argument_validation` is set to false.
+        const PRINT_ON_TRACE_RAYS_FAIL = 0x40;
     }
 }
 
@@ -1073,6 +1095,9 @@ pub struct Options<'a> {
     /// misuse.
     pub ray_query_initialization_tracking: bool,
 
+    /// If set, arguments to `traceRays` calls will be validated.
+    pub trace_ray_argument_validation: bool,
+
     /// Whether to use the `StorageInputOutput16` capability for `f16` shader I/O.
     /// When false, `f16` I/O is polyfilled using `f32` types with conversions.
     pub use_storage_input_output_16: bool,
@@ -1109,6 +1134,7 @@ impl Default for Options<'_> {
             zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode::Polyfill,
             force_loop_bounding: true,
             ray_query_initialization_tracking: true,
+            trace_ray_argument_validation: true,
             use_storage_input_output_16: true,
             debug_info: None,
             task_dispatch_limits: None,
@@ -1191,7 +1217,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
         | Caps::COOPERATIVE_MATRIX
         | Caps::PER_VERTEX
-        // No RAY_TRACING_PIPELINE
+        | Caps::RAY_TRACING_PIPELINE
         | Caps::DRAW_INDEX
         | Caps::MEMORY_DECORATION_COHERENT
         | Caps::MEMORY_DECORATION_VOLATILE

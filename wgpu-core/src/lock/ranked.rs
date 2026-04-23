@@ -192,6 +192,10 @@ impl<T> Mutex<T> {
             saved: LockStateGuard(saved),
         }
     }
+
+    pub fn into_inner(self) -> T {
+        self.inner.into_inner()
+    }
 }
 
 impl<'a, T> ops::Deref for MutexGuard<'a, T> {

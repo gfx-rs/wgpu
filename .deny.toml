@@ -11,22 +11,14 @@ skip-tree = [
 
     # glutin and tracy-client-sys use windows-sys 0.52, pulling older windows-targets
     { name = "windows-targets", version = "0.52" },
-
-    # winit uses an old version via android-activity → jni
-    { name = "windows-targets", version = "0.42" },
 ]
 skip = [
-    # flume -> fastrand uses an old version only on wasm32
-    { name = "getrandom", version = "0.2.17" },
     # the ecosystem is migrating from getrandom 0.3 to 0.4, so this captures many stragglers
     { name = "getrandom", version = "0.3.4" },
 
     # Deno uses an old version
     { name = "bincode", version = "1.3.3" },
     { name = "which", version = "6.0.3" },
-
-    # Winit uses an old version via android-activity → jni
-    { name = "windows-sys", version = "0.45" },
 
     # Winit uses an old version via calloop → rustix 0.38
     { name = "linux-raw-sys", version = "0.4" },
@@ -54,6 +46,20 @@ skip = [
 
     # drm uses an older version via drm-sys, and a newer version via rustix
     { name = "linux-raw-sys", version = "0.9.4" },
+
+    # getrandom -> wasip3 -> wit-bindgen uses an old version but
+    # getrandom -> wasip2 -> wit-bindgen uses a newer version
+    { name = "wit-bindgen", version = "0.51.0" },
+
+    # android-activity -> ndk -> jni-sys uses an old version but
+    # android-activity -> jni -> jni-sys uses a newer version
+    { name = "jni-sys", version = "0.3.1" },
+
+    # v8 -> bindgen -> itertools uses an old version
+    { name = "itertools", version = "0.13" },
+
+    # gpu-descriptor and petgraph use an old version
+    { name = "hashbrown", version = "0.15.5" },
 ]
 wildcards = "deny"
 allow-wildcard-paths = true

@@ -1,19 +1,19 @@
 struct FragmentOutputVec4Vec3_ {
     float4 vec4f : SV_Target0;
-    nointerpolation int4 vec4i : SV_Target1;
-    nointerpolation uint4 vec4u : SV_Target2;
+    int4 vec4i : SV_Target1;
+    uint4 vec4u : SV_Target2;
     float3 vec3f : SV_Target3;
-    nointerpolation int3 vec3i : SV_Target4;
-    nointerpolation uint3 vec3u : SV_Target5;
+    int3 vec3i : SV_Target4;
+    uint3 vec3u : SV_Target5;
 };
 
 struct FragmentOutputVec2Scalar {
     float2 vec2f : SV_Target0;
-    nointerpolation int2 vec2i : SV_Target1;
-    nointerpolation uint2 vec2u : SV_Target2;
+    int2 vec2i : SV_Target1;
+    uint2 vec2u : SV_Target2;
     float scalarf : SV_Target3;
-    nointerpolation int scalari : SV_Target4;
-    nointerpolation uint scalaru : SV_Target5;
+    int scalari : SV_Target4;
+    uint scalaru : SV_Target5;
 };
 
 FragmentOutputVec4Vec3_ main_vec4vec3_()

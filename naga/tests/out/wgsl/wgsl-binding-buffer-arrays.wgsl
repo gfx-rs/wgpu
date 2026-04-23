@@ -19,7 +19,7 @@ var<storage> storage_array: binding_array<Foo, 1>;
 var<uniform> uni: UniformIndex;
 
 @fragment 
-fn main(fragment_in: FragmentIn) -> @location(0) @interpolate(flat) u32 {
+fn main(fragment_in: FragmentIn) -> @location(0) u32 {
     var u1_: u32 = 0u;
 
     let uniform_index = uni.index;

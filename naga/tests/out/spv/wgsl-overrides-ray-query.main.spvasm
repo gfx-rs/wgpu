@@ -44,9 +44,9 @@ OpDecorate %10 Binding 0
 %31 = OpConstant  %6  0
 %32 = OpTypePointer Function %3
 %34 = OpConstant  %3  0
-%36 = OpTypeBool
-%37 = OpTypeVector %36 3
-%38 = OpTypeFunction %2 %28 %4 %8 %29 %32
+%36 = OpTypeFunction %2 %28 %4 %8 %29 %32
+%44 = OpTypeBool
+%45 = OpTypeVector %44 3
 %66 = OpConstant  %6  256
 %69 = OpConstant  %6  512
 %74 = OpConstant  %6  16
@@ -57,114 +57,114 @@ OpDecorate %10 Binding 0
 %95 = OpConstant  %6  128
 %124 = OpTypeVector %6 2
 %125 = OpTypePointer Function %124
-%126 = OpTypeVector %36 2
+%126 = OpTypeVector %44 2
 %127 = OpConstantComposite  %124  %31 %31
 %128 = OpConstant  %6  4294967295
 %129 = OpConstantComposite  %124  %128 %128
-%142 = OpTypePointer Function %36
-%143 = OpTypeFunction %36 %28 %29
-%149 = OpConstantFalse  %36
+%142 = OpTypePointer Function %44
+%143 = OpTypeFunction %44 %28 %29
+%149 = OpConstantFalse  %44
 %156 = OpConstant  %6  6
-%39 = OpFunction  %2  None %38
-%40 = OpFunctionParameter  %28
-%41 = OpFunctionParameter  %4
-%42 = OpFunctionParameter  %8
-%43 = OpFunctionParameter  %29
-%44 = OpFunctionParameter  %32
-%45 = OpLabel
-%46 = OpCompositeExtract  %6  %42 0
-%47 = OpCompositeExtract  %6  %42 1
-%48 = OpCompositeExtract  %3  %42 2
-%49 = OpCompositeExtract  %3  %42 3
-OpStore %44 %49
-%50 = OpCompositeExtract  %7  %42 4
-%51 = OpCompositeExtract  %7  %42 5
-%52 = OpFOrdLessThanEqual  %36  %48 %49
-%53 = OpFOrdGreaterThanEqual  %36  %48 %34
-%54 = OpIsInf  %37  %50
-%55 = OpAny  %36  %54
-%56 = OpIsNan  %37  %50
-%57 = OpAny  %36  %56
-%58 = OpLogicalOr  %36  %57 %55
-%59 = OpLogicalNot  %36  %58
-%60 = OpIsInf  %37  %51
-%61 = OpAny  %36  %60
-%62 = OpIsNan  %37  %51
-%63 = OpAny  %36  %62
-%64 = OpLogicalOr  %36  %63 %61
-%65 = OpLogicalNot  %36  %64
+%37 = OpFunction  %2  None %36
+%38 = OpFunctionParameter  %28
+%39 = OpFunctionParameter  %4
+%40 = OpFunctionParameter  %8
+%41 = OpFunctionParameter  %29
+%42 = OpFunctionParameter  %32
+%43 = OpLabel
+%46 = OpCompositeExtract  %6  %40 0
+%47 = OpCompositeExtract  %6  %40 1
+%48 = OpCompositeExtract  %3  %40 2
+%49 = OpCompositeExtract  %3  %40 3
+%50 = OpCompositeExtract  %7  %40 4
+%51 = OpCompositeExtract  %7  %40 5
+%52 = OpFOrdLessThanEqual  %44  %48 %49
+%53 = OpFOrdGreaterThanEqual  %44  %48 %34
+%54 = OpIsInf  %45  %50
+%55 = OpAny  %44  %54
+%56 = OpIsNan  %45  %50
+%57 = OpAny  %44  %56
+%58 = OpLogicalOr  %44  %57 %55
+%59 = OpLogicalNot  %44  %58
+%60 = OpIsInf  %45  %51
+%61 = OpAny  %44  %60
+%62 = OpIsNan  %45  %51
+%63 = OpAny  %44  %62
+%64 = OpLogicalOr  %44  %63 %61
+%65 = OpLogicalNot  %44  %64
 %67 = OpBitwiseAnd  %6  %46 %66
-%68 = OpINotEqual  %36  %67 %31
+%68 = OpINotEqual  %44  %67 %31
 %70 = OpBitwiseAnd  %6  %46 %69
-%71 = OpINotEqual  %36  %70 %31
-%72 = OpLogicalAnd  %36  %71 %68
-%73 = OpLogicalNot  %36  %72
+%71 = OpINotEqual  %44  %70 %31
+%72 = OpLogicalAnd  %44  %71 %68
+%73 = OpLogicalNot  %44  %72
 %75 = OpBitwiseAnd  %6  %46 %74
-%76 = OpINotEqual  %36  %75 %31
+%76 = OpINotEqual  %44  %75 %31
 %78 = OpBitwiseAnd  %6  %46 %77
-%79 = OpINotEqual  %36  %78 %31
-%80 = OpLogicalAnd  %36  %79 %68
-%81 = OpLogicalAnd  %36  %79 %76
-%82 = OpLogicalAnd  %36  %76 %68
-%83 = OpLogicalOr  %36  %82 %80
-%84 = OpLogicalOr  %36  %83 %81
-%85 = OpLogicalNot  %36  %84
+%79 = OpINotEqual  %44  %78 %31
+%80 = OpLogicalAnd  %44  %79 %68
+%81 = OpLogicalAnd  %44  %79 %76
+%82 = OpLogicalAnd  %44  %76 %68
+%83 = OpLogicalOr  %44  %82 %80
+%84 = OpLogicalOr  %44  %83 %81
+%85 = OpLogicalNot  %44  %84
 %87 = OpBitwiseAnd  %6  %46 %86
-%88 = OpINotEqual  %36  %87 %31
+%88 = OpINotEqual  %44  %87 %31
 %90 = OpBitwiseAnd  %6  %46 %89
-%91 = OpINotEqual  %36  %90 %31
+%91 = OpINotEqual  %44  %90 %31
 %93 = OpBitwiseAnd  %6  %46 %92
-%94 = OpINotEqual  %36  %93 %31
+%94 = OpINotEqual  %44  %93 %31
 %96 = OpBitwiseAnd  %6  %46 %95
-%97 = OpINotEqual  %36  %96 %31
-%98 = OpLogicalAnd  %36  %97 %88
-%99 = OpLogicalAnd  %36  %97 %91
-%100 = OpLogicalAnd  %36  %97 %94
-%101 = OpLogicalAnd  %36  %94 %88
-%102 = OpLogicalAnd  %36  %94 %91
-%103 = OpLogicalAnd  %36  %91 %88
-%104 = OpLogicalOr  %36  %103 %98
-%105 = OpLogicalOr  %36  %104 %99
-%106 = OpLogicalOr  %36  %105 %100
-%107 = OpLogicalOr  %36  %106 %101
-%108 = OpLogicalOr  %36  %107 %102
-%109 = OpLogicalNot  %36  %108
-%110 = OpLogicalAnd  %36  %109 %52
-%111 = OpLogicalAnd  %36  %110 %53
-%112 = OpLogicalAnd  %36  %111 %59
-%113 = OpLogicalAnd  %36  %112 %65
-%114 = OpLogicalAnd  %36  %113 %73
-%115 = OpLogicalAnd  %36  %114 %85
+%97 = OpINotEqual  %44  %96 %31
+%98 = OpLogicalAnd  %44  %97 %88
+%99 = OpLogicalAnd  %44  %97 %91
+%100 = OpLogicalAnd  %44  %97 %94
+%101 = OpLogicalAnd  %44  %94 %88
+%102 = OpLogicalAnd  %44  %94 %91
+%103 = OpLogicalAnd  %44  %91 %88
+%104 = OpLogicalOr  %44  %103 %98
+%105 = OpLogicalOr  %44  %104 %99
+%106 = OpLogicalOr  %44  %105 %100
+%107 = OpLogicalOr  %44  %106 %101
+%108 = OpLogicalOr  %44  %107 %102
+%109 = OpLogicalNot  %44  %108
+%110 = OpLogicalAnd  %44  %109 %52
+%111 = OpLogicalAnd  %44  %110 %53
+%112 = OpLogicalAnd  %44  %111 %59
+%113 = OpLogicalAnd  %44  %112 %65
+%114 = OpLogicalAnd  %44  %113 %73
+%115 = OpLogicalAnd  %44  %114 %85
+OpStore %42 %49
 OpSelectionMerge %116 None
 OpBranchConditional %115 %118 %117
 %118 = OpLabel
-OpRayQueryInitializeKHR %40 %41 %46 %47 %50 %48 %51 %49
-OpStore %43 %86
+OpRayQueryInitializeKHR %38 %39 %46 %47 %50 %48 %51 %49
+OpStore %41 %86
 OpBranch %116
 %117 = OpLabel
 OpBranch %116
 %116 = OpLabel
 OpReturn
 OpFunctionEnd
-%144 = OpFunction  %36  None %143
+%144 = OpFunction  %44  None %143
 %145 = OpFunctionParameter  %28
 %146 = OpFunctionParameter  %29
 %147 = OpLabel
 %148 = OpVariable  %142  Function %149
 %150 = OpLoad  %6  %146
 %153 = OpBitwiseAnd  %6  %150 %86
-%154 = OpINotEqual  %36  %153 %31
+%154 = OpINotEqual  %44  %153 %31
 OpSelectionMerge %151 None
 OpBranchConditional %154 %152 %151
 %152 = OpLabel
-%155 = OpRayQueryProceedKHR  %36  %145
+%155 = OpRayQueryProceedKHR  %44  %145
 OpStore %148 %155
 %157 = OpSelect  %6  %155 %89 %156
 %158 = OpBitwiseOr  %6  %150 %157
 OpStore %146 %158
 OpBranch %151
 %151 = OpLabel
-%159 = OpLoad  %36  %148
+%159 = OpLoad  %44  %148
 OpReturnValue %159
 OpFunctionEnd
 %13 = OpFunction  %2  None %14
@@ -176,7 +176,7 @@ OpFunctionEnd
 %15 = OpLoad  %4  %10
 OpBranch %35
 %35 = OpLabel
-%119 = OpFunctionCall  %2  %39 %27 %15 %26 %30 %33
+%119 = OpFunctionCall  %2  %37 %27 %15 %26 %30 %33
 OpBranch %120
 %120 = OpLabel
 OpLoopMerge %121 %123 None
@@ -184,19 +184,19 @@ OpBranch %131
 %131 = OpLabel
 %132 = OpLoad  %124  %130
 %133 = OpIEqual  %126  %127 %132
-%134 = OpAll  %36  %133
+%134 = OpAll  %44  %133
 OpSelectionMerge %135 None
 OpBranchConditional %134 %121 %135
 %135 = OpLabel
 %136 = OpCompositeExtract  %6  %132 1
-%137 = OpIEqual  %36  %136 %31
+%137 = OpIEqual  %44  %136 %31
 %138 = OpSelect  %6  %137 %86 %31
 %139 = OpCompositeConstruct  %124  %138 %86
 %140 = OpISub  %124  %132 %139
 OpStore %130 %140
 OpBranch %122
 %122 = OpLabel
-%141 = OpFunctionCall  %36  %144 %27 %30
+%141 = OpFunctionCall  %44  %144 %27 %30
 OpSelectionMerge %160 None
 OpBranchConditional %141 %160 %161
 %161 = OpLabel
