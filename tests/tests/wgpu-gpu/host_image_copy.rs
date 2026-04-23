@@ -1,10 +1,11 @@
 use wgpu_test::{
-    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(HOST_IMAGE_UPLOAD);
     vec.push(HOST_IMAGE_UPLOAD_MAPPED_AT_CREATION);
+    vec.push(HOST_IMAGE_DOWNLOAD);
 }
 
 /// Upload pixel data into a HOST_VISIBLE texture via the encoder-mapped path
@@ -170,26 +171,126 @@ async fn host_image_upload(ctx: TestingContext, start_mapped: bool) {
 
 #[gpu_test]
 static HOST_IMAGE_UPLOAD: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(wgpu::Features::HOST_IMAGE_COPY)
-            // llvmpipe reports HOST_IMAGE_COPY support but cannot load the
-            // vkCopyMemoryToImageEXT function pointers (driver bug).
-            .skip(FailureCase::adapter("llvmpipe")),
-    )
+    .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
         host_image_upload(ctx, false).await;
     });
 
 #[gpu_test]
 static HOST_IMAGE_UPLOAD_MAPPED_AT_CREATION: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(wgpu::Features::HOST_IMAGE_COPY)
-            // llvmpipe reports HOST_IMAGE_COPY support but cannot load the
-            // vkCopyMemoryToImageEXT function pointers (driver bug).
-            .skip(FailureCase::adapter("llvmpipe")),
-    )
+    .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
         host_image_upload(ctx, true).await;
+    });
+
+/// Upload pixel data into a HOST_VISIBLE texture via a GPU queue transfer
+/// (`queue.write_texture`), then read it back via `copy_to_memory` and verify.
+async fn host_image_download(ctx: TestingContext) {
+    let width = 4u32;
+    let height = 4u32;
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let bytes_per_pixel = 4u32;
+
+    let host_bytes_per_row = bytes_per_pixel * width; // 16
+    let host_data_size = (host_bytes_per_row * height) as usize; // 64
+
+    // queue.write_texture requires rows aligned to COPY_BYTES_PER_ROW_ALIGNMENT.
+    let gpu_bytes_per_row = host_bytes_per_row.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT); // 256
+    let gpu_data_size = (gpu_bytes_per_row * height) as usize; // 1024
+
+    // Dense pixel data, then scattered into an aligned upload buffer.
+    let pixel_data: Vec<u8> = (0..host_data_size).map(|i| i as u8).collect();
+    let mut upload_data = vec![0u8; gpu_data_size];
+    for row in 0..height as usize {
+        let src = row * host_bytes_per_row as usize;
+        let dst = row * gpu_bytes_per_row as usize;
+        upload_data[dst..dst + host_bytes_per_row as usize]
+            .copy_from_slice(&pixel_data[src..src + host_bytes_per_row as usize]);
+    }
+
+    // HOST_VISIBLE for CPU read, COPY_DST for GPU write.
+    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("host-visible download texture"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::HOST_VISIBLE | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+        mapped_at_creation: false,
+    });
+
+    // Upload via GPU queue transfer.
+    ctx.queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &upload_data,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(gpu_bytes_per_row),
+            rows_per_image: Some(height),
+        },
+        wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+    );
+
+    // Transition texture to HOST_COPY layout after the queue write completes.
+    let mut map_encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("map encoder"),
+        });
+    map_encoder.map_texture_on_completion(&texture, Box::new(|_| {}));
+    ctx.queue.submit(Some(map_encoder.finish()));
+
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
+
+    // Download via host image copy, using dense (unaligned) row stride.
+    let mut cpu_readback = vec![0u8; host_data_size];
+    {
+        let mapped = texture.get_mapped();
+        mapped.copy_to_memory(
+            wgpu::TexelCopyTextureInfoBase {
+                texture: (),
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &mut cpu_readback,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(host_bytes_per_row),
+                rows_per_image: Some(height),
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+    texture.unmap();
+
+    assert_eq!(cpu_readback, pixel_data, "host image download mismatch");
+}
+
+#[gpu_test]
+static HOST_IMAGE_DOWNLOAD: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
+    .run_async(|ctx| async move {
+        host_image_download(ctx).await;
     });
