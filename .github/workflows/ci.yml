@@ -824,7 +824,7 @@ jobs:
           cargo --locked fmt -- --check
 
       - name: Install Taplo
-        uses: uncenter/setup-taplo@v1
+        uses: uncenter/setup-taplo@v2
         with:
           version: "0.9.3"
 
@@ -832,7 +832,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.45.0
+        uses: crate-ci/typos@v1.45.1
 
   check-cts-runner:
     # runtime is normally 2 minutes

@@ -18,6 +18,14 @@
 /// `Mutex`, and its rank here is the constant
 /// [`COMMAND_BUFFER_DATA`].
 ///
+/// Building with `RUSTFLAGS="--cfg wgpu_validate_locks"`, replaces the
+/// lock implementation in `lock::vanilla` with in `lock::ranked`, which
+/// checks that the observed sequences of lock acquisition respect the
+/// ordering defined here.
+///
+/// TODO(<https://github.com/gfx-rs/wgpu/issues/5572>): Resolve invalid
+/// acquisitions of DEVICE_COMMAND_INDICES followed by COMMAND_BUFFER_DATA.
+///
 /// [`Mutex`]: parking_lot::Mutex
 /// [`RwLock`]: parking_lot::RwLock
 /// [`SnatchLock`]: crate::snatch::SnatchLock
@@ -97,60 +105,102 @@ macro_rules! define_lock_ranks {
 }
 
 define_lock_ranks! {
+    // Non-leaf ranks, in topological order.
     rank COMMAND_BUFFER_DATA "CommandBuffer::data" followed by {
         DEVICE_SNATCHABLE_LOCK,
-        DEVICE_USAGE_SCOPES,
-        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
         BUFFER_MAP_STATE,
+        COMMAND_ALLOCATOR_FREE_ENCODERS,
+        BUFFER_POOL,
+        DEVICE_TRACE,
+        DEVICE_USAGE_SCOPES,
+        REGISTRY_STORAGE,
+        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
     rank DEVICE_SNATCHABLE_LOCK "Device::snatchable_lock" followed by {
-        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
-        DEVICE_TRACE,
         BUFFER_MAP_STATE,
+        DEVICE_FENCE,
+        QUEUE_PENDING_WRITES,
+        TEXTURE_INITIALIZATION_STATUS,
+        QUEUE_LIFE_TRACKER,
+        BLAS_COMPACTION_STATE,
+        BUFFER_BIND_GROUPS,
+        BUFFER_INITIALIZATION_STATUS,
+        BUFFER_POOL,
+        DEVICE_TRACE,
+        DEVICE_USAGE_SCOPES,
+        REGISTRY_STORAGE,
+        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
+        TEXTURE_BIND_GROUPS,
+        TEXTURE_CLEAR_MODE,
+        TEXTURE_VIEWS,
         // Uncomment this to see an interesting cycle.
         // COMMAND_BUFFER_DATA,
     }
-    rank BUFFER_MAP_STATE "Buffer::map_state" followed by {
-        QUEUE_PENDING_WRITES,
-        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
-        DEVICE_TRACE,
-    }
-    rank QUEUE_PENDING_WRITES "Queue::pending_writes" followed by {
-        COMMAND_ALLOCATOR_FREE_ENCODERS,
-        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
+    rank DEVICE_FENCE "Device::fence" followed by {
+        DEVICE_COMMAND_INDICES,
         QUEUE_LIFE_TRACKER,
     }
-    rank QUEUE_LIFE_TRACKER "Queue::life_tracker" followed by {
+    rank DEVICE_COMMAND_INDICES "Device::command_indices" followed by {
+        BUFFER_POOL,
+        QUEUE_PENDING_WRITES,
+        QUEUE_LIFE_TRACKER,
         COMMAND_ALLOCATOR_FREE_ENCODERS,
+        DEVICE_DEFERRED_DESTROY,
+        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
+    }
+    rank QUEUE_PENDING_WRITES "Queue::pending_writes" followed by {
+        BUFFER_MAP_STATE,
+        DEVICE_TRACKERS,
+        COMMAND_ALLOCATOR_FREE_ENCODERS,
+        BUFFER_INITIALIZATION_STATUS,
+        TEXTURE_INITIALIZATION_STATUS,
+        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
+    }
+    rank TEXTURE_INITIALIZATION_STATUS "Texture::initialization_status" followed by {
+        DEVICE_TRACKERS,
+    }
+    rank DEVICE_TRACKERS "Device::trackers" followed by {
+        TEXTURE_CLEAR_MODE,
+    }
+    rank QUEUE_LIFE_TRACKER "Queue::life_tracker" followed by {
+        BUFFER_MAP_STATE,
+        BUFFER_INITIALIZATION_STATUS,
+        BUFFER_POOL,
+        COMMAND_ALLOCATOR_FREE_ENCODERS,
+        DEVICE_DEFERRED_DESTROY,
         DEVICE_TRACE,
+        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
+    }
+    rank BUFFER_MAP_STATE "Buffer::map_state" followed by {
+        DEVICE_TRACE,
+        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
     rank COMMAND_ALLOCATOR_FREE_ENCODERS "CommandAllocator::free_encoders" followed by {
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
 
+    // Leaf ranks reachable from the graph above, alphabetical.
+    rank BLAS_COMPACTION_STATE "Blas::compaction_state" followed by { }
     rank BUFFER_BIND_GROUPS "Buffer::bind_groups" followed by { }
     rank BUFFER_INITIALIZATION_STATUS "Buffer::initialization_status" followed by { }
-    rank DEVICE_COMMAND_INDICES "Device::command_indices" followed by {}
-    rank DEVICE_DEFERRED_DESTROY "Device::deferred_destroy" followed by {}
-    rank DEVICE_FENCE "Device::fence" followed by { }
+    rank BUFFER_POOL "BufferPool::buffers" followed by { }
+    rank DEVICE_DEFERRED_DESTROY "Device::deferred_destroy" followed by { }
     rank DEVICE_TRACE "Device::trace" followed by { }
-    rank DEVICE_TRACKERS "Device::trackers" followed by { }
-    rank DEVICE_LOST_CLOSURE "Device::device_lost_closure" followed by { }
     rank DEVICE_USAGE_SCOPES "Device::usage_scopes" followed by { }
-    rank IDENTITY_MANAGER_VALUES "IdentityManager::values" followed by { }
     rank REGISTRY_STORAGE "Registry::storage" followed by { }
-    rank RESOURCE_POOL_INNER "ResourcePool::inner" followed by { }
     rank SHARED_TRACKER_INDEX_ALLOCATOR_INNER "SharedTrackerIndexAllocator::inner" followed by { }
-    rank SURFACE_PRESENTATION "Surface::presentation" followed by { }
     rank TEXTURE_BIND_GROUPS "Texture::bind_groups" followed by { }
-    rank TEXTURE_INITIALIZATION_STATUS "Texture::initialization_status" followed by { }
     rank TEXTURE_CLEAR_MODE "Texture::clear_mode" followed by { }
     rank TEXTURE_VIEWS "Texture::views" followed by { }
+
+    // Ranks not connected to the graph, alphabetical.
     rank BLAS_BUILT_INDEX "Blas::built_index" followed by { }
-    rank BLAS_COMPACTION_STATE "Blas::compaction_size" followed by { }
+    rank DEVICE_LOST_CLOSURE "Device::device_lost_closure" followed by { }
+    rank IDENTITY_MANAGER_VALUES "IdentityManager::values" followed by { }
+    rank RESOURCE_POOL_INNER "ResourcePool::inner" followed by { }
+    rank SURFACE_PRESENTATION "Surface::presentation" followed by { }
     rank TLAS_BUILT_INDEX "Tlas::built_index" followed by { }
     rank TLAS_DEPENDENCIES "Tlas::dependencies" followed by { }
-    rank BUFFER_POOL "BufferPool::buffers" followed by { }
 
     #[cfg(test)]
     rank PAWN "pawn" followed by { ROOK, BISHOP }

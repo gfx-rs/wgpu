@@ -65,6 +65,13 @@ pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Resu
         for hunk in &hunks_in_a_released_section {
             eprintln!("{hunk}");
         }
+
+        eprintln!();
+        eprintln!(
+            "hint: a release likely happened after this change was first added to `## Unreleased`. \
+             Move the affected entries back up under `## Unreleased` in `{CHANGELOG_PATH_RELATIVE}` \
+             and try again."
+        );
     }
 
     if failed {
