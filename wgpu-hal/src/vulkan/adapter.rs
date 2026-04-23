@@ -1294,9 +1294,7 @@ impl PhysicalDeviceProperties {
             }
         }
 
-        if self.device_api_version < vk::make_api_version(0, 1, 4, 0)
-            && requested_features.intersects(wgt::Features::HOST_IMAGE_COPY)
-        {
+        if requested_features.intersects(wgt::Features::HOST_IMAGE_COPY) {
             extensions.push(ext::host_image_copy::NAME);
         }
 
@@ -2585,6 +2583,12 @@ impl super::Adapter {
         } else {
             None
         };
+
+        // Fail device creation rather than silently poisoning the device later
+        // when HOST_IMAGE_COPY operations return DeviceError::Lost.
+        if host_image_copy_fns.is_none() && features.contains(wgt::Features::HOST_IMAGE_COPY) {
+            return Err(crate::DeviceError::Unexpected);
+        }
 
         let naga_options = {
             use naga::back::spv;
