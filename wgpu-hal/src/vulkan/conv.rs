@@ -323,6 +323,11 @@ pub fn map_texture_usage_to_barrier(
         access |= vk::AccessFlags::SHADER_WRITE;
     }
 
+    if usage.contains(wgt::TextureUses::HOST_COPY) {
+        stages |= vk::PipelineStageFlags::HOST;
+        access |= vk::AccessFlags::HOST_READ | vk::AccessFlags::HOST_WRITE;
+    }
+
     if usage == wgt::TextureUses::UNINITIALIZED || usage == wgt::TextureUses::PRESENT {
         (
             vk::PipelineStageFlags::TOP_OF_PIPE,

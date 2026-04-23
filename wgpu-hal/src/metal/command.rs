@@ -8,8 +8,8 @@ use objc2_metal::{
     MTLBlitPassDescriptor, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandEncoder,
     MTLCommandQueue, MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLCounterDontSample,
     MTLDevice, MTLLoadAction, MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor,
-    MTLResidencySet, MTLResidencySetDescriptor, MTLResource, MTLSamplerState, MTLScissorRect,
-    MTLSize, MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping, MTLViewport,
+    MTLResidencySet, MTLResidencySetDescriptor, MTLSamplerState, MTLScissorRect, MTLSize,
+    MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping, MTLViewport,
     MTLVisibilityResultMode,
 };
 
@@ -549,10 +549,23 @@ impl crate::CommandEncoder for super::CommandEncoder {
     {
     }
 
-    unsafe fn transition_textures<'a, T>(&mut self, _barriers: T)
+    unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
     where
         T: Iterator<Item = crate::TextureBarrier<'a, super::Texture>>,
     {
+        // On macOS, HOST_COPY textures use MTLStorageMode::Managed. When the CPU
+        // has written to the texture and the GPU now needs to read it, we must
+        // synchronize the managed resource so that the GPU sees the CPU's writes.
+        // On macOS, HOST_COPY textures use MTLStorageMode::Managed. Before the GPU
+        // reads such a texture, we must call synchronizeResource to flush CPU writes.
+        #[cfg(target_os = "macos")]
+        for barrier in barriers {
+            if barrier.texture.host_copy && !barrier.usage.to.contains(wgt::TextureUses::HOST_COPY)
+            {
+                let encoder = self.enter_blit();
+                encoder.synchronizeResource(ProtocolObject::from_ref(&*barrier.texture.raw));
+            }
+        }
     }
 
     unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {
@@ -677,6 +690,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
+        #[cfg(target_os = "macos")]
+        if src.host_copy {
+            let encoder = self.enter_blit();
+            encoder.synchronizeResource(ProtocolObject::from_ref(&*src.raw));
+        }
+
         let encoder = self.enter_blit();
         for copy in regions {
             let src_origin = conv::map_origin(&copy.texture_base.origin);
@@ -1882,13 +1901,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
             residency_set.addAllocation(ProtocolObject::from_ref(&*dependency.raw));
         }
         residency_set.commit();
-    }
-
-    unsafe fn pre_texture_map(&mut self, texture: &<Self::A as crate::Api>::Texture) {
-        let encoder = self.enter_blit();
-        let texture_as_resource: &ProtocolObject<dyn MTLResource> =
-            ProtocolObject::from_ref(texture.raw_handle());
-        encoder.synchronizeResource(texture_as_resource);
     }
 }
 

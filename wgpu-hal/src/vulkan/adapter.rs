@@ -2563,11 +2563,25 @@ impl super::Adapter {
         } else {
             None
         };
-        let host_image_copy_fns = if enabled_extensions.contains(&ext::host_image_copy::NAME) {
-            Some(ext::host_image_copy::Device::new(
-                &self.instance.raw,
-                &raw_device,
-            ))
+        let host_image_copy_fns = if enabled_extensions.contains(&ext::host_image_copy::NAME)
+            || self.phd_capabilities.device_api_version >= vk::make_api_version(0, 1, 4, 0)
+        {
+            // Some drivers report the extension but fail to provide the function pointers
+            // (e.g. software renderers). Verify the primary entry point is reachable first.
+            let probe = unsafe {
+                self.instance
+                    .raw
+                    .get_device_proc_addr(raw_device.handle(), c"vkCopyMemoryToImageEXT".as_ptr())
+            };
+            if probe.is_some() {
+                Some(ext::host_image_copy::Device::new(
+                    &self.instance.raw,
+                    &raw_device,
+                ))
+            } else {
+                log::warn!("VK_EXT_host_image_copy enabled but vkCopyMemoryToImageEXT unavailable — disabling");
+                None
+            }
         } else {
             None
         };

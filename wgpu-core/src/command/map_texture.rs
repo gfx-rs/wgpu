@@ -8,10 +8,7 @@ use crate::{
     device::{DeviceError, MissingFeatures, TextureMapClosure},
     global::Global,
     id::{CommandEncoderId, TextureId},
-    resource::{
-        DestroyedResourceError, InvalidResourceError, ParentDevice as _, RawResourceAccess as _,
-        TextureMapState,
-    },
+    resource::{DestroyedResourceError, InvalidResourceError, ParentDevice as _, TextureMapState},
     track::ResourceUsageCompatibilityError,
 };
 
@@ -81,9 +78,6 @@ pub(crate) fn encode_map_texture_on_completion(
         &usage_scope,
         state.snatch_guard,
     );
-
-    let raw_texture = texture.try_raw(state.snatch_guard)?;
-    unsafe { state.raw_encoder.pre_texture_map(raw_texture) };
 
     Ok(())
 }

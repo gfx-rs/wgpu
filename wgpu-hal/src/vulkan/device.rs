@@ -503,6 +503,15 @@ impl super::Device {
                 vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE;
         }
 
+        // Strip HOST_COPY from usage if the host_image_copy extension functions
+        // aren't available (e.g. broken driver that claims the extension but can't
+        // load function pointers), to avoid creating images with HOST_TRANSFER_EXT.
+        let effective_usage = if self.shared.extension_fns.host_image_copy.is_none() {
+            desc.usage - wgt::TextureUses::HOST_COPY
+        } else {
+            desc.usage
+        };
+
         let mut vk_info = vk::ImageCreateInfo::default()
             .flags(raw_flags)
             .image_type(conv::map_texture_dimension(desc.dimension))
@@ -512,7 +521,7 @@ impl super::Device {
             .array_layers(desc.array_layer_count())
             .samples(vk::SampleCountFlags::from_raw(desc.sample_count))
             .tiling(tiling)
-            .usage(conv::map_texture_usage(desc.usage))
+            .usage(conv::map_texture_usage(effective_usage))
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .initial_layout(vk::ImageLayout::UNDEFINED);
 
@@ -1346,13 +1355,14 @@ impl crate::Device for super::Device {
             .dst_image(dst.raw)
             .dst_image_layout(vk::ImageLayout::GENERAL)
             .regions(&vk_regions);
+        let fns = self
+            .shared
+            .extension_fns
+            .host_image_copy
+            .as_ref()
+            .ok_or(crate::DeviceError::Lost)?;
         unsafe {
-            self.shared
-                .extension_fns
-                .host_image_copy
-                .as_ref()
-                .unwrap()
-                .copy_memory_to_image(&info)
+            fns.copy_memory_to_image(&info)
                 .map_err(super::map_host_device_oom_err)
         }
     }
@@ -1399,13 +1409,14 @@ impl crate::Device for super::Device {
             .src_image(src.raw)
             .src_image_layout(vk::ImageLayout::GENERAL)
             .regions(&vk_regions);
+        let fns = self
+            .shared
+            .extension_fns
+            .host_image_copy
+            .as_ref()
+            .ok_or(crate::DeviceError::Lost)?;
         unsafe {
-            self.shared
-                .extension_fns
-                .host_image_copy
-                .as_ref()
-                .unwrap()
-                .copy_image_to_memory(&info)
+            fns.copy_image_to_memory(&info)
                 .map_err(super::map_host_device_oom_err)
         }
     }

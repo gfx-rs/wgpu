@@ -388,6 +388,7 @@ impl super::Device {
             array_layers,
             mip_levels,
             copy_size,
+            host_copy: false,
         }
     }
 
@@ -522,7 +523,18 @@ impl crate::Device for super::Device {
             {
                 MTLStorageMode::Memoryless
             } else if desc.usage.contains(wgt::TextureUses::HOST_COPY) {
-                MTLStorageMode::Shared
+                // On macOS, use Managed so that CPU writes (replaceRegion) are
+                // explicitly synchronized to the GPU via blitEncoder.synchronizeResource.
+                // On iOS/tvOS, Shared is sufficient because unified memory is truly
+                // coherent for textures too.
+                #[cfg(target_os = "macos")]
+                {
+                    MTLStorageMode::Managed
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    MTLStorageMode::Shared
+                }
             } else {
                 MTLStorageMode::Private
             };
@@ -553,6 +565,7 @@ impl crate::Device for super::Device {
                 mip_levels: desc.mip_level_count,
                 array_layers: desc.array_layer_count(),
                 copy_size: desc.copy_extent(),
+                host_copy: desc.usage.contains(wgt::TextureUses::HOST_COPY),
             })
         })
     }

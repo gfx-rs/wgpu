@@ -1395,8 +1395,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 );
         }
     }
-
-    unsafe fn pre_texture_map(&mut self, _texture: &<Self::A as crate::Api>::Texture) {}
 }
 
 #[test]

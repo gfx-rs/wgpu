@@ -235,13 +235,7 @@ impl Queue {
         &self,
         submission_index: u64,
         snatch_guard: &SnatchGuard,
-    ) -> (
-        SmallVec<[SubmittedWorkDoneClosure; 1]>,
-        Vec<super::BufferMapPendingClosure>,
-        Vec<BlasCompactReadyPendingClosure>,
-        Vec<super::TextureMapClosure>,
-        bool,
-    ) {
+    ) -> MaintainResult {
         let mut life_tracker = self.lock_life();
         let submission_closures = life_tracker.triage_submissions(submission_index);
 
@@ -320,6 +314,14 @@ impl Drop for Queue {
 pub type SubmittedWorkDoneClosure = Box<dyn FnOnce() + Send + 'static>;
 #[cfg(not(send_sync))]
 pub type SubmittedWorkDoneClosure = Box<dyn FnOnce() + 'static>;
+
+pub(crate) type MaintainResult = (
+    SmallVec<[SubmittedWorkDoneClosure; 1]>,
+    Vec<super::BufferMapPendingClosure>,
+    Vec<BlasCompactReadyPendingClosure>,
+    Vec<super::TextureMapClosure>,
+    bool,
+);
 
 /// A texture or buffer to be freed soon.
 ///
@@ -1438,8 +1440,7 @@ impl Queue {
                         }
 
                         // done
-                        textures_to_map_on_completion
-                            .extend(baked.encoded_textures_to_map.drain(..));
+                        textures_to_map_on_completion.append(&mut baked.encoded_textures_to_map);
                         active_executions.push(EncoderInFlight {
                             inner: baked.encoder,
                             trackers: baked.trackers,

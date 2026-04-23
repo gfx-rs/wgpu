@@ -628,6 +628,18 @@ impl Global {
                 .map_err(|e| texture.device.handle_hal_error(e))?;
         }
 
+        // Mark written layers as initialized so that handle_src_texture_init
+        // doesn't clear them before subsequent GPU reads.
+        {
+            let mip_level = texture_base.mip_level as usize;
+            let layer_start = texture_base.array_layer;
+            let layer_end = layer_start + array_layer_count;
+            let mut init_status = texture.initialization_status.write();
+            if let Some(mip_tracker) = init_status.mips.get_mut(mip_level) {
+                mip_tracker.drain(layer_start..layer_end);
+            }
+        }
+
         Ok(())
     }
 

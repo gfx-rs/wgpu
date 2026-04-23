@@ -1592,6 +1592,10 @@ impl Device {
             };
         }
 
+        // HOST_VISIBLE is validated separately above (requires HOST_IMAGE_COPY feature).
+        // Exclude it here so format-level allowed_usages checks don't reject it.
+        let usage_to_check = desc.usage - wgt::TextureUsages::HOST_VISIBLE;
+
         let missing_allowed_usages = match desc.format.planes() {
             Some(planes) => {
                 let mut planes_usages = wgt::TextureUsages::all();
@@ -1605,9 +1609,9 @@ impl Device {
                     planes_usages &= format_features.allowed_usages;
                 }
 
-                desc.usage - planes_usages
+                usage_to_check - planes_usages
             }
-            None => desc.usage - format_features.allowed_usages,
+            None => usage_to_check - format_features.allowed_usages,
         };
 
         if !missing_allowed_usages.is_empty() {

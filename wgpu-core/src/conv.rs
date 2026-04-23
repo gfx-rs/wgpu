@@ -151,13 +151,15 @@ pub fn map_texture_usage_for_texture(
             wgt::TextureUses::DEPTH_STENCIL_WRITE
         } else if desc.usage.contains(wgt::TextureUsages::COPY_DST) {
             wgt::TextureUses::COPY_DST // (set already)
+        } else if desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE) {
+            // HOST_COPY (already set via HOST_VISIBLE) suffices for initialization.
+            wgt::TextureUses::HOST_COPY
         } else {
-            // Use COPY_DST only if we can't use COLOR_TARGET
+            // Use COLOR_TARGET for initialization if available, else COPY_DST.
             if format_features
                 .allowed_usages
                 .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
                 && desc.dimension == wgt::TextureDimension::D2
-            // Render targets dimension must be 2d
             {
                 wgt::TextureUses::COLOR_TARGET
             } else {
