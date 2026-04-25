@@ -951,6 +951,33 @@ impl super::Device {
         &self.shared.instance
     }
 
+    /// Allocate memory via [`gpu_allocator`], falling back to a dedicated
+    /// allocation if suballocation fails because the heap is too fragmented to
+    /// fit a new managed block. The caller picks the dedicated scheme
+    /// ([`AllocationScheme::DedicatedBuffer`] or [`AllocationScheme::DedicatedImage`])
+    /// matching the resource being allocated for.
+    ///
+    /// [`AllocationScheme::DedicatedBuffer`]: gpu_allocator::vulkan::AllocationScheme::DedicatedBuffer
+    /// [`AllocationScheme::DedicatedImage`]: gpu_allocator::vulkan::AllocationScheme::DedicatedImage
+    fn allocate_memory(
+        &self,
+        base: gpu_allocator::vulkan::AllocationCreateDesc<'_>,
+        dedicated_scheme: gpu_allocator::vulkan::AllocationScheme,
+    ) -> Result<gpu_allocator::vulkan::Allocation, gpu_allocator::AllocationError> {
+        match self.mem_allocator.lock().allocate(&base) {
+            Ok(alloc) => Ok(alloc),
+            Err(gpu_allocator::AllocationError::OutOfMemory) => {
+                self.mem_allocator
+                    .lock()
+                    .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
+                        allocation_scheme: dedicated_scheme,
+                        ..base
+                    })
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     fn error_if_would_oom_on_resource_allocation(
         &self,
         needs_host_access: bool,
@@ -1094,18 +1121,20 @@ impl crate::Device for super::Device {
         }
 
         let allocation = self
-            .mem_allocator
-            .lock()
-            .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
-                name,
-                requirements: vk::MemoryRequirements {
-                    memory_type_bits: requirements.memory_type_bits & self.valid_ash_memory_types,
-                    ..requirements
+            .allocate_memory(
+                gpu_allocator::vulkan::AllocationCreateDesc {
+                    name,
+                    requirements: vk::MemoryRequirements {
+                        memory_type_bits: requirements.memory_type_bits
+                            & self.valid_ash_memory_types,
+                        ..requirements
+                    },
+                    location,
+                    linear: true, // Buffers are always linear
+                    allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
                 },
-                location,
-                linear: true, // Buffers are always linear
-                allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
-            })
+                gpu_allocator::vulkan::AllocationScheme::DedicatedBuffer(raw),
+            )
             .inspect_err(|_| {
                 unsafe { self.shared.raw.destroy_buffer(raw, None) };
             })?;
@@ -1239,19 +1268,20 @@ impl crate::Device for super::Device {
         let name = desc.label.unwrap_or("Unlabeled texture");
 
         let allocation = self
-            .mem_allocator
-            .lock()
-            .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
-                name,
-                requirements: vk::MemoryRequirements {
-                    memory_type_bits: image.requirements.memory_type_bits
-                        & self.valid_ash_memory_types,
-                    ..image.requirements
+            .allocate_memory(
+                gpu_allocator::vulkan::AllocationCreateDesc {
+                    name,
+                    requirements: vk::MemoryRequirements {
+                        memory_type_bits: image.requirements.memory_type_bits
+                            & self.valid_ash_memory_types,
+                        ..image.requirements
+                    },
+                    location: gpu_allocator::MemoryLocation::GpuOnly,
+                    linear: false,
+                    allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
                 },
-                location: gpu_allocator::MemoryLocation::GpuOnly,
-                linear: false,
-                allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
-            })
+                gpu_allocator::vulkan::AllocationScheme::DedicatedImage(image.raw),
+            )
             .inspect_err(|_| {
                 unsafe { self.shared.raw.destroy_image(image.raw, None) };
             })?;
@@ -2695,15 +2725,17 @@ impl crate::Device for super::Device {
                 .unwrap_or("Unlabeled acceleration structure buffer");
 
             let allocation = self
-                .mem_allocator
-                .lock()
-                .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
-                    name,
-                    requirements,
-                    location: gpu_allocator::MemoryLocation::GpuOnly,
-                    linear: true, // Buffers are always linear
-                    allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
-                })
+                .allocate_memory(
+                    gpu_allocator::vulkan::AllocationCreateDesc {
+                        name,
+                        requirements,
+                        location: gpu_allocator::MemoryLocation::GpuOnly,
+                        linear: true, // Buffers are always linear
+                        allocation_scheme:
+                            gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
+                    },
+                    gpu_allocator::vulkan::AllocationScheme::DedicatedBuffer(raw_buffer),
+                )
                 .inspect_err(|_| {
                     self.shared.raw.destroy_buffer(raw_buffer, None);
                 })?;
