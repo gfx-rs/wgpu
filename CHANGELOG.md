@@ -177,7 +177,7 @@ By @andyleiserson in [#9321](https://github.com/gfx-rs/wgpu/pull/9321).
 - Fixed `SHADER_I16` not enabling `storage_buffer16_bit_access` or `storage_input_output16`, causing Vulkan validation errors when using 16-bit integers in buffers. By @JMS55 in [#9412](https://github.com/gfx-rs/wgpu/pull/9412).
 - Fixed validation errors when frames take longer than the specified swapchain acquire timeout. By @atlv24 in [#9405](https://github.com/gfx-rs/wgpu/pull/9405).
 - Fixed limits on Mesa's Honeykrisp / Asahi Linux. By @im-0 in [#9393](https://github.com/gfx-rs/wgpu/pull/9393).
-- Fall back to a dedicated `vkAllocateMemory` call when `gpu-allocator` cannot fit a new suballocation block, reducing out of memory failures under memory pressure. By @JMS55 in [#TODO](TODO).
+- Fall back to a dedicated `vkAllocateMemory` call when `gpu-allocator` cannot fit a new suballocation block, reducing out of memory failures under memory pressure. By @JMS55 in [#9462](https://github.com/gfx-rs/wgpu/pull/9462).
 
 #### dx12
 
