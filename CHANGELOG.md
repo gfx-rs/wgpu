@@ -85,6 +85,57 @@ GLSL:
 
 By @andyleiserson in [#9321](https://github.com/gfx-rs/wgpu/pull/9321).
 
+#### Host texture copies
+
+When uploading a texture, you typically first copy the contents into device-visible memory, before then copying that into the texture on the queue timeline. This results in 2 copies, even
+on unified memory systems. Host image copies provide a way to read and write textures from the host without this extra copy. Additionally, this can be done from multiple threads, asynchronously,
+while you record commands using the textures. This makes it an effective async upload technique.
+
+Using these copies requires mapping textures, which functions similarly to buffer mapping, except that mapped textures are always both readable and writable. Only textures created with
+`wgpu::TextureUsages::HOST_VISIBLE` can be mapped.
+
+To interact with mapped textures, you can use the methods `copy_from_memory` and `copy_to_memory`.
+
+To first map a texture, you can call `CommandEncoder::map_texture_on_completion`, which lets you include a callback. Once the command encoder finishes and the callback is fired, you may
+use `Texture::get_mapped`. There is no synchronous mapping mechanism.
+
+Textures can also now be mapped at creation, through the `mapped_at_creation` on texture descriptors.
+
+Example:
+```rust
+let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+    ...
+    usage: wgpu::TextureUsages::HOST_VISIBLE, // and however else you plan to use it
+    mapped_at_creation: true,
+});
+
+let mapped = texture.get_mapped();
+
+mapped.copy_from_memory(
+    wgpu::TexelCopyTextureInfoBase {
+        texture: (),
+        mip_level: 0,
+        origin: wgpu::Origin3d::ZERO,
+        aspect: wgpu::TextureAspect::All,
+    },
+    &upload_data,
+    wgpu::TexelCopyBufferLayout {
+        offset: 0,
+        bytes_per_row: Some(width * pixel_bytes),
+        rows_per_image: Some(height),
+    },
+    wgpu::Extent3d {
+        width,
+        height,
+        depth_or_array_layers: 1,
+    },
+);
+
+texture.unmap();
+
+// The texture is now usable.
+```
+
 ### Added/New Features
 
 #### General
