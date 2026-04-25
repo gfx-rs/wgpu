@@ -1016,6 +1016,7 @@ pub struct Texture {
     mip_level_count: u32,
     sample_count: u32,
     allocation: suballocation::Allocation,
+    host_visible: bool,
 }
 
 impl Texture {
@@ -1612,6 +1613,7 @@ impl crate::Surface for Surface {
                 suballocation::AllocationType::Texture,
                 sc.format.theoretical_memory_footprint(sc.size),
             ),
+            host_visible: false,
         };
         Ok(crate::AcquiredSurfaceTexture {
             texture,
