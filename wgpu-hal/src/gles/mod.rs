@@ -86,9 +86,9 @@ mod command;
 mod conv;
 mod device;
 ///cbindgen:ignore
-#[cfg(all(not(webgl), any(not(windows), feature = "angle")))]
+#[cfg(all(not(webgl), any(not(windows), feature = "gles-with-angle")))]
 mod egl;
-#[cfg(all(not(webgl), any(not(windows), feature = "angle")))]
+#[cfg(all(not(webgl), any(not(windows), feature = "gles-with-angle")))]
 pub use self::egl::{AdapterContext, AdapterContextLock, Instance, Surface};
 
 #[cfg(Emscripten)]
@@ -102,9 +102,9 @@ mod web;
 #[cfg(webgl)]
 pub use self::web::{AdapterContext, Instance, Surface};
 
-#[cfg(all(windows, not(webgl), not(feature = "angle")))]
+#[cfg(all(windows, not(webgl), not(feature = "gles-with-angle")))]
 mod wgl;
-#[cfg(all(windows, not(webgl), not(feature = "angle")))]
+#[cfg(all(windows, not(webgl), not(feature = "gles-with-angle")))]
 pub use self::wgl::{AdapterContext, AdapterContextLock, Instance, Surface};
 
 pub use fence::Fence;

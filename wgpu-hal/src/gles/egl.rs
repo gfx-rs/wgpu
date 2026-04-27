@@ -1257,10 +1257,8 @@ impl crate::Surface for Surface {
                 (sc, wl_window)
             }
             None => {
-                #[cfg(unix)]
+                #[cfg_attr(not(unix), expect(unused_mut))]
                 let mut wl_window = None;
-                #[cfg(not(unix))]
-                let wl_window = None;
                 let (mut temp_xlib_handle, mut temp_xcb_handle);
                 let native_window_ptr = match (self.wsi.kind, self.raw_window_handle) {
                     (WindowKind::Unknown | WindowKind::X11, Rwh::Xlib(handle)) => {

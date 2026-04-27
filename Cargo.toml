@@ -104,7 +104,8 @@ wgpu-types = { version = "30.0.0", path = "./wgpu-types", default-features = fal
 # are allowed through though.
 hlsl-snapshots = { path = "naga/hlsl-snapshots" }
 
-wgpu-core-deps-windows-linux-android = { version = "30.0.0", path = "./wgpu-core/platform-deps/windows-linux-android" }
+wgpu-core-deps-linux-android-bsd = { version = "30.0.0", path = "./wgpu-core/platform-deps/linux-android-bsd" }
+wgpu-core-deps-windows = { version = "30.0.0", path = "./wgpu-core/platform-deps/windows" }
 wgpu-core-deps-apple = { version = "30.0.0", path = "./wgpu-core/platform-deps/apple" }
 wgpu-core-deps-wasm = { version = "30.0.0", path = "./wgpu-core/platform-deps/wasm" }
 wgpu-core-deps-emscripten = { version = "30.0.0", path = "./wgpu-core/platform-deps/emscripten" }
