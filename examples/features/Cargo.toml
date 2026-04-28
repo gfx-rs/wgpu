@@ -28,7 +28,7 @@ test = false
 [features]
 default = []
 webgl = ["wgpu/webgl", "wgpu-test/webgl"]
-webgpu = ["wgpu/webgpu", "wgpu-test/webgl"]
+webgpu = ["wgpu/webgpu"]
 exhaust = ["wgpu/exhaust"]
 
 [dependencies]
