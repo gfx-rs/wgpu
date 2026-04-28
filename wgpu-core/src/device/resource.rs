@@ -41,7 +41,7 @@ use crate::{
         TextureInitTrackerAction,
     },
     instance::{Adapter, RequestDeviceError},
-    lock::{rank, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    lock::{rank, Mutex, RwLock, RwLockReadGuard},
     pipeline::{self, ColorStateError},
     pool::ResourcePool,
     present,
@@ -289,7 +289,6 @@ pub struct Device {
 }
 
 pub(crate) type FenceReadGuard<'a> = RwLockReadGuard<'a, ManuallyDrop<Box<dyn hal::DynFence>>>;
-pub(crate) type FenceWriteGuard<'a> = RwLockWriteGuard<'a, ManuallyDrop<Box<dyn hal::DynFence>>>;
 
 pub(crate) enum DeferredDestroy {
     TextureViews(WeakVec<TextureView>),

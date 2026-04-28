@@ -24,7 +24,7 @@ use crate::{
         CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
         TransferError,
     },
-    device::{DeviceError, FenceReadGuard, FenceWriteGuard, WaitIdleError},
+    device::{DeviceError, FenceReadGuard, WaitIdleError},
     get_lowest_common_denom,
     global::Global,
     hal_label,
@@ -566,7 +566,7 @@ impl WebGpuError for QueueSubmitError {
 pub(crate) struct PendingSubmission<'a> {
     queue: &'a Queue,
     snatch_guard: SnatchGuard<'a>,
-    fence: FenceWriteGuard<'a>,
+    fence: FenceReadGuard<'a>,
     command_index_guard: RwLockWriteGuard<'a, CommandIndices>,
     // Command buffers to be executed, along with trackers for the resources they use.
     pub executions: Vec<EncoderInFlight>,
@@ -1557,7 +1557,7 @@ impl Queue {
     ) -> (PendingSubmission<'a>, SubmissionIndex) {
         // Lock ordering requires that the fence lock be acquired after the snatch lock and
         // before the command index lock.
-        let fence = self.device.fence.write();
+        let fence = self.device.fence.read();
 
         let mut command_index_guard = self.device.command_indices.write();
         command_index_guard.active_submission_index += 1;
@@ -1600,7 +1600,7 @@ impl Queue {
         let PendingSubmission {
             queue: _,
             snatch_guard,
-            mut fence,
+            fence,
             command_index_guard,
             mut executions,
             mut surface_textures,
@@ -1671,7 +1671,7 @@ impl Queue {
                 self.raw().submit(
                     &hal_command_buffers,
                     &submit_surface_textures,
-                    (fence.as_mut(), submit_index),
+                    (fence.as_ref(), submit_index),
                 )
             }
             .map_err(|e| self.device.handle_hal_error(e))?;
@@ -1692,7 +1692,7 @@ impl Queue {
         self.lock_life().track_submission(submit_index, executions);
 
         Ok(SubmissionResult {
-            fence: RwLockWriteGuard::downgrade(fence),
+            fence,
             snatch_guard,
         })
     }
