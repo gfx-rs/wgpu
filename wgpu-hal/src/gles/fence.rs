@@ -1,20 +1,29 @@
-use alloc::vec::Vec;
+use alloc::{sync::Arc, vec::Vec};
 use core::sync::atomic::Ordering;
+use parking_lot::RwLock;
 
 use glow::HasContext;
 
 use crate::AtomicFenceValue;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug)]
 struct GLFence {
-    sync: glow::Fence,
+    // Since a fence can be `Copy`ed, there can exist some
+    // cases where (without proper synchronisation),
+    // a fence could be destroyed while something else is
+    // still using it. Therefore, while a function is
+    // using this fence, it should read this. (write
+    // should be done when destroying it)
+    //
+    // The arc should not be kept after a function has finished
+    sync: Arc<RwLock<glow::Fence>>,
     value: crate::FenceValue,
 }
 
 #[derive(Debug)]
 pub struct Fence {
     last_completed: AtomicFenceValue,
-    pending: Vec<GLFence>,
+    pending: RwLock<Vec<GLFence>>,
     fence_behavior: wgt::GlFenceBehavior,
 }
 
@@ -29,7 +38,7 @@ impl Fence {
     pub fn new(options: &wgt::GlBackendOptions) -> Self {
         Self {
             last_completed: AtomicFenceValue::new(0),
-            pending: Vec::new(),
+            pending: RwLock::new(Vec::new()),
             fence_behavior: options.fence_behavior,
         }
     }
@@ -46,7 +55,10 @@ impl Fence {
 
         let sync = unsafe { gl.fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0) }
             .map_err(|_| crate::DeviceError::OutOfMemory)?;
-        self.pending.push(GLFence { sync, value });
+        self.pending.write().push(GLFence {
+            sync: Arc::new(RwLock::new(sync)),
+            value,
+        });
 
         Ok(())
     }
@@ -62,12 +74,15 @@ impl Fence {
             return max_value;
         }
 
-        for gl_fence in self.pending.iter() {
+        let pending = self.pending.read();
+
+        for gl_fence in pending.iter() {
+            let fence = gl_fence.sync.read();
             if gl_fence.value <= max_value {
                 // We already know this was good, no need to check again
                 continue;
             }
-            let status = unsafe { gl.get_sync_status(gl_fence.sync) };
+            let status = unsafe { gl.get_sync_status(*fence) };
             if status == glow::SIGNALED {
                 max_value = gl_fence.value;
             } else {
@@ -88,14 +103,21 @@ impl Fence {
         }
 
         let latest = self.get_latest(gl);
-        for &gl_fence in self.pending.iter() {
+        let mut pending = self.pending.write();
+        for gl_fence in pending.iter() {
+            // We don't need to keep around this lock until after the retain - we need to make
+            // sure nothing is using it by writing to it, but any new references must come
+            // from `self.pending`, which is write-locked, so nothing else can take a
+            // copy of this value
+            let sync = *gl_fence.sync.write();
+
             if gl_fence.value <= latest {
                 unsafe {
-                    gl.delete_sync(gl_fence.sync);
+                    gl.delete_sync(sync);
                 }
             }
         }
-        self.pending.retain(|&gl_fence| gl_fence.value > latest);
+        pending.retain(|gl_fence| gl_fence.value > latest);
     }
 
     pub fn wait(
@@ -115,9 +137,10 @@ impl Fence {
             return Ok(true);
         }
 
+        let pending = self.pending.read();
+
         // Find a matching fence
-        let gl_fence = self
-            .pending
+        let gl_fence = pending
             .iter()
             // Greater or equal as an abundance of caution, but there should be one fence per value
             .find(|gl_fence| gl_fence.value >= wait_value);
@@ -130,13 +153,19 @@ impl Fence {
         // We should have found a fence with the exact value.
         debug_assert_eq!(gl_fence.value, wait_value);
 
+        let sync = gl_fence.sync.clone();
+
+        drop(pending);
+
         let status = unsafe {
             gl.client_wait_sync(
-                gl_fence.sync,
+                *sync.read(),
                 glow::SYNC_FLUSH_COMMANDS_BIT,
                 timeout_ns.min(i32::MAX as u32) as i32,
             )
         };
+
+        drop(sync);
 
         let signalled = match status {
             glow::ALREADY_SIGNALED | glow::CONDITION_SATISFIED => true,
@@ -159,9 +188,13 @@ impl Fence {
             return;
         }
 
-        for gl_fence in self.pending {
+        for gl_fence in self.pending.into_inner() {
             unsafe {
-                gl.delete_sync(gl_fence.sync);
+                gl.delete_sync(
+                    Arc::into_inner(gl_fence.sync)
+                        .expect("A function has failed to drop all its references to this")
+                        .into_inner(),
+                );
             }
         }
     }
