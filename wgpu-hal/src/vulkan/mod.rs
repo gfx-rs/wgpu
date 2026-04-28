@@ -1220,7 +1220,7 @@ impl Fence {
     ///
     /// [`FencePool`]: Fence::FencePool
     /// [`Queue::submit`]: crate::Queue::submit
-    fn maintain(&mut self, device: &ash::Device) -> Result<(), crate::DeviceError> {
+    fn maintain(&self, device: &ash::Device) -> Result<(), crate::DeviceError> {
         match *self {
             Self::TimelineSemaphore(_) => {}
             Self::FencePool(ref pool) => {
@@ -1267,7 +1267,7 @@ impl crate::Queue for Queue {
         &self,
         command_buffers: &[&CommandBuffer],
         surface_textures: &[&SurfaceTexture],
-        (signal_fence, signal_value): (&mut Fence, crate::FenceValue),
+        (signal_fence, signal_value): (&Fence, crate::FenceValue),
     ) -> Result<(), crate::DeviceError> {
         let mut fence_raw = vk::Fence::null();
 

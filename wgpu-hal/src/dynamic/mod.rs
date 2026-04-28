@@ -57,10 +57,6 @@ trait DynResourceExt {
     ///
     /// - Panics if `self` is not downcastable to `T`.
     fn expect_downcast_ref<T: DynResource>(&self) -> &T;
-    /// # Panics
-    ///
-    /// - Panics if `self` is not downcastable to `T`.
-    fn expect_downcast_mut<T: DynResource>(&mut self) -> &mut T;
 
     /// Unboxes a `Box<dyn DynResource>` to a concrete type.
     ///
@@ -74,12 +70,6 @@ impl<R: DynResource + ?Sized> DynResourceExt for R {
     fn expect_downcast_ref<'a, T: DynResource>(&'a self) -> &'a T {
         self.as_any()
             .downcast_ref()
-            .expect("Resource doesn't have the expected backend type.")
-    }
-
-    fn expect_downcast_mut<'a, T: DynResource>(&'a mut self) -> &'a mut T {
-        self.as_any_mut()
-            .downcast_mut()
             .expect("Resource doesn't have the expected backend type.")
     }
 

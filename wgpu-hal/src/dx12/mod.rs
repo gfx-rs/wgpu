@@ -1670,7 +1670,7 @@ impl crate::Queue for Queue {
         &self,
         command_buffers: &[&CommandBuffer],
         _surface_textures: &[&Texture],
-        (signal_fence, signal_value): (&mut Fence, crate::FenceValue),
+        (signal_fence, signal_value): (&Fence, crate::FenceValue),
     ) -> Result<(), crate::DeviceError> {
         let mut temp_lists = self.temp_lists.lock();
         temp_lists.clear();

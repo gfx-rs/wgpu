@@ -262,7 +262,7 @@ impl crate::Queue for Context {
         &self,
         command_buffers: &[&CommandBuffer],
         surface_textures: &[&Resource],
-        (fence, fence_value): (&mut Fence, crate::FenceValue),
+        (fence, fence_value): (&Fence, crate::FenceValue),
     ) -> DeviceResult<()> {
         // All commands are executed synchronously.
         for cb in command_buffers {

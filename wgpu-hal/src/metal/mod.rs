@@ -531,7 +531,7 @@ impl crate::Queue for Queue {
         &self,
         command_buffers: &[&CommandBuffer],
         _surface_textures: &[&SurfaceTexture],
-        (signal_fence, signal_value): (&mut Fence, crate::FenceValue),
+        (signal_fence, signal_value): (&Fence, crate::FenceValue),
     ) -> Result<(), crate::DeviceError> {
         autoreleasepool(|_| {
             let extra_command_buffer = {
@@ -1049,7 +1049,7 @@ impl Fence {
         max_value
     }
 
-    fn maintain(&mut self) {
+    fn maintain(&self) {
         let latest = self.get_latest();
         self.pending_command_buffers
             .write()

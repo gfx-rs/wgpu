@@ -1243,7 +1243,7 @@ pub trait Queue: WasmNotSendSync {
         &self,
         command_buffers: &[&<Self::A as Api>::CommandBuffer],
         surface_textures: &[&<Self::A as Api>::SurfaceTexture],
-        signal_fence: (&mut <Self::A as Api>::Fence, FenceValue),
+        signal_fence: (&<Self::A as Api>::Fence, FenceValue),
     ) -> Result<(), DeviceError>;
     /// Present a surface texture to the screen.
     ///

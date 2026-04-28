@@ -44,12 +44,12 @@ impl Fence {
     }
 
     pub fn signal(
-        &mut self,
+        &self,
         gl: &glow::Context,
         value: crate::FenceValue,
     ) -> Result<(), crate::DeviceError> {
         if self.fence_behavior.is_auto_finish() {
-            *self.last_completed.get_mut() = value;
+            self.last_completed.store(value, Ordering::Release);
             return Ok(());
         }
 
@@ -97,7 +97,7 @@ impl Fence {
         max_value
     }
 
-    pub fn maintain(&mut self, gl: &glow::Context) {
+    pub fn maintain(&self, gl: &glow::Context) {
         if self.fence_behavior.is_auto_finish() {
             return;
         }
