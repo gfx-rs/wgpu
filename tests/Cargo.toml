@@ -116,3 +116,6 @@ web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "Blob"] }
 [lints.clippy]
 bool_assert_comparison = "allow"
 disallowed_types = "allow"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wasm_test)'] }

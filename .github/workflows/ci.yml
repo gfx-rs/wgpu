@@ -593,15 +593,9 @@ jobs:
         with:
           tool: cargo-nextest
 
-      - name: Install playwright and npm dependencies
-        run: |
-          cd tests/wasm/runner
-          npm install
-          npx playwright install chromium --with-deps
-
       - name: Execute tests
         run: |
-          cargo xtask test-wasm --headless
+          cargo xtask test-wasm
 
   gpu-test:
     # runtime is normally 5-15 minutes

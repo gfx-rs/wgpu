@@ -69,7 +69,7 @@ Commands:
 
     --list      List all of the tests and their executables without running them
     --retries   Number of times to retry failing tests
-    --headless  Open the browser in headless mode
+    --show      Show each test's browser window instead of running headless.
     --debug     Instead of running tests, just start the test server and keep it
                 running. Tests can then be debugged individually in a browser by visiting
                 the test URL with a test name, for example:

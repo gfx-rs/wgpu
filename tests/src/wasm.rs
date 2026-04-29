@@ -1,5 +1,4 @@
 #![cfg(target_arch = "wasm32")]
-
 use crate::{
     execute_test,
     init::{init_logger, WebDisplayHandle},
@@ -9,11 +8,9 @@ use crate::{
 };
 
 use exhaust::Exhaust;
-#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 use wgpu::{Backends, TextureFormat};
 
-#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(inline_js = "
   export function test_success() {
     window.sessionStorage.test_success = `true`;
@@ -23,6 +20,11 @@ use wgpu::{Backends, TextureFormat};
     window.sessionStorage.test_failure = message;
     console.error(message);
   }
+
+  export function gpu_report(report) {
+    window.sessionStorage.gpu_report = report;
+    console.log(report);
+  }
 ")]
 
 extern "C" {
@@ -31,10 +33,13 @@ extern "C" {
 
     #[wasm_bindgen()]
     fn test_failure(message: String);
+
+    #[wasm_bindgen()]
+    fn gpu_report(report: String);
 }
 
 #[wasm_bindgen]
-pub async fn gpu_report() -> String {
+pub async fn run_gpu_report() {
     std::panic::set_hook(Box::new(|e| {
         test_failure(format!("{}", e));
     }));
@@ -84,7 +89,7 @@ pub async fn gpu_report() -> String {
         devices: vec![report],
     };
 
-    serde_json::to_string_pretty(&report).expect("Failed to generate gpu report")
+    gpu_report(serde_json::to_string_pretty(&report).expect("Failed to generate gpu report"));
 }
 
 pub fn main(initializers: Vec<GpuTestInitializer>, test_name: String) {
