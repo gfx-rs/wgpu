@@ -126,7 +126,9 @@ impl Queue {
         texture: &Arc<Texture>,
     ) -> Result<(), DeviceError> {
         let snatch_guard = self.device.snatchable_lock.read();
-        let (mut submission, _index) = self.allocate_submission(snatch_guard);
+        let mut submission = self
+            .allocate_submission(snatch_guard)
+            .map_err(|(_index, e)| e)?;
         let device = &self.device;
 
         // If the texture is uninitialized it needs to be cleared before presenting
@@ -1253,7 +1255,9 @@ impl Queue {
         buffer: &Arc<Buffer>,
         snatch_guard: SnatchGuard,
     ) -> Result<(), BufferAccessError> {
-        let (submission, _index) = self.allocate_submission(snatch_guard);
+        let submission = self
+            .allocate_submission(snatch_guard)
+            .map_err(|(_index, e)| e)?;
 
         let pending_writes = self.pending_writes.lock();
         if !pending_writes.contains_buffer(buffer) {
@@ -1267,7 +1271,10 @@ impl Queue {
 
     fn flush_pending_writes(&self) -> Result<Option<SubmissionIndex>, DeviceError> {
         let snatch_guard = self.device.snatchable_lock.read();
-        let (submission, submit_index) = self.allocate_submission(snatch_guard);
+        let submission = self
+            .allocate_submission(snatch_guard)
+            .map_err(|(_index, e)| e)?;
+        let submit_index = submission.index;
         let pending_writes = self.pending_writes.lock();
         if pending_writes.is_recording {
             submission.submit(pending_writes)?;
@@ -1312,13 +1319,12 @@ impl Queue {
         api_log!("Queue::submit");
 
         let snatch_guard = self.device.snatchable_lock.read();
-        let (mut submission, submit_index) = self.allocate_submission(snatch_guard);
+        let mut submission = self
+            .allocate_submission(snatch_guard)
+            .map_err(|(index, e)| (index, e.into()))?;
+        let submit_index = submission.index;
 
         let res = 'error: {
-            if let Err(e) = self.device.check_is_valid() {
-                break 'error Err(e.into());
-            }
-
             let mut used_surface_textures = track::TextureUsageScope::default();
 
             {
@@ -1554,7 +1560,7 @@ impl Queue {
     fn allocate_submission<'a>(
         &'a self,
         snatch_guard: SnatchGuard<'a>,
-    ) -> (PendingSubmission<'a>, SubmissionIndex) {
+    ) -> Result<PendingSubmission<'a>, (SubmissionIndex, DeviceError)> {
         // Lock ordering requires that the fence lock be acquired after the snatch lock and
         // before the command index lock.
         let fence = self.device.fence.write();
@@ -1562,6 +1568,10 @@ impl Queue {
         let mut command_index_guard = self.device.command_indices.write();
         command_index_guard.active_submission_index += 1;
         let index = command_index_guard.active_submission_index;
+
+        if let Err(e) = self.device.check_is_valid() {
+            return Err((index, e));
+        }
 
         let submission = PendingSubmission {
             queue: self,
@@ -1573,7 +1583,7 @@ impl Queue {
             index,
         };
 
-        (submission, index)
+        Ok(submission)
     }
 
     /// Finalize and submit a [`PendingSubmission`] that was returned by
