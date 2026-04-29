@@ -248,6 +248,14 @@ impl BackendOptions {
 /// Part of [`BackendOptions`].
 #[derive(Clone, Debug, Default)]
 pub struct GlBackendOptions {
+    /// Which EGL client API to use when creating the context.
+    ///
+    /// Defaults to [`GlClientApi::Auto`], which prefers desktop OpenGL when
+    /// the EGL display advertises it and falls back to OpenGL ES otherwise.
+    /// Set to [`GlClientApi::OpenGlEs`] to force OpenGL ES even on machines
+    /// that also support desktop OpenGL (required for GLES-only features such
+    /// as `EXTERNAL_TEXTURE`).
+    pub client_api: GlClientApi,
     /// Which OpenGL ES 3 minor version to request, if using OpenGL ES.
     pub gles_minor_version: Gles3MinorVersion,
     /// Behavior of OpenGL fences. Affects how `on_completed_work_done` and `device.poll` behave.
@@ -277,6 +285,7 @@ impl GlBackendOptions {
         let gles_minor_version = Gles3MinorVersion::from_env().unwrap_or_default();
         let debug_fns = GlDebugFns::from_env().unwrap_or_default();
         Self {
+            client_api: GlClientApi::Auto,
             gles_minor_version,
             fence_behavior: GlFenceBehavior::Normal,
             debug_fns,
@@ -292,6 +301,7 @@ impl GlBackendOptions {
         let fence_behavior = self.fence_behavior.with_env();
         let debug_fns = self.debug_fns.with_env();
         Self {
+            client_api: self.client_api,
             gles_minor_version,
             fence_behavior,
             debug_fns,
@@ -1017,4 +1027,22 @@ impl GlFenceBehavior {
             self
         }
     }
+}
+
+/// Selects which EGL client API is used when creating the OpenGL context.
+///
+/// Used in [`GlBackendOptions::client_api`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GlClientApi {
+    /// Prefer desktop OpenGL when the EGL display advertises it; fall back to
+    /// OpenGL ES otherwise. This is the default behaviour.
+    #[default]
+    Auto,
+    /// Always request a desktop OpenGL context.
+    ///
+    /// Falls back to OpenGL ES if the EGL display does not support desktop GL.
+    OpenGl,
+    /// Always request an OpenGL ES context, even when desktop OpenGL is
+    /// available.
+    OpenGlEs,
 }
