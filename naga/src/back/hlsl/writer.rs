@@ -3068,6 +3068,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             crate::Literal::F64(value) => write!(self.out, "{value:?}L")?,
             crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
             crate::Literal::F16(value) => write!(self.out, "{value:?}h")?,
+            crate::Literal::U16(value) => write!(self.out, "uint16_t({value})")?,
+            crate::Literal::I16(value) => write!(self.out, "int16_t({value})")?,
             crate::Literal::U32(value) => write!(self.out, "{value}u")?,
             // `-2147483648` is parsed by some compilers as unary negation of
             // positive 2147483648, which is too large for an int, causing
@@ -3863,6 +3865,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 if inner.scalar_kind() == Some(ScalarKind::Float)
                     && (kind == ScalarKind::Sint || kind == ScalarKind::Uint)
                     && convert.is_some()
+                    && matches!(convert, Some(4) | Some(8))
                 {
                     // Use helper functions for float to int casts in order to
                     // avoid undefined behaviour when value is out of range for
@@ -3916,6 +3919,24 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         None => {
                             if inner.scalar_width() == Some(8) {
                                 false
+                            } else if inner.scalar_width() == Some(2) {
+                                // HLSL's asint()/asuint() only work on 32-bit types.
+                                // For 16-bit bitcasts, use type constructor instead.
+                                let dst_scalar = Scalar { kind, width: 2 };
+                                match *inner {
+                                    TypeInner::Vector { size, .. } => {
+                                        write!(
+                                            self.out,
+                                            "{}{}(",
+                                            dst_scalar.to_hlsl_str()?,
+                                            common::vector_size_str(size)
+                                        )?;
+                                    }
+                                    _ => {
+                                        write!(self.out, "{}(", dst_scalar.to_hlsl_str()?)?;
+                                    }
+                                };
+                                true
                             } else {
                                 write!(self.out, "{}(", kind.to_hlsl_cast(),)?;
                                 true

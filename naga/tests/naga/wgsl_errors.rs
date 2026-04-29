@@ -1415,6 +1415,147 @@ fn float16_capability_and_enable() {
 }
 
 #[test]
+fn int16_capability_and_enable() {
+    // A zero value expression
+    check_extension_validation! {
+        Capabilities::SHADER_INT16,
+        r#"fn foo() {
+            let a = u16();
+        }
+        "#,
+        r#"error: the `wgpu_int16` enable extension is not enabled
+  ┌─ wgsl:2:21
+  │
+2 │             let a = u16();
+  │                     ^^^ the `wgpu_int16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int16;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "SHADER_INT16", .. }),
+            ..
+        })
+    }
+
+    // Literals (via constructor)
+    check_extension_validation! {
+        Capabilities::SHADER_INT16,
+        r#"fn foo() {
+            let a = u16(1);
+        }
+        "#,
+        r#"error: the `wgpu_int16` enable extension is not enabled
+  ┌─ wgsl:2:21
+  │
+2 │             let a = u16(1);
+  │                     ^^^ the `wgpu_int16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int16;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::Expression {
+                source: naga::valid::ExpressionError::Literal(
+                    naga::valid::LiteralError::Width(
+                        naga::valid::WidthError::MissingCapability { flag: "SHADER_INT16", .. }
+                    )
+                ),
+                ..
+            },
+            ..
+        })
+    }
+
+    // `u16`-typed declarations
+    check_extension_validation! {
+        Capabilities::SHADER_INT16,
+        "var input: u16;",
+        r#"error: the `wgpu_int16` enable extension is not enabled
+  ┌─ wgsl:1:12
+  │
+1 │ var input: u16;
+  │            ^^^ the `wgpu_int16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int16;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "SHADER_INT16", .. }),
+            ..
+        })
+    }
+
+    // `i16`-typed declarations
+    check_extension_validation! {
+        Capabilities::SHADER_INT16,
+        "var input: i16;",
+        r#"error: the `wgpu_int16` enable extension is not enabled
+  ┌─ wgsl:1:12
+  │
+1 │ var input: i16;
+  │            ^^^ the `wgpu_int16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int16;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "SHADER_INT16", .. }),
+            ..
+        })
+    }
+}
+
+#[test]
+fn int16_in_atomic() {
+    check_validation! {
+        "enable wgpu_int16; @group(0) @binding(0) var<storage> a: atomic<u16>;",
+        "enable wgpu_int16; @group(0) @binding(0) var<storage> a: atomic<i16>;":
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::InvalidAtomicWidth(_, 2),
+            ..
+        }),
+        naga::valid::Capabilities::SHADER_INT16
+    }
+}
+
+#[test]
+fn int16_subgroup_bitwise_rejected() {
+    check_validation! {
+        "enable wgpu_int16; @compute @workgroup_size(1) fn main() { var v = i16(1); v = subgroupAnd(v); }",
+        "enable wgpu_int16; @compute @workgroup_size(1) fn main() { var v = i16(1); v = subgroupOr(v); }",
+        "enable wgpu_int16; @compute @workgroup_size(1) fn main() { var v = i16(1); v = subgroupXor(v); }",
+        "enable wgpu_int16; @compute @workgroup_size(1) fn main() { var v = u16(1); v = subgroupAnd(v); }":
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::InvalidSubgroup(
+                    naga::valid::SubgroupError::InvalidOperand(_),
+                ),
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::SHADER_INT16 | naga::valid::Capabilities::SUBGROUP
+    }
+}
+
+#[test]
+fn int16_in_immediate() {
+    check_validation! {
+        "enable wgpu_int16; var<immediate> input: i16;",
+        "enable wgpu_int16; var<immediate> input: u16;",
+        "enable wgpu_int16; var<immediate> input: vec2<i16>;",
+        "enable wgpu_int16; struct S { a: u16 }; var<immediate> input: S;":
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::InvalidImmediateType(
+                naga::valid::ImmediateError::InvalidScalar(_)
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::SHADER_INT16 | naga::valid::Capabilities::IMMEDIATES
+    }
+}
+
+#[test]
 fn float16_in_immediate() {
     check_validation! {
         "enable f16; var<immediate> input: f16;",

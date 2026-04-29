@@ -302,6 +302,8 @@ impl TryToWgsl for crate::Scalar {
             Scalar::F16 => "f16",
             Scalar::F32 => "f32",
             Scalar::F64 => "f64",
+            Scalar::I16 => "i16",
+            Scalar::U16 => "u16",
             Scalar::I32 => "i32",
             Scalar::U32 => "u32",
             Scalar::I64 => "i64",

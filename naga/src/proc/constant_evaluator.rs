@@ -285,6 +285,8 @@ enum LiteralVector {
     F64(ArrayVec<f64, { crate::VectorSize::MAX }>),
     F32(ArrayVec<f32, { crate::VectorSize::MAX }>),
     F16(ArrayVec<f16, { crate::VectorSize::MAX }>),
+    U16(ArrayVec<u16, { crate::VectorSize::MAX }>),
+    I16(ArrayVec<i16, { crate::VectorSize::MAX }>),
     U32(ArrayVec<u32, { crate::VectorSize::MAX }>),
     I32(ArrayVec<i32, { crate::VectorSize::MAX }>),
     U64(ArrayVec<u64, { crate::VectorSize::MAX }>),
@@ -301,6 +303,8 @@ impl LiteralVector {
             LiteralVector::F64(ref v) => v.len(),
             LiteralVector::F32(ref v) => v.len(),
             LiteralVector::F16(ref v) => v.len(),
+            LiteralVector::U16(ref v) => v.len(),
+            LiteralVector::I16(ref v) => v.len(),
             LiteralVector::U32(ref v) => v.len(),
             LiteralVector::I32(ref v) => v.len(),
             LiteralVector::U64(ref v) => v.len(),
@@ -321,6 +325,8 @@ impl LiteralVector {
         match literal {
             Literal::F64(e) => Self::F64(arrayvec_of(e)),
             Literal::F32(e) => Self::F32(arrayvec_of(e)),
+            Literal::U16(e) => Self::U16(arrayvec_of(e)),
+            Literal::I16(e) => Self::I16(arrayvec_of(e)),
             Literal::U32(e) => Self::U32(arrayvec_of(e)),
             Literal::I32(e) => Self::I32(arrayvec_of(e)),
             Literal::U64(e) => Self::U64(arrayvec_of(e)),
@@ -354,6 +360,8 @@ impl LiteralVector {
             }};
         }
         Ok(match components[0] {
+            Literal::I16(_) => compose_literals!(components, I16, I16),
+            Literal::U16(_) => compose_literals!(components, U16, U16),
             Literal::I32(_) => compose_literals!(components, I32, I32),
             Literal::U32(_) => compose_literals!(components, U32, U32),
             Literal::I64(_) => compose_literals!(components, I64, I64),
@@ -385,6 +393,8 @@ impl LiteralVector {
             LiteralVector::F64(ref v) => decompose_literals!(v, F64),
             LiteralVector::F32(ref v) => decompose_literals!(v, F32),
             LiteralVector::F16(ref v) => decompose_literals!(v, F16),
+            LiteralVector::U16(ref v) => decompose_literals!(v, U16),
+            LiteralVector::I16(ref v) => decompose_literals!(v, I16),
             LiteralVector::U32(ref v) => decompose_literals!(v, U32),
             LiteralVector::I32(ref v) => decompose_literals!(v, I32),
             LiteralVector::U64(ref v) => decompose_literals!(v, U64),
@@ -2385,7 +2395,39 @@ impl<'a> ConstantEvaluator<'a> {
         let expr = match self.expressions[expr] {
             Expression::Literal(literal) => {
                 let literal = match target {
+                    Sc::I16 => Literal::I16(match literal {
+                        Literal::I16(v) => v,
+                        Literal::U16(v) => v as i16,
+                        Literal::I32(v) => v as i16,
+                        Literal::U32(v) => v as i16,
+                        Literal::F32(v) => v.clamp(i16::MIN as f32, i16::MAX as f32) as i16,
+                        Literal::F16(v) => {
+                            f16::to_f32(v).clamp(i16::MIN as f32, i16::MAX as f32) as i16
+                        }
+                        Literal::Bool(v) => v as i16,
+                        Literal::F64(_) | Literal::I64(_) | Literal::U64(_) => {
+                            return make_error();
+                        }
+                        Literal::AbstractInt(v) => v as i16,
+                        Literal::AbstractFloat(v) => v as i16,
+                    }),
+                    Sc::U16 => Literal::U16(match literal {
+                        Literal::I16(v) => v as u16,
+                        Literal::U16(v) => v,
+                        Literal::I32(v) => v as u16,
+                        Literal::U32(v) => v as u16,
+                        Literal::F32(v) => v.clamp(u16::MIN as f32, u16::MAX as f32) as u16,
+                        Literal::F16(v) => f16::to_u16(&v.max(f16::ZERO)).unwrap(),
+                        Literal::Bool(v) => v as u16,
+                        Literal::F64(_) | Literal::I64(_) | Literal::U64(_) => {
+                            return make_error();
+                        }
+                        Literal::AbstractInt(v) => v as u16,
+                        Literal::AbstractFloat(v) => v as u16,
+                    }),
                     Sc::I32 => Literal::I32(match literal {
+                        Literal::I16(v) => v as i32,
+                        Literal::U16(v) => v as i32,
                         Literal::I32(v) => v,
                         Literal::U32(v) => v as i32,
                         Literal::F32(v) => v.clamp(i32::min_float(), i32::max_float()) as i32,
@@ -2398,6 +2440,8 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractFloat(v) => i32::try_from_abstract(v)?,
                     }),
                     Sc::U32 => Literal::U32(match literal {
+                        Literal::I16(v) => v as u32,
+                        Literal::U16(v) => v as u32,
                         Literal::I32(v) => v as u32,
                         Literal::U32(v) => v,
                         Literal::F32(v) => v.clamp(u32::min_float(), u32::max_float()) as u32,
@@ -2411,6 +2455,8 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractFloat(v) => u32::try_from_abstract(v)?,
                     }),
                     Sc::I64 => Literal::I64(match literal {
+                        Literal::I16(v) => v as i64,
+                        Literal::U16(v) => v as i64,
                         Literal::I32(v) => v as i64,
                         Literal::U32(v) => v as i64,
                         Literal::F32(v) => v.clamp(i64::min_float(), i64::max_float()) as i64,
@@ -2423,6 +2469,8 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractFloat(v) => i64::try_from_abstract(v)?,
                     }),
                     Sc::U64 => Literal::U64(match literal {
+                        Literal::I16(v) => v as u64,
+                        Literal::U16(v) => v as u64,
                         Literal::I32(v) => v as u64,
                         Literal::U32(v) => v as u64,
                         Literal::F32(v) => v.clamp(u64::min_float(), u64::max_float()) as u64,
@@ -2440,6 +2488,8 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F32(v) => f16::from_f32(v),
                         Literal::F64(v) => f16::from_f64(v),
                         Literal::Bool(v) => f16::from_u32(v as u32).unwrap(),
+                        Literal::I16(v) => f16::from_f32(v as f32),
+                        Literal::U16(v) => f16::from_f32(v as f32),
                         Literal::I64(v) => f16::from_i64(v).unwrap(),
                         Literal::U64(v) => f16::from_u64(v).unwrap(),
                         Literal::I32(v) => f16::from_i32(v).unwrap(),
@@ -2448,6 +2498,8 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractInt(v) => f16::try_from_abstract(v)?,
                     }),
                     Sc::F32 => Literal::F32(match literal {
+                        Literal::I16(v) => v as f32,
+                        Literal::U16(v) => v as f32,
                         Literal::I32(v) => v as f32,
                         Literal::U32(v) => v as f32,
                         Literal::F32(v) => v,
@@ -2460,6 +2512,8 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractFloat(v) => f32::try_from_abstract(v)?,
                     }),
                     Sc::F64 => Literal::F64(match literal {
+                        Literal::I16(v) => v as f64,
+                        Literal::U16(v) => v as f64,
                         Literal::I32(v) => v as f64,
                         Literal::U32(v) => v as f64,
                         Literal::F16(v) => f16::to_f64(v),
@@ -2471,6 +2525,8 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractFloat(v) => f64::try_from_abstract(v)?,
                     }),
                     Sc::BOOL => Literal::Bool(match literal {
+                        Literal::I16(v) => v != 0,
+                        Literal::U16(v) => v != 0,
                         Literal::I32(v) => v != 0,
                         Literal::U32(v) => v != 0,
                         Literal::F32(v) => v != 0.0,
@@ -2630,6 +2686,7 @@ impl<'a> ConstantEvaluator<'a> {
         let expr = match self.expressions[expr] {
             Expression::Literal(value) => Expression::Literal(match op {
                 UnaryOperator::Negate => match value {
+                    Literal::I16(v) => Literal::I16(v.wrapping_neg()),
                     Literal::I32(v) => Literal::I32(v.wrapping_neg()),
                     Literal::I64(v) => Literal::I64(v.wrapping_neg()),
                     Literal::F32(v) => Literal::F32(-v),
@@ -2644,8 +2701,10 @@ impl<'a> ConstantEvaluator<'a> {
                     _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
                 },
                 UnaryOperator::BitwiseNot => match value {
+                    Literal::I16(v) => Literal::I16(!v),
                     Literal::I32(v) => Literal::I32(!v),
                     Literal::I64(v) => Literal::I64(!v),
+                    Literal::U16(v) => Literal::U16(!v),
                     Literal::U32(v) => Literal::U32(!v),
                     Literal::U64(v) => Literal::U64(!v),
                     Literal::AbstractInt(v) => Literal::AbstractInt(!v),
@@ -2718,6 +2777,69 @@ impl<'a> ConstantEvaluator<'a> {
                     BinaryOperator::GreaterEqual => Literal::Bool(left_value >= right_value),
 
                     _ => match (left_value, right_value) {
+                        (Literal::I16(a), Literal::I16(b)) => Literal::I16(match op {
+                            BinaryOperator::Add => a.wrapping_add(b),
+                            BinaryOperator::Subtract => a.wrapping_sub(b),
+                            BinaryOperator::Multiply => a.wrapping_mul(b),
+                            BinaryOperator::Divide => a.checked_div(b).ok_or_else(|| {
+                                if b == 0 {
+                                    ConstantEvaluatorError::DivisionByZero
+                                } else {
+                                    ConstantEvaluatorError::Overflow("division".into())
+                                }
+                            })?,
+                            BinaryOperator::Modulo => a.checked_rem(b).ok_or_else(|| {
+                                if b == 0 {
+                                    ConstantEvaluatorError::RemainderByZero
+                                } else {
+                                    ConstantEvaluatorError::Overflow("remainder".into())
+                                }
+                            })?,
+                            BinaryOperator::And => a & b,
+                            BinaryOperator::ExclusiveOr => a ^ b,
+                            BinaryOperator::InclusiveOr => a | b,
+                            _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                        }),
+                        (Literal::I16(a), Literal::U32(b)) => Literal::I16(match op {
+                            BinaryOperator::ShiftLeft => {
+                                if (if a.is_negative() { !a } else { a }).leading_zeros() <= b {
+                                    return Err(ConstantEvaluatorError::Overflow("<<".to_string()));
+                                }
+                                a.checked_shl(b)
+                                    .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?
+                            }
+                            BinaryOperator::ShiftRight => a
+                                .checked_shr(b)
+                                .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
+                            _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                        }),
+                        (Literal::U16(a), Literal::U16(b)) => Literal::U16(match op {
+                            BinaryOperator::Add => a.wrapping_add(b),
+                            BinaryOperator::Subtract => a.wrapping_sub(b),
+                            BinaryOperator::Multiply => a.wrapping_mul(b),
+                            BinaryOperator::Divide => a
+                                .checked_div(b)
+                                .ok_or(ConstantEvaluatorError::DivisionByZero)?,
+                            BinaryOperator::Modulo => a
+                                .checked_rem(b)
+                                .ok_or(ConstantEvaluatorError::RemainderByZero)?,
+                            BinaryOperator::And => a & b,
+                            BinaryOperator::ExclusiveOr => a ^ b,
+                            BinaryOperator::InclusiveOr => a | b,
+                            _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                        }),
+                        (Literal::U16(a), Literal::U32(b)) => Literal::U16(match op {
+                            BinaryOperator::ShiftLeft => a
+                                .checked_mul(
+                                    1u16.checked_shl(b)
+                                        .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
+                                )
+                                .ok_or(ConstantEvaluatorError::Overflow("<<".to_string()))?,
+                            BinaryOperator::ShiftRight => a
+                                .checked_shr(b)
+                                .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
+                            _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                        }),
                         (Literal::I32(a), Literal::I32(b)) => Literal::I32(match op {
                             BinaryOperator::Add => a.wrapping_add(b),
                             BinaryOperator::Subtract => a.wrapping_sub(b),

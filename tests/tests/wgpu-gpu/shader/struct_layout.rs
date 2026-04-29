@@ -15,6 +15,8 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         IMMEDIATES_INPUT_INT64,
         UNIFORM_INPUT_F16,
         STORAGE_INPUT_F16,
+        UNIFORM_INPUT_I16,
+        STORAGE_INPUT_I16,
     ]);
 }
 
@@ -782,6 +784,38 @@ static STORAGE_INPUT_F16: GpuTestConfiguration = GpuTestConfiguration::new()
         )
     });
 
+#[gpu_test]
+static UNIFORM_INPUT_I16: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::SHADER_I16)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Uniform,
+            create_int16_struct_layout_test(),
+        )
+    });
+
+#[gpu_test]
+static STORAGE_INPUT_I16: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::SHADER_I16)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Storage,
+            create_int16_struct_layout_test(),
+        )
+    });
+
 fn create_16bit_struct_layout_test() -> Vec<ShaderTest> {
     let mut tests = Vec::new();
 
@@ -911,5 +945,84 @@ fn create_16bit_struct_layout_test() -> Vec<ShaderTest> {
     tests
         .into_iter()
         .map(|test| test.header("enable f16;".into()))
+        .collect()
+}
+
+fn create_int16_struct_layout_test() -> Vec<ShaderTest> {
+    let mut tests = Vec::new();
+
+    // i16/u16 alignment tests (same layout rules as f16 — 2-byte alignment)
+    {
+        let members =
+            "scalar1: u16, scalar2: i16, v3: vec3<u16>, tuck_in: i16, scalar4: u16, larger: u32";
+        let direct = String::from(
+            "\
+            output[0] = u32(input.scalar1);
+            output[1] = u32(input.scalar2);
+            output[2] = u32(input.v3.x);
+            output[3] = u32(input.v3.y);
+            output[4] = u32(input.v3.z);
+            output[5] = u32(input.tuck_in);
+            output[6] = u32(input.scalar4);
+            output[7] = u32(extractBits(input.larger, 0u, 16u));
+            output[8] = u32(extractBits(input.larger, 16u, 16u));
+        ",
+        );
+
+        tests.push(ShaderTest::new(
+            "i16/u16 alignment".into(),
+            members.into(),
+            direct,
+            &[
+                0_u16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+                // Extra values to help debug if the test fails.
+                12, 13, 14, 15, 16, 17, 18, 19, 20,
+            ],
+            &[
+                0, // scalar1
+                1, // scalar2
+                4, 5, 6,  // v3
+                7,  // tuck_in
+                8,  // scalar4
+                10, // larger[0..16]
+                11, // larger[16..32]
+            ],
+        ));
+    }
+
+    // vec2/vec3/vec4 alignment
+    {
+        let members = "v2: vec2<u16>, v3: vec3<i16>, v4: vec4<u16>";
+        let direct = String::from(
+            "\
+            output[0] = u32(input.v2.x);
+            output[1] = u32(input.v2.y);
+            output[2] = u32(input.v3.x);
+            output[3] = u32(input.v3.y);
+            output[4] = u32(input.v3.z);
+            output[5] = u32(input.v4.x);
+            output[6] = u32(input.v4.y);
+            output[7] = u32(input.v4.z);
+            output[8] = u32(input.v4.w);
+        ",
+        );
+
+        tests.push(ShaderTest::new(
+            "i16/u16 vector alignment".into(),
+            members.into(),
+            direct,
+            &(0..20).collect::<Vec<u16>>(),
+            &[
+                0, 1, // v2
+                4, 5, 6, // v3
+                8, 9, 10, 11, // v4
+            ],
+        ));
+    }
+
+    // Insert `enable wgpu_int16;` header
+    tests
+        .into_iter()
+        .map(|test| test.header("enable wgpu_int16;".into()))
         .collect()
 }

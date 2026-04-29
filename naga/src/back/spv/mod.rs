@@ -1206,6 +1206,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::TEXTURE_INT64_ATOMIC
         | Caps::RAY_HIT_VERTEX_POSITION
         | Caps::SHADER_FLOAT16
+        | Caps::SHADER_INT16
         // No TEXTURE_EXTERNAL
         | Caps::SHADER_FLOAT16_IN_FLOAT32
         | Caps::SHADER_BARYCENTRICS

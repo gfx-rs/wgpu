@@ -1630,6 +1630,7 @@ impl<W: Write> super::Writer<'_, W> {
                         match scalar.kind {
                             ScalarKind::Sint => {
                                 let min_val = match scalar.width {
+                                    2 => crate::Literal::I16(i16::MIN),
                                     4 => crate::Literal::I32(i32::MIN),
                                     8 => crate::Literal::I64(i64::MIN),
                                     _ => {
@@ -1694,6 +1695,7 @@ impl<W: Write> super::Writer<'_, W> {
                         match scalar.kind {
                             ScalarKind::Sint => {
                                 let min_val = match scalar.width {
+                                    2 => crate::Literal::I16(i16::MIN),
                                     4 => crate::Literal::I32(i32::MIN),
                                     8 => crate::Literal::I64(i64::MIN),
                                     _ => {

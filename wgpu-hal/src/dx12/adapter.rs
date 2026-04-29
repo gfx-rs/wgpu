@@ -586,6 +586,10 @@ impl super::Adapter {
             wgt::Features::SHADER_F16,
             shader_model >= naga::back::hlsl::ShaderModel::V6_2 && float16_supported,
         );
+        features.set(
+            wgt::Features::SHADER_I16,
+            shader_model >= naga::back::hlsl::ShaderModel::V6_2 && float16_supported,
+        );
 
         features.set(
             wgt::Features::SUBGROUP,
