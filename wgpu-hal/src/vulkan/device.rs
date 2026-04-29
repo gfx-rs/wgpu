@@ -1464,6 +1464,9 @@ impl crate::Device for super::Device {
         let mut binding_flags = Vec::new();
         let mut binding_map = Vec::new();
         let mut next_binding = 0;
+        let remap_to_sequential = desc
+            .flags
+            .contains(crate::BindGroupLayoutFlags::INTERNAL_SEQUENTIAL_BINDINGS);
         let mut contains_binding_arrays = false;
         let mut desc_count = gpu_descriptor::DescriptorTotalCount::default();
         for entry in desc.entries {
@@ -1486,8 +1489,16 @@ impl crate::Device for super::Device {
             match entry.ty {
                 wgt::BindingType::ExternalTexture => unimplemented!(),
                 _ => {
+                    let binding = if remap_to_sequential {
+                        let remapped = next_binding;
+                        next_binding += 1;
+                        remapped
+                    } else {
+                        entry.binding
+                    };
+
                     vk_bindings.push(vk::DescriptorSetLayoutBinding {
-                        binding: next_binding,
+                        binding,
                         descriptor_type: conv::map_binding_type(entry.ty),
                         descriptor_count: count,
                         stage_flags: conv::map_shader_stage(entry.visibility),
@@ -1498,11 +1509,10 @@ impl crate::Device for super::Device {
                     binding_map.push((
                         entry.binding,
                         super::BindingInfo {
-                            binding: next_binding,
+                            binding,
                             binding_array_size: entry.count,
                         },
                     ));
-                    next_binding += 1;
                 }
             }
 
@@ -1776,10 +1786,18 @@ impl crate::Device for super::Device {
                 .iter()
                 .find(|layout_entry| layout_entry.binding == entry.binding)
                 .expect("internal error: no layout entry found with binding slot");
-            (layout, entry)
+            let binding = desc
+                .layout
+                .binding_map
+                .iter()
+                .find_map(|&(mapped_binding, binding_info)| {
+                    (mapped_binding == entry.binding).then_some(binding_info.binding)
+                })
+                .expect("internal error: no mapped binding found for layout entry");
+            (layout, entry, binding)
         });
-        let mut next_binding = 0;
-        for (layout, entry) in layout_and_entry_iter {
+
+        for (layout, entry, binding) in layout_and_entry_iter {
             let write = vk::WriteDescriptorSet::default().dst_set(*set.raw());
 
             match layout.ty {
@@ -1793,11 +1811,10 @@ impl crate::Device for super::Device {
                         ));
                     writes.push(
                         write
-                            .dst_binding(next_binding)
+                            .dst_binding(binding)
                             .descriptor_type(conv::map_binding_type(layout.ty))
                             .image_info(local_image_infos),
                     );
-                    next_binding += 1;
                 }
                 wgt::BindingType::Texture { .. } | wgt::BindingType::StorageTexture { .. } => {
                     let start = entry.resource_index;
@@ -1815,11 +1832,10 @@ impl crate::Device for super::Device {
                         ));
                     writes.push(
                         write
-                            .dst_binding(next_binding)
+                            .dst_binding(binding)
                             .descriptor_type(conv::map_binding_type(layout.ty))
                             .image_info(local_image_infos),
                     );
-                    next_binding += 1;
                 }
                 wgt::BindingType::Buffer { .. } => {
                     let start = entry.resource_index;
@@ -1838,11 +1854,10 @@ impl crate::Device for super::Device {
                         ));
                     writes.push(
                         write
-                            .dst_binding(next_binding)
+                            .dst_binding(binding)
                             .descriptor_type(conv::map_binding_type(layout.ty))
                             .buffer_info(local_buffer_infos),
                     );
-                    next_binding += 1;
                 }
                 wgt::BindingType::AccelerationStructure { .. } => {
                     let start = entry.resource_index;
@@ -1869,12 +1884,11 @@ impl crate::Device for super::Device {
 
                     writes.push(
                         write
-                            .dst_binding(next_binding)
+                            .dst_binding(binding)
                             .descriptor_type(conv::map_binding_type(layout.ty))
                             .descriptor_count(entry.count)
                             .push_next(local_acceleration_structure_infos),
                     );
-                    next_binding += 1;
                 }
                 wgt::BindingType::ExternalTexture => unimplemented!(),
             }

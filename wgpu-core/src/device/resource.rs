@@ -2825,8 +2825,10 @@ impl Device {
                 })?;
         }
 
-        let bgl_flags = conv::bind_group_layout_flags(self.features);
-
+        let mut bgl_flags = conv::bind_group_layout_flags(self.features);
+        if origin == bgl::Origin::Derived {
+            bgl_flags |= hal::BindGroupLayoutFlags::INTERNAL_SEQUENTIAL_BINDINGS;
+        }
         let hal_bindings = entry_map.values().copied().collect::<Vec<_>>();
         let hal_desc = hal::BindGroupLayoutDescriptor {
             label: label.to_hal(self.instance_flags),

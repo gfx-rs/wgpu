@@ -1788,6 +1788,8 @@ bitflags!(
     pub struct BindGroupLayoutFlags: u32 {
         /// Allows for bind group binding arrays to be shorter than the array in the BGL.
         const PARTIALLY_BOUND = 1 << 0;
+        /// Internal: remap bindings to a dense 0..N range in declaration order.
+        const INTERNAL_SEQUENTIAL_BINDINGS = 1 << 1;
     }
 );
 
