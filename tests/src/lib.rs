@@ -13,7 +13,7 @@ mod poll;
 mod report;
 mod run;
 pub mod wasm;
-pub mod wasm_logger;
+pub mod wasm_manager;
 
 #[cfg(target_arch = "wasm32")]
 pub use init::initialize_html_canvas;
@@ -121,18 +121,23 @@ macro_rules! gpu_test_main {
     ($tests: expr) => {
         #[cfg(target_arch = "wasm32")]
         #[wasm_bindgen::prelude::wasm_bindgen]
-        pub fn tests() {
-            $crate::wasm::main($tests);
+        pub fn run_test(test_name: String) {
+            $crate::wasm::main($tests, test_name);
         }
 
         #[cfg(target_arch = "wasm32")]
-        pub fn main() {
-            $tests;
+        fn main() {
+            // Ensure that value is used so that warnings don't happen.
+            let _ = $tests;
         }
 
         #[cfg(not(target_arch = "wasm32"))]
         fn main() -> $crate::native::MainResult {
-            $crate::native::main($tests)
+            if std::env::var("TEST_WASM") == Ok("true".to_string()) {
+                $crate::wasm_manager::run_wasm_browser_tests($tests)
+            } else {
+                $crate::native::main($tests)
+            }
         }
     };
 }

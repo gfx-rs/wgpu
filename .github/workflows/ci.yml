@@ -577,16 +577,31 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
-      - name: Install `wasm-pack`
+      - name: Get `wasm-bindgen` version
+        run: |
+          WASM_BINDGEN_VERSION=$(cargo metadata --format-version 1 --all-features | jq '.packages[] | select(.name == "wasm-bindgen") | .version' | tr -d '"')
+
+          echo $WASM_BINDGEN_VERSION
+
+          echo "WASM_BINDGEN_VERSION=$WASM_BINDGEN_VERSION" >> "$GITHUB_ENV"
+
+      - name: Install `wasm-bindgen`
+        run: cargo +stable install wasm-bindgen-cli --version=$WASM_BINDGEN_VERSION
+
+      - name: Install `cargo-nextest`
         uses: taiki-e/install-action@v2
         with:
-          tool: wasm-pack
+          tool: cargo-nextest
+
+      - name: Install playwright and npm dependencies
+        run: |
+          cd tests/wasm/runner
+          npm install
+          npx playwright install chromium --with-deps
 
       - name: Execute tests
         run: |
-          cd wgpu
-
-          wasm-pack test --headless --chrome --no-default-features --features wgsl,webgl,web --workspace
+          cargo xtask test-wasm --headless
 
   gpu-test:
     # runtime is normally 5-15 minutes

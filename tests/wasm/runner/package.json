@@ -8,10 +8,11 @@
   },
   "keywords": [],
   "author": "",
-  "license": "MIT",
+  "license": "MIT OR Apache-2.0",
   "description": "",
   "dependencies": {
     "@playwright/browser-chromium": "^1.58.2",
+    "express": "^5.2.1",
     "playwright": "^1.58.2"
   }
 }

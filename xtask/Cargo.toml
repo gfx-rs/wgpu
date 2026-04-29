@@ -20,3 +20,4 @@ log.workspace = true
 pico-args.workspace = true
 serde_json.workspace = true
 xshell.workspace = true
+ureq.workspace = true
