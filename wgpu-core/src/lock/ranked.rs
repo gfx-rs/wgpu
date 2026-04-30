@@ -289,6 +289,7 @@ pub struct RwLockReadGuard<'a, T> {
 /// For details, see [the module documentation][self].
 pub struct RwLockWriteGuard<'a, T> {
     inner: wgpu_sync::RwLockWriteGuard<'a, T>,
+    #[cfg_attr(not(miri), expect(unused))] // but `Drop` has important side effects
     saved: LockStateGuard,
 }
 
