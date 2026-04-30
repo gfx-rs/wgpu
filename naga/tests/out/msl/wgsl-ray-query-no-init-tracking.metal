@@ -59,8 +59,6 @@ RayIntersection query_loop(
     metal::raytracing::instance_acceleration_structure acs
 ) {
     metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> rq_1 = {};
-    uint naga_query_init_tracker_for_rq_1 = 0u;
-    float naga_query_tmax_tracker_for_rq_1 = 0.0;
     RayDesc _e8 = RayDesc {4u, 255u, 0.1, 100.0, pos, dir};
     {
         RayDesc desc = _e8;
@@ -142,8 +140,6 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
   metal::raytracing::instance_acceleration_structure acc_struct [[user(fake0)]]
 ) {
     metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> rq = {};
-    uint naga_query_init_tracker_for_rq = 0u;
-    float naga_query_tmax_tracker_for_rq = 0.0;
     metal::float3 pos_2 = metal::float3(0.0);
     metal::float3 dir_2 = metal::float3(0.0, 1.0, 0.0);
     RayDesc _e12 = RayDesc {4u, 255u, 0.1, 100.0, pos_2, dir_2};
@@ -166,7 +162,10 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
     }
     RayIntersection intersection_1 = ray_query_get_intersection_false(rq, naga_query_init_tracker_for_rq);
     if (intersection_1.kind == 3u) {
-        rq.commit_bounding_box_intersection(10.0);
+{
+            float t = 10.0;
+            rq.commit_bounding_box_intersection(t);
+        }
         return;
     } else {
         if (intersection_1.kind == 1u) {

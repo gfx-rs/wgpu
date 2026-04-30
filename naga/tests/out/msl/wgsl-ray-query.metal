@@ -193,12 +193,14 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
     }
     RayIntersection intersection_1 = ray_query_get_intersection_false(rq, naga_query_init_tracker_for_rq);
     if (intersection_1.kind == 3u) {
-        if (((naga_query_init_tracker_for_rq & 2) == 2) && !((naga_query_init_tracker_for_rq & 4) == 4)) {
+        if (((naga_query_init_tracker_for_rq & 2) == 2) && !((naga_query_init_tracker_for_rq & 4) == 4)){
+            float t = 10.0;
             float current_max_t = naga_query_tmax_tracker_for_rq;
             if (rq.get_committed_intersection_type() != metal::raytracing::intersection_type::none) {
                 current_max_t = rq.get_committed_distance();
             }
-            if (rq.get_candidate_intersection_type() == metal::raytracing::intersection_type::bounding_box) {            rq.commit_bounding_box_intersection(10.0);
+            if (rq.get_candidate_intersection_type() == metal::raytracing::intersection_type::bounding_box && (rq.get_ray_min_distance() <= t) && (t <= current_max_t)) {
+                rq.commit_bounding_box_intersection(t);
             }
         }
         return;

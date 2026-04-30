@@ -412,8 +412,17 @@ impl<W: Write> Writer<W> {
                         &tracker_expr_name,
                         back::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
                     )?;
-                    writeln!(self.out, ") {{")?;
-                    current_level = current_level.next();
+                    write!(self.out, ")")?;
+                }
+                writeln!(self.out, "{{")?;
+                current_level = current_level.next();
+                write!(
+                    self.out,
+                    "{current_level}float t = "
+                )?;
+                self.put_expression(hit_t, &context.expression, true)?;
+                writeln!(self.out, ";")?;
+                if context.expression.ray_query_initialization_tracking {
                     write!(
                         self.out,
                         "{current_level}float current_max_t = {tmax_tracker_expr_name};
@@ -430,20 +439,24 @@ impl<W: Write> Writer<W> {
 {current_level}if ("
                     )?;
                     self.put_expression(query, &context.expression, true)?;
-                    write!(self.out, ".get_candidate_intersection_type() == {RT_NAMESPACE}::intersection_type::bounding_box) {{")?;
+                    write!(self.out, ".get_candidate_intersection_type() == {RT_NAMESPACE}::intersection_type::bounding_box && (")?;
+                    self.put_expression(query, &context.expression, true)?;
+                    write!(
+                        self.out,
+                        ".get_ray_min_distance()")?;
+                    writeln!(self.out, " <= t) && (t <= current_max_t)) {{")?;
+                    current_level = current_level.next();
                 }
                 write!(self.out, "{current_level}")?;
                 self.put_expression(query, &context.expression, true)?;
-                write!(self.out, ".commit_bounding_box_intersection(")?;
-                self.put_expression(hit_t, &context.expression, true)?;
-                writeln!(self.out, ");")?;
+                writeln!(self.out, ".commit_bounding_box_intersection(t);")?;
                 if context.expression.ray_query_initialization_tracking {
                     writeln!(
                         self.out,
-                        "{level}{INDENT}}}
-{level}}}"
+                        "{level}{INDENT}}}"
                     )?;
                 }
+                writeln!(self.out, "{level}}}")?;
             }
             crate::RayQueryFunction::ConfirmIntersection => {
                 let mut current_level = level;

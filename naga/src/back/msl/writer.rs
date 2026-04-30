@@ -1117,23 +1117,24 @@ impl<W: Write> Writer<W> {
             writeln!(self.out, ";")?;
 
             // If this variable is a ray query, put in an initialization tracker.
+            if context.ray_query_initialization_tracking {
+                if let crate::TypeInner::RayQuery { .. } = context.module.types[ty].inner {
+                    writeln!(
+                        self.out,
+                        "{}uint {}{} = 0u;",
+                        back::INDENT,
+                        super::ray::RAY_QUERY_TRACKER_VARIABLE_PREFIX,
+                        self.names[&name_key]
+                    )?;
 
-            if let crate::TypeInner::RayQuery { .. } = context.module.types[ty].inner {
-                writeln!(
-                    self.out,
-                    "{}uint {}{} = 0u;",
-                    back::INDENT,
-                    super::ray::RAY_QUERY_TRACKER_VARIABLE_PREFIX,
-                    self.names[&name_key]
-                )?;
-
-                writeln!(
-                    self.out,
-                    "{}float {}{} = 0.0;",
-                    back::INDENT,
-                    super::ray::RAY_QUERY_T_MAX_TRACKER_VARIABLE_PREFIX,
-                    self.names[&name_key]
-                )?;
+                    writeln!(
+                        self.out,
+                        "{}float {}{} = 0.0;",
+                        back::INDENT,
+                        super::ray::RAY_QUERY_T_MAX_TRACKER_VARIABLE_PREFIX,
+                        self.names[&name_key]
+                    )?;
+                }
             }
         }
         Ok(())
