@@ -290,28 +290,30 @@ impl BakedCommands {
 
         let mut ranges: Vec<TextureInitRange> = Vec::new();
         for texture_use in self.texture_memory_actions.drain_init_actions() {
-            let mut initialization_status = texture_use.texture.initialization_status.write();
-            let use_range = texture_use.range;
-            let affected_mip_trackers = initialization_status
-                .mips
-                .iter_mut()
-                .enumerate()
-                .skip(use_range.mip_range.start as usize)
-                .take((use_range.mip_range.end - use_range.mip_range.start) as usize);
+            {
+                let mut initialization_status = texture_use.texture.initialization_status.write();
+                let use_range = texture_use.range;
+                let affected_mip_trackers = initialization_status
+                    .mips
+                    .iter_mut()
+                    .enumerate()
+                    .skip(use_range.mip_range.start as usize)
+                    .take((use_range.mip_range.end - use_range.mip_range.start) as usize);
 
-            match texture_use.kind {
-                MemoryInitKind::ImplicitlyInitialized => {
-                    for (_, mip_tracker) in affected_mip_trackers {
-                        mip_tracker.drain(use_range.layer_range.clone());
+                match texture_use.kind {
+                    MemoryInitKind::ImplicitlyInitialized => {
+                        for (_, mip_tracker) in affected_mip_trackers {
+                            mip_tracker.drain(use_range.layer_range.clone());
+                        }
                     }
-                }
-                MemoryInitKind::NeedsInitializedMemory => {
-                    for (mip_level, mip_tracker) in affected_mip_trackers {
-                        for layer_range in mip_tracker.drain(use_range.layer_range.clone()) {
-                            ranges.push(TextureInitRange {
-                                mip_range: (mip_level as u32)..(mip_level as u32 + 1),
-                                layer_range,
-                            });
+                    MemoryInitKind::NeedsInitializedMemory => {
+                        for (mip_level, mip_tracker) in affected_mip_trackers {
+                            for layer_range in mip_tracker.drain(use_range.layer_range.clone()) {
+                                ranges.push(TextureInitRange {
+                                    mip_range: (mip_level as u32)..(mip_level as u32 + 1),
+                                    layer_range,
+                                });
+                            }
                         }
                     }
                 }
