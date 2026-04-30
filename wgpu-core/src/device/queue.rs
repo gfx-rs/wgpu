@@ -993,35 +993,42 @@ impl Queue {
         } else {
             destination.origin.z..destination.origin.z + size.depth_or_array_layers
         };
-        let mut dst_initialization_status = dst.initialization_status.write();
-        if dst_initialization_status.mips[destination.mip_level as usize]
-            .check(init_layer_range.clone())
-            .is_some()
-        {
-            if has_copy_partial_init_tracker_coverage(size, &destination, &dst.desc) {
-                for layer_range in dst_initialization_status.mips[destination.mip_level as usize]
-                    .drain(init_layer_range)
-                    .collect::<Vec<core::ops::Range<u32>>>()
-                {
-                    let mut trackers = self.device.trackers.lock();
-                    crate::command::clear_texture(
-                        &dst,
-                        TextureInitRange {
-                            mip_range: destination.mip_level..(destination.mip_level + 1),
-                            layer_range,
-                        },
-                        encoder,
-                        &mut trackers.textures,
-                        &self.device.alignments,
-                        self.device.zero_buffer.as_ref(),
-                        &snatch_guard,
-                        self.device.instance_flags,
-                    )
-                    .map_err(QueueWriteError::from)?;
+        let layer_ranges_to_clear = {
+            let mut dst_initialization_status = dst.initialization_status.write();
+            if dst_initialization_status.mips[destination.mip_level as usize]
+                .check(init_layer_range.clone())
+                .is_some()
+            {
+                if has_copy_partial_init_tracker_coverage(size, &destination, &dst.desc) {
+                    dst_initialization_status.mips[destination.mip_level as usize]
+                        .drain(init_layer_range)
+                        .collect::<Vec<core::ops::Range<u32>>>()
+                } else {
+                    dst_initialization_status.mips[destination.mip_level as usize]
+                        .drain(init_layer_range);
+                    vec![]
                 }
             } else {
-                dst_initialization_status.mips[destination.mip_level as usize]
-                    .drain(init_layer_range);
+                vec![]
+            }
+        };
+        if !layer_ranges_to_clear.is_empty() {
+            let mut trackers = self.device.trackers.lock();
+            for layer_range in layer_ranges_to_clear {
+                crate::command::clear_texture(
+                    &dst,
+                    TextureInitRange {
+                        mip_range: destination.mip_level..(destination.mip_level + 1),
+                        layer_range,
+                    },
+                    encoder,
+                    &mut trackers.textures,
+                    &self.device.alignments,
+                    self.device.zero_buffer.as_ref(),
+                    &snatch_guard,
+                    self.device.instance_flags,
+                )
+                .map_err(QueueWriteError::from)?;
             }
         }
 
@@ -1236,6 +1243,10 @@ impl Queue {
 
         let (selector, dst_base) = extract_texture_selector(&destination, &size, &dst)?;
 
+        let snatch_guard = self.device.snatchable_lock.read();
+
+        let dst_raw = dst.try_raw(&snatch_guard)?;
+
         // This must happen after parameter validation (so that errors are reported
         // as required by the spec), but before any side effects.
         if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
@@ -1257,40 +1268,44 @@ impl Queue {
         } else {
             destination.origin.z..destination.origin.z + size.depth_or_array_layers
         };
-        let mut dst_initialization_status = dst.initialization_status.write();
-        if dst_initialization_status.mips[destination.mip_level as usize]
-            .check(init_layer_range.clone())
-            .is_some()
-        {
-            if has_copy_partial_init_tracker_coverage(&size, &destination, &dst.desc) {
-                for layer_range in dst_initialization_status.mips[destination.mip_level as usize]
-                    .drain(init_layer_range)
-                    .collect::<Vec<core::ops::Range<u32>>>()
-                {
-                    let mut trackers = self.device.trackers.lock();
-                    crate::command::clear_texture(
-                        &dst,
-                        TextureInitRange {
-                            mip_range: destination.mip_level..(destination.mip_level + 1),
-                            layer_range,
-                        },
-                        encoder,
-                        &mut trackers.textures,
-                        &self.device.alignments,
-                        self.device.zero_buffer.as_ref(),
-                        &self.device.snatchable_lock.read(),
-                        self.device.instance_flags,
-                    )
-                    .map_err(QueueWriteError::from)?;
+        let layer_ranges_to_clear = {
+            let mut dst_initialization_status = dst.initialization_status.write();
+            if dst_initialization_status.mips[destination.mip_level as usize]
+                .check(init_layer_range.clone())
+                .is_some()
+            {
+                if has_copy_partial_init_tracker_coverage(&size, &destination, &dst.desc) {
+                    dst_initialization_status.mips[destination.mip_level as usize]
+                        .drain(init_layer_range)
+                        .collect::<Vec<core::ops::Range<u32>>>()
+                } else {
+                    dst_initialization_status.mips[destination.mip_level as usize]
+                        .drain(init_layer_range);
+                    vec![]
                 }
             } else {
-                dst_initialization_status.mips[destination.mip_level as usize]
-                    .drain(init_layer_range);
+                vec![]
+            }
+        };
+        if !layer_ranges_to_clear.is_empty() {
+            let mut trackers = self.device.trackers.lock();
+            for layer_range in layer_ranges_to_clear {
+                crate::command::clear_texture(
+                    &dst,
+                    TextureInitRange {
+                        mip_range: destination.mip_level..(destination.mip_level + 1),
+                        layer_range,
+                    },
+                    encoder,
+                    &mut trackers.textures,
+                    &self.device.alignments,
+                    self.device.zero_buffer.as_ref(),
+                    &snatch_guard,
+                    self.device.instance_flags,
+                )
+                .map_err(QueueWriteError::from)?;
             }
         }
-
-        let snatch_guard = self.device.snatchable_lock.read();
-        let dst_raw = dst.try_raw(&snatch_guard)?;
 
         let regions = hal::TextureCopy {
             src_base: hal::TextureCopyBase {
