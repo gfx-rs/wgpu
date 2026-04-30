@@ -42,7 +42,7 @@ impl Default for InstanceDevices {
 
 impl InstanceDevices {
     pub(crate) fn new() -> Self {
-        Self(Mutex::new(rank::HUB_OTHER, WeakVec::new()))
+        Self(Mutex::new(rank::INSTANCE_DEVICES, WeakVec::new()))
     }
 
     pub(crate) fn push(&self, device: &Arc<Device>) {

@@ -113,7 +113,7 @@ define_lock_ranks! {
         BUFFER_POOL,
         DEVICE_TRACE,
         DEVICE_USAGE_SCOPES,
-        HUB_OTHER,
+        INSTANCE_DEVICES,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
     rank DEVICE_SNATCHABLE_LOCK "Device::snatchable_lock" followed by {
@@ -128,7 +128,7 @@ define_lock_ranks! {
         BUFFER_POOL,
         DEVICE_TRACE,
         DEVICE_USAGE_SCOPES,
-        HUB_OTHER,
+        INSTANCE_DEVICES,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
         TEXTURE_BIND_GROUPS,
         TEXTURE_CLEAR_MODE,
@@ -175,7 +175,7 @@ define_lock_ranks! {
     rank COMMAND_ALLOCATOR_FREE_ENCODERS "CommandAllocator::free_encoders" followed by {
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
-    rank HUB_OTHER "Hub (general)" followed by {
+    rank INSTANCE_DEVICES "InstanceDevices" followed by {
     }
 
     // Leaf ranks reachable from the graph above, alphabetical.
