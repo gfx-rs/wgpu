@@ -268,7 +268,6 @@ raw-window-metal = "1.0"
 # Vulkan dependencies
 android_system_properties = "0.1.1"
 ash = "0.38"
-gpu-descriptor = "0.3.2"
 
 # DX12 dependencies
 range-alloc = "0.1"

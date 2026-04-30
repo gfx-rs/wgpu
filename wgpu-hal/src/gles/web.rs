@@ -179,6 +179,44 @@ impl crate::Instance for Instance {
     }
 }
 
+impl super::Adapter {
+    /// Creates a new external adapter from an existing WebGL2 rendering context.
+    ///
+    /// # Safety
+    ///
+    /// - The underlying WebGL2 context must be valid (not lost).
+    /// - The underlying WebGL2 context must be valid when interfacing with any objects returned by
+    ///   wgpu-hal from this adapter.
+    /// - The underlying WebGL2 context must be valid when dropping this adapter and when
+    ///   dropping any objects returned from this adapter.
+    pub unsafe fn new_external(
+        webgl2_context: web_sys::WebGl2RenderingContext,
+        options: wgt::GlBackendOptions,
+    ) -> Option<crate::ExposedAdapter<super::Api>> {
+        let glow_context = glow::Context::from_webgl2_context(webgl2_context.clone());
+        unsafe {
+            Self::expose(
+                AdapterContext {
+                    glow_context,
+                    webgl2_context,
+                },
+                options,
+            )
+        }
+    }
+
+    pub fn adapter_context(&self) -> &AdapterContext {
+        &self.shared.context
+    }
+}
+
+impl super::Device {
+    /// Returns the underlying WebGL2 `AdapterContext`.
+    pub fn context(&self) -> &AdapterContext {
+        &self.shared.context
+    }
+}
+
 #[derive(Debug)]
 pub struct Surface {
     canvas: Canvas,

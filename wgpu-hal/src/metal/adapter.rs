@@ -1062,6 +1062,10 @@ impl super::CapabilitiesQuery {
                     && (device.supportsFamily(MTLGPUFamily::Apple7)
                         || device.supportsFamily(MTLGPUFamily::Mac2)))
                 || (available!(macos = 10.15, ios = 14.0, tvos = 16.0, visionos = 1.0)
+                    && device_class_responds_to(
+                        device,
+                        sel!(supportsShaderBarycentricCoordinates),
+                    )
                     && device.supportsShaderBarycentricCoordinates()),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             // See https://github.com/gfx-rs/wgpu/pull/8725 for more details
