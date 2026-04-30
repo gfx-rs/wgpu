@@ -74,8 +74,18 @@ impl<W: Write> Writer<W> {
         let mut base_level = back::Level(1);
         writeln!(
             self.out,
-            "{intersection} {INTERSECTION_FUNCTION_NAME}_{committed}({} intersector, uint intersector_tracker) {{",
+            "{intersection} {INTERSECTION_FUNCTION_NAME}_{committed}({} intersector",
             metal_intersector_ty()
+        )?;
+        if options.ray_query_initialization_tracking {
+            writeln!(
+                self.out,
+                ", uint intersector_tracker"
+            )?;
+        }
+        writeln!(
+            self.out,
+            ") {{"
         )?;
         // Initialize the intersection to its default values (which should be zero).
         writeln!(

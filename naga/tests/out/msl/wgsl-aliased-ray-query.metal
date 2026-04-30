@@ -26,7 +26,9 @@ struct RayIntersection {
     metal::float4x3 object_to_world;
     metal::float4x3 world_to_object;
 };
-RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector, uint intersector_tracker) {
+RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector
+, uint intersector_tracker
+) {
     RayIntersection intersection = RayIntersection {};
     if (((intersector_tracker & 2) == 2) && !((intersector_tracker & 4) == 4)) {
         metal::raytracing::intersection_type ty = intersector.get_candidate_intersection_type();

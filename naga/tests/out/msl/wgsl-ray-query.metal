@@ -32,7 +32,9 @@ struct Output {
     metal::float3 normal;
 };
 
-RayIntersection ray_query_get_intersection_true(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector, uint intersector_tracker) {
+RayIntersection ray_query_get_intersection_true(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector
+, uint intersector_tracker
+) {
     RayIntersection intersection = RayIntersection {};
     if (((intersector_tracker & 4) == 4)) {
         metal::raytracing::intersection_type ty = intersector.get_committed_intersection_type();
@@ -131,7 +133,9 @@ metal::float3 get_torus_normal(
     return;
 }
 
-RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector, uint intersector_tracker) {
+RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector
+, uint intersector_tracker
+) {
     RayIntersection intersection = RayIntersection {};
     if (((intersector_tracker & 2) == 2) && !((intersector_tracker & 4) == 4)) {
         metal::raytracing::intersection_type ty = intersector.get_candidate_intersection_type();
