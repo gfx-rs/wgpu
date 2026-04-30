@@ -342,9 +342,9 @@ impl RenderBundleEncoder {
                 .map_pass_err(scope)?;
         };
 
+        let buffer_guard = hub.buffers.read();
         let bind_group_guard = hub.bind_groups.read();
         let pipeline_guard = hub.render_pipelines.read();
-        let buffer_guard = hub.buffers.read();
 
         let mut state = State {
             trackers: RenderBundleScope::new(),
