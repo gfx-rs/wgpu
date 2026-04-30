@@ -78,15 +78,9 @@ impl<W: Write> Writer<W> {
             metal_intersector_ty()
         )?;
         if options.ray_query_initialization_tracking {
-            writeln!(
-                self.out,
-                ", uint intersector_tracker"
-            )?;
+            writeln!(self.out, ", uint intersector_tracker")?;
         }
-        writeln!(
-            self.out,
-            ") {{"
-        )?;
+        writeln!(self.out, ") {{")?;
         // Initialize the intersection to its default values (which should be zero).
         writeln!(
             self.out,
@@ -426,10 +420,7 @@ impl<W: Write> Writer<W> {
                 }
                 writeln!(self.out, "{{")?;
                 current_level = current_level.next();
-                write!(
-                    self.out,
-                    "{current_level}float t = "
-                )?;
+                write!(self.out, "{current_level}float t = ")?;
                 self.put_expression(hit_t, &context.expression, true)?;
                 writeln!(self.out, ";")?;
                 if context.expression.ray_query_initialization_tracking {
@@ -451,9 +442,7 @@ impl<W: Write> Writer<W> {
                     self.put_expression(query, &context.expression, true)?;
                     write!(self.out, ".get_candidate_intersection_type() == {RT_NAMESPACE}::intersection_type::bounding_box && (")?;
                     self.put_expression(query, &context.expression, true)?;
-                    write!(
-                        self.out,
-                        ".get_ray_min_distance()")?;
+                    write!(self.out, ".get_ray_min_distance()")?;
                     writeln!(self.out, " <= t) && (t <= current_max_t)) {{")?;
                     current_level = current_level.next();
                 }
@@ -461,10 +450,7 @@ impl<W: Write> Writer<W> {
                 self.put_expression(query, &context.expression, true)?;
                 writeln!(self.out, ".commit_bounding_box_intersection(t);")?;
                 if context.expression.ray_query_initialization_tracking {
-                    writeln!(
-                        self.out,
-                        "{level}{INDENT}}}"
-                    )?;
+                    writeln!(self.out, "{level}{INDENT}}}")?;
                 }
                 writeln!(self.out, "{level}}}")?;
             }
