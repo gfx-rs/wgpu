@@ -635,8 +635,7 @@ impl WebGpuError for QueueSubmitError {
 /// [`submit`]: `PendingSubmission::submit`
 pub(crate) struct PendingSubmission<'a> {
     queue: &'a Queue,
-    // NOTE: Guards must be declared in reverse of acquisition order, so  `wgpu_validate_locks`
-    // succeeds.
+    // The lock ordering checker cares about the drop order for these guards.
     command_index_guard: RwLockWriteGuard<'a, CommandIndices>,
     snatch_guard: SnatchGuard<'a>,
     // Command buffers to be executed, along with trackers for the resources they use.
@@ -729,11 +728,7 @@ impl Queue {
             buffer_offset,
         );
 
-        drop(snatch_guard);
-
         pending_writes.consume(staging_buffer);
-
-        drop(pending_writes);
 
         result
     }
@@ -1703,8 +1698,8 @@ impl Queue {
 
         let submission = PendingSubmission {
             queue: self,
-            snatch_guard,
             command_index_guard,
+            snatch_guard,
             executions: Vec::new(),
             surface_textures: FastHashMap::default(),
             index,
