@@ -2955,7 +2955,10 @@ impl<W: Write> Writer<W> {
                     super::ray::INTERSECTION_FUNCTION_NAME
                 )?;
                 self.put_expression(query, context, true)?;
-                write!(self.out, ", {tracker_expr_name})")?;
+                if context.ray_query_initialization_tracking {
+                    write!(self.out, ", {tracker_expr_name}")?;
+                }
+                write!(self.out, ")")?;
             }
             crate::Expression::CooperativeLoad { ref data, .. } => {
                 if context.lang_version < (2, 3) {

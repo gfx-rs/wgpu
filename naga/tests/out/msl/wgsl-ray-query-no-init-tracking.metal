@@ -89,7 +89,7 @@ RayIntersection query_loop(
             break;
         }
     }
-    return ray_query_get_intersection_true(rq_1, naga_query_init_tracker_for_rq_1);
+    return ray_query_get_intersection_true(rq_1);
 }
 
 metal::float3 get_torus_normal(
@@ -162,7 +162,7 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
         metal::raytracing::ray ray = metal::raytracing::ray(desc.origin, desc.dir, desc.tmin, desc.tmax);
         rq.reset(ray,acc_struct, desc.cull_mask, params);
     }
-    RayIntersection intersection_1 = ray_query_get_intersection_false(rq, naga_query_init_tracker_for_rq);
+    RayIntersection intersection_1 = ray_query_get_intersection_false(rq);
     if (intersection_1.kind == 3u) {
 {
             float t = 10.0;
