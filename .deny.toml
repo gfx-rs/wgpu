@@ -33,6 +33,9 @@ skip = [
     { name = "rustix", version = "0.38" },
     { name = "windows-sys", version = "0.59" },
 
+    # Winit uses an old version directly
+    { name = "redox_syscall", version = "0.4.1" },
+
     # Winit uses an old version via android-activity
     { name = "thiserror", version = "1" },
     { name = "thiserror-impl", version = "1" },

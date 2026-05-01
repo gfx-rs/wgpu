@@ -42,6 +42,30 @@ Bottom level categories:
 
 ## Unreleased
 
+## v29.0.2 (2026-05-01)
+
+### Bug Fixes
+
+#### General
+
+- Fix late bindings not being updated for identical pipeline layouts. By @kristoff3r in [#9341](https://github.com/gfx-rs/wgpu/pull/9341).
+- Fix missing dependency feature activations when building wgpu-hal with gles/dx12 in isolation. By @wumpf in [#9325](https://github.com/gfx-rs/wgpu/pull/9325).
+
+- Make `wgpu_types::texture::format::TextureChannel` accessible as `wgpu::TextureChannel`. By @TornaxO7 in [#9349](https://github.com/gfx-rs/wgpu/pull/9349).
+
+#### DX12
+
+- Fixed a `debug_assert` during stride validation for indirect multi draw. By @kristoff3r in [#9332](https://github.com/gfx-rs/wgpu/pull/9332).
+- Fix incorrect `max_binding_array_sampler_elements_per_shader_stage` limit reported on DX12. By @kristoff3r in [#9330](https://github.com/gfx-rs/wgpu/pull/9330).
+
+#### Vulkan
+
+- Only request `shaderDrawParameters` when `SHADER_DRAW_INDEX` is requested, avoiding device creation failures on drivers that don't support it (e.g. V3DV, SwiftShader). By @mohamedtahaguelzim in [#9331](https://github.com/gfx-rs/wgpu/pull/9331).
+
+#### Metal
+
+- Fix crash on fence creation when running in a MacOS sandbox. By @wumpf in [#9415](https://github.com/gfx-rs/wgpu/pull/9415).
+
 ## v29.0.1 (2026-03-26)
 
 This release includes `wgpu-core`, `wgpu-hal` and `wgpu-types` version `29.0.1`. All other crates remain at their previous versions.
