@@ -531,11 +531,8 @@ impl<L, V> TextureDescriptor<L, V> {
     pub fn map_label_and_view_formats<K, M>(
         &self,
         l_fun: impl FnOnce(&L) -> K,
-        v_fun: impl FnOnce(V) -> M,
-    ) -> TextureDescriptor<K, M>
-    where
-        V: Clone,
-    {
+        v_fun: impl FnOnce(&V) -> M,
+    ) -> TextureDescriptor<K, M> {
         TextureDescriptor {
             label: l_fun(&self.label),
             size: self.size,
@@ -544,7 +541,7 @@ impl<L, V> TextureDescriptor<L, V> {
             dimension: self.dimension,
             format: self.format,
             usage: self.usage,
-            view_formats: v_fun(self.view_formats.clone()),
+            view_formats: v_fun(&self.view_formats),
         }
     }
 
