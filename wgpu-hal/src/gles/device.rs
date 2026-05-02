@@ -1354,7 +1354,13 @@ impl crate::Device for super::Device {
                     group: group_index as u32,
                     binding: entry.binding,
                 };
-                binding_map.insert(br, *counter);
+                binding_map.insert(
+                    br,
+                    glsl::BindTarget {
+                        binding: Some(*counter),
+                        external_texture: None,
+                    },
+                );
                 *counter += entry.count.map_or(1, |c| c.get() as u8);
             }
 
