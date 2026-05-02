@@ -89,7 +89,6 @@ mod webgpu_impl {
 
     #[doc(hidden)]
     pub const WEBGPU_FEATURE_PRIMITIVE_INDEX: u64 = 1 << 17;
-
 }
 
 macro_rules! bitflags_array_impl {

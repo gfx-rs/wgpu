@@ -1,5 +1,5 @@
-use objc2::rc::autoreleasepool;
 use block2::StackBlock;
+use objc2::rc::autoreleasepool;
 use objc2::runtime::{AnyObject, ProtocolObject, Sel};
 use objc2::{available, sel};
 use objc2_foundation::{NSOperatingSystemVersion, NSProcessInfo, NSString};
@@ -89,58 +89,57 @@ impl crate::Adapter for super::Adapter {
                 .device
                 .newCommandQueueWithMaxCommandBufferCount(MAX_COMMAND_BUFFERS)
                 .unwrap();
-        let device = &self.shared.device;
+            let device = &self.shared.device;
 
-        let cq_desc = MTLCommandQueueDescriptor::new();
-        // SAFETY: MAX_COMMAND_BUFFERS is a reasonable number of buffers.
-        unsafe {
-            cq_desc.setMaxCommandBufferCount(MAX_COMMAND_BUFFERS);
-        }
-
-        let use_debug_printf = features.contains(wgt::Features::DEBUG_PRINTF)
-            && self.shared.private_caps.supports_debug_printf;
-        self.shared
-            .use_debug_printf
-            .store(use_debug_printf, atomic::Ordering::Relaxed);
-
-        if use_debug_printf {
-            let log_desc = MTLLogStateDescriptor::new();
-            log_desc.setLevel(MTLLogLevel::Debug);
-
-            if let Ok(log_state) = device.newLogStateWithDescriptor_error(&log_desc) {
-                cq_desc.setLogState(Some(&log_state));
-
-                let handler = StackBlock::new(
-                    |subsystem: *mut NSString,
-                     category: *mut NSString,
-                     _level: MTLLogLevel,
-                     message: NonNull<NSString>| {
-                        // SAFETY: message is NonNull<NSString>
-                        let msg = unsafe { message.as_ref() }.to_string();
-
-                        let cat = if !category.is_null() {
-                            // SAFETY: we checked for null, and category is an NSString ptr
-                            unsafe { (*category).to_string() }
-                        } else {
-                            "null".to_string()
-                        };
-
-                        let sub = if !subsystem.is_null() {
-                            // SAFETY: we checked for null, and subsystem is an NSString ptr
-                            unsafe { (*subsystem).to_string() }
-                        } else {
-                            "null".to_string()
-                        };
-
-                        println!("[{sub}::{cat}] {msg}");
-                    },
-                );
-
-                // SAFETY: handler is Send because it does not capture
-                unsafe { log_state.addLogHandler(&handler) };
+            let cq_desc = MTLCommandQueueDescriptor::new();
+            // SAFETY: MAX_COMMAND_BUFFERS is a reasonable number of buffers.
+            unsafe {
+                cq_desc.setMaxCommandBufferCount(MAX_COMMAND_BUFFERS);
             }
-        }
 
+            let use_debug_printf = features.contains(wgt::Features::DEBUG_PRINTF)
+                && self.shared.private_caps.supports_debug_printf;
+            self.shared
+                .use_debug_printf
+                .store(use_debug_printf, atomic::Ordering::Relaxed);
+
+            if use_debug_printf {
+                let log_desc = MTLLogStateDescriptor::new();
+                log_desc.setLevel(MTLLogLevel::Debug);
+
+                if let Ok(log_state) = device.newLogStateWithDescriptor_error(&log_desc) {
+                    cq_desc.setLogState(Some(&log_state));
+
+                    let handler = StackBlock::new(
+                        |subsystem: *mut NSString,
+                         category: *mut NSString,
+                         _level: MTLLogLevel,
+                         message: NonNull<NSString>| {
+                            // SAFETY: message is NonNull<NSString>
+                            let msg = unsafe { message.as_ref() }.to_string();
+
+                            let cat = if !category.is_null() {
+                                // SAFETY: we checked for null, and category is an NSString ptr
+                                unsafe { (*category).to_string() }
+                            } else {
+                                "null".to_string()
+                            };
+
+                            let sub = if !subsystem.is_null() {
+                                // SAFETY: we checked for null, and subsystem is an NSString ptr
+                                unsafe { (*subsystem).to_string() }
+                            } else {
+                                "null".to_string()
+                            };
+
+                            println!("[{sub}::{cat}] {msg}");
+                        },
+                    );
+
+                    // SAFETY: handler is Send because it does not capture
+                    unsafe { log_state.addLogHandler(&handler) };
+                }
+            }
 
             // Acquiring the meaning of timestamp ticks is hard with Metal!
             // The only thing there is a method correlating cpu & gpu timestamps (`device.sample_timestamps`).
