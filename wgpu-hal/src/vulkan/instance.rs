@@ -813,13 +813,14 @@ impl super::Instance {
                 validation_feature_list
                     .push(vk::ValidationFeatureEnableEXT::SYNCHRONIZATION_VALIDATION);
 
-                validation_feature_list.push(vk::ValidationFeatureEnableEXT::DEBUG_PRINTF);
-
                 // Only enable GPU assisted validation if requested.
+                // DEBUG_PRINTF and GPU_ASSISTED are mutually exclusive.
                 if should_enable_gpu_based_validation {
                     validation_feature_list.push(vk::ValidationFeatureEnableEXT::GPU_ASSISTED);
                     validation_feature_list
                         .push(vk::ValidationFeatureEnableEXT::GPU_ASSISTED_RESERVE_BINDING_SLOT);
+                } else {
+                    validation_feature_list.push(vk::ValidationFeatureEnableEXT::DEBUG_PRINTF);
                 }
 
                 validation_features = vk::ValidationFeaturesEXT::default()

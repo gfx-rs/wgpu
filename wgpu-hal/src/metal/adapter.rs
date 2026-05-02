@@ -99,7 +99,9 @@ impl crate::Adapter for super::Adapter {
 
         let use_debug_printf = features.contains(wgt::Features::DEBUG_PRINTF)
             && self.shared.private_caps.supports_debug_printf;
-        self.shared.use_debug_printf.replace(use_debug_printf);
+        self.shared
+            .use_debug_printf
+            .store(use_debug_printf, atomic::Ordering::Relaxed);
 
         if use_debug_printf {
             let log_desc = MTLLogStateDescriptor::new();
