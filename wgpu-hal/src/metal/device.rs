@@ -277,7 +277,7 @@ impl super::Device {
                     options.setPreserveInvariance(true);
                 }
 
-                if self.shared.use_debug_printf.get() {
+                if self.shared.use_debug_printf.load(atomic::Ordering::Relaxed) {
                     options.setEnableLogging(true);
                 }
 

@@ -35,7 +35,7 @@ use alloc::{
 };
 use std::sync::OnceLock;
 
-use core::{cell::Cell, fmt, iter, ops, ptr::NonNull, sync::atomic};
+use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
 
 use bitflags::bitflags;
 use hashbrown::HashMap;
@@ -403,7 +403,7 @@ struct AdapterShared {
     private_texture_format_caps: PrivateTextureFormatCapabilities,
     settings: Settings,
     presentation_timer: time::PresentationTimer,
-    use_debug_printf: Cell<bool>,
+    use_debug_printf: atomic::AtomicBool,
 }
 
 #[cfg(send_sync)]
@@ -426,7 +426,7 @@ impl AdapterShared {
             device,
             settings: Settings::default(),
             presentation_timer: time::PresentationTimer::new(),
-            use_debug_printf: Cell::new(false),
+            use_debug_printf: atomic::AtomicBool::new(false),
         }
     }
 
