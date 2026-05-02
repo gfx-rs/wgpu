@@ -1346,7 +1346,30 @@ impl crate::Device for super::Device {
                         ..
                     } => &mut num_storage_buffers,
                     wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
-                    wgt::BindingType::ExternalTexture => unimplemented!(),
+                    wgt::BindingType::ExternalTexture => {
+                        let texture_slot = num_textures;
+                        let params_slot = num_storage_buffers;
+                        let count = entry.count.map_or(1, |c| c.get() as u8);
+
+                        binding_to_slot[entry.binding as usize] = texture_slot;
+                        let br = naga::ResourceBinding {
+                            group: group_index as u32,
+                            binding: entry.binding,
+                        };
+                        binding_map.insert(
+                            br,
+                            glsl::BindTarget {
+                                binding: Some(texture_slot),
+                                external_texture: Some(glsl::ExternalTextureBindTarget {
+                                    texture: texture_slot,
+                                    params: params_slot,
+                                }),
+                            },
+                        );
+                        num_textures += count;
+                        num_storage_buffers += count;
+                        continue;
+                    }
                 };
 
                 binding_to_slot[entry.binding as usize] = *counter;
@@ -1463,7 +1486,22 @@ impl crate::Device for super::Device {
                     })
                 }
                 wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
-                wgt::BindingType::ExternalTexture => unimplemented!(),
+                wgt::BindingType::ExternalTexture => {
+                    let ext_tex = &desc.external_textures[entry.resource_index as usize];
+                    let view = ext_tex.planes[0].view;
+                    let (raw, target) = view.inner.as_native();
+                    let params = &ext_tex.params;
+                    super::RawBinding::ExternalTexture {
+                        raw,
+                        target,
+                        params_raw: params.buffer.raw.unwrap(),
+                        params_offset: params.offset as i32,
+                        params_size: match params.size {
+                            Some(s) => s.get() as i32,
+                            None => (params.buffer.size - params.offset) as i32,
+                        },
+                    }
+                }
             };
             contents.push(binding);
         }
