@@ -42,6 +42,12 @@ Bottom level categories:
 
 ## Unreleased
 
+## v29.0.3 (2026-05-01)
+
+### Bug Fixes
+
+- Fix compilation error when `cfg(debug_assertions)` is not active. `wgpu-core` `v29.0.2` has been yanked. By @Elabajaba in [#9352](https://github.com/gfx-rs/wgpu/pull/9352).
+
 ## v29.0.2 (2026-05-01)
 
 ### Bug Fixes
