@@ -477,7 +477,7 @@ impl Buffer {
 /// You can pass buffer slices to methods like [`RenderPass::set_vertex_buffer`]
 /// and [`RenderPass::set_index_buffer`] to indicate which portion of the buffer
 /// a draw call should consult. You can also convert it to a [`BufferBinding`]
-/// with `.into()`.
+/// with `.try_into()`, which fails if the slice length is 0.
 ///
 /// To access the slice's contents on the CPU, you must first [map] the buffer,
 /// and then call [`BufferSlice::get_mapped_range`] or
@@ -556,7 +556,6 @@ impl<'a> BufferSlice<'a> {
     ///
     /// # Panics
     ///
-    /// - If the buffer is already mapped.
     /// - If the buffer’s [`BufferUsages`] do not allow the requested [`MapMode`].
     /// - If the beginning of this slice is not aligned to [`MAP_ALIGNMENT`] within the buffer.
     /// - If the length of this slice is not a multiple of 4.
