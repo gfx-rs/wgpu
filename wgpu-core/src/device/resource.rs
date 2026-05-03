@@ -41,7 +41,7 @@ use crate::{
         TextureInitTrackerAction,
     },
     instance::{Adapter, RequestDeviceError},
-    lock::{rank, Mutex, RwLock},
+    lock::{rank, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
     pipeline::{self, ColorStateError},
     pool::ResourcePool,
     present,
@@ -287,6 +287,9 @@ pub struct Device {
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<Box<dyn trace::Trace + Send + Sync + 'static>>>,
 }
+
+pub(crate) type FenceReadGuard<'a> = RwLockReadGuard<'a, ManuallyDrop<Box<dyn hal::DynFence>>>;
+pub(crate) type FenceWriteGuard<'a> = RwLockWriteGuard<'a, ManuallyDrop<Box<dyn hal::DynFence>>>;
 
 pub(crate) enum DeferredDestroy {
     TextureViews(WeakVec<TextureView>),
@@ -826,7 +829,7 @@ impl Device {
     ///   if there was a timeout or a validation error.
     pub(crate) fn maintain<'this>(
         &'this self,
-        fence: crate::lock::RwLockReadGuard<ManuallyDrop<Box<dyn hal::DynFence>>>,
+        fence: FenceReadGuard<'_>,
         poll_type: wgt::PollType<crate::SubmissionIndex>,
         snatch_guard: SnatchGuard,
     ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {

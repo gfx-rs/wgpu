@@ -795,11 +795,49 @@ pub struct Queue {
     idle_fence: Direct3D12::ID3D12Fence,
     idle_event: Event,
     idle_fence_value: AtomicU64,
+    pending_waits: Mutex<Vec<(Direct3D12::ID3D12Fence, u64)>>,
+    pending_signals: Mutex<Vec<(Direct3D12::ID3D12Fence, u64)>>,
 }
 
 impl Queue {
     pub fn as_raw(&self) -> &Direct3D12::ID3D12CommandQueue {
         &self.raw
+    }
+
+    /// Stage a `ID3D12CommandQueue::Wait(fence, value)` for the next
+    /// [`crate::Queue::submit`]. The wait is enqueued before the
+    /// submit's command lists, so subsequent GPU work observes the
+    /// foreign signal at `value`.
+    pub fn add_wait_fence(&self, fence: Direct3D12::ID3D12Fence, value: u64) {
+        self.pending_waits.lock().push((fence, value));
+    }
+
+    /// Remove `fence` from the pending wait list if it is still present.
+    /// Returns `true` if it was found and removed.
+    pub fn remove_wait_fence(&self, fence: &Direct3D12::ID3D12Fence) -> bool {
+        let target = fence.as_raw();
+        let mut waits = self.pending_waits.lock();
+        let before = waits.len();
+        waits.retain(|(f, _)| f.as_raw() != target);
+        waits.len() != before
+    }
+
+    /// Stage a `ID3D12CommandQueue::Signal(fence, value)` for the next
+    /// [`crate::Queue::submit`]. The signal is enqueued after the
+    /// submit's command lists complete, so a foreign API waiting on
+    /// `(fence, value)` observes the wgpu work as done.
+    pub fn add_signal_fence(&self, fence: Direct3D12::ID3D12Fence, value: u64) {
+        self.pending_signals.lock().push((fence, value));
+    }
+
+    /// Remove `fence` from the pending signal list if it is still present.
+    /// Returns `true` if it was found and removed.
+    pub fn remove_signal_fence(&self, fence: &Direct3D12::ID3D12Fence) -> bool {
+        let target = fence.as_raw();
+        let mut signals = self.pending_signals.lock();
+        let before = signals.len();
+        signals.retain(|(f, _)| f.as_raw() != target);
+        signals.len() != before
     }
 }
 
@@ -1640,6 +1678,17 @@ impl crate::Queue for Queue {
             temp_lists.push(Some(cmd_buf.raw.clone().into()));
         }
 
+        // Drain caller-staged waits before ExecuteCommandLists so the
+        // GPU queue blocks on each foreign signal before running our
+        // command lists. D3D12 queue commands are FIFO - Wait calls
+        // here gate everything submitted after them.
+        {
+            let mut waits = self.pending_waits.lock();
+            for (fence, value) in waits.drain(..) {
+                unsafe { self.raw.Wait(&fence, value) }.into_device_result("Wait pending fence")?;
+            }
+        }
+
         {
             profiling::scope!("ID3D12CommandQueue::ExecuteCommandLists");
             unsafe { self.raw.ExecuteCommandLists(&temp_lists) }
@@ -1647,6 +1696,16 @@ impl crate::Queue for Queue {
 
         unsafe { self.raw.Signal(&signal_fence.raw, signal_value) }
             .into_device_result("Signal fence")?;
+
+        // Drain caller-staged signals after our own Signal so each
+        // additional fence value publishes once the submit completes.
+        {
+            let mut signals = self.pending_signals.lock();
+            for (fence, value) in signals.drain(..) {
+                unsafe { self.raw.Signal(&fence, value) }
+                    .into_device_result("Signal pending fence")?;
+            }
+        }
 
         // Note the lack of synchronization here between the main Direct queue
         // and the dedicated presentation queue. This is automatically handled

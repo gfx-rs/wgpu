@@ -8,11 +8,6 @@ pub(super) use native::*;
 mod native;
 
 pub(super) trait Surface: Send + Sync + 'static {
-    /// Deletes the surface and associated resources.
-    ///
-    /// The surface must not be in use when it is deleted.
-    unsafe fn delete_surface(self: Box<Self>);
-
     /// Returns the surface capabilities for the given adapter.
     ///
     /// Returns `None` if the surface is not compatible with the adapter.
@@ -37,16 +32,10 @@ pub(super) trait Surface: Send + Sync + 'static {
 pub(super) trait Swapchain: Send + Sync + 'static {
     /// Releases all resources associated with the swapchain, without
     /// destroying the swapchain itself. Must be called before calling
-    /// either [`Surface::create_swapchain`] or [`Swapchain::delete_swapchain`].
+    /// either [`Surface::create_swapchain`] or dropping the swapchain.
     ///
     /// The swapchain must not be in use when this is called.
     unsafe fn release_resources(&mut self, device: &super::Device);
-
-    /// Deletes the swapchain.
-    ///
-    /// The swapchain must not be in use when it is deleted and
-    /// [`Swapchain::release_resources`] must have been called first.
-    unsafe fn delete_swapchain(self: Box<Self>);
 
     /// Acquires the next available surface texture for rendering.
     ///

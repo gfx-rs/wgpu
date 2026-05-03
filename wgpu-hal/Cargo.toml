@@ -93,7 +93,6 @@ vulkan = [
     "dep:arrayvec",
     "dep:ash",
     "dep:bytemuck",
-    "dep:gpu-descriptor",
     "dep:libc",
     "dep:libloading",
     "dep:ordered-float",
@@ -229,7 +228,6 @@ glow = { workspace = true, optional = true }
 gpu-allocator = { workspace = true, optional = true }
 # Backend: Vulkan
 ash = { workspace = true, optional = true }
-gpu-descriptor = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true, features = ["union"] }
 # Backend: GLES
 khronos-egl = { workspace = true, features = ["dynamic"], optional = true }

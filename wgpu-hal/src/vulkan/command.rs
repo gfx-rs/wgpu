@@ -932,7 +932,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         group: &super::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
-        let sets = [*group.set.raw()];
+        let sets = [group.set.raw()];
         unsafe {
             self.device.raw.cmd_bind_descriptor_sets(
                 self.active,
