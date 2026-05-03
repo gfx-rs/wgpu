@@ -1410,6 +1410,18 @@ bitflags_array! {
         ///   to access the `i8`/`u8` predeclared scalars and the asymmetric matrix types
         ///   such as `coop_mat16x32`, `coop_mat32x16` that 8-bit multiplies require)
         ///
+        /// **Note on `i8`/`u8` scope:** `enable wgpu_cooperative_matrix;` makes `i8` and
+        /// `u8` first-class WGSL scalar types — they may appear in storage buffers
+        /// (`var<storage> buf: array<i8>;`) and struct fields, not just as cooperative
+        /// matrix component types. This is required so cooperative matrix loads and
+        /// stores can address backing buffers with 8-bit element strides.
+        ///
+        /// **Naming convention for cooperative matrix types:** `coop_mat<C>x<R><T, U>`
+        /// is `C` columns by `R` rows of scalar `T` with usage `U`, matching WGSL's
+        /// `mat<C>x<R><T>` ordering. So `coop_mat32x16<i8, A>` is a matrix with 32
+        /// columns and 16 rows (which represents an `M=16, K=32` A-operand in textbook
+        /// `M×N = (M×K)·(K×N)` GEMM notation).
+        ///
         /// On Vulkan, the set of supported `(M, N, K, scalar)` configurations is determined
         /// at adapter creation by querying `vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR`.
         /// If no matching configuration is available on the device, this feature will not be

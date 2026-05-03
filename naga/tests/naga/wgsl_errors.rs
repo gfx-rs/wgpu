@@ -5229,7 +5229,7 @@ fn main() {
         Err(naga::valid::ValidationError::EntryPoint {
             source: naga::valid::EntryPointError::Function(
                 naga::valid::FunctionError::Expression {
-                    source: ExpressionError::InvalidCooperativeOperand(_),
+                    source: ExpressionError::InvalidCooperativeMixedInputs { .. },
                     ..
                 }
             ),

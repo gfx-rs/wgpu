@@ -2189,37 +2189,24 @@ impl BlockContext<'_> {
                 let c_id = self.cached[c];
                 let id = self.gen_id();
 
-                // Build the CooperativeMatrixOperands word.  SPIR-V requires this
-                // operand for any signed-integer matrix operand; for float matrices
-                // it is omitted so that the existing SPIR-V golden tests are
-                // unchanged (NONE_KHR == 0 is equivalent but adds a word).
+                // Build the CooperativeMatrixOperands word. SPIR-V requires this
+                // operand whenever any matrix has signed-integer components; for
+                // all-float operands we omit it (NONE_KHR == 0 is equivalent but
+                // adds a word, and skipping it keeps the float golden tests stable).
                 let matrix_operands = {
-                    use crate::ScalarKind::Sint;
+                    use crate::ScalarKind::{Float, Sint};
                     use spirv::CooperativeMatrixOperands as Cmo;
-                    let a_scalar = self.fun_info[a]
+                    let scalar_for = |h: Handle<crate::Expression>| match *self.fun_info[h]
                         .ty
                         .inner_with(&self.ir_module.types)
-                        .scalar()
-                        .unwrap_or(crate::Scalar::F32);
-                    let b_scalar = self.fun_info[b]
-                        .ty
-                        .inner_with(&self.ir_module.types)
-                        .scalar()
-                        .unwrap_or(crate::Scalar::F32);
-                    let c_scalar = self.fun_info[c]
-                        .ty
-                        .inner_with(&self.ir_module.types)
-                        .scalar()
-                        .unwrap_or(crate::Scalar::F32);
-                    if matches!(
-                        (a_scalar.kind, b_scalar.kind, c_scalar.kind),
-                        (Sint, _, _) | (_, Sint, _) | (_, _, Sint)
-                    ) || matches!(
-                        (a_scalar.kind, b_scalar.kind, c_scalar.kind),
-                        (crate::ScalarKind::Uint, _, _)
-                            | (_, crate::ScalarKind::Uint, _)
-                            | (_, _, crate::ScalarKind::Uint)
-                    ) {
+                    {
+                        crate::TypeInner::CooperativeMatrix { scalar, .. } => scalar,
+                        _ => unreachable!("validated as CooperativeMatrix"),
+                    };
+                    let a_scalar = scalar_for(a);
+                    let b_scalar = scalar_for(b);
+                    let c_scalar = scalar_for(c);
+                    if a_scalar.kind != Float || b_scalar.kind != Float || c_scalar.kind != Float {
                         let mut ops = Cmo::NONE_KHR;
                         if a_scalar.kind == Sint {
                             ops |= Cmo::MATRIX_A_SIGNED_COMPONENTS_KHR;

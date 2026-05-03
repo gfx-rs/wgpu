@@ -152,6 +152,11 @@ pub enum ExpressionError {
     #[error("Invalid operand for cooperative op")]
     InvalidCooperativeOperand(Handle<crate::Expression>),
     #[error(
+        "Cooperative matrix `coopMultiplyAdd` requires A and B to share a scalar type, \
+         got A: {a:?}, B: {b:?}"
+    )]
+    InvalidCooperativeMixedInputs { a: crate::Scalar, b: crate::Scalar },
+    #[error(
         "Invalid accumulator type for coopMultiplyAdd: A/B use {ab:?} but C uses {c:?}; \
          allowed widened accumulators are f16→f32, i8→i32, u8→u32"
     )]
@@ -1457,8 +1462,15 @@ impl super::Validator {
                     _ => unreachable!(),
                 };
                 if a_scalar != b_scalar {
-                    return Err(ExpressionError::InvalidCooperativeOperand(a));
+                    return Err(ExpressionError::InvalidCooperativeMixedInputs {
+                        a: a_scalar,
+                        b: b_scalar,
+                    });
                 }
+                // Same-type accumulators are allowed for every scalar so that the
+                // codegen path is exercised uniformly. The runtime
+                // (`vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR`) is what
+                // ultimately rejects unrealistic combos like `i8 × i8 → i8`.
                 let valid_accumulator = c_scalar == a_scalar
                     || matches!(
                         (a_scalar, c_scalar),

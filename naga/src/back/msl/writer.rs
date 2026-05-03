@@ -6502,6 +6502,14 @@ template <typename A>
         Ok(())
     }
 
+    /// NOTE: this generator does not itself reject non-float scalar types. Metal's
+    /// `simdgroup_matrix` only exists for `float`/`half`, so emitting a wrapper for
+    /// e.g. `simdgroup_char32x16` would produce invalid MSL. The float-only check
+    /// lives at the use site in `put_expression` for `CooperativeMultiplyAdd`,
+    /// which fails the whole compilation before the consumer ever reads the
+    /// emitted output. If we ever start writing wrappers in a context where
+    /// `put_expression` cannot bail (e.g. emitting a stub library), mirror that
+    /// check here.
     fn write_wrapped_cooperative_multiply_add(
         &mut self,
         module: &crate::Module,

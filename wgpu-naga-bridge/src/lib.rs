@@ -165,6 +165,11 @@ pub fn features_to_naga_capabilities(
     );
     // i8/u8 scalars are enabled alongside cooperative matrix (needed for int8 component types).
     // Backends that don't support cooperative matrix never set this feature so this is safe.
+    //
+    // TODO: SHADER_INT8 is logically orthogonal to cooperative matrix. If a future
+    // use case wants 8-bit integer scalars without cooperative matrix, split this
+    // into its own `wgt::Features` flag and gate the WGSL `wgpu_cooperative_matrix`
+    // enable's grant of `i8`/`u8` types on it independently.
     caps.set(
         Caps::SHADER_INT8,
         features.intersects(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX),
