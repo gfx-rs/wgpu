@@ -151,6 +151,11 @@ pub enum ExpressionError {
     UnsupportedWidth(crate::MathFunction, crate::ScalarKind, crate::Bytes),
     #[error("Invalid operand for cooperative op")]
     InvalidCooperativeOperand(Handle<crate::Expression>),
+    #[error(
+        "Invalid accumulator type for coopMultiplyAdd: A/B use {ab:?} but C uses {c:?}; \
+         allowed widened accumulators are f16→f32, i8→i32, u8→u32"
+    )]
+    InvalidCooperativeAccumulator { ab: crate::Scalar, c: crate::Scalar },
     #[error("Shift amount exceeds the bit width of {lhs_type:?}")]
     ShiftAmountTooLarge {
         lhs_type: crate::TypeInner,
@@ -1436,7 +1441,9 @@ impl super::Validator {
                 if a_cols != b_rows || a_rows != c_rows || b_cols != c_cols {
                     return Err(ExpressionError::InvalidCooperativeOperand(a));
                 }
-                // All three operands must use the same scalar type.
+                // A and B must have the same scalar type. C (the accumulator)
+                // may be the same type or a canonical wider type for
+                // mixed-precision GEMM: f16→f32, i8→i32, u8→u32.
                 let a_scalar = match resolver[a] {
                     Ti::CooperativeMatrix { scalar, .. } => scalar,
                     _ => unreachable!(),
@@ -1449,8 +1456,21 @@ impl super::Validator {
                     Ti::CooperativeMatrix { scalar, .. } => scalar,
                     _ => unreachable!(),
                 };
-                if a_scalar != b_scalar || a_scalar != c_scalar {
+                if a_scalar != b_scalar {
                     return Err(ExpressionError::InvalidCooperativeOperand(a));
+                }
+                let valid_accumulator = c_scalar == a_scalar
+                    || matches!(
+                        (a_scalar, c_scalar),
+                        (crate::Scalar::F16, crate::Scalar::F32)
+                            | (crate::Scalar::I8, crate::Scalar::I32)
+                            | (crate::Scalar::U8, crate::Scalar::U32)
+                    );
+                if !valid_accumulator {
+                    return Err(ExpressionError::InvalidCooperativeAccumulator {
+                        ab: a_scalar,
+                        c: c_scalar,
+                    });
                 }
                 ShaderStages::COMPUTE
             }
