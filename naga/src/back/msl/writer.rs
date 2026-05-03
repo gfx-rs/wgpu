@@ -556,6 +556,14 @@ impl crate::Scalar {
             } => "half",
             Self {
                 kind: Sk::Sint,
+                width: 1,
+            } => "char",
+            Self {
+                kind: Sk::Uint,
+                width: 1,
+            } => "uchar",
+            Self {
+                kind: Sk::Sint,
                 width: 2,
             } => "short",
             Self {
@@ -2926,6 +2934,22 @@ impl<W: Write> Writer<W> {
                 if context.lang_version < (2, 3) {
                     return Err(Error::UnsupportedCooperativeMatrix);
                 }
+                // Metal simdgroup_matrix only supports floating-point types.
+                {
+                    let ptr_ty = context.resolve_type(data.pointer);
+                    let scalar = ptr_ty
+                        .pointer_base_type()
+                        .and_then(|tr| tr.inner_with(&context.module.types).scalar());
+                    if !matches!(
+                        scalar,
+                        Some(crate::Scalar {
+                            kind: crate::ScalarKind::Float,
+                            ..
+                        })
+                    ) {
+                        return Err(Error::UnsupportedCooperativeMatrix);
+                    }
+                }
                 write!(self.out, "{COOPERATIVE_LOAD_FUNCTION}(")?;
                 write!(self.out, "&")?;
                 self.put_access_chain(data.pointer, context.policies.index, context)?;
@@ -2936,6 +2960,19 @@ impl<W: Write> Writer<W> {
             crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
                 if context.lang_version < (2, 3) {
                     return Err(Error::UnsupportedCooperativeMatrix);
+                }
+                // Metal simdgroup_matrix only supports floating-point types.
+                {
+                    let a_scalar = context.resolve_type(a).scalar();
+                    if !matches!(
+                        a_scalar,
+                        Some(crate::Scalar {
+                            kind: crate::ScalarKind::Float,
+                            ..
+                        })
+                    ) {
+                        return Err(Error::UnsupportedCooperativeMatrix);
+                    }
                 }
                 write!(self.out, "{COOPERATIVE_MULTIPLY_ADD_FUNCTION}(")?;
                 self.put_expression(a, context, true)?;

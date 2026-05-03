@@ -1419,6 +1419,39 @@ impl super::Validator {
                         }
                     }
                 }
+                // Validate that the shapes are compatible: A[rows×cols_a] * B[rows_b×cols] +
+                // C[rows×cols] requires cols_a == rows_b, plus consistent outer dimensions.
+                let (a_rows, a_cols) = match resolver[a] {
+                    Ti::CooperativeMatrix { rows, columns, .. } => (rows, columns),
+                    _ => unreachable!(),
+                };
+                let (b_rows, b_cols) = match resolver[b] {
+                    Ti::CooperativeMatrix { rows, columns, .. } => (rows, columns),
+                    _ => unreachable!(),
+                };
+                let (c_rows, c_cols) = match resolver[c] {
+                    Ti::CooperativeMatrix { rows, columns, .. } => (rows, columns),
+                    _ => unreachable!(),
+                };
+                if a_cols != b_rows || a_rows != c_rows || b_cols != c_cols {
+                    return Err(ExpressionError::InvalidCooperativeOperand(a));
+                }
+                // All three operands must use the same scalar type.
+                let a_scalar = match resolver[a] {
+                    Ti::CooperativeMatrix { scalar, .. } => scalar,
+                    _ => unreachable!(),
+                };
+                let b_scalar = match resolver[b] {
+                    Ti::CooperativeMatrix { scalar, .. } => scalar,
+                    _ => unreachable!(),
+                };
+                let c_scalar = match resolver[c] {
+                    Ti::CooperativeMatrix { scalar, .. } => scalar,
+                    _ => unreachable!(),
+                };
+                if a_scalar != b_scalar || a_scalar != c_scalar {
+                    return Err(ExpressionError::InvalidCooperativeOperand(a));
+                }
                 ShaderStages::COMPUTE
             }
         };

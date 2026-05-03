@@ -1076,7 +1076,12 @@ impl BlockContext<'_> {
                                 self.cached[expr_handle] = id;
                                 return Ok(());
                             }
-                            crate::TypeInner::CooperativeMatrix { .. } => spirv::Op::FAdd,
+                            crate::TypeInner::CooperativeMatrix { scalar, .. } => {
+                                match scalar.kind {
+                                    crate::ScalarKind::Float => spirv::Op::FAdd,
+                                    _ => spirv::Op::IAdd,
+                                }
+                            }
                             _ => unimplemented!(),
                         },
                         crate::BinaryOperator::Subtract => match *left_ty_inner {
@@ -1105,7 +1110,12 @@ impl BlockContext<'_> {
                                 self.cached[expr_handle] = id;
                                 return Ok(());
                             }
-                            crate::TypeInner::CooperativeMatrix { .. } => spirv::Op::FSub,
+                            crate::TypeInner::CooperativeMatrix { scalar, .. } => {
+                                match scalar.kind {
+                                    crate::ScalarKind::Float => spirv::Op::FSub,
+                                    _ => spirv::Op::ISub,
+                                }
+                            }
                             _ => unimplemented!(),
                         },
                         crate::BinaryOperator::Multiply => {
@@ -2178,12 +2188,62 @@ impl BlockContext<'_> {
                 let b_id = self.cached[b];
                 let c_id = self.cached[c];
                 let id = self.gen_id();
+
+                // Build the CooperativeMatrixOperands word.  SPIR-V requires this
+                // operand for any signed-integer matrix operand; for float matrices
+                // it is omitted so that the existing SPIR-V golden tests are
+                // unchanged (NONE_KHR == 0 is equivalent but adds a word).
+                let matrix_operands = {
+                    use crate::ScalarKind::Sint;
+                    use spirv::CooperativeMatrixOperands as Cmo;
+                    let a_scalar = self.fun_info[a]
+                        .ty
+                        .inner_with(&self.ir_module.types)
+                        .scalar()
+                        .unwrap_or(crate::Scalar::F32);
+                    let b_scalar = self.fun_info[b]
+                        .ty
+                        .inner_with(&self.ir_module.types)
+                        .scalar()
+                        .unwrap_or(crate::Scalar::F32);
+                    let c_scalar = self.fun_info[c]
+                        .ty
+                        .inner_with(&self.ir_module.types)
+                        .scalar()
+                        .unwrap_or(crate::Scalar::F32);
+                    if matches!(
+                        (a_scalar.kind, b_scalar.kind, c_scalar.kind),
+                        (Sint, _, _) | (_, Sint, _) | (_, _, Sint)
+                    ) || matches!(
+                        (a_scalar.kind, b_scalar.kind, c_scalar.kind),
+                        (crate::ScalarKind::Uint, _, _)
+                            | (_, crate::ScalarKind::Uint, _)
+                            | (_, _, crate::ScalarKind::Uint)
+                    ) {
+                        let mut ops = Cmo::NONE_KHR;
+                        if a_scalar.kind == Sint {
+                            ops |= Cmo::MATRIX_A_SIGNED_COMPONENTS_KHR;
+                        }
+                        if b_scalar.kind == Sint {
+                            ops |= Cmo::MATRIX_B_SIGNED_COMPONENTS_KHR;
+                        }
+                        if c_scalar.kind == Sint {
+                            ops |= Cmo::MATRIX_C_SIGNED_COMPONENTS_KHR;
+                            ops |= Cmo::MATRIX_RESULT_SIGNED_COMPONENTS_KHR;
+                        }
+                        Some(ops)
+                    } else {
+                        None
+                    }
+                };
+
                 block.body.push(Instruction::coop_mul_add(
                     result_type_id,
                     id,
                     a_id,
                     b_id,
                     c_id,
+                    matrix_operands,
                 ));
                 id
             }

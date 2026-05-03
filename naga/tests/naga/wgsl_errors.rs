@@ -5180,6 +5180,36 @@ fn cooperative_matrix_enable_extension() {
     }
 }
 
+/// Tests that cooperative matrices reject unsupported scalar types.
+#[test]
+fn cooperative_matrix_scalar_unsupported() {
+    use naga::valid::{Capabilities, TypeError};
+
+    // bool is never a valid cooperative matrix element type
+    check_one_validation!(
+        r#"enable wgpu_cooperative_matrix;
+var<private> a: coop_mat8x8<bool, A>;
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: TypeError::CooperativeMatrixScalarUnsupported { .. },
+            ..
+        }),
+        Capabilities::COOPERATIVE_MATRIX
+    );
+
+    // f64 is never a valid cooperative matrix element type
+    check_one_validation!(
+        r#"enable wgpu_cooperative_matrix;
+var<private> a: coop_mat8x8<f64, A>;
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: TypeError::CooperativeMatrixScalarUnsupported { .. },
+            ..
+        }),
+        Capabilities::COOPERATIVE_MATRIX | Capabilities::FLOAT64
+    );
+}
+
 /// Tests for mesh shader extension validation via WGSL parsing.
 ///
 /// Some mesh shader features can only be tested at parse-level in WGSL due to

@@ -1402,14 +1402,22 @@ bitflags_array! {
         /// matrix multiply-accumulate operations on small tiles of data, enabling
         /// hardware-accelerated matrix math.
         ///
-        /// **Current limitations:** The implementation currently only supports 8x8 f32 matrices.
-        /// On Vulkan, support is determined by querying `vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR`
-        /// for configurations matching 8x8x8 f32. Most Vulkan implementations (NVIDIA, AMD) primarily
-        /// support f16 inputs at larger sizes (e.g., 16x16), so Vulkan support may be limited.
+        /// **Supported scalar types:**
+        /// - `f16`, `f32` — float types, supported on Metal and Vulkan
+        /// - `i32`, `u32` — 32-bit integer types, Vulkan only
+        /// - `i8`, `u8` — 8-bit integer types, Vulkan only (requires device support for
+        ///   `shaderInt8` and `storageBuffer8BitAccess`; use `enable wgpu_cooperative_matrix;`
+        ///   to access the `i8`/`u8` predeclared scalars and the asymmetric matrix types
+        ///   such as `coop_mat16x32`, `coop_mat32x16` that 8-bit multiplies require)
+        ///
+        /// On Vulkan, the set of supported `(M, N, K, scalar)` configurations is determined
+        /// at adapter creation by querying `vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR`.
+        /// If no matching configuration is available on the device, this feature will not be
+        /// reported as supported.
         ///
         /// Supported platforms:
-        /// - Metal (with MSL 2.3+ and Apple7+/Mac2+, using simdgroup matrix operations)
-        /// - Vulkan (with [VK_KHR_cooperative_matrix](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_cooperative_matrix.html), if 8x8 f32 is supported)
+        /// - Metal (with MSL 2.3+ and Apple7+/Mac2+, using simdgroup matrix operations; float only)
+        /// - Vulkan (with [`VK_KHR_cooperative_matrix`](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_cooperative_matrix.html))
         ///
         /// This is a native only feature.
         #[name("wgpu-cooperative-matrix")]

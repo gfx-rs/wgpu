@@ -218,6 +218,9 @@ bitflags::bitflags! {
         const MEMORY_DECORATION_VOLATILE = 1 << 42;
         /// Support for 16-bit integer types.
         const SHADER_INT16 = 1 << 43;
+        /// Support for 8-bit integer scalars (`i8`/`u8`) in storage buffers and
+        /// as the component type of cooperative matrices.
+        const SHADER_INT8 = 1 << 44;
     }
 }
 

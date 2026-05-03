@@ -124,6 +124,13 @@ pub enum TypeError {
     InvalidArrayBaseType(Handle<crate::Type>),
     #[error("Matrix elements must always be floating-point types")]
     MatrixElementNotFloat,
+    #[error(
+        "Cooperative matrix component type must be f16, f32, i32, u32, i8, or u8 (got {kind:?} width {width})"
+    )]
+    CooperativeMatrixScalarUnsupported {
+        kind: crate::ScalarKind,
+        width: crate::Bytes,
+    },
     #[error("The constant {0:?} is specialized, and cannot be used as an array size")]
     UnsupportedSpecializedArrayLength(Handle<crate::Constant>),
     #[error("{} of dimensionality {dim:?} and class {class:?} are not supported", if *.arrayed {"Arrayed images"} else {"Images"})]
@@ -335,6 +342,15 @@ impl super::Validator {
                         });
                     }
                     true
+                } else if scalar.width == 1 {
+                    if !self.capabilities.contains(Capabilities::SHADER_INT8) {
+                        return Err(WidthError::MissingCapability {
+                            name: "i8",
+                            flag: "SHADER_INT8",
+                        });
+                    }
+                    immediates_compatibility = Err(ImmediateError::InvalidScalar(scalar));
+                    true
                 } else {
                     scalar.width == 4
                 }
@@ -358,6 +374,15 @@ impl super::Validator {
                             flag: "SHADER_INT64",
                         });
                     }
+                    true
+                } else if scalar.width == 1 {
+                    if !self.capabilities.contains(Capabilities::SHADER_INT8) {
+                        return Err(WidthError::MissingCapability {
+                            name: "u8",
+                            flag: "SHADER_INT8",
+                        });
+                    }
+                    immediates_compatibility = Err(ImmediateError::InvalidScalar(scalar));
                     true
                 } else {
                     scalar.width == 4
@@ -456,11 +481,19 @@ impl super::Validator {
                 role: _,
             } => {
                 self.require_type_capability(Capabilities::COOPERATIVE_MATRIX)?;
-                // Allow f16 (width 2) and f32 (width 4) for cooperative matrices
-                if scalar.kind != crate::ScalarKind::Float
-                    || (scalar.width != 2 && scalar.width != 4)
-                {
-                    return Err(TypeError::MatrixElementNotFloat);
+                let scalar_ok = match (scalar.kind, scalar.width) {
+                    (crate::ScalarKind::Float, 2) | (crate::ScalarKind::Float, 4) => true,
+                    (crate::ScalarKind::Sint | crate::ScalarKind::Uint, 4) => true,
+                    (crate::ScalarKind::Sint | crate::ScalarKind::Uint, 1) => {
+                        self.capabilities.contains(Capabilities::SHADER_INT8)
+                    }
+                    _ => false,
+                };
+                if !scalar_ok {
+                    return Err(TypeError::CooperativeMatrixScalarUnsupported {
+                        kind: scalar.kind,
+                        width: scalar.width,
+                    });
                 }
                 TypeInfo::new(
                     TypeFlags::DATA

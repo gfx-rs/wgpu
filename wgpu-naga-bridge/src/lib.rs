@@ -163,6 +163,12 @@ pub fn features_to_naga_capabilities(
         Caps::COOPERATIVE_MATRIX,
         features.intersects(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX),
     );
+    // i8/u8 scalars are enabled alongside cooperative matrix (needed for int8 component types).
+    // Backends that don't support cooperative matrix never set this feature so this is safe.
+    caps.set(
+        Caps::SHADER_INT8,
+        features.intersects(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX),
+    );
     caps.set(
         Caps::PER_VERTEX,
         features.intersects(wgt::Features::SHADER_PER_VERTEX),

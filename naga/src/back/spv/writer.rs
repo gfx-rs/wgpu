@@ -2048,8 +2048,19 @@ impl Writer {
                 self.require_any("16 bit integer", &[spirv::Capability::Int16])?;
                 self.use_extension("SPV_KHR_16bit_storage");
             }
+            // 8-bit integer support requires Int8 and StorageBuffer8BitAccess
+            crate::TypeInner::Scalar(crate::Scalar {
+                width: 1,
+                kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+            }) => {
+                self.capabilities_used
+                    .insert(spirv::Capability::StorageBuffer8BitAccess);
+                self.capabilities_used
+                    .insert(spirv::Capability::UniformAndStorageBuffer8BitAccess);
+                self.use_extension("SPV_KHR_8bit_storage");
+            }
             // Cooperative types and ops
-            crate::TypeInner::CooperativeMatrix { .. } => {
+            crate::TypeInner::CooperativeMatrix { scalar, .. } => {
                 self.require_any(
                     "cooperative matrix",
                     &[spirv::Capability::CooperativeMatrixKHR],
@@ -2057,6 +2068,13 @@ impl Writer {
                 self.require_any("memory model", &[spirv::Capability::VulkanMemoryModel])?;
                 self.use_extension("SPV_KHR_cooperative_matrix");
                 self.use_extension("SPV_KHR_vulkan_memory_model");
+                if scalar.width == 1 {
+                    self.capabilities_used
+                        .insert(spirv::Capability::StorageBuffer8BitAccess);
+                    self.capabilities_used
+                        .insert(spirv::Capability::UniformAndStorageBuffer8BitAccess);
+                    self.use_extension("SPV_KHR_8bit_storage");
+                }
             }
             _ => {}
         }
