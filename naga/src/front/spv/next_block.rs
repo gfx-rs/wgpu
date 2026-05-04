@@ -823,6 +823,115 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         SignAnchor::Result,
                     )?;
                 }
+                Op::IAddCarry | Op::ISubBorrow => {
+                    inst.expect(5)?;
+
+                    let start = self.data_offset;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let p1_id = self.next()?;
+                    let p2_id = self.next()?;
+                    let span = self.span_from_with_op(start);
+
+                    let p1_lexp = self.lookup_expression.lookup(p1_id)?;
+                    let p1_type_id = p1_lexp.type_id;
+                    let mut left = get_expr_handle!(p1_id, p1_lexp);
+                    let p2_lexp = self.lookup_expression.lookup(p2_id)?;
+                    let p2_type_id = p2_lexp.type_id;
+                    let mut right = get_expr_handle!(p2_id, p2_lexp);
+
+                    // Result is `OpTypeStruct{T, T}` whose two members must
+                    // have the same type as the operands per the SPIR-V spec.
+                    let result_ty_handle = self.lookup_type.lookup(result_type_id)?.handle;
+                    let member_ty_id = self
+                        .lookup_member
+                        .get(&(result_ty_handle, 0))
+                        .ok_or(Error::InvalidAccessType(result_type_id))?
+                        .type_id;
+                    let member_ty_handle = self.lookup_type.lookup(member_ty_id)?.handle;
+                    let scalar = ctx.module.types[member_ty_handle]
+                        .inner
+                        .scalar()
+                        .ok_or(Error::InvalidAccessType(result_type_id))?;
+
+                    // SPIR-V integer types are signless, so when the operand's
+                    // declared `OpTypeInt` differs from the struct member's
+                    // (e.g. `signed` vs `unsigned`), bitcast it so the produced
+                    // naga IR expressions type-check.
+                    if p1_type_id != member_ty_id {
+                        left = ctx.expressions.append(
+                            crate::Expression::As {
+                                expr: left,
+                                kind: scalar.kind,
+                                convert: None,
+                            },
+                            span,
+                        );
+                    }
+                    if p2_type_id != member_ty_id {
+                        right = ctx.expressions.append(
+                            crate::Expression::As {
+                                expr: right,
+                                kind: scalar.kind,
+                                convert: None,
+                            },
+                            span,
+                        );
+                    }
+
+                    let arith_op = match inst.op {
+                        Op::IAddCarry => crate::BinaryOperator::Add,
+                        Op::ISubBorrow => crate::BinaryOperator::Subtract,
+                        _ => unreachable!(),
+                    };
+                    let arith = ctx.expressions.append(
+                        crate::Expression::Binary {
+                            op: arith_op,
+                            left,
+                            right,
+                        },
+                        span,
+                    );
+                    let (cmp_left, cmp_right) = match inst.op {
+                        // `a + b` carries iff the wrapped sum drops below `a`.
+                        Op::IAddCarry => (arith, left),
+                        // `a - b` borrows iff `a < b`.
+                        Op::ISubBorrow => (left, right),
+                        _ => unreachable!(),
+                    };
+                    let cmp = ctx.expressions.append(
+                        crate::Expression::Binary {
+                            op: crate::BinaryOperator::Less,
+                            left: cmp_left,
+                            right: cmp_right,
+                        },
+                        span,
+                    );
+                    let cmp_int = ctx.expressions.append(
+                        crate::Expression::As {
+                            expr: cmp,
+                            kind: scalar.kind,
+                            convert: Some(scalar.width),
+                        },
+                        span,
+                    );
+
+                    let composed = ctx.expressions.append(
+                        crate::Expression::Compose {
+                            ty: result_ty_handle,
+                            components: alloc::vec![arith, cmp_int],
+                        },
+                        span,
+                    );
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: composed,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+                }
                 Op::IEqual | Op::INotEqual => {
                     inst.expect(5)?;
                     let operator = map_binary_operator(inst.op)?;
