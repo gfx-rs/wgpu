@@ -654,10 +654,28 @@ impl BufferMemoryBacking {
         }
     }
 }
+/// Describes who owns a [`Buffer`]'s `vk::Buffer` handle and its backing memory,
+/// and therefore what cleanup is required when the buffer is destroyed.
+#[derive(Debug)]
+enum BufferOwnership {
+    /// wgpu-hal owns the `vk::Buffer` and its backing memory. On cleanup the buffer
+    /// handle is destroyed and the memory is released.
+    Managed(Mutex<BufferMemoryBacking>),
+    /// wgpu-hal owns the `vk::Buffer` handle but the backing memory is kept alive
+    /// by the caller. On cleanup only the buffer handle is destroyed.
+    RawHandle,
+    /// Caller owns the `vk::Buffer` and its backing memory. On cleanup the
+    /// [`crate::DropGuard`] runs the caller's cleanup callback and wgpu-hal touches
+    /// neither the handle nor the memory.
+    External(crate::DropGuard),
+}
+
 #[derive(Debug)]
 pub struct Buffer {
     raw: vk::Buffer,
-    allocation: Option<Mutex<BufferMemoryBacking>>,
+
+    // This field must be last, because it may contain a `DropGuard` which needs to be dropped after all other fields.
+    ownership: BufferOwnership,
 }
 impl Buffer {
     /// # Safety
@@ -667,9 +685,25 @@ impl Buffer {
     pub unsafe fn from_raw(vk_buffer: vk::Buffer) -> Self {
         Self {
             raw: vk_buffer,
-            allocation: None,
+            ownership: BufferOwnership::RawHandle,
         }
     }
+
+    /// # Safety
+    /// - `vk_buffer` must outlive the returned `Buffer`.
+    /// - wgpu-hal will NOT call `vkDestroyBuffer`; the caller remains responsible for the buffer handle's destruction.
+    ///   The `drop_callback` runs when the `Buffer` drops and may be used to release caller-side bookkeeping.
+    /// - Externally imported buffers can't be mapped by `wgpu`.
+    pub unsafe fn from_raw_externally_owned(
+        vk_buffer: vk::Buffer,
+        drop_callback: crate::DropCallback,
+    ) -> Self {
+        Self {
+            raw: vk_buffer,
+            ownership: BufferOwnership::External(crate::DropGuard::new(drop_callback)),
+        }
+    }
+
     /// # Safety
     /// - We will use this buffer and the buffer's backing memory range as if we have exclusive ownership over it, until the wgpu resource is dropped and the wgpu-hal object is cleaned up
     /// - Externally imported buffers can't be mapped by `wgpu`
@@ -682,7 +716,7 @@ impl Buffer {
     ) -> Self {
         Self {
             raw: vk_buffer,
-            allocation: Some(Mutex::new(BufferMemoryBacking::VulkanMemory {
+            ownership: BufferOwnership::Managed(Mutex::new(BufferMemoryBacking::VulkanMemory {
                 memory,
                 offset,
                 size,
