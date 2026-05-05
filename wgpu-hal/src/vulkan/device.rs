@@ -235,7 +235,10 @@ impl super::DeviceShared {
         buffer: &'a super::Buffer,
         ranges: I,
     ) -> Option<impl 'a + Iterator<Item = vk::MappedMemoryRange<'a>>> {
-        let allocation = buffer.allocation.as_ref()?.lock();
+        let super::BufferOwnership::Managed(ref allocation) = buffer.ownership else {
+            return None;
+        };
+        let allocation = allocation.lock();
         let mask = self.private_caps.non_coherent_map_mask;
         Some(ranges.map(move |range| {
             vk::MappedMemoryRange::default()
@@ -988,24 +991,35 @@ impl crate::Device for super::Device {
 
         Ok(super::Buffer {
             raw,
-            allocation: Some(Mutex::new(super::BufferMemoryBacking::Managed(allocation))),
+            ownership: super::BufferOwnership::Managed(Mutex::new(
+                super::BufferMemoryBacking::Managed(allocation),
+            )),
         })
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
-        unsafe { self.shared.raw.destroy_buffer(buffer.raw, None) };
-        if let Some(allocation) = buffer.allocation {
-            let allocation = allocation.into_inner();
-            self.counters.buffer_memory.sub(allocation.size() as isize);
-            match allocation {
-                super::BufferMemoryBacking::Managed(allocation) => {
-                    let result = self.mem_allocator.lock().free(allocation);
-                    if let Err(err) = result {
-                        log::warn!("Failed to free buffer allocation: {err}");
+        match buffer.ownership {
+            super::BufferOwnership::Managed(allocation) => {
+                unsafe { self.shared.raw.destroy_buffer(buffer.raw, None) };
+                let allocation = allocation.into_inner();
+                self.counters.buffer_memory.sub(allocation.size() as isize);
+                match allocation {
+                    super::BufferMemoryBacking::Managed(allocation) => {
+                        let result = self.mem_allocator.lock().free(allocation);
+                        if let Err(err) = result {
+                            log::warn!("Failed to free buffer allocation: {err}");
+                        }
                     }
+                    super::BufferMemoryBacking::VulkanMemory { memory, .. } => unsafe {
+                        self.shared.raw.free_memory(memory, None);
+                    },
                 }
-                super::BufferMemoryBacking::VulkanMemory { memory, .. } => unsafe {
-                    self.shared.raw.free_memory(memory, None);
-                },
+            }
+            super::BufferOwnership::RawHandle => {
+                unsafe { self.shared.raw.destroy_buffer(buffer.raw, None) };
+            }
+            super::BufferOwnership::External(_drop_guard) => {
+                // The caller owns the `vk::Buffer` and its memory. Dropping
+                // `_drop_guard` at the end of this arm runs the cleanup callback.
             }
         }
 
@@ -1021,35 +1035,36 @@ impl crate::Device for super::Device {
         buffer: &super::Buffer,
         range: crate::MemoryRange,
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
-        if let Some(ref allocation) = buffer.allocation {
-            let mut allocation = allocation.lock();
-            if let super::BufferMemoryBacking::Managed(ref mut allocation) = *allocation {
-                let is_coherent = allocation
-                    .memory_properties()
-                    .contains(vk::MemoryPropertyFlags::HOST_COHERENT);
-                Ok(crate::BufferMapping {
-                    ptr: unsafe {
-                        allocation
-                            .mapped_ptr()
-                            .unwrap()
-                            .cast()
-                            .offset(range.start as isize)
-                    },
-                    is_coherent,
-                })
-            } else {
-                crate::hal_usage_error("tried to map externally created buffer")
-            }
-        } else {
+        let super::BufferOwnership::Managed(ref allocation) = buffer.ownership else {
             crate::hal_usage_error("tried to map external buffer")
-        }
+        };
+        let mut allocation = allocation.lock();
+        let super::BufferMemoryBacking::Managed(ref mut allocation) = *allocation else {
+            crate::hal_usage_error("tried to map externally created buffer")
+        };
+        let is_coherent = allocation
+            .memory_properties()
+            .contains(vk::MemoryPropertyFlags::HOST_COHERENT);
+        Ok(crate::BufferMapping {
+            ptr: unsafe {
+                allocation
+                    .mapped_ptr()
+                    .unwrap()
+                    .cast()
+                    .offset(range.start as isize)
+            },
+            is_coherent,
+        })
     }
 
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
-        if buffer.allocation.is_some() {
-            // gpu-allocator maps the buffer when allocated and unmap it when free'd
-        } else {
-            crate::hal_usage_error("tried to unmap external buffer")
+        match buffer.ownership {
+            super::BufferOwnership::Managed(_) => {
+                // gpu-allocator maps the buffer when allocated and unmaps it when free'd
+            }
+            super::BufferOwnership::RawHandle | super::BufferOwnership::External(_) => {
+                crate::hal_usage_error("tried to unmap external buffer")
+            }
         }
     }
 

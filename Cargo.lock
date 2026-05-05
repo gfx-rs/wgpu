@@ -1778,6 +1778,8 @@ dependencies = [
  "allocator-api2",
  "equivalent",
  "foldhash 0.2.0",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -1785,11 +1787,6 @@ name = "hashbrown"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
-dependencies = [
- "foldhash 0.2.0",
- "serde",
- "serde_core",
-]
 
 [[package]]
 name = "heck"
@@ -2397,7 +2394,7 @@ dependencies = [
  "diff",
  "env_logger",
  "half",
- "hashbrown 0.17.0",
+ "hashbrown 0.16.1",
  "hlsl-snapshots",
  "indexmap",
  "itertools 0.14.0",
@@ -3099,7 +3096,7 @@ version = "29.0.0"
 dependencies = [
  "bytemuck",
  "env_logger",
- "hashbrown 0.17.0",
+ "hashbrown 0.16.1",
  "log",
  "raw-window-handle",
  "ron",
@@ -4679,7 +4676,7 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "document-features",
- "hashbrown 0.17.0",
+ "hashbrown 0.16.1",
  "js-sys",
  "log",
  "naga",
@@ -4749,7 +4746,7 @@ dependencies = [
  "bytemuck",
  "cfg_aliases",
  "document-features",
- "hashbrown 0.17.0",
+ "hashbrown 0.16.1",
  "indexmap",
  "log",
  "macro_rules_attribute",
@@ -4881,7 +4878,7 @@ dependencies = [
  "glutin-winit",
  "glutin_wgl_sys",
  "gpu-allocator",
- "hashbrown 0.17.0",
+ "hashbrown 0.16.1",
  "js-sys",
  "khronos-egl",
  "libc",
@@ -4926,7 +4923,7 @@ dependencies = [
  "bitflags 2.11.1",
  "env_logger",
  "exhaust",
- "hashbrown 0.17.0",
+ "hashbrown 0.16.1",
  "pico-args",
  "pollster",
  "serde",
@@ -5003,7 +5000,7 @@ dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
  "exhaust",
- "hashbrown 0.17.0",
+ "hashbrown 0.16.1",
  "js-sys",
  "log",
  "raw-window-handle",
