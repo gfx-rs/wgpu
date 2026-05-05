@@ -3338,7 +3338,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         rows: crate::VectorSize::Bi,
                         width: 4,
                     }) = get_inner_matrix_of_struct_array_member(module, base, func_ctx, true)
-                        .or_else(|| get_global_uniform_matrix(module, base, func_ctx))
+                        .or_else(|| {
+                            get_inner_matrix_of_global_uniform(module, base, func_ctx, true)
+                        })
                     {
                         write!(self.out, "__get_col_of_mat{}x2(", columns as u8)?;
                         self.write_expr(module, base, func_ctx)?;
@@ -3462,7 +3464,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         width: 4,
                         ..
                     }) = get_inner_matrix_of_struct_array_member(module, base, func_ctx, true)
-                        .or_else(|| get_global_uniform_matrix(module, base, func_ctx))
+                        .or_else(|| {
+                            get_inner_matrix_of_global_uniform(module, base, func_ctx, true)
+                        })
                     {
                         self.write_expr(module, base, func_ctx)?;
                         write!(self.out, "._{index}")?;
@@ -3811,8 +3815,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         }) = get_inner_matrix_of_struct_array_member(
                             module, pointer, func_ctx, false,
                         )
-                        .or_else(|| get_inner_matrix_of_global_uniform(module, pointer, func_ctx))
-                        {
+                        .or_else(|| {
+                            get_inner_matrix_of_global_uniform(module, pointer, func_ctx, false)
+                        }) {
                             let mut resolved = func_ctx.resolve_type(pointer, &module.types);
                             let ptr_tr = resolved.pointer_base_type();
                             if let Some(ptr_ty) =
@@ -5018,44 +5023,15 @@ pub(super) fn get_inner_matrix_of_struct_array_member(
     None
 }
 
-/// Simpler version of get_inner_matrix_of_global_uniform that only looks at the
-/// immediate expression, rather than traversing an access chain.
-fn get_global_uniform_matrix(
-    module: &Module,
-    base: Handle<crate::Expression>,
-    func_ctx: &back::FunctionCtx<'_>,
-) -> Option<MatrixType> {
-    let base_tr = func_ctx
-        .resolve_type(base, &module.types)
-        .pointer_base_type();
-    let base_ty = base_tr.as_ref().map(|tr| tr.inner_with(&module.types));
-    match (&func_ctx.expressions[base], base_ty) {
-        (
-            &crate::Expression::GlobalVariable(handle),
-            Some(&TypeInner::Matrix {
-                columns,
-                rows,
-                scalar,
-            }),
-        ) if module.global_variables[handle].space == crate::AddressSpace::Uniform => {
-            Some(MatrixType {
-                columns,
-                rows,
-                width: scalar.width,
-            })
-        }
-        _ => None,
-    }
-}
-
 /// Returns the matrix data if the access chain starting at `base`:
-/// - starts with an expression with resolved type of [`TypeInner::Matrix`]
-/// - contains zero or more expressions with resolved type of [`TypeInner::Array`] of [`TypeInner::Matrix`]
-/// - ends with an [`Expression::GlobalVariable`](crate::Expression::GlobalVariable) in [`AddressSpace::Uniform`](crate::AddressSpace::Uniform)
+/// - starts with an expression with resolved type of [`TypeInner::Matrix`], or
+/// - contains zero or more expressions with resolved type of [`TypeInner::Array`] of [`TypeInner::Matrix`] if `direct = false`
+/// - and ends with an [`Expression::GlobalVariable`](crate::Expression::GlobalVariable) in [`AddressSpace::Uniform`](crate::AddressSpace::Uniform)
 fn get_inner_matrix_of_global_uniform(
     module: &Module,
     base: Handle<crate::Expression>,
     func_ctx: &back::FunctionCtx<'_>,
+    direct: bool,
 ) -> Option<MatrixType> {
     let mut mat_data = None;
     let mut array_base = None;
@@ -5080,7 +5056,9 @@ fn get_inner_matrix_of_global_uniform(
                 })
             }
             TypeInner::Array { base, .. } => {
-                array_base = Some(base);
+                if !direct {
+                    array_base = Some(base);
+                }
             }
             _ => break,
         }
