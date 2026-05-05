@@ -1,18 +1,18 @@
-typedef struct { float2 _0; float2 _1; } __mat2x2;
-float2 __get_col_of_mat2x2(__mat2x2 mat, uint idx) {
+typedef struct { float2 _0; float2 _1; } __mat2x2_f32;
+float2 __get_col_of_mat2x2_f32(__mat2x2_f32 mat, uint idx) {
     switch(idx) {
     case 0: { return mat._0; }
     case 1: { return mat._1; }
     default: { return (float2)0; }
     }
 }
-void __set_col_of_mat2x2(__mat2x2 mat, uint idx, float2 value) {
+void __set_col_of_mat2x2_f32(__mat2x2_f32 mat, uint idx, float2 value) {
     switch(idx) {
     case 0: { mat._0 = value; break; }
     case 1: { mat._1 = value; break; }
     }
 }
-void __set_el_of_mat2x2(__mat2x2 mat, uint idx, uint vec_idx, float value) {
+void __set_el_of_mat2x2_f32(__mat2x2_f32 mat, uint idx, uint vec_idx, float value) {
     switch(idx) {
     case 0: { mat._0[vec_idx] = value; break; }
     case 1: { mat._1[vec_idx] = value; break; }
@@ -28,11 +28,11 @@ struct StructWithArrayOfStructOfMat {
 };
 
 RWByteAddressBuffer s_m : register(u0);
-cbuffer u_m : register(b1) { __mat2x2 u_m; }
+cbuffer u_m : register(b1) { __mat2x2_f32 u_m; }
 RWByteAddressBuffer s_sm : register(u0, space1);
 cbuffer u_sm : register(b1, space1) { StructWithMat u_sm; }
 RWByteAddressBuffer s_am : register(u0, space2);
-cbuffer u_am : register(b1, space2) { __mat2x2 u_am[4]; }
+cbuffer u_am : register(b1, space2) { __mat2x2_f32 u_am[4]; }
 RWByteAddressBuffer s_sasm : register(u0, space3);
 cbuffer u_sasm : register(b1, space3) { StructWithArrayOfStructOfMat u_sasm; }
 
@@ -57,15 +57,15 @@ void access_m()
     float2x2 l_u_m = ((float2x2)u_m);
     float2 l_u_c_c = u_m._0;
     int _e40 = idx;
-    float2 l_u_c_v = __get_col_of_mat2x2(u_m, _e40);
+    float2 l_u_c_v = __get_col_of_mat2x2_f32(u_m, _e40);
     float l_u_e_cc = u_m._0.x;
     int _e49 = idx;
     float l_u_e_cv = u_m._0[_e49];
     int _e53 = idx;
-    float l_u_e_vc = __get_col_of_mat2x2(u_m, _e53).x;
+    float l_u_e_vc = __get_col_of_mat2x2_f32(u_m, _e53).x;
     int _e58 = idx;
     int _e60 = idx;
-    float l_u_e_vv = __get_col_of_mat2x2(u_m, _e58)[_e60];
+    float l_u_e_vv = __get_col_of_mat2x2_f32(u_m, _e58)[_e60];
     {
         float2x2 _value2 = l_u_m;
         s_m.Store2(0, asuint(_value2[0]));
@@ -223,20 +223,20 @@ void access_am()
     float2x2 l_u_m_v = ((float2x2)u_am[_e92]);
     float2 l_u_c_cc = u_am[0]._0;
     int _e101 = idx_2;
-    float2 l_u_c_cv = __get_col_of_mat2x2(u_am[0], _e101);
+    float2 l_u_c_cv = __get_col_of_mat2x2_f32(u_am[0], _e101);
     int _e105 = idx_2;
     float2 l_u_c_vc = u_am[_e105]._0;
     int _e110 = idx_2;
     int _e112 = idx_2;
-    float2 l_u_c_vv = __get_col_of_mat2x2(u_am[_e110], _e112);
+    float2 l_u_c_vv = __get_col_of_mat2x2_f32(u_am[_e110], _e112);
     float l_u_e_ccc = u_am[0]._0.x;
     int _e123 = idx_2;
     float l_u_e_ccv = u_am[0]._0[_e123];
     int _e128 = idx_2;
-    float l_u_e_cvc = __get_col_of_mat2x2(u_am[0], _e128).x;
+    float l_u_e_cvc = __get_col_of_mat2x2_f32(u_am[0], _e128).x;
     int _e134 = idx_2;
     int _e136 = idx_2;
-    float l_u_e_cvv = __get_col_of_mat2x2(u_am[0], _e134)[_e136];
+    float l_u_e_cvv = __get_col_of_mat2x2_f32(u_am[0], _e134)[_e136];
     int _e140 = idx_2;
     float l_u_e_vcc = u_am[_e140]._0.x;
     int _e146 = idx_2;
@@ -244,11 +244,11 @@ void access_am()
     float l_u_e_vcv = u_am[_e146]._0[_e149];
     int _e153 = idx_2;
     int _e155 = idx_2;
-    float l_u_e_vvc = __get_col_of_mat2x2(u_am[_e153], _e155).x;
+    float l_u_e_vvc = __get_col_of_mat2x2_f32(u_am[_e153], _e155).x;
     int _e160 = idx_2;
     int _e162 = idx_2;
     int _e164 = idx_2;
-    float l_u_e_vvv = __get_col_of_mat2x2(u_am[_e160], _e162)[_e164];
+    float l_u_e_vvv = __get_col_of_mat2x2_f32(u_am[_e160], _e162)[_e164];
     {
         float2x2 _value2[4] = l_u_a;
         {
