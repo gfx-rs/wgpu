@@ -17,7 +17,6 @@ env:
   REPO_MSRV: "1.93"
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
-  DENO_WEBGPU_DX12_COMPILER: dynamicdxc
   RUST_BACKTRACE: full
   RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
@@ -156,7 +155,6 @@ jobs:
         shell: bash
         run: |
           export LLVM_PROFILE_FILE=${{ github.workspace }}/target/wgpu-%p-%m.profraw
-          export DENO_WEBGPU_BACKEND=${{ matrix.backend }}
           cargo --locked test -p cts_runner
 
       - name: Run CTS
