@@ -1183,7 +1183,7 @@ pub struct FencePool {
     last_completed: crate::FenceValue,
     /// The pending fence values have to be ascending.
     active: Vec<(crate::FenceValue, SynchronizedFence)>,
-    // Don't need exta synchronisation around the fences here, if they are used they should be put into active.
+    // Don't need extra synchronisation around the fences here, if they are used they should be put into active.
     free: Vec<vk::Fence>,
 }
 
@@ -1208,7 +1208,7 @@ impl Fence {
                 if value > last_completed
                     && device
                         // Don't need to clone as active should be from a read or
-                        // write lock which means this is alread synchronised.
+                        // write lock which means this is already synchronised.
                         .get_fence_status(**raw)
                         .map_err(map_host_device_oom_and_lost_err)?
                 {
@@ -1375,7 +1375,7 @@ impl crate::Queue for Queue {
 
         // We need to signal our wgpu::Fence if we have one, this adds it to the signal list.
         signal_fence.maintain(&self.device.raw)?;
-        // Keeping the Arc around is probaly unneeded - the fence should never be signaled as it was reset,
+        // Keeping the Arc around is probably unneeded - the fence should never be signaled as it was reset,
         // and newer submits should not happen until this submit is done. Therefore, it should be too high
         // to be reset.
         let shared_fence;
