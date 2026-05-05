@@ -9,14 +9,14 @@ use crate::AtomicFenceValue;
 #[derive(Debug)]
 struct GLFence {
     // Since a fence can be `Copy`ed, there can exist some
-    // cases where (without proper synchronisation),
-    // a fence could be destroyed while something else is
-    // still using it. Therefore, while a function is
-    // using this fence, it should read this. (write
-    // should be done when destroying it)
+    // cases where a fence could be destroyed while something
+    // else is still using it. Therefore, while a function is
+    // using this fence (and doesn't keep pending read locked),
+    // it should clone the `Arc` to show it needs this to
+    // stay alive.
     //
     // The arc should not be kept after a function has finished
-    sync: Arc<RwLock<glow::Fence>>,
+    sync: Arc<glow::Fence>,
     value: crate::FenceValue,
 }
 
@@ -56,7 +56,7 @@ impl Fence {
         let sync = unsafe { gl.fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0) }
             .map_err(|_| crate::DeviceError::OutOfMemory)?;
         self.pending.write().push(GLFence {
-            sync: Arc::new(RwLock::new(sync)),
+            sync: Arc::new(sync),
             value,
         });
 
@@ -77,12 +77,12 @@ impl Fence {
         let pending = self.pending.read();
 
         for gl_fence in pending.iter() {
-            let fence = gl_fence.sync.read();
             if gl_fence.value <= max_value {
                 // We already know this was good, no need to check again
                 continue;
             }
-            let status = unsafe { gl.get_sync_status(*fence) };
+            // We have pending `read` locked, so we shouldn't have to clone it.
+            let status = unsafe { gl.get_sync_status(*gl_fence.sync) };
             if status == glow::SIGNALED {
                 max_value = gl_fence.value;
             } else {
@@ -104,20 +104,22 @@ impl Fence {
 
         let latest = self.get_latest(gl);
         let mut pending = self.pending.write();
-        for gl_fence in pending.iter() {
-            // We don't need to keep around this lock until after the retain - we need to make
-            // sure nothing is using it by writing to it, but any new references must come
-            // from `self.pending`, which is write-locked, so nothing else can take a
-            // copy of this value
-            let sync = *gl_fence.sync.write();
-
-            if gl_fence.value <= latest {
+        pending.retain_mut(|gl_fence| {
+            if gl_fence.value > latest {
+                true
+            } else if let Some(fence) = Arc::get_mut(&mut gl_fence.sync) {
                 unsafe {
-                    gl.delete_sync(sync);
+                    gl.delete_sync(*fence);
                 }
+                false
+            } else {
+                // Another function is currently using this value. In general, these should finish
+                // very quickly (for wait because the fence should already be signaled, an all
+                // others are just fast), but submit should be very fast, so we shouldn't block on
+                // this.
+                true
             }
-        }
-        pending.retain(|gl_fence| gl_fence.value > latest);
+        });
     }
 
     pub fn wait(
@@ -153,13 +155,14 @@ impl Fence {
         // We should have found a fence with the exact value.
         debug_assert_eq!(gl_fence.value, wait_value);
 
+        // clone to show we're using the fence
         let sync = gl_fence.sync.clone();
 
         drop(pending);
 
         let status = unsafe {
             gl.client_wait_sync(
-                *sync.read(),
+                *sync,
                 glow::SYNC_FLUSH_COMMANDS_BIT,
                 timeout_ns.min(i32::MAX as u32) as i32,
             )
@@ -192,8 +195,7 @@ impl Fence {
             unsafe {
                 gl.delete_sync(
                     Arc::into_inner(gl_fence.sync)
-                        .expect("A function has failed to drop all its references to this")
-                        .into_inner(),
+                        .expect("A function has failed to drop all its references to this"),
                 );
             }
         }

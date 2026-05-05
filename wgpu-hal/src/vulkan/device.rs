@@ -2300,13 +2300,11 @@ impl crate::Device for super::Device {
 
                 for (_, raw) in active {
                     unsafe {
-                        self.shared.raw.destroy_fence(Arc::into_inner(raw).expect("Fence should have its reference count be one by the end of each function").into_inner(), None)
+                        self.shared.raw.destroy_fence(Arc::into_inner(raw).expect("Fence should have its reference count be one by the end of each function"), None)
                     };
                 }
                 for raw in free {
-                    unsafe {
-                        self.shared.raw.destroy_fence(Arc::into_inner(raw).expect("Fence should have its reference count be one by the end of each function").into_inner(), None)
-                    };
+                    unsafe { self.shared.raw.destroy_fence(raw, None) };
                 }
             }
         }
@@ -2847,9 +2845,8 @@ impl super::DeviceShared {
                 } else {
                     match active.iter().find(|&&(value, _)| value >= wait_value) {
                         Some((_, fence)) => {
+                            // clone to show we are using this fence while the pool is unlocked.
                             let fence = fence.clone();
-                            // Don't block other things while waiting, but make sure that the fence can't be reset during this.
-                            let fence = fence.read();
                             drop(pool);
                             match unsafe {
                                 self.raw.wait_for_fences(

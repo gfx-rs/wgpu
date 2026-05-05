@@ -1171,15 +1171,20 @@ pub enum Fence {
     FencePool(RwLock<FencePool>),
 }
 
-/// A shared fence type. The arc is expect to be one once a function has finished being called
-pub(super) type SynchronizedFence = Arc<RwLock<vk::Fence>>;
+/// A shared fence type. The arc is expect to have a ref-count of one once a function has finished being called
+///
+/// A fence should have access synchronised as fence resetting might happen at any point. Resetting checks the ref-count
+/// of the fence, so instead of copying the fence, it should have its `Arc` container cloned which shows not to reset
+/// this fence as it is being used.
+pub(super) type SynchronizedFence = Arc<vk::Fence>;
 
 #[derive(Debug)]
 pub struct FencePool {
     last_completed: crate::FenceValue,
     /// The pending fence values have to be ascending.
     active: Vec<(crate::FenceValue, SynchronizedFence)>,
-    free: Vec<SynchronizedFence>,
+    // Don't need exta synchronisation around the fences here, if they are used they should be put into active.
+    free: Vec<vk::Fence>,
 }
 
 impl crate::DynFence for Fence {}
@@ -1202,7 +1207,9 @@ impl Fence {
             unsafe {
                 if value > last_completed
                     && device
-                        .get_fence_status(*raw.read())
+                        // Don't need to clone as active should be from a read or
+                        // write lock which means this is alread synchronised.
+                        .get_fence_status(**raw)
                         .map_err(map_host_device_oom_and_lost_err)?
                 {
                     last_completed = value;
@@ -1263,29 +1270,28 @@ impl Fence {
                     ref mut active,
                     ref mut free,
                 } = *pool.write();
-                let latest = Self::check_active(device, *last_completed, active)?;
+
                 let base_free = free.len();
-                for &(value, ref fence) in active.iter() {
-                    if value <= latest {
-                        free.push(fence.clone());
+                let latest = Self::check_active(device, *last_completed, active)?;
+
+                active.retain_mut(|&mut (value, ref mut fence)| {
+                    if value > latest {
+                        true
+                    } else if let Some(fence) = Arc::get_mut(fence) {
+                        // No other references to these, so we have exclusive access. Add them to free and reset them later,
+                        // but drop them from active immediately
+                        free.push(*fence);
+                        false
+                    } else {
+                        // some other function is using it. Although this shouldn't be to long,
+                        // maintain shouldn't block, and it should be cleared up by the next time it happens
+                        true
                     }
-                }
+                });
+
                 if free.len() != base_free {
-                    active.retain(|&(value, _)| value > latest);
-
-                    let to_reset = free[base_free..]
-                        .iter()
-                        .map(|fence| {
-                            // We don't need to keep this write lock. Any other function should read from it while it is using
-                            // it, this write checks that. Any new readers or writers would come through pool, which is write
-                            // (and so exclusively) locked. This means no new readers can come in from anywhere, even if the
-                            // write lock is dropped, so we can save some space.
-                            let guard = fence.write();
-                            *guard
-                        })
-                        .collect::<Box<_>>();
-
-                    unsafe { device.reset_fences(&to_reset) }.map_err(map_device_oom_err)?
+                    unsafe { device.reset_fences(&free[base_free..]) }
+                        .map_err(map_device_oom_err)?
                 }
                 *last_completed = latest;
             }
@@ -1369,8 +1375,10 @@ impl crate::Queue for Queue {
 
         // We need to signal our wgpu::Fence if we have one, this adds it to the signal list.
         signal_fence.maintain(&self.device.raw)?;
-        let sync_fence;
-        let fence_lock;
+        // Keeping the Arc around is probaly unneeded - the fence should never be signaled as it was reset,
+        // and newer submits should not happen until this submit is done. Therefore, it should be too high
+        // to be reset.
+        let shared_fence;
         match *signal_fence {
             Fence::TimelineSemaphore(raw) => {
                 signal_semaphores.push_signal(SemaphoreType::Timeline(raw, signal_value));
@@ -1381,24 +1389,19 @@ impl crate::Queue for Queue {
                     ref mut free,
                     ..
                 } = *pool.write();
-                let active_fence;
-                (fence_raw, active_fence) = match free.pop() {
-                    Some(raw) => {
-                        // Lock the fence until after the submit is done (which is at the end of this function).
-                        sync_fence = raw;
-                        fence_lock = sync_fence.read();
-                        (*fence_lock, sync_fence.clone())
-                    }
+                shared_fence = match free.pop() {
+                    Some(raw) => Arc::new(raw),
                     None => unsafe {
                         let fence = self
                             .device
                             .raw
                             .create_fence(&vk::FenceCreateInfo::default(), None)
                             .map_err(map_host_device_oom_err)?;
-                        (fence, Arc::new(RwLock::new(fence)))
+                        Arc::new(fence)
                     },
                 };
-                active.push((signal_value, active_fence));
+                fence_raw = *shared_fence;
+                active.push((signal_value, shared_fence.clone()));
             }
         }
 
