@@ -344,6 +344,9 @@ pub struct Buffer {
     size: wgt::BufferAddress,
     /// Flags to use within calls to [`Device::map_buffer`](crate::Device::map_buffer).
     map_flags: u32,
+    /// Buffer mapping state.
+    ///
+    /// If locked concurrently with the GL context, the GL context should be locked first.
     map_state: Arc<MaybeMutex<BufferMapState>>,
 }
 
