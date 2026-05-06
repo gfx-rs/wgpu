@@ -188,6 +188,47 @@ fn partially_mapped() {
     assert!(result.is_err());
 }
 
+/// Ensure that `map_async` calls its callback even when the buffer is invalid.
+///
+/// Regression test: when `buffer_map_async` failed because the buffer id referred to
+/// an invalid buffer (one whose creation had failed), it dropped `op` via `?` without
+/// calling its callback, violating the documented guarantee that the callback is always
+/// called.
+#[test]
+fn map_async_on_invalid_buffer_calls_callback() {
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+
+    // MAP_READ | MAP_WRITE is an invalid usage combination, so create_buffer
+    // will fail and the returned buffer will be invalid. Capture the error so
+    // the default (panic) handler is not reached.
+    let _creation_error_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("invalid"),
+        size: 4,
+        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::MAP_WRITE,
+        mapped_at_creation: false,
+    });
+    drop(_creation_error_scope);
+
+    // `map_async` on an invalid buffer should fire the callback with an error.
+    // Also capture the Err that wgpu-core returns to wgpu's map_async layer, which
+    // wgpu forwards to the error sink regardless of whether it called the callback.
+    let callback_called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let callback_called2 = callback_called.clone();
+    let _map_error_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+    buffer.map_async(wgpu::MapMode::Read, .., move |result| {
+        assert!(result.is_err(), "expected an error for an invalid buffer");
+        callback_called2.store(true, std::sync::atomic::Ordering::SeqCst);
+    });
+    device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+    drop(_map_error_scope);
+
+    assert!(
+        callback_called.load(std::sync::atomic::Ordering::SeqCst),
+        "map_async callback was not called for an invalid buffer"
+    );
+}
+
 /// Ensure that you cannot unmap a buffer while there are still accessible mapped views.
 #[test]
 #[should_panic(expected = "You cannot unmap a buffer that still has accessible mapped views")]
