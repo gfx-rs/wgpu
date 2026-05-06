@@ -403,7 +403,7 @@ pub struct CommandEncoderDescriptor<L> {
 impl<L> CommandEncoderDescriptor<L> {
     /// Takes a closure and maps the label of the command encoder descriptor into another.
     #[must_use]
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CommandEncoderDescriptor<K> {
+    pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> CommandEncoderDescriptor<K> {
         CommandEncoderDescriptor {
             label: fun(&self.label),
         }
@@ -489,7 +489,7 @@ pub struct CommandBufferDescriptor<L> {
 impl<L> CommandBufferDescriptor<L> {
     /// Takes a closure and maps the label of the command buffer descriptor into another.
     #[must_use]
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CommandBufferDescriptor<K> {
+    pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> CommandBufferDescriptor<K> {
         CommandBufferDescriptor {
             label: fun(&self.label),
         }

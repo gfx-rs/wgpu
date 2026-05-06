@@ -34,7 +34,7 @@ pub struct BufferDescriptor<L> {
 impl<L> BufferDescriptor<L> {
     /// Takes a closure and maps the label of the buffer descriptor into another.
     #[must_use]
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> BufferDescriptor<K> {
+    pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> BufferDescriptor<K> {
         BufferDescriptor {
             label: fun(&self.label),
             size: self.size,
