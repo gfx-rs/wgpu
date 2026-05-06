@@ -144,16 +144,12 @@ impl Fence {
         // Find a matching fence
         let gl_fence = pending
             .iter()
-            // Greater or equal as an abundance of caution, but there should be one fence per value
             .find(|gl_fence| gl_fence.value >= wait_value);
 
         let Some(gl_fence) = gl_fence else {
             log::warn!("Tried to wait for {wait_value} but that value has not been signalled yet");
             return Ok(false);
         };
-
-        // We should have found a fence with the exact value.
-        debug_assert_eq!(gl_fence.value, wait_value);
 
         // clone to show we're using the fence
         let sync = gl_fence.sync.clone();
@@ -180,7 +176,8 @@ impl Fence {
         };
 
         if signalled {
-            self.last_completed.fetch_max(wait_value, Ordering::AcqRel);
+            self.last_completed
+                .fetch_max(gl_fence.value, Ordering::AcqRel);
         }
 
         Ok(signalled)

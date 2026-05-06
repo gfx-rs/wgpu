@@ -60,7 +60,7 @@ static ARRAY_SIZE_OVERRIDES: GpuTestConfiguration = GpuTestConfiguration::new()
                 wgpu_test::FailureCase::molten_vk()
                     .validation_error("Shader library compile failed")
                     .validation_error("could not be compiled into pipeline")
-                    .panic("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
+                    .unexpected_error("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
             ),
     )
     .run_async(move |ctx| async move {

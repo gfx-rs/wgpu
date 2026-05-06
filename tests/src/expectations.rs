@@ -201,6 +201,23 @@ impl FailureCase {
         self
     }
 
+    /// Matches this failure case against an unexpected driver error.
+    ///
+    /// Depending on build configuration, the error may surface as either a
+    /// panic raised by the `internal_error_panic` feature (with the supplied
+    /// message as a substring), or as a device-loss. Either behavior is
+    /// accepted. In the device loss case, the original message has been
+    /// discarded, and there is some risk this accepts a different error than
+    /// intended (but it must be a device loss due to an unexpected driver
+    /// error, which should be rare).
+    pub fn unexpected_error(mut self, msg: &'static str) -> Self {
+        self.reasons.push(FailureReason::panic().with_message(msg));
+        self.reasons.push(FailureReason::panic().with_message(
+            "Device lost: Unexpected error variant (driver implementation is at fault)",
+        ));
+        self
+    }
+
     /// Test is flaky with the given configuration. Do not assert failure.
     ///
     /// Use this _very_ sparyingly, and match as tightly as you can, including giving a specific failure message.

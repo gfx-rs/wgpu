@@ -2077,7 +2077,15 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = hub.buffers.get(buffer_id).get()?;
+        let buffer = match hub.buffers.get(buffer_id).get() {
+            Ok(buffer) => buffer,
+            Err(err) => {
+                if let Some(callback) = op.callback {
+                    callback(Err(err.clone().into()));
+                }
+                return Err(err.into());
+            }
+        };
 
         buffer.map_async(offset, size, op)
     }
