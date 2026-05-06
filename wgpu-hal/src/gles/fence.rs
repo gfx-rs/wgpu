@@ -153,6 +153,7 @@ impl Fence {
 
         // clone to show we're using the fence
         let sync = gl_fence.sync.clone();
+        let fence_value = gl_fence.value;
 
         drop(pending);
 
@@ -177,7 +178,7 @@ impl Fence {
 
         if signalled {
             self.last_completed
-                .fetch_max(gl_fence.value, Ordering::AcqRel);
+                .fetch_max(fence_value, Ordering::AcqRel);
         }
 
         Ok(signalled)
