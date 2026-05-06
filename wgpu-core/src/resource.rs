@@ -438,7 +438,16 @@ pub type BufferAccessResult = Result<(), BufferAccessError>;
 pub(crate) struct BufferPendingMapping {
     pub(crate) range: Range<wgt::BufferAddress>,
     pub(crate) op: BufferMapOperation,
-    // hold the parent alive while the mapping is active
+
+    /// A strong reference to the parent buffer, to hold it alive
+    /// while the mapping is pending.
+    ///
+    /// This creates a temporary reference cycle: [`Buffer::map_state`] owns
+    /// this `BufferPendingMapping`, which in turn holds an `Arc<Buffer>` back
+    /// to the same buffer. The cycle is intentional — it keeps the buffer alive
+    /// while it sits in `LifetimeTracker::ready_to_map` with no other owner —
+    /// and is broken by `Buffer::map` when it moves the `BufferPendingMapping`
+    /// out of [`Buffer::map_state`].
     pub(crate) _parent_buffer: Arc<Buffer>,
 }
 
@@ -716,6 +725,12 @@ impl Buffer {
             }
 
             if let Some(queue) = device.get_queue().as_ref() {
+                // Flush pending writes to this buffer before scheduling the map.
+                //
+                // Such writes get added to `queue.life_tracker.lock().active`, so
+                // that `lock_life().map` below will find the buffer in that
+                // submission and wait for it, rather than placing it in
+                // `ready_to_map` prematurely.
                 match queue.flush_writes_for_buffer(self, snatch_guard) {
                     Err(err) => {
                         let state = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
@@ -725,7 +740,7 @@ impl Buffer {
                         return Err((op, err));
                     }
                     Ok(()) => {
-                        // Schedule the buffer map in the  lifetime tracker.
+                        // Schedule the buffer map in the lifetime tracker.
                         //
                         // This call searches for use of the buffer by pending submissions.
                         // If we just flushed pending writes, that search is redundant; we

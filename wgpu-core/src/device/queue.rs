@@ -281,6 +281,12 @@ impl Drop for Queue {
             self.maintain(last_successful_submission_index, &snatch_guard);
         drop(snatch_guard);
 
+        // `wait_for_idle` above ensures all in-flight submissions have
+        // completed, so `maintain` should have drained every active
+        // submission. A false result here indicates that something went
+        // wrong — most likely the device was lost and `wait_for_idle`
+        // did not surface that as an error, leaving submissions
+        // unprocessed and their `mapped` buffer callbacks unfired.
         assert!(queue_empty);
 
         let closures = crate::device::UserClosures {
