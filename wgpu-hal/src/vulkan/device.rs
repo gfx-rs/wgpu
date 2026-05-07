@@ -775,7 +775,19 @@ impl super::Device {
                     flags |= vk::PipelineShaderStageCreateFlags::ALLOW_VARYING_SUBGROUP_SIZE;
                 }
                 wgt::SubgroupSize::Full => {
-                    flags |= vk::PipelineShaderStageCreateFlags::REQUIRE_FULL_SUBGROUPS;
+                    // Pair `REQUIRE_FULL_SUBGROUPS` with `ALLOW_VARYING_SUBGROUP_SIZE`.
+                    //
+                    // Without varying, the driver fixes the subgroup size at
+                    // pipeline creation (typically `maxSubgroupSize`), forcing
+                    // `workgroup_size.x` to be a multiple of `maxSubgroupSize`.
+                    // That breaks shaders that just want full subgroups
+                    // regardless of size, and conflicts with the WebGPU spec,
+                    // where the WGSL `subgroup_size` builtin reflects the size
+                    // actually used at each invocation. Allowing varying lets
+                    // the runtime pick a size in `[min, max]` that divides
+                    // `workgroup_size.x` while still guaranteeing full subgroups.
+                    flags |= vk::PipelineShaderStageCreateFlags::REQUIRE_FULL_SUBGROUPS
+                        | vk::PipelineShaderStageCreateFlags::ALLOW_VARYING_SUBGROUP_SIZE;
                 }
                 wgt::SubgroupSize::Fixed(size) => {
                     required_subgroup_size = Some(Box::new(

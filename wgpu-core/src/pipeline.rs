@@ -290,6 +290,13 @@ pub enum CreateComputePipelineError {
         "Subgroup size {size} is not a power of two in [{min}, {max}] (subgroup_min_size, subgroup_max_size)"
     )]
     InvalidSubgroupSize { size: u32, min: u32, max: u32 },
+    #[error(
+        "`SubgroupSize::Full` requires `@workgroup_size` x to be at least subgroup_min_size ({subgroup_min_size}); got {workgroup_size_x}"
+    )]
+    WorkgroupSizeTooSmallForFullSubgroups {
+        workgroup_size_x: u32,
+        subgroup_min_size: u32,
+    },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
@@ -306,6 +313,7 @@ impl WebGpuError for CreateComputePipelineError {
             Self::Internal(_) => ErrorType::Internal,
             Self::PipelineConstants(_) => ErrorType::Validation,
             Self::InvalidSubgroupSize { .. } => ErrorType::Validation,
+            Self::WorkgroupSizeTooSmallForFullSubgroups { .. } => ErrorType::Validation,
         }
     }
 }
@@ -779,6 +787,14 @@ pub enum CreateRenderPipelineError {
     InvalidSubgroupSize { size: u32, min: u32, max: u32 },
     #[error("`SubgroupSize::Full` is only valid on compute, task, and mesh stages")]
     FullSubgroupsNotAllowed,
+    #[error(
+        "`SubgroupSize::Full` on {stage:?} stage requires `@workgroup_size` x to be at least subgroup_min_size ({subgroup_min_size}); got {workgroup_size_x}"
+    )]
+    WorkgroupSizeTooSmallForFullSubgroups {
+        stage: wgt::ShaderStages,
+        workgroup_size_x: u32,
+        subgroup_min_size: u32,
+    },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
@@ -815,6 +831,7 @@ impl WebGpuError for CreateRenderPipelineError {
             | Self::PipelineConstants { .. }
             | Self::InvalidSubgroupSize { .. }
             | Self::FullSubgroupsNotAllowed
+            | Self::WorkgroupSizeTooSmallForFullSubgroups { .. }
             | Self::VertexAttributeStrideTooLarge { .. } => ErrorType::Validation,
         }
     }

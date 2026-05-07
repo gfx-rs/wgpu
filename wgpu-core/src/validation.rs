@@ -1342,6 +1342,17 @@ impl Interface {
             .map_or(Default::default(), |ep| ep.immediate_slots_required)
     }
 
+    /// Returns the `@workgroup_size` of the given entry point, if any.
+    pub fn workgroup_size(
+        &self,
+        stage: naga::ShaderStage,
+        entry_point_name: &str,
+    ) -> Option<[u32; 3]> {
+        self.entry_points
+            .get(&(stage, entry_point_name.to_string()))
+            .map(|ep| ep.workgroup_size)
+    }
+
     pub fn finalize_entry_point_name(
         &self,
         stage: naga::ShaderStage,

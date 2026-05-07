@@ -1908,8 +1908,23 @@ pub enum SubgroupSize {
     Varying,
     /// Require full subgroups for the stage.
     ///
+    /// Guarantees that every subgroup launched is full (no partial subgroups
+    /// at the edges of a workgroup). The actual subgroup size may still vary
+    /// between [`AdapterInfo::subgroup_min_size`] and
+    /// [`AdapterInfo::subgroup_max_size`] — the runtime is free to pick a
+    /// size that divides `workgroup_size.x`. The WGSL `subgroup_size` builtin
+    /// reflects the size actually used at each invocation.
+    ///
+    /// The `x` dimension of the entry point's `@workgroup_size` must be at
+    /// least [`AdapterInfo::subgroup_min_size`]; otherwise no full subgroup
+    /// can fit and pipeline creation fails. (Vulkan forbids partial subgroups
+    /// when `REQUIRE_FULL_SUBGROUPS_BIT` is set.)
+    ///
     /// Only valid on compute, task, and mesh stages. Setting this on a vertex
     /// or fragment stage is a pipeline creation error.
+    ///
+    /// [`AdapterInfo::subgroup_min_size`]: crate::AdapterInfo::subgroup_min_size
+    /// [`AdapterInfo::subgroup_max_size`]: crate::AdapterInfo::subgroup_max_size
     Full,
     /// Require a specific subgroup size for the stage.
     ///
