@@ -213,10 +213,14 @@ pub struct ProgrammableStageDescriptor<'a, SM = ShaderModuleId> {
     /// [`wgt::SubgroupSize::Varying`]. Setting any other value requires
     /// [`wgt::Features::SUBGROUP_SIZE_CONTROL`].
     ///
-    /// Intended for passthrough shaders. The WebGPU `subgroup-size-control`
-    /// proposal specifies a `@subgroup_size` WGSL attribute on the entry point
-    /// for WGSL/Naga shaders; passthrough shaders cannot carry such an
-    /// attribute, so the request is threaded through here instead.
+    /// Intended for SPIR-V passthrough shaders on Vulkan. The WebGPU
+    /// `subgroup-size-control` proposal specifies a `@subgroup_size` WGSL
+    /// attribute on the entry point for WGSL/Naga shaders; SPIR-V passthrough
+    /// shaders cannot carry such an attribute, so the request is threaded
+    /// through here instead. HLSL passthrough shaders (D3D12) use `[WaveSize]`
+    /// in the shader source and are not affected by this field; MetalLib/MSL
+    /// passthrough shaders are not affected either, as Metal has no API to
+    /// control the SIMD-group width.
     #[cfg_attr(feature = "serde", serde(default))]
     pub subgroup_size: wgt::SubgroupSize,
 }
