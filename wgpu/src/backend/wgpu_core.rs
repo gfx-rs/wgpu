@@ -1373,6 +1373,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                         .vertex
                         .compilation_options
                         .zero_initialize_workgroup_memory,
+                    subgroup_size: desc.vertex.compilation_options.subgroup_size,
                 },
                 buffers: Borrowed(&vertex_buffers),
             },
@@ -1394,6 +1395,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                         zero_initialize_workgroup_memory: frag
                             .compilation_options
                             .zero_initialize_workgroup_memory,
+                        subgroup_size: frag.compilation_options.subgroup_size,
                     },
                     targets: Borrowed(frag.targets),
                 }
@@ -1457,6 +1459,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                             .mesh
                             .compilation_options
                             .zero_initialize_workgroup_memory,
+                        subgroup_size: task.compilation_options.subgroup_size,
                     },
                 }
             }),
@@ -1469,6 +1472,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                         .mesh
                         .compilation_options
                         .zero_initialize_workgroup_memory,
+                    subgroup_size: desc.mesh.compilation_options.subgroup_size,
                 },
             },
             layout: desc.layout.map(|layout| layout.inner.as_core().id),
@@ -1490,6 +1494,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                         zero_initialize_workgroup_memory: frag
                             .compilation_options
                             .zero_initialize_workgroup_memory,
+                        subgroup_size: frag.compilation_options.subgroup_size,
                     },
                     targets: Borrowed(frag.targets),
                 }
@@ -1545,6 +1550,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                 zero_initialize_workgroup_memory: desc
                     .compilation_options
                     .zero_initialize_workgroup_memory,
+                subgroup_size: desc.compilation_options.subgroup_size,
             },
             cache: desc.cache.map(|cache| cache.inner.as_core().id),
         };

@@ -1151,6 +1151,18 @@ bitflags_array! {
         /// This is a native only feature.
         #[name("wgpu-subgroup-barrier")]
         const SUBGROUP_BARRIER = 1 << 40;
+        /// Allows requesting a specific subgroup size or full subgroups for a
+        /// shader stage via [`SubgroupSize::Fixed`] / [`SubgroupSize::Full`].
+        ///
+        /// Without this feature, only [`SubgroupSize::Varying`] (the default)
+        /// is accepted.
+        ///
+        /// Supported Platforms:
+        /// - Vulkan (with `VK_EXT_subgroup_size_control`, promoted to Vulkan 1.3)
+        ///
+        /// This is a native only feature.
+        #[name("wgpu-subgroup-size-control")]
+        const SUBGROUP_SIZE_CONTROL = 1 << 24;
         /// Allows the use of pipeline cache objects
         ///
         /// Supported platforms:
@@ -1867,6 +1879,47 @@ impl Features {
         }
         formats
     }
+}
+
+/// Required subgroup size for a shader stage.
+///
+/// Setting any value other than [`SubgroupSize::Varying`] requires
+/// [`Features::SUBGROUP_SIZE_CONTROL`]. Honored on Vulkan via
+/// `VK_EXT_subgroup_size_control`. On backends that do not advertise the
+/// feature, non-`Varying` values are rejected at pipeline creation.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum SubgroupSize {
+    /// The implementation chooses the subgroup size, between
+    /// [`AdapterInfo::subgroup_min_size`] and [`AdapterInfo::subgroup_max_size`]
+    /// (inclusive).
+    ///
+    /// This is the default, and the only value honored on backends that do not
+    /// advertise [`Features::SUBGROUP_SIZE_CONTROL`]. Concretely:
+    /// - On Vulkan, individual subgroups within a single dispatch may use
+    ///   different sizes (`VK_PIPELINE_SHADER_STAGE_CREATE_ALLOW_VARYING_SUBGROUP_SIZE_BIT`).
+    /// - On Metal, D3D12, and GL, the subgroup size is determined by the
+    ///   hardware/driver and is not user-controllable.
+    ///
+    /// [`AdapterInfo::subgroup_min_size`]: crate::AdapterInfo::subgroup_min_size
+    /// [`AdapterInfo::subgroup_max_size`]: crate::AdapterInfo::subgroup_max_size
+    #[default]
+    Varying,
+    /// Require full subgroups for the stage.
+    ///
+    /// Only valid on compute, task, and mesh stages. Setting this on a vertex
+    /// or fragment stage is a pipeline creation error.
+    Full,
+    /// Require a specific subgroup size for the stage.
+    ///
+    /// The size must be a power of two between
+    /// [`AdapterInfo::subgroup_min_size`] and [`AdapterInfo::subgroup_max_size`]
+    /// (inclusive).
+    ///
+    /// [`AdapterInfo::subgroup_min_size`]: crate::AdapterInfo::subgroup_min_size
+    /// [`AdapterInfo::subgroup_max_size`]: crate::AdapterInfo::subgroup_max_size
+    Fixed(u32),
 }
 
 #[cfg(test)]

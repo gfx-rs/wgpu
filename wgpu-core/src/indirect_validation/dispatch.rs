@@ -205,6 +205,7 @@ impl Dispatch {
                 entry_point: "main",
                 constants: &Default::default(),
                 zero_initialize_workgroup_memory: false,
+                subgroup_size: wgt::SubgroupSize::Varying,
             },
             cache: None,
         };

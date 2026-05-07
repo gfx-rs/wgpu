@@ -20,6 +20,11 @@ pub struct PipelineCompilationOptions<'a> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
+    /// Required subgroup size for this stage.
+    ///
+    /// Defaults to [`SubgroupSize::Varying`]. Setting any other value requires
+    /// [`Features::SUBGROUP_SIZE_CONTROL`].
+    pub subgroup_size: SubgroupSize,
 }
 
 impl Default for PipelineCompilationOptions<'_> {
@@ -27,6 +32,7 @@ impl Default for PipelineCompilationOptions<'_> {
         Self {
             constants: Default::default(),
             zero_initialize_workgroup_memory: true,
+            subgroup_size: SubgroupSize::Varying,
         }
     }
 }

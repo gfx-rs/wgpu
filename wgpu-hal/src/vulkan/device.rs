@@ -1,4 +1,6 @@
-use alloc::{borrow::ToOwned as _, collections::BTreeMap, ffi::CString, sync::Arc, vec::Vec};
+use alloc::{
+    borrow::ToOwned as _, boxed::Box, collections::BTreeMap, ffi::CString, sync::Arc, vec::Vec,
+};
 use core::{
     ffi::CStr,
     mem::{self, MaybeUninit},
@@ -252,6 +254,8 @@ impl super::DeviceShared {
 struct CompiledStage {
     create_info: vk::PipelineShaderStageCreateInfo<'static>,
     _entry_point: CString,
+    _required_subgroup_size:
+        Option<Box<vk::PipelineShaderStageRequiredSubgroupSizeCreateInfo<'static>>>,
     temp_raw_module: Option<vk::ShaderModule>,
 }
 
@@ -757,8 +761,35 @@ impl super::Device {
         };
 
         let mut flags = vk::PipelineShaderStageCreateFlags::empty();
-        if self.shared.features.contains(wgt::Features::SUBGROUP) {
-            flags |= vk::PipelineShaderStageCreateFlags::ALLOW_VARYING_SUBGROUP_SIZE
+        let mut required_subgroup_size = None;
+        if self
+            .shared
+            .features
+            .contains(wgt::Features::SUBGROUP_SIZE_CONTROL)
+        {
+            // wgpu-core validation guarantees `Full` is only used on
+            // compute/task/mesh stages and `Fixed(n)` is a power-of-two within
+            // `[subgroup_min_size, subgroup_max_size]`.
+            match stage.subgroup_size {
+                wgt::SubgroupSize::Varying => {
+                    flags |= vk::PipelineShaderStageCreateFlags::ALLOW_VARYING_SUBGROUP_SIZE;
+                }
+                wgt::SubgroupSize::Full => {
+                    flags |= vk::PipelineShaderStageCreateFlags::REQUIRE_FULL_SUBGROUPS;
+                }
+                wgt::SubgroupSize::Fixed(size) => {
+                    required_subgroup_size = Some(Box::new(
+                        vk::PipelineShaderStageRequiredSubgroupSizeCreateInfo::default()
+                            .required_subgroup_size(size),
+                    ));
+                }
+            }
+        } else if self.shared.features.contains(wgt::Features::SUBGROUP) {
+            // Without `SUBGROUP_SIZE_CONTROL`, wgpu-core enforces that
+            // `subgroup_size` is `Varying`. Preserve the existing behavior:
+            // the `VK_EXT_subgroup_size_control` extension is enabled whenever
+            // `Features::SUBGROUP` is requested, so we always allow varying.
+            flags |= vk::PipelineShaderStageCreateFlags::ALLOW_VARYING_SUBGROUP_SIZE;
         }
 
         let entry_point = CString::new(stage.entry_point).unwrap();
@@ -769,10 +800,17 @@ impl super::Device {
 
         // Circumvent struct lifetime check because of a self-reference inside CompiledStage
         create_info.p_name = entry_point.as_ptr();
+        if let Some(ref boxed) = required_subgroup_size {
+            // Same trick as `p_name`: the boxed struct lives on `CompiledStage`
+            // and its address remains stable across `CompiledStage` moves.
+            let ptr: *const vk::PipelineShaderStageRequiredSubgroupSizeCreateInfo<'_> = &**boxed;
+            create_info.p_next = ptr.cast();
+        }
 
         Ok(CompiledStage {
             create_info,
             _entry_point: entry_point,
+            _required_subgroup_size: required_subgroup_size,
             temp_raw_module: match *stage.module {
                 super::ShaderModule::Raw(_) => None,
                 super::ShaderModule::Intermediate { .. } => Some(vk_module),

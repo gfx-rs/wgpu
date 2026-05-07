@@ -800,6 +800,7 @@ impl GPUDevice {
         entry_point: descriptor.compute.entry_point.map(Into::into),
         constants: descriptor.compute.constants.into_iter().collect(),
         zero_initialize_workgroup_memory: true,
+        subgroup_size: wgpu_types::SubgroupSize::Varying,
       },
       cache: None,
     };
@@ -834,6 +835,7 @@ impl GPUDevice {
         entry_point: descriptor.vertex.entry_point.map(Into::into),
         constants: descriptor.vertex.constants.into_iter().collect(),
         zero_initialize_workgroup_memory: true,
+        subgroup_size: wgpu_types::SubgroupSize::Varying,
       },
       buffers: Cow::Owned(
         descriptor
@@ -925,6 +927,7 @@ impl GPUDevice {
             entry_point: fragment.entry_point.map(Into::into),
             constants: fragment.constants.into_iter().collect(),
             zero_initialize_workgroup_memory: true,
+            subgroup_size: wgpu_types::SubgroupSize::Varying,
           },
           targets: Cow::Owned(
             fragment

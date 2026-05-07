@@ -132,6 +132,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
     };
   ```
   By @AdrianEddy in [#9496](https://github.com/gfx-rs/wgpu/pull/9496).
+- Add per-stage subgroup size control via a new `subgroup_size: SubgroupSize` field on `PipelineCompilationOptions`, gated behind the new `Features::SUBGROUP_SIZE_CONTROL`. The `SubgroupSize` enum offers `Varying` (default), `Full` (compute/task/mesh stages only), and `Fixed(u32)` (must be a power of two within `[subgroup_min_size, subgroup_max_size]`). Honored on Vulkan via `VK_EXT_subgroup_size_control` (promoted in 1.3); other backends accept only `Varying`. By @ruihe774 in [#9523](https://github.com/gfx-rs/wgpu/pull/9523).
 
 #### Metal
 

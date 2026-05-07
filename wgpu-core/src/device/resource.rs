@@ -361,6 +361,59 @@ impl Device {
         }
     }
 
+    fn check_fixed_subgroup_size(&self, n: u32) -> Result<(), (u32, u32, u32)> {
+        let info = &self.adapter.raw.info;
+        let min = info.subgroup_min_size;
+        let max = info.subgroup_max_size;
+        if !n.is_power_of_two() || n < min || n > max {
+            Err((n, min, max))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn validate_compute_subgroup_size(
+        &self,
+        size: wgt::SubgroupSize,
+    ) -> Result<(), pipeline::CreateComputePipelineError> {
+        if matches!(size, wgt::SubgroupSize::Varying) {
+            return Ok(());
+        }
+        self.require_features(wgt::Features::SUBGROUP_SIZE_CONTROL)?;
+        if let wgt::SubgroupSize::Fixed(n) = size {
+            self.check_fixed_subgroup_size(n)
+                .map_err(|(size, min, max)| {
+                    pipeline::CreateComputePipelineError::InvalidSubgroupSize { size, min, max }
+                })?;
+        }
+        Ok(())
+    }
+
+    fn validate_render_subgroup_size(
+        &self,
+        size: wgt::SubgroupSize,
+        allow_full: bool,
+    ) -> Result<(), pipeline::CreateRenderPipelineError> {
+        match size {
+            wgt::SubgroupSize::Varying => Ok(()),
+            wgt::SubgroupSize::Full => {
+                self.require_features(wgt::Features::SUBGROUP_SIZE_CONTROL)?;
+                if !allow_full {
+                    return Err(pipeline::CreateRenderPipelineError::FullSubgroupsNotAllowed);
+                }
+                Ok(())
+            }
+            wgt::SubgroupSize::Fixed(n) => {
+                self.require_features(wgt::Features::SUBGROUP_SIZE_CONTROL)?;
+                self.check_fixed_subgroup_size(n)
+                    .map_err(|(size, min, max)| {
+                        pipeline::CreateRenderPipelineError::InvalidSubgroupSize { size, min, max }
+                    })?;
+                Ok(())
+            }
+        }
+    }
+
     /// # Safety
     ///
     /// - See [wgpu::Device::start_graphics_debugger_capture][api] for details the safety.
@@ -3870,6 +3923,8 @@ impl Device {
 
         self.require_downlevel_flags(wgt::DownlevelFlags::COMPUTE_SHADERS)?;
 
+        self.validate_compute_subgroup_size(desc.stage.subgroup_size)?;
+
         let shader_module = desc.stage.module;
 
         shader_module.same_device(self)?;
@@ -3944,6 +3999,7 @@ impl Device {
                 entry_point: final_entry_point_name.as_ref(),
                 constants: &desc.stage.constants,
                 zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
+                subgroup_size: desc.stage.subgroup_size,
             },
             cache: cache.as_ref().map(|it| it.raw()),
         };
@@ -4040,6 +4096,21 @@ impl Device {
 
         let mut io = validation::StageIo::default();
         let mut validated_stages = wgt::ShaderStages::empty();
+
+        match desc.vertex {
+            pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
+                self.validate_render_subgroup_size(vertex.stage.subgroup_size, false)?;
+            }
+            pipeline::RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
+                if let Some(task) = task {
+                    self.validate_render_subgroup_size(task.stage.subgroup_size, true)?;
+                }
+                self.validate_render_subgroup_size(mesh.stage.subgroup_size, true)?;
+            }
+        }
+        if let Some(ref fragment) = desc.fragment {
+            self.validate_render_subgroup_size(fragment.stage.subgroup_size, false)?;
+        }
 
         let mut vertex_steps;
         let mut hal_vertex_buffer_layouts;
@@ -4479,6 +4550,7 @@ impl Device {
                         constants: &stage_desc.constants,
                         zero_initialize_workgroup_memory: stage_desc
                             .zero_initialize_workgroup_memory,
+                        subgroup_size: stage_desc.subgroup_size,
                     })
                 };
             }
@@ -4525,6 +4597,7 @@ impl Device {
                         constants: &stage_desc.constants,
                         zero_initialize_workgroup_memory: stage_desc
                             .zero_initialize_workgroup_memory,
+                        subgroup_size: stage_desc.subgroup_size,
                     })
                 } else {
                     None
@@ -4569,6 +4642,7 @@ impl Device {
                         constants: &stage_desc.constants,
                         zero_initialize_workgroup_memory: stage_desc
                             .zero_initialize_workgroup_memory,
+                        subgroup_size: stage_desc.subgroup_size,
                     })
                 };
             }
@@ -4625,6 +4699,7 @@ impl Device {
                     zero_initialize_workgroup_memory: fragment_state
                         .stage
                         .zero_initialize_workgroup_memory,
+                    subgroup_size: fragment_state.stage.subgroup_size,
                 })
             }
             None => None,

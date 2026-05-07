@@ -792,6 +792,7 @@ impl<'a> IntoTrace for crate::pipeline::ResolvedProgrammableStageDescriptor<'a> 
             entry_point: self.entry_point,
             constants: self.constants,
             zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
+            subgroup_size: self.subgroup_size,
         }
     }
 }

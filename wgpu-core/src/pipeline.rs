@@ -209,6 +209,11 @@ pub struct ProgrammableStageDescriptor<'a, SM = ShaderModuleId> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
+    /// Required subgroup size for this stage. Defaults to
+    /// [`wgt::SubgroupSize::Varying`]. Setting any other value requires
+    /// [`wgt::Features::SUBGROUP_SIZE_CONTROL`].
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub subgroup_size: wgt::SubgroupSize,
 }
 
 /// cbindgen:ignore
@@ -280,6 +285,12 @@ pub enum CreateComputePipelineError {
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
+    #[error(
+        "Subgroup size {size} is not a power of two in [{min}, {max}] (subgroup_min_size, subgroup_max_size)"
+    )]
+    InvalidSubgroupSize { size: u32, min: u32, max: u32 },
+    #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
 
@@ -289,10 +300,12 @@ impl WebGpuError for CreateComputePipelineError {
             Self::Device(e) => e.webgpu_error_type(),
             Self::InvalidResource(e) => e.webgpu_error_type(),
             Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
             Self::Implicit(e) => e.webgpu_error_type(),
             Self::Stage(e) => e.webgpu_error_type(),
             Self::Internal(_) => ErrorType::Internal,
             Self::PipelineConstants(_) => ErrorType::Validation,
+            Self::InvalidSubgroupSize { .. } => ErrorType::Validation,
         }
     }
 }
@@ -760,6 +773,12 @@ pub enum CreateRenderPipelineError {
         "but no render target for the pipeline was specified."
     ))]
     NoTargetSpecified,
+    #[error(
+        "Subgroup size {size} is not a power of two in [{min}, {max}] (subgroup_min_size, subgroup_max_size)"
+    )]
+    InvalidSubgroupSize { size: u32, min: u32, max: u32 },
+    #[error("`SubgroupSize::Full` is only valid on compute, task, and mesh stages")]
+    FullSubgroupsNotAllowed,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
@@ -794,6 +813,8 @@ impl WebGpuError for CreateRenderPipelineError {
             | Self::DualSourceBlendingWithMultipleColorTargets { .. }
             | Self::NoTargetSpecified
             | Self::PipelineConstants { .. }
+            | Self::InvalidSubgroupSize { .. }
+            | Self::FullSubgroupsNotAllowed
             | Self::VertexAttributeStrideTooLarge { .. } => ErrorType::Validation,
         }
     }
