@@ -155,6 +155,7 @@ jobs:
         shell: bash
         run: |
           export LLVM_PROFILE_FILE=${{ github.workspace }}/target/wgpu-%p-%m.profraw
+          export DENO_WEBGPU_BACKEND=${{ matrix.backend }}
           cargo --locked test -p cts_runner
 
       - name: Run CTS
