@@ -142,9 +142,7 @@ impl Fence {
         let pending = self.pending.read();
 
         // Find a matching fence
-        let gl_fence = pending
-            .iter()
-            .find(|gl_fence| gl_fence.value >= wait_value);
+        let gl_fence = pending.iter().find(|gl_fence| gl_fence.value >= wait_value);
 
         let Some(gl_fence) = gl_fence else {
             log::warn!("Tried to wait for {wait_value} but that value has not been signalled yet");
@@ -177,8 +175,7 @@ impl Fence {
         };
 
         if signalled {
-            self.last_completed
-                .fetch_max(fence_value, Ordering::AcqRel);
+            self.last_completed.fetch_max(fence_value, Ordering::AcqRel);
         }
 
         Ok(signalled)
