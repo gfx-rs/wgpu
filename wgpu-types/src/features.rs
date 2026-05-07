@@ -1887,6 +1887,18 @@ impl Features {
 /// [`Features::SUBGROUP_SIZE_CONTROL`]. Honored on Vulkan via
 /// `VK_EXT_subgroup_size_control`. On backends that do not advertise the
 /// feature, non-`Varying` values are rejected at pipeline creation.
+///
+/// This API is a precursor to the WebGPU [`subgroup-size-control`
+/// proposal][proposal], which models the same capability as a `@subgroup_size`
+/// WGSL attribute on compute entry points. The validation rules applied here
+/// to [`Fixed`] mirror the ones the proposal places on the attribute, so
+/// shaders authored against `Fixed(n)` should remain valid once the WGSL
+/// attribute lands. [`Full`] is a wgpu extension that has no counterpart in
+/// the proposal.
+///
+/// [`Fixed`]: SubgroupSize::Fixed
+/// [`Full`]: SubgroupSize::Full
+/// [proposal]: https://github.com/gpuweb/gpuweb/blob/main/proposals/subgroup-size-control.md
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -1928,9 +1940,18 @@ pub enum SubgroupSize {
     Full,
     /// Require a specific subgroup size for the stage.
     ///
-    /// The size must be a power of two between
-    /// [`AdapterInfo::subgroup_min_size`] and [`AdapterInfo::subgroup_max_size`]
-    /// (inclusive).
+    /// Validation rules follow the WebGPU `subgroup-size-control` proposal's
+    /// `@subgroup_size` attribute:
+    ///
+    /// - The size must be a power of two (D3D12 requirement).
+    /// - The size must be between [`AdapterInfo::subgroup_min_size`] and
+    ///   [`AdapterInfo::subgroup_max_size`] (inclusive).
+    /// - For compute, task, and mesh stages, `workgroup_size.x` must be a
+    ///   multiple of the requested size (Vulkan requirement).
+    ///
+    /// (The proposal also constrains the total workgroup size against a
+    /// `maxComputeWorkgroupSubgroups` limit; wgpu does not yet expose that
+    /// limit, so the corresponding check is currently skipped.)
     ///
     /// [`AdapterInfo::subgroup_min_size`]: crate::AdapterInfo::subgroup_min_size
     /// [`AdapterInfo::subgroup_max_size`]: crate::AdapterInfo::subgroup_max_size

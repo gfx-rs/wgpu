@@ -338,6 +338,41 @@ impl Drop for Device {
     }
 }
 
+enum SubgroupWorkgroupSizeXError {
+    TooSmallForFull {
+        workgroup_size_x: u32,
+        subgroup_min_size: u32,
+    },
+    NotMultipleOfFixed {
+        workgroup_size_x: u32,
+        subgroup_size: u32,
+    },
+}
+
+fn map_subgroup_workgroup_err(
+    stage: wgt::ShaderStages,
+    e: SubgroupWorkgroupSizeXError,
+) -> pipeline::CreateRenderPipelineError {
+    match e {
+        SubgroupWorkgroupSizeXError::TooSmallForFull {
+            workgroup_size_x,
+            subgroup_min_size,
+        } => pipeline::CreateRenderPipelineError::WorkgroupSizeTooSmallForFullSubgroups {
+            stage,
+            workgroup_size_x,
+            subgroup_min_size,
+        },
+        SubgroupWorkgroupSizeXError::NotMultipleOfFixed {
+            workgroup_size_x,
+            subgroup_size,
+        } => pipeline::CreateRenderPipelineError::WorkgroupSizeXNotMultipleOfSubgroupSize {
+            stage,
+            workgroup_size_x,
+            subgroup_size,
+        },
+    }
+}
+
 impl Device {
     pub(crate) fn raw(&self) -> &dyn hal::DynDevice {
         self.raw.as_ref()
@@ -372,22 +407,45 @@ impl Device {
         }
     }
 
-    /// When `size == Full`, verifies that `workgroup_size.x` is at least
-    /// `subgroup_min_size` so a full subgroup can fit in the workgroup.
-    /// Returns `(workgroup_size_x, subgroup_min_size)` on error.
-    fn check_full_subgroup_workgroup_size_x(
+    /// Validates `workgroup_size.x` against the requested [`wgt::SubgroupSize`]
+    /// for stages that have a workgroup size (compute, task, mesh):
+    ///
+    /// - For [`Full`], `workgroup_size.x` must be at least
+    ///   `subgroup_min_size`, otherwise no full subgroup can fit.
+    /// - For [`Fixed(n)`], `workgroup_size.x` must be a multiple of `n`. This
+    ///   matches the WebGPU `subgroup-size-control` proposal's validation for
+    ///   the `@subgroup_size` attribute (a Vulkan requirement).
+    ///
+    /// [`Full`]: wgt::SubgroupSize::Full
+    /// [`Fixed(n)`]: wgt::SubgroupSize::Fixed
+    fn check_subgroup_workgroup_size_x(
         &self,
         size: wgt::SubgroupSize,
         workgroup_size_x: u32,
-    ) -> Result<(), (u32, u32)> {
-        if !matches!(size, wgt::SubgroupSize::Full) {
-            return Ok(());
-        }
-        let min = self.adapter.raw.info.subgroup_min_size;
-        if workgroup_size_x < min {
-            Err((workgroup_size_x, min))
-        } else {
-            Ok(())
+    ) -> Result<(), SubgroupWorkgroupSizeXError> {
+        match size {
+            wgt::SubgroupSize::Varying => Ok(()),
+            wgt::SubgroupSize::Full => {
+                let min = self.adapter.raw.info.subgroup_min_size;
+                if workgroup_size_x < min {
+                    Err(SubgroupWorkgroupSizeXError::TooSmallForFull {
+                        workgroup_size_x,
+                        subgroup_min_size: min,
+                    })
+                } else {
+                    Ok(())
+                }
+            }
+            wgt::SubgroupSize::Fixed(n) => {
+                if n != 0 && !workgroup_size_x.is_multiple_of(n) {
+                    Err(SubgroupWorkgroupSizeXError::NotMultipleOfFixed {
+                        workgroup_size_x,
+                        subgroup_size: n,
+                    })
+                } else {
+                    Ok(())
+                }
+            }
         }
     }
 
@@ -3987,12 +4045,22 @@ impl Device {
                     None,
                 )?;
                 if let Some(ws) = interface.workgroup_size(naga_stage, &final_entry_point_name) {
-                    self.check_full_subgroup_workgroup_size_x(desc.stage.subgroup_size, ws[0])
-                        .map_err(|(workgroup_size_x, subgroup_min_size)| {
-                            pipeline::CreateComputePipelineError::WorkgroupSizeTooSmallForFullSubgroups {
+                    self.check_subgroup_workgroup_size_x(desc.stage.subgroup_size, ws[0])
+                        .map_err(|e| match e {
+                            SubgroupWorkgroupSizeXError::TooSmallForFull {
                                 workgroup_size_x,
                                 subgroup_min_size,
-                            }
+                            } => pipeline::CreateComputePipelineError::WorkgroupSizeTooSmallForFullSubgroups {
+                                workgroup_size_x,
+                                subgroup_min_size,
+                            },
+                            SubgroupWorkgroupSizeXError::NotMultipleOfFixed {
+                                workgroup_size_x,
+                                subgroup_size,
+                            } => pipeline::CreateComputePipelineError::WorkgroupSizeXNotMultipleOfSubgroupSize {
+                                workgroup_size_x,
+                                subgroup_size,
+                            },
                         })?;
                 }
             }
@@ -4622,17 +4690,8 @@ impl Device {
                         if let Some(ws) =
                             interface.workgroup_size(naga_stage, &_task_entry_point_name)
                         {
-                            self.check_full_subgroup_workgroup_size_x(
-                                stage_desc.subgroup_size,
-                                ws[0],
-                            )
-                            .map_err(|(workgroup_size_x, subgroup_min_size)| {
-                                pipeline::CreateRenderPipelineError::WorkgroupSizeTooSmallForFullSubgroups {
-                                    stage: stage_bit,
-                                    workgroup_size_x,
-                                    subgroup_min_size,
-                                }
-                            })?;
+                            self.check_subgroup_workgroup_size_x(stage_desc.subgroup_size, ws[0])
+                                .map_err(|e| map_subgroup_workgroup_err(stage_bit, e))?;
                         }
                         validated_stages |= stage_bit;
                     }
@@ -4683,17 +4742,8 @@ impl Device {
                         if let Some(ws) =
                             interface.workgroup_size(naga_stage, &_mesh_entry_point_name)
                         {
-                            self.check_full_subgroup_workgroup_size_x(
-                                stage_desc.subgroup_size,
-                                ws[0],
-                            )
-                            .map_err(|(workgroup_size_x, subgroup_min_size)| {
-                                pipeline::CreateRenderPipelineError::WorkgroupSizeTooSmallForFullSubgroups {
-                                    stage: stage_bit,
-                                    workgroup_size_x,
-                                    subgroup_min_size,
-                                }
-                            })?;
+                            self.check_subgroup_workgroup_size_x(stage_desc.subgroup_size, ws[0])
+                                .map_err(|e| map_subgroup_workgroup_err(stage_bit, e))?;
                         }
                         validated_stages |= stage_bit;
                     }

@@ -212,6 +212,11 @@ pub struct ProgrammableStageDescriptor<'a, SM = ShaderModuleId> {
     /// Required subgroup size for this stage. Defaults to
     /// [`wgt::SubgroupSize::Varying`]. Setting any other value requires
     /// [`wgt::Features::SUBGROUP_SIZE_CONTROL`].
+    ///
+    /// Intended for passthrough shaders. The WebGPU `subgroup-size-control`
+    /// proposal specifies a `@subgroup_size` WGSL attribute on the entry point
+    /// for WGSL/Naga shaders; passthrough shaders cannot carry such an
+    /// attribute, so the request is threaded through here instead.
     #[cfg_attr(feature = "serde", serde(default))]
     pub subgroup_size: wgt::SubgroupSize,
 }
@@ -297,6 +302,13 @@ pub enum CreateComputePipelineError {
         workgroup_size_x: u32,
         subgroup_min_size: u32,
     },
+    #[error(
+        "`SubgroupSize::Fixed({subgroup_size})` requires `@workgroup_size` x to be a multiple of {subgroup_size}; got {workgroup_size_x}"
+    )]
+    WorkgroupSizeXNotMultipleOfSubgroupSize {
+        workgroup_size_x: u32,
+        subgroup_size: u32,
+    },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
@@ -314,6 +326,7 @@ impl WebGpuError for CreateComputePipelineError {
             Self::PipelineConstants(_) => ErrorType::Validation,
             Self::InvalidSubgroupSize { .. } => ErrorType::Validation,
             Self::WorkgroupSizeTooSmallForFullSubgroups { .. } => ErrorType::Validation,
+            Self::WorkgroupSizeXNotMultipleOfSubgroupSize { .. } => ErrorType::Validation,
         }
     }
 }
@@ -795,6 +808,14 @@ pub enum CreateRenderPipelineError {
         workgroup_size_x: u32,
         subgroup_min_size: u32,
     },
+    #[error(
+        "`SubgroupSize::Fixed({subgroup_size})` on {stage:?} stage requires `@workgroup_size` x to be a multiple of {subgroup_size}; got {workgroup_size_x}"
+    )]
+    WorkgroupSizeXNotMultipleOfSubgroupSize {
+        stage: wgt::ShaderStages,
+        workgroup_size_x: u32,
+        subgroup_size: u32,
+    },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
@@ -832,6 +853,7 @@ impl WebGpuError for CreateRenderPipelineError {
             | Self::InvalidSubgroupSize { .. }
             | Self::FullSubgroupsNotAllowed
             | Self::WorkgroupSizeTooSmallForFullSubgroups { .. }
+            | Self::WorkgroupSizeXNotMultipleOfSubgroupSize { .. }
             | Self::VertexAttributeStrideTooLarge { .. } => ErrorType::Validation,
         }
     }

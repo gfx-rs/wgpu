@@ -24,6 +24,16 @@ pub struct PipelineCompilationOptions<'a> {
     ///
     /// Defaults to [`SubgroupSize::Varying`]. Setting any other value requires
     /// [`Features::SUBGROUP_SIZE_CONTROL`].
+    ///
+    /// Intended for passthrough shaders. The WebGPU [`subgroup-size-control`
+    /// proposal][proposal] specifies a `@subgroup_size` WGSL attribute on the
+    /// entry point as the way to request a specific size for WGSL/Naga shaders;
+    /// passthrough shaders cannot carry such an attribute, so the request must
+    /// be threaded through the pipeline-creation API instead. For non-passthrough
+    /// shaders, prefer the WGSL attribute once it is supported, and leave this
+    /// field at its default.
+    ///
+    /// [proposal]: https://github.com/gpuweb/gpuweb/blob/main/proposals/subgroup-size-control.md
     pub subgroup_size: SubgroupSize,
 }
 

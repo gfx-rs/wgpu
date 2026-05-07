@@ -157,6 +157,64 @@ fn main() {}
 }
 
 #[test]
+fn fixed_subgroup_size_rejects_workgroup_size_x_not_multiple() {
+    // `subgroup_min_size = 8`, `subgroup_max_size = 64`. Request
+    // `Fixed(16)` on a `@workgroup_size(8)` compute shader: 8 is not a
+    // multiple of 16, so pipeline creation must fail per the
+    // `subgroup-size-control` proposal.
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::NOOP,
+        backend_options: wgpu::BackendOptions {
+            noop: wgpu::NoopBackendOptions {
+                enable: true,
+                subgroup_min_size: Some(8),
+                subgroup_max_size: Some(64),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
+    });
+    let adapter =
+        pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+            .expect("noop adapter");
+    let (device, _queue) = pollster::block_on(adapter.request_device(&DeviceDescriptor {
+        required_features: Features::SUBGROUP_SIZE_CONTROL,
+        ..DeviceDescriptor::default()
+    }))
+    .expect("device");
+
+    let module = device.create_shader_module(ShaderModuleDescriptor {
+        label: None,
+        source: ShaderSource::Wgsl(
+            "\
+@compute @workgroup_size(8)
+fn main() {}
+"
+            .into(),
+        ),
+    });
+
+    fail(
+        &device,
+        || {
+            device.create_compute_pipeline(&ComputePipelineDescriptor {
+                label: None,
+                layout: None,
+                module: &module,
+                entry_point: Some("main"),
+                compilation_options: PipelineCompilationOptions {
+                    subgroup_size: SubgroupSize::Fixed(16),
+                    ..Default::default()
+                },
+                cache: None,
+            })
+        },
+        Some("requires `@workgroup_size` x to be a multiple of 16; got 8"),
+    );
+}
+
+#[test]
 fn fixed_subgroup_size_requires_subgroup_size_control_feature() {
     // Default features — `SUBGROUP_SIZE_CONTROL` is not requested.
     let (device, _queue) = wgpu::Device::noop(&DeviceDescriptor::default());
