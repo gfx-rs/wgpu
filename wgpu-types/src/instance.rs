@@ -45,7 +45,7 @@ pub struct InstanceDescriptor {
     pub flags: InstanceFlags,
     /// Memory budget thresholds used by some backends.
     pub memory_budget_thresholds: MemoryBudgetThresholds,
-    /// Options the control the behavior of specific backends.
+    /// Options for configuring the behavior of specific backends.
     pub backend_options: crate::BackendOptions,
     /// System platform or compositor connection to connect this `Instance` to.
     ///
