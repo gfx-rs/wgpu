@@ -70,7 +70,7 @@ impl crate::framework::Example for Example {
             compilation_options: Default::default(),
             cache: None,
         });
-        let blitter = wgpu::util::TextureBlitter::new(device, config.format);
+        let blitter = wgpu::util::TextureBlitter::new(device, config.view_formats[0]);
         let global_params = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: size_of::<GlobalParams>() as u64,
