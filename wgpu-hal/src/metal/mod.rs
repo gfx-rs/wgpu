@@ -1037,9 +1037,16 @@ unsafe impl Sync for Fence {}
 impl Fence {
     fn get_latest(&self) -> crate::FenceValue {
         let mut max_value = self.completed_value.load(atomic::Ordering::Acquire);
-        for &(value, ref cmd_buf) in self.pending_command_buffers.iter() {
-            if cmd_buf.status() == MTLCommandBufferStatus::Completed {
-                max_value = value;
+        if let Some(shared_event) = &self.shared_event {
+            // signaledValue() is updated by the GPU when it executes the
+            // encodeSignalEvent command, which is more reliable than polling
+            // cmd_buf.status() (see #9531 / #8119).
+            max_value = max_value.max(shared_event.signaledValue());
+        } else {
+            for &(value, ref cmd_buf) in self.pending_command_buffers.iter() {
+                if cmd_buf.status() == MTLCommandBufferStatus::Completed {
+                    max_value = value;
+                }
             }
         }
         max_value

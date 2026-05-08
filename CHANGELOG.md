@@ -218,6 +218,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
 #### Metal
 
+- Fix `device.poll(PollType::wait_indefinitely())` deadlocking for long-running command buffers by replacing spin-polling on `MTLCommandBuffer.status()` with `MTLSharedEvent::waitUntilSignaledValue:timeoutMS:`. By @ruihe774.
 - Fix crash on fence creation when running in a MacOS Seatbelt sandbox. By @wumpf in [#9415](https://github.com/gfx-rs/wgpu/pull/9415)
 
 ### Dependency Updates

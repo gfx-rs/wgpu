@@ -19,9 +19,9 @@ use objc2_metal::{
     MTLPipelineBufferDescriptorArray, MTLPipelineOption, MTLPixelFormat, MTLPrimitiveTopologyClass,
     MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
     MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
-    MTLSamplerMipFilter, MTLSamplerState, MTLSize, MTLStencilDescriptor, MTLStorageMode,
-    MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTriangleFillMode, MTLVertexDescriptor,
-    MTLVertexStepFunction,
+    MTLSamplerMipFilter, MTLSamplerState, MTLSharedEvent, MTLSize, MTLStencilDescriptor,
+    MTLStorageMode, MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTriangleFillMode,
+    MTLVertexDescriptor, MTLVertexStepFunction,
 };
 
 use super::{adapter::VERTEX_BUFFER_SLOT_START, conv, PassthroughShader, ShaderModuleSource};
@@ -1896,13 +1896,7 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn get_fence_value(&self, fence: &super::Fence) -> DeviceResult<crate::FenceValue> {
-        let mut max_value = fence.completed_value.load(atomic::Ordering::Acquire);
-        for &(value, ref cmd_buf) in fence.pending_command_buffers.iter() {
-            if cmd_buf.status() == MTLCommandBufferStatus::Completed {
-                max_value = value;
-            }
-        }
-        Ok(max_value)
+        Ok(fence.get_latest())
     }
     unsafe fn wait(
         &self,
@@ -1914,6 +1908,19 @@ impl crate::Device for super::Device {
             return Ok(true);
         }
 
+        // Use MTLSharedEvent::waitUntilSignaledValue:timeoutMS: when available.
+        // This is a proper OS-level blocking wait rather than a spin-poll on
+        // MTLCommandBuffer.status(), which can fail to observe Completed for
+        // long-running command buffers (see #9531 / #8119).
+        if let Some(shared_event) = &fence.shared_event {
+            let timeout_ms = match timeout {
+                None => u64::MAX,
+                Some(d) => u64::try_from(d.as_millis()).unwrap_or(u64::MAX),
+            };
+            return Ok(shared_event.waitUntilSignaledValue_timeoutMS(wait_value, timeout_ms));
+        }
+
+        // Fallback for sandboxed environments where MTLSharedEvent is unavailable.
         let cmd_buf = match fence
             .pending_command_buffers
             .iter()
@@ -1926,15 +1933,20 @@ impl crate::Device for super::Device {
             }
         };
 
+        if timeout.is_none() {
+            // waitUntilCompleted blocks until the command buffer finishes.
+            cmd_buf.waitUntilCompleted();
+            return Ok(true);
+        }
+
+        // Timed spin-poll fallback (rare path: sandboxed + finite timeout).
         let start = time::Instant::now();
         loop {
             if let MTLCommandBufferStatus::Completed = cmd_buf.status() {
                 return Ok(true);
             }
-            if let Some(timeout) = timeout {
-                if start.elapsed() >= timeout {
-                    return Ok(false);
-                }
+            if start.elapsed() >= timeout.unwrap() {
+                return Ok(false);
             }
             thread::sleep(core::time::Duration::from_millis(1));
         }

@@ -23,6 +23,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         WAIT_OUT_OF_ORDER,
         WAIT_AFTER_BAD_SUBMISSION,
         WAIT_ON_FAILED_SUBMISSION,
+        WAIT_INDEFINITELY_LONG_RUNNING,
     ]);
 }
 
@@ -348,3 +349,105 @@ async fn wait_on_failed_submission(ctx: TestingContext) {
     });
     let _ = result;
 }
+
+/// Regression test for <https://github.com/gfx-rs/wgpu/issues/9531>.
+///
+/// On Metal, `poll(wait_indefinitely())` deadlocked for command buffers that
+/// took more than a few hundred milliseconds because `Device::wait` spin-polled
+/// `MTLCommandBuffer.status()`, which could permanently miss the `Completed`
+/// state for long-running buffers.
+#[gpu_test]
+static WAIT_INDEFINITELY_LONG_RUNNING: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits())
+    .run_async(|ctx| async move {
+        // Dispatch a compute shader that keeps the GPU busy for several hundred
+        // milliseconds.  The exact duration is hardware-dependent; the important
+        // thing is that it is long enough to expose a missed-completion bug in
+        // a spin-poll implementation.
+        const SHADER: &str = r#"
+@group(0) @binding(0) var<storage, read_write> buf: array<u32>;
+
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    var x: u32 = gid.x ^ 0xDEADBEEFu;
+    for (var i: u32 = 0u; i < 1000000u; i++) {
+        x ^= x << 13u;
+        x ^= x >> 17u;
+        x ^= x << 5u;
+    }
+    buf[gid.x] = x;
+}
+"#;
+        const N_THREADS: u32 = 1024 * 64;
+
+        let module = ctx
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+            });
+
+        let buf = ctx.device.create_buffer(&BufferDescriptor {
+            label: None,
+            size: (N_THREADS as u64) * 4,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+
+        let bgl = ctx
+            .device
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let pipeline_layout = ctx
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[Some(&bgl)],
+                immediate_size: 0,
+            });
+
+        let pipeline = ctx
+            .device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: None,
+                layout: Some(&pipeline_layout),
+                module: &module,
+                entry_point: Some("main"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
+
+        let bg = ctx.device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &bgl,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: buf.as_entire_binding(),
+            }],
+        });
+
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor::default());
+        {
+            let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
+            cpass.set_pipeline(&pipeline);
+            cpass.set_bind_group(0, &bg, &[]);
+            cpass.dispatch_workgroups(N_THREADS / 64, 1, 1);
+        }
+        ctx.queue.submit(Some(encoder.finish()));
+
+        ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
+    });
