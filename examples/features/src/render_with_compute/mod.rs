@@ -3,7 +3,7 @@
 //! therefore not recommended to use this code, at least until
 //! <https://bugzilla.mozilla.org/show_bug.cgi?id=1870699> (and possibly further work) is resolved.
 
-use std::time::Instant;
+use web_time::Instant;
 
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy, Debug)]
 #[repr(C)]
