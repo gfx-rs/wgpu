@@ -78,6 +78,7 @@ pub(super) struct WrappedStructMatrixAccess {
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) struct WrappedMatCx2 {
     pub(super) columns: crate::VectorSize,
+    pub(super) width: u8,
 }
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -838,13 +839,17 @@ impl<W: Write> super::Writer<'_, W> {
                             if let Some(super::writer::MatrixType {
                                 columns,
                                 rows: crate::VectorSize::Bi,
-                                width: 4,
+                                width,
                             }) = super::writer::get_inner_matrix_data(module, member.ty)
                             {
                                 write!(
                                     self.out,
-                                    "{}{}.{} = (__mat{}x2",
-                                    INDENT, RETURN_VARIABLE_NAME, field_name, columns as u8
+                                    "{}{}.{} = (__mat{}x2_f{}",
+                                    INDENT,
+                                    RETURN_VARIABLE_NAME,
+                                    field_name,
+                                    columns as u8,
+                                    width * 8
                                 )?;
                                 if let crate::TypeInner::Array { base, size, .. } = *other {
                                     self.write_array_size(module, base, size)?;
@@ -2141,35 +2146,42 @@ impl<W: Write> super::Writer<'_, W> {
 
     pub(super) fn write_mat_cx2_typedef_and_functions(
         &mut self,
-        WrappedMatCx2 { columns }: WrappedMatCx2,
+        WrappedMatCx2 { columns, width }: WrappedMatCx2,
     ) -> BackendResult {
         use crate::back::INDENT;
+
+        let bit_width = width * 8;
+        let type_name = crate::Scalar {
+            kind: ScalarKind::Float,
+            width,
+        }
+        .to_hlsl_str()?;
 
         // typedef
         write!(self.out, "typedef struct {{ ")?;
         for i in 0..columns as u8 {
-            write!(self.out, "float2 _{i}; ")?;
+            write!(self.out, "{type_name}2 _{i}; ")?;
         }
-        writeln!(self.out, "}} __mat{}x2;", columns as u8)?;
+        writeln!(self.out, "}} __mat{}x2_f{bit_width};", columns as u8)?;
 
         // __get_col_of_mat
         writeln!(
             self.out,
-            "float2 __get_col_of_mat{}x2(__mat{}x2 mat, uint idx) {{",
+            "{type_name}2 __get_col_of_mat{}x2_f{bit_width}(__mat{}x2_f{bit_width} mat, uint idx) {{",
             columns as u8, columns as u8
         )?;
         writeln!(self.out, "{INDENT}switch(idx) {{")?;
         for i in 0..columns as u8 {
             writeln!(self.out, "{INDENT}case {i}: {{ return mat._{i}; }}")?;
         }
-        writeln!(self.out, "{INDENT}default: {{ return (float2)0; }}")?;
+        writeln!(self.out, "{INDENT}default: {{ return ({type_name}2)0; }}")?;
         writeln!(self.out, "{INDENT}}}")?;
         writeln!(self.out, "}}")?;
 
         // __set_col_of_mat
         writeln!(
             self.out,
-            "void __set_col_of_mat{}x2(__mat{}x2 mat, uint idx, float2 value) {{",
+            "void __set_col_of_mat{}x2_f{bit_width}(__mat{}x2_f{bit_width} mat, uint idx, {type_name}2 value) {{",
             columns as u8, columns as u8
         )?;
         writeln!(self.out, "{INDENT}switch(idx) {{")?;
@@ -2182,7 +2194,7 @@ impl<W: Write> super::Writer<'_, W> {
         // __set_el_of_mat
         writeln!(
             self.out,
-            "void __set_el_of_mat{}x2(__mat{}x2 mat, uint idx, uint vec_idx, float value) {{",
+            "void __set_el_of_mat{}x2_f{bit_width}(__mat{}x2_f{bit_width} mat, uint idx, uint vec_idx, {type_name} value) {{",
             columns as u8, columns as u8
         )?;
         writeln!(self.out, "{INDENT}switch(idx) {{")?;
@@ -2211,10 +2223,10 @@ impl<W: Write> super::Writer<'_, W> {
                 if let Some(super::writer::MatrixType {
                     columns,
                     rows: crate::VectorSize::Bi,
-                    width: 4,
+                    width,
                 }) = super::writer::get_inner_matrix_data(module, global.ty)
                 {
-                    let entry = WrappedMatCx2 { columns };
+                    let entry = WrappedMatCx2 { columns, width };
                     if self.wrapped.insert(WrappedType::MatCx2(entry)) {
                         self.write_mat_cx2_typedef_and_functions(entry)?;
                     }
@@ -2229,10 +2241,10 @@ impl<W: Write> super::Writer<'_, W> {
                         if let Some(super::writer::MatrixType {
                             columns,
                             rows: crate::VectorSize::Bi,
-                            width: 4,
+                            width,
                         }) = super::writer::get_inner_matrix_data(module, member.ty)
                         {
-                            let entry = WrappedMatCx2 { columns };
+                            let entry = WrappedMatCx2 { columns, width };
                             if self.wrapped.insert(WrappedType::MatCx2(entry)) {
                                 self.write_mat_cx2_typedef_and_functions(entry)?;
                             }
@@ -2267,7 +2279,7 @@ impl<W: Write> super::Writer<'_, W> {
     ///
     /// ```text
     /// tests\out\hlsl\access.hlsl:183:41: error: cannot compile this l-value expression yet
-    ///     t_1.am = (__mat4x2[2])((float4x2[2])0);
+    ///     t_1.am = (__mat4x2_f32[2])((float4x2[2])0);
     ///                                         ^
     /// ```
     fn write_wrapped_zero_value_function(

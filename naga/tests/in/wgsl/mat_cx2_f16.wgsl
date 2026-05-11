@@ -1,5 +1,9 @@
-// Test HLSL handling of N-by-3 matrices. These should not receive the special
-// treatment that N-by-2 matrices receive (which is tested in mat_cx2.wgsl).
+// Test handling of N-by-2 matrices.
+// See the doc comments on `naga::back::hlsl` and `naga::back::spv` for details.
+//
+// There are additional tests in `access.wgsl`.
+//
+// Tests that we don't apply this handling to other sizes are in mat_cx3.wgsl.
 
 // Access type (3rd item in variable names)
 // S = Struct
@@ -11,7 +15,9 @@
 // C = Constant
 // V = Variable
 
-alias Mat = mat3x3<f32>;
+enable f16;
+
+alias Mat = mat4x2<f16>;
 
 @group(0) @binding(0)
 var<storage, read_write> s_m: Mat;
