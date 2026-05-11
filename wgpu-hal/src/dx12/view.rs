@@ -41,12 +41,13 @@ fn aspects_to_plane(aspects: crate::FormatAspects) -> u32 {
     }
 }
 
-/// Shader component mapping for stencil-only views
+/// Shader component mapping for stencil views
 ///
-/// Stencil views use `DXGI_FORMAT_X24_TYPELESS_G8_UINT`, which places
-/// the value in the green component. WebGPU specifies that it be in
-/// the red component, and that the remaining components _should_ be
-/// (0, 0, 1), but may have an unspecified value.
+/// Stencil views use `DXGI_FORMAT_X24_TYPELESS_G8_UINT` or
+/// `DXGI_FORMAT_X32_TYPELESS_G8X24_UINT`, which have the stencil value in
+/// the green component. WebGPU specifies that the stencil value be in the
+/// red component. It also specifies that the remaining components _should_
+/// be (0, 0, 1), but may have an unspecified value.
 const STENCIL_COMPONENT_MAPPING: Direct3D12::D3D12_SHADER_COMPONENT_MAPPING =
     super::conv::make_shader_component_mapping(
         Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1,
