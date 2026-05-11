@@ -74,7 +74,7 @@ static DRAW_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
                 wgpu_test::FailureCase::molten_vk()
                     .validation_error("could not be compiled into pipeline")
                     .validation_error("vkDestroyDevice")
-                    .panic("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
+                    .unexpected_error("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
             ),
     )
     .run_async(test);
