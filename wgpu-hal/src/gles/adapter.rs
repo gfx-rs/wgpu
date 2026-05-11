@@ -1332,11 +1332,6 @@ impl super::AdapterShared {
     }
 }
 
-#[cfg(send_sync)]
-unsafe impl Sync for super::Adapter {}
-#[cfg(send_sync)]
-unsafe impl Send for super::Adapter {}
-
 #[cfg(test)]
 mod tests {
     use super::super::Adapter;

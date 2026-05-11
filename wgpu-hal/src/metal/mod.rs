@@ -392,8 +392,8 @@ struct AdapterShared {
     presentation_timer: time::PresentationTimer,
 }
 
-unsafe impl Send for AdapterShared {}
-unsafe impl Sync for AdapterShared {}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(AdapterShared: Send, Sync);
 
 impl AdapterShared {
     fn new(
@@ -446,13 +446,16 @@ pub struct Adapter {
     shared: Arc<AdapterShared>,
 }
 
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(Adapter: Send, Sync);
+
 pub struct Queue {
     shared: Arc<QueueShared>,
     timestamp_period: f32,
 }
 
-unsafe impl Send for Queue {}
-unsafe impl Sync for Queue {}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(Queue: Send, Sync);
 
 impl Queue {
     pub unsafe fn queue_from_raw(
@@ -703,8 +706,8 @@ pub struct Sampler {
 
 impl crate::DynSampler for Sampler {}
 
-unsafe impl Send for Sampler {}
-unsafe impl Sync for Sampler {}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(Sampler: Send, Sync);
 
 impl Sampler {
     fn as_raw(&self) -> NonNull<ProtocolObject<dyn MTLSamplerState>> {
@@ -887,8 +890,8 @@ pub struct PassthroughShader {
     pub num_workgroups: HashMap<String, (u32, u32, u32)>,
 }
 
-unsafe impl Send for PassthroughShader {}
-unsafe impl Sync for PassthroughShader {}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(PassthroughShader: Send, Sync);
 
 #[derive(Debug)]
 pub struct ShaderModule {
@@ -993,8 +996,8 @@ pub struct RenderPipeline {
     )>,
 }
 
-unsafe impl Send for RenderPipeline {}
-unsafe impl Sync for RenderPipeline {}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(RenderPipeline: Send, Sync);
 
 impl crate::DynRenderPipeline for RenderPipeline {}
 
@@ -1004,8 +1007,8 @@ pub struct ComputePipeline {
     cs_info: PipelineStageInfo,
 }
 
-unsafe impl Send for ComputePipeline {}
-unsafe impl Sync for ComputePipeline {}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(ComputePipeline: Send, Sync);
 
 impl crate::DynComputePipeline for ComputePipeline {}
 
