@@ -1,26 +1,26 @@
-typedef struct { float2 _0; float2 _1; } __mat2x2;
-float2 __get_col_of_mat2x2(__mat2x2 mat, uint idx) {
+typedef struct { float2 _0; float2 _1; } __mat2x2_f32;
+float2 __get_col_of_mat2x2_f32(__mat2x2_f32 mat, uint idx) {
     switch(idx) {
     case 0: { return mat._0; }
     case 1: { return mat._1; }
     default: { return (float2)0; }
     }
 }
-void __set_col_of_mat2x2(__mat2x2 mat, uint idx, float2 value) {
+void __set_col_of_mat2x2_f32(__mat2x2_f32 mat, uint idx, float2 value) {
     switch(idx) {
     case 0: { mat._0 = value; break; }
     case 1: { mat._1 = value; break; }
     }
 }
-void __set_el_of_mat2x2(__mat2x2 mat, uint idx, uint vec_idx, float value) {
+void __set_el_of_mat2x2_f32(__mat2x2_f32 mat, uint idx, uint vec_idx, float value) {
     switch(idx) {
     case 0: { mat._0[vec_idx] = value; break; }
     case 1: { mat._1[vec_idx] = value; break; }
     }
 }
 
-typedef struct { float2 _0; float2 _1; float2 _2; float2 _3; } __mat4x2;
-float2 __get_col_of_mat4x2(__mat4x2 mat, uint idx) {
+typedef struct { float2 _0; float2 _1; float2 _2; float2 _3; } __mat4x2_f32;
+float2 __get_col_of_mat4x2_f32(__mat4x2_f32 mat, uint idx) {
     switch(idx) {
     case 0: { return mat._0; }
     case 1: { return mat._1; }
@@ -29,7 +29,7 @@ float2 __get_col_of_mat4x2(__mat4x2 mat, uint idx) {
     default: { return (float2)0; }
     }
 }
-void __set_col_of_mat4x2(__mat4x2 mat, uint idx, float2 value) {
+void __set_col_of_mat4x2_f32(__mat4x2_f32 mat, uint idx, float2 value) {
     switch(idx) {
     case 0: { mat._0 = value; break; }
     case 1: { mat._1 = value; break; }
@@ -37,7 +37,7 @@ void __set_col_of_mat4x2(__mat4x2 mat, uint idx, float2 value) {
     case 3: { mat._3 = value; break; }
     }
 }
-void __set_el_of_mat4x2(__mat4x2 mat, uint idx, uint vec_idx, float value) {
+void __set_el_of_mat4x2_f32(__mat4x2_f32 mat, uint idx, uint vec_idx, float value) {
     switch(idx) {
     case 0: { mat._0[vec_idx] = value; break; }
     case 1: { mat._1[vec_idx] = value; break; }
@@ -65,7 +65,7 @@ struct Baz {
 };
 
 struct MatCx2InArray {
-    __mat4x2 am[2];
+    __mat4x2_f32 am[2];
 };
 
 struct AssignToMember {
@@ -171,7 +171,7 @@ void test_matrix_within_struct_accesses()
 
 MatCx2InArray ConstructMatCx2InArray(float4x2 arg0[2]) {
     MatCx2InArray ret = (MatCx2InArray)0;
-    ret.am = (__mat4x2[2])arg0;
+    ret.am = (__mat4x2_f32[2])arg0;
     return ret;
 }
 
@@ -191,30 +191,30 @@ void test_matrix_within_array_within_struct_accesses()
     float4x2 l1_1 = ((float4x2)nested_mat_cx2_.am[0]);
     float2 l2_1 = nested_mat_cx2_.am[0]._0;
     int _e20 = idx_1;
-    float2 l3_1 = __get_col_of_mat4x2(nested_mat_cx2_.am[0], _e20);
+    float2 l3_1 = __get_col_of_mat4x2_f32(nested_mat_cx2_.am[0], _e20);
     float l4_1 = nested_mat_cx2_.am[0]._0.y;
     int _e33 = idx_1;
     float l5_1 = nested_mat_cx2_.am[0]._0[_e33];
     int _e39 = idx_1;
-    float l6_1 = __get_col_of_mat4x2(nested_mat_cx2_.am[0], _e39).y;
+    float l6_1 = __get_col_of_mat4x2_f32(nested_mat_cx2_.am[0], _e39).y;
     int _e46 = idx_1;
     int _e48 = idx_1;
-    float l7_ = __get_col_of_mat4x2(nested_mat_cx2_.am[0], _e46)[_e48];
+    float l7_ = __get_col_of_mat4x2_f32(nested_mat_cx2_.am[0], _e46)[_e48];
     int _e55 = idx_1;
     idx_1 = asint(asuint(_e55) + asuint(int(1)));
-    t_1.am = (__mat4x2[2])ZeroValuearray2_float4x2_();
-    t_1.am[0] = (__mat4x2)float4x2((8.0).xx, (7.0).xx, (6.0).xx, (5.0).xx);
+    t_1.am = (__mat4x2_f32[2])ZeroValuearray2_float4x2_();
+    t_1.am[0] = (__mat4x2_f32)float4x2((8.0).xx, (7.0).xx, (6.0).xx, (5.0).xx);
     t_1.am[0]._0 = (9.0).xx;
     int _e77 = idx_1;
-    __set_col_of_mat4x2(t_1.am[0], _e77, (90.0).xx);
+    __set_col_of_mat4x2_f32(t_1.am[0], _e77, (90.0).xx);
     t_1.am[0]._0.y = 10.0;
     int _e89 = idx_1;
     t_1.am[0]._0[min(uint(_e89), 1u)] = 20.0;
     int _e94 = idx_1;
-    __set_el_of_mat4x2(t_1.am[0], _e94, 1, 30.0);
+    __set_el_of_mat4x2_f32(t_1.am[0], _e94, 1, 30.0);
     int _e100 = idx_1;
     int _e102 = idx_1;
-    __set_el_of_mat4x2(t_1.am[0], _e100, _e102, 40.0);
+    __set_el_of_mat4x2_f32(t_1.am[0], _e100, _e102, 40.0);
     return;
 }
 

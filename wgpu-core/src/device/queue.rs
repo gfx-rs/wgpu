@@ -126,7 +126,9 @@ impl Queue {
         texture: &Arc<Texture>,
     ) -> Result<(), DeviceError> {
         let snatch_guard = self.device.snatchable_lock.read();
-        let (mut submission, _index) = self.allocate_submission(snatch_guard);
+        let submission = self
+            .allocate_submission(snatch_guard)
+            .map_err(|(_index, e)| e)?;
         let device = &self.device;
 
         // If the texture is uninitialized it needs to be cleared before presenting
@@ -141,6 +143,8 @@ impl Queue {
         let mut pending_writes = self.pending_writes.lock();
 
         if needs_clear {
+            // After encoding the clear operation, we must not return without
+            // adding the texture to `pending_writes`.
             let encoder = pending_writes.activate();
             let mut trackers = device.trackers.lock();
             crate::command::clear_texture(
@@ -182,6 +186,12 @@ impl Queue {
         };
 
         if pending.is_empty() {
+            // This assert checks that we don't return here if we encoded a
+            // clear operation for the texture, which would be a problem since
+            // we haven't done anything yet to ensure it stays alive. If we
+            // cleared the texture, then we must have produced a barrier to put
+            // it in PRESENT state, so `pending` will not be empty.
+            debug_assert!(!needs_clear);
             return Ok(());
         }
 
@@ -198,20 +208,19 @@ impl Queue {
             let encoder = pending_writes.activate();
             // SAFETY:
             // - The encoder is in the recording state after `activate()`
-            // - The texture is kept alive by the Arc from `acquired_texture`
+            // - The texture is kept alive by adding it to `PendingWrites` below
             unsafe {
                 encoder.transition_textures(&barriers);
             }
         }
 
-        // Keep the texture alive in the submission so its clear_view isn't
-        // destroyed before the GPU finishes the submitted commands.
+        // Add the texture to `PendingWrites`. This will cause `submit()` to:
+        // - Flush any pending writes to the texture.
+        // - Include the texture in `surface_textures` for the submission.
+        // - Keep the texture alive so the texture and its clear_view aren't
+        //   destroyed before the GPU finishes the `clear_texture` operation
+        //   encoded above.
         pending_writes.insert_texture(texture);
-
-        // Flush pending writes through the standard submission path.
-        submission
-            .surface_textures
-            .insert(Arc::as_ptr(texture), texture.clone());
 
         submission.submit(pending_writes)?;
 
@@ -573,7 +582,7 @@ pub(crate) struct PendingSubmission<'a> {
     // Surface textures referenced by command buffers in this submission. These need to be
     // passed to the HAL `submit` call. Deduplicated using a hashmap to avoid vulkan
     // deadlocking from the same surface texture being submitted multiple times.
-    pub surface_textures: FastHashMap<*const Texture, Arc<Texture>>,
+    surface_textures: FastHashMap<*const Texture, Arc<Texture>>,
     pub index: SubmissionIndex,
 }
 
@@ -1253,7 +1262,9 @@ impl Queue {
         buffer: &Arc<Buffer>,
         snatch_guard: SnatchGuard,
     ) -> Result<(), BufferAccessError> {
-        let (submission, _index) = self.allocate_submission(snatch_guard);
+        let submission = self
+            .allocate_submission(snatch_guard)
+            .map_err(|(_index, e)| e)?;
 
         let pending_writes = self.pending_writes.lock();
         if !pending_writes.contains_buffer(buffer) {
@@ -1267,7 +1278,10 @@ impl Queue {
 
     fn flush_pending_writes(&self) -> Result<Option<SubmissionIndex>, DeviceError> {
         let snatch_guard = self.device.snatchable_lock.read();
-        let (submission, submit_index) = self.allocate_submission(snatch_guard);
+        let submission = self
+            .allocate_submission(snatch_guard)
+            .map_err(|(_index, e)| e)?;
+        let submit_index = submission.index;
         let pending_writes = self.pending_writes.lock();
         if pending_writes.is_recording {
             submission.submit(pending_writes)?;
@@ -1312,13 +1326,12 @@ impl Queue {
         api_log!("Queue::submit");
 
         let snatch_guard = self.device.snatchable_lock.read();
-        let (mut submission, submit_index) = self.allocate_submission(snatch_guard);
+        let mut submission = self
+            .allocate_submission(snatch_guard)
+            .map_err(|(index, e)| (index, e.into()))?;
+        let submit_index = submission.index;
 
         let res = 'error: {
-            if let Err(e) = self.device.check_is_valid() {
-                break 'error Err(e.into());
-            }
-
             let mut used_surface_textures = track::TextureUsageScope::default();
 
             {
@@ -1539,8 +1552,8 @@ impl Queue {
     /// The caller passes in the already-acquired [`SnatchGuard`]. This function acquires
     /// the fence lock and the command index lock.
     ///
-    /// The caller should update the [`PendingSubmission`] members `executions` and
-    /// `surface_textures` with details of the submission.
+    /// The caller should update [`PendingSubmission::executions`] with details of the
+    /// submission.
     ///
     /// To finalize and submit the submission, call [`PendingSubmission::submit`] (which is
     /// a convenience wrapper around [`Queue::submit_pending_submission`]).
@@ -1554,7 +1567,7 @@ impl Queue {
     fn allocate_submission<'a>(
         &'a self,
         snatch_guard: SnatchGuard<'a>,
-    ) -> (PendingSubmission<'a>, SubmissionIndex) {
+    ) -> Result<PendingSubmission<'a>, (SubmissionIndex, DeviceError)> {
         // Lock ordering requires that the fence lock be acquired after the snatch lock and
         // before the command index lock.
         let fence = self.device.fence.write();
@@ -1562,6 +1575,10 @@ impl Queue {
         let mut command_index_guard = self.device.command_indices.write();
         command_index_guard.active_submission_index += 1;
         let index = command_index_guard.active_submission_index;
+
+        if let Err(e) = self.device.check_is_valid() {
+            return Err((index, e));
+        }
 
         let submission = PendingSubmission {
             queue: self,
@@ -1573,7 +1590,7 @@ impl Queue {
             index,
         };
 
-        (submission, index)
+        Ok(submission)
     }
 
     /// Finalize and submit a [`PendingSubmission`] that was returned by
