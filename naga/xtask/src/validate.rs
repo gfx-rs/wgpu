@@ -282,10 +282,10 @@ fn validate_metal(path: &Path, xcrun: &str) -> anyhow::Result<()> {
     };
     let warnings_as_errors = ["-Werror=constant-conversion"];
     EasyCommand::new(xcrun, |cmd| {
-        cmd.args(["-sdk", "macosx", "metal", "-mmacosx-version-min=10.11"])
+        cmd.arg("metal")
             .arg(std_arg)
             .args(warnings_as_errors)
-            .args(["-x", "metal", &*path.to_string_lossy(), "-o", "/dev/null"])
+            .args([&*path.to_string_lossy(), "-o", "/dev/null"])
     })
     .success()
 }
