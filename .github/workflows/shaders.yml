@@ -39,6 +39,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       # We must have the FXC job before the DXC job, so the DXC PATH has priority
@@ -85,6 +86,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - run: |
@@ -115,6 +117,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - run: cd naga; cargo xtask validate spv
