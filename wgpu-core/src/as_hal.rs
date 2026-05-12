@@ -181,7 +181,11 @@ impl<Fence: 'static> Deref for FenceGuard<Fence> {
     type Target = Fence;
 
     fn deref(&self) -> &Self::Target {
-        self.device.fence.as_any().downcast_ref::<Fence>().expect("Checked in `new` that fence was of valid type.")
+        self.device
+            .fence
+            .as_any()
+            .downcast_ref::<Fence>()
+            .expect("Checked in `new` that fence was of valid type.")
     }
 }
 

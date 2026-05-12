@@ -1492,9 +1492,7 @@ impl Queue {
 
             let pending_writes = self.pending_writes.lock();
 
-            let SubmissionResult {
-                snatch_guard,
-            } = match submission.submit(pending_writes) {
+            let SubmissionResult { snatch_guard } = match submission.submit(pending_writes) {
                 Ok(result) => result,
                 Err(e) => break 'error Err(e.into()),
             };
@@ -1504,9 +1502,7 @@ impl Queue {
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
             // `device.maintain` consumes and will release the snatch guard.
-            let (closures, result) = self
-                .device
-                .maintain(wgt::PollType::Poll, snatch_guard);
+            let (closures, result) = self.device.maintain(wgt::PollType::Poll, snatch_guard);
             match result {
                 Ok(status) => {
                     debug_assert!(matches!(
@@ -1699,9 +1695,7 @@ impl Queue {
         // this will register the new submission to the life time tracker
         self.lock_life().track_submission(submit_index, executions);
 
-        Ok(SubmissionResult {
-            snatch_guard,
-        })
+        Ok(SubmissionResult { snatch_guard })
     }
 
     pub fn get_timestamp_period(&self) -> f32 {
