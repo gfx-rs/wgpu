@@ -737,6 +737,10 @@ impl Writer {
         let divisor_selector_id = match scalar.kind {
             crate::ScalarKind::Sint => {
                 let (const_min_id, const_neg_one_id) = match scalar.width {
+                    2 => Ok((
+                        self.get_constant_scalar(crate::Literal::I16(i16::MIN)),
+                        self.get_constant_scalar(crate::Literal::I16(-1i16)),
+                    )),
                     4 => Ok((
                         self.get_constant_scalar(crate::Literal::I32(i32::MIN)),
                         self.get_constant_scalar(crate::Literal::I32(-1i32)),
@@ -1910,6 +1914,16 @@ impl Writer {
                 if let Some(cap) = cap {
                     self.capabilities_used.insert(cap);
                 }
+                if bits == 16 {
+                    self.capabilities_used
+                        .insert(spirv::Capability::StorageBuffer16BitAccess);
+                    self.capabilities_used
+                        .insert(spirv::Capability::UniformAndStorageBuffer16BitAccess);
+                    if self.use_storage_input_output_16 {
+                        self.capabilities_used
+                            .insert(spirv::Capability::StorageInputOutput16);
+                    }
+                }
                 Instruction::type_int(id, bits, signedness)
             }
             Sk::Float => {
@@ -2016,6 +2030,22 @@ impl Writer {
             }
             | crate::TypeInner::Scalar(crate::Scalar::F16) => {
                 self.require_any("16 bit floating-point", &[spirv::Capability::Float16])?;
+                self.use_extension("SPV_KHR_16bit_storage");
+            }
+            // 16 bit integer support requires Int16 capability
+            crate::TypeInner::Vector {
+                scalar:
+                    crate::Scalar {
+                        kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                        width: 2,
+                    },
+                ..
+            }
+            | crate::TypeInner::Scalar(crate::Scalar {
+                kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                width: 2,
+            }) => {
+                self.require_any("16 bit integer", &[spirv::Capability::Int16])?;
                 self.use_extension("SPV_KHR_16bit_storage");
             }
             // Cooperative types and ops
@@ -2575,6 +2605,13 @@ impl Writer {
             crate::Literal::F16(value) => {
                 let low = value.to_bits();
                 Instruction::constant_16bit(type_id, id, low as u32)
+            }
+            crate::Literal::U16(value) => Instruction::constant_16bit(type_id, id, value as u32),
+            crate::Literal::I16(value) => {
+                // Sign-extend into the 32-bit word so that `spirv-as` can
+                // round-trip the disassembly (it expects signed values for
+                // signed types).
+                Instruction::constant_16bit(type_id, id, value as i32 as u32)
             }
             crate::Literal::U32(value) => Instruction::constant_32bit(type_id, id, value),
             crate::Literal::I32(value) => Instruction::constant_32bit(type_id, id, value as u32),

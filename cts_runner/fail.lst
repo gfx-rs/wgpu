@@ -11,6 +11,8 @@
 //
 // The `cts_runner` integration test `lst_files_are_sorted` verifies that test selectors
 // appear in this file in order -- including ones in comments.
+webgpu:api,operation,rendering,3d_texture_slices:* // https://github.com/gfx-rs/wgpu/issues/9455
+
 webgpu:api,validation,buffer,mapping:* // crash
 webgpu:api,validation,capability_checks,features,* // 21%, TypeError not thrown for missing features (needs deno_webgpu fix)
 webgpu:api,validation,capability_checks,limits,* // 60%, workgroup storage size validation unimplemented; interstage vars counting; bind group timing on dx12

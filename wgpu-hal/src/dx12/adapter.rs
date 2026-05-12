@@ -591,6 +591,10 @@ impl super::Adapter {
             wgt::Features::SHADER_F16,
             shader_model >= naga::back::hlsl::ShaderModel::V6_2 && float16_supported,
         );
+        features.set(
+            wgt::Features::SHADER_I16,
+            shader_model >= naga::back::hlsl::ShaderModel::V6_2 && float16_supported,
+        );
 
         features.set(
             wgt::Features::SUBGROUP,
@@ -1096,6 +1100,8 @@ impl crate::Adapter for super::Adapter {
                 idle_fence,
                 idle_event,
                 idle_fence_value: AtomicU64::new(0),
+                pending_waits: Mutex::new(Vec::new()),
+                pending_signals: Mutex::new(Vec::new()),
             },
         })
     }

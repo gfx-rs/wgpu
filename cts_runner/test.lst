@@ -12,6 +12,8 @@ unittests:*
 
 webgpu:api,operation,adapter,requestAdapter:*
 webgpu:api,operation,buffers,createBindGroup:buffer_binding_resource:*
+webgpu:api,operation,buffers,map:mapAsync,read,*
+webgpu:api,operation,buffers,map:mapAsync,write,*
 webgpu:api,operation,command_buffer,basic:*
 webgpu:api,operation,command_buffer,copyBufferToBuffer:*
 fails-if(vulkan) webgpu:api,operation,command_buffer,copyTextureToTexture:copy_depth_stencil:format="depth16unorm"
@@ -37,7 +39,6 @@ webgpu:api,operation,device,lost:*
 webgpu:api,operation,render_pass,storeOp:*
 webgpu:api,operation,render_pipeline,overrides:*
 webgpu:api,operation,render_pipeline,pipeline_output_targets:color,component_count,blend:*
-webgpu:api,operation,rendering,3d_texture_slices:*
 webgpu:api,operation,rendering,basic:clear:*
 webgpu:api,operation,rendering,basic:fullscreen_quad:*
 //FAIL: webgpu:api,operation,rendering,basic:large_draw:*
@@ -308,7 +309,31 @@ webgpu:api,validation,texture,destroy:invalid_texture:*
 webgpu:api,validation,texture,destroy:twice:*
 webgpu:api,validation,texture,float32_filterable:create_bind_group:*
 webgpu:api,validation,texture,rg11b10ufloat_renderable:*
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:*
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=false;numAttribsToReserve=0;isAsync=false
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=false;numAttribsToReserve=0;isAsync=true
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=false;numAttribsToReserve=1;isAsync=false
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=false;numAttribsToReserve=1;isAsync=true
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=false;numAttribsToReserve=2;isAsync=false
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=false;numAttribsToReserve=2;isAsync=true
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=true;numAttribsToReserve=0;isAsync=false
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=true;numAttribsToReserve=0;isAsync=true
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=true;numAttribsToReserve=1;isAsync=false
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=true;numAttribsToReserve=1;isAsync=true
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=true;numAttribsToReserve=2;isAsync=false
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=true;numAttribsToReserve=2;isAsync=true
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=false;numAttribsToReserve=0;isAsync=false
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=false;numAttribsToReserve=0;isAsync=true
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=false;numAttribsToReserve=1;isAsync=false
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=false;numAttribsToReserve=1;isAsync=true
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=false;numAttribsToReserve=2;isAsync=false
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=false;numAttribsToReserve=2;isAsync=true
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=true;numAttribsToReserve=0;isAsync=false
+// https://github.com/gfx-rs/wgpu/issues/9456
+fails-if(dx12) webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=true;numAttribsToReserve=0;isAsync=true
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=true;numAttribsToReserve=1;isAsync=false
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=true;numAttribsToReserve=1;isAsync=true
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=true;numAttribsToReserve=2;isAsync=false
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=true;numAttribsToReserve=2;isAsync=true
 
 fails-if(dx12) webgpu:shader,execution,expression,call,builtin,atan2:f16:*
 webgpu:shader,execution,expression,call,builtin,atan2:f32:*

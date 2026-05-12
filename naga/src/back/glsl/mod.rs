@@ -639,6 +639,7 @@ pub fn supported_capabilities() -> valid::Capabilities {
         | Caps::SUBGROUP
         | Caps::SUBGROUP_BARRIER
         | Caps::SHADER_FLOAT16
+        | Caps::SHADER_INT16
         | Caps::SHADER_FLOAT16_IN_FLOAT32
         | Caps::SHADER_BARYCENTRICS
         | Caps::DRAW_INDEX

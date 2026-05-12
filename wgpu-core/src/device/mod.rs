@@ -28,6 +28,7 @@ pub mod ray_tracing;
 pub mod resource;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
+pub(crate) use resource::{FenceReadGuard, FenceWriteGuard};
 pub use {life::WaitIdleError, resource::Device};
 
 pub const SHADER_STAGE_COUNT: usize = hal::MAX_CONCURRENT_SHADER_STAGES;

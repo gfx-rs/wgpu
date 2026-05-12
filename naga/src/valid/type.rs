@@ -316,7 +316,18 @@ impl super::Validator {
                 _ => scalar.width == 4,
             },
             crate::ScalarKind::Sint => {
-                if scalar.width == 8 {
+                if scalar.width == 2 {
+                    if !self.capabilities.contains(Capabilities::SHADER_INT16) {
+                        return Err(WidthError::MissingCapability {
+                            name: "i16",
+                            flag: "SHADER_INT16",
+                        });
+                    }
+
+                    immediates_compatibility = Err(ImmediateError::InvalidScalar(scalar));
+
+                    true
+                } else if scalar.width == 8 {
                     if !self.capabilities.contains(Capabilities::SHADER_INT64) {
                         return Err(WidthError::MissingCapability {
                             name: "i64",
@@ -329,7 +340,18 @@ impl super::Validator {
                 }
             }
             crate::ScalarKind::Uint => {
-                if scalar.width == 8 {
+                if scalar.width == 2 {
+                    if !self.capabilities.contains(Capabilities::SHADER_INT16) {
+                        return Err(WidthError::MissingCapability {
+                            name: "u16",
+                            flag: "SHADER_INT16",
+                        });
+                    }
+
+                    immediates_compatibility = Err(ImmediateError::InvalidScalar(scalar));
+
+                    true
+                } else if scalar.width == 8 {
                     if !self.capabilities.contains(Capabilities::SHADER_INT64) {
                         return Err(WidthError::MissingCapability {
                             name: "u64",
@@ -455,14 +477,16 @@ impl super::Validator {
                 match scalar {
                     crate::Scalar {
                         kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
-                        width: _,
+                        width: 4,
+                    } => {}
+                    crate::Scalar {
+                        kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                        width: 8,
                     } => {
-                        if scalar.width == 8
-                            && !self.capabilities.intersects(
-                                Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
-                                    | Capabilities::SHADER_INT64_ATOMIC_MIN_MAX,
-                            )
-                        {
+                        if !self.capabilities.intersects(
+                            Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
+                                | Capabilities::SHADER_INT64_ATOMIC_MIN_MAX,
+                        ) {
                             return Err(TypeError::MissingCapability(
                                 Capabilities::SHADER_INT64_ATOMIC_ALL_OPS,
                             ));

@@ -2,6 +2,18 @@ use wgpu::{Adapter, Backends, Device, Features, Instance, Limits, Queue};
 
 use crate::{report::AdapterReport, TestParameters};
 
+/// Default device-lost callback installed by [`initialize_device`]. Panics on
+/// any non-[`wgpu::DeviceLostReason::Destroyed`] device loss, which will
+/// cause the test to be treated as a failure.
+///
+/// Tests intentionally provoking device loss should install their own callback
+/// with [`wgpu::Device::set_device_lost_callback`].
+fn default_device_lost_callback(reason: wgpu::DeviceLostReason, message: String) {
+    if reason != wgpu::DeviceLostReason::Destroyed {
+        panic!("Device lost: {message}");
+    }
+}
+
 /// Initialize the logger for the test runner.
 pub fn init_logger() {
     // We don't actually care if it fails
@@ -182,10 +194,14 @@ pub async fn initialize_device(
         })
         .await;
 
-    match bundle {
-        Ok(b) => b,
+    let (device, queue) = match bundle {
+        Ok((device, queue)) => (device, queue),
         Err(e) => panic!("Failed to initialize device: {e}"),
-    }
+    };
+
+    device.set_device_lost_callback(default_device_lost_callback);
+
+    (device, queue)
 }
 
 /// Create a canvas for testing.
