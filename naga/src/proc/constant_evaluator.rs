@@ -952,6 +952,8 @@ pub enum ConstantEvaluatorError {
     SelectAcceptRejectTypeMismatch,
     #[error("Cooperative operations can't be constant")]
     CooperativeOperation,
+    #[error("Type is too large")]
+    TypeTooLarge(Handle<Type>),
 }
 
 impl<'a> ConstantEvaluator<'a> {
@@ -2652,7 +2654,14 @@ impl<'a> ConstantEvaluator<'a> {
             }
         };
         let mut layouter = core::mem::take(self.layouter);
-        layouter.update(self.to_ctx()).unwrap();
+        layouter.update(self.to_ctx()).map_err(|err| {
+            // The layouter operates lazily, so the error
+            // could be for any pending type.
+            let crate::proc::LayoutErrorInner::TooLarge = err.inner else {
+                unreachable!("unexpected layout error: {err:?}");
+            };
+            ConstantEvaluatorError::TypeTooLarge(err.ty)
+        })?;
         *self.layouter = layouter;
 
         let new_base_stride = self.layouter[new_base].to_stride();

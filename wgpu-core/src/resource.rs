@@ -629,9 +629,8 @@ impl Buffer {
     ///   with the error, and the caller is responsible for calling the
     ///   callback.
     ///
-    /// A return value of `Ok(0)` roughly means that no wait is necessary,
-    /// but it does not necessarily mean that the buffer has already been
-    /// mapped.
+    /// A return value of `Ok(0)` means that mapping does not need to wait on the queue, but
+    /// it does not mean that the buffer has already been mapped.
     fn try_map_async(
         self: &Arc<Self>,
         offset: wgt::BufferAddress,
@@ -693,50 +692,79 @@ impl Buffer {
             return Err((op, e.into()));
         }
 
-        {
+        let submit_index = {
             let snatch_guard = device.snatchable_lock.read();
             if let Err(e) = self.check_destroyed(&snatch_guard) {
                 return Err((op, e.into()));
             }
-        }
 
-        {
-            let map_state = &mut *self.map_state.lock();
-            *map_state = match *map_state {
-                BufferMapState::Init { .. } | BufferMapState::Active { .. } => {
-                    return Err((op, BufferAccessError::AlreadyMapped));
-                }
-                BufferMapState::Waiting(_) => {
-                    return Err((op, BufferAccessError::MapAlreadyPending));
-                }
-                BufferMapState::Idle => BufferMapState::Waiting(BufferPendingMapping {
-                    range: offset..end_offset,
-                    op,
-                    _parent_buffer: self.clone(),
-                }),
-            };
-        }
+            {
+                let map_state = &mut *self.map_state.lock();
+                *map_state = match *map_state {
+                    BufferMapState::Init { .. } | BufferMapState::Active { .. } => {
+                        return Err((op, BufferAccessError::AlreadyMapped));
+                    }
+                    BufferMapState::Waiting(_) => {
+                        return Err((op, BufferAccessError::MapAlreadyPending));
+                    }
+                    BufferMapState::Idle => BufferMapState::Waiting(BufferPendingMapping {
+                        range: offset..end_offset,
+                        op,
+                        _parent_buffer: self.clone(),
+                    }),
+                };
+            }
 
-        // TODO: we are ignoring the transition here, I think we need to add a barrier
-        // at the end of the submission
+            if let Some(queue) = device.get_queue().as_ref() {
+                match queue.flush_writes_for_buffer(self, snatch_guard) {
+                    Err(err) => {
+                        let state = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
+                        let BufferMapState::Waiting(BufferPendingMapping { op, .. }) = state else {
+                            unreachable!();
+                        };
+                        return Err((op, err));
+                    }
+                    Ok(()) => {
+                        // Schedule the buffer map in the  lifetime tracker.
+                        //
+                        // This call searches for use of the buffer by pending submissions.
+                        // If we just flushed pending writes, that search is redundant; we
+                        // already know that mapping needs to wait for the latest submission
+                        // and could implement a special case to directly attach it to that
+                        // submission. However, the queue is searched in reverse, so finding
+                        // that the buffer is used by the latest submission will be fast.
+                        Some(queue.lock_life().map(self).unwrap_or(0))
+                    }
+                }
+            } else {
+                None
+            }
+        };
+
+        // At this point, `submit_index` is:
+        // - `Some(index)`, if there is a submission the mapping operation must wait for.
+        // - `Some(0)`, if we have a queue and there is no submission to wait for.
+        // - `None`, if we don't have a queue.
+        //
+        // TODO(https://github.com/gfx-rs/wgpu/issues/9306): we are ignoring the transition
+        // here, I think we need to add a barrier at the end of the submission
         device
             .trackers
             .lock()
             .buffers
             .set_single(self, internal_use);
 
-        let submit_index = if let Some(queue) = device.get_queue() {
-            queue.lock_life().map(self).unwrap_or(0) // '0' means no wait is necessary
+        if let Some(index) = submit_index {
+            Ok(index)
         } else {
+            // We don't have a queue, so go ahead and map the buffer.
             // We can safely unwrap below since we just set the `map_state` to `BufferMapState::Waiting`.
             let (mut operation, status) = self.map(&device.snatchable_lock.read()).unwrap();
             if let Some(callback) = operation.callback.take() {
                 callback(status);
             }
-            0
-        };
-
-        Ok(submit_index)
+            Ok(0)
+        }
     }
 
     pub fn get_mapped_range(
@@ -820,6 +848,7 @@ impl Buffer {
         }
     }
     /// This function returns [`None`] only if [`Self::map_state`] is not [`BufferMapState::Waiting`].
+    /// Other errors are returned within `BufferMapPendingClosure`.
     #[must_use]
     pub(crate) fn map(&self, snatch_guard: &SnatchGuard) -> Option<BufferMapPendingClosure> {
         // This _cannot_ be inlined into the match. If it is, the lock will be held

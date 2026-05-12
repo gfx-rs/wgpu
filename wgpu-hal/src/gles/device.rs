@@ -579,6 +579,7 @@ impl crate::Device for super::Device {
                 target,
                 size: desc.size,
                 map_flags: 0,
+                mapped: false.into(),
                 data: Some(Arc::new(MaybeMutex::new(vec![0; desc.size as usize]))),
                 offset_of_current_mapping: Arc::new(MaybeMutex::new(0)),
             });
@@ -678,6 +679,7 @@ impl crate::Device for super::Device {
             raw,
             target,
             size: desc.size,
+            mapped: false.into(),
             map_flags,
             data,
             offset_of_current_mapping: Arc::new(MaybeMutex::new(0)),
@@ -719,13 +721,28 @@ impl crate::Device for super::Device {
                     slice.as_mut_ptr()
                 } else {
                     *lock(&buffer.offset_of_current_mapping) = range.start;
-                    unsafe {
-                        gl.map_buffer_range(
-                            buffer.target,
-                            range.start as i32,
-                            (range.end - range.start) as i32,
-                            buffer.map_flags,
-                        )
+                    // glMapBufferRange throws an error if length is 0.
+                    // We want to allow mapping 0-sized buffer slices, so perform a workaround
+                    // if the range length is 0. The resulting pointer must never be dereferenced.
+                    let range_start: i32 = range
+                        .start
+                        .try_into()
+                        .expect("Buffer range invalid for GLES");
+                    let range_length: i32 = (range.end - range.start)
+                        .try_into()
+                        .expect("Buffer range invalid for GLES");
+                    if range_length != 0 {
+                        buffer.mapped.set(true);
+                        unsafe {
+                            gl.map_buffer_range(
+                                buffer.target,
+                                range_start,
+                                range_length,
+                                buffer.map_flags,
+                            )
+                        }
+                    } else {
+                        ptr::dangling_mut()
                     }
                 };
                 unsafe { gl.bind_buffer(buffer.target, None) };
@@ -738,13 +755,15 @@ impl crate::Device for super::Device {
         })
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
-        if let Some(raw) = buffer.raw {
-            if buffer.data.is_none() {
-                let gl = &self.shared.context.lock();
-                unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
-                unsafe { gl.unmap_buffer(buffer.target) };
-                unsafe { gl.bind_buffer(buffer.target, None) };
-                *lock(&buffer.offset_of_current_mapping) = 0;
+        if buffer.mapped.replace(false) {
+            if let Some(raw) = buffer.raw {
+                if buffer.data.is_none() {
+                    let gl = &self.shared.context.lock();
+                    unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
+                    unsafe { gl.unmap_buffer(buffer.target) };
+                    unsafe { gl.bind_buffer(buffer.target, None) };
+                    *lock(&buffer.offset_of_current_mapping) = 0;
+                }
             }
         }
     }
@@ -752,19 +771,21 @@ impl crate::Device for super::Device {
     where
         I: Iterator<Item = crate::MemoryRange>,
     {
-        if let Some(raw) = buffer.raw {
-            if buffer.data.is_none() {
-                let gl = &self.shared.context.lock();
-                unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
-                for range in ranges {
-                    let offset_of_current_mapping = *lock(&buffer.offset_of_current_mapping);
-                    unsafe {
-                        gl.flush_mapped_buffer_range(
-                            buffer.target,
-                            (range.start - offset_of_current_mapping) as i32,
-                            (range.end - range.start) as i32,
-                        )
-                    };
+        if buffer.mapped.get() {
+            if let Some(raw) = buffer.raw {
+                if buffer.data.is_none() {
+                    let gl = &self.shared.context.lock();
+                    unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
+                    for range in ranges {
+                        let offset_of_current_mapping = *lock(&buffer.offset_of_current_mapping);
+                        unsafe {
+                            gl.flush_mapped_buffer_range(
+                                buffer.target,
+                                (range.start - offset_of_current_mapping) as i32,
+                                (range.end - range.start) as i32,
+                            )
+                        };
+                    }
                 }
             }
         }

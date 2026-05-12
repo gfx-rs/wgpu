@@ -1317,14 +1317,17 @@ impl super::AdapterShared {
         } else {
             log::error!("Fake map");
             let length = dst_data.len();
-            let buffer_mapping =
-                unsafe { gl.map_buffer_range(target, offset, length as _, glow::MAP_READ_BIT) };
+            // glMapBufferRange throws an error if length is 0.
+            if length != 0 {
+                let buffer_mapping =
+                    unsafe { gl.map_buffer_range(target, offset, length as _, glow::MAP_READ_BIT) };
 
-            unsafe {
-                core::ptr::copy_nonoverlapping(buffer_mapping, dst_data.as_mut_ptr(), length)
-            };
+                unsafe {
+                    core::ptr::copy_nonoverlapping(buffer_mapping, dst_data.as_mut_ptr(), length)
+                };
 
-            unsafe { gl.unmap_buffer(target) };
+                unsafe { gl.unmap_buffer(target) };
+            }
         }
     }
 }

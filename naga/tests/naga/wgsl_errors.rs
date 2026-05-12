@@ -4715,6 +4715,50 @@ fn max_type_size_array_of_structs() {
 }
 
 #[test]
+fn max_type_size_array_constructor_with_oversize_type() {
+    // An `array(...)` constructor expression invokes the layouter to compute
+    // the stride of the constructed array. If a previously declared type is
+    // oversize, the layouter encounters it and the error must be reported
+    // rather than panicking.
+    //
+    // Regression test for <https://github.com/gfx-rs/wgpu/issues/9440>.
+    check(
+        r#"
+            var<workgroup> big: array<u32, 1 << 29>;
+            const A = array(1);
+        "#,
+        r#"error: type is too large
+ = note: the maximum size is 2147483647 bytes
+
+"#,
+    );
+}
+
+#[test]
+fn max_type_size_concretize_with_oversize_type() {
+    // Concretizing an abstract array (here, indexing it with a non-constant
+    // index forces concretization to a concrete element type) invokes the
+    // layouter to compute the new array's stride. If a previously declared
+    // type is oversize, the layouter encounters it and the error must be
+    // reported rather than panicking.
+    //
+    // Regression test for <https://github.com/gfx-rs/wgpu/issues/9440>.
+    check(
+        r#"
+            const a = array(0.);
+            var<workgroup> big: array<u32, 1 << 29>;
+            fn main(i: u32) {
+                let x = a[i];
+            }
+        "#,
+        r#"error: type is too large
+ = note: the maximum size is 2147483647 bytes
+
+"#,
+    );
+}
+
+#[test]
 fn source_with_control_char() {
     check(
         "\x07",

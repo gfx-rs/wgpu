@@ -277,6 +277,13 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
                     .cast_array(expr, *concrete_scalar, expr_span)
                 {
                     Ok(expr) => return Ok(expr),
+                    Err(crate::proc::ConstantEvaluatorError::TypeTooLarge(ty)) => {
+                        // Special case where the error is not actually related to the
+                        // particular scalar we tried to concretize.
+                        return Err(Box::new(super::Error::TypeTooLarge {
+                            span: self.module.types.get_span(ty),
+                        }));
+                    }
                     Err(err) => {
                         errors.push((concrete_scalar.to_wgsl_for_diagnostics(), err));
                     }

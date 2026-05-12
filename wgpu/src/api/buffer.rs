@@ -1,6 +1,7 @@
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{
     error, fmt,
+    num::NonZero,
     ops::{Bound, Deref, Range, RangeBounds},
 };
 
@@ -307,7 +308,6 @@ impl Buffer {
     /// # Panics
     ///
     /// - If `bounds` is outside of the bounds of `self`.
-    /// - If `bounds` has a length less than 1.
     #[track_caller]
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'_> {
         let (offset, size) = range_to_offset_size(bounds, self.size);
@@ -477,7 +477,7 @@ impl Buffer {
 /// You can pass buffer slices to methods like [`RenderPass::set_vertex_buffer`]
 /// and [`RenderPass::set_index_buffer`] to indicate which portion of the buffer
 /// a draw call should consult. You can also convert it to a [`BufferBinding`]
-/// with `.into()`.
+/// with `.try_into()`, which fails if the slice length is 0.
 ///
 /// To access the slice's contents on the CPU, you must first [map] the buffer,
 /// and then call [`BufferSlice::get_mapped_range`] or
@@ -501,7 +501,7 @@ impl Buffer {
 pub struct BufferSlice<'a> {
     pub(crate) buffer: &'a Buffer,
     pub(crate) offset: BufferAddress,
-    pub(crate) size: BufferSize,
+    pub(crate) size: BufferAddress,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(BufferSlice<'_>: Send, Sync);
@@ -518,11 +518,10 @@ impl<'a> BufferSlice<'a> {
     /// # Panics
     ///
     /// - If `bounds` is outside of the bounds of `self`.
-    /// - If `bounds` has a length less than 1.
     #[track_caller]
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'a> {
-        let (offset, size) = range_to_offset_size(bounds, self.size.get());
-        check_buffer_bounds(self.size.get(), offset, size);
+        let (offset, size) = range_to_offset_size(bounds, self.size);
+        check_buffer_bounds(self.size, offset, size);
         BufferSlice {
             buffer: self.buffer,
             offset: self.offset + offset, // check_buffer_bounds ensures this does not overflow
@@ -557,7 +556,6 @@ impl<'a> BufferSlice<'a> {
     ///
     /// # Panics
     ///
-    /// - If the buffer is already mapped.
     /// - If the buffer’s [`BufferUsages`] do not allow the requested [`MapMode`].
     /// - If the beginning of this slice is not aligned to [`MAP_ALIGNMENT`] within the buffer.
     /// - If the length of this slice is not a multiple of 4.
@@ -575,9 +573,15 @@ impl<'a> BufferSlice<'a> {
         callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
     ) {
         let mut mc = self.buffer.map_context.lock();
-        assert_eq!(mc.mapped_range, 0..0, "Buffer is already mapped");
-        let end = self.offset + self.size.get();
-        mc.mapped_range = self.offset..end;
+        if mc.mapped_range.is_some() {
+            // Buffer is already mapped; fail
+            drop(mc);
+            callback(Err(BufferAsyncError));
+            return;
+        }
+
+        let end = self.offset + self.size;
+        mc.mapped_range = Some(self.offset..end);
         drop(mc); // release the lock of map_context as callback can call lock it again
 
         self.buffer
@@ -662,28 +666,38 @@ impl<'a> BufferSlice<'a> {
     }
 
     /// Returns the size of this slice.
-    pub fn size(&self) -> BufferSize {
+    pub fn size(&self) -> BufferAddress {
         self.size
     }
-}
 
-impl<'a> From<BufferSlice<'a>> for crate::BufferBinding<'a> {
-    /// Convert a [`BufferSlice`] to an equivalent [`BufferBinding`],
-    /// provided that it will be used without a dynamic offset.
-    fn from(value: BufferSlice<'a>) -> Self {
-        BufferBinding {
-            buffer: value.buffer,
-            offset: value.offset,
-            size: Some(value.size),
-        }
+    pub(crate) fn size_expect_nonzero(&self) -> BufferSize {
+        BufferSize::new(self.size).expect("buffer slice can not be empty")
     }
 }
 
-impl<'a> From<BufferSlice<'a>> for crate::BindingResource<'a> {
+impl<'a> TryFrom<BufferSlice<'a>> for crate::BufferBinding<'a> {
+    type Error = ();
+
+    /// Convert a [`BufferSlice`] to an equivalent [`BufferBinding`],
+    /// provided that it will be used without a dynamic offset.
+    fn try_from(value: BufferSlice<'a>) -> Result<Self, Self::Error> {
+        Ok(BufferBinding {
+            buffer: value.buffer,
+            offset: value.offset,
+            size: Some(NonZero::new(value.size()).ok_or(())?),
+        })
+    }
+}
+
+impl<'a> TryFrom<BufferSlice<'a>> for crate::BindingResource<'a> {
+    type Error = ();
+
     /// Convert a [`BufferSlice`] to an equivalent [`BindingResource::Buffer`],
     /// provided that it will be used without a dynamic offset.
-    fn from(value: BufferSlice<'a>) -> Self {
-        crate::BindingResource::Buffer(crate::BufferBinding::from(value))
+    fn try_from(value: BufferSlice<'a>) -> Result<Self, Self::Error> {
+        Ok(crate::BindingResource::Buffer(
+            crate::BufferBinding::try_from(value)?,
+        ))
     }
 }
 
@@ -720,9 +734,9 @@ struct Subrange {
 }
 
 impl Subrange {
-    fn new(offset: BufferAddress, size: BufferSize, kind: RangeMappingKind) -> Self {
+    fn new(offset: BufferAddress, size: BufferAddress, kind: RangeMappingKind) -> Self {
         Self {
-            index: offset..(offset + size.get()),
+            index: offset..(offset + size),
             kind,
         }
     }
@@ -745,13 +759,12 @@ impl fmt::Display for Subrange {
 pub(crate) struct MapContext {
     /// The range of the buffer that is mapped.
     ///
-    /// This is `0..0` if the buffer is not mapped. This becomes non-empty when
-    /// the buffer is mapped at creation time, and when you call `map_async` on
-    /// some [`BufferSlice`] (so technically, it indicates the portion that is
-    /// *or has been requested to be* mapped.)
+    /// This becomes Some(...) when the buffer is mapped at creation time, and
+    /// when you call `map_async` on some [`BufferSlice`] (so technically, it
+    /// indicates the portion that is *or has been requested to be* mapped.)
     ///
     /// All [`BufferView`]s and [`BufferViewMut`]s must fall within this range.
-    mapped_range: Range<BufferAddress>,
+    mapped_range: Option<Range<BufferAddress>>,
 
     /// The ranges covered by all outstanding [`BufferView`]s and
     /// [`BufferViewMut`]s. These are non-overlapping, and are all contained
@@ -768,14 +781,14 @@ impl MapContext {
     /// [`mapped_at_creation`]: BufferDescriptor::mapped_at_creation
     pub(crate) fn new(mapped_range: Option<Range<BufferAddress>>) -> Self {
         Self {
-            mapped_range: mapped_range.unwrap_or(0..0),
+            mapped_range,
             sub_ranges: Vec::new(),
         }
     }
 
     /// Record that the buffer is no longer mapped.
     fn reset(&mut self) {
-        self.mapped_range = 0..0;
+        self.mapped_range = None;
 
         assert!(
             self.sub_ranges.is_empty(),
@@ -789,18 +802,19 @@ impl MapContext {
     ///
     /// This returns an error if the given range is invalid.
     fn validate_and_add(&mut self, new_sub: Subrange) -> Result<(), MapRangeError> {
-        if self.mapped_range.is_empty() {
+        if self.mapped_range.is_none() {
             return Err(MapRangeError(
                 "tried to call get_mapped_range(_mut) on an unmapped buffer".into(),
             ));
         }
-        if !range_contains(&self.mapped_range, &new_sub.index) {
+        let mapped_range = self.mapped_range.as_ref().unwrap();
+        if !range_contains(mapped_range, &new_sub.index) {
             return Err(MapRangeError(alloc::format!(
                 "tried to call get_mapped_range(_mut) on a range that is not entirely mapped. \
                  Attempted to get range {}, but the mapped range is {}..{}",
                 new_sub,
-                self.mapped_range.start,
-                self.mapped_range.end
+                mapped_range.start,
+                mapped_range.end
             )));
         }
         // This check is essential for avoiding undefined behavior: it is the
@@ -829,8 +843,8 @@ impl MapContext {
     ///
     /// This panics if the given range does not exactly match one previously
     /// passed to [`MapContext::validate_and_add`].
-    pub(crate) fn remove(&mut self, offset: BufferAddress, size: BufferSize) {
-        let end = offset + size.get();
+    pub(crate) fn remove(&mut self, offset: BufferAddress, size: BufferAddress) {
+        let end = offset + size;
 
         let index = self
             .sub_ranges
@@ -911,7 +925,7 @@ pub struct BufferView {
     // `buffer, offset, size` are similar to `BufferSlice`, except that they own the buffer.
     buffer: Buffer,
     offset: BufferAddress,
-    size: BufferSize,
+    size: BufferAddress,
     inner: dispatch::DispatchBufferMappedRange,
 }
 
@@ -937,7 +951,7 @@ pub struct BufferViewMut {
     // `buffer, offset, size` are similar to `BufferSlice`, except that they own the buffer.
     buffer: Buffer,
     offset: BufferAddress,
-    size: BufferSize,
+    size: BufferAddress,
     inner: dispatch::DispatchBufferMappedRange,
 }
 
@@ -996,7 +1010,7 @@ impl BufferViewMut {
     /// Returns the length of this view; the number of bytes to be written.
     pub fn len(&self) -> usize {
         // cannot fail because we can't actually map more than isize::MAX bytes
-        usize::try_from(self.size.get()).unwrap()
+        usize::try_from(self.size).unwrap()
     }
 
     /// Returns `true` if the view has a length of 0.
@@ -1027,24 +1041,23 @@ impl BufferViewMut {
 
 #[track_caller]
 fn check_buffer_bounds(
-    buffer_size: BufferAddress,
+    whole_size: BufferAddress,
     slice_offset: BufferAddress,
-    slice_size: BufferSize,
+    slice_size: BufferAddress,
 ) {
-    // A slice of length 0 is invalid, so the offset must not be equal to or greater than the buffer size.
-    if slice_offset >= buffer_size {
+    if slice_offset > whole_size {
         panic!(
             "slice offset {} is out of range for buffer of size {}",
-            slice_offset, buffer_size
+            slice_offset, whole_size
         );
     }
 
     // Detect integer overflow.
-    let end = slice_offset.checked_add(slice_size.get());
-    if end.is_none_or(|end| end > buffer_size) {
+    let end = slice_offset.checked_add(slice_size);
+    if end.is_none_or(|end| end > whole_size) {
         panic!(
             "slice offset {} size {} is out of range for buffer of size {}",
-            slice_offset, slice_size, buffer_size
+            slice_offset, slice_size, whole_size
         );
     }
 }
@@ -1053,75 +1066,59 @@ fn check_buffer_bounds(
 pub(crate) fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
     bounds: S,
     whole_size: BufferAddress,
-) -> (BufferAddress, BufferSize) {
+) -> (BufferAddress, BufferAddress) {
     let offset = match bounds.start_bound() {
         Bound::Included(&bound) => bound,
         Bound::Excluded(&bound) => bound + 1,
         Bound::Unbounded => 0,
     };
-    let size = BufferSize::new(match bounds.end_bound() {
+    let size = match bounds.end_bound() {
         Bound::Included(&bound) => bound + 1 - offset,
         Bound::Excluded(&bound) => bound - offset,
         Bound::Unbounded => whole_size - offset,
-    })
-    .expect("buffer slices can not be empty");
+    };
 
     (offset, size)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        check_buffer_bounds, range_overlaps, range_to_offset_size, BufferAddress, BufferSize,
-    };
-
-    fn bs(value: BufferAddress) -> BufferSize {
-        BufferSize::new(value).unwrap()
-    }
+    use super::{check_buffer_bounds, range_overlaps, range_to_offset_size};
 
     #[test]
     fn range_to_offset_size_works() {
         let whole = 100;
 
-        assert_eq!(range_to_offset_size(0..2, whole), (0, bs(2)));
-        assert_eq!(range_to_offset_size(2..5, whole), (2, bs(3)));
-        assert_eq!(range_to_offset_size(.., whole), (0, bs(whole)));
-        assert_eq!(range_to_offset_size(21.., whole), (21, bs(whole - 21)));
-        assert_eq!(range_to_offset_size(0.., whole), (0, bs(whole)));
-        assert_eq!(range_to_offset_size(..21, whole), (0, bs(21)));
-    }
-
-    #[test]
-    #[should_panic = "buffer slices can not be empty"]
-    fn range_to_offset_size_panics_for_empty_range() {
-        range_to_offset_size(123..123, 200);
-    }
-
-    #[test]
-    #[should_panic = "buffer slices can not be empty"]
-    fn range_to_offset_size_panics_for_unbounded_empty_range() {
-        range_to_offset_size(..0, 100);
+        assert_eq!(range_to_offset_size(0..2, whole), (0, 2));
+        assert_eq!(range_to_offset_size(2..5, whole), (2, 3));
+        assert_eq!(range_to_offset_size(.., whole), (0, whole));
+        assert_eq!(range_to_offset_size(21.., whole), (21, whole - 21));
+        assert_eq!(range_to_offset_size(0.., whole), (0, whole));
+        assert_eq!(range_to_offset_size(..21, whole), (0, 21));
     }
 
     #[test]
     fn check_buffer_bounds_works_for_end_in_range() {
-        check_buffer_bounds(200, 100, bs(50));
-        check_buffer_bounds(200, 100, bs(100));
-        check_buffer_bounds(u64::MAX, u64::MAX - 100, bs(100));
-        check_buffer_bounds(u64::MAX, 0, bs(u64::MAX));
-        check_buffer_bounds(u64::MAX, 1, bs(u64::MAX - 1));
+        check_buffer_bounds(200, 100, 50);
+        check_buffer_bounds(200, 100, 100);
+        check_buffer_bounds(u64::MAX, u64::MAX - 100, 100);
+        check_buffer_bounds(u64::MAX, 0, u64::MAX);
+        check_buffer_bounds(u64::MAX, 1, u64::MAX - 1);
+        // Test empty buffer slices
+        check_buffer_bounds(0, 0, 0);
+        check_buffer_bounds(u64::MAX, u64::MAX, 0);
     }
 
     #[test]
     #[should_panic]
     fn check_buffer_bounds_panics_for_end_over_size() {
-        check_buffer_bounds(200, 100, bs(101));
+        check_buffer_bounds(200, 100, 101);
     }
 
     #[test]
     #[should_panic]
     fn check_buffer_bounds_panics_for_end_wraparound() {
-        check_buffer_bounds(u64::MAX, 1, bs(u64::MAX));
+        check_buffer_bounds(u64::MAX, 1, u64::MAX);
     }
 
     #[test]
