@@ -1595,8 +1595,7 @@ impl Queue {
     ///   [`PendingSubmission`].
     /// - Advances `last_successful_submission_index` and registers the
     ///   submission with the lifetime tracker.
-    /// - Returns a [`SubmissionResult`], which contains the snatch guard
-    ///   and a downgraded [`FenceReadGuard`].
+    /// - Returns a [`SubmissionResult`], which contains the snatch guard.
     fn submit_pending_submission<'a>(
         &self,
         mut pending_writes: MutexGuard<'_, PendingWrites>,
