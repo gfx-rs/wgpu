@@ -234,6 +234,8 @@ pub enum FunctionError {
     InvalidPayloadAddressSpace(crate::AddressSpace),
     #[error("The payload type ({0:?}) passed to `traceRay` does not match the previous one {1:?}")]
     MismatchedPayloadType(Handle<crate::Type>, Handle<crate::Type>),
+    #[error("The payload passed to `traceRay` must be a pointer directly to a global variable")]
+    PayloadPointerNotGlobal,
 }
 
 bitflags::bitflags! {
@@ -668,7 +670,9 @@ impl super::Validator {
         match (scalar.kind, *op) {
             (sk::Bool, sg::All | sg::Any) if is_scalar => {}
             (sk::Sint | sk::Uint | sk::Float, sg::Add | sg::Mul | sg::Min | sg::Max) => {}
-            (sk::Sint | sk::Uint, sg::And | sg::Or | sg::Xor) => {}
+            // Subgroup bitwise ops require >= 32-bit integers because HLSL's
+            // WaveActiveBitAnd/Or/Xor don't support 16-bit types.
+            (sk::Sint | sk::Uint, sg::And | sg::Or | sg::Xor) if scalar.width >= 4 => {}
 
             (_, _) => {
                 log::error!("Subgroup operand type {argument_inner:?}");
@@ -1733,6 +1737,13 @@ impl super::Validator {
                                 return Err(FunctionError::InvalidPayloadType
                                     .with_span_handle(payload, context.expressions))
                             }
+                        };
+
+                        // spir-v requires a direct reference to a global variable.
+                        let crate::Expression::GlobalVariable(_) = context.expressions[payload]
+                        else {
+                            return Err(FunctionError::PayloadPointerNotGlobal
+                                .with_span_handle(payload, context.expressions));
                         };
 
                         let ty = *self

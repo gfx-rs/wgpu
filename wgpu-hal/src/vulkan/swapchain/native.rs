@@ -34,13 +34,15 @@ impl NativeSurface {
     }
 }
 
-impl Surface for NativeSurface {
-    unsafe fn delete_surface(self: Box<Self>) {
+impl Drop for NativeSurface {
+    fn drop(&mut self) {
         unsafe {
             self.functor.destroy_surface(self.raw, None);
         }
     }
+}
 
+impl Surface for NativeSurface {
     fn surface_capabilities(
         &self,
         adapter: &crate::vulkan::Adapter,
@@ -160,10 +162,10 @@ impl Surface for NativeSurface {
         profiling::scope!("Device::create_swapchain");
         let functor = khr::swapchain::Device::new(&self.instance.raw, &device.shared.raw);
 
-        let old_swapchain = match provided_old_swapchain {
-            Some(osc) => osc.as_any().downcast_ref::<NativeSwapchain>().unwrap().raw,
-            None => vk::SwapchainKHR::null(),
-        };
+        let old_swapchain = provided_old_swapchain
+            .as_ref()
+            .map(|osc| osc.as_any().downcast_ref::<NativeSwapchain>().unwrap().raw)
+            .unwrap_or(vk::SwapchainKHR::null());
 
         let color_space = if config.format == wgt::TextureFormat::Rgba16Float {
             // Enable wide color gamut mode
@@ -215,11 +217,6 @@ impl Surface for NativeSurface {
             profiling::scope!("vkCreateSwapchainKHR");
             unsafe { functor.create_swapchain(&info, None) }
         };
-
-        // doing this before bailing out with error
-        if old_swapchain != vk::SwapchainKHR::null() {
-            unsafe { functor.destroy_swapchain(old_swapchain, None) }
-        }
 
         let raw = match result {
             Ok(swapchain) => swapchain,
@@ -336,6 +333,14 @@ pub(crate) struct NativeSwapchain {
     next_present_time: Option<vk::PresentTimeGOOGLE>,
 }
 
+impl Drop for NativeSwapchain {
+    fn drop(&mut self) {
+        unsafe {
+            self.functor.destroy_swapchain(self.raw, None);
+        }
+    }
+}
+
 impl Swapchain for NativeSwapchain {
     unsafe fn release_resources(&mut self, device: &crate::vulkan::Device) {
         profiling::scope!("Swapchain::release_resources");
@@ -372,10 +377,6 @@ impl Swapchain for NativeSwapchain {
 
             unsafe { mutex_removed.destroy(&device.shared.raw) };
         }
-    }
-
-    unsafe fn delete_swapchain(self: Box<Self>) {
-        unsafe { self.functor.destroy_swapchain(self.raw, None) };
     }
 
     unsafe fn acquire(

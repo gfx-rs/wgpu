@@ -436,7 +436,9 @@ impl PhysicalDeviceFeatures {
                 ),
                 _ => None,
             },
-            _16bit_storage: if requested_features.contains(wgt::Features::SHADER_F16) {
+            _16bit_storage: if requested_features
+                .intersects(wgt::Features::SHADER_F16 | wgt::Features::SHADER_I16)
+            {
                 Some(
                     vk::PhysicalDevice16BitStorageFeatures::default()
                         .storage_buffer16_bit_access(true)
@@ -738,7 +740,14 @@ impl PhysicalDeviceFeatures {
 
         features.set(F::SHADER_F64, self.core.shader_float64 != 0);
         features.set(F::SHADER_INT64, self.core.shader_int64 != 0);
-        features.set(F::SHADER_I16, self.core.shader_int16 != 0);
+        if let Some(ref bit16) = self._16bit_storage {
+            features.set(
+                F::SHADER_I16,
+                self.core.shader_int16 != 0
+                    && bit16.storage_buffer16_bit_access != 0
+                    && bit16.uniform_and_storage_buffer16_bit_access != 0,
+            );
+        }
 
         features.set(F::PRIMITIVE_INDEX, self.core.geometry_shader != 0);
 
@@ -1202,8 +1211,9 @@ impl PhysicalDeviceProperties {
                 extensions.push(khr::sampler_ycbcr_conversion::NAME);
             }
 
-            // Require `VK_KHR_16bit_storage` if the feature `SHADER_F16` was requested
-            if requested_features.contains(wgt::Features::SHADER_F16) {
+            // Require `VK_KHR_16bit_storage` if `SHADER_F16` or `SHADER_I16` was requested
+            if requested_features.intersects(wgt::Features::SHADER_F16 | wgt::Features::SHADER_I16)
+            {
                 // - Feature `SHADER_F16` also requires `VK_KHR_shader_float16_int8`, but we always
                 //   require that anyway (if it is available) below.
                 // - `VK_KHR_16bit_storage` requires `VK_KHR_storage_buffer_storage_class`, however
@@ -2603,6 +2613,10 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::Float16);
             }
 
+            if features.contains(wgt::Features::SHADER_I16) {
+                capabilities.push(spv::Capability::Int16);
+            }
+
             if features.intersects(
                 wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS
                     | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX
@@ -2731,6 +2745,7 @@ impl super::Adapter {
                     max_mesh_workgroups_total: limits.max_mesh_workgroup_total_count,
                 }),
                 mesh_shader_primitive_indices_clamp: true,
+                trace_ray_argument_validation: true,
             }
         };
 
@@ -2802,6 +2817,7 @@ impl super::Adapter {
             family_index,
             relay_semaphores: Mutex::new(relay_semaphores),
             signal_semaphores: Mutex::new(SemaphoreList::new(SemaphoreListMode::Signal)),
+            wait_semaphores: Mutex::new(SemaphoreList::new(SemaphoreListMode::Wait)),
         };
 
         let allocation_sizes = AllocationSizes::from_memory_hints(memory_hints).into();
@@ -2818,7 +2834,7 @@ impl super::Adapter {
                 allocation_sizes,
             })?;
 
-        let desc_allocator = gpu_descriptor::DescriptorAllocator::new(
+        let desc_allocator = super::descriptor::DescriptorAllocator::new(
             if let Some(di) = self.phd_capabilities.descriptor_indexing {
                 di.max_update_after_bind_descriptors_in_all_pools
             } else {

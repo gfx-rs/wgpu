@@ -411,7 +411,10 @@ fn compile_dxc(
         compile_args.push(Dxc::DXC_ARG_SKIP_OPTIMIZATIONS);
     }
 
-    if device.features.contains(wgt::Features::SHADER_F16) {
+    if device
+        .features
+        .intersects(wgt::Features::SHADER_F16 | wgt::Features::SHADER_I16)
+    {
         compile_args.push(windows::core::w!("-enable-16bit-types"));
     }
 

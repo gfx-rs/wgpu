@@ -119,6 +119,16 @@ pub enum BuildAccelerationStructureError {
         buffer_size: BufferAddress,
     },
 
+    #[error(
+        "Offset {offset}, computed as {count} times {stride} B, exceeds the maximum addressable offset 2^32 - 1 within buffer {buffer_ident:?}"
+    )]
+    OffsetLimitedTo4GB {
+        buffer_ident: ResourceErrorIdent,
+        offset: BufferAddress,
+        count: BufferAddress,
+        stride: BufferAddress,
+    },
+
     #[error("Buffer {0:?} associated offset doesn't align with the index type")]
     UnalignedIndexBufferOffset(ResourceErrorIdent),
 
@@ -215,6 +225,7 @@ impl WebGpuError for BuildAccelerationStructureError {
             Self::MissingBufferUsage(e) => e.webgpu_error_type(),
             Self::MissingFeatures(e) => e.webgpu_error_type(),
             Self::InsufficientBufferSize { .. }
+            | Self::OffsetLimitedTo4GB { .. }
             | Self::UnalignedIndexBufferOffset(..)
             | Self::UnalignedTransformBufferOffset(..)
             | Self::InvalidIndexCount(..)

@@ -268,7 +268,8 @@ impl Device {
         let instance_buffer_size = self
             .alignments
             .raw_tlas_instance_size
-            .saturating_mul(desc.max_instances.max(1));
+            .checked_mul(desc.max_instances.max(1))
+            .expect("max_tlas_instance_count should not allow excessive buffer size");
         let instance_buffer = unsafe {
             self.raw().create_buffer(&hal::BufferDescriptor {
                 label: hal_label(Some("(wgpu-core) instances_buffer"), self.instance_flags),

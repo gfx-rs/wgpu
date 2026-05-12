@@ -115,12 +115,28 @@ jobs:
           debug = "line-tables-only"
           EOF
 
+      # Unlike regular `llvm-cov run`, which builds artifacts in `target/llvm-cov-target`,
+      # `llvm-cov show-env` uses the regular target directory for artifacts. Because of this,
+      # this job configures the `install-mesa` and `install-warp` actions with the regular
+      # target directory, not the `llvm-cov-target` directory.
+      #
+      # The `GITHUB_ENV` file is not subject to shell expansion, so we need to un-escape the
+      # `llvm-cov show-env` output.
+      - name: Set llvm-cov environment
+        shell: bash
+        run: |
+          cargo llvm-cov --no-cfg-coverage show-env | while read -r assignment; do
+            key="${assignment%%=*}"
+            eval "$assignment"
+            echo "$key=${!key}" >> "$GITHUB_ENV"
+          done
+
       - name: (Windows) Install DXC
         if: matrix.os == 'windows-2022'
         uses: ./.github/actions/install-dxc
 
       # Note: `target-dir` is intentionally different from other jobs.
-      # See note in xtask about `llvm-cov show-env`.
+      # See note above about `llvm-cov show-env`.
       - name: (Windows) Install WARP
         if: matrix.os == 'windows-2022'
         uses: ./.github/actions/install-warp
@@ -141,7 +157,7 @@ jobs:
         run: |
           export LLVM_PROFILE_FILE=${{ github.workspace }}/target/wgpu-%p-%m.profraw
           export DENO_WEBGPU_BACKEND=${{ matrix.backend }}
-          cargo --locked llvm-cov --no-cfg-coverage --no-report test -p cts_runner
+          cargo --locked test -p cts_runner
 
       - name: Run CTS
         shell: bash
@@ -153,7 +169,6 @@ jobs:
         run: |
           set -e
 
-          source <(cargo llvm-cov --no-cfg-coverage show-env --sh)
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
