@@ -115,6 +115,7 @@ define_lock_ranks! {
         DEVICE_USAGE_SCOPES,
         REGISTRY_STORAGE,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
+        TEXTURE_MAP_STATE,
     }
     rank DEVICE_SNATCHABLE_LOCK "Device::snatchable_lock" followed by {
         BUFFER_MAP_STATE,
@@ -170,6 +171,7 @@ define_lock_ranks! {
         DEVICE_DEFERRED_DESTROY,
         DEVICE_TRACE,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
+        TEXTURE_MAP_STATE,
     }
     rank BUFFER_MAP_STATE "Buffer::map_state" followed by {
         DEVICE_TRACE,
@@ -189,7 +191,6 @@ define_lock_ranks! {
     rank DEVICE_USAGE_SCOPES "Device::usage_scopes" followed by { }
     rank REGISTRY_STORAGE "Registry::storage" followed by { }
     rank SHARED_TRACKER_INDEX_ALLOCATOR_INNER "SharedTrackerIndexAllocator::inner" followed by { }
-    rank SURFACE_PRESENTATION "Surface::presentation" followed by { }
     rank TEXTURE_BIND_GROUPS "Texture::bind_groups" followed by { }
     rank TEXTURE_CLEAR_MODE "Texture::clear_mode" followed by { }
     rank TEXTURE_MAP_STATE "Texture::map_state" followed by { }

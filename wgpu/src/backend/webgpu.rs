@@ -3387,6 +3387,14 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
     ) {
         // no-op
     }
+
+    fn map_texture_on_completion(
+        &mut self,
+        _texture: &dispatch::DispatchTexture,
+        _callback: dispatch::TextureMapCallback,
+    ) {
+        unimplemented!("map_texture_on_completion not supported on WebGPU");
+    }
 }
 impl Drop for WebCommandEncoder {
     fn drop(&mut self) {
