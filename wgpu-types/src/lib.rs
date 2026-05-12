@@ -50,9 +50,10 @@ mod surface;
 mod texture;
 mod tokens;
 mod transfers;
+mod vertex;
 mod write_only;
 
-pub use nt::{VertexAttribute, VertexFormat, VertexStepMode};
+pub use nt::VertexFormat;
 
 pub use adapter::*;
 pub use backend::*;
@@ -73,6 +74,7 @@ pub use surface::*;
 pub use texture::*;
 pub use tokens::*;
 pub use transfers::*;
+pub use vertex::*;
 pub use write_only::*;
 
 pub(crate) use naga_types::{link_to_wgc_docs, link_to_wgpu_docs, link_to_wgpu_item};
