@@ -902,6 +902,8 @@ impl Device {
         // We don't use the result of the wait here, as we want to progress forward as far as
         // possible and the wait could have been for submissions that finished long ago.
         let mut queue_empty = false;
+        // Prevent new commands from being submitted as we want to act on `queue_empty`.
+        let _command_indices = self.command_indices.read();
         if let Some(queue) = self.get_queue() {
             let queue_result = queue.maintain(current_finished_submission, &snatch_guard);
             (
