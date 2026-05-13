@@ -228,7 +228,7 @@ impl Queue {
     }
 
     /// Maintains the queue's list of finished command buffers.
-    /// 
+    ///
     /// Command buffers submitted before `submission_index` was submitted
     /// stop being tracked and callbacks which are waiting for them are
     /// returned. Also returned is whether the queue is empty. This may
