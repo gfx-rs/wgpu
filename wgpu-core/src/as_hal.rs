@@ -1,10 +1,9 @@
-use core::{marker::PhantomData, mem::ManuallyDrop, ops::Deref};
+use core::{mem::ManuallyDrop, ops::Deref};
 
 use alloc::sync::Arc;
 use hal::DynResource;
 
 use crate::{
-    device::Device,
     global::Global,
     id::{
         AdapterId, BlasId, BufferId, CommandEncoderId, DeviceId, QueueId, SurfaceId, TextureId,
@@ -154,41 +153,6 @@ where
 {
 }
 
-/// A guard which holds alive a device, dereferencing to the Hal type.
-struct FenceGuard<Fence: 'static> {
-    device: Arc<Device>,
-    fence: PhantomData<Fence>,
-}
-
-impl<Fence> FenceGuard<Fence>
-where
-    Fence: 'static,
-{
-    /// Creates a new guard over a device's fence.
-    ///
-    /// Returns `None` if:
-    /// - The device's fence is not of the expected Hal type.
-    pub fn new(device: Arc<Device>) -> Option<Self> {
-        let _fence = device.fence.as_any().downcast_ref::<Fence>()?;
-        Some(Self {
-            device,
-            fence: PhantomData,
-        })
-    }
-}
-
-impl<Fence: 'static> Deref for FenceGuard<Fence> {
-    type Target = Fence;
-
-    fn deref(&self) -> &Self::Target {
-        self.device
-            .fence
-            .as_any()
-            .downcast_ref::<Fence>()
-            .expect("Checked in `new` that fence was of valid type.")
-    }
-}
-
 impl Global {
     /// # Safety
     ///
@@ -280,7 +244,7 @@ impl Global {
 
         let device = self.hub.devices.get(id);
 
-        FenceGuard::new(device)
+        SimpleResourceGuard::new(device, move |device| device.fence.as_any().downcast_ref())
     }
 
     /// # Safety
