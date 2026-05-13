@@ -11,6 +11,11 @@
 //
 // The `cts_runner` integration test `lst_files_are_sorted` verifies that test selectors
 // appear in this file in order -- including ones in comments.
+
+webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth24plus-stencil8";depthReadOnly=false;stencilReadOnly=true // https://github.com/gfx-rs/wgpu/issues/8705
+webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth24plus-stencil8";depthReadOnly=true;stencilReadOnly=false // https://github.com/gfx-rs/wgpu/issues/8705
+webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=false;stencilReadOnly=true // https://github.com/gfx-rs/wgpu/issues/8705
+webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=true;stencilReadOnly=false // https://github.com/gfx-rs/wgpu/issues/8705
 webgpu:api,operation,rendering,3d_texture_slices:* // https://github.com/gfx-rs/wgpu/issues/9455
 
 webgpu:api,validation,buffer,mapping:* // crash

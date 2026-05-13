@@ -23,6 +23,10 @@ use crate::COPY_BUFFER_ALIGNMENT;
 /// 3. Submit all command encoders that were used in step 1.
 /// 4. Call [`StagingBelt::recall()`].
 ///
+/// Alternatively, steps 2 and 4 can be combined into a single call to
+/// [`StagingBelt::finish_and_recall_on_submit()`], which schedules the re-map
+/// automatically when the encoder is submitted, so no explicit `recall()` is needed.
+///
 /// [`Queue::write_buffer_with()`]: crate::Queue::write_buffer_with
 pub struct StagingBelt {
     device: Device,
@@ -265,6 +269,39 @@ impl StagingBelt {
                 .map_async(MapMode::Write, move |_| {
                     let _ = sender.send(chunk);
                 });
+        }
+    }
+
+    /// Convenience for [`StagingBelt::finish()`] followed by a deferred
+    /// [`StagingBelt::recall()`] that runs automatically when `encoder`'s command
+    /// buffer is submitted.
+    ///
+    /// After calling this method, the staging belt's internal buffers will be
+    /// re-mapped for write once the submission completes, without requiring an
+    /// explicit call to [`StagingBelt::recall()`].
+    ///
+    /// Like [`StagingBelt::recall()`], this method does not block.
+    ///
+    /// # Important
+    ///
+    /// `encoder` must be finished (via [`CommandEncoder::finish()`]) and the
+    /// resulting [`CommandBuffer`] must be submitted to the [`Queue`] **before**
+    /// the next call that needs free staging-belt chunks. If the encoder is
+    /// never submitted, the belt's closed chunks will not be returned and the
+    /// belt will allocate new buffers indefinitely.
+    ///
+    /// [`CommandBuffer`]: crate::CommandBuffer
+    /// [`Queue`]: crate::Queue
+    pub fn finish_and_recall_on_submit(&mut self, encoder: &CommandEncoder) {
+        self.finish();
+        self.receive_chunks();
+
+        for chunk in self.closed_chunks.drain(..) {
+            let sender = self.sender.get_mut().clone();
+            let buffer = chunk.buffer.clone();
+            encoder.map_buffer_on_submit(&buffer, MapMode::Write, .., move |_| {
+                let _ = sender.send(chunk);
+            });
         }
     }
 

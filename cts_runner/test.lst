@@ -36,6 +36,15 @@ webgpu:api,operation,compute_pipeline,overrides:*
 //FAIL: webgpu:api,operation,compute,basic:large_dispatch:*
 webgpu:api,operation,compute,basic:memcpy:*
 webgpu:api,operation,device,lost:*
+webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth16unorm";*
+webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth24plus";*
+webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth24plus-stencil8";depthReadOnly=false;stencilReadOnly=false
+webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth24plus-stencil8";depthReadOnly=true;stencilReadOnly=true
+webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float";*
+webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=false;stencilReadOnly=false
+webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=true;stencilReadOnly=true
+webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="stencil8";*
+
 webgpu:api,operation,render_pass,storeOp:*
 webgpu:api,operation,render_pipeline,overrides:*
 webgpu:api,operation,render_pipeline,pipeline_output_targets:color,component_count,blend:*
