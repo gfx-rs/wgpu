@@ -447,3 +447,21 @@ pub(crate) fn map_acceleration_structure_copy_mode(
         }
     }
 }
+
+pub(crate) const fn make_shader_component_mapping(
+    src0: Direct3D12::D3D12_SHADER_COMPONENT_MAPPING,
+    src1: Direct3D12::D3D12_SHADER_COMPONENT_MAPPING,
+    src2: Direct3D12::D3D12_SHADER_COMPONENT_MAPPING,
+    src3: Direct3D12::D3D12_SHADER_COMPONENT_MAPPING,
+) -> Direct3D12::D3D12_SHADER_COMPONENT_MAPPING {
+    const M: i32 = Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_MASK as i32;
+    const S: i32 = Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_SHIFT as i32;
+    Direct3D12::D3D12_SHADER_COMPONENT_MAPPING(
+        (src0.0 & M)
+            | (src1.0 & M) << S
+            | (src2.0 & M) << (S * 2)
+            | (src3.0 & M) << (S * 3)
+            | Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_ALWAYS_SET_BIT_AVOIDING_ZEROMEM_MISTAKES
+                as i32,
+    )
+}
