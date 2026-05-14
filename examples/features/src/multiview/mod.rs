@@ -85,6 +85,7 @@ impl crate::framework::Example for Example {
             mip_level_count: None,
             base_array_layer: 0,
             array_layer_count: Some(NUM_LAYERS),
+            swizzle: wgpu::TextureComponentSwizzle::default(),
         });
         let mut views = Vec::new();
         for i in 0..NUM_LAYERS {
@@ -98,6 +99,7 @@ impl crate::framework::Example for Example {
                 mip_level_count: None,
                 base_array_layer: i,
                 array_layer_count: Some(1),
+                swizzle: wgpu::TextureComponentSwizzle::default(),
             }));
         }
         let blitter = wgpu::util::TextureBlitter::new(device, config.format);

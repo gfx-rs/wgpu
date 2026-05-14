@@ -231,6 +231,10 @@ pub enum CreateBindGroupError {
     },
     #[error("Storage texture bindings must have a single mip level, but given a view with mip_level_count = {mip_level_count:?} at binding {binding}")]
     InvalidStorageTextureMipLevelCount { binding: u32, mip_level_count: u32 },
+    #[error("Storage texture bindings must have an identity swizzle, but given a view with swizzle = {swizzle:?}")]
+    InvalidStorageTextureSwizzle {
+        swizzle: wgt::TextureComponentSwizzle,
+    },
     #[error("External texture bindings must have a single mip level, but given a view with mip_level_count = {mip_level_count:?} at binding {binding}")]
     InvalidExternalTextureMipLevelCount { binding: u32, mip_level_count: u32 },
     #[error("External texture bindings must have a format of `rgba8unorm`, `bgra8unorm`, or `rgba16float, but given a view with format = {format:?} at binding {binding}")]
@@ -288,6 +292,7 @@ impl WebGpuError for CreateBindGroupError {
             | Self::InvalidTextureDimension { .. }
             | Self::InvalidStorageTextureFormat { .. }
             | Self::InvalidStorageTextureMipLevelCount { .. }
+            | Self::InvalidStorageTextureSwizzle { .. }
             | Self::WrongSamplerComparison { .. }
             | Self::WrongSamplerFiltering { .. }
             | Self::DepthStencilAspect

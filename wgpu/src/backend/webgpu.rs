@@ -692,6 +692,24 @@ fn map_texture_aspect(aspect: wgt::TextureAspect) -> webgpu_sys::GpuTextureAspec
     }
 }
 
+fn map_component_swizzle(swizzle: wgt::ComponentSwizzle) -> char {
+    match swizzle {
+        wgt::ComponentSwizzle::Zero => '0',
+        wgt::ComponentSwizzle::One => '1',
+        wgt::ComponentSwizzle::R => 'r',
+        wgt::ComponentSwizzle::G => 'g',
+        wgt::ComponentSwizzle::B => 'b',
+        wgt::ComponentSwizzle::A => 'a',
+    }
+}
+fn map_texture_component_swizzle(swizzle: wgt::TextureComponentSwizzle) -> String {
+    let mut s = String::with_capacity(4);
+    for component in [swizzle.r, swizzle.g, swizzle.b, swizzle.a] {
+        s.push(map_component_swizzle(component));
+    }
+    s
+}
+
 fn map_filter_mode(mode: wgt::FilterMode) -> webgpu_sys::GpuFilterMode {
     match mode {
         wgt::FilterMode::Nearest => webgpu_sys::GpuFilterMode::Nearest,
@@ -2918,6 +2936,7 @@ impl dispatch::TextureInterface for WebTexture {
             mapped.set_label(label);
         }
         mapped.set_usage(desc.usage.unwrap_or(wgt::TextureUsages::empty()).bits());
+        mapped.set_swizzle(&map_texture_component_swizzle(desc.swizzle));
 
         let view = self.inner.create_view_with_descriptor(&mapped).unwrap();
 

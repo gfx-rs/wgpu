@@ -451,6 +451,7 @@ impl<A: hal::Api> Example<A> {
             dimension: wgpu_types::TextureViewDimension::D2,
             usage: wgpu_types::TextureUses::RESOURCE,
             range: wgpu_types::ImageSubresourceRange::default(),
+            swizzle: wgpu_types::TextureComponentSwizzle::default(),
         };
         let texture_view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
 
@@ -702,6 +703,7 @@ impl<A: hal::Api> Example<A> {
             dimension: wgpu_types::TextureViewDimension::D2,
             usage: wgpu_types::TextureUses::COLOR_TARGET,
             range: wgpu_types::ImageSubresourceRange::default(),
+            swizzle: wgpu_types::TextureComponentSwizzle::default(),
         };
         let surface_tex_view = unsafe {
             self.device

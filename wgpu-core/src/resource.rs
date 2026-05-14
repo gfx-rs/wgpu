@@ -1784,6 +1784,10 @@ pub struct TextureViewDescriptor<'a> {
     pub usage: Option<wgt::TextureUsages>,
     /// Range within the texture that is accessible via this view.
     pub range: wgt::ImageSubresourceRange,
+    /// Texture component swizzle.
+    /// When the texture view is accessed by a shader, the red/green/blue/alpha channels are replaced
+    /// by the value corresponding to the component specified in [`wgt::TextureComponentSwizzle`].
+    pub swizzle: wgt::TextureComponentSwizzle,
 }
 
 #[derive(Debug)]
@@ -1793,6 +1797,7 @@ pub(crate) struct HalTextureViewDescriptor {
     pub usage: wgt::TextureUsages,
     pub dimension: wgt::TextureViewDimension,
     pub range: wgt::ImageSubresourceRange,
+    pub swizzle: wgt::TextureComponentSwizzle,
 }
 
 impl HalTextureViewDescriptor {
@@ -1815,6 +1820,8 @@ pub enum TextureViewNotRenderableReason {
         "The aspects of this texture view are a subset of the aspects in the original texture. Aspects: {0:?}"
     )]
     Aspects(hal::FormatAspects),
+    #[error("The texture view swizzle must be identity. View swizzle: {0:?}")]
+    Swizzle(wgt::TextureComponentSwizzle),
 }
 
 #[derive(Debug)]

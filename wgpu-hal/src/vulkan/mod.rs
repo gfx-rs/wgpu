@@ -390,6 +390,8 @@ struct PrivateCapabilities {
     /// these usages do not have as high of an alignment requirement using the buffer as
     ///  a scratch buffer when building acceleration structures.
     scratch_buffer_alignment: u32,
+
+    depth_stencil_swizzle_one_support: bool,
 }
 
 bitflags::bitflags!(

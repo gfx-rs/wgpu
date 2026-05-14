@@ -9,8 +9,9 @@ use objc2_metal::{
     MTLInstanceAccelerationStructureDescriptor, MTLOrigin,
     MTLPrimitiveAccelerationStructureDescriptor, MTLPrimitiveTopologyClass, MTLPrimitiveType,
     MTLRenderStages, MTLResourceUsage, MTLSamplerAddressMode, MTLSamplerBorderColor,
-    MTLSamplerMinMagFilter, MTLSize, MTLStencilOperation, MTLStoreAction, MTLTextureType,
-    MTLTextureUsage, MTLVertexFormat, MTLVertexStepFunction, MTLWinding,
+    MTLSamplerMinMagFilter, MTLSize, MTLStencilOperation, MTLStoreAction, MTLTextureSwizzle,
+    MTLTextureSwizzleChannels, MTLTextureType, MTLTextureUsage, MTLVertexFormat,
+    MTLVertexStepFunction, MTLWinding,
 };
 
 pub fn map_texture_usage(format: wgt::TextureFormat, usage: wgt::TextureUses) -> MTLTextureUsage {
@@ -484,4 +485,26 @@ pub fn map_acceleration_structure_descriptor<'a>(
     }
     descriptor.setUsage(usage);
     descriptor
+}
+
+pub fn map_component_swizzle(swizzle: wgt::ComponentSwizzle) -> MTLTextureSwizzle {
+    match swizzle {
+        wgt::ComponentSwizzle::Zero => MTLTextureSwizzle::Zero,
+        wgt::ComponentSwizzle::One => MTLTextureSwizzle::One,
+        wgt::ComponentSwizzle::R => MTLTextureSwizzle::Red,
+        wgt::ComponentSwizzle::G => MTLTextureSwizzle::Green,
+        wgt::ComponentSwizzle::B => MTLTextureSwizzle::Blue,
+        wgt::ComponentSwizzle::A => MTLTextureSwizzle::Alpha,
+    }
+}
+
+pub fn map_texture_component_swizzle(
+    swizzle: wgt::TextureComponentSwizzle,
+) -> MTLTextureSwizzleChannels {
+    MTLTextureSwizzleChannels {
+        red: map_component_swizzle(swizzle.r),
+        green: map_component_swizzle(swizzle.g),
+        blue: map_component_swizzle(swizzle.b),
+        alpha: map_component_swizzle(swizzle.a),
+    }
 }

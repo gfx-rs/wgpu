@@ -1677,6 +1677,7 @@ impl Device {
                                     base_array_layer: array_layer,
                                     array_layer_count: Some(1),
                                 },
+                                swizzle: wgt::TextureComponentSwizzle::default(),
                             };
                             clear_views.push(ManuallyDrop::new(
                                 unsafe {
@@ -1732,6 +1733,9 @@ impl Device {
         desc: &resource::TextureViewDescriptor,
     ) -> Result<Arc<TextureView>, resource::CreateTextureViewError> {
         self.check_is_valid()?;
+        if desc.swizzle != wgt::TextureComponentSwizzle::default() {
+            self.require_features(wgt::Features::TEXTURE_COMPONENT_SWIZZLE)?;
+        }
 
         let snatch_guard = texture.device.snatchable_lock.read();
 
@@ -1978,6 +1982,10 @@ impl Device {
                 break 'error Err(TextureViewNotRenderableReason::Aspects(aspects));
             }
 
+            if desc.swizzle != wgt::TextureComponentSwizzle::default() {
+                break 'error Err(TextureViewNotRenderableReason::Swizzle(desc.swizzle));
+            }
+
             Ok(texture
                 .desc
                 .compute_render_extent(desc.range.base_mip_level, desc.range.aspect.to_plane()))
@@ -2032,6 +2040,7 @@ impl Device {
             dimension: resolved_dimension,
             usage,
             range: resolved_range,
+            swizzle: desc.swizzle,
         };
 
         let raw = unsafe { self.raw().create_texture_view(texture_raw, &hal_desc) }
@@ -2052,6 +2061,7 @@ impl Device {
                 dimension: resolved_dimension,
                 usage: resolved_usage,
                 range: resolved_range,
+                swizzle: desc.swizzle,
             },
             format_features: texture.format_features,
             render_extent,
@@ -3639,6 +3649,12 @@ impl Device {
                     return Err(Error::InvalidStorageTextureMipLevelCount {
                         binding,
                         mip_level_count,
+                    });
+                }
+
+                if view.desc.swizzle != wgt::TextureComponentSwizzle::default() {
+                    return Err(Error::InvalidStorageTextureSwizzle {
+                        swizzle: view.desc.swizzle,
                     });
                 }
 

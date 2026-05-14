@@ -2313,6 +2313,7 @@ impl dispatch::TextureInterface for CoreTexture {
                 base_array_layer: desc.base_array_layer,
                 array_layer_count: desc.array_layer_count,
             },
+            swizzle: desc.swizzle,
         };
         let (id, error) = self
             .context

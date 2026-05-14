@@ -176,6 +176,7 @@ impl GPUTexture {
         base_array_layer: descriptor.base_array_layer,
         array_layer_count: descriptor.array_layer_count,
       },
+      swizzle: crate::transform_texture_component_swizzle(&descriptor.swizzle)?,
     };
 
     let (id, err) =
@@ -215,6 +216,8 @@ struct GPUTextureViewDescriptor {
   base_array_layer: u32,
   #[options(enforce_range = true)]
   array_layer_count: Option<u32>,
+  #[webidl(default = String::from("rgba"))]
+  swizzle: String,
 }
 
 #[derive(WebIDL)]

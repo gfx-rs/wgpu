@@ -609,6 +609,27 @@ impl crate::Device for super::Device {
             desc.range
                 .is_full_resource(desc.format, texture.mip_levels, texture.array_layers);
 
+        const R001_SWIZZLE: wgt::TextureComponentSwizzle = wgt::TextureComponentSwizzle {
+            r: wgt::ComponentSwizzle::R,
+            g: wgt::ComponentSwizzle::Zero,
+            b: wgt::ComponentSwizzle::Zero,
+            a: wgt::ComponentSwizzle::One,
+        };
+        let swizzle = 'b: {
+            if !self.shared.private_caps.texture_component_swizzle {
+                assert_eq!(desc.swizzle, wgt::TextureComponentSwizzle::default());
+                break 'b None;
+            }
+            if texture.format.is_depth_stencil_format() {
+                break 'b Some(R001_SWIZZLE.compose(desc.swizzle));
+            }
+            if desc.swizzle != wgt::TextureComponentSwizzle::default() {
+                break 'b Some(desc.swizzle);
+            }
+            None
+        }
+        .map(conv::map_texture_component_swizzle);
+
         let raw = if format_equal && type_equal && range_full_resource {
             // Some images are marked as framebuffer-only, and we can't create aliases of them.
             // Also helps working around Metal bugs with aliased array textures.
@@ -633,15 +654,28 @@ impl crate::Device for super::Device {
                     length: array_layer_count as _,
                 };
                 let raw = unsafe {
-                    texture
-                        .raw
-                        .newTextureViewWithPixelFormat_textureType_levels_slices(
-                            raw_format,
-                            raw_type,
-                            level_range,
-                            slice_range,
-                        )
-                        .unwrap()
+                    if let Some(swizzle) = swizzle {
+                        texture
+                            .raw
+                            .newTextureViewWithPixelFormat_textureType_levels_slices_swizzle(
+                                raw_format,
+                                raw_type,
+                                level_range,
+                                slice_range,
+                                swizzle,
+                            )
+                            .unwrap()
+                    } else {
+                        texture
+                            .raw
+                            .newTextureViewWithPixelFormat_textureType_levels_slices(
+                                raw_format,
+                                raw_type,
+                                level_range,
+                                slice_range,
+                            )
+                            .unwrap()
+                    }
                 };
                 if let Some(label) = desc.label {
                     raw.setLabel(Some(&NSString::from_str(label)));

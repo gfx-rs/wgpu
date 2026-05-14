@@ -1035,3 +1035,25 @@ pub fn map_acceleration_structure_usage_to_barrier(
 
     (stages, access)
 }
+
+pub fn map_component_swizzle(swizzle: wgt::ComponentSwizzle) -> vk::ComponentSwizzle {
+    match swizzle {
+        wgt::ComponentSwizzle::Zero => vk::ComponentSwizzle::ZERO,
+        wgt::ComponentSwizzle::One => vk::ComponentSwizzle::ONE,
+        wgt::ComponentSwizzle::R => vk::ComponentSwizzle::R,
+        wgt::ComponentSwizzle::G => vk::ComponentSwizzle::G,
+        wgt::ComponentSwizzle::B => vk::ComponentSwizzle::B,
+        wgt::ComponentSwizzle::A => vk::ComponentSwizzle::A,
+    }
+}
+
+pub fn map_texture_component_swizzle(
+    swizzle: wgt::TextureComponentSwizzle,
+) -> vk::ComponentMapping {
+    vk::ComponentMapping {
+        r: map_component_swizzle(swizzle.r),
+        g: map_component_swizzle(swizzle.g),
+        b: map_component_swizzle(swizzle.b),
+        a: map_component_swizzle(swizzle.a),
+    }
+}
