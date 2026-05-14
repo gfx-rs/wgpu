@@ -899,7 +899,7 @@ impl Device {
         // Prevent new commands from being submitted as we want to act on `queue_empty`.
         let command_indices = self.command_indices.read();
         // Check that the device is valid. This is combined with queue empty to decide whether
-        // to destroy all resources. Queue.submit blocks on command indices being writeable
+        // to destroy all resources. Queue.submit blocks on command indices being writable
         // and rejects if invalid so if the device in now invalid, and all submissions are
         // finished, there will be no more submissions.
         let device_valid = self.is_valid();
