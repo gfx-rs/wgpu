@@ -244,6 +244,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
+          env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: (Linux `aarch64`) Install `aarch64-linux-gnu` `g++`
@@ -417,6 +418,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: wgpu-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
+          env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Reduce MSRV on dependencies
@@ -490,6 +492,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: core-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
+          env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Reduce MSRV on dependencies
@@ -638,6 +641,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
+          env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
           workspaces: |
             . -> target
@@ -750,6 +754,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: doctests-${{ env.CACHE_SUFFIX }}
+          env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Run doctests
@@ -782,6 +787,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: miri-${{ env.CACHE_SUFFIX }}
+          env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Run Miri on selected tests
@@ -864,6 +870,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: cts-runner-${{ env.CACHE_SUFFIX }}
+          env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Build Deno

@@ -667,7 +667,8 @@ impl<W: Write> super::Writer<'_, W> {
 
                 // GetDimensions Overloaded Methods
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions#overloaded-methods
-                let (ret_swizzle, number_of_params) = match wiq.query {
+                // We rely on the validator to reject invalid queries.
+                let (ret_swizzle, number_of_out_params) = match wiq.query {
                     ImageQuery::Size | ImageQuery::SizeLevel => {
                         let ret = match wiq.dim {
                             IDim::D1 => "x",
@@ -677,13 +678,22 @@ impl<W: Write> super::Writer<'_, W> {
                         };
                         (ret, ret.len() + array_coords + extra_coords)
                     }
-                    ImageQuery::NumLevels | ImageQuery::NumSamples | ImageQuery::NumLayers => {
-                        if wiq.arrayed || wiq.dim == IDim::D3 {
-                            ("w", 4)
-                        } else {
-                            ("z", 3)
+                    ImageQuery::NumLevels | ImageQuery::NumSamples => {
+                        // We want `NumberOfLevels` or `Samples`
+                        match wiq.dim {
+                            IDim::D1 => ("y", 2),
+                            IDim::D3 => ("w", 4),
+                            IDim::D2 | IDim::Cube => {
+                                if wiq.arrayed {
+                                    ("w", 4)
+                                } else {
+                                    ("z", 3)
+                                }
+                            }
                         }
                     }
+                    // We want `Elements`
+                    ImageQuery::NumLayers => ("z", 3 + extra_coords),
                 };
 
                 // Write `GetDimensions` function.
@@ -704,7 +714,7 @@ impl<W: Write> super::Writer<'_, W> {
                     },
                 }
 
-                for component in COMPONENTS[..number_of_params - 1].iter() {
+                for component in COMPONENTS[..number_of_out_params - 1].iter() {
                     write!(self.out, "{RETURN_VARIABLE_NAME}.{component}, ")?;
                 }
 
@@ -713,7 +723,7 @@ impl<W: Write> super::Writer<'_, W> {
                     self.out,
                     "{}.{}",
                     RETURN_VARIABLE_NAME,
-                    COMPONENTS[number_of_params - 1]
+                    COMPONENTS[number_of_out_params - 1]
                 )?;
 
                 writeln!(self.out, ");")?;
