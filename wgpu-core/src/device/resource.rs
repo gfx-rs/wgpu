@@ -896,7 +896,6 @@ impl Device {
             }
         };
 
-        
         // Prevent new commands from being submitted as we want to act on `queue_empty`.
         let command_indices = self.command_indices.read();
         // Check that the device is valid. This is combined with queue empty to decide whether
