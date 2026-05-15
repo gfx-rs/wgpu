@@ -45,7 +45,11 @@ fn check_feature_dependency(requirement: Requirement) {
 
     let output = match Command::new("cargo").args(&args).output() {
         Ok(o) if o.status.success() => o.stdout,
-        Ok(o) => panic!("cargo tree failed ({}):\n{}", o.status, String::from_utf8_lossy(&o.stderr)),
+        Ok(o) => panic!(
+            "cargo tree failed ({}):\n{}",
+            o.status,
+            String::from_utf8_lossy(&o.stderr)
+        ),
         Err(e) => panic!("Failed to run cargo tree: {e}"),
     };
     let output = String::from_utf8(output).expect("Output is not valid UTF-8");
@@ -119,8 +123,7 @@ fn wasm32_without_webgl_or_noop_does_not_depend_on_wgpu_core() {
     });
 
     check_feature_dependency(Requirement {
-        human_readable_name:
-            "wasm32 with only `webgpu` feature does not depend on `wgpu-core`",
+        human_readable_name: "wasm32 with only `webgpu` feature does not depend on `wgpu-core`",
         target: "wasm32-unknown-unknown",
         packages: &["wgpu-examples"],
         features: &["webgpu"],
