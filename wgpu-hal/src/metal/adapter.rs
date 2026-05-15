@@ -69,6 +69,9 @@ impl super::Adapter {
     pub(super) fn new(shared: Arc<super::AdapterShared>) -> Self {
         Self { shared }
     }
+    pub fn raw_device(&self) -> &ProtocolObject<dyn MTLDevice> {
+        &self.shared.device
+    }
 }
 
 impl crate::Adapter for super::Adapter {
