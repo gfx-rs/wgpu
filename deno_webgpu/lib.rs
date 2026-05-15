@@ -312,18 +312,24 @@ fn transform_label<'a>(label: String) -> Option<std::borrow::Cow<'a, str>> {
 fn transform_texture_component_swizzle(
   swizzle: &str,
 ) -> Result<wgpu_types::TextureComponentSwizzle, deno_error::JsErrorBox> {
-  if swizzle.len() != 4 {
+  let mut chars = [None; 4];
+
+  for (i, c) in swizzle.chars().enumerate() {
+    if i >= 4 {
+      return Err(deno_error::JsErrorBox::type_error(
+        "TextureComponentSwizzle must be exactly a four-character string.",
+      ));
+    }
+    chars[i] = Some(transform_component_swizzle(c)?);
+  }
+
+  let [Some(r), Some(g), Some(b), Some(a)] = chars else {
     return Err(deno_error::JsErrorBox::type_error(
       "TextureComponentSwizzle must be exactly a four-character string.",
     ));
-  }
-  let mut chars = swizzle.chars();
-  Ok(wgpu_types::TextureComponentSwizzle {
-    r: transform_component_swizzle(chars.next().unwrap())?,
-    g: transform_component_swizzle(chars.next().unwrap())?,
-    b: transform_component_swizzle(chars.next().unwrap())?,
-    a: transform_component_swizzle(chars.next().unwrap())?,
-  })
+  };
+
+  Ok(wgpu_types::TextureComponentSwizzle { r, g, b, a })
 }
 
 fn transform_component_swizzle(
@@ -337,7 +343,7 @@ fn transform_component_swizzle(
     'b' => Ok(wgpu_types::ComponentSwizzle::B),
     'a' => Ok(wgpu_types::ComponentSwizzle::A),
     _ => Err(deno_error::JsErrorBox::type_error(
-      "invalid value for ComponentSwizzle.",
+      "Invalid character for ComponentSwizzle.",
     )),
   }
 }
