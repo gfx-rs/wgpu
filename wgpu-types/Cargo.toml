@@ -44,7 +44,7 @@ serde = ["dep:serde", "bitflags/serde"]
 # Enables some internal instrumentation for debugging purposes.
 counters = []
 # Enables variants of `Trace` other than `Trace::Off`
-trace = ["std"]
+trace = ["std", "serde/std"]
 # Enable web-specific dependencies for wasm.
 web = ["dep:js-sys", "dep:web-sys"]
 exhaust = ["dep:exhaust"]
