@@ -112,6 +112,28 @@ Zero-size buffer bindings are still not permitted. `BufferBinding` now implement
 
 By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
+### `TEXTURE_COMPONENT_SWIZZLE` feature and `swizzle` field in `TextureViewDescriptor`
+
+`TEXTURE_COMPONENT_SWIZZLE` feature is implemented and there is a new `swizzle` field in `TextureViewDescriptor`
+for texture component swizzle. Currently it's only supported on Vulkan.
+
+```diff
+let texture_view_desc = wgpu::TextureViewDescriptor {
+    label: None,
+    format: Some(wgpu::TextureFormat::Rgba8Unorm),
+    dimension: Some(wgpu::TextureViewDimension::D2),
+    usage: None,
+    aspect: wgpu::TextureAspect::All,
+    base_mip_level: 0,
+    mip_level_count: None,
+    base_array_layer: 0,
+    array_layer_count: None,
++   swizzle: wgpu::TextureComponentSwizzle::default(),
+}
+```
+
+By @beicause in [#9553](https://github.com/gfx-rs/wgpu/pull/9553).
+
 ### Added/New Features
 
 #### General
