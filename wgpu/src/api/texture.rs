@@ -178,16 +178,22 @@ impl Texture {
         self.descriptor.usage
     }
 
-    /// Get the mapped handle. Panics if this texture isn't mapped.
-    pub fn get_mapped(&self) -> MappedTexture {
-        let token = self.inner.get_map_token().expect("Texture is not mapped");
-        MappedTexture {
+    /// Returns a mapped handle if this texture is currently mapped, `None` otherwise.
+    ///
+    /// The texture must have been mapped via [`CommandEncoder::map_texture_on_completion`]
+    /// or created with `mapped_at_creation: true`. The handle prevents unmapping while alive.
+    pub fn get_mapped(&self) -> Option<MappedTexture> {
+        let token = self.inner.get_map_token()?;
+        Some(MappedTexture {
             texture: self.clone(),
             _token: token,
-        }
+        })
     }
 
-    /// Unmaps the texture so that it is usable on the GPU.
+    /// Returns the texture to GPU-exclusive ownership so it can be used in GPU commands.
+    ///
+    /// All [`MappedTexture`] handles obtained from [`Texture::get_mapped`] must be
+    /// dropped before calling this, or the call will fail with an error.
     pub fn unmap(&self) {
         self.inner.unmap();
     }

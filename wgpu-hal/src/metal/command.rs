@@ -564,6 +564,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 encoder.synchronizeResource(ProtocolObject::from_ref(&*barrier.texture.raw));
             }
         }
+        // On non-macOS Apple targets (iOS/tvOS), HOST_IMAGE_COPY uses
+        // MTLStorageMode::Shared so no explicit synchronization is needed.
+        #[cfg(not(target_os = "macos"))]
+        let _ = barriers;
     }
 
     unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {

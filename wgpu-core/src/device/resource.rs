@@ -1528,6 +1528,11 @@ impl Device {
                     bad,
                 ));
             }
+            if desc.sample_count > 1 {
+                return Err(CreateTextureError::HostVisibleMultisampled(
+                    desc.sample_count,
+                ));
+            }
             self.require_features(wgt::Features::HOST_IMAGE_COPY)
                 .map_err(|e| CreateTextureError::MissingFeatures(desc.format, e))?;
         }

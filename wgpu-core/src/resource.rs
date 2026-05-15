@@ -1750,6 +1750,8 @@ pub enum CreateTextureError {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("mapped_at_creation requires TextureUsages::HOST_VISIBLE")]
     MappedAtCreationRequiresHostVisible,
+    #[error("HOST_VISIBLE textures must have sample_count = 1, got {0}")]
+    HostVisibleMultisampled(u32),
 }
 
 crate::impl_resource_type!(Texture);
@@ -1785,7 +1787,8 @@ impl WebGpuError for CreateTextureError {
             | Self::InvalidMultisampledFormat(_)
             | Self::InvalidSampleCount(..)
             | Self::MultisampledNotRenderAttachment
-            | Self::MappedAtCreationRequiresHostVisible => ErrorType::Validation,
+            | Self::MappedAtCreationRequiresHostVisible
+            | Self::HostVisibleMultisampled(_) => ErrorType::Validation,
         }
     }
 }

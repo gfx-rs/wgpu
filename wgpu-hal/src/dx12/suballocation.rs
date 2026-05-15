@@ -466,7 +466,8 @@ impl<'a> DeviceAllocationContext<'a> {
         let heap_properties = Direct3D12::D3D12_HEAP_PROPERTIES {
             Type: Direct3D12::D3D12_HEAP_TYPE_CUSTOM,
             CPUPageProperty: if desc.usage.contains(wgt::TextureUses::HOST_COPY) {
-                // Probably doesn't matter whether its this or write combined. Vulkan doesn't care (as far as I'm aware)
+                // WRITE_BACK gives coherent CPU read+write access required by ReadFromSubresource.
+                // WRITE_COMBINE would be faster for pure uploads but prevents CPU readback.
                 Direct3D12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK
             } else {
                 Direct3D12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE

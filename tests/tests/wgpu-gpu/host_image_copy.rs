@@ -52,7 +52,7 @@ async fn host_image_upload(ctx: TestingContext, start_mapped: bool) {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("map encoder"),
             });
-        map_encoder.map_texture_on_completion(&texture, Box::new(|_| {}));
+        map_encoder.map_texture_on_completion(&texture, Box::new(|| {}));
         ctx.queue.submit(Some(map_encoder.finish()));
 
         // Wait until the submission is done — texture is now CPU-accessible.
@@ -63,7 +63,7 @@ async fn host_image_upload(ctx: TestingContext, start_mapped: bool) {
 
     // Write and verify via CPU.
     {
-        let mapped = texture.get_mapped();
+        let mapped = texture.get_mapped().expect("texture should be mapped");
 
         // Upload dense pixel data.
         mapped.copy_from_memory(
@@ -252,7 +252,7 @@ async fn host_image_download(ctx: TestingContext) {
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("map encoder"),
         });
-    map_encoder.map_texture_on_completion(&texture, Box::new(|_| {}));
+    map_encoder.map_texture_on_completion(&texture, Box::new(|| {}));
     ctx.queue.submit(Some(map_encoder.finish()));
 
     ctx.async_poll(wgpu::PollType::wait_indefinitely())
@@ -262,7 +262,7 @@ async fn host_image_download(ctx: TestingContext) {
     // Download via host image copy, using dense (unaligned) row stride.
     let mut cpu_readback = vec![0u8; host_data_size];
     {
-        let mapped = texture.get_mapped();
+        let mapped = texture.get_mapped().expect("texture should be mapped");
         mapped.copy_to_memory(
             wgpu::TexelCopyTextureInfoBase {
                 texture: (),

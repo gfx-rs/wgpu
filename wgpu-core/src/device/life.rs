@@ -445,4 +445,26 @@ impl LifetimeTracker {
             submission.textures_to_map.extend(textures);
         }
     }
+
+    /// Drain all pending texture-map callbacks without firing them.
+    ///
+    /// Called on device loss / queue drop when in-flight submissions will
+    /// never complete.  Transitions `MappingQueued` textures back to
+    /// `Unmapped` so that the mutex guard can be released cleanly.
+    pub(crate) fn drain_pending_texture_maps(&mut self) {
+        for a in &mut self.active {
+            for texture in a.textures_to_map.drain(..) {
+                let mut map_state = texture.map_state.lock();
+                if matches!(*map_state, TextureMapState::MappingQueued(_)) {
+                    *map_state = TextureMapState::Unmapped;
+                }
+            }
+        }
+        for texture in self.ready_to_map_textures.drain(..) {
+            let mut map_state = texture.map_state.lock();
+            if matches!(*map_state, TextureMapState::MappingQueued(_)) {
+                *map_state = TextureMapState::Unmapped;
+            }
+        }
+    }
 }

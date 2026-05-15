@@ -2101,7 +2101,7 @@ pub struct TextureDescriptor<'a> {
     /// Allows views of this texture to have a different format
     /// than the texture does.
     pub view_formats: Vec<wgt::TextureFormat>,
-    #[allow(dead_code)]
+    #[cfg_attr(not(any(vulkan, dx12)), allow(dead_code))]
     pub mapped_at_creation: bool,
 }
 

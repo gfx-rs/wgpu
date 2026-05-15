@@ -380,7 +380,7 @@ pub enum HostTextureCopyError {
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
-    Transfer(crate::command::TransferError),
+    Transfer(#[from] crate::command::TransferError),
     #[error("Texture is not mapped")]
     NotMapped,
 }

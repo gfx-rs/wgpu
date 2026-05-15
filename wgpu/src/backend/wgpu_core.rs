@@ -2986,8 +2986,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         texture: &dispatch::DispatchTexture,
         callback: dispatch::TextureMapCallback,
     ) {
-        let core_callback: wgpu_core::device::TextureMapClosure =
-            Box::new(move || callback(Ok(())));
+        let core_callback: wgpu_core::device::TextureMapClosure = callback;
         if let Err(cause) = self.context.0.command_encoder_map_texture_on_completion(
             self.id,
             texture.as_core().id,

@@ -69,10 +69,9 @@ pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>)
 #[cfg(not(send_sync))]
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + 'static>;
 #[cfg(send_sync)]
-pub type TextureMapCallback =
-    Box<dyn FnOnce(Result<(), crate::TextureAsyncError>) + Send + 'static>;
+pub type TextureMapCallback = Box<dyn FnOnce() + Send + 'static>;
 #[cfg(not(send_sync))]
-pub type TextureMapCallback = Box<dyn FnOnce(Result<(), crate::TextureAsyncError>) + 'static>;
+pub type TextureMapCallback = Box<dyn FnOnce() + 'static>;
 
 #[cfg(send_sync)]
 pub type BlasCompactCallback = Box<dyn FnOnce(Result<(), crate::BlasAsyncError>) + Send + 'static>;

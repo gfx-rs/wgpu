@@ -446,7 +446,13 @@ impl CommandEncoder {
         );
     }
 
-    /// Queue the texture to be mapped so that the it may be used by the host after completion of this command buffer.
+    /// Queue the texture to be mapped for host access after this command buffer completes.
+    ///
+    /// The `callback` is invoked once the GPU submission finishes and the texture
+    /// transitions to `HOST_COPY` layout. After the callback fires, call
+    /// [`Texture::get_mapped`] to obtain a [`MappedTexture`] handle.
+    ///
+    /// Requires `TextureUsages::HOST_VISIBLE` and the `HOST_IMAGE_COPY` feature.
     pub fn map_texture_on_completion(
         &mut self,
         texture: &Texture,

@@ -292,7 +292,13 @@ impl Drop for Queue {
         ) = self.maintain(last_successful_submission_index, &snatch_guard);
         drop(snatch_guard);
 
-        assert!(queue_empty);
+        if self.device.is_valid() {
+            assert!(queue_empty);
+        } else {
+            // Device was lost; in-flight submissions will never complete.
+            // Drain any textures stuck in MappingQueued so they return to Unmapped.
+            self.lock_life().drain_pending_texture_maps();
+        }
 
         let closures = crate::device::UserClosures {
             mappings: mapping_closures,
