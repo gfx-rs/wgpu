@@ -1822,9 +1822,9 @@ bitflags_array! {
         ///
         /// Supported platforms:
         /// - Vulkan
+        /// - DX12
         ///
         /// Not yet implemented:
-        /// - DX12
         /// - Metal on Apple2+ or Mac2+
         /// - OpenGL
         ///

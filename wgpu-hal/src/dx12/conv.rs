@@ -465,3 +465,35 @@ pub(crate) const fn make_shader_component_mapping(
                 as i32,
     )
 }
+
+pub(crate) fn map_component_swizzle(
+    swizzle: wgt::ComponentSwizzle,
+) -> Direct3D12::D3D12_SHADER_COMPONENT_MAPPING {
+    match swizzle {
+        wgt::ComponentSwizzle::Zero => Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0,
+        wgt::ComponentSwizzle::One => Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1,
+        wgt::ComponentSwizzle::R => {
+            Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_0
+        }
+        wgt::ComponentSwizzle::G => {
+            Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1
+        }
+        wgt::ComponentSwizzle::B => {
+            Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2
+        }
+        wgt::ComponentSwizzle::A => {
+            Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_3
+        }
+    }
+}
+
+pub(crate) fn map_texture_component_swizzle(
+    swizzle: wgt::TextureComponentSwizzle,
+) -> Direct3D12::D3D12_SHADER_COMPONENT_MAPPING {
+    make_shader_component_mapping(
+        map_component_swizzle(swizzle.r),
+        map_component_swizzle(swizzle.g),
+        map_component_swizzle(swizzle.b),
+        map_component_swizzle(swizzle.a),
+    )
+}
