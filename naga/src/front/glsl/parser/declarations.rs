@@ -321,9 +321,9 @@ impl ParsingContext<'_> {
                 // name (`sampler2D`, `isampler3D`, `sampler2DShadow`, …) before
                 // consuming it — after `parse_type` the token has been consumed and
                 // the flag cannot be recovered from the produced `Handle<Type>` alone.
-                let is_combined_sampler = self.peek(frontend).is_some_and(|t| {
-                    matches!(t.value, TokenValue::CombinedSamplerTypeName(_))
-                });
+                let is_combined_sampler = self
+                    .peek(frontend)
+                    .is_some_and(|t| matches!(t.value, TokenValue::CombinedSamplerTypeName(_)));
                 let (ty, mut meta) = self.parse_type(frontend, ctx)?;
 
                 let token = self.bump(frontend)?;

@@ -8,8 +8,7 @@ use super::{
 };
 use crate::{
     AddressSpace, Binding, BuiltIn, Constant, Expression, GlobalVariable, Handle, LocalVariable,
-    Override, ResourceBinding, Scalar, ShaderStage, SwizzleComponent, Type, TypeInner,
-    VectorSize,
+    Override, ResourceBinding, Scalar, ShaderStage, SwizzleComponent, Type, TypeInner, VectorSize,
 };
 
 pub struct VarDeclaration<'a, 'key> {
@@ -676,9 +675,7 @@ impl Frontend {
                     );
 
                     // Name the implicit sampler `<original_name>_sampler` for debuggability.
-                    let sampler_name = name
-                        .as_deref()
-                        .map(|n| alloc::format!("{n}_sampler"));
+                    let sampler_name = name.as_deref().map(|n| alloc::format!("{n}_sampler"));
 
                     // Compute a unique sampler binding: one past the highest binding already
                     // in use on the same descriptor set (or binding 0 if the set is empty).

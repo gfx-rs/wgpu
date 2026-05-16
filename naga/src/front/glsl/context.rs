@@ -137,14 +137,15 @@ impl<'a> Context<'a> {
             let maybe_image_expr = this
                 .expressions
                 .iter()
-                .find(|(_, expr)| **expr == Expression::GlobalVariable(image_handle))
-                .map(|(h, _)| h);
+                .find(|&(_, expr)| *expr == Expression::GlobalVariable(image_handle))
+                .map(|&(h, _)| h);
 
             if let Some(image_expr) = maybe_image_expr {
                 let span = this.module.global_variables.get_span(sampler_handle);
                 // The implicit sampler global was not added to frontend.global_variables,
                 // so we add its expression here and populate the samplers map.
-                let sampler_expr = this.add_expression(Expression::GlobalVariable(sampler_handle), span)?;
+                let sampler_expr =
+                    this.add_expression(Expression::GlobalVariable(sampler_handle), span)?;
                 this.samplers.insert(image_expr, sampler_expr);
             }
         }

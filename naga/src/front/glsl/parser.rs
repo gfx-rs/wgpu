@@ -193,11 +193,8 @@ impl<'source> ParsingContext<'source> {
         if !frontend.combined_samplers.is_empty() {
             // Collect the set of implicit sampler handles so we can exclude them
             // from the "already allocated" scan.
-            let implicit_sampler_handles: alloc::collections::BTreeSet<_> = frontend
-                .combined_samplers
-                .iter()
-                .map(|&(_, s)| s)
-                .collect();
+            let implicit_sampler_handles: alloc::collections::BTreeSet<_> =
+                frontend.combined_samplers.iter().map(|&(_, s)| s).collect();
 
             // Build a map: group -> (one past the highest binding currently in use),
             // counting only the non-implicit globals.
@@ -234,12 +231,11 @@ impl<'source> ParsingContext<'source> {
                     rb.group = group;
                     rb.binding = *next;
                 } else {
-                    ctx.module.global_variables.get_mut(sampler_handle).binding = Some(
-                        crate::ResourceBinding {
+                    ctx.module.global_variables.get_mut(sampler_handle).binding =
+                        Some(crate::ResourceBinding {
                             group,
                             binding: *next,
-                        },
-                    );
+                        });
                 }
                 *next += 1;
             }
