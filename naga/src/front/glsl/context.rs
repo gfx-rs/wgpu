@@ -138,7 +138,7 @@ impl<'a> Context<'a> {
                 .expressions
                 .iter()
                 .find(|&(_, expr)| *expr == Expression::GlobalVariable(image_handle))
-                .map(|&(h, _)| h);
+                .map(|(h, _)| h);
 
             if let Some(image_expr) = maybe_image_expr {
                 let span = this.module.global_variables.get_span(sampler_handle);
