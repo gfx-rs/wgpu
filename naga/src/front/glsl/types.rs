@@ -188,12 +188,99 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
                 })
             };
 
+            let sampler_parse = |word: &str| {
+                let sampler_kind = |prefix: &str| {
+                    Some(match prefix {
+                        "" => ScalarKind::Float,
+                        "i" => ScalarKind::Sint,
+                        "u" => ScalarKind::Uint,
+                        _ => return None,
+                    })
+                };
+
+                let shadow_parse = |suffix: &str| {
+                    let suffix = suffix.strip_prefix("sampler")?;
+                    let (dim, arrayed) = match suffix {
+                        "1DShadow" => (ImageDimension::D1, false),
+                        "1DArrayShadow" => (ImageDimension::D1, true),
+                        "2DShadow" => (ImageDimension::D2, false),
+                        "2DArrayShadow" => (ImageDimension::D2, true),
+                        "CubeShadow" => (ImageDimension::Cube, false),
+                        "CubeArrayShadow" => (ImageDimension::Cube, true),
+                        _ => return None,
+                    };
+                    Some(Type {
+                        name: None,
+                        inner: TypeInner::Image {
+                            dim,
+                            arrayed,
+                            class: ImageClass::Depth { multi: false },
+                        },
+                    })
+                };
+
+                if let Some(ty) = shadow_parse(word) {
+                    return Some(ty);
+                }
+
+                let (kind_prefix, rest) = if let Some(rest) = word.strip_prefix("sampler") {
+                    ("", rest)
+                } else if let Some(rest) = word.strip_prefix("isampler") {
+                    ("i", rest)
+                } else if let Some(rest) = word.strip_prefix("usampler") {
+                    ("u", rest)
+                } else {
+                    return None;
+                };
+
+                let kind = sampler_kind(kind_prefix)?;
+                let sampled = |multi| ImageClass::Sampled { kind, multi };
+
+                let (dim, arrayed, class) = match rest {
+                    "1D" => (ImageDimension::D1, false, sampled(false)),
+                    "1DArray" => (ImageDimension::D1, true, sampled(false)),
+                    "2D" => (ImageDimension::D2, false, sampled(false)),
+                    "2DArray" => (ImageDimension::D2, true, sampled(false)),
+                    "2DMS" => (ImageDimension::D2, false, sampled(true)),
+                    "2DMSArray" => (ImageDimension::D2, true, sampled(true)),
+                    "3D" => (ImageDimension::D3, false, sampled(false)),
+                    "Cube" => (ImageDimension::Cube, false, sampled(false)),
+                    "CubeArray" => (ImageDimension::Cube, true, sampled(false)),
+                    _ => return None,
+                };
+
+                Some(Type {
+                    name: None,
+                    inner: TypeInner::Image {
+                        dim,
+                        arrayed,
+                        class,
+                    },
+                })
+            };
+
             vec_parse(word)
                 .or_else(|| mat_parse(word))
                 .or_else(|| texture_parse(word))
                 .or_else(|| image_parse(word))
+                .or_else(|| sampler_parse(word))
         }
     }
+}
+
+/// Returns `true` for GLSL combined image-sampler type names (`sampler2D`,
+/// `isampler3D`, `sampler2DShadow`, …). Excludes the plain-sampler types
+/// `sampler` and `samplerShadow`, which map to [`TypeInner::Sampler`], not
+/// [`TypeInner::Image`].
+///
+/// Used by the lexer to emit [`CombinedSamplerTypeName`] tokens.
+///
+/// [`CombinedSamplerTypeName`]: super::token::TokenValue::CombinedSamplerTypeName
+pub fn is_combined_sampler(word: &str) -> bool {
+    if word == "sampler" || word == "samplerShadow" {
+        return false;
+    }
+    word.starts_with("sampler") || word.starts_with("isampler") || word.starts_with("usampler")
 }
 
 pub const fn scalar_components(ty: &TypeInner) -> Option<Scalar> {

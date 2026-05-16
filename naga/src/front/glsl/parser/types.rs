@@ -80,7 +80,15 @@ impl ParsingContext<'_> {
         let token = self.bump(frontend)?;
         let mut handle = match token.value {
             TokenValue::Void => return Ok((None, token.meta)),
-            TokenValue::TypeName(ty) => ctx.module.types.insert(ty, token.meta),
+            // Combined sampler types (sampler2D, isampler3D, sampler2DShadow, …) carry
+            // the same `Image` inner type as their `textureXX` counterparts but are
+            // tokenised separately so variable declarations can synthesise a paired
+            // implicit sampler. Here they are inserted into the type arena the same way
+            // as any other type name — the `CombinedSamplerTypeName` distinction is only
+            // relevant at global-variable-declaration time (see `add_global_var`).
+            TokenValue::TypeName(ty) | TokenValue::CombinedSamplerTypeName(ty) => {
+                ctx.module.types.insert(ty, token.meta)
+            }
             TokenValue::Struct => {
                 let mut meta = token.meta;
                 let ty_name = self.expect_ident(frontend)?.0;
@@ -390,7 +398,9 @@ impl ParsingContext<'_> {
 
     pub fn peek_type_name(&mut self, frontend: &mut Frontend) -> bool {
         self.peek(frontend).is_some_and(|t| match t.value {
-            TokenValue::TypeName(_) | TokenValue::Void => true,
+            TokenValue::TypeName(_) | TokenValue::CombinedSamplerTypeName(_) | TokenValue::Void => {
+                true
+            }
             TokenValue::Struct => true,
             TokenValue::Identifier(ref ident) => frontend.lookup_type.contains_key(ident),
             _ => false,

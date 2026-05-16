@@ -469,6 +469,7 @@ impl ParsingContext<'_> {
                                 name: Some(name),
                                 init: None,
                                 meta,
+                                is_combined_sampler: false,
                             };
 
                             let pointer = frontend.add_local_var(ctx, decl)?;

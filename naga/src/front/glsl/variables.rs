@@ -8,7 +8,8 @@ use super::{
 };
 use crate::{
     AddressSpace, Binding, BuiltIn, Constant, Expression, GlobalVariable, Handle, LocalVariable,
-    Override, ResourceBinding, Scalar, ShaderStage, SwizzleComponent, Type, TypeInner, VectorSize,
+    Override, ResourceBinding, Scalar, ShaderStage, SwizzleComponent, Type, TypeInner,
+    VectorSize,
 };
 
 pub struct VarDeclaration<'a, 'key> {
@@ -17,6 +18,11 @@ pub struct VarDeclaration<'a, 'key> {
     pub name: Option<String>,
     pub init: Option<Handle<Expression>>,
     pub meta: Span,
+    /// `true` when the GLSL source type name is a combined image-sampler type
+    /// (`sampler2D`, `isampler3D`, `sampler2DShadow`, …).  When set, `add_global_var`
+    /// will synthesise a paired implicit sampler global at the same (set, binding) so
+    /// that `texture(u_tex, uv)` can be lowered to `textureSample(u_tex, u_tex_sampler, uv)`.
+    pub is_combined_sampler: bool,
 }
 
 /// Information about a builtin used in [`add_builtin`](Frontend::add_builtin).
@@ -421,6 +427,7 @@ impl Frontend {
             name,
             init,
             meta,
+            is_combined_sampler,
         }: VarDeclaration,
     ) -> Result<GlobalOrConstant> {
         let storage = qualifiers.storage.0;
@@ -640,6 +647,74 @@ impl Frontend {
                     },
                     meta,
                 );
+
+                // If this is a combined image-sampler uniform (`sampler2D`, `sampler2DShadow`,
+                // etc.), synthesise an implicit companion `sampler` global.  The companion is
+                // recorded in `Frontend::combined_samplers` so that every `Context` built
+                // afterwards can populate its `samplers` map, which is what `texture_call` uses
+                // to emit `textureSample`.
+                //
+                // WGSL and naga validation require each (set, binding) pair to be unique even
+                // across different resource types.  Therefore the implicit sampler is placed at a
+                // binding that is guaranteed not to collide: the next unused binding slot on the
+                // same set.
+                if is_combined_sampler && space == AddressSpace::Handle {
+                    let comparison = matches!(
+                        ctx.module.types[ty].inner,
+                        TypeInner::Image {
+                            class: crate::ImageClass::Depth { .. },
+                            ..
+                        }
+                    );
+
+                    let sampler_ty = ctx.module.types.insert(
+                        Type {
+                            name: None,
+                            inner: TypeInner::Sampler { comparison },
+                        },
+                        meta,
+                    );
+
+                    // Name the implicit sampler `<original_name>_sampler` for debuggability.
+                    let sampler_name = name
+                        .as_deref()
+                        .map(|n| alloc::format!("{n}_sampler"));
+
+                    // Compute a unique sampler binding: one past the highest binding already
+                    // in use on the same descriptor set (or binding 0 if the set is empty).
+                    let sampler_binding = if let Some(ref image_rb) = binding {
+                        let group = image_rb.group;
+                        let next_binding = ctx
+                            .module
+                            .global_variables
+                            .iter()
+                            .filter_map(|(_, var)| var.binding.as_ref())
+                            .filter(|rb| rb.group == group)
+                            .map(|rb| rb.binding + 1)
+                            .max()
+                            .unwrap_or(0);
+                        Some(ResourceBinding {
+                            group,
+                            binding: next_binding,
+                        })
+                    } else {
+                        None
+                    };
+
+                    let sampler_handle = ctx.module.global_variables.append(
+                        GlobalVariable {
+                            name: sampler_name,
+                            space: AddressSpace::Handle,
+                            binding: sampler_binding,
+                            ty: sampler_ty,
+                            init: None,
+                            memory_decorations: crate::MemoryDecorations::empty(),
+                        },
+                        meta,
+                    );
+
+                    self.combined_samplers.push((handle, sampler_handle));
+                }
 
                 let lookup = GlobalLookup {
                     kind: GlobalLookupKind::Variable(handle),

@@ -315,7 +315,15 @@ impl ParsingContext<'_> {
 
             if self.peek_type_name(frontend) {
                 // This branch handles variables and function prototypes and if
-                // external is true also function definitions
+                // external is true also function definitions.
+                //
+                // Check whether the upcoming token is a combined image-sampler type
+                // name (`sampler2D`, `isampler3D`, `sampler2DShadow`, …) before
+                // consuming it — after `parse_type` the token has been consumed and
+                // the flag cannot be recovered from the produced `Handle<Type>` alone.
+                let is_combined_sampler = self.peek(frontend).is_some_and(|t| {
+                    matches!(t.value, TokenValue::CombinedSamplerTypeName(_))
+                });
                 let (ty, mut meta) = self.parse_type(frontend, ctx)?;
 
                 let token = self.bump(frontend)?;
@@ -403,6 +411,7 @@ impl ParsingContext<'_> {
                         external,
                         is_inside_loop,
                         ctx,
+                        is_combined_sampler,
                     };
 
                     self.backtrack(token_fallthrough)?;
@@ -597,6 +606,7 @@ impl ParsingContext<'_> {
                 name,
                 init: None,
                 meta,
+                is_combined_sampler: false,
             },
         )?;
 

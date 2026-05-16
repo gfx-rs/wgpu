@@ -18,7 +18,10 @@ pub use token::TokenValue;
 
 use alloc::{string::String, vec::Vec};
 
-use crate::{proc::Layouter, FastHashMap, FastHashSet, Handle, Module, ShaderStage, Span, Type};
+use crate::{
+    proc::Layouter, FastHashMap, FastHashSet, GlobalVariable, Handle, Module, ShaderStage, Span,
+    Type,
+};
 use ast::{EntryArg, FunctionDeclaration, GlobalLookup};
 use parser::ParsingContext;
 
@@ -174,6 +177,14 @@ pub struct Frontend {
 
     entry_args: Vec<EntryArg>,
 
+    /// Maps each combined-sampler image global (e.g. from `sampler2D` / `sampler2DShadow`
+    /// uniforms) to an implicit paired sampler global that was synthesized for it.
+    ///
+    /// When `texture(u_tex, uv)` is called with a combined-sampler uniform, the texture
+    /// call machinery looks up `ctx.samplers[image_expr]` to find the WGSL sampler.
+    /// These pairs get translated into `ctx.samplers` entries in [`Context::new`].
+    pub(crate) combined_samplers: Vec<(Handle<GlobalVariable>, Handle<GlobalVariable>)>,
+
     layouter: Layouter,
 
     errors: Vec<Error>,
@@ -187,6 +198,7 @@ impl Frontend {
         self.lookup_type.clear();
         self.global_variables.clear();
         self.entry_args.clear();
+        self.combined_samplers.clear();
         self.layouter.clear();
     }
 

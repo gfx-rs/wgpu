@@ -69,6 +69,15 @@ pub enum TokenValue {
     Void,
     Struct,
     TypeName(Type),
+    /// A combined image-sampler type name (`sampler2D`, `isampler3D`, `sampler2DShadow`, …).
+    ///
+    /// Emitted for GLSL `samplerXX` types (excluding the bare `sampler` and `samplerShadow`
+    /// tokens, which carry an explicit `TypeInner::Sampler` and are tokenised as plain
+    /// [`TypeName`](TokenValue::TypeName)). The inner `Type` is the same `Image` type that
+    /// `TypeName` would carry — the separate variant exists so that the variable-declaration
+    /// code can distinguish "this was a combined sampler" from "this was a plain texture type"
+    /// at the point where a paired implicit sampler needs to be synthesised.
+    CombinedSamplerTypeName(Type),
 
     Assign,
     AddAssign,

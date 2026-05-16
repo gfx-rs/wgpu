@@ -121,6 +121,34 @@ impl<'a> Context<'a> {
         for &(ref name, lookup) in frontend.global_variables.iter() {
             this.add_global(name, lookup)?
         }
+
+        // For each combined image-sampler uniform (e.g. `sampler2D u_tex`), add an
+        // entry to `ctx.samplers` mapping the image expression to its implicit
+        // companion sampler expression.  This enables `texture(u_tex, uv)` to be
+        // lowered to `textureSample(u_tex, u_tex_sampler, uv)` without requiring the
+        // caller to write `texture(sampler2D(u_tex, u_samp), uv)`.
+        //
+        // The image global's expression was appended by the `add_global` loop above.
+        // The implicit sampler global was NOT added to `frontend.global_variables` (it
+        // is anonymous from the GLSL source's perspective), so we add its expression
+        // here and immediately map it.
+        for &(image_handle, sampler_handle) in frontend.combined_samplers.iter() {
+            // Locate the expression that was already created for the image global.
+            let maybe_image_expr = this
+                .expressions
+                .iter()
+                .find(|(_, expr)| **expr == Expression::GlobalVariable(image_handle))
+                .map(|(h, _)| h);
+
+            if let Some(image_expr) = maybe_image_expr {
+                let span = this.module.global_variables.get_span(sampler_handle);
+                // The implicit sampler global was not added to frontend.global_variables,
+                // so we add its expression here and populate the samplers map.
+                let sampler_expr = this.add_expression(Expression::GlobalVariable(sampler_handle), span)?;
+                this.samplers.insert(image_expr, sampler_expr);
+            }
+        }
+
         this.is_const = is_const;
 
         Ok(this)

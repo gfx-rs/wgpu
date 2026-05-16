@@ -464,89 +464,10 @@ fn inject_standard_builtins(
     module: &mut Module,
     name: &str,
 ) {
-    // Some samplers (sampler1D, etc...) can be float, int, or uint
-    let anykind_sampler = if name.starts_with("sampler") {
-        Some((name, Sk::Float))
-    } else if name.starts_with("usampler") {
-        Some((&name[1..], Sk::Uint))
-    } else if name.starts_with("isampler") {
-        Some((&name[1..], Sk::Sint))
-    } else {
-        None
-    };
-    if let Some((sampler, kind)) = anykind_sampler {
-        match sampler {
-            "sampler1D" | "sampler1DArray" | "sampler2D" | "sampler2DArray" | "sampler2DMS"
-            | "sampler2DMSArray" | "sampler3D" | "samplerCube" | "samplerCubeArray" => {
-                declaration.overloads.push(module.add_builtin(
-                    vec![
-                        TypeInner::Image {
-                            dim: match sampler {
-                                "sampler1D" | "sampler1DArray" => Dim::D1,
-                                "sampler2D" | "sampler2DArray" | "sampler2DMS"
-                                | "sampler2DMSArray" => Dim::D2,
-                                "sampler3D" => Dim::D3,
-                                _ => Dim::Cube,
-                            },
-                            arrayed: matches!(
-                                sampler,
-                                "sampler1DArray"
-                                    | "sampler2DArray"
-                                    | "sampler2DMSArray"
-                                    | "samplerCubeArray"
-                            ),
-                            class: ImageClass::Sampled {
-                                kind,
-                                multi: matches!(sampler, "sampler2DMS" | "sampler2DMSArray"),
-                            },
-                        },
-                        TypeInner::Sampler { comparison: false },
-                    ],
-                    MacroCall::Sampler,
-                ));
-                return;
-            }
-            _ => (),
-        }
-    }
+    // `sampler2D(tex, samp)` constructors are handled in constructor_many() — the lexer
+    // emits CombinedSamplerTypeName, so they never arrive here as function identifiers.
 
     match name {
-        // Shadow sampler can only be of kind `Sk::Float`
-        "sampler1DShadow"
-        | "sampler1DArrayShadow"
-        | "sampler2DShadow"
-        | "sampler2DArrayShadow"
-        | "samplerCubeShadow"
-        | "samplerCubeArrayShadow" => {
-            let dim = match name {
-                "sampler1DShadow" | "sampler1DArrayShadow" => Dim::D1,
-                "sampler2DShadow" | "sampler2DArrayShadow" => Dim::D2,
-                _ => Dim::Cube,
-            };
-            let arrayed = matches!(
-                name,
-                "sampler1DArrayShadow" | "sampler2DArrayShadow" | "samplerCubeArrayShadow"
-            );
-
-            for i in 0..2 {
-                let ty = TypeInner::Image {
-                    dim,
-                    arrayed,
-                    class: match i {
-                        0 => ImageClass::Sampled {
-                            kind: Sk::Float,
-                            multi: false,
-                        },
-                        _ => ImageClass::Depth { multi: false },
-                    },
-                };
-
-                declaration.overloads.push(module.add_builtin(
-                    vec![ty, TypeInner::Sampler { comparison: true }],
-                    MacroCall::SamplerShadow,
-                ))
-            }
-        }
         "sin" | "exp" | "exp2" | "sinh" | "cos" | "cosh" | "tan" | "tanh" | "acos" | "asin"
         | "log" | "log2" | "radians" | "degrees" | "asinh" | "acosh" | "atanh"
         | "floatBitsToInt" | "floatBitsToUint" | "dFdx" | "dFdxFine" | "dFdxCoarse" | "dFdy"
@@ -1543,8 +1464,6 @@ pub enum TextureLevelType {
 /// A compiler defined builtin function
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum MacroCall {
-    Sampler,
-    SamplerShadow,
     Texture {
         proj: bool,
         offset: bool,
@@ -1593,16 +1512,6 @@ impl MacroCall {
         meta: Span,
     ) -> Result<Option<Handle<Expression>>> {
         Ok(Some(match *self {
-            MacroCall::Sampler => {
-                ctx.samplers.insert(args[0], args[1]);
-                args[0]
-            }
-            MacroCall::SamplerShadow => {
-                sampled_to_depth(ctx, args[0], meta, &mut frontend.errors);
-                ctx.invalidate_expression(args[0], meta)?;
-                ctx.samplers.insert(args[0], args[1]);
-                args[0]
-            }
             MacroCall::Texture {
                 proj,
                 offset,

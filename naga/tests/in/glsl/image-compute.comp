@@ -1,0 +1,21 @@
+// Exercises imageLoad and imageStore in a compute shader context.
+// Covers the readonly/writeonly/read-write access qualifiers on image2D uniforms.
+#version 460 core
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(rgba8, set = 0, binding = 0) uniform readonly image2D src;
+layout(rgba8, set = 0, binding = 1) uniform writeonly image2D dst;
+layout(rgba8, set = 0, binding = 2) uniform image2D rw;
+
+void main() {
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+
+    // Read from a readonly image and write to a writeonly image.
+    vec4 val = imageLoad(src, pos);
+    imageStore(dst, pos, val);
+
+    // Read-modify-write via a read-write image.
+    vec4 prev = imageLoad(rw, pos);
+    imageStore(rw, pos, prev * 0.5);
+}

@@ -489,6 +489,26 @@ impl Frontend {
                     .map(|member| scalar_components(&ctx.module.types[member.ty].inner))
                     .collect::<Vec<_>>(),
             ),
+            TypeInner::Image {
+                class: crate::ImageClass::Sampled { .. },
+                ..
+            } if args.len() == 2 => {
+                let (image, _) = args[0];
+                let (sampler, _) = args[1];
+                ctx.samplers.insert(image, sampler);
+                return Ok(image);
+            }
+            TypeInner::Image {
+                class: crate::ImageClass::Depth { .. },
+                ..
+            } if args.len() == 2 => {
+                let (image, image_meta) = args[0];
+                let (sampler, _) = args[1];
+                sampled_to_depth(ctx, image, image_meta, &mut self.errors);
+                ctx.invalidate_expression(image, image_meta)?;
+                ctx.samplers.insert(image, sampler);
+                return Ok(image);
+            }
             _ => {
                 return Err(Error {
                     kind: ErrorKind::SemanticError("Constructor: Too many arguments".into()),

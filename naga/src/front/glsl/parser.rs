@@ -181,6 +181,70 @@ impl<'source> ParsingContext<'source> {
             self.parse_external_declaration(frontend, &mut ctx)?;
         }
 
+        // Fix up bindings for all implicit samplers that were synthesised for combined
+        // image-sampler uniforms (`sampler2D`, `sampler2DShadow`, …).  The sampler
+        // globals were initially created with the same binding as their paired image,
+        // which would cause `BindingCollision` validation errors.  Now that all
+        // declarations have been processed we can see the full binding landscape and
+        // assign each implicit sampler the next free slot on its descriptor set.
+        //
+        // We do this in a single pass: for each set we collect the highest binding
+        // currently allocated, then hand out sequential slots for the samplers.
+        if !frontend.combined_samplers.is_empty() {
+            // Collect the set of implicit sampler handles so we can exclude them
+            // from the "already allocated" scan.
+            let implicit_sampler_handles: alloc::collections::BTreeSet<_> = frontend
+                .combined_samplers
+                .iter()
+                .map(|&(_, s)| s)
+                .collect();
+
+            // Build a map: group -> (one past the highest binding currently in use),
+            // counting only the non-implicit globals.
+            let mut group_next_binding: crate::FastHashMap<u32, u32> =
+                crate::FastHashMap::default();
+            for (handle, var) in ctx.module.global_variables.iter() {
+                if implicit_sampler_handles.contains(&handle) {
+                    continue;
+                }
+                if let Some(ref rb) = var.binding {
+                    let entry = group_next_binding.entry(rb.group).or_insert(0);
+                    if rb.binding + 1 > *entry {
+                        *entry = rb.binding + 1;
+                    }
+                }
+            }
+
+            // Assign the implicit samplers non-conflicting bindings in the same group
+            // as their paired image, after all the declared bindings.
+            for &(image_handle, sampler_handle) in frontend.combined_samplers.iter() {
+                let group = ctx
+                    .module
+                    .global_variables
+                    .get_mut(image_handle)
+                    .binding
+                    .as_ref()
+                    .map(|rb| rb.group)
+                    .unwrap_or(0);
+
+                let next = group_next_binding.entry(group).or_insert(0);
+                if let Some(ref mut rb) =
+                    ctx.module.global_variables.get_mut(sampler_handle).binding
+                {
+                    rb.group = group;
+                    rb.binding = *next;
+                } else {
+                    ctx.module.global_variables.get_mut(sampler_handle).binding = Some(
+                        crate::ResourceBinding {
+                            group,
+                            binding: *next,
+                        },
+                    );
+                }
+                *next += 1;
+            }
+        }
+
         // Add an `EntryPoint` to `parser.module` for `main`, if a
         // suitable overload exists. Error out if we can't find one.
         if let Some(declaration) = frontend.lookup_function.get("main") {
@@ -411,6 +475,9 @@ pub struct DeclarationContext<'ctx, 'qualifiers, 'a> {
     external: bool,
     is_inside_loop: bool,
     ctx: &'ctx mut Context<'a>,
+    /// `true` when the current declaration's type was a combined image-sampler type
+    /// name in GLSL source (`sampler2D`, `isampler3D`, `sampler2DShadow`, …).
+    is_combined_sampler: bool,
 }
 
 impl DeclarationContext<'_, '_, '_> {
@@ -428,6 +495,7 @@ impl DeclarationContext<'_, '_, '_> {
             name: Some(name),
             init,
             meta,
+            is_combined_sampler: self.is_combined_sampler,
         };
 
         match self.external {

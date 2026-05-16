@@ -8,7 +8,7 @@ use pp_rs::{
 use super::{
     ast::Precision,
     token::{Directive, DirectiveKind, Token, TokenValue},
-    types::parse_type,
+    types::{is_combined_sampler, parse_type},
 };
 use crate::{FastHashMap, Span, StorageAccess};
 
@@ -112,6 +112,9 @@ impl Iterator for Lexer<'_> {
                     "void" => TokenValue::Void,
                     "struct" => TokenValue::Struct,
                     word => match parse_type(word) {
+                        Some(t) if is_combined_sampler(word) => {
+                            TokenValue::CombinedSamplerTypeName(t)
+                        }
                         Some(t) => TokenValue::TypeName(t),
                         None => TokenValue::Identifier(String::from(word)),
                     },
