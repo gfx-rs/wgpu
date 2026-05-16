@@ -182,7 +182,7 @@ pub struct Frontend {
     ///
     /// When `texture(u_tex, uv)` is called with a combined-sampler uniform, the texture
     /// call machinery looks up `ctx.samplers[image_expr]` to find the WGSL sampler.
-    /// These pairs get translated into `ctx.samplers` entries in [`Context::new`].
+    /// These pairs get translated into `ctx.samplers` entries in `Context::new`.
     pub(crate) combined_samplers: Vec<(Handle<GlobalVariable>, Handle<GlobalVariable>)>,
 
     layouter: Layouter,
