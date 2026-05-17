@@ -323,6 +323,7 @@ struct CapabilitiesQuery {
     supports_raytracing: bool,
     shader_per_vertex: bool,
     supports_multisample_array: bool,
+    texture_component_swizzle: bool,
 }
 
 #[derive(Debug)]
@@ -334,6 +335,7 @@ struct PrivateCapabilities {
     timestamp_query_support: TimestampQuerySupport,
     supports_memoryless_storage: bool,
     mesh_shaders: bool,
+    texture_component_swizzle: bool,
 }
 
 #[derive(Debug)]

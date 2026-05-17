@@ -115,7 +115,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 ### `TEXTURE_COMPONENT_SWIZZLE` feature and `swizzle` field in `TextureViewDescriptor`
 
 `TEXTURE_COMPONENT_SWIZZLE` feature is implemented and there is a new `swizzle` field in `TextureViewDescriptor`
-for texture component swizzle. Currently it's supported on Vulkan and DX12.
+for texture component swizzle.
 
 ```diff
 let texture_view_desc = wgpu::TextureViewDescriptor {
