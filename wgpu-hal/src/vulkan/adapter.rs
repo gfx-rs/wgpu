@@ -973,13 +973,15 @@ impl PhysicalDeviceFeatures {
             supports_acceleration_structure_binding_array,
         );
 
-        features.set(
-            F::EXPERIMENTAL_RAY_TRACING_PIPELINES
-            // Ditto.
-                | F::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
-            supports_acceleration_structures
-                && caps.supports_extension(khr::ray_tracing_pipeline::NAME),
-        );
+        if supports_acceleration_structures
+            && caps.supports_extension(khr::ray_tracing_pipeline::NAME)
+        {
+            features.insert(
+                F::EXPERIMENTAL_RAY_TRACING_PIPELINES
+                        // Same reason as for ray queries.
+                            | F::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
+            );
+        }
 
         let rg11b10ufloat_renderable = supports_format(
             instance,
