@@ -2897,7 +2897,9 @@ impl crate::Device for super::Device {
             transform: instance.transform,
             custom_data_and_mask: (instance.custom_data & MAX_U24)
                 | (u32::from(instance.mask) << 24),
-            shader_binding_table_record_offset_and_flags: (instance.pipeline_intersection_data_offset & MAX_U24),
+            shader_binding_table_record_offset_and_flags: (instance
+                .pipeline_intersection_data_offset
+                & MAX_U24),
             acceleration_structure_reference: instance.blas_address,
         };
         bytemuck::bytes_of(&temp).to_vec()
