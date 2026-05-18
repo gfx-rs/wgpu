@@ -2994,6 +2994,8 @@ pub struct TlasInstance {
     pub custom_data: u32,
     pub mask: u8,
     pub blas_address: u64,
+    /// The offset for the index into the intersection hit
+    /// group calculation. Number is in hit groups.
     pub pipeline_intersection_data_offset: u32,
 }
 
