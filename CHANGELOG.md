@@ -44,6 +44,10 @@ Bottom level categories:
 
 ### Bug Fixes
 
+#### Metal
+
+- Restore the `Queue::as_raw` method, which was removed without good reason in v29. It now returns `&ProtocolObject<dyn MTLCommandQueue>`. By @andyleiserson in [#9560](https://github.com/gfx-rs/wgpu/pull/9560).
+
 #### Vulkan
 
 - Fixed `VUID-RuntimeSpirv-vulkanMemoryModel-06265` validation errors by enabling `vulkanMemoryModelDeviceScope` whenever the Vulkan memory model is enabled, since the SPIR-V backend emits storage atomics with `Device` scope. By @francisdb in [#9741](https://github.com/gfx-rs/wgpu/pull/9741).
