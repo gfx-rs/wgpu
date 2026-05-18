@@ -114,8 +114,8 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
 ### `TEXTURE_COMPONENT_SWIZZLE` feature and `swizzle` field in `TextureViewDescriptor`
 
-`TEXTURE_COMPONENT_SWIZZLE` feature is implemented and there is a new `swizzle` field in `TextureViewDescriptor`
-for texture component swizzle.
+A new `swizzle` field is in `TextureViewDescriptor` used for mapping red/green/blue/alpha channels of the texture view
+when accessed by shaders. This requires `TEXTURE_COMPONENT_SWIZZLE` feature if `swizzle` is not identity.
 
 ```diff
 let texture_view_desc = wgpu::TextureViewDescriptor {

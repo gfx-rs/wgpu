@@ -624,6 +624,7 @@ impl crate::Device for super::Device {
                 break 'b None;
             }
             if texture.format.is_depth_stencil_format() {
+                // Use r001 swizzle to make g,b,a channels well-defined.
                 break 'b Some(R001_SWIZZLE.compose(desc.swizzle));
             }
             if desc.swizzle != wgt::TextureComponentSwizzle::default() {
@@ -694,6 +695,8 @@ impl crate::Device for super::Device {
         self.counters.texture_views.add(1);
 
         Ok(super::TextureView {
+            // Texture view with swizzzle isn't renderable but depth-stencil texture view uses r001 swizzle.
+            // Solution: If the formats match, we use the texture instead of the view to render it.
             attachment: if format_equal {
                 AttachmentInfo {
                     texture: texture.raw.clone(),
