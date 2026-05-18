@@ -615,10 +615,6 @@ impl crate::Device for super::Device {
             b: wgt::ComponentSwizzle::Zero,
             a: wgt::ComponentSwizzle::One,
         };
-        let has_shader_usage = texture
-            .raw
-            .usage()
-            .intersects(MTLTextureUsage::ShaderRead | MTLTextureUsage::ShaderWrite);
         let swizzle = 'b: {
             if !self.shared.private_caps.texture_component_swizzle {
                 break 'b None;
@@ -633,14 +629,28 @@ impl crate::Device for super::Device {
             None
         }
         .map(conv::map_texture_component_swizzle);
-
-        let raw = if format_equal
-            && type_equal
-            && range_full_resource
-            && (!has_shader_usage || swizzle.is_none())
-        {
+        let has_shader_usage = texture
+            .raw
+            .usage()
+            .intersects(MTLTextureUsage::ShaderRead | MTLTextureUsage::ShaderWrite);
+        let needs_texture_view = 'b: {
+            if !format_equal {
+                break 'b true;
+            }
             // Some images are marked as framebuffer-only, and we can't create aliases of them.
             // Also helps working around Metal bugs with aliased array textures.
+            //
+            // And subresource doesn't need a texture view as we set the level and layer in `MTLRenderPassDescriptor`.
+            if !has_shader_usage {
+                break 'b false;
+            }
+            if !(type_equal && range_full_resource && swizzle.is_none()) {
+                break 'b true;
+            }
+            false
+        };
+
+        let raw = if !needs_texture_view {
             texture.raw.to_owned()
         } else {
             let mip_level_count = desc
