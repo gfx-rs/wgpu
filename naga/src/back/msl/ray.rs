@@ -32,7 +32,7 @@ impl<W: Write> Writer<W> {
         self.write_contains_flags(&format!("as_type<uint>({expr})"), 0x7f800000)
     }
 
-    fn write_nan(&mut self, expr: &str) -> BackendResult {
+    fn write_is_nan(&mut self, expr: &str) -> BackendResult {
         write!(self.out, "(")?;
         self.write_not_finite(expr)?;
         write!(self.out, " && ((as_type<uint>({expr}) & 0x7fffff) != 0))")?;
@@ -337,7 +337,7 @@ impl<W: Write> Writer<W> {
                     }
 
                     write!(self.out, " || ")?;
-                    self.write_nan("desc.tmax")?;
+                    self.write_is_nan("desc.tmax")?;
                     writeln!(self.out, ";")?;
 
                     // Metal also requires that tmax >= 0.0, but if tmax >= tmin and tmin >= 0.0, tmax must be >= 0.0
