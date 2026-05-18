@@ -20,12 +20,12 @@ use objc2_metal::{
     MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
     MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
     MTLSamplerMipFilter, MTLSamplerState, MTLSize, MTLStencilDescriptor, MTLStorageMode,
-    MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTriangleFillMode, MTLVertexDescriptor,
-    MTLVertexStepFunction,
+    MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTextureUsage, MTLTriangleFillMode,
+    MTLVertexDescriptor, MTLVertexStepFunction,
 };
 
 use super::{adapter::VERTEX_BUFFER_SLOT_START, conv, PassthroughShader, ShaderModuleSource};
-use crate::{auxil::map_naga_stage, TlasInstance};
+use crate::{auxil::map_naga_stage, metal::AttachmentInfo, TlasInstance};
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
@@ -615,6 +615,10 @@ impl crate::Device for super::Device {
             b: wgt::ComponentSwizzle::Zero,
             a: wgt::ComponentSwizzle::One,
         };
+        let has_shader_usage = texture
+            .raw
+            .usage()
+            .intersects(MTLTextureUsage::ShaderRead | MTLTextureUsage::ShaderWrite);
         let swizzle = 'b: {
             if !self.shared.private_caps.texture_component_swizzle {
                 break 'b None;
@@ -629,7 +633,13 @@ impl crate::Device for super::Device {
         }
         .map(conv::map_texture_component_swizzle);
 
-        let raw = if format_equal && type_equal && range_full_resource && swizzle.is_none() {
+        let raw = if format_equal
+            && type_equal
+            && range_full_resource
+            && (!has_shader_usage || swizzle.is_none())
+        {
+            // Some images are marked as framebuffer-only, and we can't create aliases of them.
+            // Also helps working around Metal bugs with aliased array textures.
             texture.raw.to_owned()
         } else {
             let mip_level_count = desc
@@ -683,7 +693,23 @@ impl crate::Device for super::Device {
 
         self.counters.texture_views.add(1);
 
-        Ok(super::TextureView { raw, aspects })
+        Ok(super::TextureView {
+            attachment: if format_equal {
+                AttachmentInfo {
+                    texture: texture.raw.clone(),
+                    base_mip_level: desc.range.base_mip_level,
+                    base_array_layer: desc.range.base_array_layer,
+                }
+            } else {
+                AttachmentInfo {
+                    texture: raw.clone(),
+                    base_mip_level: 0,
+                    base_array_layer: 0,
+                }
+            },
+            raw,
+            aspects,
+        })
     }
 
     unsafe fn destroy_texture_view(&self, _view: super::TextureView) {

@@ -678,7 +678,15 @@ unsafe impl Send for Texture {}
 unsafe impl Sync for Texture {}
 
 #[derive(Debug)]
+struct AttachmentInfo {
+    texture: Retained<ProtocolObject<dyn MTLTexture>>,
+    base_mip_level: u32,
+    base_array_layer: u32,
+}
+
+#[derive(Debug)]
 pub struct TextureView {
+    attachment: AttachmentInfo,
     raw: Retained<ProtocolObject<dyn MTLTexture>>,
     aspects: crate::FormatAspects,
 }
