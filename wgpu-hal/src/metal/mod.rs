@@ -467,6 +467,10 @@ impl Queue {
             timestamp_period,
         }
     }
+
+    pub fn as_raw(&self) -> &ProtocolObject<dyn MTLCommandQueue> {
+        &self.shared.raw
+    }
 }
 
 #[derive(Debug)]
