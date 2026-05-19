@@ -1,13 +1,17 @@
 use std::future;
 use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 
 use wgpu::custom::*;
 use wgpu_native::{native, *};
 
 use crate::conv;
-use crate::device::{CDevice, CQueue};
+use crate::device::{CDevice, CQueue, ErrorHandler};
 
-pub(crate) fn adapter_info(info: &native::WGPUAdapterInfo) -> wgpu::AdapterInfo {
+pub(crate) fn adapter_info_with_extras(
+    info: &native::WGPUAdapterInfo,
+    extras: &native::WGPUAdapterInfoExtras,
+) -> wgpu::AdapterInfo {
     let device_type = conv::map_device_type_from_native(info.adapterType);
     let backend = conv::map_backend_from_native(info.backendType);
     wgpu::AdapterInfo {
@@ -15,15 +19,34 @@ pub(crate) fn adapter_info(info: &native::WGPUAdapterInfo) -> wgpu::AdapterInfo 
         vendor: info.vendorID,
         device: info.deviceID,
         device_type,
-        device_pci_bus_id: String::new(),
+        device_pci_bus_id: unsafe { conv::string_view_to_string(extras.devicePciBusId) },
         driver: unsafe { conv::string_view_to_string(info.vendor) },
         driver_info: unsafe { conv::string_view_to_string(info.description) },
         backend,
-        subgroup_min_size: wgpu::wgt::MINIMUM_SUBGROUP_MIN_SIZE,
-        subgroup_max_size: wgpu::wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
-        transient_saves_memory: false,
+        subgroup_min_size: info.subgroupMinSize,
+        subgroup_max_size: info.subgroupMaxSize,
+        transient_saves_memory: extras.transientSavesMemory != 0,
         limit_bucket: None,
     }
+}
+
+pub(crate) fn get_adapter_info(adapter: native::WGPUAdapter) -> wgpu::AdapterInfo {
+    let mut extras = native::WGPUAdapterInfoExtras {
+        chain: native::WGPUChainedStruct {
+            next: std::ptr::null_mut(),
+            sType: native::WGPUSType_AdapterInfoExtras,
+        },
+        transientSavesMemory: 0,
+        devicePciBusId: conv::null_string_view(),
+    };
+    let mut raw = native::WGPUAdapterInfo {
+        nextInChain: std::ptr::from_mut::<native::WGPUChainedStruct>(&mut extras.chain),
+        ..unsafe { std::mem::zeroed() }
+    };
+    unsafe { wgpuAdapterGetInfo(adapter, Some(&mut raw)) };
+    let info = adapter_info_with_extras(&raw, &extras);
+    unsafe { wgpuAdapterInfoFreeMembers(raw) };
+    info
 }
 
 // ── CAdapter ──────────────────────────────────────────────────────────────────
@@ -64,6 +87,41 @@ impl AdapterInterface for CAdapter {
             .map(conv::str_to_string_view)
             .unwrap_or(conv::null_string_view());
 
+        // Uncaptured error callback: delegates to the handler registered via
+        // on_uncaptured_error(), or silently ignores if none is set.
+        unsafe extern "C" fn uncaptured_error_cb(
+            _device: *const native::WGPUDevice,
+            type_: native::WGPUErrorType,
+            message: native::WGPUStringView,
+            userdata1: *mut std::ffi::c_void,
+            _userdata2: *mut std::ffi::c_void,
+        ) {
+            let handler_arc = unsafe { &*(userdata1 as *const ErrorHandler) };
+            let guard = handler_arc.lock().unwrap();
+            let msg = unsafe { crate::conv::string_view_to_string(message) };
+            if let Some(handler) = guard.as_ref() {
+                let error = match type_ {
+                    native::WGPUErrorType_Validation => wgpu::Error::Validation {
+                        source: Box::new(std::io::Error::other(msg.clone())),
+                        description: msg,
+                    },
+                    native::WGPUErrorType_OutOfMemory => wgpu::Error::OutOfMemory {
+                        source: Box::new(std::io::Error::other(msg)),
+                    },
+                    _ => wgpu::Error::Internal {
+                        source: Box::new(std::io::Error::other(msg.clone())),
+                        description: msg,
+                    },
+                };
+                let handler = Arc::clone(handler);
+                drop(guard);
+                handler(error);
+            }
+            // If no handler set, silently ignore (don't abort like wgpu-native's default).
+        }
+
+        let error_handler: ErrorHandler = Arc::new(Mutex::new(None));
+
         let c_desc = native::WGPUDeviceDescriptor {
             nextInChain: std::ptr::null_mut(),
             label: label_sv,
@@ -83,8 +141,10 @@ impl AdapterInterface for CAdapter {
             },
             uncapturedErrorCallbackInfo: native::WGPUUncapturedErrorCallbackInfo {
                 nextInChain: std::ptr::null_mut(),
-                callback: None,
-                userdata1: std::ptr::null_mut(),
+                callback: Some(uncaptured_error_cb),
+                // SAFETY: error_handler outlives the device (stored in CDevice).
+                // wgpu-native will not call the callback after wgpuDeviceRelease.
+                userdata1: Arc::as_ptr(&error_handler) as *mut _,
                 userdata2: std::ptr::null_mut(),
             },
         };
@@ -92,22 +152,25 @@ impl AdapterInterface for CAdapter {
         struct Out {
             device: native::WGPUDevice,
             status: native::WGPURequestDeviceStatus,
+            message: String,
         }
         let mut out = Out {
             device: std::ptr::null_mut(),
             status: native::WGPURequestDeviceStatus_Error,
+            message: String::new(),
         };
 
         unsafe extern "C" fn callback(
             status: native::WGPURequestDeviceStatus,
             device: native::WGPUDevice,
-            _message: native::WGPUStringView,
+            message: native::WGPUStringView,
             userdata1: *mut std::ffi::c_void,
             _userdata2: *mut std::ffi::c_void,
         ) {
             let out = &mut *(userdata1 as *mut Out);
             out.status = status;
             out.device = device;
+            out.message = unsafe { crate::conv::string_view_to_string(message) };
         }
 
         let callback_info = native::WGPURequestDeviceCallbackInfo {
@@ -119,13 +182,7 @@ impl AdapterInterface for CAdapter {
         };
 
         // Capture adapter info before creating device (needed for device.adapter_info()).
-        let info = unsafe {
-            let mut raw: native::WGPUAdapterInfo = std::mem::zeroed();
-            wgpuAdapterGetInfo(self.ptr, Some(&mut raw));
-            let parsed = adapter_info(&raw);
-            wgpuAdapterInfoFreeMembers(raw);
-            parsed
-        };
+        let info = get_adapter_info(self.ptr);
 
         unsafe { wgpuAdapterRequestDevice(self.ptr, Some(&c_desc), callback_info) };
 
@@ -136,11 +193,15 @@ impl AdapterInterface for CAdapter {
                     DispatchDevice::custom(CDevice {
                         ptr: out.device,
                         info,
+                        error_handler,
                     }),
                     DispatchQueue::custom(CQueue { ptr: queue_ptr }),
                 ))
             } else {
-                panic!("wgpu-native: request_device failed")
+                Err(wgpu::RequestDeviceError::from_message(format!(
+                    "wgpu-native: request_device failed (status={}, message={})",
+                    out.status, out.message
+                )))
             };
 
         Box::pin(future::ready(result))
@@ -166,24 +227,20 @@ impl AdapterInterface for CAdapter {
     }
 
     fn downlevel_capabilities(&self) -> wgpu::DownlevelCapabilities {
-        // wgpu-native has no downlevel capabilities query.
-        unimplemented!("wgpu-native does not expose downlevel capabilities")
+        wgpu::DownlevelCapabilities::default()
     }
 
     fn get_info(&self) -> wgpu::AdapterInfo {
-        let mut raw: native::WGPUAdapterInfo = unsafe { std::mem::zeroed() };
-        unsafe { wgpuAdapterGetInfo(self.ptr, Some(&mut raw)) };
-        let info = adapter_info(&raw);
-        unsafe { wgpuAdapterInfoFreeMembers(raw) };
-        info
+        get_adapter_info(self.ptr)
     }
 
     fn get_texture_format_features(
         &self,
-        _format: wgpu::TextureFormat,
+        format: wgpu::TextureFormat,
     ) -> wgpu::TextureFormatFeatures {
-        // wgpu-native has no per-format feature query on the adapter.
-        unimplemented!("wgpu-native does not expose texture format feature queries")
+        // wgpu-native has no per-format feature query, so fall back to the
+        // WebGPU-guaranteed minimums, conditioned on the adapter's actual features.
+        format.guaranteed_format_features(self.features())
     }
 
     fn get_presentation_timestamp(&self) -> wgpu::PresentationTimestamp {

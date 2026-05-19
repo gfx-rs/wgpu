@@ -50,12 +50,12 @@ impl BufferInterface for CBuffer {
             userdata1: *mut std::ffi::c_void,
             _userdata2: *mut std::ffi::c_void,
         ) {
-            let out = &mut *(userdata1 as *mut Out);
+            let out = unsafe { Box::from_raw(userdata1 as *mut Out) };
             let result = match status {
                 native::WGPUMapAsyncStatus_Success => Ok(()),
                 _ => Err(wgpu::BufferAsyncError),
             };
-            if let Some(cb) = out.callback.take() {
+            if let Some(cb) = out.callback {
                 cb(result);
             }
         }
@@ -65,14 +65,14 @@ impl BufferInterface for CBuffer {
             wgpu::MapMode::Write => native::WGPUMapMode_Write,
         };
 
-        let mut out = Out {
+        let out = Box::new(Out {
             callback: Some(callback),
-        };
+        });
         let callback_info = native::WGPUBufferMapCallbackInfo {
             nextInChain: std::ptr::null_mut(),
             mode: native::WGPUCallbackMode_AllowSpontaneous,
             callback: Some(cb),
-            userdata1: std::ptr::addr_of_mut!(out).cast(),
+            userdata1: Box::into_raw(out).cast(),
             userdata2: std::ptr::null_mut(),
         };
 
@@ -85,7 +85,6 @@ impl BufferInterface for CBuffer {
                 callback_info,
             )
         };
-        // wgpu-native fires the callback synchronously; `out.callback` is consumed by now.
     }
 
     fn get_mapped_range(
@@ -188,7 +187,7 @@ impl TextureInterface for CTexture {
             usage: desc
                 .usage
                 .map(conv::texture_usage_to_native)
-                .unwrap_or(native::WGPUTextureUsage_None),
+                .unwrap_or_else(|| unsafe { wgpuTextureGetUsage(self.ptr) }),
         };
         let ptr = unsafe { wgpuTextureCreateView(self.ptr, Some(&c_desc)) };
         DispatchTextureView::custom(CTextureView { ptr })

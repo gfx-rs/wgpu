@@ -24,7 +24,15 @@ pub use resource::{
 };
 pub use surface::{CSurface, CSurfaceOutputDetail};
 
-// ── CInstance ────────────────────────────────────────────────────────────────
+#[expect(clippy::result_large_err)]
+fn instance_create(desc: InstanceDescriptor) -> Result<wgpu::Instance, InstanceDescriptor> {
+    Ok(wgpu::Instance::from_custom(CInstance::new(desc)))
+}
+
+#[ctor::ctor]
+fn register_factory() {
+    wgpu::set_instance_factory(instance_create);
+}
 
 #[derive(Debug)]
 pub struct CInstance {

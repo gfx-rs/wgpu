@@ -109,10 +109,21 @@ pub fn opt_str_to_string_view(s: Option<&str>) -> native::WGPUStringView {
 
 /// SAFETY: caller must ensure the WGPUStringView data pointer is valid.
 pub unsafe fn string_view_to_string(sv: native::WGPUStringView) -> String {
-    if sv.data.is_null() || sv.length == 0 {
+    if sv.data.is_null() {
         return String::new();
     }
-    let slice = std::slice::from_raw_parts(sv.data as *const u8, sv.length);
+    let len = if sv.length == usize::MAX {
+        // WGPU_STRLEN: null-terminated
+        unsafe { std::ffi::CStr::from_ptr(sv.data as *const std::ffi::c_char) }
+            .to_bytes()
+            .len()
+    } else {
+        sv.length
+    };
+    if len == 0 {
+        return String::new();
+    }
+    let slice = unsafe { std::slice::from_raw_parts(sv.data as *const u8, len) };
     String::from_utf8_lossy(slice).into_owned()
 }
 
@@ -239,6 +250,12 @@ pub fn map_supported_features(sf: &native::WGPUSupportedFeatures) -> wgpu::Featu
             result.insert(feat);
         }
     }
+    // wgpu-native hardcodes experimental_features: disabled() when converting
+    // WGPUDeviceDescriptor to wgpu-core's DeviceDescriptor, so requesting
+    // experimental features via request_device always fails. Strip them here so
+    // the test infra marks tests that need them as Unsupported rather than running
+    // and SIGABRTing.
+    result &= !wgpu::Features::all_experimental_mask();
     result
 }
 

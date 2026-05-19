@@ -1,5 +1,6 @@
 use std::future;
 use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 
 use wgpu::custom::*;
 use wgpu_native::{native, *};
@@ -10,9 +11,12 @@ use crate::resource::*;
 
 // ── CDevice ───────────────────────────────────────────────────────────────────
 
+pub(crate) type ErrorHandler = Arc<Mutex<Option<Arc<dyn wgpu::UncapturedErrorHandler>>>>;
+
 pub struct CDevice {
     pub(crate) ptr: native::WGPUDevice,
     pub(crate) info: wgpu::AdapterInfo,
+    pub(crate) error_handler: ErrorHandler,
 }
 
 impl std::fmt::Debug for CDevice {
@@ -547,6 +551,8 @@ impl DeviceInterface for CDevice {
                     sType: native::WGPUSType_RenderPipelineDescriptorExtras,
                 },
                 cache: c.ptr,
+                multiviewMask: 0,
+                zeroInitializeWorkgroupMemory: false as _,
             });
         let c_desc = native::WGPURenderPipelineDescriptor {
             nextInChain: cache_extras
@@ -802,6 +808,8 @@ impl DeviceInterface for CDevice {
                     sType: native::WGPUSType_MeshPipelineDescriptorExtras,
                 },
                 cache: c.ptr,
+                multiviewMask: 0,
+                zeroInitializeWorkgroupMemory: false as _,
             });
 
         let c_desc = native::WGPUMeshPipelineDescriptor {
@@ -867,6 +875,7 @@ impl DeviceInterface for CDevice {
                     sType: native::WGPUSType_ComputePipelineDescriptorExtras,
                 },
                 cache: c.ptr,
+                zeroInitializeWorkgroupMemory: false as _,
             });
         let c_desc = native::WGPUComputePipelineDescriptor {
             nextInChain: cache_extras
@@ -1089,16 +1098,11 @@ impl DeviceInterface for CDevice {
     }
 
     fn set_device_lost_callback(&self, _device_lost_callback: BoxDeviceLostCallback) {
-        // wgpu-native device lost callback is set at device creation time, not after.
-        // Cannot be implemented post-creation via this API.
-        unimplemented!("wgpu-native does not support setting device lost callback after creation")
+        // wgpu-native sets the device lost callback at creation time; ignore post-creation sets.
     }
 
-    fn on_uncaptured_error(&self, _handler: std::sync::Arc<dyn wgpu::UncapturedErrorHandler>) {
-        // wgpu-native uncaptured error callback is set at device creation time.
-        unimplemented!(
-            "wgpu-native does not support setting uncaptured error handler after creation"
-        )
+    fn on_uncaptured_error(&self, handler: std::sync::Arc<dyn wgpu::UncapturedErrorHandler>) {
+        *self.error_handler.lock().unwrap() = Some(handler);
     }
 
     fn push_error_scope(&self, filter: wgpu::ErrorFilter) -> u32 {
@@ -1299,7 +1303,12 @@ impl QueueInterface for CQueue {
     }
 
     fn submit(&self, command_buffers: &mut dyn Iterator<Item = DispatchCommandBuffer>) -> u64 {
-        let ptrs: Vec<native::WGPUCommandBuffer> = command_buffers
+        // Collect first so DispatchCommandBuffers stay alive across wgpuQueueSubmitForIndex.
+        // Consuming them inside map() would call wgpuCommandBufferRelease before submit,
+        // leaving dangling raw pointers.
+        let dispatches: Vec<DispatchCommandBuffer> = command_buffers.collect();
+        let ptrs: Vec<native::WGPUCommandBuffer> = dispatches
+            .iter()
             .map(|cb| cb.as_custom::<CCommandBuffer>().unwrap().ptr)
             .collect();
         unsafe { wgpuQueueSubmitForIndex(self.ptr, ptrs.len(), ptrs.as_ptr()) }
@@ -1320,24 +1329,23 @@ impl QueueInterface for CQueue {
             userdata1: *mut std::ffi::c_void,
             _userdata2: *mut std::ffi::c_void,
         ) {
-            let out = &mut *(userdata1 as *mut Out);
-            if let Some(cb) = out.callback.take() {
+            let out = unsafe { Box::from_raw(userdata1 as *mut Out) };
+            if let Some(cb) = out.callback {
                 cb();
             }
         }
 
-        let mut out = Out {
+        let out = Box::new(Out {
             callback: Some(callback),
-        };
+        });
         let callback_info = native::WGPUQueueWorkDoneCallbackInfo {
             nextInChain: std::ptr::null_mut(),
             mode: native::WGPUCallbackMode_AllowSpontaneous,
             callback: Some(cb),
-            userdata1: std::ptr::addr_of_mut!(out).cast(),
+            userdata1: Box::into_raw(out).cast(),
             userdata2: std::ptr::null_mut(),
         };
         unsafe { wgpuQueueOnSubmittedWorkDone(self.ptr, callback_info) };
-        // wgpu-native fires the callback synchronously under AllowSpontaneous.
     }
 
     fn compact_blas(&self, _blas: &DispatchBlas) -> (Option<u64>, DispatchBlas) {

@@ -25,7 +25,10 @@ unsafe impl Sync for CComputePass {}
 
 impl Drop for CComputePass {
     fn drop(&mut self) {
-        unsafe { wgpuComputePassEncoderRelease(self.ptr) };
+        unsafe {
+            wgpuComputePassEncoderEnd(self.ptr);
+            wgpuComputePassEncoderRelease(self.ptr);
+        }
     }
 }
 
@@ -142,7 +145,10 @@ unsafe impl Sync for CRenderPass {}
 
 impl Drop for CRenderPass {
     fn drop(&mut self) {
-        unsafe { wgpuRenderPassEncoderRelease(self.ptr) };
+        unsafe {
+            wgpuRenderPassEncoderEnd(self.ptr);
+            wgpuRenderPassEncoderRelease(self.ptr);
+        }
     }
 }
 

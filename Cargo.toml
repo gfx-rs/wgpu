@@ -82,6 +82,7 @@ wgpu = { path = "./wgpu", version = "29.0.0", default-features = false, features
   "vulkan-portability",
   "wgsl",
 ] }
+wgpu-c-backend = { path = "./wgpu-c-backend", version = "29.0.0" }
 wgpu-core = { path = "./wgpu-core", version = "29.0.0" }
 wgpu-hal = { path = "./wgpu-hal", version = "29.0.0" }
 wgpu-macros = { path = "./wgpu-macros", version = "29.0.0" }

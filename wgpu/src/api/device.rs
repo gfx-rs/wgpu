@@ -718,6 +718,16 @@ impl Device {
 pub struct RequestDeviceError {
     pub(crate) inner: RequestDeviceErrorKind,
 }
+
+impl RequestDeviceError {
+    /// Construct an error from a custom backend message.
+    pub fn from_message(message: String) -> Self {
+        RequestDeviceError {
+            inner: RequestDeviceErrorKind::Custom(message),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) enum RequestDeviceErrorKind {
     /// Error from [`wgpu_core`].
@@ -730,6 +740,9 @@ pub(crate) enum RequestDeviceErrorKind {
     /// (This is currently never used by the webgl backend, but it could be.)
     #[cfg(webgpu)]
     WebGpu(String),
+
+    /// Error from a custom backend.
+    Custom(String),
 }
 
 static_assertions::assert_impl_all!(RequestDeviceError: Send, Sync);
@@ -743,6 +756,7 @@ impl fmt::Display for RequestDeviceError {
             RequestDeviceErrorKind::WebGpu(error) => {
                 write!(_f, "{error}")
             }
+            RequestDeviceErrorKind::Custom(msg) => write!(_f, "{msg}"),
             #[cfg(not(any(webgpu, wgpu_core)))]
             _ => unimplemented!("unknown `RequestDeviceErrorKind`"),
         }
@@ -756,6 +770,7 @@ impl error::Error for RequestDeviceError {
             RequestDeviceErrorKind::Core(error) => error.source(),
             #[cfg(webgpu)]
             RequestDeviceErrorKind::WebGpu(_) => None,
+            RequestDeviceErrorKind::Custom(_) => None,
             #[cfg(not(any(webgpu, wgpu_core)))]
             _ => unimplemented!("unknown `RequestDeviceErrorKind`"),
         }

@@ -1,7 +1,21 @@
 use alloc::vec::Vec;
 use core::future::Future;
+#[cfg(custom)]
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{dispatch::InstanceInterface, util::Mutex, *};
+
+#[cfg(custom)]
+static INSTANCE_FACTORY: AtomicUsize = AtomicUsize::new(0);
+
+/// Register a factory that can intercept [`Instance::new`] for custom backends.
+///
+/// The factory receives the [`InstanceDescriptor`] and returns `Ok(Instance)` to
+/// take ownership of the request, or `Err(desc)` to fall through to the built-in backend.
+#[cfg(custom)]
+pub fn set_instance_factory(f: fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor>) {
+    INSTANCE_FACTORY.store(f as usize, Ordering::Release);
+}
 
 bitflags::bitflags! {
     /// WGSL language extensions.
@@ -60,12 +74,26 @@ impl Instance {
     /// - If no backend feature for the active target platform is enabled,
     ///   this method will panic; see [`Instance::enabled_backend_features()`].
     #[allow(clippy::allow_attributes, unreachable_code)]
-    pub fn new(desc: InstanceDescriptor) -> Self {
+    pub fn new(mut desc: InstanceDescriptor) -> Self {
         if Self::enabled_backend_features().is_empty() {
             panic!(
                 "No wgpu backend feature that is implemented for the target platform was enabled. \
                  See `wgpu::Instance::enabled_backend_features()` for more information."
             );
+        }
+
+        #[cfg(custom)]
+        {
+            let factory_val = INSTANCE_FACTORY.load(Ordering::Acquire);
+            if factory_val != 0 {
+                // SAFETY: stored via `set_instance_factory` which accepts exactly this fn type.
+                let factory: fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor> =
+                    unsafe { core::mem::transmute(factory_val) };
+                match factory(desc) {
+                    Ok(inst) => return inst,
+                    Err(returned_desc) => desc = returned_desc,
+                }
+            }
         }
 
         #[cfg(webgpu)]
