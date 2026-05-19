@@ -342,10 +342,7 @@ impl Device {
             label: desc.label.to_string(),
             max_instance_count: desc.max_instances,
             tracking_data: TrackingData::new(self.tracker_indices.tlas_s.clone()),
-            max_intersection_index: RwLock::new(
-                rank::TLAS_MAX_INTERSECTION_IDX,
-                resource::MaxIntersectionIndex::Unused,
-            ),
+            max_intersection_index: RwLock::new(rank::TLAS_MAX_INTERSECTION_IDX, 0),
         }))
     }
 
@@ -496,6 +493,14 @@ impl Device {
                 zero_initialize_workgroup_memory: desc.miss.zero_initialize_workgroup_memory,
             }
         };
+
+        if desc.intersections.len() > 1 << 24 {
+            return Err(
+                pipeline::CreateRayTracingPipelineError::TooManyIntersectionGroups(
+                    desc.intersections.len(),
+                ),
+            );
+        }
 
         if desc.max_recursion_depth > self.limits.max_ray_recursion_depth {
             return Err(
@@ -735,6 +740,7 @@ impl Device {
             shader_modules
         };
 
+        // Won't panic because `desc.intersections` is required to be below 2^24 - 1 (see `CreateRayTracingPipelineError::TooManyIntersectionGroups`)
         let shader_binding_data = pipeline::ShaderBindingData::from_raw_pipeline(
             self.clone(),
             raw.as_ref(),

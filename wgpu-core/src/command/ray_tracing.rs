@@ -10,7 +10,7 @@ use wgt::{math::align_to, BufferUsages, BufferUses, Features};
 use crate::{
     command::encoder::EncodingState,
     ray_tracing::{AsAction, AsBuild, TlasBuild, ValidateAsActionsError},
-    resource::{Buffer, InvalidResourceError, MaxIntersectionIndex},
+    resource::{Buffer, InvalidResourceError},
 };
 use crate::{command::EncoderStateError, device::resource::CommandIndices};
 use crate::{
@@ -81,7 +81,7 @@ impl super::CommandEncoder {
                     build_command.tlas_s_built.push(TlasBuild {
                         tlas,
                         dependencies: Vec::new(),
-                        max_intersection_idx: MaxIntersectionIndex::Unused,
+                        max_intersection_idx: 0,
                     });
                 }
 
@@ -268,24 +268,17 @@ pub(crate) fn build_acceleration_structures(
 
         let mut instance_count = 0;
 
-        let mut max_intersection_idx = MaxIntersectionIndex::Unused;
+        let mut max_intersection_idx = 0;
         for (instance_idx, instance) in package.instances.iter().flatten().enumerate() {
-            let Some(()) = max_intersection_idx.set_intersection_index(instance.intersection_index)
-            else {
-                return Err(
-                    BuildAccelerationStructureError::TlasInstancesIntersectionIndicesDiffer(
-                        tlas.error_ident(),
-                        instance_idx,
-                    ),
-                );
-            };
-
             if instance.custom_data >= (1u32 << 24u32) {
                 return Err(BuildAccelerationStructureError::TlasInvalidCustomData(
                     tlas.error_ident(),
                     instance_idx,
                 ));
             }
+
+            max_intersection_idx = max_intersection_idx.max(instance.intersection_index);
+
             let blas = &instance.blas;
             let is_new_dependency = seen_dependencies.insert(blas.tracker_index());
 
@@ -293,18 +286,15 @@ pub(crate) fn build_acceleration_structures(
                 state.tracker.blas_s.insert_single(blas.clone());
             }
 
-            let intersection_data_offset = match instance.intersection_index {
-                wgt::IntersectionShaderIndex::IntersectionIndex(v) => v,
-                wgt::IntersectionShaderIndex::QueryData(v) => {
-                    if v >= (1u32 << 24u32) {
-                        return Err(BuildAccelerationStructureError::TlasInvalidQueryData(
-                            tlas.error_ident(),
-                            instance_idx,
-                        ));
-                    }
-                    v
-                }
-            };
+            if instance.intersection_index >= (1u32 << 24u32) {
+                return Err(
+                    BuildAccelerationStructureError::TlasInvalidIntersectionIndex(
+                        tlas.error_ident(),
+                        instance_idx,
+                        instance.intersection_index,
+                    ),
+                );
+            }
 
             instance_buffer_staging_source.extend(state.device.raw().tlas_instance_to_bytes(
                 hal::TlasInstance {
@@ -312,7 +302,7 @@ pub(crate) fn build_acceleration_structures(
                     custom_data: instance.custom_data,
                     mask: instance.mask,
                     blas_address: blas.handle,
-                    pipeline_intersection_data_offset: intersection_data_offset,
+                    pipeline_intersection_data_offset: instance.intersection_index,
                 },
             ));
 
@@ -609,12 +599,14 @@ impl CommandBufferMutable {
 
                     let current_max = tlas.max_intersection_index.read();
 
-                    if !current_max.at_most(*max_intersection_idx) {
-                        return Err(ValidateAsActionsError::TlasIntersectionInvalid(
-                            tlas.error_ident(),
-                            *current_max,
-                            *max_intersection_idx,
-                        ));
+                    if let &Some(max_intersection_idx) = max_intersection_idx {
+                        if *current_max > max_intersection_idx {
+                            return Err(ValidateAsActionsError::TlasIntersectionInvalid(
+                                tlas.error_ident(),
+                                *current_max,
+                                max_intersection_idx,
+                            ));
+                        }
                     }
                 }
             }

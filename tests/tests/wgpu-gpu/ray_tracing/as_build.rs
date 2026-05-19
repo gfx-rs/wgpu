@@ -43,7 +43,6 @@ fn unbuilt_blas(ctx: TestingContext) {
         &ctx,
         AccelerationStructureFlags::empty(),
         AccelerationStructureFlags::empty(),
-        false,
     );
 
     // Build the TLAS package with an unbuilt BLAS.
@@ -78,7 +77,6 @@ fn unbuilt_blas_compaction(ctx: TestingContext) {
         &ctx,
         AccelerationStructureFlags::ALLOW_COMPACTION,
         AccelerationStructureFlags::empty(),
-        false,
     );
 
     fail(
@@ -106,7 +104,6 @@ fn blas_compaction_without_flags(ctx: TestingContext) {
         &ctx,
         AccelerationStructureFlags::empty(),
         AccelerationStructureFlags::empty(),
-        false,
     );
 
     let mut encoder = ctx
@@ -143,7 +140,6 @@ fn unprepared_blas_compaction(ctx: TestingContext) {
         &ctx,
         AccelerationStructureFlags::ALLOW_COMPACTION,
         AccelerationStructureFlags::empty(),
-        false,
     );
 
     let mut encoder = ctx
@@ -172,7 +168,6 @@ fn blas_compaction(ctx: TestingContext) {
         &ctx,
         AccelerationStructureFlags::ALLOW_COMPACTION,
         AccelerationStructureFlags::empty(),
-        false,
     );
 
     let mut encoder = ctx
@@ -230,7 +225,6 @@ fn out_of_order_as_build(ctx: TestingContext) {
         &ctx,
         AccelerationStructureFlags::empty(),
         AccelerationStructureFlags::empty(),
-        false,
     );
 
     //
@@ -266,7 +260,6 @@ fn out_of_order_as_build(ctx: TestingContext) {
         &ctx,
         AccelerationStructureFlags::empty(),
         AccelerationStructureFlags::empty(),
-        false,
     );
 
     //
@@ -319,7 +312,6 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         &ctx,
         AccelerationStructureFlags::empty(),
         AccelerationStructureFlags::empty(),
-        false,
     );
 
     //
@@ -412,7 +404,6 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         &ctx,
         AccelerationStructureFlags::empty(),
         AccelerationStructureFlags::empty(),
-        false,
     );
 
     //
@@ -565,7 +556,7 @@ fn build_with_transform(ctx: TestingContext) {
         [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
         0,
         0xFF,
-        wgpu_types::IntersectionShaderIndex::QueryData(0),
+        0,
     ));
 
     let mut encoder_build = ctx
@@ -612,7 +603,6 @@ fn only_blas_vertex_return(ctx: TestingContext) {
         &ctx,
         AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
         AccelerationStructureFlags::empty(),
-        false,
     );
 
     let mut encoder_blas = ctx
@@ -738,7 +728,6 @@ fn only_tlas_vertex_return(ctx: TestingContext) {
         &ctx,
         AccelerationStructureFlags::empty(),
         AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
-        false,
     );
 
     let mut encoder_blas = ctx

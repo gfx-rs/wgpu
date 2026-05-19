@@ -341,7 +341,7 @@ impl crate::framework::Example for Example {
                     )),
                     0,
                     0xff,
-                    wgpu::IntersectionShaderIndex::QueryData(0),
+                    0,
                 ));
             }
         }

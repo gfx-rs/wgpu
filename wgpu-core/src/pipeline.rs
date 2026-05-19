@@ -1185,8 +1185,8 @@ pub enum CreateRayTracingPipelineError {
     },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
-    #[error("The number of intersection shaders {0} is greater than the limit Limits::max_intersection_group_count {1}")]
-    TooManyIntersectionGroups(usize, u32),
+    #[error("The number of intersection shaders {0} is greater than 2^24 - 1")]
+    TooManyIntersectionGroups(usize),
     #[error(
         "The ray recursion depth {0} is greater than the limit Limits::max_ray_recursion_depth {1}"
     )]
@@ -1252,12 +1252,13 @@ pub struct RayTracingPipelineDescriptor<
 pub struct ShaderBindingData {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     pub(crate) device: Arc<Device>,
-    pub(crate) num_intersection_groups: u64,
+    pub(crate) num_intersection_groups: u32,
     pub(crate) miss_offset: wgt::BufferAddress,
     pub(crate) intersection_offset: wgt::BufferAddress,
 }
 
 impl ShaderBindingData {
+    /// Panics if `num_intersection_groups` is above u32::MAX
     pub(crate) fn from_raw_pipeline(
         device: Arc<Device>,
         pipeline: &dyn hal::DynRayTracingPipeline,
@@ -1345,7 +1346,7 @@ impl ShaderBindingData {
         Ok(Self {
             raw: ManuallyDrop::new(buffer),
             device,
-            num_intersection_groups: num_intersection_groups as _,
+            num_intersection_groups: u32::try_from(num_intersection_groups).unwrap(),
             miss_offset: padded_miss_offset,
             intersection_offset: padded_intersection_offset,
         })

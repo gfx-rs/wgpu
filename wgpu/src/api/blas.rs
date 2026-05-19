@@ -8,8 +8,6 @@ use wgt::{WasmNotSend, WasmNotSendSync};
 use crate::dispatch;
 use crate::{Buffer, Label};
 
-pub use wgpu_types::IntersectionShaderIndex;
-
 /// Descriptor for the size defining attributes of a triangle geometry, for a bottom level acceleration structure.
 pub type BlasTriangleGeometrySizeDescriptor = wgt::BlasTriangleGeometrySizeDescriptor;
 static_assertions::assert_impl_all!(BlasTriangleGeometrySizeDescriptor: Send, Sync);
@@ -67,9 +65,9 @@ pub struct TlasInstance {
     /// Mask for the instance used inside the shader to filter instances.
     /// Reports hit only if `(shader_cull_mask & tlas_instance.mask) != 0u`.
     pub mask: u8,
-    /// Intersection group index into a ray tracing pipeline. Must be [`wgt::IntersectionShaderIndex::IntersectionIndex`] if used in a ray tracing pipeline trace,
-    /// and [`wgt::IntersectionShaderIndex::QueryData`] if used for ray queries. (Note: this means all of these must be the same in any TLAs.)
-    pub intersection_index: wgt::IntersectionShaderIndex,
+    /// Intersection group index into a ray tracing pipeline. Must be less than the number of intersection
+    /// groups in any ray tracing pipeline a tlas built with this is used for.
+    pub intersection_index: u32,
 }
 
 impl TlasInstance {
@@ -90,7 +88,7 @@ impl TlasInstance {
         transform: [f32; 12],
         custom_data: u32,
         mask: u8,
-        intersection_index: wgt::IntersectionShaderIndex,
+        intersection_index: u32,
     ) -> Self {
         Self {
             blas: blas.inner.clone(),

@@ -86,7 +86,7 @@ fn aabb_blas_build_and_trace(ctx: TestingContext) {
         [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
         0,
         0xFF,
-        wgpu::IntersectionShaderIndex::QueryData(0),
+        0,
     ));
 
     let mut encoder = ctx

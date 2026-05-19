@@ -3435,62 +3435,6 @@ crate::impl_parent_device!(Blas);
 crate::impl_storage_item!(Blas);
 crate::impl_trackable!(Blas);
 
-#[derive(Debug, Copy, Clone)]
-pub enum MaxIntersectionIndex {
-    /// No intersection indices, TLAS can be used for anything.
-    Unused,
-    /// Intersection indices are all for query data.
-    Query,
-    /// Intersection indices are all intersection function indices. Contains maximum.
-    Intersection(u32),
-}
-
-impl MaxIntersectionIndex {
-    /// Attempt to set the max intersection index, returning None if new does not match
-    pub(crate) fn set_intersection_index(
-        &mut self,
-        new: wgt::IntersectionShaderIndex,
-    ) -> Option<()> {
-        match self {
-            Self::Unused => {
-                *self = match new {
-                    wgt::IntersectionShaderIndex::IntersectionIndex(idx) => Self::Intersection(idx),
-                    wgt::IntersectionShaderIndex::QueryData(_) => Self::Query,
-                };
-            }
-            Self::Query => {
-                let wgt::IntersectionShaderIndex::QueryData(_) = new else {
-                    return None;
-                };
-                // dont need to assign
-            }
-            Self::Intersection(ref mut idx) => {
-                let wgt::IntersectionShaderIndex::IntersectionIndex(new_idx) = new else {
-                    return None;
-                };
-                *idx = (*idx).max(new_idx)
-            }
-        }
-        Some(())
-    }
-
-    /// Check self is at most max intersection index `maximum_allowed`
-    pub(crate) fn at_most(&self, maximum_allowed: Self) -> bool {
-        match *self {
-            // anything is allowed
-            Self::Unused => true,
-            Self::Query => matches!(maximum_allowed, Self::Query),
-            Self::Intersection(idx) => {
-                let Self::Intersection(max_idx) = maximum_allowed else {
-                    return false;
-                };
-
-                max_idx >= idx
-            }
-        }
-    }
-}
-
 #[derive(Debug)]
 pub(crate) struct TlasState {
     pub(crate) raw: Snatchable<Box<dyn hal::DynAccelerationStructure>>,
@@ -3507,7 +3451,7 @@ pub struct Tlas {
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
     pub(crate) built_index: RwLock<Option<NonZeroU64>>,
     pub(crate) dependencies: RwLock<Vec<Arc<Blas>>>,
-    pub(crate) max_intersection_index: RwLock<MaxIntersectionIndex>,
+    pub(crate) max_intersection_index: RwLock<u32>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
@@ -3565,10 +3509,7 @@ impl Tlas {
             built_index: RwLock::new(rank::TLAS_BUILT_INDEX, None),
             dependencies: RwLock::new(rank::TLAS_DEPENDENCIES, Vec::new()),
             device,
-            max_intersection_index: RwLock::new(
-                rank::TLAS_MAX_INTERSECTION_IDX,
-                MaxIntersectionIndex::Unused,
-            ),
+            max_intersection_index: RwLock::new(rank::TLAS_MAX_INTERSECTION_IDX, 0),
         })
     }
 }

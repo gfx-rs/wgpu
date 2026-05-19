@@ -165,7 +165,7 @@ impl crate::framework::Example for Example {
                 .unwrap(),
             0,
             0xff,
-            wgpu::IntersectionShaderIndex::QueryData(0),
+            0,
         ));
 
         tlas[1] = Some(TlasInstance::new(
@@ -181,7 +181,7 @@ impl crate::framework::Example for Example {
                 .unwrap(),
             0,
             0xff,
-            wgpu::IntersectionShaderIndex::QueryData(0),
+            0,
         ));
 
         tlas[2] = Some(TlasInstance::new(
@@ -197,7 +197,7 @@ impl crate::framework::Example for Example {
                 .unwrap(),
             0,
             0xff,
-            wgpu::IntersectionShaderIndex::QueryData(0),
+            0,
         ));
 
         let uniforms = {

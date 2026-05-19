@@ -25,8 +25,7 @@ use crate::{
     device::{DeviceError, MissingFeatures},
     resource::{
         self, Blas, BlasCompactCallback, BlasPrepareCompactResult, DestroyedResourceError,
-        InvalidResourceError, MaxIntersectionIndex, MissingBufferUsageError, ResourceErrorIdent,
-        Tlas,
+        InvalidResourceError, MissingBufferUsageError, ResourceErrorIdent, Tlas,
     },
 };
 
@@ -179,10 +178,6 @@ pub enum BuildAccelerationStructureError {
 
     #[error("Tlas {0:?} instance {1} contains an invalid custom data (more than 24bits)")]
     TlasInvalidCustomData(ResourceErrorIdent, usize),
-    #[error(
-        "Tlas {0:?} instance {1} contains an invalid query data in the `intersection_index` field (more than 24bits)"
-    )]
-    TlasInvalidQueryData(ResourceErrorIdent, usize),
 
     #[error(
         "Tlas {0:?} has {1} active instances but only {2} are allowed as specified by the descriptor at creation"
@@ -215,9 +210,9 @@ pub enum BuildAccelerationStructureError {
     #[error("Tlas {0:?} instance {1} has a different Intersection")]
     TlasInstancesIntersectionIndicesDiffer(ResourceErrorIdent, usize),
     #[error(
-        "Tlas {0:?} instance {1} contains an intersection index {2} which is greater than `Limits::max_intersection_group_count` {3}"
+        "Tlas {0:?} instance {1} contains an intersection index {2} which is greater than 2^24 - 1"
     )]
-    TlasInvalidIntersectionIndex(ResourceErrorIdent, usize, u32, u32),
+    TlasInvalidIntersectionIndex(ResourceErrorIdent, usize, u32),
 }
 
 impl WebGpuError for BuildAccelerationStructureError {
@@ -252,7 +247,6 @@ impl WebGpuError for BuildAccelerationStructureError {
             | Self::UseTransformMissing(..)
             | Self::TlasDependentMissingVertexReturn(..)
             | Self::TlasInstancesIntersectionIndicesDiffer(..)
-            | Self::TlasInvalidQueryData(..)
             | Self::TlasInvalidIntersectionIndex(..)
             | Self::BlasGeometryKindMismatch(..)
             | Self::IncompatibleBlasAabbPrimitiveCount(..)
@@ -276,12 +270,8 @@ pub enum ValidateAsActionsError {
     #[error("Blas {0:?} is newer than the containing Tlas {1:?}")]
     BlasNewerThenTlas(ResourceErrorIdent, ResourceErrorIdent),
 
-    #[error("Tlas {0:?} has an intersection index {1:?}  greater or different from {2:?}")]
-    TlasIntersectionInvalid(
-        ResourceErrorIdent,
-        MaxIntersectionIndex,
-        MaxIntersectionIndex,
-    ),
+    #[error("Tlas {0:?} has an intersection index {1:?} greater than {2:?}")]
+    TlasIntersectionInvalid(ResourceErrorIdent, u32, u32),
 }
 
 impl WebGpuError for ValidateAsActionsError {
@@ -340,7 +330,7 @@ pub struct TlasInstance<'a, Blas = Arc<resource::Blas>> {
     pub transform: &'a [f32; 12],
     pub custom_data: u32,
     pub mask: u8,
-    pub intersection_index: wgt::IntersectionShaderIndex,
+    pub intersection_index: u32,
 }
 
 pub struct TlasPackage<'a, Tlas = Arc<resource::Tlas>, Blas = Arc<resource::Blas>> {
@@ -353,7 +343,7 @@ pub struct TlasPackage<'a, Tlas = Arc<resource::Tlas>, Blas = Arc<resource::Blas
 pub(crate) struct TlasBuild {
     pub tlas: Arc<Tlas>,
     pub dependencies: Vec<Arc<Blas>>,
-    pub max_intersection_idx: MaxIntersectionIndex,
+    pub max_intersection_idx: u32,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -374,7 +364,7 @@ impl AsBuild {
 #[derive(Debug, Clone)]
 pub(crate) enum AsAction {
     Build(AsBuild),
-    UseTlas(Arc<Tlas>, MaxIntersectionIndex),
+    UseTlas(Arc<Tlas>, Option<u32>),
 }
 
 /// Like [`BlasTriangleGeometry`], but with owned data.
@@ -429,7 +419,7 @@ pub struct OwnedTlasInstance<R: ReferenceType> {
     pub transform: [f32; 12],
     pub custom_data: u32,
     pub mask: u8,
-    pub intersection_index: wgt::IntersectionShaderIndex,
+    pub intersection_index: u32,
 }
 
 pub type ArcTlasInstance = OwnedTlasInstance<ArcReferences>;

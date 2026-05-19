@@ -370,12 +370,12 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
 
         flush_bindings_helper(
             &mut self.pass,
-            crate::resource::MaxIntersectionIndex::Intersection(
+            Some(
                 self.pipeline
                     .as_ref()
                     .unwrap()
                     .shader_binding_data()?
-                    .num_intersection_groups as _,
+                    .num_intersection_groups,
             ),
         )?;
 
@@ -881,7 +881,7 @@ fn trace_rays(
                 buffer: shader_binding_data.raw.as_ref(),
                 offset: shader_binding_data.intersection_offset,
                 stride: device.alignments.ray_tracing_pipeline_group_data_alignment as _,
-                count: shader_binding_data.num_intersection_groups,
+                count: shader_binding_data.num_intersection_groups as _,
             },
         );
     }

@@ -195,13 +195,3 @@ pub const TRANSFORM_BUFFER_ALIGNMENT: crate::BufferAddress = 16;
 
 /// Alignment requirement for instance buffers used in acceleration structure builds (`build_acceleration_structures_unsafe_tlas`)
 pub const INSTANCE_BUFFER_ALIGNMENT: crate::BufferAddress = 16;
-
-/// An option of either an index into a ray tracing pipeline or some data for ray queries.
-#[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum IntersectionShaderIndex {
-    /// An index into the intersection groups in a shader.
-    IntersectionIndex(u32),
-    /// Data returned to ray queries.
-    QueryData(u32),
-}
