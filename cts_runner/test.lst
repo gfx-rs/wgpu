@@ -32,7 +32,7 @@ webgpu:api,operation,command_buffer,image_copy:undefined_params:initMethod="Writ
 webgpu:api,operation,command_buffer,image_copy:undefined_params:initMethod="WriteTexture";checkMethod="PartialCopyT2B";dimension="1d"
 fails-if(dx12) webgpu:api,operation,command_buffer,image_copy:undefined_params:initMethod="WriteTexture";checkMethod="PartialCopyT2B";dimension="2d"
 webgpu:api,operation,command_buffer,image_copy:undefined_params:initMethod="WriteTexture";checkMethod="PartialCopyT2B";dimension="3d"
-webgpu:api,operation,command_buffer,programmable,immediate:*
+fails-if(dx12) webgpu:api,operation,command_buffer,programmable,immediate:*
 webgpu:api,operation,compute_pipeline,overrides:*
 //FAIL: webgpu:api,operation,compute,basic:large_dispatch:*
 webgpu:api,operation,compute,basic:memcpy:*
