@@ -380,7 +380,7 @@ fn transform_buffer<'a, 'b>(
   let data = match data_size {
     Some(size) => {
       let size_bytes = size as usize * bytes_per_element;
-      &buf
+      buf
         .get(data_offset_bytes..(data_offset_bytes + size_bytes))
         .ok_or(JsErrorBox::range_error(
           "The end index of data is out of range",
