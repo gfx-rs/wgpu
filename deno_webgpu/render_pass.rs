@@ -17,6 +17,7 @@ use deno_core::webidl::WebIdlConverter;
 use deno_core::webidl::WebIdlError;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
+use deno_error::JsErrorBox;
 
 use crate::buffer::GPUBuffer;
 use crate::error::GPUGenericError;
@@ -444,6 +445,43 @@ impl GPURenderPassEncoder {
       )
       .err();
     self.error_handler.push_error(err);
+  }
+
+  #[required(2)]
+  #[undefined]
+  fn set_immediates(
+    &self,
+    #[webidl(options(enforce_range = true))] offset: u32,
+    #[anybuffer] data: &[u8],
+    // FIXME: If data is TypedArray, WebGPU spec requires `data_offset` and `data_size` to be in elements, not in bytes.
+    #[webidl(default = 0, options(enforce_range = true))] data_offset: u64,
+    #[webidl(options(enforce_range = true))] data_size: Option<u64>,
+  ) -> Result<(), JsErrorBox> {
+    if data_offset >= data.len() as u64 {
+      return Err(JsErrorBox::range_error("data offset out of bounds"));
+    }
+    let content_size = if let Some(data_size) = data_size {
+      data_size
+    } else {
+      data.len() as u64 - data_offset
+    };
+    if !content_size.is_multiple_of(wgpu_types::IMMEDIATE_DATA_ALIGNMENT as u64)
+    {
+      return Err(JsErrorBox::range_error("data size is not a multiple of 4"));
+    }
+    if data_offset + content_size > data.len() as u64 {
+      return Err(JsErrorBox::range_error("The end of data is out of bounds"));
+    }
+    let err = self
+      .instance
+      .render_pass_set_immediates(
+        &mut self.render_pass.borrow_mut(),
+        offset,
+        &data[(data_offset as usize)..((data_offset + content_size) as usize)],
+      )
+      .err();
+    self.error_handler.push_error(err);
+    Ok(())
   }
 }
 

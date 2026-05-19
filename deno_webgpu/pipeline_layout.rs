@@ -60,4 +60,5 @@ pub(crate) struct GPUPipelineLayoutDescriptor {
 
   pub bind_group_layouts:
     Vec<Nullable<Ptr<super::bind_group_layout::GPUBindGroupLayout>>>,
+  pub immediate_size: u32,
 }

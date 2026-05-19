@@ -132,10 +132,11 @@ impl GPUQueue {
     #[webidl] buffer: Ptr<GPUBuffer>,
     #[webidl(options(enforce_range = true))] buffer_offset: u64,
     #[anybuffer] buf: &[u8],
+    // FIXME: If data is TypedArray, WebGPU spec requires `data_offset` and `data_size` to be in elements, not in bytes.
     #[webidl(default = 0, options(enforce_range = true))] data_offset: u64,
-    #[webidl(options(enforce_range = true))] size: Option<u64>,
+    #[webidl(options(enforce_range = true))] data_size: Option<u64>,
   ) {
-    let data = match size {
+    let data = match data_size {
       Some(size) => {
         &buf[(data_offset as usize)..((data_offset + size) as usize)]
       }
