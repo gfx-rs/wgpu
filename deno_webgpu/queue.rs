@@ -7,6 +7,7 @@ use std::time::Duration;
 use deno_core::cppgc::Ptr;
 use deno_core::futures::channel::oneshot;
 use deno_core::op2;
+use deno_core::v8;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
@@ -16,6 +17,7 @@ use crate::command_buffer::GPUCommandBuffer;
 use crate::error::GPUGenericError;
 use crate::texture::GPUTexture;
 use crate::texture::GPUTextureAspect;
+use crate::transform_buffer;
 use crate::webidl::GPUExtent3D;
 use crate::webidl::GPUOrigin3D;
 use crate::Instance;
@@ -127,21 +129,16 @@ impl GPUQueue {
 
   #[required(3)]
   #[undefined]
-  fn write_buffer(
+  fn write_buffer<'a>(
     &self,
+    scope: &mut v8::HandleScope<'a>,
     #[webidl] buffer: Ptr<GPUBuffer>,
     #[webidl(options(enforce_range = true))] buffer_offset: u64,
-    #[anybuffer] buf: &[u8],
-    // FIXME: If data is TypedArray, WebGPU spec requires `data_offset` and `data_size` to be in elements, not in bytes.
+    data_arg: v8::Local<'a, v8::Value>,
     #[webidl(default = 0, options(enforce_range = true))] data_offset: u64,
-    #[webidl(options(enforce_range = true))] data_size: Option<u64>,
-  ) {
-    let data = match data_size {
-      Some(size) => {
-        &buf[(data_offset as usize)..((data_offset + size) as usize)]
-      }
-      None => &buf[(data_offset as usize)..],
-    };
+    #[webidl(options(enforce_range = true))] size: Option<u64>,
+  ) -> Result<(), JsErrorBox> {
+    let data = transform_buffer(scope, data_arg, data_offset, size)?;
 
     let err = self
       .instance
@@ -149,6 +146,8 @@ impl GPUQueue {
       .err();
 
     self.error_handler.push_error(err);
+
+    Ok(())
   }
 
   #[required(4)]

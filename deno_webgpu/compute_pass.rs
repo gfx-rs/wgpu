@@ -15,6 +15,7 @@ use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 
 use crate::error::GPUGenericError;
+use crate::transform_buffer;
 use crate::Instance;
 
 pub struct GPUComputePassEncoder {
@@ -234,35 +235,29 @@ impl GPUComputePassEncoder {
 
   #[required(2)]
   #[undefined]
-  fn set_immediates(
+  fn set_immediates<'a>(
     &self,
+    scope: &mut v8::HandleScope<'a>,
     #[webidl(options(enforce_range = true))] offset: u32,
-    #[anybuffer] data: &[u8],
-    // FIXME: If data is TypedArray, WebGPU spec requires `data_offset` and `data_size` to be in elements, not in bytes.
+    data_arg: v8::Local<'a, v8::Value>,
     #[webidl(default = 0, options(enforce_range = true))] data_offset: u64,
     #[webidl(options(enforce_range = true))] data_size: Option<u64>,
   ) -> Result<(), JsErrorBox> {
-    if data_offset >= data.len() as u64 {
-      return Err(JsErrorBox::range_error("data offset out of bounds"));
-    }
-    let content_size = if let Some(data_size) = data_size {
-      data_size
-    } else {
-      data.len() as u64 - data_offset
-    };
-    if !content_size.is_multiple_of(wgpu_types::IMMEDIATE_DATA_ALIGNMENT as u64)
+    let data = transform_buffer(scope, data_arg, data_offset, data_size)?;
+
+    if !data
+      .len()
+      .is_multiple_of(wgpu_types::IMMEDIATE_DATA_ALIGNMENT as usize)
     {
       return Err(JsErrorBox::range_error("data size is not a multiple of 4"));
     }
-    if data_offset + content_size > data.len() as u64 {
-      return Err(JsErrorBox::range_error("The end of data is out of bounds"));
-    }
+
     let err = self
       .instance
       .compute_pass_set_immediates(
         &mut self.compute_pass.borrow_mut(),
         offset,
-        &data[(data_offset as usize)..((data_offset + content_size) as usize)],
+        data,
       )
       .err();
     self.error_handler.push_error(err);
