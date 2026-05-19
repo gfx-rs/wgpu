@@ -204,7 +204,6 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
 
         max_multiview_view_count,
 
-        max_intersection_group_count,
         max_ray_dispatch_count,
         max_ray_recursion_depth,
     } = limits;
@@ -265,7 +264,6 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t       Max Acceleration Structures Per Shader Stage: {max_acceleration_structures_per_shader_stage}")?;
 
     writeln!(output, "\t\t                           Max Multiview View Count: {max_multiview_view_count}")?;
-    writeln!(output, "\t\t                       Max Intersection Group Count: {max_intersection_group_count}")?;
     writeln!(output, "\t\t                             Max Ray Dispatch Count: {max_ray_dispatch_count}")?;
     writeln!(output, "\t\t                            Max Ray Recursion Depth: {max_ray_recursion_depth}")?;
     // This one reflects more of a wgpu implementation limitations than a hardware limit

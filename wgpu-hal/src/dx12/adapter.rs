@@ -1018,7 +1018,6 @@ impl super::Adapter {
                     max_multiview_view_count,
 
                     // not yet implemented
-                    max_intersection_group_count: 0,
                     max_ray_dispatch_count: 0,
                     max_ray_recursion_depth: 0,
                 }),
