@@ -1,4 +1,6 @@
 use std::ptr::NonNull;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use wgpu::custom::*;
 use wgpu_native::{native, *};
@@ -31,7 +33,45 @@ macro_rules! c_resource {
 
 // ── CBuffer ───────────────────────────────────────────────────────────────────
 
-c_resource!(CBuffer, native::WGPUBuffer, wgpuBufferRelease);
+pub struct CBuffer {
+    pub(crate) ptr: native::WGPUBuffer,
+    // Tracks whether the buffer is currently mapped. Set to true by a
+    // successful map_async callback; reset to false by unmap(). Prevents
+    // calling wgpuBufferGetMappedRange on an unmapped buffer, which would
+    // cause handle_error_fatal to panic inside extern "C" → SIGSEGV.
+    is_mapped: Arc<AtomicBool>,
+}
+impl std::fmt::Debug for CBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CBuffer")
+            .field("ptr", &self.ptr)
+            .field("is_mapped", &self.is_mapped.load(Ordering::Relaxed))
+            .finish()
+    }
+}
+unsafe impl Send for CBuffer {}
+unsafe impl Sync for CBuffer {}
+impl Drop for CBuffer {
+    fn drop(&mut self) {
+        unsafe { wgpuBufferRelease(self.ptr) };
+    }
+}
+
+impl CBuffer {
+    pub(crate) fn new(ptr: native::WGPUBuffer) -> Self {
+        CBuffer {
+            ptr,
+            is_mapped: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub(crate) fn new_mapped_at_creation(ptr: native::WGPUBuffer) -> Self {
+        CBuffer {
+            ptr,
+            is_mapped: Arc::new(AtomicBool::new(true)),
+        }
+    }
+}
 
 impl BufferInterface for CBuffer {
     fn map_async(
@@ -42,6 +82,7 @@ impl BufferInterface for CBuffer {
     ) {
         struct Out {
             callback: Option<BufferMapCallback>,
+            is_mapped: Arc<AtomicBool>,
         }
 
         unsafe extern "C" fn cb(
@@ -52,11 +93,14 @@ impl BufferInterface for CBuffer {
         ) {
             let out = unsafe { Box::from_raw(userdata1 as *mut Out) };
             let result = match status {
-                native::WGPUMapAsyncStatus_Success => Ok(()),
+                native::WGPUMapAsyncStatus_Success => {
+                    out.is_mapped.store(true, Ordering::Release);
+                    Ok(())
+                }
                 _ => Err(wgpu::BufferAsyncError),
             };
-            if let Some(cb) = out.callback {
-                cb(result);
+            if let Some(callback) = out.callback {
+                crate::catch_callback_panic(|| callback(result));
             }
         }
 
@@ -67,6 +111,7 @@ impl BufferInterface for CBuffer {
 
         let out = Box::new(Out {
             callback: Some(callback),
+            is_mapped: Arc::clone(&self.is_mapped),
         });
         let callback_info = native::WGPUBufferMapCallbackInfo {
             nextInChain: std::ptr::null_mut(),
@@ -85,6 +130,8 @@ impl BufferInterface for CBuffer {
                 callback_info,
             )
         };
+        // Re-raise any panic that occurred if the callback fired synchronously.
+        crate::resume_callback_panic();
     }
 
     fn get_mapped_range(
@@ -93,6 +140,13 @@ impl BufferInterface for CBuffer {
     ) -> Result<DispatchBufferMappedRange, wgpu::MapRangeError> {
         let offset = sub_range.start as usize;
         let size = (sub_range.end - sub_range.start) as usize;
+
+        // Guard against calling wgpuBufferGetMappedRange on an unmapped buffer:
+        // that function calls handle_error_fatal which panics inside extern "C",
+        // causing UB / SIGSEGV. Panic in Rust instead.
+        if !self.is_mapped.load(Ordering::Acquire) {
+            panic!("get_mapped_range called on unmapped buffer");
+        }
 
         let ptr = unsafe { wgpuBufferGetMappedRange(self.ptr, offset, size) };
         let (ptr, _is_const): (*mut u8, bool) = if ptr.is_null() {
@@ -113,6 +167,7 @@ impl BufferInterface for CBuffer {
     }
 
     fn unmap(&self) {
+        self.is_mapped.store(false, Ordering::Release);
         unsafe { wgpuBufferUnmap(self.ptr) };
     }
 
@@ -224,18 +279,92 @@ c_resource!(
 
 impl ShaderModuleInterface for CShaderModule {
     fn get_compilation_info(&self) -> std::pin::Pin<Box<dyn ShaderCompilationInfoFuture>> {
-        // wgpu-native does not implement wgpuShaderModuleGetCompilationInfo.
-        unimplemented!("wgpu-native does not implement wgpuShaderModuleGetCompilationInfo")
+        struct Out {
+            messages: Vec<wgpu::CompilationMessage>,
+        }
+
+        unsafe extern "C" fn callback(
+            _status: native::WGPUCompilationInfoRequestStatus,
+            info: *const native::WGPUCompilationInfo,
+            userdata1: *mut std::ffi::c_void,
+            _userdata2: *mut std::ffi::c_void,
+        ) {
+            let out = &mut *(userdata1 as *mut Out);
+            if info.is_null() {
+                return;
+            }
+            let info = &*info;
+            let messages_slice = if info.messageCount == 0 || info.messages.is_null() {
+                &[]
+            } else {
+                std::slice::from_raw_parts(info.messages, info.messageCount)
+            };
+            out.messages = messages_slice
+                .iter()
+                .map(|m| {
+                    let message_type = match m.type_ {
+                        native::WGPUCompilationMessageType_Warning => {
+                            wgpu::CompilationMessageType::Warning
+                        }
+                        native::WGPUCompilationMessageType_Info => {
+                            wgpu::CompilationMessageType::Info
+                        }
+                        _ => wgpu::CompilationMessageType::Error,
+                    };
+                    let location = if m.lineNum > 0 {
+                        Some(wgpu::SourceLocation {
+                            line_number: m.lineNum as u32,
+                            line_position: m.linePos as u32,
+                            offset: m.offset as u32,
+                            length: m.length as u32,
+                        })
+                    } else {
+                        None
+                    };
+                    wgpu::CompilationMessage {
+                        message: crate::conv::string_view_to_string(m.message),
+                        message_type,
+                        location,
+                    }
+                })
+                .collect();
+        }
+
+        let mut out = Out { messages: vec![] };
+        let callback_info = native::WGPUCompilationInfoCallbackInfo {
+            nextInChain: std::ptr::null_mut(),
+            mode: native::WGPUCallbackMode_AllowSpontaneous,
+            callback: Some(callback),
+            userdata1: std::ptr::addr_of_mut!(out).cast(),
+            userdata2: std::ptr::null_mut(),
+        };
+        unsafe { wgpuShaderModuleGetCompilationInfo(self.ptr, callback_info) };
+        Box::pin(std::future::ready(wgpu::CompilationInfo {
+            messages: out.messages,
+        }))
     }
 }
 
 // ── CBindGroupLayout ──────────────────────────────────────────────────────────
 
-c_resource!(
-    CBindGroupLayout,
-    native::WGPUBindGroupLayout,
-    wgpuBindGroupLayoutRelease
-);
+pub struct CBindGroupLayout {
+    pub(crate) ptr: native::WGPUBindGroupLayout,
+    pub(crate) device_ptr: native::WGPUDevice,
+}
+impl std::fmt::Debug for CBindGroupLayout {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CBindGroupLayout")
+            .field("ptr", &self.ptr)
+            .finish()
+    }
+}
+unsafe impl Send for CBindGroupLayout {}
+unsafe impl Sync for CBindGroupLayout {}
+impl Drop for CBindGroupLayout {
+    fn drop(&mut self) {
+        unsafe { wgpuBindGroupLayoutRelease(self.ptr) };
+    }
+}
 
 impl BindGroupLayoutInterface for CBindGroupLayout {}
 
@@ -266,7 +395,10 @@ c_resource!(
 impl RenderPipelineInterface for CRenderPipeline {
     fn get_bind_group_layout(&self, index: u32) -> DispatchBindGroupLayout {
         let ptr = unsafe { wgpuRenderPipelineGetBindGroupLayout(self.ptr, index) };
-        DispatchBindGroupLayout::custom(CBindGroupLayout { ptr })
+        DispatchBindGroupLayout::custom(CBindGroupLayout {
+            ptr,
+            device_ptr: std::ptr::null_mut(),
+        })
     }
 }
 
@@ -281,7 +413,10 @@ c_resource!(
 impl ComputePipelineInterface for CComputePipeline {
     fn get_bind_group_layout(&self, index: u32) -> DispatchBindGroupLayout {
         let ptr = unsafe { wgpuComputePipelineGetBindGroupLayout(self.ptr, index) };
-        DispatchBindGroupLayout::custom(CBindGroupLayout { ptr })
+        DispatchBindGroupLayout::custom(CBindGroupLayout {
+            ptr,
+            device_ptr: std::ptr::null_mut(),
+        })
     }
 }
 
@@ -313,11 +448,25 @@ impl QuerySetInterface for CQuerySet {}
 
 // ── CCommandBuffer ────────────────────────────────────────────────────────────
 
-c_resource!(
-    CCommandBuffer,
-    native::WGPUCommandBuffer,
-    wgpuCommandBufferRelease
-);
+pub struct CCommandBuffer {
+    pub(crate) ptr: native::WGPUCommandBuffer,
+    /// Device that created this command buffer. Used to detect cross-device submission.
+    pub(crate) device_ptr: native::WGPUDevice,
+}
+impl std::fmt::Debug for CCommandBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CCommandBuffer")
+            .field("ptr", &self.ptr)
+            .finish()
+    }
+}
+unsafe impl Send for CCommandBuffer {}
+unsafe impl Sync for CCommandBuffer {}
+impl Drop for CCommandBuffer {
+    fn drop(&mut self) {
+        unsafe { wgpuCommandBufferRelease(self.ptr) };
+    }
+}
 
 impl CommandBufferInterface for CCommandBuffer {}
 

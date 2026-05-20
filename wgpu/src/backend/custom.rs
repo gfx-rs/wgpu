@@ -4,6 +4,7 @@
 
 pub use crate::dispatch::*;
 
+use alloc::boxed::Box;
 use alloc::sync::Arc;
 
 macro_rules! dyn_type {
@@ -91,7 +92,70 @@ dyn_type!(pub mut struct DynCommandEncoder(dyn CommandEncoderInterface));
 dyn_type!(pub mut struct DynComputePass(dyn ComputePassInterface));
 dyn_type!(pub mut struct DynRenderPass(dyn RenderPassInterface));
 dyn_type!(pub mut struct DynCommandBuffer(dyn CommandBufferInterface));
-dyn_type!(pub mut struct DynRenderBundleEncoder(dyn RenderBundleEncoderInterface));
+// DynRenderBundleEncoder uses Box instead of Arc so that finish_boxed(self: Box<Self>)
+// can be dispatched through the trait object (consuming the encoder).
+#[derive(Debug)]
+pub(crate) struct DynRenderBundleEncoder(Box<dyn RenderBundleEncoderInterface>);
+
+impl DynRenderBundleEncoder {
+    pub(crate) fn new<T: RenderBundleEncoderInterface>(t: T) -> Self {
+        Self(Box::new(t))
+    }
+
+    pub(crate) fn downcast<T: RenderBundleEncoderInterface>(&self) -> Option<&T> {
+        self.0.as_ref().as_any().downcast_ref()
+    }
+
+    pub(crate) fn finish_boxed(
+        self,
+        desc: &crate::RenderBundleDescriptor<'_>,
+    ) -> crate::dispatch::DispatchRenderBundle {
+        self.0.finish_boxed(desc)
+    }
+}
+
+impl core::ops::Deref for DynRenderBundleEncoder {
+    type Target = dyn RenderBundleEncoderInterface;
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
+
+impl core::ops::DerefMut for DynRenderBundleEncoder {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.0.as_mut()
+    }
+}
+
+impl PartialEq for DynRenderBundleEncoder {
+    fn eq(&self, other: &Self) -> bool {
+        core::ptr::addr_eq(
+            self.0.as_ref() as *const dyn RenderBundleEncoderInterface,
+            other.0.as_ref() as *const dyn RenderBundleEncoderInterface,
+        )
+    }
+}
+impl Eq for DynRenderBundleEncoder {}
+impl PartialOrd for DynRenderBundleEncoder {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for DynRenderBundleEncoder {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        let a = self.0.as_ref() as *const dyn RenderBundleEncoderInterface as *const () as usize;
+        let b = other.0.as_ref() as *const dyn RenderBundleEncoderInterface as *const () as usize;
+        a.cmp(&b)
+    }
+}
+impl core::hash::Hash for DynRenderBundleEncoder {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        let addr = self.0.as_ref() as *const dyn RenderBundleEncoderInterface as *const () as usize;
+        addr.hash(state);
+    }
+}
 dyn_type!(pub ref struct DynRenderBundle(dyn RenderBundleInterface));
 dyn_type!(pub ref struct DynSurface(dyn SurfaceInterface));
 dyn_type!(pub ref struct DynSurfaceOutputDetail(dyn SurfaceOutputDetailInterface));

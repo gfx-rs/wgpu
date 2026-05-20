@@ -1,5 +1,6 @@
 use std::future;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use wgpu::custom::*;
@@ -12,11 +13,19 @@ use crate::resource::*;
 // ── CDevice ───────────────────────────────────────────────────────────────────
 
 pub(crate) type ErrorHandler = Arc<Mutex<Option<Arc<dyn wgpu::UncapturedErrorHandler>>>>;
+pub(crate) type DeviceLostHandler = Mutex<Option<BoxDeviceLostCallback>>;
 
 pub struct CDevice {
     pub(crate) ptr: native::WGPUDevice,
     pub(crate) info: wgpu::AdapterInfo,
-    pub(crate) error_handler: ErrorHandler,
+    pub(crate) error_handler: Box<ErrorHandler>,
+    pub(crate) device_lost_handler: Box<DeviceLostHandler>,
+    /// Tracks the number of active error scopes. Shared with the device's CQueue.
+    /// Used to decide whether cross-device submit should panic (no scope) or let
+    /// wgpu-native route the error to the active scope instead.
+    pub(crate) error_scope_depth: Arc<AtomicU32>,
+    /// Set to true by CQueue::drop. Used to detect use-after-queue-drop.
+    pub(crate) queue_dropped: Arc<AtomicBool>,
 }
 
 impl std::fmt::Debug for CDevice {
@@ -30,7 +39,12 @@ unsafe impl Sync for CDevice {}
 
 impl Drop for CDevice {
     fn drop(&mut self) {
-        unsafe { wgpuDeviceRelease(self.ptr) };
+        // wgpu-native's WGPUDeviceImpl::drop calls device_poll which can panic via
+        // handle_error_fatal if the device is in an error state. Catch that here so it
+        // doesn't abort during Drop.
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            unsafe { wgpuDeviceRelease(self.ptr) };
+        }));
     }
 }
 
@@ -142,63 +156,96 @@ impl DeviceInterface for CDevice {
             .map(conv::str_to_string_view)
             .unwrap_or(conv::null_string_view());
 
-        let entries: Vec<native::WGPUBindGroupLayoutEntry> = desc
-            .entries
-            .iter()
-            .map(|e| {
-                let mut entry: native::WGPUBindGroupLayoutEntry = unsafe { std::mem::zeroed() };
-                entry.binding = e.binding;
-                entry.visibility = conv::shader_stages_to_native(e.visibility);
-                entry.bindingArraySize = e.count.map(|n| n.get()).unwrap_or(0);
-                match e.ty {
-                    wgpu::BindingType::Buffer {
-                        ty,
-                        has_dynamic_offset,
-                        min_binding_size,
-                    } => {
-                        entry.buffer = native::WGPUBufferBindingLayout {
-                            nextInChain: std::ptr::null_mut(),
-                            type_: conv::buffer_binding_type_to_native(ty),
-                            hasDynamicOffset: has_dynamic_offset as u32,
-                            minBindingSize: min_binding_size.map(|s| s.get()).unwrap_or(0),
-                        };
-                    }
-                    wgpu::BindingType::Sampler(ty) => {
-                        entry.sampler = native::WGPUSamplerBindingLayout {
-                            nextInChain: std::ptr::null_mut(),
-                            type_: conv::sampler_binding_type_to_native(ty),
-                        };
-                    }
-                    wgpu::BindingType::Texture {
-                        sample_type,
-                        view_dimension,
-                        multisampled,
-                    } => {
-                        entry.texture = native::WGPUTextureBindingLayout {
-                            nextInChain: std::ptr::null_mut(),
-                            sampleType: conv::texture_sample_type_to_native(sample_type),
-                            viewDimension: conv::texture_view_dimension_to_native(view_dimension),
-                            multisampled: multisampled as u32,
-                        };
-                    }
-                    wgpu::BindingType::StorageTexture {
-                        access,
-                        format,
-                        view_dimension,
-                    } => {
-                        entry.storageTexture = native::WGPUStorageTextureBindingLayout {
-                            nextInChain: std::ptr::null_mut(),
-                            access: conv::storage_texture_access_to_native(access),
-                            format: conv::texture_format_to_native(format),
-                            viewDimension: conv::texture_view_dimension_to_native(view_dimension),
-                        };
-                    }
-                    // AccelerationStructure and ExternalTexture not supported by wgpu-native.
-                    _ => unimplemented!("wgpu-native does not support this binding type"),
+        // AccelerationStructure entries require a chained WGPUAccelerationStructureBindingLayout.
+        // We Box each chain struct for a stable heap address, then set nextInChain after the
+        // entries Vec is finalized (so Vec reallocation can't invalidate the entry addresses).
+        let mut entries: Vec<native::WGPUBindGroupLayoutEntry> =
+            Vec::with_capacity(desc.entries.len());
+        // (entry_index, Box<chain>) — Box gives stable address even if this Vec reallocates.
+        let mut as_chains: Vec<(usize, Box<native::WGPUAccelerationStructureBindingLayout>)> =
+            Vec::new();
+
+        for e in desc.entries.iter() {
+            let mut entry: native::WGPUBindGroupLayoutEntry = unsafe { std::mem::zeroed() };
+            entry.binding = e.binding;
+            entry.visibility = conv::shader_stages_to_native(e.visibility);
+            entry.bindingArraySize = e.count.map(|n| n.get()).unwrap_or(0);
+            match e.ty {
+                wgpu::BindingType::Buffer {
+                    ty,
+                    has_dynamic_offset,
+                    min_binding_size,
+                } => {
+                    entry.buffer = native::WGPUBufferBindingLayout {
+                        nextInChain: std::ptr::null_mut(),
+                        type_: conv::buffer_binding_type_to_native(ty),
+                        hasDynamicOffset: has_dynamic_offset as u32,
+                        minBindingSize: min_binding_size.map(|s| s.get()).unwrap_or(0),
+                    };
                 }
-                entry
-            })
-            .collect();
+                wgpu::BindingType::Sampler(ty) => {
+                    entry.sampler = native::WGPUSamplerBindingLayout {
+                        nextInChain: std::ptr::null_mut(),
+                        type_: conv::sampler_binding_type_to_native(ty),
+                    };
+                }
+                wgpu::BindingType::Texture {
+                    sample_type,
+                    view_dimension,
+                    multisampled,
+                } => {
+                    entry.texture = native::WGPUTextureBindingLayout {
+                        nextInChain: std::ptr::null_mut(),
+                        sampleType: conv::texture_sample_type_to_native(sample_type),
+                        viewDimension: conv::texture_view_dimension_to_native(view_dimension),
+                        multisampled: multisampled as u32,
+                    };
+                }
+                wgpu::BindingType::StorageTexture {
+                    access,
+                    format,
+                    view_dimension,
+                } => {
+                    entry.storageTexture = native::WGPUStorageTextureBindingLayout {
+                        nextInChain: std::ptr::null_mut(),
+                        access: conv::storage_texture_access_to_native(access),
+                        format: conv::texture_format_to_native(format),
+                        viewDimension: conv::texture_view_dimension_to_native(view_dimension),
+                    };
+                }
+                wgpu::BindingType::AccelerationStructure { vertex_return } => {
+                    // entry.nextInChain is set below after the entries Vec is finalized.
+                    as_chains.push((
+                        entries.len(),
+                        Box::new(native::WGPUAccelerationStructureBindingLayout {
+                            chain: native::WGPUChainedStruct {
+                                next: std::ptr::null_mut(),
+                                sType: native::WGPUSType_AccelerationStructureBindingLayout,
+                            },
+                            vertexReturn: vertex_return as u32,
+                        }),
+                    ));
+                }
+                // Unknown binding types: leave the entry zeroed so wgpu-native treats it
+                // as an unrecognized entry and generates a validation error. This is safe
+                // only for binding types that don't trigger the "invalid entry" panic in
+                // wgpu-native's map_bind_group_layout_entry (which fires when none of the
+                // standard types match AND no as_layout chain is present).
+                // NOTE: any truly unknown variant here will still SIGABRT via the same
+                // panic path — they must be added above before shipping.
+                _ => {}
+            }
+            entries.push(entry);
+        }
+
+        // Wire AccelerationStructure chain pointers now that entries is finalized.
+        // Box<T> guarantees the inner T doesn't move, so the raw pointer stays valid
+        // for the duration of the wgpuDeviceCreateBindGroupLayout call below.
+        for (idx, chain) in &as_chains {
+            entries[*idx].nextInChain =
+                chain.as_ref() as *const native::WGPUAccelerationStructureBindingLayout
+                    as *mut native::WGPUChainedStruct;
+        }
 
         let c_desc = native::WGPUBindGroupLayoutDescriptor {
             nextInChain: std::ptr::null_mut(),
@@ -211,7 +258,7 @@ impl DeviceInterface for CDevice {
             },
         };
         let ptr = unsafe { wgpuDeviceCreateBindGroupLayout(self.ptr, Some(&c_desc)) };
-        DispatchBindGroupLayout::custom(CBindGroupLayout { ptr })
+        DispatchBindGroupLayout::custom(CBindGroupLayout { ptr, device_ptr: self.ptr })
     }
 
     fn create_bind_group(&self, desc: &wgpu::BindGroupDescriptor<'_>) -> DispatchBindGroup {
@@ -220,7 +267,11 @@ impl DeviceInterface for CDevice {
             .as_deref()
             .map(conv::str_to_string_view)
             .unwrap_or(conv::null_string_view());
-        let layout_ptr = desc.layout.as_custom::<CBindGroupLayout>().unwrap().ptr;
+        let layout = desc.layout.as_custom::<CBindGroupLayout>().unwrap();
+        if !layout.device_ptr.is_null() && layout.device_ptr != self.ptr {
+            panic!("bind group layout was created from a different device");
+        }
+        let layout_ptr = layout.ptr;
 
         let entries: Vec<native::WGPUBindGroupEntry> = desc
             .entries
@@ -542,23 +593,25 @@ impl DeviceInterface for CDevice {
             fragment_state = None;
         }
 
-        let mut cache_extras = desc
+        let render_cache_ptr = desc
             .cache
             .and_then(|c| c.as_custom::<CPipelineCache>())
-            .map(|c| native::WGPURenderPipelineDescriptorExtras {
-                chain: native::WGPUChainedStruct {
-                    next: std::ptr::null_mut(),
-                    sType: native::WGPUSType_RenderPipelineDescriptorExtras,
-                },
-                cache: c.ptr,
-                multiviewMask: 0,
-                zeroInitializeWorkgroupMemory: false as _,
-            });
+            .map(|c| c.ptr)
+            .unwrap_or(std::ptr::null_mut());
+        let mut render_extras = native::WGPURenderPipelineDescriptorExtras {
+            chain: native::WGPUChainedStruct {
+                next: std::ptr::null_mut(),
+                sType: native::WGPUSType_RenderPipelineDescriptorExtras,
+            },
+            cache: render_cache_ptr,
+            multiviewMask: 0,
+            zeroInitializeWorkgroupMemory: desc
+                .vertex
+                .compilation_options
+                .zero_initialize_workgroup_memory as _,
+        };
         let c_desc = native::WGPURenderPipelineDescriptor {
-            nextInChain: cache_extras
-                .as_mut()
-                .map(|e| std::ptr::from_mut::<native::WGPUChainedStruct>(&mut e.chain))
-                .unwrap_or(std::ptr::null_mut()),
+            nextInChain: std::ptr::from_mut::<native::WGPUChainedStruct>(&mut render_extras.chain),
             label: label_sv,
             layout: layout_ptr,
             vertex: c_vertex,
@@ -798,25 +851,26 @@ impl DeviceInterface for CDevice {
             fragment_state = None;
         }
 
-        // Pipeline cache extras (optional).
-        let mut cache_extras = desc
+        let mesh_cache_ptr = desc
             .cache
             .and_then(|c| c.as_custom::<CPipelineCache>())
-            .map(|c| native::WGPUMeshPipelineDescriptorExtras {
-                chain: native::WGPUChainedStruct {
-                    next: std::ptr::null_mut(),
-                    sType: native::WGPUSType_MeshPipelineDescriptorExtras,
-                },
-                cache: c.ptr,
-                multiviewMask: 0,
-                zeroInitializeWorkgroupMemory: false as _,
-            });
+            .map(|c| c.ptr)
+            .unwrap_or(std::ptr::null_mut());
+        let mut mesh_extras = native::WGPUMeshPipelineDescriptorExtras {
+            chain: native::WGPUChainedStruct {
+                next: std::ptr::null_mut(),
+                sType: native::WGPUSType_MeshPipelineDescriptorExtras,
+            },
+            cache: mesh_cache_ptr,
+            multiviewMask: 0,
+            zeroInitializeWorkgroupMemory: desc
+                .mesh
+                .compilation_options
+                .zero_initialize_workgroup_memory as _,
+        };
 
         let c_desc = native::WGPUMeshPipelineDescriptor {
-            nextInChain: cache_extras
-                .as_mut()
-                .map(|e| std::ptr::from_mut::<native::WGPUChainedStruct>(&mut e.chain))
-                .unwrap_or(std::ptr::null_mut()),
+            nextInChain: std::ptr::from_mut::<native::WGPUChainedStruct>(&mut mesh_extras.chain),
             label: label_sv,
             layout: layout_ptr,
             task: task_state
@@ -866,22 +920,23 @@ impl DeviceInterface for CDevice {
                 value: *v,
             })
             .collect();
-        let mut cache_extras = desc
+        let cache_ptr = desc
             .cache
             .and_then(|c| c.as_custom::<CPipelineCache>())
-            .map(|c| native::WGPUComputePipelineDescriptorExtras {
-                chain: native::WGPUChainedStruct {
-                    next: std::ptr::null_mut(),
-                    sType: native::WGPUSType_ComputePipelineDescriptorExtras,
-                },
-                cache: c.ptr,
-                zeroInitializeWorkgroupMemory: false as _,
-            });
+            .map(|c| c.ptr)
+            .unwrap_or(std::ptr::null_mut());
+        let mut extras = native::WGPUComputePipelineDescriptorExtras {
+            chain: native::WGPUChainedStruct {
+                next: std::ptr::null_mut(),
+                sType: native::WGPUSType_ComputePipelineDescriptorExtras,
+            },
+            cache: cache_ptr,
+            zeroInitializeWorkgroupMemory: desc
+                .compilation_options
+                .zero_initialize_workgroup_memory as _,
+        };
         let c_desc = native::WGPUComputePipelineDescriptor {
-            nextInChain: cache_extras
-                .as_mut()
-                .map(|e| std::ptr::from_mut::<native::WGPUChainedStruct>(&mut e.chain))
-                .unwrap_or(std::ptr::null_mut()),
+            nextInChain: std::ptr::from_mut::<native::WGPUChainedStruct>(&mut extras.chain),
             label: label_sv,
             layout: layout_ptr,
             compute: native::WGPUComputeState {
@@ -926,15 +981,28 @@ impl DeviceInterface for CDevice {
             .as_deref()
             .map(conv::str_to_string_view)
             .unwrap_or(conv::null_string_view());
+        // Any bits not in KNOWN_BUFFER_USAGE_BITS cannot be represented in the C API.
+        // Pass usage=0 so wgpu-core generates a validation error (empty usage is always
+        // invalid) captured by any active error scope — matching expected wgpu semantics.
+        let native_usage = if (desc.usage.bits() & !conv::KNOWN_BUFFER_USAGE_BITS.bits()) == 0 {
+            conv::buffer_usage_to_native(desc.usage)
+        } else {
+            0
+        };
         let c_desc = native::WGPUBufferDescriptor {
             nextInChain: std::ptr::null_mut(),
             label: label_sv,
-            usage: conv::buffer_usage_to_native(desc.usage),
+            usage: native_usage,
             size: desc.size,
             mappedAtCreation: desc.mapped_at_creation as u32,
         };
         let ptr = unsafe { wgpuDeviceCreateBuffer(self.ptr, Some(&c_desc)) };
-        DispatchBuffer::custom(CBuffer { ptr })
+        let buf = if desc.mapped_at_creation {
+            CBuffer::new_mapped_at_creation(ptr)
+        } else {
+            CBuffer::new(ptr)
+        };
+        DispatchBuffer::custom(buf)
     }
 
     fn create_texture(&self, desc: &wgpu::TextureDescriptor<'_>) -> DispatchTexture {
@@ -1039,6 +1107,9 @@ impl DeviceInterface for CDevice {
         &self,
         desc: &wgpu::CommandEncoderDescriptor<'_>,
     ) -> DispatchCommandEncoder {
+        if self.queue_dropped.load(Ordering::Acquire) {
+            panic!("device's queue has been dropped");
+        }
         let label = desc.label.map(|s| s.to_owned());
         let label_sv = label
             .as_deref()
@@ -1049,7 +1120,7 @@ impl DeviceInterface for CDevice {
             label: label_sv,
         };
         let ptr = unsafe { wgpuDeviceCreateCommandEncoder(self.ptr, Some(&c_desc)) };
-        DispatchCommandEncoder::custom(CCommandEncoder { ptr })
+        DispatchCommandEncoder::custom(CCommandEncoder { ptr, device_ptr: self.ptr })
     }
 
     fn create_render_bundle_encoder(
@@ -1097,8 +1168,8 @@ impl DeviceInterface for CDevice {
         DispatchRenderBundleEncoder::custom(CRenderBundleEncoder { ptr })
     }
 
-    fn set_device_lost_callback(&self, _device_lost_callback: BoxDeviceLostCallback) {
-        // wgpu-native sets the device lost callback at creation time; ignore post-creation sets.
+    fn set_device_lost_callback(&self, device_lost_callback: BoxDeviceLostCallback) {
+        *self.device_lost_handler.lock().unwrap() = Some(device_lost_callback);
     }
 
     fn on_uncaptured_error(&self, handler: std::sync::Arc<dyn wgpu::UncapturedErrorHandler>) {
@@ -1106,6 +1177,7 @@ impl DeviceInterface for CDevice {
     }
 
     fn push_error_scope(&self, filter: wgpu::ErrorFilter) -> u32 {
+        self.error_scope_depth.fetch_add(1, Ordering::Relaxed);
         unsafe { wgpuDevicePushErrorScope(self.ptr, conv::error_filter_to_native(filter)) };
         0
     }
@@ -1160,6 +1232,7 @@ impl DeviceInterface for CDevice {
             userdata1: std::ptr::addr_of_mut!(out).cast(),
             userdata2: std::ptr::null_mut(),
         };
+        self.error_scope_depth.fetch_sub(1, Ordering::Relaxed);
         unsafe { wgpuDevicePopErrorScope(self.ptr, callback_info) };
         Box::pin(future::ready(out.error.unwrap_or(None)))
     }
@@ -1183,6 +1256,8 @@ impl DeviceInterface for CDevice {
             } => (true, submission_index),
         };
         let result = unsafe { wgpuDevicePoll(self.ptr, wait, submission_index.as_ref()) };
+        // Re-raise any panic that occurred inside a map callback during polling.
+        crate::resume_callback_panic();
         if result {
             Ok(wgpu::PollStatus::QueueEmpty)
         } else {
@@ -1201,6 +1276,15 @@ impl DeviceInterface for CDevice {
 
     fn destroy(&self) {
         unsafe { wgpuDeviceDestroy(self.ptr) };
+        // wgpu-native does not wire WGPUDeviceLostCallbackInfo to wgpu-core's
+        // device_lost_closure, so the callback never fires automatically after
+        // wgpuDeviceDestroy. Call it directly here, matching the expected semantics.
+        if let Some(callback) = self.device_lost_handler.lock().unwrap().take() {
+            crate::catch_callback_panic(|| {
+                callback(wgpu::DeviceLostReason::Destroyed, String::new())
+            });
+            crate::resume_callback_panic();
+        }
     }
 }
 
@@ -1227,6 +1311,12 @@ fn blend_component_to_native(bc: wgpu::BlendComponent) -> native::WGPUBlendCompo
 
 pub struct CQueue {
     pub(crate) ptr: native::WGPUQueue,
+    /// Device this queue belongs to. Used to detect cross-device command buffer submission.
+    pub(crate) device_ptr: native::WGPUDevice,
+    /// Shared with the owning CDevice. Mirrors the active error scope count.
+    pub(crate) error_scope_depth: Arc<AtomicU32>,
+    /// Shared with the owning CDevice. Set to true when this queue is dropped.
+    pub(crate) queue_dropped: Arc<AtomicBool>,
 }
 
 impl std::fmt::Debug for CQueue {
@@ -1240,6 +1330,7 @@ unsafe impl Sync for CQueue {}
 
 impl Drop for CQueue {
     fn drop(&mut self) {
+        self.queue_dropped.store(true, Ordering::Release);
         unsafe { wgpuQueueRelease(self.ptr) };
     }
 }
@@ -1286,8 +1377,8 @@ impl QueueInterface for CQueue {
         let c_dst = conv::image_copy_texture_to_native(&texture, tex_ptr);
         let c_layout = native::WGPUTexelCopyBufferLayout {
             offset: data_layout.offset,
-            bytesPerRow: data_layout.bytes_per_row.unwrap_or(0),
-            rowsPerImage: data_layout.rows_per_image.unwrap_or(0),
+            bytesPerRow: data_layout.bytes_per_row.unwrap_or(native::WGPU_COPY_STRIDE_UNDEFINED),
+            rowsPerImage: data_layout.rows_per_image.unwrap_or(native::WGPU_COPY_STRIDE_UNDEFINED),
         };
         let c_size = conv::extent3d_to_native(size);
         unsafe {
@@ -1309,9 +1400,30 @@ impl QueueInterface for CQueue {
         let dispatches: Vec<DispatchCommandBuffer> = command_buffers.collect();
         let ptrs: Vec<native::WGPUCommandBuffer> = dispatches
             .iter()
-            .map(|cb| cb.as_custom::<CCommandBuffer>().unwrap().ptr)
+            .map(|cb| {
+                let cb = cb.as_custom::<CCommandBuffer>().unwrap();
+                if cb.device_ptr != self.device_ptr
+                    && self.error_scope_depth.load(Ordering::Relaxed) == 0
+                {
+                    // No active error scope: cross-device submit is a fatal error — panic so
+                    // the caller's catch_unwind (if any) can observe it, matching wgpu-core's
+                    // behavior where such errors are fatal when uncaptured.
+                    panic!("Command buffer was created on a different device than the queue it's being submitted to");
+                }
+                cb.ptr
+            })
             .collect();
-        unsafe { wgpuQueueSubmitForIndex(self.ptr, ptrs.len(), ptrs.as_ptr()) }
+        // wgpu-native's wgpuQueueSubmitForIndex calls handle_error_fatal (which panics)
+        // for fatal validation errors. Catch those panics here so they re-raise cleanly
+        // in Rust context instead of aborting due to unwinding through extern "C" frames.
+        let result =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+                wgpuQueueSubmitForIndex(self.ptr, ptrs.len(), ptrs.as_ptr())
+            }));
+        match result {
+            Ok(idx) => idx,
+            Err(payload) => std::panic::resume_unwind(payload),
+        }
     }
 
     fn get_timestamp_period(&self) -> f32 {

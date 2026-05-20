@@ -9,6 +9,7 @@ use crate::resource::*;
 
 pub struct CCommandEncoder {
     pub(crate) ptr: native::WGPUCommandEncoder,
+    pub(crate) device_ptr: native::WGPUDevice,
 }
 impl std::fmt::Debug for CCommandEncoder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -293,7 +294,7 @@ impl CommandEncoderInterface for CCommandEncoder {
                 }),
             )
         };
-        DispatchCommandBuffer::custom(CCommandBuffer { ptr })
+        DispatchCommandBuffer::custom(CCommandBuffer { ptr, device_ptr: self.device_ptr })
     }
 
     fn clear_texture(
@@ -395,8 +396,8 @@ impl CommandEncoderInterface for CCommandEncoder {
             Item = wgpu::wgt::TextureTransition<&'a DispatchTexture>,
         >,
     ) {
-        // wgpu-native does not expose explicit resource transitions.
-        unimplemented!("wgpu-native does not expose resource transitions")
+        // The underlying backends (Metal, Vulkan, etc.) handle resource transitions
+        // automatically; no explicit API call is needed.
     }
 }
 
@@ -557,5 +558,9 @@ impl RenderBundleEncoderInterface for CRenderBundleEncoder {
         };
         let ptr = unsafe { wgpuRenderBundleEncoderFinish(self.ptr, Some(&c_desc)) };
         DispatchRenderBundle::custom(CRenderBundle { ptr })
+    }
+
+    fn finish_boxed(self: Box<Self>, desc: &wgpu::RenderBundleDescriptor<'_>) -> DispatchRenderBundle {
+        (*self).finish(desc)
     }
 }

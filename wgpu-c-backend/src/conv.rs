@@ -92,7 +92,7 @@ pub fn gl_fence_behavior_to_native(
 pub fn null_string_view() -> native::WGPUStringView {
     native::WGPUStringView {
         data: std::ptr::null(),
-        length: 0,
+        length: usize::MAX, // WGPU_STRLEN = undefined/null optional string
     }
 }
 
@@ -974,6 +974,7 @@ pub fn texture_format_to_native(f: wgpu::TextureFormat) -> native::WGPUTextureFo
         TF::Rgba16Unorm => native::WGPUNativeTextureFormat_Rgba16Unorm,
         TF::Rgba16Snorm => native::WGPUNativeTextureFormat_Rgba16Snorm,
         TF::NV12 => native::WGPUNativeTextureFormat_NV12,
+        TF::R64Uint => wgpu_native::conv::WGPU_NATIVE_TEXTURE_FORMAT_R64_UINT,
         _ => native::WGPUTextureFormat_Undefined,
     }
 }
@@ -1015,6 +1016,21 @@ fn astc_to_native(block: wgpu::AstcBlock, channel: wgpu::AstcChannel) -> native:
 
 // ── Usages ────────────────────────────────────────────────────────────────────
 
+/// All wgpu::BufferUsages bits that buffer_usage_to_native knows how to map.
+/// Any bits outside this set are unknown to the C API and will cause validation failure.
+pub const KNOWN_BUFFER_USAGE_BITS: wgpu::BufferUsages = wgpu::BufferUsages::MAP_READ
+    .union(wgpu::BufferUsages::MAP_WRITE)
+    .union(wgpu::BufferUsages::COPY_SRC)
+    .union(wgpu::BufferUsages::COPY_DST)
+    .union(wgpu::BufferUsages::INDEX)
+    .union(wgpu::BufferUsages::VERTEX)
+    .union(wgpu::BufferUsages::UNIFORM)
+    .union(wgpu::BufferUsages::STORAGE)
+    .union(wgpu::BufferUsages::INDIRECT)
+    .union(wgpu::BufferUsages::QUERY_RESOLVE)
+    .union(wgpu::BufferUsages::BLAS_INPUT)
+    .union(wgpu::BufferUsages::TLAS_INPUT);
+
 pub fn buffer_usage_to_native(u: wgpu::BufferUsages) -> native::WGPUBufferUsage {
     let mut out: native::WGPUBufferUsage = 0;
     if u.contains(wgpu::BufferUsages::MAP_READ) {
@@ -1047,6 +1063,14 @@ pub fn buffer_usage_to_native(u: wgpu::BufferUsages) -> native::WGPUBufferUsage 
     if u.contains(wgpu::BufferUsages::QUERY_RESOLVE) {
         out |= native::WGPUBufferUsage_QueryResolve;
     }
+    // BLAS_INPUT and TLAS_INPUT share their bit values with wgpu-types, and wgpu-native
+    // uses the same wgpu-types, so we pass the raw bits directly.
+    if u.contains(wgpu::BufferUsages::BLAS_INPUT) {
+        out |= wgpu::BufferUsages::BLAS_INPUT.bits() as native::WGPUBufferUsage;
+    }
+    if u.contains(wgpu::BufferUsages::TLAS_INPUT) {
+        out |= wgpu::BufferUsages::TLAS_INPUT.bits() as native::WGPUBufferUsage;
+    }
     out
 }
 
@@ -1066,6 +1090,11 @@ pub fn texture_usage_to_native(u: wgpu::TextureUsages) -> native::WGPUTextureUsa
     }
     if u.contains(wgpu::TextureUsages::RENDER_ATTACHMENT) {
         out |= native::WGPUTextureUsage_RenderAttachment;
+    }
+    if u.contains(wgpu::TextureUsages::STORAGE_ATOMIC) {
+        // Pass STORAGE_ATOMIC's raw bit (1 << 16) directly; wgpu-native's
+        // from_u64_bits recognizes it as wgpu_types::TextureUsages::STORAGE_ATOMIC.
+        out |= wgpu::TextureUsages::STORAGE_ATOMIC.bits() as native::WGPUTextureUsage;
     }
     out
 }
@@ -1342,13 +1371,14 @@ pub fn vertex_format_to_native(f: wgpu::VertexFormat) -> native::WGPUVertexForma
         wgpu::VertexFormat::Sint32x2 => native::WGPUVertexFormat_Sint32x2,
         wgpu::VertexFormat::Sint32x3 => native::WGPUVertexFormat_Sint32x3,
         wgpu::VertexFormat::Sint32x4 => native::WGPUVertexFormat_Sint32x4,
+        wgpu::VertexFormat::Unorm10_10_10_2 => native::WGPUVertexFormat_Unorm10_10_10_2,
+        wgpu::VertexFormat::Unorm8x4Bgra => native::WGPUVertexFormat_Unorm8x4BGRA,
         wgpu::VertexFormat::Float64
         | wgpu::VertexFormat::Float64x2
         | wgpu::VertexFormat::Float64x3
         | wgpu::VertexFormat::Float64x4 => {
             panic!("Float64 vertex formats are not supported by WebGPU")
         }
-        _ => panic!("unsupported vertex format"),
     }
 }
 
@@ -1412,8 +1442,8 @@ pub fn image_copy_buffer_to_native(
     native::WGPUTexelCopyBufferInfo {
         layout: native::WGPUTexelCopyBufferLayout {
             offset: icb.layout.offset,
-            bytesPerRow: icb.layout.bytes_per_row.unwrap_or(0),
-            rowsPerImage: icb.layout.rows_per_image.unwrap_or(0),
+            bytesPerRow: icb.layout.bytes_per_row.unwrap_or(native::WGPU_COPY_STRIDE_UNDEFINED),
+            rowsPerImage: icb.layout.rows_per_image.unwrap_or(native::WGPU_COPY_STRIDE_UNDEFINED),
         },
         buffer: buf_ptr,
     }
@@ -1478,7 +1508,7 @@ pub fn storage_texture_access_to_native(
         wgpu::StorageTextureAccess::WriteOnly => native::WGPUStorageTextureAccess_WriteOnly,
         wgpu::StorageTextureAccess::ReadOnly => native::WGPUStorageTextureAccess_ReadOnly,
         wgpu::StorageTextureAccess::ReadWrite => native::WGPUStorageTextureAccess_ReadWrite,
-        wgpu::StorageTextureAccess::Atomic => native::WGPUStorageTextureAccess_ReadWrite,
+        wgpu::StorageTextureAccess::Atomic => wgpu_native::conv::WGPU_NATIVE_STORAGE_TEXTURE_ACCESS_ATOMIC,
     }
 }
 

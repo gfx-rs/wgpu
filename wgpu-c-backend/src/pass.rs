@@ -121,8 +121,7 @@ impl ComputePassInterface for CComputePass {
             Item = wgpu::wgt::TextureTransition<&'a DispatchTextureView>,
         >,
     ) {
-        // wgpu-native has no explicit resource transition API.
-        unimplemented!("wgpu-native does not expose explicit resource transitions")
+        // The underlying backends handle resource transitions automatically.
     }
 }
 

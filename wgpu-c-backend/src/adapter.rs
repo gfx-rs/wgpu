@@ -1,12 +1,13 @@
 use std::future;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::{Arc, Mutex};
 
 use wgpu::custom::*;
 use wgpu_native::{native, *};
 
 use crate::conv;
-use crate::device::{CDevice, CQueue, ErrorHandler};
+use crate::device::{CDevice, CQueue, DeviceLostHandler, ErrorHandler};
 
 pub(crate) fn adapter_info_with_extras(
     info: &native::WGPUAdapterInfo,
@@ -115,12 +116,41 @@ impl AdapterInterface for CAdapter {
                 };
                 let handler = Arc::clone(handler);
                 drop(guard);
-                handler(error);
+                crate::catch_callback_panic(|| handler(error));
             }
             // If no handler set, silently ignore (don't abort like wgpu-native's default).
         }
 
-        let error_handler: ErrorHandler = Arc::new(Mutex::new(None));
+        // Device lost callback: delegates to the handler registered via set_device_lost_callback().
+        unsafe extern "C" fn device_lost_cb(
+            _device: *const native::WGPUDevice,
+            reason: native::WGPUDeviceLostReason,
+            message: native::WGPUStringView,
+            userdata1: *mut std::ffi::c_void,
+            _userdata2: *mut std::ffi::c_void,
+        ) {
+            let handler = unsafe { &*(userdata1 as *const DeviceLostHandler) };
+            let callback = handler.lock().unwrap().take();
+            if let Some(callback) = callback {
+                let reason_wgpu = match reason {
+                    native::WGPUDeviceLostReason_Destroyed => wgpu::DeviceLostReason::Destroyed,
+                    _ => wgpu::DeviceLostReason::Unknown,
+                };
+                let msg = unsafe { crate::conv::string_view_to_string(message) };
+                crate::catch_callback_panic(|| callback(reason_wgpu, msg));
+            }
+        }
+
+        // Box gives a stable heap address for the Arc itself. We pass
+        // a *const Arc<Mutex<...>> (= *const ErrorHandler) as userdata1 so
+        // the callback can safely reconstruct &ErrorHandler via a pointer cast.
+        // Arc::as_ptr would return *const Mutex<...> (the inner T), not a pointer
+        // to the Arc struct — casting that to *const Arc would be UB / SIGSEGV.
+        let error_handler: Box<ErrorHandler> = Box::new(Arc::new(Mutex::new(None)));
+        let handler_ptr = error_handler.as_ref() as *const ErrorHandler;
+
+        let device_lost_handler: Box<DeviceLostHandler> = Box::new(Mutex::new(None));
+        let device_lost_ptr = device_lost_handler.as_ref() as *const DeviceLostHandler;
 
         let c_desc = native::WGPUDeviceDescriptor {
             nextInChain: std::ptr::null_mut(),
@@ -135,16 +165,19 @@ impl AdapterInterface for CAdapter {
             deviceLostCallbackInfo: native::WGPUDeviceLostCallbackInfo {
                 nextInChain: std::ptr::null_mut(),
                 mode: native::WGPUCallbackMode_AllowSpontaneous,
-                callback: None,
-                userdata1: std::ptr::null_mut(),
+                callback: Some(device_lost_cb),
+                // SAFETY: device_lost_ptr points into the Box heap allocation, which is
+                // stored in CDevice and outlives the device.
+                userdata1: device_lost_ptr as *mut _,
                 userdata2: std::ptr::null_mut(),
             },
             uncapturedErrorCallbackInfo: native::WGPUUncapturedErrorCallbackInfo {
                 nextInChain: std::ptr::null_mut(),
                 callback: Some(uncaptured_error_cb),
-                // SAFETY: error_handler outlives the device (stored in CDevice).
-                // wgpu-native will not call the callback after wgpuDeviceRelease.
-                userdata1: Arc::as_ptr(&error_handler) as *mut _,
+                // SAFETY: handler_ptr points into the Box heap allocation, which is
+                // stored in CDevice and outlives the device. wgpu-native will not call
+                // the callback after wgpuDeviceRelease.
+                userdata1: handler_ptr as *mut _,
                 userdata2: std::ptr::null_mut(),
             },
         };
@@ -189,13 +222,23 @@ impl AdapterInterface for CAdapter {
         let result =
             if out.status == native::WGPURequestDeviceStatus_Success && !out.device.is_null() {
                 let queue_ptr = unsafe { wgpuDeviceGetQueue(out.device) };
+                let error_scope_depth = Arc::new(AtomicU32::new(0));
+                let queue_dropped = Arc::new(AtomicBool::new(false));
                 Ok((
                     DispatchDevice::custom(CDevice {
                         ptr: out.device,
                         info,
                         error_handler,
+                        device_lost_handler,
+                        error_scope_depth: Arc::clone(&error_scope_depth),
+                        queue_dropped: Arc::clone(&queue_dropped),
                     }),
-                    DispatchQueue::custom(CQueue { ptr: queue_ptr }),
+                    DispatchQueue::custom(CQueue {
+                        ptr: queue_ptr,
+                        device_ptr: out.device,
+                        error_scope_depth,
+                        queue_dropped,
+                    }),
                 ))
             } else {
                 Err(wgpu::RequestDeviceError::from_message(format!(

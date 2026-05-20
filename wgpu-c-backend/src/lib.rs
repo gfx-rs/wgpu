@@ -9,6 +9,36 @@ mod surface;
 use std::future;
 use std::pin::Pin;
 
+// ── Panic propagation for extern "C" callbacks ────────────────────────────────
+//
+// Rust panics must not cross `extern "C"` boundaries (UB). When a user-supplied
+// Rust closure is called from within one of our `extern "C"` C-API callbacks,
+// we catch any panic with `catch_unwind` and store it here. The caller then
+// checks `resume_callback_panic()` after the C function returns to re-raise it
+// on the Rust side where it can propagate normally.
+
+thread_local! {
+    static CALLBACK_PANIC: std::cell::RefCell<Option<Box<dyn std::any::Any + Send + 'static>>> =
+        std::cell::RefCell::new(None);
+}
+
+pub(crate) fn catch_callback_panic<F: FnOnce()>(f: F) {
+    if let Err(payload) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        CALLBACK_PANIC.with(|p| {
+            let mut guard = p.borrow_mut();
+            if guard.is_none() {
+                *guard = Some(payload);
+            }
+        });
+    }
+}
+
+pub(crate) fn resume_callback_panic() {
+    if let Some(payload) = CALLBACK_PANIC.with(|p| p.borrow_mut().take()) {
+        std::panic::resume_unwind(payload);
+    }
+}
+
 use wgpu::custom::*;
 use wgpu::InstanceDescriptor;
 use wgpu_native::{native, *};
@@ -24,8 +54,22 @@ pub use resource::{
 };
 pub use surface::{CSurface, CSurfaceOutputDetail};
 
+// Backends that wgpu-native actually implements.
+const WGPU_NATIVE_BACKENDS: wgpu::Backends = wgpu::Backends::VULKAN
+    .union(wgpu::Backends::METAL)
+    .union(wgpu::Backends::DX12)
+    .union(wgpu::Backends::GL);
+
 #[expect(clippy::result_large_err)]
 fn instance_create(desc: InstanceDescriptor) -> Result<wgpu::Instance, InstanceDescriptor> {
+    // Pass through to wgpu-core's built-in factory when the requested backends
+    // don't include anything wgpu-native can handle (e.g. Backends::empty(),
+    // Backends::NOOP, Backends::BROWSER_WEBGPU). wgpu-core will generate the
+    // correct "not requested" / "not compiled in" error messages.
+    if desc.backends.intersection(WGPU_NATIVE_BACKENDS).is_empty() {
+        return Err(desc);
+    }
+    println!("Using wgpu-native instance");
     Ok(wgpu::Instance::from_custom(CInstance::new(desc)))
 }
 
@@ -302,8 +346,8 @@ impl InstanceInterface for CInstance {
     }
 
     fn poll_all_devices(&self, _force_wait: bool) -> bool {
-        // wgpu-native has no equivalent poll_all_devices.
-        unimplemented!("wgpu-native does not expose poll_all_devices")
+        unsafe { wgpuInstanceProcessEvents(self.ptr) };
+        true
     }
 
     fn enumerate_adapters(&self, backends: wgpu::Backends) -> Pin<Box<dyn EnumerateAdapterFuture>> {

@@ -3913,6 +3913,13 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
         }
         .into()
     }
+
+    fn finish_boxed(
+        self: Box<Self>,
+        desc: &crate::RenderBundleDescriptor<'_>,
+    ) -> dispatch::DispatchRenderBundle {
+        (*self).finish(desc)
+    }
 }
 
 impl dispatch::RenderBundleInterface for CoreRenderBundle {}

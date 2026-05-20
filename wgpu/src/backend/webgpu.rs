@@ -3898,6 +3898,13 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         }
         .into()
     }
+
+    fn finish_boxed(
+        self: Box<Self>,
+        desc: &crate::RenderBundleDescriptor<'_>,
+    ) -> dispatch::DispatchRenderBundle {
+        (*self).finish(desc)
+    }
 }
 impl Drop for WebRenderBundleEncoder {
     fn drop(&mut self) {
