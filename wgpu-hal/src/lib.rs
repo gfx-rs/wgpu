@@ -1937,7 +1937,7 @@ pub struct InstanceDescriptor<'a> {
     pub memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     pub backend_options: wgt::BackendOptions,
     pub telemetry: Option<Telemetry>,
-    /// This is a borrow because the surrounding `core::Instance` keeps the the owned display handle
+    /// This is a borrow because the surrounding `core::Instance` keeps the owned display handle
     /// alive already.
     pub display: Option<DisplayHandle<'a>>,
 }

@@ -209,7 +209,7 @@ pub struct SurfaceConfiguration<V> {
     ///   a small amount of GPU work each frame that need low latency, this is a reasonable choice.
     /// * Choose `2` for a balance between latency and throughput. The CPU and GPU both can each use
     ///   a full monitor refresh to do their computations. This is a reasonable default for most applications.
-    /// * Choose `3` or higher to maximize throughput, sacrificing latency when the the CPU and GPU
+    /// * Choose `3` or higher to maximize throughput, sacrificing latency when the CPU and GPU
     ///   are using less than a full monitor refresh each. For applications that use CPU-side pipelining
     ///   of frames this may be a reasonable choice. ⚠️ On 60hz displays the latency can be very noticeable.
     ///

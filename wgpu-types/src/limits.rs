@@ -325,7 +325,7 @@ impl Default for Limits {
 }
 
 impl Limits {
-    /// These default limits are guaranteed to to work on all modern
+    /// These default limits are guaranteed to work on all modern
     /// backends and guaranteed to be supported by WebGPU
     ///
     /// Those limits are as follows:
