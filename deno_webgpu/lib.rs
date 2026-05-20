@@ -316,6 +316,8 @@ fn operation_error(
   JsErrorBox::new("DOMExceptionOperationError", message)
 }
 
+/// Validate the input data (AllowSharedBufferSource) and return the slice that applied the offset and size,
+/// or return Err if validation fails. Used in `Queue::write_buffer` and `set_immediates`.
 fn transform_buffer<'a, 'b>(
   scope: &mut v8::HandleScope,
   data_arg: v8::Local<'a, v8::Value>,
@@ -401,16 +403,13 @@ fn transform_buffer<'a, 'b>(
   if data_offset_bytes + content_size_bytes > buf.len() {
     return Err(operation_error("The end index of data is out of bounds"));
   }
+
+  // Both `Queue::write_buffer` and `set_immediates` require content size to be a multiple of 4
   if !content_size_bytes.is_multiple_of(4) {
     return Err(operation_error("content size is not a multiple of 4"));
   }
 
   let data = &buf[data_offset_bytes..(data_offset_bytes + content_size_bytes)];
-
-  // Both `Queue::write_buffer` and `set_immediates` require content size to a multiple of 4
-  if !data.len().is_multiple_of(4) {
-    return Err(operation_error("content size is not a multiple of 4"));
-  }
 
   Ok(data)
 }
