@@ -310,6 +310,12 @@ fn transform_label<'a>(label: String) -> Option<std::borrow::Cow<'a, str>> {
   }
 }
 
+fn operation_error(
+  message: impl Into<std::borrow::Cow<'static, str>>,
+) -> JsErrorBox {
+  JsErrorBox::new("DOMExceptionOperationError", message)
+}
+
 fn transform_buffer<'a, 'b>(
   scope: &mut v8::HandleScope,
   data_arg: v8::Local<'a, v8::Value>,
@@ -383,8 +389,6 @@ fn transform_buffer<'a, 'b>(
     ));
   };
 
-  // TODO: Should throw OperationError instead of RangeError to match spec.
-
   let data_offset_bytes = data_offset as usize * bytes_per_element;
   let content_size_bytes = if let Some(data_size) = data_size {
     data_size as usize * bytes_per_element
@@ -392,26 +396,20 @@ fn transform_buffer<'a, 'b>(
     buf
       .len()
       .checked_sub(data_offset_bytes)
-      .ok_or(JsErrorBox::range_error("data offset is out of bounds"))?
+      .ok_or(operation_error("data offset is out of bounds"))?
   };
   if data_offset_bytes + content_size_bytes > buf.len() {
-    return Err(JsErrorBox::range_error(
-      "The end index of data is out of bounds",
-    ));
+    return Err(operation_error("The end index of data is out of bounds"));
   }
   if !content_size_bytes.is_multiple_of(4) {
-    return Err(JsErrorBox::range_error(
-      "content size is not a multiple of 4",
-    ));
+    return Err(operation_error("content size is not a multiple of 4"));
   }
 
   let data = &buf[data_offset_bytes..(data_offset_bytes + content_size_bytes)];
 
   // Both `Queue::write_buffer` and `set_immediates` require content size to a multiple of 4
   if !data.len().is_multiple_of(4) {
-    return Err(JsErrorBox::range_error(
-      "content size is not a multiple of 4",
-    ));
+    return Err(operation_error("content size is not a multiple of 4"));
   }
 
   Ok(data)
