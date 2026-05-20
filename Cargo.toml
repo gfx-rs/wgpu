@@ -330,6 +330,14 @@ naga = { path = "./naga" }
 env_logger = { version = "0.11", git = "https://github.com/rust-cli/env_logger.git", rev = "d550741" }
 libtest-mimic = { version = "0.8", git = "https://github.com/cwfitzgerald/libtest-mimic.git", rev = "9979b3c" }
 
+# Use local wgpu-native so that [patch.crates-io] applies to its transitive
+# deps (naga, wgpu-core, etc.). Cargo patches do not propagate through git
+# dependencies, only through path dependencies.
+[patch."https://github.com/inner-daemons/wgpu-native"]
+wgpu-native = { path = "../wgpu-native" }
+
+
+
 [profile.release]
 lto = "thin"
 debug = true
