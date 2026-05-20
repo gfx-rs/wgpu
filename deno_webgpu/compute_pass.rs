@@ -245,13 +245,6 @@ impl GPUComputePassEncoder {
   ) -> Result<(), JsErrorBox> {
     let data = transform_buffer(scope, data_arg, data_offset, data_size)?;
 
-    if !data
-      .len()
-      .is_multiple_of(wgpu_types::IMMEDIATE_DATA_ALIGNMENT as usize)
-    {
-      return Err(JsErrorBox::range_error("data size is not a multiple of 4"));
-    }
-
     let err = self
       .instance
       .compute_pass_set_immediates(

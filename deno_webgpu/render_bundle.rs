@@ -398,14 +398,7 @@ impl GPURenderBundleEncoder {
   ) -> Result<(), JsErrorBox> {
     let data = transform_buffer(scope, data_arg, data_offset, data_size)?;
 
-    if !data
-      .len()
-      .is_multiple_of(wgpu_types::IMMEDIATE_DATA_ALIGNMENT as usize)
-    {
-      return Err(JsErrorBox::range_error("data size is not a multiple of 4"));
-    }
-
-    // `wgpu_render_bundle_set_immediates` doesn't validate immediate offset.
+    // Validate immediate offset to avoid `wgpu_render_bundle_set_immediates` panic.
     if !offset.is_multiple_of(wgpu_types::IMMEDIATE_DATA_ALIGNMENT) {
       let err = GPUError::Validation(
         wgpu_core::binding_model::ImmediateUploadError::StartOffsetUnaligned(

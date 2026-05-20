@@ -316,6 +316,7 @@ fn transform_buffer<'a, 'b>(
   data_offset: u64,
   data_size: Option<u64>,
 ) -> Result<&'b [u8], JsErrorBox> {
+  const EMPTY: &[u8] = &[];
   // Per the WebGPU spec, dataOffset and size are in elements (not bytes)
   // when data is a TypedArray, and in bytes otherwise.
   let (buf, bytes_per_element) = if let Ok(typed_array) =
@@ -323,70 +324,95 @@ fn transform_buffer<'a, 'b>(
   {
     let len = typed_array.length();
     if len == 0 {
-      return Ok(&[]);
-    }
-    let bpe = (typed_array.byte_length()).checked_div(len).unwrap_or(1);
-    let byte_offset = typed_array.byte_offset();
-    let byte_len = typed_array.byte_length();
-    let ab = typed_array.buffer(scope).unwrap();
-    // SAFETY: Pointer is non-null, and V8 guarantees that the
-    // byte_offset is within the buffer backing store.
-    let ptr = unsafe { ab.data().unwrap().as_ptr().add(byte_offset) };
-    let buf =
+      (EMPTY, 1)
+    } else {
+      let bpe = (typed_array.byte_length()).checked_div(len).unwrap_or(1);
+      let byte_offset = typed_array.byte_offset();
+      let byte_len = typed_array.byte_length();
+      let ab = typed_array.buffer(scope).unwrap();
+      // SAFETY: Pointer is non-null, and V8 guarantees that the
+      // byte_offset is within the buffer backing store.
+      let ptr = unsafe { ab.data().unwrap().as_ptr().add(byte_offset) };
+      let buf =
           // SAFETY: the slice is within the bounds of the backing store
           unsafe { std::slice::from_raw_parts(ptr as *const u8, byte_len) };
-    (buf, bpe)
+      (buf, bpe)
+    }
   } else if let Ok(ab) = v8::Local::<v8::ArrayBuffer>::try_from(data_arg) {
     let byte_len = ab.byte_length();
     if byte_len == 0 {
-      return Ok(&[]);
-    }
-    let ptr = ab.data().unwrap().as_ptr();
-    let buf =
+      (EMPTY, 1)
+    } else {
+      let ptr = ab.data().unwrap().as_ptr();
+      let buf =
         // SAFETY: Pointer is non-null and byte_len is within the backing store.
         unsafe { std::slice::from_raw_parts(ptr as *const u8, byte_len) };
-    (buf, 1)
+      (buf, 1)
+    }
   } else if let Ok(ab) = v8::Local::<v8::SharedArrayBuffer>::try_from(data_arg)
   {
     let byte_len = ab.byte_length();
     if byte_len == 0 {
-      return Ok(&[]);
-    }
-    let ptr = ab.get_backing_store().data().unwrap().as_ptr();
-    let buf =
+      (EMPTY, 1)
+    } else {
+      let ptr = ab.get_backing_store().data().unwrap().as_ptr();
+      let buf =
         // SAFETY: Pointer is non-null and byte_len is within the backing store.
         unsafe { std::slice::from_raw_parts(ptr as *const u8, byte_len) };
-    (buf, 1)
+      (buf, 1)
+    }
   } else if let Ok(view) = v8::Local::<v8::ArrayBufferView>::try_from(data_arg)
   {
     let byte_offset = view.byte_offset();
     let byte_len = view.byte_length();
     if byte_len == 0 {
-      return Ok(&[]);
+      (EMPTY, 1)
+    } else {
+      let ab = view.buffer(scope).unwrap();
+      // SAFETY: Pointer is non-null, and V8 guarantees that the
+      // byte_offset is within the buffer backing store.
+      let ptr = unsafe { ab.data().unwrap().as_ptr().add(byte_offset) };
+      // SAFETY: the slice is within the bounds of the backing store
+      let buf =
+        unsafe { std::slice::from_raw_parts(ptr as *const u8, byte_len) };
+      (buf, 1)
     }
-    let ab = view.buffer(scope).unwrap();
-    // SAFETY: Pointer is non-null, and V8 guarantees that the
-    // byte_offset is within the buffer backing store.
-    let ptr = unsafe { ab.data().unwrap().as_ptr().add(byte_offset) };
-    // SAFETY: the slice is within the bounds of the backing store
-    let buf = unsafe { std::slice::from_raw_parts(ptr as *const u8, byte_len) };
-    (buf, 1)
   } else {
     return Err(JsErrorBox::type_error(
-      "data must be an ArrayBuffer or ArrayBufferView",
+      "data must be an ArrayBuffer, SharedArrayBuffer or ArrayBufferView",
     ));
   };
+
+  // TODO: Should throw OperationError instead of RangeError to match spec.
+
   let data_offset_bytes = data_offset as usize * bytes_per_element;
-  let data = match data_size {
-    Some(size) => {
-      let size_bytes = size as usize * bytes_per_element;
-      buf
-        .get(data_offset_bytes..(data_offset_bytes + size_bytes))
-        .ok_or(JsErrorBox::range_error(
-          "The end index of data is out of range",
-        ))?
-    }
-    None => &buf[data_offset_bytes..],
+  let content_size_bytes = if let Some(data_size) = data_size {
+    data_size as usize * bytes_per_element
+  } else {
+    buf
+      .len()
+      .checked_sub(data_offset_bytes)
+      .ok_or(JsErrorBox::range_error("data offset is out of bounds"))?
   };
+  if data_offset_bytes + content_size_bytes > buf.len() {
+    return Err(JsErrorBox::range_error(
+      "The end index of data is out of bounds",
+    ));
+  }
+  if !content_size_bytes.is_multiple_of(4) {
+    return Err(JsErrorBox::range_error(
+      "content size is not a multiple of 4",
+    ));
+  }
+
+  let data = &buf[data_offset_bytes..(data_offset_bytes + content_size_bytes)];
+
+  // Both `Queue::write_buffer` and `set_immediates` require content size to a multiple of 4
+  if !data.len().is_multiple_of(4) {
+    return Err(JsErrorBox::range_error(
+      "content size is not a multiple of 4",
+    ));
+  }
+
   Ok(data)
 }
