@@ -38,9 +38,9 @@ webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoder
 webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="render%20bundle";state="destroyed";* // https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="render%20pass";state="destroyed";* // https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,cmds,setBindGroup:u32array_start_and_length:* // deno unwrap
-webgpu:api,validation,encoding,cmds,setImmediates:* // 52%, https://github.com/gfx-rs/wgpu/issues/8556
+webgpu:api,validation,encoding,cmds,setImmediates:* // 62%, https://github.com/gfx-rs/wgpu/issues/8556
 webgpu:api,validation,encoding,encoder_open_state:* // https://github.com/gfx-rs/wgpu/issues/7857
-webgpu:api,validation,encoding,programmable,pipeline_immediate:* // 23%, https://github.com/gfx-rs/wgpu/issues/8556
+webgpu:api,validation,encoding,programmable,pipeline_immediate:* // 27%, https://github.com/gfx-rs/wgpu/issues/8556
 webgpu:api,validation,encoding,queries,resolveQuerySet:* // 93%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,render_bundle:* // 81%, readonly flag normalization mismatch
 webgpu:api,validation,image_copy,buffer_texture_copies:* // https://github.com/gfx-rs/wgpu/issues/7946
