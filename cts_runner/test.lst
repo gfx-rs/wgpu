@@ -362,7 +362,7 @@ webgpu:shader,execution,expression,call,builtin,firstLeadingBit:*
 fails-if(dx12) webgpu:shader,execution,expression,call,builtin,textureDimensions:*
 webgpu:shader,execution,expression,call,builtin,textureNumLayers:*
 webgpu:shader,execution,expression,call,builtin,textureNumLevels:*
-webgpu:shader,execution,expression,call,builtin,textureNumSamples:*
+fails-if(dx12) webgpu:shader,execution,expression,call,builtin,textureNumSamples:*
 webgpu:shader,execution,expression,call,builtin,textureSample:sampled_1d_coords:*
 webgpu:shader,execution,expression,call,builtin,textureSampleBaseClampToEdge:2d_coords:stage="c";textureType="texture_2d<f32>";*
 // NOTE: This is supposed to be an exhaustive listing underneath

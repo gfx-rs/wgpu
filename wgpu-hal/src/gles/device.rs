@@ -503,22 +503,14 @@ impl super::Device {
 
         let mut uniforms = ArrayVec::new();
 
-        for (stage_idx, stage_items) in immediates_items.into_iter().enumerate() {
+        for stage_items in immediates_items {
             for item in stage_items {
-                let source = &shaders[stage_idx].1.module.source;
-                let super::ShaderModuleSource::Naga(naga_module) = source else {
-                    // ImmediateItem can only be constructed given a naga module, as it requires a type handle.
-                    // Passthrough shaders will have immediates_items empty
-                    unreachable!("Passthrough shaders don't currently support immediates on GLES");
-                };
-                let type_inner = &naga_module.module.types[item.ty].inner;
-
                 let location = unsafe { gl.get_uniform_location(program, &item.access_path) };
 
                 log::trace!(
                     "immediate data item: name={}, ty={:?}, offset={}, location={:?}",
                     item.access_path,
-                    type_inner,
+                    item.ty,
                     item.offset,
                     location,
                 );
@@ -527,8 +519,8 @@ impl super::Device {
                     uniforms.push(super::ImmediateDesc {
                         location,
                         offset: item.offset,
-                        size_bytes: type_inner.size(naga_module.module.to_ctx()),
-                        ty: type_inner.clone(),
+                        size_bytes: item.size_bytes,
+                        ty: item.ty,
                     });
                 }
             }
