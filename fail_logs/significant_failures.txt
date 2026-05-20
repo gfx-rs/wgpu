@@ -1,0 +1,14 @@
+
+        FAIL [   2.116s] player::player test_api
+     TIMEOUT [  90.008s] wgpu-examples [Executed Flaky Failure: ALWAYS] [Metal/Apple M3/2] wgpu_examples::timestamp_queries::tests::timestamps_encoder
+        FAIL [   2.282s] wgpu-examples [Executed] [Metal/Apple M3/2] cube-lines
+        FAIL [   1.013s] wgpu-test::wgpu-gpu [Executed Failure: BACKEND] [Metal/Apple M3/2] wgpu_gpu::subgroup_operations::subgroup_operations
+        FAIL [   1.444s] wgpu-test::wgpu-gpu [Executed] [Metal/Apple M3/2] wgpu_gpu::device::device_lifetime_check
+        FAIL [   0.958s] wgpu-test::wgpu-gpu [Executed] [Metal/Apple M3/2] wgpu_gpu::mem_leaks::simple_draw_check_mem_leaks
+
+
+test_api failure seems like it is caused by using KosmicKrisp which reports weird limits.
+timestamp_queries test is confusing.
+cube-lines generates an insane diff image that makes no sense. It seems to feature a checkerboard pattern, though the diff is identical to a certain llvmpipe version. Confusing.
+subgroup_operations seems to have each byte be the same instead of presumably depending on the subgroup location. This is likely to be an issue with not passign through full information like limits or pipeline descriptor fields.
+device_lifetime_check and simple_draw_check_mem_leaks are both related to the `generate_report` being missing, but aren't real issues.

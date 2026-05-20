@@ -1,0 +1,110 @@
+warning: patch `env_logger v0.11.9 (https://github.com/rust-cli/env_logger.git?rev=d550741#d550741c)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: patch `libtest-mimic v0.8.1 (https://github.com/cwfitzgerald/libtest-mimic.git?rev=9979b3c#9979b3c1)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running `target/debug/wgpu-xtask test test_api`
+[INFO  wgpu_xtask::test] Generating .gpuconfig file based on gpus on the system
+warning: patch `env_logger v0.11.9 (https://github.com/rust-cli/env_logger.git?rev=d550741#d550741c)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: patch `libtest-mimic v0.8.1 (https://github.com/cwfitzgerald/libtest-mimic.git?rev=9979b3c#9979b3c1)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: patch `env_logger v0.11.9 (https://github.com/rust-cli/env_logger.git?rev=d550741#d550741c)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: patch `libtest-mimic v0.8.1 (https://github.com/cwfitzgerald/libtest-mimic.git?rev=9979b3c#9979b3c1)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: unreachable pattern
+    --> /Users/supamaggie70/code/workspaces/wgpu-native/src/conv.rs:1176:9
+     |
+1069 |         wgt::TextureFormat::R64Uint => None,
+     |         --------------------------- matches all the relevant values
+...
+1176 |         wgt::TextureFormat::R64Uint => Some(WGPU_NATIVE_TEXTURE_FORMAT_R64_UINT),
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ no value can reach this
+     |
+     = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default
+
+warning: `wgpu-native` (lib) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.35s
+────────────
+ Nextest run ID 852e09d3-4304-4342-bdbd-14efb48122ad with nextest profile: default
+    Starting 1 test across 1 binary (1 test and 37 binaries skipped)
+        PASS [   0.801s] wgpu-info::bin/wgpu-info tests::generate_gpuconfig_report
+────────────
+     Summary [   0.803s] 1 test run: 1 passed, 1 skipped
+[INFO  wgpu_xtask::test] Found 3 gpus
+[INFO  wgpu_xtask::test] Running cargo tests
+warning: patch `env_logger v0.11.9 (https://github.com/rust-cli/env_logger.git?rev=d550741#d550741c)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: patch `libtest-mimic v0.8.1 (https://github.com/cwfitzgerald/libtest-mimic.git?rev=9979b3c#9979b3c1)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: patch `env_logger v0.11.9 (https://github.com/rust-cli/env_logger.git?rev=d550741#d550741c)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: patch `libtest-mimic v0.8.1 (https://github.com/cwfitzgerald/libtest-mimic.git?rev=9979b3c#9979b3c1)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: unreachable pattern
+    --> /Users/supamaggie70/code/workspaces/wgpu-native/src/conv.rs:1176:9
+     |
+1069 |         wgt::TextureFormat::R64Uint => None,
+     |         --------------------------- matches all the relevant values
+...
+1176 |         wgt::TextureFormat::R64Uint => Some(WGPU_NATIVE_TEXTURE_FORMAT_R64_UINT),
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ no value can reach this
+     |
+     = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default
+
+warning: `wgpu-native` (lib) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.16s
+────────────
+ Nextest run ID d404304b-488f-4fa5-8a6d-d936be0ee8f5 with nextest profile: default
+    Starting 1 test across 38 binaries (1608 tests skipped)
+        FAIL [   0.674s] player::player test_api
+  stdout ───
+
+    running 1 test
+    Corpus "/Users/supamaggie70/code/workspaces/wgpu/player/tests/player/data/all.ron"
+    Test '"bind-group.ron"'
+    Backend Vulkan
+    test test_api ... FAILED
+
+    failures:
+
+    failures:
+        test_api
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+
+  stderr ───
+
+    thread 'test_api' (49791992) panicked at player/tests/player/main.rs:95:14:
+    called `Result::unwrap()` on an `Err` value: LimitsExceeded(FailedLimit { name: "max_color_attachments", requested: 8, allowed: 5 })
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+────────────
+     Summary [   0.678s] 1 test run: 0 passed, 1 failed, 1608 skipped
+        FAIL [   0.674s] player::player test_api
+error: test run failed
+Error: Tests failed
+
+Caused by:
+    command exited with non-zero code `cargo nextest run --benches --tests --all-features test_api`: 100

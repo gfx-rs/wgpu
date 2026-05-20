@@ -1,0 +1,103 @@
+warning: patch `env_logger v0.11.9 (https://github.com/rust-cli/env_logger.git?rev=d550741#d550741c)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: patch `libtest-mimic v0.8.1 (https://github.com/cwfitzgerald/libtest-mimic.git?rev=9979b3c#9979b3c1)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.22s
+     Running `target/debug/wgpu-xtask test timestamps_encoder`
+[INFO  wgpu_xtask::test] Generating .gpuconfig file based on gpus on the system
+warning: patch `env_logger v0.11.9 (https://github.com/rust-cli/env_logger.git?rev=d550741#d550741c)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: patch `libtest-mimic v0.8.1 (https://github.com/cwfitzgerald/libtest-mimic.git?rev=9979b3c#9979b3c1)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: patch `env_logger v0.11.9 (https://github.com/rust-cli/env_logger.git?rev=d550741#d550741c)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: patch `libtest-mimic v0.8.1 (https://github.com/cwfitzgerald/libtest-mimic.git?rev=9979b3c#9979b3c1)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: unreachable pattern
+    --> /Users/supamaggie70/code/workspaces/wgpu-native/src/conv.rs:1176:9
+     |
+1069 |         wgt::TextureFormat::R64Uint => None,
+     |         --------------------------- matches all the relevant values
+...
+1176 |         wgt::TextureFormat::R64Uint => Some(WGPU_NATIVE_TEXTURE_FORMAT_R64_UINT),
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ no value can reach this
+     |
+     = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default
+
+warning: `wgpu-native` (lib) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
+────────────
+ Nextest run ID e3e699e7-51fc-4c75-919e-8b4bd50a354e with nextest profile: default
+    Starting 1 test across 1 binary (1 test and 37 binaries skipped)
+        PASS [   2.034s] wgpu-info::bin/wgpu-info tests::generate_gpuconfig_report
+────────────
+     Summary [   2.035s] 1 test run: 1 passed, 1 skipped
+[INFO  wgpu_xtask::test] Found 3 gpus
+[INFO  wgpu_xtask::test] Running cargo tests
+warning: patch `env_logger v0.11.9 (https://github.com/rust-cli/env_logger.git?rev=d550741#d550741c)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: patch `libtest-mimic v0.8.1 (https://github.com/cwfitzgerald/libtest-mimic.git?rev=9979b3c#9979b3c1)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: patch `env_logger v0.11.9 (https://github.com/rust-cli/env_logger.git?rev=d550741#d550741c)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: patch `libtest-mimic v0.8.1 (https://github.com/cwfitzgerald/libtest-mimic.git?rev=9979b3c#9979b3c1)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	crates-io
+warning: unreachable pattern
+    --> /Users/supamaggie70/code/workspaces/wgpu-native/src/conv.rs:1176:9
+     |
+1069 |         wgt::TextureFormat::R64Uint => None,
+     |         --------------------------- matches all the relevant values
+...
+1176 |         wgt::TextureFormat::R64Uint => Some(WGPU_NATIVE_TEXTURE_FORMAT_R64_UINT),
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ no value can reach this
+     |
+     = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default
+
+warning: `wgpu-native` (lib) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s
+────────────
+ Nextest run ID 9efb77e0-8afd-4bec-8fbb-4edc9ce74999 with nextest profile: default
+    Starting 3 tests across 38 binaries (1606 tests skipped)
+        PASS [   0.021s] wgpu-examples [Unsupported: Features] [KosmicKrisp/Apple M3/0] wgpu_examples::timestamp_queries::tests::timestamps_encoder
+        PASS [   0.895s] wgpu-examples [Executed Flaky Failure: ALWAYS] [Vulkan/llvmpipe (LLVM 22.1.0, 128 bits)/1] wgpu_examples::timestamp_queries::tests::timestamps_encoder
+        SLOW [> 45.000s] wgpu-examples [Executed Flaky Failure: ALWAYS] [Metal/Apple M3/2] wgpu_examples::timestamp_queries::tests::timestamps_encoder
+ TERMINATING [> 90.000s] wgpu-examples [Executed Flaky Failure: ALWAYS] [Metal/Apple M3/2] wgpu_examples::timestamp_queries::tests::timestamps_encoder
+     TIMEOUT [  90.008s] wgpu-examples [Executed Flaky Failure: ALWAYS] [Metal/Apple M3/2] wgpu_examples::timestamp_queries::tests::timestamps_encoder
+  stdout ───
+
+    running 1 test
+    Using wgpu-native instance
+  stderr ───
+    2026-05-20 02:32:52.216 wgpu_examples-7bf658f05bd88674[30186:49797416] Metal API Validation Enabled
+    2026-05-20 02:32:52.217 wgpu_examples-7bf658f05bd88674[30186:49797416] Metal GPU Validation Enabled
+
+    (test timed out)
+
+────────────
+     Summary [  90.015s] 3 tests run: 2 passed, 1 timed out, 1606 skipped
+     TIMEOUT [  90.008s] wgpu-examples [Executed Flaky Failure: ALWAYS] [Metal/Apple M3/2] wgpu_examples::timestamp_queries::tests::timestamps_encoder
+error: test run failed
+Error: Tests failed
+
+Caused by:
+    command exited with non-zero code `cargo nextest run --benches --tests --all-features timestamps_encoder`: 100
