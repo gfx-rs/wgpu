@@ -136,6 +136,7 @@ impl core::error::Error for ParseError {}
 
 #[cfg(test)]
 mod parse_error_tests {
+
     #[test]
     fn test_notes() {
         use crate::front::wgsl::parse_str;
@@ -150,7 +151,7 @@ mod parse_error_tests {
             )
             .unwrap_err()
             .notes()
-            .collect::<std::vec::Vec<_>>(),
+            .collect::<super::Vec<_>>(),
             [
                 "`cross` accepts the following types for argument #1:",
                 "allowed type: vec3<{AbstractFloat}>",
