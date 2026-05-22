@@ -159,6 +159,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 #### naga
 
 - spirv-out ray tracing pipelines. By @Vecvec in [#9085](https://github.com/gfx-rs/wgpu/pull/9085).
+- Add `spirv-out` ray tracing pipelines. By @Vecvec in [#9085](https://github.com/gfx-rs/wgpu/pull/9085).
 - Add `naga::front::wgsl::ParseError::notes()`. By @kwillemsen in [#9572](https://github.com/gfx-rs/wgpu/pull/9572).
 
 ### Changes
