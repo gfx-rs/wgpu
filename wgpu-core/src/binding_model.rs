@@ -1277,13 +1277,11 @@ impl BindGroup {
         &'a self,
         guard: &'a SnatchGuard,
     ) -> Result<&'a dyn hal::DynBindGroup, DestroyedResourceError> {
-        // Clippy insist on writing it this way. The idea is to return None
-        // if any of the raw buffer is not valid anymore.
-        for buffer in &self.buffer_init_actions {
-            buffer.buffer.try_raw(guard)?;
+        for buffer in self.used.buffers.used_resources() {
+            buffer.try_raw(guard)?;
         }
-        for texture in &self.texture_init_actions {
-            texture.texture.try_raw(guard)?;
+        for texture in self.used.views.used_textures() {
+            texture.try_raw(guard)?;
         }
 
         self.raw
