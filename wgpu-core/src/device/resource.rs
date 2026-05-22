@@ -728,6 +728,7 @@ impl Device {
     /// implementation of a reference-counted structure).
     /// The snatch lock must not be held while this function is called.
     pub(crate) fn deferred_resource_destruction(&self) {
+        // Note that the deferred_destroy list may contain duplicate entries.
         let deferred_destroy = mem::take(&mut *self.deferred_destroy.lock());
         for item in deferred_destroy {
             match item {
@@ -3499,12 +3500,12 @@ impl Device {
         let bind_group = Arc::new(bind_group);
 
         let weak_ref = Arc::downgrade(&bind_group);
-        for range in &bind_group.texture_init_actions {
-            let mut bind_groups = range.texture.bind_groups.lock();
+        for texture in bind_group.used.views.used_textures() {
+            let mut bind_groups = texture.bind_groups.lock();
             bind_groups.push(weak_ref.clone());
         }
-        for range in &bind_group.buffer_init_actions {
-            let mut bind_groups = range.buffer.bind_groups.lock();
+        for buffer in bind_group.used.buffers.used_resources() {
+            let mut bind_groups = buffer.bind_groups.lock();
             bind_groups.push(weak_ref.clone());
         }
 
