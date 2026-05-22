@@ -806,12 +806,12 @@ pub enum AttachmentError {
     ReadOnlyWithLoad,
     #[error("StoreOp must be None for read-only attachments")]
     ReadOnlyWithStore,
-    #[error("Depth LoadOp and StoreOp ({ops:?}) must be None for attachments ({format:?}) without depth aspect")]
+    #[error("Depth `LoadOp and `StoreOp` (`{ops:?}`) must be `None` for attachments (`{format:?}`) without depth aspect")]
     DepthOpsWithoutAspect {
         format: wgt::TextureFormat,
         ops: (Option<LoadOp<Option<f32>>>, Option<StoreOp>),
     },
-    #[error("Stencil LoadOp and StoreOp ({ops:?}) must be None for attachments ({format:?}) without stencil aspect")]
+    #[error("Stencil `LoadOp` and `StoreOp` (`{ops:?}`) must be `None` for attachments (`{format:?}`) without stencil aspect")]
     StencilOpsWithoutAspect {
         format: wgt::TextureFormat,
         ops: (Option<LoadOp<Option<u32>>>, Option<StoreOp>),
