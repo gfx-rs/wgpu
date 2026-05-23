@@ -981,7 +981,7 @@ impl<A: hal::Api> Example<A> {
             ctx.encoder.set_compute_pipeline(&self.pipeline);
             ctx.encoder
                 .set_bind_group(&self.pipeline_layout, 0, &self.bind_group, &[]);
-            ctx.encoder.dispatch([512 / 8, 512 / 8, 1]);
+            ctx.encoder.dispatch_workgroups([512 / 8, 512 / 8, 1]);
         }
 
         ctx.frames_recorded += 1;

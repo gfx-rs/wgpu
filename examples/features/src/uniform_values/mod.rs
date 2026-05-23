@@ -401,7 +401,18 @@ impl ApplicationHandler<UniformAction> for App {
                         }
                         return;
                     }
-                    CurrentSurfaceTexture::Suboptimal(_) | CurrentSurfaceTexture::Outdated => {
+                    CurrentSurfaceTexture::Suboptimal(texture) => {
+                        drop(texture);
+
+                        wgpu_ctx
+                            .surface
+                            .configure(&wgpu_ctx.device, &wgpu_ctx.surface_config);
+                        if let Some(window) = &self.window {
+                            window.request_redraw();
+                        }
+                        return;
+                    }
+                    CurrentSurfaceTexture::Outdated => {
                         wgpu_ctx
                             .surface
                             .configure(&wgpu_ctx.device, &wgpu_ctx.surface_config);
@@ -470,7 +481,7 @@ impl ApplicationHandler<UniformAction> for App {
                 if let Some(window) = &self.window {
                     window.pre_present_notify();
                 }
-                frame.present();
+                wgpu_ctx.queue.present(frame);
             }
             WindowEvent::Occluded(is_occluded) => {
                 if !is_occluded {

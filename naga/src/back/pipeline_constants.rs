@@ -1026,6 +1026,32 @@ fn map_value_to_literal(value: f64, scalar: Scalar) -> Result<Literal, PipelineC
             let value = value != 0.0 && !value.is_nan();
             Ok(Literal::Bool(value))
         }
+        Scalar::I16 => {
+            if !value.is_finite() {
+                return Err(PipelineConstantError::SrcNeedsToBeFinite);
+            }
+
+            let value = value.trunc();
+            if value < f64::from(i16::MIN) || value > f64::from(i16::MAX) {
+                return Err(PipelineConstantError::DstRangeTooSmall);
+            }
+
+            let value = value as i16;
+            Ok(Literal::I16(value))
+        }
+        Scalar::U16 => {
+            if !value.is_finite() {
+                return Err(PipelineConstantError::SrcNeedsToBeFinite);
+            }
+
+            let value = value.trunc();
+            if value < f64::from(u16::MIN) || value > f64::from(u16::MAX) {
+                return Err(PipelineConstantError::DstRangeTooSmall);
+            }
+
+            let value = value as u16;
+            Ok(Literal::U16(value))
+        }
         Scalar::I32 => {
             // https://webidl.spec.whatwg.org/#js-long
             if !value.is_finite() {

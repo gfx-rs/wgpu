@@ -936,7 +936,7 @@ impl crate::Device for super::Device {
         let mut bind_uav = hlsl::BindTarget::default();
         let mut parameters = Vec::new();
         let mut immediates_target = None;
-        let mut root_constant_info = None;
+        let mut immediates_info = None;
 
         if desc.immediate_size != 0 {
             let parameter_index = parameters.len();
@@ -954,9 +954,9 @@ impl crate::Device for super::Device {
             });
             let binding = bind_cbv;
             bind_cbv.register += 1;
-            root_constant_info = Some(super::RootConstantInfo {
+            immediates_info = Some(super::ImmediatesInfo {
                 root_index: parameter_index as u32,
-                range: 0..size,
+                size,
             });
             immediates_target = Some(binding);
 
@@ -1400,23 +1400,7 @@ impl crate::Device for super::Device {
                         },
                     },
                 };
-                let special_constant_buffer_args_len = {
-                    // Hack: construct a dummy value of the special constants buffer value we need to
-                    // fill, and calculate the size of each member.
-                    let super::RootElement::SpecialConstantBuffer {
-                        first_vertex,
-                        first_instance,
-                        other,
-                    } = (super::RootElement::SpecialConstantBuffer {
-                        first_vertex: 0,
-                        first_instance: 0,
-                        other: 0,
-                    })
-                    else {
-                        unreachable!();
-                    };
-                    size_of_val(&first_vertex) + size_of_val(&first_instance) + size_of_val(&other)
-                };
+                let special_constant_buffer_args_len = size_of::<super::SpecialConstants>();
 
                 let draw_mesh = if self
                     .features
@@ -1505,7 +1489,7 @@ impl crate::Device for super::Device {
                 signature: Some(raw),
                 total_root_elements: parameters.len() as super::RootIndex,
                 special_constants,
-                root_constant_info,
+                immediates_info,
                 sampler_heap_root_index,
             },
             bind_group_infos,
@@ -1523,8 +1507,8 @@ impl crate::Device for super::Device {
                 external_texture_binding_map,
                 force_loop_bounding: true,
                 task_dispatch_limits: Some(naga::back::TaskDispatchLimits {
-                    max_mesh_workgroups_per_dim: self.limits.max_task_mesh_workgroups_per_dimension,
-                    max_mesh_workgroups_total: self.limits.max_task_mesh_workgroup_total_count,
+                    max_mesh_workgroups_per_dim: self.limits.max_mesh_workgroups_per_dimension,
+                    max_mesh_workgroups_total: self.limits.max_mesh_workgroup_total_count,
                 }),
                 mesh_shader_primitive_indices_clamp: true,
                 ray_query_initialization_tracking: true,
@@ -1860,24 +1844,16 @@ impl crate::Device for super::Device {
                 raw_name,
                 runtime_checks: desc.runtime_checks,
             }),
-            crate::ShaderInput::Dxil {
-                shader,
-                num_workgroups,
-            } => Ok(super::ShaderModule {
+            crate::ShaderInput::Dxil { shader } => Ok(super::ShaderModule {
                 source: super::ShaderModuleSource::DxilPassthrough(super::DxilPassthroughShader {
                     shader: shader.to_vec(),
-                    num_workgroups,
                 }),
                 raw_name,
                 runtime_checks: desc.runtime_checks,
             }),
-            crate::ShaderInput::Hlsl {
-                shader,
-                num_workgroups,
-            } => Ok(super::ShaderModule {
+            crate::ShaderInput::Hlsl { shader } => Ok(super::ShaderModule {
                 source: super::ShaderModuleSource::HlslPassthrough(super::HlslPassthroughShader {
                     shader: shader.to_owned(),
-                    num_workgroups,
                 }),
                 raw_name,
                 runtime_checks: desc.runtime_checks,
@@ -2064,6 +2040,9 @@ impl crate::Device for super::Device {
 
                 for (i, (stride, vbuf)) in vertex_strides.iter_mut().zip(vertex_buffers).enumerate()
                 {
+                    let Some(vbuf) = vbuf else {
+                        continue;
+                    };
                     *stride = Some(vbuf.array_stride as u32);
                     let (slot_class, step_rate) = match vbuf.step_mode {
                         wgt::VertexStepMode::Vertex => {

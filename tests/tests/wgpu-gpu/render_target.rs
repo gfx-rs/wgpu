@@ -80,11 +80,11 @@ async fn run_test(
         label: None,
         layout: None,
         vertex: wgpu::VertexState {
-            buffers: &[wgpu::VertexBufferLayout {
+            buffers: &[Some(wgpu::VertexBufferLayout {
                 array_stride: 8,
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &vertex_attr_array![0 => Float32x2],
-            }],
+            })],
             module: &shader,
             entry_point: Some("vs_main"),
             compilation_options: Default::default(),
@@ -244,7 +244,7 @@ async fn run_test(
         .await
         .unwrap();
 
-    let data = slice.get_mapped_range();
+    let data = slice.get_mapped_range().unwrap();
     let succeeded = data.iter().all(|b| *b == u8::MAX);
     assert!(succeeded);
 }
@@ -305,11 +305,11 @@ async fn run_test_3d(ctx: TestingContext) {
         label: None,
         layout: None,
         vertex: wgpu::VertexState {
-            buffers: &[wgpu::VertexBufferLayout {
+            buffers: &[Some(wgpu::VertexBufferLayout {
                 array_stride: 8,
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &vertex_attr_array![0 => Float32x2],
-            }],
+            })],
             module: &shader,
             entry_point: Some("vs_main"),
             compilation_options: Default::default(),
@@ -436,7 +436,7 @@ async fn run_test_3d(ctx: TestingContext) {
         .await
         .unwrap();
 
-    let data = slice.get_mapped_range();
+    let data = slice.get_mapped_range().unwrap();
     let succeeded = data.iter().all(|b| *b == u8::MAX);
     assert!(succeeded);
 }

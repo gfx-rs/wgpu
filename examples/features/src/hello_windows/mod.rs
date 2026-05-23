@@ -203,7 +203,13 @@ impl ApplicationHandler for App {
                             viewport.desc.window.request_redraw();
                             return;
                         }
-                        CurrentSurfaceTexture::Suboptimal(_) | CurrentSurfaceTexture::Outdated => {
+                        CurrentSurfaceTexture::Suboptimal(texture) => {
+                            drop(texture);
+                            viewport.desc.surface.configure(device, &viewport.config);
+                            viewport.desc.window.request_redraw();
+                            return;
+                        }
+                        CurrentSurfaceTexture::Outdated => {
                             viewport.desc.surface.configure(device, &viewport.config);
                             viewport.desc.window.request_redraw();
                             return;
@@ -249,7 +255,7 @@ impl ApplicationHandler for App {
 
                     queue.submit(Some(encoder.finish()));
                     viewport.desc.window.pre_present_notify();
-                    frame.present();
+                    queue.present(frame);
                 }
             }
             WindowEvent::Occluded(is_occluded) => {

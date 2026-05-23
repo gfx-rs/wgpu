@@ -65,8 +65,6 @@ pub enum VaryingError {
         Only numeric scalars and vectors are allowed."
     )]
     NotIOShareableType(Handle<crate::Type>),
-    #[error("Interpolation is not valid")]
-    InvalidInterpolation,
     #[error("Interpolation {0:?} is only valid for stage {1:?}")]
     InvalidInterpolationInStage(crate::Interpolation, crate::ShaderStage),
     #[error("Cannot combine {interpolation:?} interpolation with the {sampling:?} sample type")]
@@ -74,6 +72,8 @@ pub enum VaryingError {
         interpolation: crate::Interpolation,
         sampling: crate::Sampling,
     },
+    #[error("`@interpolate(flat) must be explicitly specified for integer I/O")]
+    InvalidInterpolationForInteger,
     #[error("Interpolation must be specified on vertex shader outputs and fragment shader inputs")]
     MissingInterpolation,
     #[error("Built-in {0:?} is not available at this stage")]
@@ -121,6 +121,8 @@ pub enum VaryingError {
     MissingPerPrimitive,
     #[error("Per vertex fragment inputs must be an array of length 3.")]
     PerVertexNotArrayOfThree,
+    #[error("Per vertex can only have Center sampling or no sampling modifier")]
+    InvalidPerVertexSampling,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -148,8 +150,6 @@ pub enum EntryPointError {
     Argument(u32, #[source] VaryingError),
     #[error(transparent)]
     Result(#[from] VaryingError),
-    #[error("Location {location} interpolation of an integer has to be flat")]
-    InvalidIntegerInterpolation { location: u32 },
     #[error(transparent)]
     Function(#[from] FunctionError),
     #[error("Capability {0:?} is not supported")]
@@ -693,6 +693,9 @@ impl VaryingContext<'_> {
                             Capabilities::PER_VERTEX,
                         ));
                     }
+                    if sampling.is_some_and(|e| e != crate::Sampling::Center) {
+                        return Err(VaryingError::InvalidPerVertexSampling);
+                    }
                 }
                 // If this is per-vertex, we change the type we validate to the inner type, otherwise we leave it be.
                 // This lets all validation be done on the inner type once we've ensured the per-vertex is array<T, 3>
@@ -793,18 +796,21 @@ impl VaryingContext<'_> {
                 if interpolation != Some(crate::Interpolation::PerVertex) {
                     match ty_inner.scalar_kind() {
                         Some(crate::ScalarKind::Float) => {
+                            // Default interpolation is applied in the front end.
                             if needs_interpolation && interpolation.is_none() {
                                 return Err(VaryingError::MissingInterpolation);
                             }
                         }
-                        Some(_) => {
+                        Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint) => {
+                            // Integers do not have a default interpolation; `flat` must be
+                            // specified explicitly.
                             if needs_interpolation
                                 && interpolation != Some(crate::Interpolation::Flat)
                             {
-                                return Err(VaryingError::InvalidInterpolation);
+                                return Err(VaryingError::InvalidInterpolationForInteger);
                             }
                         }
-                        None => return Err(VaryingError::InvalidType(ty)),
+                        Some(_) | None => return Err(VaryingError::InvalidType(ty)),
                     }
                 }
             }

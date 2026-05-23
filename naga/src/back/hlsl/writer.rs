@@ -238,6 +238,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             if min_ref_count <= expr_info.ref_count {
                 self.need_bake_expressions.insert(exp_handle);
             }
+            if let Expression::Load { pointer } = *expr {
+                if info[pointer]
+                    .ty
+                    .inner_with(&module.types)
+                    .is_atomic_pointer(&module.types)
+                {
+                    self.need_bake_expressions.insert(exp_handle);
+                }
+            }
 
             if let Expression::Math { fun, arg, arg1, .. } = *expr {
                 match fun {
@@ -921,6 +930,23 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     ep_input.local_invocation_index_name.as_ref().unwrap()
                 )?;
             }
+            Some(crate::Binding::Location {
+                interpolation: Some(crate::Interpolation::PerVertex),
+                ..
+            }) => {
+                if self.options.shader_model < ShaderModel::V6_1 {
+                    return Err(Error::ShaderModelTooLow(
+                        "per_vertex fragment inputs".to_string(),
+                        ShaderModel::V6_1,
+                    ));
+                }
+                write!(
+                    self.out,
+                    "{{ GetAttributeAtVertex({0}.{1}, 0), GetAttributeAtVertex({0}.{1}, 1), GetAttributeAtVertex({0}.{1}, 2) }}",
+                    ep_input.arg_name,
+                    fake_member.name,
+                )?;
+            }
             _ => {
                 write!(self.out, "{}.{}", ep_input.arg_name, fake_member.name)?;
             }
@@ -1493,10 +1519,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         if let Some(MatrixType {
             columns,
             rows: crate::VectorSize::Bi,
-            width: 4,
+            width,
         }) = matrix_data
         {
-            write!(self.out, "__mat{}x2", columns as u8)?;
+            write!(self.out, "__mat{}x2_f{}", columns as u8, width * 8)?;
         } else {
             // Even though Naga IR matrices are column-major, we must describe
             // matrices passed from the CPU as being in row-major order.
@@ -2305,7 +2331,33 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
             Statement::Store { pointer, value } => {
                 let ty_inner = func_ctx.resolve_type(pointer, &module.types);
-                if let Some(crate::AddressSpace::Storage { .. }) = ty_inner.pointer_space() {
+                if ty_inner.is_atomic_pointer(&module.types) {
+                    let pointer_space = ty_inner.pointer_space().unwrap();
+                    let dummy = self.namer.call("dummy");
+                    write!(self.out, "{level}{{ ")?;
+                    if let TypeInner::Pointer { base, .. } = *ty_inner {
+                        self.write_value_type(module, &module.types[base].inner)?;
+                    }
+                    write!(self.out, " {dummy} = 0; ")?;
+                    match pointer_space {
+                        crate::AddressSpace::WorkGroup => {
+                            write!(self.out, "InterlockedExchange(")?;
+                            self.write_expr(module, pointer, func_ctx)?;
+                        }
+                        crate::AddressSpace::Storage { .. } => {
+                            let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
+                            let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
+                            write!(self.out, "{var_name}.InterlockedExchange(")?;
+                            let chain = mem::take(&mut self.temp_access_chain);
+                            self.write_storage_address(module, &chain, func_ctx)?;
+                            self.temp_access_chain = chain;
+                        }
+                        _ => unreachable!(),
+                    }
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, value, func_ctx)?;
+                    writeln!(self.out, ", {dummy}); }}")?;
+                } else if let Some(crate::AddressSpace::Storage { .. }) = ty_inner.pointer_space() {
                     let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
                     self.write_storage_store(
                         module,
@@ -2328,6 +2380,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         },
                         Struct {
                             columns: crate::VectorSize,
+                            width: u8,
                             base: Handle<crate::Expression>,
                         },
                     }
@@ -2370,7 +2423,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     if let Some(MatrixType {
                                         columns,
                                         rows: crate::VectorSize::Bi,
-                                        width: 4,
+                                        width,
                                     }) = get_inner_matrix_of_struct_array_member(
                                         module,
                                         matrix_expr,
@@ -2380,6 +2433,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                         Some((
                                             MatrixAccess::Struct {
                                                 columns,
+                                                width,
                                                 base: matrix_expr,
                                             },
                                             vector,
@@ -2455,7 +2509,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             }
                         }
                         Some((
-                            MatrixAccess::Struct { columns, base },
+                            MatrixAccess::Struct {
+                                columns,
+                                width,
+                                base,
+                            },
                             Some(Index::Expression(vec_index)),
                             scalar,
                         )) => {
@@ -2463,9 +2521,19 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             // the previously injected functions __set_col_of_matCx2 / __set_el_of_matCx2.
 
                             if scalar.is_some() {
-                                write!(self.out, "__set_el_of_mat{}x2", columns as u8)?;
+                                write!(
+                                    self.out,
+                                    "__set_el_of_mat{}x2_f{}",
+                                    columns as u8,
+                                    width * 8
+                                )?;
                             } else {
-                                write!(self.out, "__set_col_of_mat{}x2", columns as u8)?;
+                                write!(
+                                    self.out,
+                                    "__set_col_of_mat{}x2_f{}",
+                                    columns as u8,
+                                    width * 8
+                                )?;
                             }
                             write!(self.out, "(")?;
                             self.write_expr(module, base, func_ctx)?;
@@ -2495,7 +2563,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             if let Some(MatrixType {
                                 columns,
                                 rows: crate::VectorSize::Bi,
-                                width: 4,
+                                width,
                             }) = get_inner_matrix_of_struct_array_member(
                                 module, pointer, func_ctx, false,
                             ) {
@@ -2504,7 +2572,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     resolved = &module.types[base].inner;
                                 }
 
-                                write!(self.out, "(__mat{}x2", columns as u8)?;
+                                write!(self.out, "(__mat{}x2_f{}", columns as u8, width * 8)?;
                                 if let TypeInner::Array { base, size, .. } = *resolved {
                                     self.write_array_size(module, base, size)?;
                                 }
@@ -3016,6 +3084,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             crate::Literal::F64(value) => write!(self.out, "{value:?}L")?,
             crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
             crate::Literal::F16(value) => write!(self.out, "{value:?}h")?,
+            crate::Literal::U16(value) => write!(self.out, "uint16_t({value})")?,
+            crate::Literal::I16(value) => write!(self.out, "int16_t({value})")?,
             crate::Literal::U32(value) => write!(self.out, "{value}u")?,
             // `-2147483648` is parsed by some compilers as unary negation of
             // positive 2147483648, which is too large for an int, causing
@@ -3282,11 +3352,18 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     if let Some(MatrixType {
                         columns,
                         rows: crate::VectorSize::Bi,
-                        width: 4,
+                        width,
                     }) = get_inner_matrix_of_struct_array_member(module, base, func_ctx, true)
-                        .or_else(|| get_global_uniform_matrix(module, base, func_ctx))
+                        .or_else(|| {
+                            get_inner_matrix_of_global_uniform(module, base, func_ctx, true)
+                        })
                     {
-                        write!(self.out, "__get_col_of_mat{}x2(", columns as u8)?;
+                        write!(
+                            self.out,
+                            "__get_col_of_mat{}x2_f{}(",
+                            columns as u8,
+                            width * 8
+                        )?;
                         self.write_expr(module, base, func_ctx)?;
                         write!(self.out, ", ")?;
                         self.write_expr(module, index, func_ctx)?;
@@ -3405,10 +3482,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // __matCx2 struct.
                     if let Some(MatrixType {
                         rows: crate::VectorSize::Bi,
-                        width: 4,
                         ..
                     }) = get_inner_matrix_of_struct_array_member(module, base, func_ctx, true)
-                        .or_else(|| get_global_uniform_matrix(module, base, func_ctx))
+                        .or_else(|| {
+                            get_inner_matrix_of_global_uniform(module, base, func_ctx, true)
+                        })
                     {
                         self.write_expr(module, base, func_ctx)?;
                         write!(self.out, "._{index}")?;
@@ -3752,13 +3830,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         //  - a (possibly nested) array of __matCx2's
                         if let Some(MatrixType {
                             rows: crate::VectorSize::Bi,
-                            width: 4,
                             ..
                         }) = get_inner_matrix_of_struct_array_member(
                             module, pointer, func_ctx, false,
                         )
-                        .or_else(|| get_inner_matrix_of_global_uniform(module, pointer, func_ctx))
-                        {
+                        .or_else(|| {
+                            get_inner_matrix_of_global_uniform(module, pointer, func_ctx, false)
+                        }) {
                             let mut resolved = func_ctx.resolve_type(pointer, &module.types);
                             let ptr_tr = resolved.pointer_base_type();
                             if let Some(ptr_ty) =
@@ -3811,6 +3889,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 if inner.scalar_kind() == Some(ScalarKind::Float)
                     && (kind == ScalarKind::Sint || kind == ScalarKind::Uint)
                     && convert.is_some()
+                    && matches!(convert, Some(4) | Some(8))
                 {
                     // Use helper functions for float to int casts in order to
                     // avoid undefined behaviour when value is out of range for
@@ -3864,6 +3943,24 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         None => {
                             if inner.scalar_width() == Some(8) {
                                 false
+                            } else if inner.scalar_width() == Some(2) {
+                                // HLSL's asint()/asuint() only work on 32-bit types.
+                                // For 16-bit bitcasts, use type constructor instead.
+                                let dst_scalar = Scalar { kind, width: 2 };
+                                match *inner {
+                                    TypeInner::Vector { size, .. } => {
+                                        write!(
+                                            self.out,
+                                            "{}{}(",
+                                            dst_scalar.to_hlsl_str()?,
+                                            common::vector_size_str(size)
+                                        )?;
+                                    }
+                                    _ => {
+                                        write!(self.out, "{}(", dst_scalar.to_hlsl_str()?)?;
+                                    }
+                                };
+                                true
                             } else {
                                 write!(self.out, "{}(", kind.to_hlsl_cast(),)?;
                                 true
@@ -4677,10 +4774,36 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         name: String,
         // The expression which is being named.
         // Generally, this is the same as handle, except in WorkGroupUniformLoad
-        named: Handle<crate::Expression>,
-        ctx: &back::FunctionCtx,
+        expr: Handle<crate::Expression>,
+        func_ctx: &back::FunctionCtx,
     ) -> BackendResult {
-        match ctx.info[named].ty {
+        if let crate::Expression::Load { pointer } = func_ctx.expressions[expr] {
+            let ty_inner = func_ctx.resolve_type(pointer, &module.types);
+            if ty_inner.is_atomic_pointer(&module.types) {
+                let pointer_space = ty_inner.pointer_space().unwrap();
+                self.write_value_type(module, func_ctx.info[handle].ty.inner_with(&module.types))?;
+                write!(self.out, " {name}; ")?;
+                match pointer_space {
+                    crate::AddressSpace::WorkGroup => {
+                        write!(self.out, "InterlockedOr(")?;
+                        self.write_expr(module, pointer, func_ctx)?;
+                    }
+                    crate::AddressSpace::Storage { .. } => {
+                        let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
+                        let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
+                        write!(self.out, "{var_name}.InterlockedOr(")?;
+                        let chain = mem::take(&mut self.temp_access_chain);
+                        self.write_storage_address(module, &chain, func_ctx)?;
+                        self.temp_access_chain = chain;
+                    }
+                    _ => unreachable!(),
+                }
+                writeln!(self.out, ", 0, {name});")?;
+                self.named_expressions.insert(expr, name);
+                return Ok(());
+            }
+        }
+        match func_ctx.info[expr].ty {
             proc::TypeResolution::Handle(ty_handle) => match module.types[ty_handle].inner {
                 TypeInner::Struct { .. } => {
                     let ty_name = &self.names[&NameKey::Type(ty_handle)];
@@ -4695,7 +4818,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
         }
 
-        let resolved = ctx.resolve_type(named, &module.types);
+        let resolved = func_ctx.resolve_type(expr, &module.types);
 
         write!(self.out, " {name}")?;
         // If rhs is a array type, we should write array size
@@ -4703,9 +4826,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             self.write_array_size(module, base, size)?;
         }
         write!(self.out, " = ")?;
-        self.write_expr(module, handle, ctx)?;
+        self.write_expr(module, handle, func_ctx)?;
         writeln!(self.out, ";")?;
-        self.named_expressions.insert(named, name);
+        self.named_expressions.insert(expr, name);
 
         Ok(())
     }
@@ -4919,44 +5042,15 @@ pub(super) fn get_inner_matrix_of_struct_array_member(
     None
 }
 
-/// Simpler version of get_inner_matrix_of_global_uniform that only looks at the
-/// immediate expression, rather than traversing an access chain.
-fn get_global_uniform_matrix(
-    module: &Module,
-    base: Handle<crate::Expression>,
-    func_ctx: &back::FunctionCtx<'_>,
-) -> Option<MatrixType> {
-    let base_tr = func_ctx
-        .resolve_type(base, &module.types)
-        .pointer_base_type();
-    let base_ty = base_tr.as_ref().map(|tr| tr.inner_with(&module.types));
-    match (&func_ctx.expressions[base], base_ty) {
-        (
-            &crate::Expression::GlobalVariable(handle),
-            Some(&TypeInner::Matrix {
-                columns,
-                rows,
-                scalar,
-            }),
-        ) if module.global_variables[handle].space == crate::AddressSpace::Uniform => {
-            Some(MatrixType {
-                columns,
-                rows,
-                width: scalar.width,
-            })
-        }
-        _ => None,
-    }
-}
-
 /// Returns the matrix data if the access chain starting at `base`:
-/// - starts with an expression with resolved type of [`TypeInner::Matrix`]
-/// - contains zero or more expressions with resolved type of [`TypeInner::Array`] of [`TypeInner::Matrix`]
-/// - ends with an [`Expression::GlobalVariable`](crate::Expression::GlobalVariable) in [`AddressSpace::Uniform`](crate::AddressSpace::Uniform)
+/// - starts with an expression with resolved type of [`TypeInner::Matrix`], or
+/// - contains zero or more expressions with resolved type of [`TypeInner::Array`] of [`TypeInner::Matrix`] if `direct = false`
+/// - and ends with an [`Expression::GlobalVariable`](crate::Expression::GlobalVariable) in [`AddressSpace::Uniform`](crate::AddressSpace::Uniform)
 fn get_inner_matrix_of_global_uniform(
     module: &Module,
     base: Handle<crate::Expression>,
     func_ctx: &back::FunctionCtx<'_>,
+    direct: bool,
 ) -> Option<MatrixType> {
     let mut mat_data = None;
     let mut array_base = None;
@@ -4981,7 +5075,9 @@ fn get_inner_matrix_of_global_uniform(
                 })
             }
             TypeInner::Array { base, .. } => {
-                array_base = Some(base);
+                if !direct {
+                    array_base = Some(base);
+                }
             }
             _ => break,
         }

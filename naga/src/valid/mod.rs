@@ -7,6 +7,7 @@ mod compose;
 mod expression;
 mod function;
 mod handles;
+pub(crate) mod immediates;
 mod interface;
 mod r#type;
 
@@ -30,13 +31,14 @@ pub use compose::ComposeError;
 pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
 pub use function::{CallError, FunctionError, LocalVariableError, SubgroupError};
+pub use immediates::ImmediateSlots;
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
 pub use r#type::{Disalignment, ImmediateError, TypeError, TypeFlags, WidthError};
 
 use self::handles::InvalidHandleError;
 
 /// Maximum size of a type, in bytes.
-pub const MAX_TYPE_SIZE: u32 = 0x4000_0000; // 1GB
+pub const MAX_TYPE_SIZE: u32 = i32::MAX as u32;
 
 bitflags::bitflags! {
     /// Validation flags.
@@ -214,6 +216,8 @@ bitflags::bitflags! {
         const MEMORY_DECORATION_COHERENT = 1 << 41;
         /// Support for the `@volatile` memory decoration on storage buffers.
         const MEMORY_DECORATION_VOLATILE = 1 << 42;
+        /// Support for 16-bit integer types.
+        const SHADER_INT16 = 1 << 43;
     }
 }
 
@@ -229,12 +233,24 @@ impl Capabilities {
             Self::DUAL_SOURCE_BLENDING => Some(Ext::DualSourceBlending),
             // NOTE: `SHADER_FLOAT16_IN_FLOAT32` _does not_ require the `f16` extension
             Self::SHADER_FLOAT16 => Some(Ext::F16),
+            Self::SHADER_INT16 => Some(Ext::WgpuInt16),
             Self::CLIP_DISTANCES => Some(Ext::ClipDistances),
             Self::MESH_SHADER => Some(Ext::WgpuMeshShader),
             Self::RAY_QUERY => Some(Ext::WgpuRayQuery),
             Self::RAY_HIT_VERTEX_POSITION => Some(Ext::WgpuRayQueryVertexReturn),
             Self::COOPERATIVE_MATRIX => Some(Ext::WgpuCooperativeMatrix),
             Self::RAY_TRACING_PIPELINE => Some(Ext::WgpuRayTracingPipeline),
+            Self::PER_VERTEX => Some(Ext::WgpuPerVertex),
+            Self::BUFFER_BINDING_ARRAY
+            | Self::BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+            | Self::STORAGE_BUFFER_BINDING_ARRAY
+            | Self::STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+            | Self::STORAGE_TEXTURE_BINDING_ARRAY
+            | Self::STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING
+            | Self::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+            | Self::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING => {
+                Some(Ext::WgpuBindingArray)
+            }
             _ => None,
         }
     }
@@ -691,6 +707,8 @@ impl Validator {
         match gctx.types[o.ty].inner {
             crate::TypeInner::Scalar(
                 crate::Scalar::BOOL
+                | crate::Scalar::I16
+                | crate::Scalar::U16
                 | crate::Scalar::I32
                 | crate::Scalar::U32
                 | crate::Scalar::F16

@@ -31,6 +31,10 @@ pub struct TestParameters {
 
     /// Conditions under which this test should be run, but is expected to fail.
     pub failures: Vec<FailureCase>,
+
+    /// For certain features (ray tracing), metal shader validation is completely
+    /// broken
+    pub disable_mtl_shader_validation: bool,
 }
 
 impl Default for TestParameters {
@@ -45,6 +49,7 @@ impl Default for TestParameters {
             // parameters ask us to remove it.
             skips: vec![FailureCase::backend(wgpu::Backends::NOOP)],
             failures: Vec::new(),
+            disable_mtl_shader_validation: false,
         }
     }
 }
@@ -104,6 +109,15 @@ impl TestParameters {
     pub fn enable_noop(mut self) -> Self {
         self.skips
             .retain(|case| *case != FailureCase::backend(wgpu::Backends::NOOP));
+        self
+    }
+
+    /// Disable metal shader validation.
+    ///
+    /// Metal shader validation can cause features (ray tracing specifically)
+    /// to break. This disables it so it can be tested.
+    pub fn disable_mtl_shader_validation(mut self) -> Self {
+        self.disable_mtl_shader_validation = true;
         self
     }
 }

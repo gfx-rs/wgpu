@@ -350,9 +350,13 @@ pub struct DropGuard {
 #[cfg(all(any(gles, vulkan), any(native, Emscripten)))]
 impl DropGuard {
     fn from_option(callback: Option<DropCallback>) -> Option<Self> {
-        callback.map(|callback| Self {
+        callback.map(Self::new)
+    }
+
+    fn new(callback: DropCallback) -> Self {
+        Self {
             callback: Some(callback),
-        })
+        }
     }
 }
 
@@ -1091,17 +1095,17 @@ pub trait Device: WasmNotSendSync {
     /// [`FenceValue`] to store in it, so you can use this `wait` function
     /// to wait for a given queue submission to finish execution.
     ///
-    /// The `value` argument must be a value that some actual operation you have
-    /// already presented to the device is going to store in `fence`. You cannot
-    /// wait for values yet to be submitted. (This restriction accommodates
-    /// implementations like the `vulkan` backend's [`FencePool`] that must
-    /// allocate a distinct synchronization object for each fence value one is
-    /// able to wait for.)
+    /// The `value` argument must not exceed the highest value that an actual
+    /// operation you have already presented to the device is going to store in
+    /// `fence`. You cannot wait for values yet to be submitted. (This
+    /// restriction accommodates implementations like the `vulkan` backend's
+    /// [`FencePool`] that must allocate a distinct synchronization object for
+    /// each fence value one is able to wait for.)
     ///
     /// Calling `wait` with a lower [`FenceValue`] than `fence`'s current value
     /// returns immediately.
     ///
-    /// If `timeout` is provided, the function will block indefinitely or until
+    /// If `timeout` is not provided, the function will block indefinitely or until
     /// an error is encountered.
     ///
     /// Returns `Ok(true)` on success and `Ok(false)` on timeout.
@@ -1245,11 +1249,45 @@ pub trait Queue: WasmNotSendSync {
         surface_textures: &[&<Self::A as Api>::SurfaceTexture],
         signal_fence: (&mut <Self::A as Api>::Fence, FenceValue),
     ) -> Result<(), DeviceError>;
+    /// Present a surface texture to the screen.
+    ///
+    /// This consumes the surface texture, returning it to the swapchain.
+    ///
+    /// # Safety
+    ///
+    /// - `texture` must have been acquired from `surface` via
+    ///   [`Surface::acquire_texture`] and not yet presented or discarded.
+    /// - `surface` must be configured for use with the [`Device`][d] associated
+    ///   with this [`Queue`].
+    /// - `texture` must be in the "present" state. Either:
+    ///   - It was passed in [`submit`][s]'s `surface_textures` argument
+    ///     (which transitions it to the present state), or
+    ///   - The caller has otherwise transitioned it (e.g. via a clear +
+    ///     barrier to `PRESENT` for textures that were never rendered to).
+    /// - Any command buffers that write to `texture` must have been submitted
+    ///   via [`submit`][s] before this call. The submissions do not need to
+    ///   have completed on the GPU; platform-level synchronization handles the
+    ///   ordering between rendering and display.
+    /// - Must be externally synchronized with all other queue operations
+    ///   ([`submit`][s], [`present`][Queue::present],
+    ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue.
+    ///
+    /// [d]: Api::Device
+    /// [s]: Queue::submit
     unsafe fn present(
         &self,
         surface: &<Self::A as Api>::Surface,
         texture: <Self::A as Api>::SurfaceTexture,
     ) -> Result<(), SurfaceError>;
+    /// Block until all previously submitted work on this queue has completed,
+    /// including any pending presentations.
+    ///
+    /// # Safety
+    ///
+    /// - Must be externally synchronized with all other queue operations
+    ///   ([`submit`][Queue::submit], [`present`][Queue::present],
+    ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue.
+    unsafe fn wait_for_idle(&self) -> Result<(), DeviceError>;
     unsafe fn get_timestamp_period(&self) -> f32;
 }
 
@@ -1689,8 +1727,8 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &<Self::A as Api>::ComputePipeline);
 
-    unsafe fn dispatch(&mut self, count: [u32; 3]);
-    unsafe fn dispatch_indirect(
+    unsafe fn dispatch_workgroups(&mut self, count: [u32; 3]);
+    unsafe fn dispatch_workgroups_indirect(
         &mut self,
         buffer: &<Self::A as Api>::Buffer,
         offset: wgt::BufferAddress,
@@ -1899,7 +1937,7 @@ pub struct InstanceDescriptor<'a> {
     pub memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     pub backend_options: wgt::BackendOptions,
     pub telemetry: Option<Telemetry>,
-    /// This is a borrow because the surrounding `core::Instance` keeps the the owned display handle
+    /// This is a borrow because the surrounding `core::Instance` keeps the owned display handle
     /// alive already.
     pub display: Option<DisplayHandle<'a>>,
 }
@@ -1931,7 +1969,7 @@ pub struct Alignments {
     pub uniform_bounds_check_alignment: wgt::BufferSize,
 
     /// The size of the raw TLAS instance
-    pub raw_tlas_instance_size: usize,
+    pub raw_tlas_instance_size: u32,
 
     /// What the scratch buffer for building an acceleration structure must be aligned to
     pub ray_tracing_scratch_buffer_alignment: u32,
@@ -2361,24 +2399,21 @@ pub enum ShaderInput<'a> {
     Naga(NagaShader),
     MetalLib {
         file: &'a [u8],
-        num_workgroups: (u32, u32, u32),
+        num_workgroups: hashbrown::HashMap<String, (u32, u32, u32)>,
     },
     Msl {
         shader: &'a str,
-        num_workgroups: (u32, u32, u32),
+        num_workgroups: hashbrown::HashMap<String, (u32, u32, u32)>,
     },
     SpirV(&'a [u32]),
     Dxil {
         shader: &'a [u8],
-        num_workgroups: (u32, u32, u32),
     },
     Hlsl {
         shader: &'a str,
-        num_workgroups: (u32, u32, u32),
     },
     Glsl {
         shader: &'a str,
-        num_workgroups: (u32, u32, u32),
     },
 }
 
@@ -2464,7 +2499,7 @@ pub struct VertexBufferLayout<'a> {
 pub enum VertexProcessor<'a, M: DynShaderModule + ?Sized> {
     Standard {
         /// The format of any vertex buffers used with this pipeline.
-        vertex_buffers: &'a [VertexBufferLayout<'a>],
+        vertex_buffers: &'a [Option<VertexBufferLayout<'a>>],
         /// The vertex stage for this pipeline.
         vertex_stage: ProgrammableStage<'a, M>,
     },

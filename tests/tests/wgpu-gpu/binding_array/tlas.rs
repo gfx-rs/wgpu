@@ -39,6 +39,7 @@ async fn binding_array_tlas(ctx: TestingContext) {
     // Creating a `ray_query` and initializing it against element 0 forces the binding to be used.
     let shader = r#"
         enable wgpu_ray_query;
+        enable wgpu_binding_array;
 
         @group(0) @binding(0)
         var tlas_array: binding_array<acceleration_structure>;

@@ -266,16 +266,16 @@ async fn vertex_index_common(ctx: TestingContext) {
 
     pipeline_desc.vertex.entry_point = Some("vs_main_buffers");
     pipeline_desc.vertex.buffers = &[
-        wgpu::VertexBufferLayout {
+        Some(wgpu::VertexBufferLayout {
             array_stride: 4,
             step_mode: wgpu::VertexStepMode::Instance,
             attributes: &wgpu::vertex_attr_array![0 => Uint32],
-        },
-        wgpu::VertexBufferLayout {
+        }),
+        Some(wgpu::VertexBufferLayout {
             array_stride: 4,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &wgpu::vertex_attr_array![1 => Uint32],
-        },
+        }),
     ];
     let buffer_pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
 
@@ -391,8 +391,8 @@ async fn vertex_index_common(ctx: TestingContext) {
                 .map(|r| r as &mut dyn RenderEncoder)
                 .unwrap_or(&mut rpass);
 
-            render_encoder.set_vertex_buffer(0, identity_buffer.slice(..));
-            render_encoder.set_vertex_buffer(1, identity_buffer.slice(..));
+            render_encoder.set_vertex_buffer(0, Some(identity_buffer.slice(..)));
+            render_encoder.set_vertex_buffer(1, Some(identity_buffer.slice(..)));
             render_encoder.set_index_buffer(identity_buffer.slice(..), wgpu::IndexFormat::Uint32);
             render_encoder.set_pipeline(pipeline);
             render_encoder.set_bind_group(0, Some(&bg), &[]);
@@ -450,7 +450,7 @@ async fn vertex_index_common(ctx: TestingContext) {
         ctx.async_poll(wgpu::PollType::wait_indefinitely())
             .await
             .unwrap();
-        let data: Vec<u32> = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
+        let data: Vec<u32> = bytemuck::cast_slice(&slice.get_mapped_range().unwrap()).to_vec();
 
         let case_name = format!(
             "Case {:?} getting indices from {:?} using {:?} draw calls, encoded with a {:?}",

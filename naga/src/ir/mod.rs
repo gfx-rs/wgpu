@@ -1062,6 +1062,8 @@ pub enum Literal {
     F32(f32),
     /// May not be NaN or infinity.
     F16(f16),
+    U16(u16),
+    I16(i16),
     U32(u32),
     I32(i32),
     U64(u64),
@@ -1579,7 +1581,7 @@ bitflags::bitflags! {
     pub struct Barrier: u32 {
         /// Barrier affects all [`AddressSpace::Storage`] accesses.
         const STORAGE = 1 << 0;
-        /// Barrier affects all [`AddressSpace::WorkGroup`] accesses.
+        /// Barrier affects all [`AddressSpace::WorkGroup`] and [`AddressSpace::TaskPayload`] accesses.
         const WORK_GROUP = 1 << 1;
         /// Barrier synchronizes execution across all invocations within a subgroup that execute this instruction.
         const SUB_GROUP = 1 << 2;

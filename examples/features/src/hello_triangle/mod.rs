@@ -56,6 +56,24 @@ impl App {
             state: AppState::Uninitialized,
         }
     }
+
+    fn resize_surface(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        let AppState::Running(wgpu_state) = &mut self.state else {
+            return;
+        };
+
+        // Reconfigure the surface with the new size
+        wgpu_state.config.width = new_size.width.max(1);
+        wgpu_state.config.height = new_size.height.max(1);
+        wgpu_state
+            .surface
+            .configure(&wgpu_state.device, &wgpu_state.config);
+
+        // On macos the window needs to be redrawn manually after resizing
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+    }
 }
 
 impl ApplicationHandler<TriangleAction> for App {
@@ -173,6 +191,7 @@ impl ApplicationHandler<TriangleAction> for App {
             let config = surface
                 .get_default_config(&adapter, size.width, size.height)
                 .unwrap();
+
             surface.configure(&device, &config);
 
             let _ = proxy.send_event(TriangleAction::Initialized(WgpuState {
@@ -191,8 +210,11 @@ impl ApplicationHandler<TriangleAction> for App {
         match event {
             TriangleAction::Initialized(wgpu_state) => {
                 self.state = AppState::Running(wgpu_state);
+
+                // winit might have updated the window size while we were
+                // creating the surface asynchronously, so resize the surface.
                 if let Some(window) = &self.window {
-                    window.request_redraw();
+                    self.resize_surface(window.inner_size());
                 }
             }
         }
@@ -210,16 +232,7 @@ impl ApplicationHandler<TriangleAction> for App {
 
         match event {
             WindowEvent::Resized(new_size) => {
-                // Reconfigure the surface with the new size
-                wgpu_state.config.width = new_size.width.max(1);
-                wgpu_state.config.height = new_size.height.max(1);
-                wgpu_state
-                    .surface
-                    .configure(&wgpu_state.device, &wgpu_state.config);
-                // On macos the window needs to be redrawn manually after resizing
-                if let Some(window) = &self.window {
-                    window.request_redraw();
-                }
+                self.resize_surface(new_size);
             }
             WindowEvent::RedrawRequested => {
                 let frame = match wgpu_state.surface.get_current_texture() {
@@ -231,7 +244,18 @@ impl ApplicationHandler<TriangleAction> for App {
                         }
                         return;
                     }
-                    CurrentSurfaceTexture::Suboptimal(_) | CurrentSurfaceTexture::Outdated => {
+                    CurrentSurfaceTexture::Suboptimal(texture) => {
+                        drop(texture);
+
+                        wgpu_state
+                            .surface
+                            .configure(&wgpu_state.device, &wgpu_state.config);
+                        if let Some(window) = &self.window {
+                            window.request_redraw();
+                        }
+                        return;
+                    }
+                    CurrentSurfaceTexture::Outdated => {
                         wgpu_state
                             .surface
                             .configure(&wgpu_state.device, &wgpu_state.config);
@@ -289,7 +313,7 @@ impl ApplicationHandler<TriangleAction> for App {
                 if let Some(window) = &self.window {
                     window.pre_present_notify();
                 }
-                frame.present();
+                wgpu_state.queue.present(frame);
             }
             WindowEvent::Occluded(is_occluded) => {
                 if !is_occluded {

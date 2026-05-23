@@ -177,8 +177,7 @@ static MULTIPLE_BINDINGS_WITH_DIFFERENT_SIZES: GpuTestConfiguration = GpuTestCon
     .parameters(
         TestParameters::default()
             .limits(wgpu::Limits::downlevel_defaults())
-            .expect_fail(FailureCase::always())
-            .enable_noop(), // https://github.com/gfx-rs/wgpu/issues/7359
+            .enable_noop(),
     )
     .run_sync(multiple_bindings_with_differing_sizes);
 
@@ -383,7 +382,7 @@ static BIND_GROUP_WITH_MAX_BINDING_INDEX: GpuTestConfiguration = GpuTestConfigur
         device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
         assert_eq!(
-            &*readback.slice(..).get_mapped_range(),
+            &*readback.slice(..).get_mapped_range().unwrap(),
             &test_value.to_le_bytes()
         );
     });

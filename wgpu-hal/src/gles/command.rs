@@ -16,8 +16,10 @@ pub(super) struct State {
     primitive: super::PrimitiveState,
     index_format: wgt::IndexFormat,
     index_offset: wgt::BufferAddress,
-    vertex_buffers:
-        [(super::VertexBufferDesc, Option<super::BufferBinding>); crate::MAX_VERTEX_BUFFERS],
+    vertex_buffers: [(
+        Option<super::VertexBufferDesc>,
+        Option<super::BufferBinding>,
+    ); crate::MAX_VERTEX_BUFFERS],
     vertex_attributes: ArrayVec<super::AttributeDesc, { super::MAX_VERTEX_ATTRIBUTES }>,
     color_targets: ArrayVec<super::ColorTargetDesc, { crate::MAX_COLOR_ATTACHMENTS }>,
     stencil: super::StencilState,
@@ -139,9 +141,9 @@ impl super::CommandEncoder {
                     continue;
                 }
                 let (buffer_desc, vb) = match *pair {
+                    (Some(ref vb_desc), Some(ref vb)) => (vb_desc.clone(), vb),
                     // Not all dirty bindings are necessarily filled. Some may be unused.
-                    (_, None) => continue,
-                    (ref vb_desc, Some(ref vb)) => (vb_desc.clone(), vb),
+                    (_, _) => continue,
                 };
                 let instance_offset = match buffer_desc.step {
                     wgt::VertexStepMode::Vertex => 0,
@@ -166,9 +168,9 @@ impl super::CommandEncoder {
                 }
                 let (buffer_desc, vb) =
                     match self.state.vertex_buffers[attribute.buffer_index as usize] {
+                        (Some(ref vb_desc), Some(ref vb)) => (vb_desc.clone(), vb),
                         // Not all dirty bindings are necessarily filled. Some may be unused.
-                        (_, None) => continue,
-                        (ref vb_desc, Some(ref vb)) => (vb_desc.clone(), vb),
+                        (_, _) => continue,
                     };
 
                 let mut attribute_desc = attribute.clone();
@@ -875,7 +877,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .contains(super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT)
         {
             for vat in pipeline.vertex_attributes.iter() {
-                let vb = &pipeline.vertex_buffers[vat.buffer_index as usize];
+                let vb = pipeline.vertex_buffers[vat.buffer_index as usize]
+                    .as_ref()
+                    .unwrap();
                 // set the layout
                 self.cmd_buffer.commands.push(C::SetVertexAttribute {
                     buffer: None,
@@ -909,12 +913,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .zip(pipeline.vertex_buffers.iter())
             .enumerate()
         {
+            let Some(pipe_desc) = pipe_desc else {
+                continue;
+            };
             if pipe_desc.step == wgt::VertexStepMode::Instance {
                 self.state.instance_vbuf_mask |= 1 << index;
             }
-            if state_desc != pipe_desc {
+            if state_desc.as_ref() != Some(pipe_desc) {
                 self.state.dirty_vbuf_mask |= 1 << index;
-                *state_desc = pipe_desc.clone();
+                *state_desc = Some(pipe_desc.clone());
             }
         }
 
@@ -1245,14 +1252,18 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.set_pipeline_inner(&pipeline.inner);
     }
 
-    unsafe fn dispatch(&mut self, count: [u32; 3]) {
+    unsafe fn dispatch_workgroups(&mut self, count: [u32; 3]) {
         // Empty dispatches are invalid in OpenGL, but valid in WebGPU.
         if count.contains(&0) {
             return;
         }
         self.cmd_buffer.commands.push(C::Dispatch(count));
     }
-    unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
+    unsafe fn dispatch_workgroups_indirect(
+        &mut self,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+    ) {
         self.cmd_buffer.commands.push(C::DispatchIndirect {
             indirect_buf: buffer.raw.unwrap(),
             indirect_offset: offset,

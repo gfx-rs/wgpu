@@ -1,0 +1,55 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 32
+OpCapability Shader
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %22 "main"
+OpExecutionMode %22 LocalSize 1 1 1
+OpMemberDecorate %7 0 Offset 0
+OpMemberDecorate %7 1 Offset 8
+OpMemberDecorate %7 1 ColMajor
+OpMemberDecorate %7 1 MatrixStride 8
+OpMemberDecorate %8 0 Offset 0
+OpMemberDecorate %8 1 Offset 8
+OpMemberDecorate %8 2 Offset 16
+OpDecorate %9 DescriptorSet 0
+OpDecorate %9 Binding 0
+OpDecorate %10 Block
+OpMemberDecorate %10 0 Offset 0
+%2 = OpTypeVoid
+%3 = OpTypeInt 32 1
+%6 = OpTypeFloat 32
+%5 = OpTypeVector %6 2
+%4 = OpTypeMatrix %5 2
+%7 = OpTypeStruct %3 %4
+%8 = OpTypeStruct %3 %5 %5
+%10 = OpTypeStruct %8
+%11 = OpTypePointer Uniform %10
+%9 = OpVariable  %11  Uniform
+%13 = OpTypeFunction %7 %8
+%23 = OpTypeFunction %2
+%24 = OpTypePointer Uniform %8
+%26 = OpTypeInt 32 0
+%25 = OpConstant  %26  0
+%28 = OpTypePointer Uniform %7
+%12 = OpFunction  %7  None %13
+%14 = OpFunctionParameter  %8
+%15 = OpLabel
+%16 = OpCompositeExtract  %3  %14 0
+%18 = OpCompositeExtract  %5  %14 1
+%19 = OpCompositeExtract  %5  %14 2
+%17 = OpCompositeConstruct  %4  %18 %19
+%20 = OpCompositeConstruct  %7  %16 %17
+OpReturnValue %20
+OpFunctionEnd
+%22 = OpFunction  %2  None %23
+%21 = OpLabel
+%27 = OpAccessChain  %24  %9 %25
+OpBranch %29
+%29 = OpLabel
+%30 = OpLoad  %8  %27
+%31 = OpFunctionCall  %7  %12 %30
+OpReturn
+OpFunctionEnd

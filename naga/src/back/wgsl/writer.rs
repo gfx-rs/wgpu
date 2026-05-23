@@ -289,6 +289,7 @@ impl<W: Write> Writer<W> {
         #[derive(Default)]
         struct RequiredEnabled {
             f16: bool,
+            int16: bool,
             dual_source_blending: bool,
             clip_distances: bool,
             mesh_shaders: bool,
@@ -296,6 +297,8 @@ impl<W: Write> Writer<W> {
             cooperative_matrix: bool,
             draw_index: bool,
             ray_tracing_pipeline: bool,
+            per_vertex: bool,
+            binding_array: bool,
         }
         let mut needed = RequiredEnabled {
             mesh_shaders: module.uses_mesh_shaders(),
@@ -320,6 +323,12 @@ impl<W: Write> Writer<W> {
                 ..
             } => {
                 needed.mesh_shaders = true;
+            }
+            crate::Binding::Location {
+                interpolation: Some(crate::Interpolation::PerVertex),
+                ..
+            } => {
+                needed.per_vertex = true;
             }
             crate::Binding::BuiltIn(crate::BuiltIn::DrawIndex) => needed.draw_index = true,
             crate::Binding::BuiltIn(
@@ -348,6 +357,7 @@ impl<W: Write> Writer<W> {
                 | TypeInner::Vector { scalar, .. }
                 | TypeInner::Matrix { scalar, .. } => {
                     needed.f16 |= scalar == crate::Scalar::F16;
+                    needed.int16 |= scalar == crate::Scalar::I16 || scalar == crate::Scalar::U16;
                 }
                 TypeInner::Struct { ref members, .. } => {
                     for binding in members.iter().filter_map(|m| m.binding.as_ref()) {
@@ -359,6 +369,9 @@ impl<W: Write> Writer<W> {
                 }
                 TypeInner::AccelerationStructure { .. } => {
                     needed.ray_tracing_pipeline = true;
+                }
+                TypeInner::BindingArray { .. } => {
+                    needed.binding_array = true;
                 }
                 _ => {}
             }
@@ -422,6 +435,10 @@ impl<W: Write> Writer<W> {
             writeln!(self.out, "enable f16;")?;
             any_written = true;
         }
+        if needed.int16 {
+            writeln!(self.out, "enable wgpu_int16;")?;
+            any_written = true;
+        }
         if needed.dual_source_blending {
             writeln!(self.out, "enable dual_source_blending;")?;
             any_written = true;
@@ -432,6 +449,10 @@ impl<W: Write> Writer<W> {
         }
         if module.uses_mesh_shaders() {
             writeln!(self.out, "enable wgpu_mesh_shader;")?;
+            any_written = true;
+        }
+        if needed.binding_array {
+            writeln!(self.out, "enable wgpu_binding_array;")?;
             any_written = true;
         }
         if needed.draw_index {
@@ -448,6 +469,10 @@ impl<W: Write> Writer<W> {
         }
         if needed.ray_tracing_pipeline {
             writeln!(self.out, "enable wgpu_ray_tracing_pipeline;")?;
+            any_written = true;
+        }
+        if needed.per_vertex {
+            writeln!(self.out, "enable wgpu_per_vertex;")?;
             any_written = true;
         }
         if any_written {
@@ -1359,6 +1384,8 @@ impl<W: Write> Writer<W> {
             Expression::Literal(literal) => match literal {
                 crate::Literal::F16(value) => write!(self.out, "{value}h")?,
                 crate::Literal::F32(value) => write!(self.out, "{value}f")?,
+                crate::Literal::U16(value) => write!(self.out, "u16({value})")?,
+                crate::Literal::I16(value) => write!(self.out, "i16({value})")?,
                 crate::Literal::U32(value) => write!(self.out, "{value}u")?,
                 crate::Literal::I32(value) => {
                     // `-2147483648i` is not valid WGSL. The most negative `i32`

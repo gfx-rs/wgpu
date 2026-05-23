@@ -41,7 +41,7 @@ use crate::{
         TextureInitTrackerAction,
     },
     instance::{Adapter, RequestDeviceError},
-    lock::{rank, Mutex, RwLock},
+    lock::{rank, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
     pipeline::{self, ColorStateError},
     pool::ResourcePool,
     present,
@@ -54,7 +54,7 @@ use crate::{
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     timestamp_normalization::TIMESTAMP_NORMALIZATION_BUFFER_USES,
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
-    validation,
+    validation::{self, check_color_attachment_count, PassthroughInterface, ShaderMetaData},
     weak_vec::WeakVec,
     FastHashMap, LabelHelpers, OnceCellOrLock,
 };
@@ -287,6 +287,9 @@ pub struct Device {
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<Box<dyn trace::Trace + Send + Sync + 'static>>>,
 }
+
+pub(crate) type FenceReadGuard<'a> = RwLockReadGuard<'a, ManuallyDrop<Box<dyn hal::DynFence>>>;
+pub(crate) type FenceWriteGuard<'a> = RwLockWriteGuard<'a, ManuallyDrop<Box<dyn hal::DynFence>>>;
 
 pub(crate) enum DeferredDestroy {
     TextureViews(WeakVec<TextureView>),
@@ -826,7 +829,7 @@ impl Device {
     ///   if there was a timeout or a validation error.
     pub(crate) fn maintain<'this>(
         &'this self,
-        fence: crate::lock::RwLockReadGuard<ManuallyDrop<Box<dyn hal::DynFence>>>,
+        fence: FenceReadGuard<'_>,
         poll_type: wgt::PollType<crate::SubmissionIndex>,
         snatch_guard: SnatchGuard,
     ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
@@ -1201,10 +1204,23 @@ impl Device {
         let snatch_guard = device.snatchable_lock.read();
         let raw_buf = buffer.try_raw(&snatch_guard)?;
 
+        if offset > buffer.size {
+            return Err(resource::BufferAccessError::OutOfBoundsStartOffsetOverrun {
+                index: offset,
+                max: buffer.size,
+            });
+        } else if buffer.size - offset < u64::try_from(data.len()).unwrap() {
+            return Err(resource::BufferAccessError::OutOfBoundsEndOffsetOverrun {
+                index: offset,
+                size: u64::try_from(data.len()).unwrap(),
+                max: buffer.size,
+            });
+        }
+
         let mapping = unsafe {
             device
                 .raw()
-                .map_buffer(raw_buf, offset..offset + data.len() as u64)
+                .map_buffer(raw_buf, offset..offset + u64::try_from(data.len()).unwrap())
         }
         .map_err(|e| device.handle_hal_error(e))?;
 
@@ -1228,6 +1244,7 @@ impl Device {
         self: &Arc<Self>,
         hal_texture: Box<dyn hal::DynTexture>,
         desc: &resource::TextureDescriptor,
+        initial_state: wgt::TextureUses,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
         let format_features = self
             .describe_format_features(desc.format)
@@ -1250,7 +1267,7 @@ impl Device {
         self.trackers
             .lock()
             .textures
-            .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
+            .insert_single(&texture, initial_state);
 
         Ok(texture)
     }
@@ -2383,7 +2400,7 @@ impl Device {
         let module = pipeline::ShaderModule {
             raw: ManuallyDrop::new(raw),
             device: self.clone(),
-            interface: Some(interface),
+            interface: ShaderMetaData::Interface(interface),
             label: desc.label.to_string(),
         };
 
@@ -2402,6 +2419,21 @@ impl Device {
         self.check_is_valid()?;
         self.require_features(wgt::Features::PASSTHROUGH_SHADERS)?;
 
+        // Mainly important for GLSL or SPIR-V or DXIL, which each take exactly 1 entry point.
+        if (descriptor.dxil.is_some() || descriptor.glsl.is_some())
+            && descriptor.entry_points.len() != 1
+        {
+            return Err(pipeline::CreateShaderModuleError::IncorrectPassthroughEntryPointCount);
+        }
+
+        let entry_point_hashmap = || {
+            descriptor
+                .entry_points
+                .iter()
+                .map(|e| (e.name.to_string(), e.workgroup_size))
+                .collect()
+        };
+
         let hal_shader = match self.backend() {
             wgt::Backend::Vulkan => hal::ShaderInput::SpirV(
                 descriptor
@@ -2411,15 +2443,9 @@ impl Device {
             ),
             wgt::Backend::Dx12 => {
                 if let Some(dxil) = &descriptor.dxil {
-                    hal::ShaderInput::Dxil {
-                        shader: dxil,
-                        num_workgroups: descriptor.num_workgroups,
-                    }
+                    hal::ShaderInput::Dxil { shader: dxil }
                 } else if let Some(hlsl) = &descriptor.hlsl {
-                    hal::ShaderInput::Hlsl {
-                        shader: hlsl,
-                        num_workgroups: descriptor.num_workgroups,
-                    }
+                    hal::ShaderInput::Hlsl { shader: hlsl }
                 } else {
                     return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend);
                 }
@@ -2428,12 +2454,12 @@ impl Device {
                 if let Some(metallib) = &descriptor.metallib {
                     hal::ShaderInput::MetalLib {
                         file: metallib,
-                        num_workgroups: descriptor.num_workgroups,
+                        num_workgroups: entry_point_hashmap(),
                     }
                 } else if let Some(msl) = &descriptor.msl {
                     hal::ShaderInput::Msl {
                         shader: msl,
-                        num_workgroups: descriptor.num_workgroups,
+                        num_workgroups: entry_point_hashmap(),
                     }
                 } else {
                     return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend);
@@ -2444,7 +2470,6 @@ impl Device {
                     .glsl
                     .as_ref()
                     .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
-                num_workgroups: descriptor.num_workgroups,
             },
             wgt::Backend::Noop => {
                 return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend)
@@ -2475,7 +2500,13 @@ impl Device {
         let module = pipeline::ShaderModule {
             raw: ManuallyDrop::new(raw),
             device: self.clone(),
-            interface: None,
+            interface: ShaderMetaData::Passthrough(PassthroughInterface {
+                entry_point_names: descriptor
+                    .entry_points
+                    .iter()
+                    .map(|e| e.name.to_string())
+                    .collect(),
+            }),
             label: descriptor.label.to_string(),
         };
 
@@ -3782,6 +3813,7 @@ impl Device {
     fn create_derived_pipeline_layout(
         self: &Arc<Self>,
         mut derived_group_layouts: Box<ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>>,
+        immediate_size: u32,
     ) -> Result<Arc<binding_model::PipelineLayout>, pipeline::ImplicitLayoutError> {
         while derived_group_layouts
             .last()
@@ -3822,7 +3854,7 @@ impl Device {
         let layout_desc = binding_model::ResolvedPipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: Cow::Owned(bind_group_layouts),
-            immediate_size: 0, //TODO?
+            immediate_size,
         };
 
         let layout = self.create_pipeline_layout_impl(&layout_desc, true)?;
@@ -3869,13 +3901,14 @@ impl Device {
                 desc.stage.entry_point.as_ref().map(|ep| ep.as_ref()),
             )?;
 
-            if let Some(ref interface) = shader_module.interface {
+            if let Some(interface) = shader_module.interface.interface() {
                 let _ = interface.check_stage(
                     &mut binding_layout_source,
                     &mut shader_binding_sizes,
                     &final_entry_point_name,
                     stage,
                     io,
+                    None,
                 )?;
             }
         }
@@ -3883,7 +3916,11 @@ impl Device {
         let pipeline_layout = match binding_layout_source {
             validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
             validation::BindingLayoutSource::Derived(entries) => {
-                self.create_derived_pipeline_layout(entries)?
+                let immediate_size = shader_module
+                    .interface
+                    .interface()
+                    .map_or(0, |i| i.immediate_size);
+                self.create_derived_pipeline_layout(entries, immediate_size)?
             }
         };
 
@@ -3930,12 +3967,24 @@ impl Device {
                 },
             )?;
 
+        let immediate_slots_required =
+            shader_module
+                .interface
+                .interface()
+                .map_or(Default::default(), |iface| {
+                    iface.immediate_slots_required(
+                        naga::ShaderStage::Compute,
+                        &final_entry_point_name,
+                    )
+                });
+
         let pipeline = pipeline::ComputePipeline {
             raw: ManuallyDrop::new(raw),
             layout: pipeline_layout,
             device: self.clone(),
             _shader_module: shader_module,
             late_sized_buffer_groups,
+            immediate_slots_required,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.compute_pipelines.clone()),
         };
@@ -3950,11 +3999,7 @@ impl Device {
 
                 // `bind_group_layouts` might contain duplicate entries, so we need to ignore the
                 // result.
-                let _ = bgl
-                    .exclusive_pipeline
-                    .set(binding_model::ExclusivePipeline::Compute(Arc::downgrade(
-                        &pipeline,
-                    )));
+                let _ = bgl.exclusive_pipeline.set((&pipeline).into());
             }
         }
 
@@ -3971,22 +4016,13 @@ impl Device {
 
         let mut shader_binding_sizes = FastHashMap::default();
 
-        let num_attachments = desc.fragment.as_ref().map(|f| f.targets.len()).unwrap_or(0);
-        let max_attachments = self.limits.max_color_attachments as usize;
-        if num_attachments > max_attachments {
-            return Err(pipeline::CreateRenderPipelineError::ColorAttachment(
-                command::ColorAttachmentError::TooMany {
-                    given: num_attachments,
-                    limit: max_attachments,
-                },
-            ));
-        }
-
         let color_targets = desc
             .fragment
             .as_ref()
             .map_or(&[][..], |fragment| &fragment.targets);
         let depth_stencil_state = desc.depth_stencil.as_ref();
+
+        check_color_attachment_count(color_targets.len(), self.limits.max_color_attachments)?;
 
         {
             let cts: ArrayVec<_, { hal::MAX_COLOR_ATTACHMENTS }> =
@@ -4005,15 +4041,28 @@ impl Device {
         let mut validated_stages = wgt::ShaderStages::empty();
 
         let mut vertex_steps;
-        let mut vertex_buffers;
+        let mut hal_vertex_buffer_layouts;
         let mut total_attributes;
         let mut dual_source_blending = false;
         let mut has_depth_attachment = false;
         if let pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) = desc.vertex {
+            if vertex.buffers.len() > self.limits.max_vertex_buffers as usize {
+                return Err(pipeline::CreateRenderPipelineError::TooManyVertexBuffers {
+                    given: vertex.buffers.len() as u32,
+                    limit: self.limits.max_vertex_buffers,
+                });
+            }
+
             vertex_steps = Vec::with_capacity(vertex.buffers.len());
-            vertex_buffers = Vec::with_capacity(vertex.buffers.len());
+            hal_vertex_buffer_layouts = Vec::with_capacity(vertex.buffers.len());
             total_attributes = 0;
             for (i, vb_state) in vertex.buffers.iter().enumerate() {
+                let Some(vb_state) = vb_state else {
+                    vertex_steps.push(None);
+                    hal_vertex_buffer_layouts.push(None);
+                    continue;
+                };
+
                 // https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-gpuvertexbufferlayout
 
                 if vb_state.array_stride > self.limits.max_vertex_buffer_array_stride as u64 {
@@ -4069,18 +4118,20 @@ impl Device {
 
                     last_stride = last_stride.max(attribute_stride);
                 }
-                vertex_steps.push(pipeline::VertexStep {
+
+                vertex_steps.push(Some(pipeline::VertexStep {
                     stride: vb_state.array_stride,
                     last_stride,
                     mode: vb_state.step_mode,
-                });
-                if vb_state.attributes.is_empty() {
-                    continue;
-                }
-                vertex_buffers.push(hal::VertexBufferLayout {
-                    array_stride: vb_state.array_stride,
-                    step_mode: vb_state.step_mode,
-                    attributes: vb_state.attributes.as_ref(),
+                }));
+                hal_vertex_buffer_layouts.push(if vb_state.attributes.is_empty() {
+                    None
+                } else {
+                    Some(hal::VertexBufferLayout {
+                        array_stride: vb_state.array_stride,
+                        step_mode: vb_state.step_mode,
+                        attributes: vb_state.attributes.as_ref(),
+                    })
                 });
 
                 for attribute in vb_state.attributes.iter() {
@@ -4115,12 +4166,6 @@ impl Device {
                 total_attributes += vb_state.attributes.len();
             }
 
-            if vertex_buffers.len() > self.limits.max_vertex_buffers as usize {
-                return Err(pipeline::CreateRenderPipelineError::TooManyVertexBuffers {
-                    given: vertex_buffers.len() as u32,
-                    limit: self.limits.max_vertex_buffers,
-                });
-            }
             if total_attributes > self.limits.max_vertex_attributes as usize {
                 return Err(
                     pipeline::CreateRenderPipelineError::TooManyVertexAttributes {
@@ -4131,7 +4176,7 @@ impl Device {
             }
         } else {
             vertex_steps = Vec::new();
-            vertex_buffers = Vec::new();
+            hal_vertex_buffer_layouts = Vec::new();
         };
 
         if desc.primitive.strip_index_format.is_some() && !desc.primitive.topology.is_strip() {
@@ -4386,6 +4431,7 @@ impl Device {
         let mut _vertex_entry_point_name = String::new();
         let mut _task_entry_point_name = String::new();
         let mut _mesh_entry_point_name = String::new();
+        let mut immediate_slots_required = naga::valid::ImmediateSlots::default();
         match desc.vertex {
             pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
                 vertex_stage = {
@@ -4411,7 +4457,9 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(ref interface) = vertex_shader_module.interface {
+                    if let Some(interface) = vertex_shader_module.interface.interface() {
+                        immediate_slots_required |= interface
+                            .immediate_slots_required(stage.to_naga(), &_vertex_entry_point_name);
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -4419,6 +4467,7 @@ impl Device {
                                 &_vertex_entry_point_name,
                                 stage,
                                 io,
+                                Some(desc.primitive.topology),
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
@@ -4454,7 +4503,9 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(ref interface) = task_shader_module.interface {
+                    if let Some(interface) = task_shader_module.interface.interface() {
+                        immediate_slots_required |= interface
+                            .immediate_slots_required(stage.to_naga(), &_task_entry_point_name);
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -4462,6 +4513,7 @@ impl Device {
                                 &_task_entry_point_name,
                                 stage,
                                 io,
+                                Some(desc.primitive.topology),
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
@@ -4495,7 +4547,9 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(ref interface) = mesh_shader_module.interface {
+                    if let Some(interface) = mesh_shader_module.interface.interface() {
+                        immediate_slots_required |= interface
+                            .immediate_slots_required(stage.to_naga(), &_mesh_entry_point_name);
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -4503,6 +4557,7 @@ impl Device {
                                 &_mesh_entry_point_name,
                                 stage,
                                 io,
+                                Some(desc.primitive.topology),
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
@@ -4546,7 +4601,9 @@ impl Device {
                     )
                     .map_err(stage_err)?;
 
-                if let Some(ref interface) = shader_module.interface {
+                if let Some(interface) = shader_module.interface.interface() {
+                    immediate_slots_required |= interface
+                        .immediate_slots_required(stage.to_naga(), &fragment_entry_point_name);
                     io = interface
                         .check_stage(
                             &mut binding_layout_source,
@@ -4554,6 +4611,7 @@ impl Device {
                             &fragment_entry_point_name,
                             stage,
                             io,
+                            Some(desc.primitive.topology),
                         )
                         .map_err(stage_err)?;
                     validated_stages |= stage_bit;
@@ -4610,9 +4668,42 @@ impl Device {
         let pipeline_layout = match binding_layout_source {
             validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
             validation::BindingLayoutSource::Derived(entries) => {
-                self.create_derived_pipeline_layout(entries)?
+                let immediate_size = {
+                    let immediate_size_of = |sm: &pipeline::ShaderModule| {
+                        sm.interface.interface().map(|i| i.immediate_size)
+                    };
+                    let vertex = match desc.vertex {
+                        pipeline::RenderPipelineVertexProcessor::Vertex(ref v) => {
+                            immediate_size_of(&v.stage.module)
+                        }
+                        pipeline::RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => task
+                            .as_ref()
+                            .and_then(|t| immediate_size_of(&t.stage.module))
+                            .max(immediate_size_of(&mesh.stage.module)),
+                    };
+                    let fragment = desc
+                        .fragment
+                        .as_ref()
+                        .and_then(|f| immediate_size_of(&f.stage.module));
+                    vertex.max(fragment).unwrap_or(0)
+                };
+                self.create_derived_pipeline_layout(entries, immediate_size)?
             }
         };
+
+        if let pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) = desc.vertex {
+            let bind_groups_plus_vertex_buffers =
+                u32::try_from(pipeline_layout.bind_group_layouts.len() + vertex.buffers.len())
+                    .unwrap();
+            if bind_groups_plus_vertex_buffers > self.limits.max_bind_groups_plus_vertex_buffers {
+                return Err(
+                    pipeline::CreateRenderPipelineError::TooManyBindGroupsPlusVertexBuffers {
+                        given: bind_groups_plus_vertex_buffers,
+                        limit: self.limits.max_bind_groups_plus_vertex_buffers,
+                    },
+                );
+            }
+        }
 
         // Multiview is only supported if the feature is enabled
         if let Some(mv_mask) = desc.multiview_mask {
@@ -4650,13 +4741,14 @@ impl Device {
         };
 
         let is_mesh = mesh_stage.is_some();
+        let has_task_shader = task_stage.is_some();
         let raw = {
             let pipeline_desc = hal::RenderPipelineDescriptor {
                 label: desc.label.to_hal(self.instance_flags),
                 layout: pipeline_layout.raw(),
                 vertex_processor: match vertex_stage {
                     Some(vertex_stage) => hal::VertexProcessor::Standard {
-                        vertex_buffers: &vertex_buffers,
+                        vertex_buffers: &hal_vertex_buffer_layouts,
                         vertex_stage,
                     },
                     None => hal::VertexProcessor::Mesh {
@@ -4753,9 +4845,11 @@ impl Device {
             strip_index_format: desc.primitive.strip_index_format,
             vertex_steps,
             late_sized_buffer_groups,
+            immediate_slots_required,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.render_pipelines.clone()),
             is_mesh,
+            has_task_shader,
         };
 
         let pipeline = Arc::new(pipeline);
@@ -4768,11 +4862,7 @@ impl Device {
 
                 // `bind_group_layouts` might contain duplicate entries, so we need to ignore the
                 // result.
-                let _ = bgl
-                    .exclusive_pipeline
-                    .set(binding_model::ExclusivePipeline::Render(Arc::downgrade(
-                        &pipeline,
-                    )));
+                let _ = bgl.exclusive_pipeline.set((&pipeline).into());
             }
         }
 
@@ -4846,7 +4936,7 @@ impl Device {
         format_features
     }
 
-    fn describe_format_features(
+    pub(crate) fn describe_format_features(
         &self,
         format: TextureFormat,
     ) -> Result<wgt::TextureFormatFeatures, MissingFeatures> {

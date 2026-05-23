@@ -151,6 +151,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_texture_dimension_3d,
         max_texture_array_layers,
         max_bind_groups,
+        max_bind_groups_plus_vertex_buffers,
         max_bindings_per_bind_group,
         max_dynamic_uniform_buffers_per_pipeline_layout,
         max_dynamic_storage_buffers_per_pipeline_layout,
@@ -182,8 +183,10 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_immediate_size,
         max_non_sampler_bindings,
 
-        max_task_mesh_workgroup_total_count,
-        max_task_mesh_workgroups_per_dimension,
+        max_task_workgroup_total_count,
+        max_task_workgroups_per_dimension,
+        max_mesh_workgroup_total_count,
+        max_mesh_workgroups_per_dimension,
         max_task_invocations_per_workgroup,
         max_task_invocations_per_dimension,
         max_mesh_invocations_per_workgroup,
@@ -206,6 +209,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                           Max Texture Dimension 3d: {max_texture_dimension_3d}")?;
     writeln!(output, "\t\t                           Max Texture Array Layers: {max_texture_array_layers}")?;
     writeln!(output, "\t\t                                    Max Bind Groups: {max_bind_groups}")?;
+    writeln!(output, "\t\t                Max Bind Groups Plus Vertex Buffers: {max_bind_groups_plus_vertex_buffers}")?;
     writeln!(output, "\t\t                        Max Bindings Per Bind Group: {max_bindings_per_bind_group}")?;
     writeln!(output, "\t\t    Max Dynamic Uniform Buffers Per Pipeline Layout: {max_dynamic_uniform_buffers_per_pipeline_layout}")?;
     writeln!(output, "\t\t    Max Dynamic Storage Buffers Per Pipeline Layout: {max_dynamic_storage_buffers_per_pipeline_layout}")?;
@@ -236,8 +240,10 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                       Max Compute Workgroup Size Z: {max_compute_workgroup_size_z}")?;
     writeln!(output, "\t\t               Max Compute Workgroups Per Dimension: {max_compute_workgroups_per_dimension}")?;
 
-    writeln!(output, "\t\t                Max Task/Mesh Workgroup Total Count: {max_task_mesh_workgroup_total_count}")?;
-    writeln!(output, "\t\t             Max Task/Mesh Workgroups Per Dimension: {max_task_mesh_workgroups_per_dimension}")?;
+    writeln!(output, "\t\t                     Max Task Workgroup Total Count: {max_task_workgroup_total_count}")?;
+    writeln!(output, "\t\t                  Max Task Workgroups Per Dimension: {max_task_workgroups_per_dimension}")?;
+    writeln!(output, "\t\t                     Max Mesh Workgroup Total Count: {max_mesh_workgroup_total_count}")?;
+    writeln!(output, "\t\t                  Max Mesh Workgroups Per Dimension: {max_mesh_workgroups_per_dimension}")?;
     writeln!(output, "\t\t                 Max Task Invocations Per Workgroup: {max_task_invocations_per_workgroup}")?;
     writeln!(output, "\t\t                 Max Task Invocations Per Dimension: {max_task_invocations_per_dimension}")?;
     writeln!(output, "\t\t                 Max Mesh Invocations Per Workgroup: {max_mesh_invocations_per_workgroup}")?;

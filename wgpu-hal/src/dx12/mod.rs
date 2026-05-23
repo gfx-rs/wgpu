@@ -88,7 +88,7 @@ mod types;
 mod view;
 
 use alloc::{borrow::ToOwned as _, string::String, sync::Arc, vec::Vec};
-use core::{ffi, fmt, mem, ops::Deref};
+use core::{ffi, fmt, mem, ops::Deref, sync::atomic::AtomicU64};
 
 use arrayvec::ArrayVec;
 use hashbrown::HashMap;
@@ -509,6 +509,10 @@ crate::impl_dyn_resource!(
 
 // Limited by D3D12's root signature size of 64. Each element takes 1 or 2 entries.
 const MAX_ROOT_ELEMENTS: usize = 64;
+/// See comment in [`Adapter::expose`].
+/// You must change the math in the comment before you update this value.
+const MAX_IMMEDIATE_SIZE: u32 = 128;
+const MAX_IMMEDIATES: usize = MAX_IMMEDIATE_SIZE as usize / 4;
 const ZERO_BUFFER_SIZE: wgt::BufferAddress = 256 << 10;
 
 pub struct Instance {
@@ -788,11 +792,52 @@ unsafe impl Sync for Device {}
 pub struct Queue {
     raw: Direct3D12::ID3D12CommandQueue,
     temp_lists: Mutex<Vec<Option<Direct3D12::ID3D12CommandList>>>,
+    idle_fence: Direct3D12::ID3D12Fence,
+    idle_event: Event,
+    idle_fence_value: AtomicU64,
+    pending_waits: Mutex<Vec<(Direct3D12::ID3D12Fence, u64)>>,
+    pending_signals: Mutex<Vec<(Direct3D12::ID3D12Fence, u64)>>,
 }
 
 impl Queue {
     pub fn as_raw(&self) -> &Direct3D12::ID3D12CommandQueue {
         &self.raw
+    }
+
+    /// Stage a `ID3D12CommandQueue::Wait(fence, value)` for the next
+    /// [`crate::Queue::submit`]. The wait is enqueued before the
+    /// submit's command lists, so subsequent GPU work observes the
+    /// foreign signal at `value`.
+    pub fn add_wait_fence(&self, fence: Direct3D12::ID3D12Fence, value: u64) {
+        self.pending_waits.lock().push((fence, value));
+    }
+
+    /// Remove `fence` from the pending wait list if it is still present.
+    /// Returns `true` if it was found and removed.
+    pub fn remove_wait_fence(&self, fence: &Direct3D12::ID3D12Fence) -> bool {
+        let target = fence.as_raw();
+        let mut waits = self.pending_waits.lock();
+        let before = waits.len();
+        waits.retain(|(f, _)| f.as_raw() != target);
+        waits.len() != before
+    }
+
+    /// Stage a `ID3D12CommandQueue::Signal(fence, value)` for the next
+    /// [`crate::Queue::submit`]. The signal is enqueued after the
+    /// submit's command lists complete, so a foreign API waiting on
+    /// `(fence, value)` observes the wgpu work as done.
+    pub fn add_signal_fence(&self, fence: Direct3D12::ID3D12Fence, value: u64) {
+        self.pending_signals.lock().push((fence, value));
+    }
+
+    /// Remove `fence` from the pending signal list if it is still present.
+    /// Returns `true` if it was found and removed.
+    pub fn remove_signal_fence(&self, fence: &Direct3D12::ID3D12Fence) -> bool {
+        let target = fence.as_raw();
+        let mut signals = self.pending_signals.lock();
+        let before = signals.len();
+        signals.retain(|(f, _)| f.as_raw() != target);
+        signals.len() != before
     }
 }
 
@@ -818,31 +863,51 @@ struct PassResolve {
     format: Dxgi::Common::DXGI_FORMAT,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct SpecialConstants {
+    /// The first vertex in an indirect draw call, _or_ the `x` of a compute dispatch.
+    first_vertex_or_x: i32,
+    /// The first instance in an indirect draw call, _or_ the `y` of a compute dispatch.
+    first_instance_or_y: u32,
+    /// Unused in an indirect draw call, _or_ the `z` of a compute dispatch.
+    unused_or_z: u32,
+}
+
+impl SpecialConstants {
+    fn from_indirect_draw_call_params(first_vertex: i32, first_instance: u32) -> Self {
+        Self {
+            first_vertex_or_x: first_vertex,
+            first_instance_or_y: first_instance,
+            unused_or_z: 0,
+        }
+    }
+
+    fn from_compute_dispatch_params(workgroup_count: [u32; 3]) -> Self {
+        Self {
+            first_vertex_or_x: workgroup_count[0] as i32,
+            first_instance_or_y: workgroup_count[1],
+            unused_or_z: workgroup_count[2],
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum RootElement {
     Empty,
-    Constant,
-    SpecialConstantBuffer {
-        /// The first vertex in an indirect draw call, _or_ the `x` of a compute dispatch.
-        first_vertex: i32,
-        /// The first instance in an indirect draw call, _or_ the `y` of a compute dispatch.
-        first_instance: u32,
-        /// Unused in an indirect draw call, _or_ the `z` of a compute dispatch.
-        other: u32,
-    },
-    /// Descriptor table.
-    Table(Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE),
-    /// Descriptor for an uniform buffer that has dynamic offset.
+    Immediates,
+    SpecialConstants(SpecialConstants),
+    DescriptorTable(Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE),
+    /// Descriptor table referring to the entire sampler heap.
+    SamplerHeapDescriptorTable,
+    /// Root descriptor for a uniform buffer binding that has a dynamic offset.
     DynamicUniformBuffer {
         address: Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE,
     },
-    /// Descriptor table referring to the entire sampler heap.
-    SamplerHeap,
-    /// Root constants for dynamic offsets.
+    /// Root constants for storage buffer bindings with dynamic offsets.
     ///
     /// start..end is the range of values in [`PassState::dynamic_storage_buffer_offsets`]
     /// that will be used to update the root constants.
-    DynamicOffsetsBuffer {
+    DynamicStorageBufferOffsets {
         start: usize,
         end: usize,
     },
@@ -860,7 +925,7 @@ struct PassState {
     resolves: ArrayVec<PassResolve, { crate::MAX_COLOR_ATTACHMENTS }>,
     layout: PipelineLayoutShared,
     root_elements: [RootElement; MAX_ROOT_ELEMENTS],
-    constant_data: [u32; MAX_ROOT_ELEMENTS],
+    immediates: [u32; MAX_IMMEDIATES],
     dynamic_storage_buffer_offsets: Vec<u32>,
     dirty_root_elements: u64,
     vertex_buffers: [Direct3D12::D3D12_VERTEX_BUFFER_VIEW; crate::MAX_VERTEX_BUFFERS],
@@ -868,10 +933,8 @@ struct PassState {
     kind: PassKind,
 }
 
-#[test]
-fn test_dirty_mask() {
-    assert_eq!(MAX_ROOT_ELEMENTS, u64::BITS as usize);
-}
+// `root_elements` size must match `dirty_root_elements` bit size
+const _: () = assert!(MAX_ROOT_ELEMENTS == u64::BITS as usize);
 
 impl PassState {
     fn new() -> Self {
@@ -882,11 +945,11 @@ impl PassState {
                 signature: None,
                 total_root_elements: 0,
                 special_constants: None,
-                root_constant_info: None,
+                immediates_info: None,
                 sampler_heap_root_index: None,
             },
             root_elements: [RootElement::Empty; MAX_ROOT_ELEMENTS],
-            constant_data: [0; MAX_ROOT_ELEMENTS],
+            immediates: [0; MAX_IMMEDIATES],
             dynamic_storage_buffer_offsets: Vec::new(),
             dirty_root_elements: 0,
             vertex_buffers: [Default::default(); crate::MAX_VERTEX_BUFFERS],
@@ -955,6 +1018,12 @@ pub struct Buffer {
     // as the allocation size varies for assorted reasons.
     size: wgt::BufferAddress,
     allocation: suballocation::Allocation,
+}
+
+impl Buffer {
+    pub unsafe fn raw_resource(&self) -> &Direct3D12::ID3D12Resource {
+        &self.resource
+    }
 }
 
 unsafe impl Send for Buffer {}
@@ -1139,9 +1208,9 @@ struct BindGroupInfo {
 }
 
 #[derive(Debug, Clone)]
-struct RootConstantInfo {
+struct ImmediatesInfo {
     root_index: RootIndex,
-    range: core::ops::Range<u32>,
+    size: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -1155,7 +1224,7 @@ struct PipelineLayoutShared {
     signature: Option<Direct3D12::ID3D12RootSignature>,
     total_root_elements: RootIndex,
     special_constants: Option<PipelineLayoutSpecialConstants>,
-    root_constant_info: Option<RootConstantInfo>,
+    immediates_info: Option<ImmediatesInfo>,
     sampler_heap_root_index: Option<RootIndex>,
 }
 
@@ -1609,6 +1678,17 @@ impl crate::Queue for Queue {
             temp_lists.push(Some(cmd_buf.raw.clone().into()));
         }
 
+        // Drain caller-staged waits before ExecuteCommandLists so the
+        // GPU queue blocks on each foreign signal before running our
+        // command lists. D3D12 queue commands are FIFO - Wait calls
+        // here gate everything submitted after them.
+        {
+            let mut waits = self.pending_waits.lock();
+            for (fence, value) in waits.drain(..) {
+                unsafe { self.raw.Wait(&fence, value) }.into_device_result("Wait pending fence")?;
+            }
+        }
+
         {
             profiling::scope!("ID3D12CommandQueue::ExecuteCommandLists");
             unsafe { self.raw.ExecuteCommandLists(&temp_lists) }
@@ -1616,6 +1696,16 @@ impl crate::Queue for Queue {
 
         unsafe { self.raw.Signal(&signal_fence.raw, signal_value) }
             .into_device_result("Signal fence")?;
+
+        // Drain caller-staged signals after our own Signal so each
+        // additional fence value publishes once the submit completes.
+        {
+            let mut signals = self.pending_signals.lock();
+            for (fence, value) in signals.drain(..) {
+                unsafe { self.raw.Signal(&fence, value) }
+                    .into_device_result("Signal pending fence")?;
+            }
+        }
 
         // Note the lack of synchronization here between the main Direct queue
         // and the dedicated presentation queue. This is automatically handled
@@ -1654,17 +1744,31 @@ impl crate::Queue for Queue {
         let frequency = unsafe { self.raw.GetTimestampFrequency() }.expect("GetTimestampFrequency");
         (1_000_000_000.0 / frequency as f64) as f32
     }
+
+    unsafe fn wait_for_idle(&self) -> Result<(), crate::DeviceError> {
+        let value = self
+            .idle_fence_value
+            .fetch_add(1, core::sync::atomic::Ordering::Relaxed)
+            + 1;
+        unsafe { self.raw.Signal(&self.idle_fence, value) }
+            .into_device_result("Signal idle fence")?;
+        unsafe {
+            self.idle_fence
+                .SetEventOnCompletion(value, self.idle_event.0)
+        }
+        .into_device_result("SetEventOnCompletion")?;
+        unsafe { Threading::WaitForSingleObject(self.idle_event.0, Threading::INFINITE) };
+        Ok(())
+    }
 }
 #[derive(Debug)]
 pub struct DxilPassthroughShader {
     pub shader: Vec<u8>,
-    pub num_workgroups: (u32, u32, u32),
 }
 
 #[derive(Debug)]
 pub struct HlslPassthroughShader {
     pub shader: String,
-    pub num_workgroups: (u32, u32, u32),
 }
 
 #[derive(Debug)]
@@ -1676,24 +1780,24 @@ pub enum ShaderModuleSource {
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FeatureLevel {
-    _11_0,
-    _11_1,
-    _12_0,
-    _12_1,
-    _12_2,
+    V11_0,
+    V11_1,
+    V12_0,
+    V12_1,
+    V12_2,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ShaderModel {
-    _5_1,
-    _6_0,
-    _6_1,
-    _6_2,
-    _6_3,
-    _6_4,
-    _6_5,
-    _6_6,
-    _6_7,
-    _6_8,
-    _6_9,
+    V5_1,
+    V6_0,
+    V6_1,
+    V6_2,
+    V6_3,
+    V6_4,
+    V6_5,
+    V6_6,
+    V6_7,
+    V6_8,
+    V6_9,
 }

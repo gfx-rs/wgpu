@@ -221,12 +221,13 @@ impl Instance {
                 let value: &wasm_bindgen::JsValue = &canvas;
                 let obj = core::ptr::NonNull::from(value).cast();
                 let raw_window_handle = raw_window_handle::WebCanvasWindowHandle::new(obj).into();
+                let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();
 
                 // Note that we need to call this while we still have `value` around.
                 // This is safe without storing canvas to `handle_origin` since the surface will create a copy internally.
                 unsafe {
                     self.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
-                        raw_display_handle: None,
+                        raw_display_handle: Some(raw_display_handle),
                         raw_window_handle,
                     })
                 }?
@@ -239,12 +240,13 @@ impl Instance {
                 let obj = core::ptr::NonNull::from(value).cast();
                 let raw_window_handle =
                     raw_window_handle::WebOffscreenCanvasWindowHandle::new(obj).into();
+                let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();
 
                 // Note that we need to call this while we still have `value` around.
                 // This is safe without storing canvas to `handle_origin` since the surface will create a copy internally.
                 unsafe {
                     self.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
-                        raw_display_handle: None,
+                        raw_display_handle: Some(raw_display_handle),
                         raw_window_handle,
                     })
                 }?

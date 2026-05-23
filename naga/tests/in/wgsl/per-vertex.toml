@@ -1,2 +1,8 @@
 capabilities = "PER_VERTEX"
-targets = "WGSL | SPIRV"
+targets = "WGSL | SPIRV | METAL | HLSL"
+
+[msl]
+lang_version = [4, 0]
+
+[hlsl]
+shader_model = "V6_1"

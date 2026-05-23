@@ -7,7 +7,7 @@ use alloc::{
 use core::fmt;
 
 use arrayvec::ArrayVec;
-use hashbrown::hash_map::Entry;
+use hashbrown::{hash_map::Entry, HashSet};
 use shader_io_deductions::{display_deductions_as_optional_list, MaxVertexShaderOutputDeduction};
 use thiserror::Error;
 use wgt::{
@@ -16,7 +16,7 @@ use wgt::{
 };
 
 use crate::{
-    device::bgl, resource::InvalidResourceError,
+    command::ColorAttachmentError, device::bgl, resource::InvalidResourceError,
     validation::shader_io_deductions::MaxFragmentShaderInputDeduction, FastHashMap, FastHashSet,
 };
 
@@ -278,6 +278,7 @@ struct SpecializationConstant {
 struct EntryPointMeshInfo {
     max_vertices: u32,
     max_primitives: u32,
+    primitive_topology: wgt::PrimitiveTopology,
 }
 
 #[derive(Debug, Default)]
@@ -292,6 +293,7 @@ struct EntryPoint {
     dual_source_blending: bool,
     task_payload_size: Option<u32>,
     mesh_info: Option<EntryPointMeshInfo>,
+    immediate_slots_required: naga::valid::ImmediateSlots,
 }
 
 #[derive(Debug)]
@@ -299,6 +301,30 @@ pub struct Interface {
     limits: wgt::Limits,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
+    pub(crate) immediate_size: u32,
+}
+
+#[derive(Debug)]
+pub struct PassthroughInterface {
+    pub entry_point_names: HashSet<String>,
+}
+
+// Most shaders will use a standard interface which is very large.
+// Passthrough shaders have a much smaller interface. No reason to
+// box the standard interface though.
+#[expect(clippy::large_enum_variant)]
+#[derive(Debug)]
+pub enum ShaderMetaData {
+    Interface(Interface),
+    Passthrough(PassthroughInterface),
+}
+impl ShaderMetaData {
+    pub fn interface(&self) -> Option<&Interface> {
+        match self {
+            Self::Interface(i) => Some(i),
+            Self::Passthrough(_) => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -392,20 +418,8 @@ impl WebGpuError for InputError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum StageError {
-    #[error(
-        "Shader entry point's workgroup size {dimensions:?} ({total} total invocations) must be \
-        less or equal to the per-dimension limit `Limits::{per_dimension_limits_desc}` of \
-        {per_dimension_limits:?} and the total invocation limit `Limits::{total_limit_desc}` of \
-        {total_limit}"
-    )]
-    InvalidWorkgroupSize {
-        dimensions: [u32; 3],
-        per_dimension_limits: [u32; 3],
-        per_dimension_limits_desc: &'static str,
-        total: u32,
-        total_limit: u32,
-        total_limit_desc: &'static str,
-    },
+    #[error(transparent)]
+    InvalidWorkgroupSize(#[from] InvalidWorkgroupSizeError),
     #[error("Unable to find entry point '{0}'")]
     MissingEntryPoint(String),
     #[error("Shader global {0:?} is not available in the pipeline layout")]
@@ -508,12 +522,16 @@ pub enum StageError {
     InvalidPrimitiveIndex,
     #[error("If a mesh shader writes to primitive index, it must be read by the fragment shader.")]
     MissingPrimitiveIndex,
-    #[error("DrawId cannot be used in the same pipeline as a task shader")]
+    #[error("DrawId cannot be used in a mesh shader in a pipeline with a task shader")]
     DrawIdError,
     #[error("Pipeline uses dual-source blending, but the shader does not support it")]
     InvalidDualSourceBlending,
     #[error("Fragment shader writes depth, but pipeline does not have a depth attachment")]
     MissingFragDepthAttachment,
+    #[error("Per vertex fragment inputs can only be used in triangle primitive pipelines")]
+    PerVertexNotTriangles,
+    #[error("Mesh shader pipelines must have primitive topology of TriangleList, LineList or PointList, and this must match with what the mesh shader declares.")]
+    MeshTopologyMismatch,
 }
 
 impl WebGpuError for StageError {
@@ -548,7 +566,9 @@ impl WebGpuError for StageError {
             | Self::MissingPrimitiveIndex
             | Self::DrawIdError
             | Self::InvalidDualSourceBlending
-            | Self::MissingFragDepthAttachment => ErrorType::Validation,
+            | Self::MissingFragDepthAttachment
+            | Self::PerVertexNotTriangles
+            | Self::MeshTopologyMismatch => ErrorType::Validation,
         }
     }
 }
@@ -1236,6 +1256,8 @@ impl Interface {
             resource_mapping.insert(var_handle, handle);
         }
 
+        let immediate_size = naga::valid::ImmediateSlots::size_for_module(module);
+
         let mut entry_points = FastHashMap::default();
         entry_points.reserve(module.entry_points.len());
         for (index, entry_point) in module.entry_points.iter().enumerate() {
@@ -1266,6 +1288,7 @@ impl Interface {
             }
             ep.dual_source_blending = info.dual_source_blending;
             ep.workgroup_size = entry_point.workgroup_size;
+            ep.immediate_slots_required = info.immediate_slots_used;
 
             if let Some(task_payload) = entry_point.task_payload {
                 ep.task_payload_size = Some(
@@ -1278,6 +1301,11 @@ impl Interface {
                 ep.mesh_info = Some(EntryPointMeshInfo {
                     max_vertices: mesh_info.max_vertices,
                     max_primitives: mesh_info.max_primitives,
+                    primitive_topology: match mesh_info.topology {
+                        naga::MeshOutputTopology::Triangles => wgt::PrimitiveTopology::TriangleList,
+                        naga::MeshOutputTopology::Lines => wgt::PrimitiveTopology::LineList,
+                        naga::MeshOutputTopology::Points => wgt::PrimitiveTopology::PointList,
+                    },
                 });
                 Self::populate(
                     &mut ep.outputs,
@@ -1300,7 +1328,18 @@ impl Interface {
             limits,
             resources,
             entry_points,
+            immediate_size,
         }
+    }
+
+    pub fn immediate_slots_required(
+        &self,
+        stage: naga::ShaderStage,
+        entry_point_name: &str,
+    ) -> naga::valid::ImmediateSlots {
+        self.entry_points
+            .get(&(stage, entry_point_name.to_string()))
+            .map_or(Default::default(), |ep| ep.immediate_slots_required)
     }
 
     pub fn finalize_entry_point_name(
@@ -1333,6 +1372,7 @@ impl Interface {
         entry_point_name: &str,
         shader_stage: ShaderStageForValidation,
         inputs: StageIo,
+        primitive_topology: Option<wgt::PrimitiveTopology>,
     ) -> Result<StageIo, StageError> {
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
@@ -1465,76 +1505,54 @@ impl Interface {
 
         // check workgroup size limits
         if shader_stage.to_naga().compute_like() {
-            let (
-                max_workgroup_size_limits,
-                max_workgroup_size_total,
-                per_dimension_limit,
-                total_limit,
-            ) = match shader_stage.to_naga() {
-                naga::ShaderStage::Compute => (
-                    [
+            let total = match shader_stage.to_naga() {
+                naga::ShaderStage::Compute => check_workgroup_sizes(
+                    &entry_point.workgroup_size,
+                    &[
                         self.limits.max_compute_workgroup_size_x,
                         self.limits.max_compute_workgroup_size_y,
                         self.limits.max_compute_workgroup_size_z,
                     ],
-                    self.limits.max_compute_invocations_per_workgroup,
                     "max_compute_workgroup_size_*",
+                    self.limits.max_compute_invocations_per_workgroup,
                     "max_compute_invocations_per_workgroup",
-                ),
-                naga::ShaderStage::Task => (
-                    [
+                )?,
+                naga::ShaderStage::Task => check_workgroup_sizes(
+                    &entry_point.workgroup_size,
+                    &[
                         self.limits.max_task_invocations_per_dimension,
                         self.limits.max_task_invocations_per_dimension,
                         self.limits.max_task_invocations_per_dimension,
                     ],
-                    self.limits.max_task_invocations_per_workgroup,
                     "max_task_invocations_per_dimension",
+                    self.limits.max_task_invocations_per_workgroup,
                     "max_task_invocations_per_workgroup",
-                ),
-                naga::ShaderStage::Mesh => (
-                    [
+                )?,
+                naga::ShaderStage::Mesh => check_workgroup_sizes(
+                    &entry_point.workgroup_size,
+                    &[
                         self.limits.max_mesh_invocations_per_dimension,
                         self.limits.max_mesh_invocations_per_dimension,
                         self.limits.max_mesh_invocations_per_dimension,
                     ],
-                    self.limits.max_mesh_invocations_per_workgroup,
                     "max_mesh_invocations_per_dimension",
+                    self.limits.max_mesh_invocations_per_workgroup,
                     "max_mesh_invocations_per_workgroup",
-                ),
+                )?,
                 _ => unreachable!(),
             };
-
-            let total_invocations = entry_point
-                .workgroup_size
-                .iter()
-                .fold(1u32, |total, &dim| total.saturating_mul(dim));
-            let invalid_total_invocations =
-                total_invocations > max_workgroup_size_total || total_invocations == 0;
-
-            assert_eq!(
-                entry_point.workgroup_size.len(),
-                max_workgroup_size_limits.len()
-            );
-            let dimension_too_large = entry_point
-                .workgroup_size
-                .iter()
-                .zip(max_workgroup_size_limits.iter())
-                .any(|(dim, limit)| dim > limit);
-
-            if invalid_total_invocations || dimension_too_large {
-                return Err(StageError::InvalidWorkgroupSize {
-                    dimensions: entry_point.workgroup_size,
-                    total: total_invocations,
-                    per_dimension_limits: max_workgroup_size_limits,
-                    total_limit: max_workgroup_size_total,
-                    per_dimension_limits_desc: per_dimension_limit,
-                    total_limit_desc: total_limit,
-                });
+            if total == 0 {
+                return Err(StageError::InvalidWorkgroupSize(
+                    InvalidWorkgroupSizeError::Zero {
+                        dimensions: entry_point.workgroup_size,
+                    },
+                ));
             }
         }
 
         let mut this_stage_primitive_index = false;
         let mut has_draw_id = false;
+        let mut has_per_vertex = false;
 
         // check inputs compatibility
         for input in entry_point.inputs.iter() {
@@ -1599,6 +1617,7 @@ impl Interface {
                             error,
                         });
                     }
+                    has_per_vertex |= iv.interpolation == Some(naga::Interpolation::PerVertex);
                 }
                 Varying::BuiltIn(BuiltIn::PrimitiveIndex) => {
                     this_stage_primitive_index = true;
@@ -1811,6 +1830,9 @@ impl Interface {
                     value: mesh_info.max_primitives,
                 });
             }
+            if primitive_topology != Some(mesh_info.primitive_topology) {
+                return Err(StageError::MeshTopologyMismatch);
+            }
         }
         if let Some(task_payload_size) = entry_point.task_payload_size {
             if task_payload_size > self.limits.max_task_payload_size {
@@ -1848,6 +1870,10 @@ impl Interface {
             return Err(StageError::DrawIdError);
         }
 
+        if primitive_topology.is_none_or(|e| !e.is_triangles()) && has_per_vertex {
+            return Err(StageError::PerVertexNotTriangles);
+        }
+
         let outputs = entry_point
             .outputs
             .iter()
@@ -1880,6 +1906,21 @@ impl Interface {
     }
 }
 
+pub fn check_color_attachment_count(
+    num_attachments: usize,
+    limit: u32,
+) -> Result<(), ColorAttachmentError> {
+    let limit = usize::try_from(limit).unwrap();
+    if num_attachments > limit {
+        return Err(ColorAttachmentError::TooMany {
+            given: num_attachments,
+            limit,
+        });
+    }
+
+    Ok(())
+}
+
 /// Validate a list of color attachment formats against `maxColorAttachmentBytesPerSample`.
 ///
 /// The color attachments can be from a render pass descriptor or a pipeline descriptor.
@@ -1888,7 +1929,7 @@ impl Interface {
 pub fn validate_color_attachment_bytes_per_sample(
     attachment_formats: impl IntoIterator<Item = wgt::TextureFormat>,
     limit: u32,
-) -> Result<(), crate::command::ColorAttachmentError> {
+) -> Result<(), ColorAttachmentError> {
     let mut total_bytes_per_sample: u32 = 0;
     for format in attachment_formats {
         let byte_cost = format.target_pixel_byte_cost().unwrap();
@@ -1899,15 +1940,69 @@ pub fn validate_color_attachment_bytes_per_sample(
     }
 
     if total_bytes_per_sample > limit {
-        return Err(
-            crate::command::ColorAttachmentError::TooManyBytesPerSample {
-                total: total_bytes_per_sample,
-                limit,
-            },
-        );
+        return Err(ColorAttachmentError::TooManyBytesPerSample {
+            total: total_bytes_per_sample,
+            limit,
+        });
     }
 
     Ok(())
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum InvalidWorkgroupSizeError {
+    #[error(
+        "Workgroup size {dimensions:?} ({total} total invocations) must be less or equal to \
+        the per-dimension limit `Limits::{per_dimension_limits_desc}` of {per_dimension_limits:?} \
+        and the total invocation limit `Limits::{total_limit_desc}` of {total_limit}"
+    )]
+    LimitExceeded {
+        dimensions: [u32; 3],
+        per_dimension_limits: [u32; 3],
+        per_dimension_limits_desc: &'static str,
+        total: u32,
+        total_limit: u32,
+        total_limit_desc: &'static str,
+    },
+    #[error("Workgroup sizes {dimensions:?} must be positive")]
+    Zero { dimensions: [u32; 3] },
+}
+
+/// Check X/Y/Z workgroup sizes against per-dimension and overall limits.
+///
+/// This function does not check that the sizes are non-zero. In a dispatch, it is legal for
+/// the size to be zero. In shader or pipeline creation, it is an error for the size to be
+/// zero, and the caller must check that.
+pub(crate) fn check_workgroup_sizes(
+    sizes: &[u32; 3],
+    per_dimension_limits: &[u32; 3],
+    per_dimension_limits_desc: &'static str,
+    total_limit: u32,
+    total_limit_desc: &'static str,
+) -> Result<u32, InvalidWorkgroupSizeError> {
+    let total = sizes
+        .iter()
+        .fold(1u32, |total, &dim| total.saturating_mul(dim));
+
+    let invalid_total_invocations = total > total_limit;
+
+    let dimension_too_large = sizes
+        .iter()
+        .zip(per_dimension_limits.iter())
+        .any(|(dim, limit)| dim > limit);
+
+    if invalid_total_invocations || dimension_too_large {
+        Err(InvalidWorkgroupSizeError::LimitExceeded {
+            dimensions: *sizes,
+            per_dimension_limits: *per_dimension_limits,
+            per_dimension_limits_desc,
+            total,
+            total_limit,
+            total_limit_desc,
+        })
+    } else {
+        Ok(total)
+    }
 }
 
 pub enum ShaderStageForValidation {

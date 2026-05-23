@@ -261,6 +261,8 @@ pub trait QueueInterface: CommonTraits {
     fn on_submitted_work_done(&self, callback: BoxSubmittedWorkDoneCallback);
 
     fn compact_blas(&self, blas: &DispatchBlas) -> (Option<u64>, DispatchBlas);
+
+    fn present(&self, detail: &DispatchSurfaceOutputDetail);
 }
 
 pub trait ShaderModuleInterface: CommonTraits {
@@ -277,8 +279,10 @@ pub trait BufferInterface: CommonTraits {
         range: Range<crate::BufferAddress>,
         callback: BufferMapCallback,
     );
-    fn get_mapped_range(&self, sub_range: Range<crate::BufferAddress>)
-        -> DispatchBufferMappedRange;
+    fn get_mapped_range(
+        &self,
+        sub_range: Range<crate::BufferAddress>,
+    ) -> Result<DispatchBufferMappedRange, crate::MapRangeError>;
 
     fn unmap(&self);
 
@@ -407,6 +411,14 @@ pub trait ComputePassInterface: CommonTraits + Drop {
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
     );
+
+    fn transition_resources<'a>(
+        &mut self,
+        buffer_transitions: &mut dyn Iterator<Item = wgt::BufferTransition<&'a DispatchBuffer>>,
+        texture_transitions: &mut dyn Iterator<
+            Item = wgt::TextureTransition<&'a DispatchTextureView>,
+        >,
+    );
 }
 pub trait RenderPassInterface: CommonTraits + Drop {
     fn set_pipeline(&mut self, pipeline: &DispatchRenderPipeline);
@@ -426,7 +438,7 @@ pub trait RenderPassInterface: CommonTraits + Drop {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &DispatchBuffer,
+        buffer: Option<&DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     );
@@ -537,7 +549,7 @@ pub trait RenderBundleEncoderInterface: CommonTraits {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &DispatchBuffer,
+        buffer: Option<&DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     );
@@ -578,7 +590,6 @@ pub trait SurfaceInterface: CommonTraits {
 }
 
 pub trait SurfaceOutputDetailInterface: CommonTraits {
-    fn present(&self);
     fn texture_discard(&self);
 }
 

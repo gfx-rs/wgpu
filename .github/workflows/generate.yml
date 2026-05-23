@@ -72,6 +72,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: cargo-generate-${{ matrix.name }}
+          env-vars: ImageVersion
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Install `cargo-generate`
         uses: taiki-e/install-action@v2

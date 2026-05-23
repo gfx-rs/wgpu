@@ -152,7 +152,7 @@
                             num_dynamic_offsets: 0,
                             bind_group: Some(PointerId(0x10)),
                         ),
-                        Dispatch((4, 1, 1)),
+                        DispatchWorkgroups((4, 1, 1)),
                     ],
                     dynamic_offsets: [],
                     string_data: [],

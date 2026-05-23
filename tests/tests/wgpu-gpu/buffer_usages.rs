@@ -161,7 +161,7 @@ async fn map_test(
 
     if !before_unmap && !before_destroy {
         {
-            let view = buffer.slice(0..size).get_mapped_range();
+            let view = buffer.slice(0..size).get_mapped_range().unwrap();
             assert!(!view.is_empty());
         }
 

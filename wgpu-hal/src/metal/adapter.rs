@@ -1,3 +1,4 @@
+use objc2::rc::autoreleasepool;
 use objc2::runtime::{AnyObject, ProtocolObject, Sel};
 use objc2::{available, sel};
 use objc2_foundation::{NSOperatingSystemVersion, NSProcessInfo};
@@ -68,6 +69,9 @@ impl super::Adapter {
     pub(super) fn new(shared: Arc<super::AdapterShared>) -> Self {
         Self { shared }
     }
+    pub fn raw_device(&self) -> &ProtocolObject<dyn MTLDevice> {
+        &self.shared.device
+    }
 }
 
 impl crate::Adapter for super::Adapter {
@@ -76,54 +80,57 @@ impl crate::Adapter for super::Adapter {
     unsafe fn open(
         &self,
         features: wgt::Features,
-        _limits: &wgt::Limits,
+        limits: &wgt::Limits,
         _memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let queue = self
-            .shared
-            .device
-            .newCommandQueueWithMaxCommandBufferCount(MAX_COMMAND_BUFFERS)
-            .unwrap();
+        autoreleasepool(|_| {
+            let queue = self
+                .shared
+                .device
+                .newCommandQueueWithMaxCommandBufferCount(MAX_COMMAND_BUFFERS)
+                .unwrap();
 
-        // Acquiring the meaning of timestamp ticks is hard with Metal!
-        // The only thing there is a method correlating cpu & gpu timestamps (`device.sample_timestamps`).
-        // Users are supposed to call this method twice and calculate the difference,
-        // see "Converting GPU Timestamps into CPU Time":
-        // https://developer.apple.com/documentation/metal/gpu_counters_and_counter_sample_buffers/converting_gpu_timestamps_into_cpu_time
-        // Not only does this mean we get an approximate value, this is as also *very slow*!
-        // Chromium opted to solve this using a linear regression that they stop at some point
-        // https://source.chromium.org/chromium/chromium/src/+/refs/heads/main:third_party/dawn/src/dawn/native/metal/DeviceMTL.mm;drc=76be2f9f117654f3fe4faa477b0445114fccedda;bpv=0;bpt=1;l=46
-        // Generally, the assumption is that timestamp values aren't changing over time, after all all other APIs provide stable values.
-        //
-        // We should do as Chromium does for the general case, but this requires quite some state tracking
-        // and doesn't even provide perfectly accurate values, especially at the start of the application when
-        // we didn't have the chance to sample a lot of values just yet.
-        //
-        // So instead, we're doing the dangerous but easy thing and use our "knowledge" of timestamps
-        // conversions on different devices, after all Metal isn't supported on that many ;)
-        // Based on:
-        // * https://github.com/gfx-rs/wgpu/pull/2528
-        // * https://github.com/gpuweb/gpuweb/issues/1325#issuecomment-761041326
-        let timestamp_period = if self.shared.device.name().to_string().starts_with("Intel") {
-            83.333
-        } else {
-            // Known for Apple Silicon (at least M1 & M2, iPad Pro 2018) and AMD GPUs.
-            1.0
-        };
+            // Acquiring the meaning of timestamp ticks is hard with Metal!
+            // The only thing there is a method correlating cpu & gpu timestamps (`device.sample_timestamps`).
+            // Users are supposed to call this method twice and calculate the difference,
+            // see "Converting GPU Timestamps into CPU Time":
+            // https://developer.apple.com/documentation/metal/gpu_counters_and_counter_sample_buffers/converting_gpu_timestamps_into_cpu_time
+            // Not only does this mean we get an approximate value, this is as also *very slow*!
+            // Chromium opted to solve this using a linear regression that they stop at some point
+            // https://source.chromium.org/chromium/chromium/src/+/refs/heads/main:third_party/dawn/src/dawn/native/metal/DeviceMTL.mm;drc=76be2f9f117654f3fe4faa477b0445114fccedda;bpv=0;bpt=1;l=46
+            // Generally, the assumption is that timestamp values aren't changing over time, after all all other APIs provide stable values.
+            //
+            // We should do as Chromium does for the general case, but this requires quite some state tracking
+            // and doesn't even provide perfectly accurate values, especially at the start of the application when
+            // we didn't have the chance to sample a lot of values just yet.
+            //
+            // So instead, we're doing the dangerous but easy thing and use our "knowledge" of timestamps
+            // conversions on different devices, after all Metal isn't supported on that many ;)
+            // Based on:
+            // * https://github.com/gfx-rs/wgpu/pull/2528
+            // * https://github.com/gpuweb/gpuweb/issues/1325#issuecomment-761041326
+            let timestamp_period = if self.shared.device.name().to_string().starts_with("Intel") {
+                83.333
+            } else {
+                // Known for Apple Silicon (at least M1 & M2, iPad Pro 2018) and AMD GPUs.
+                1.0
+            };
 
-        Ok(crate::OpenDevice {
-            device: super::Device {
-                shared: Arc::clone(&self.shared),
-                features,
-                counters: Default::default(),
-            },
-            queue: super::Queue {
-                shared: Arc::new(QueueShared {
-                    raw: queue,
-                    command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
-                }),
-                timestamp_period,
-            },
+            Ok(crate::OpenDevice {
+                device: super::Device {
+                    shared: Arc::clone(&self.shared),
+                    features,
+                    counters: Default::default(),
+                    limits: limits.clone(),
+                },
+                queue: super::Queue {
+                    shared: Arc::new(QueueShared {
+                        raw: queue,
+                        command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
+                    }),
+                    timestamp_period,
+                },
+            })
         })
     }
 
@@ -668,7 +675,9 @@ impl super::CapabilitiesQuery {
                     // Mesh shaders don't work on virtual devices even if they should be supported. CI thing
                 && !is_virtual;
 
-        let msl_version = if available!(macos = 15.0, ios = 18.0, tvos = 18.0, visionos = 2.0) {
+        let msl_version = if available!(macos = 26.0, ios = 26.0, tvos = 26.0, visionos = 26.0) {
+            MTLLanguageVersion::Version4_0
+        } else if available!(macos = 15.0, ios = 18.0, tvos = 18.0, visionos = 2.0) {
             MTLLanguageVersion::Version3_2
         } else if available!(macos = 14.0, ios = 17.0, tvos = 17.0, visionos = 1.0) {
             MTLLanguageVersion::Version3_1
@@ -919,11 +928,30 @@ impl super::CapabilitiesQuery {
             // This limit is the minimum of:
             // - "Maximum scalar or vector inputs to a fragment function"
             // - "Maximum number of input components to a fragment function" / 4
-            max_inter_stage_shader_variables: if (family_check
-                && device.supportsFamily(MTLGPUFamily::Apple4))
-                || device.supportsFeatureSet(MTLFeatureSet::macOS_GPUFamily1_v1)
+            //
+            // On non-Apple GPUs only, the Metal validation layers will error with:
+            //
+            // "number of shader varying components (125) exceeds limit (124).
+            // Note that on macOS the following attributes count towards the
+            // limit: [[position]], [[clip_distance]], [[point_size]],
+            // [[point_coord]], and, when read in the fragment shader,
+            // [[viewport_array_index]] & [[render_target_array_index]]."
+            //
+            // if the limit in the feature tables is crossed while also using
+            // one of the built-ins mentioned above.
+            //
+            // Note that the error says "on macOS" but it actually only applies
+            // to non-Apple GPUs.
+            //
+            // We only need to account for the position built-in since the others
+            // are either not used or they already count towards the limit
+            // calculation as specified by WebGPU.
+            max_inter_stage_shader_variables: if family_check
+                && device.supportsFamily(MTLGPUFamily::Apple4)
             {
-                31 // min(32 or 124, 124 / 4)
+                31 // min(124, 124 / 4)
+            } else if device.supportsFeatureSet(MTLFeatureSet::macOS_GPUFamily1_v1) {
+                30 // min(32, 124 / 4) - 1
             } else {
                 15 // min(60, 60 / 4)
             },
@@ -931,6 +959,9 @@ impl super::CapabilitiesQuery {
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=6
             // These are older checks but still hold true; no entry in this table supports
             // more than 1024 threads.
+            // **Note:** this is used to emit the `[[max_total_threads_per_threadgroup]]`
+            // attribute. This is how we guarantee that compute dispatches will always run
+            // and not silently fail due to hardware register pressure or occupancy limits.
             max_threads_per_group: if Self::supports_any(
                 device,
                 &[
@@ -1034,6 +1065,10 @@ impl super::CapabilitiesQuery {
                     && (device.supportsFamily(MTLGPUFamily::Apple7)
                         || device.supportsFamily(MTLGPUFamily::Mac2)))
                 || (available!(macos = 10.15, ios = 14.0, tvos = 16.0, visionos = 1.0)
+                    && device_class_responds_to(
+                        device,
+                        sel!(supportsShaderBarycentricCoordinates),
+                    )
                     && device.supportsShaderBarycentricCoordinates()),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             // See https://github.com/gfx-rs/wgpu/pull/8725 for more details
@@ -1062,7 +1097,26 @@ impl super::CapabilitiesQuery {
             },
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             mesh_shaders,
-            max_mesh_task_workgroup_count: if mesh_shaders { 1024 } else { 0 },
+            max_task_workgroup_count: if mesh_shaders
+                && (metal4 || device.supportsFamily(MTLGPUFamily::Apple2))
+            {
+                u32::MAX
+            } else if mesh_shaders {
+                1024
+            } else {
+                0
+            },
+            max_mesh_workgroup_count: if mesh_shaders
+                && device.supportsFamily(MTLGPUFamily::Apple10)
+            {
+                2u32.pow(22)
+            } else if mesh_shaders && device.supportsFamily(MTLGPUFamily::Apple9) {
+                2u32.pow(20)
+            } else if mesh_shaders {
+                1024
+            } else {
+                0
+            },
             max_task_payload_size: if mesh_shaders { 16384 - 32 } else { 0 },
             supports_cooperative_matrix: family_check
                 && (device.supportsFamily(MTLGPUFamily::Apple7)
@@ -1081,6 +1135,15 @@ impl super::CapabilitiesQuery {
             } else {
                 false
             },
+            shader_per_vertex: family_check && device.supportsFamily(MTLGPUFamily::Apple10),
+
+            //https://developer.apple.com/documentation/metal/mtltexturetype/type2dmultisamplearray
+            supports_multisample_array: available!(
+                macos = 10.14,
+                ios = 14.0,
+                tvos = 16.0,
+                visionos = 1.0
+            ),
         }
     }
 
@@ -1096,6 +1159,7 @@ impl super::CapabilitiesQuery {
             | F::CLEAR_TEXTURE
             | F::TEXTURE_FORMAT_16BIT_NORM
             | F::SHADER_F16
+            | F::SHADER_I16
             | F::DEPTH32FLOAT_STENCIL8
             | F::BGRA8UNORM_STORAGE
             | F::PASSTHROUGH_SHADERS
@@ -1189,11 +1253,20 @@ impl super::CapabilitiesQuery {
             self.shader_barycentrics && self.msl_version >= MTLLanguageVersion::Version2_2,
         );
 
+        features.set(F::SHADER_PER_VERTEX, self.shader_per_vertex);
+
         if self.supports_simd_scoped_operations {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);
         }
 
-        features.set(F::EXPERIMENTAL_MESH_SHADER, self.mesh_shaders);
+        features.set(
+            F::EXPERIMENTAL_MESH_SHADER | F::EXPERIMENTAL_MESH_SHADER_POINTS,
+            self.mesh_shaders,
+        );
+        features.set(
+            F::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
+            self.supported_vertex_amplification_factor > 1 && self.mesh_shaders,
+        );
 
         // Cooperative matrix (simdgroup matrix) requires MSL 2.3+
         features.set(
@@ -1206,6 +1279,8 @@ impl super::CapabilitiesQuery {
         }
 
         features.set(F::EXPERIMENTAL_RAY_QUERY, self.supports_raytracing);
+
+        features.set(F::MULTISAMPLE_ARRAY, self.supports_multisample_array);
 
         features
     }
@@ -1238,6 +1313,11 @@ impl super::CapabilitiesQuery {
             .flags
             .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
 
+        downlevel.flags.set(
+            wgt::DownlevelFlags::MSL2_1,
+            self.msl_version >= MTLLanguageVersion::Version2_1,
+        );
+
         let limits = crate::auxil::adjust_raw_limits(wgt::Limits {
             //
             // WebGPU LIMITS:
@@ -1247,9 +1327,11 @@ impl super::CapabilitiesQuery {
             max_texture_dimension_2d: self.max_texture_size as u32,
             max_texture_dimension_3d: self.max_texture_3d_size as u32,
             max_texture_array_layers: self.max_texture_layers as u32,
-            // No real limit.
-            max_bind_groups: 8,
-            // No real limit.
+            // No limit.
+            max_bind_groups: u32::MAX,
+            // No limit. Once we start using argument buffers we should set this appropriately.
+            max_bind_groups_plus_vertex_buffers: u32::MAX,
+            // No limit.
             max_bindings_per_bind_group: u32::MAX,
             // No limit, use maxUniformBuffersPerShaderStage.
             max_dynamic_uniform_buffers_per_pipeline_layout: MAX_UNIFORM_BUFFERS_PER_SHADER_STAGE,
@@ -1313,8 +1395,10 @@ impl super::CapabilitiesQuery {
             },
 
             // Should be not too large
-            max_task_mesh_workgroup_total_count: self.max_mesh_task_workgroup_count,
-            max_task_mesh_workgroups_per_dimension: self.max_mesh_task_workgroup_count,
+            max_task_workgroup_total_count: self.max_task_workgroup_count,
+            max_task_workgroups_per_dimension: self.max_task_workgroup_count,
+            max_mesh_workgroup_total_count: self.max_mesh_workgroup_count,
+            max_mesh_workgroups_per_dimension: self.max_mesh_workgroup_count,
             max_task_invocations_per_workgroup: if self.mesh_shaders { 1024 } else { 0 },
             max_task_invocations_per_dimension: if self.mesh_shaders { 1024 } else { 0 },
             max_mesh_invocations_per_workgroup: if self.mesh_shaders { 1024 } else { 0 },
@@ -1336,8 +1420,10 @@ impl super::CapabilitiesQuery {
                 // Metal Shading Language it generates, so from `wgpu_hal`'s
                 // users' point of view, references are tightly checked.
                 uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
-                raw_tlas_instance_size: size_of::<MTLIndirectAccelerationStructureInstanceDescriptor>(
-                ),
+                raw_tlas_instance_size: u32::try_from(size_of::<
+                    MTLIndirectAccelerationStructureInstanceDescriptor,
+                >())
+                .unwrap(),
                 ray_tracing_scratch_buffer_alignment: 1,
             },
             downlevel,

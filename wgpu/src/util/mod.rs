@@ -48,7 +48,7 @@ impl DownloadBuffer {
         buffer: &super::BufferSlice<'_>,
         callback: impl FnOnce(Result<Self, super::BufferAsyncError>) + Send + 'static,
     ) {
-        let size = buffer.size.into();
+        let size = buffer.size;
 
         let download = device.create_buffer(&super::BufferDescriptor {
             size,
@@ -72,7 +72,14 @@ impl DownloadBuffer {
                     return;
                 }
 
-                let mapped_range = download.inner.get_mapped_range(0..size);
+                let mapped_range = match download.inner.get_mapped_range(0..size) {
+                    Ok(range) => range,
+                    Err(e) => {
+                        callback(Err(super::BufferAsyncError));
+                        log::error!("Failed to get mapped range: {e}");
+                        return;
+                    }
+                };
                 callback(Ok(Self {
                     _gpu_buffer: download,
                     mapped_range,

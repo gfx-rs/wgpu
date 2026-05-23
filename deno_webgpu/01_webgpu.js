@@ -273,8 +273,7 @@ ObjectDefineProperty(GPUSupportedLimitsPrototype, privateCustomInspect, {
           "maxTextureDimension3D",
           "maxTextureArrayLayers",
           "maxBindGroups",
-          // TODO(@crowlKats): support max_bind_groups_plus_vertex_buffers
-          // "maxBindGroupsPlusVertexBuffers",
+          "maxBindGroupsPlusVertexBuffers",
           "maxBindingsPerBindGroup",
           "maxDynamicUniformBuffersPerPipelineLayout",
           "maxDynamicStorageBuffersPerPipelineLayout",

@@ -20,6 +20,10 @@ fn main() {
             all(windows_linux_android, feature = "vulkan"), // Regular Vulkan
             all(target_vendor = "apple", feature = "vulkan-portability") // Vulkan Portability on Apple
         ) },
+        drm: { all(
+            feature = "drm",
+            any(target_os = "linux", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd")
+        ) },
         metal: { all(target_vendor = "apple", feature = "metal") },
 
         supports_64bit_atomics: { target_has_atomic = "64" }

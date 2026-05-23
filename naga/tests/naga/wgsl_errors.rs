@@ -590,13 +590,13 @@ fn struct_member_size_too_low() {
     check(
         r#"
             struct Bar {
-                @size(0) data: array<f32>
+                @size(0) data: array<f32, 1>
             }
         "#,
         r#"error: struct member size must be at least 4
   ┌─ wgsl:3:23
   │
-3 │                 @size(0) data: array<f32>
+3 │                 @size(0) data: array<f32, 1>
   │                       ^ must be at least 4
 
 "#,
@@ -984,6 +984,28 @@ fn matrix_constructor_inferred() {
     );
 }
 
+#[test]
+fn recursion_depth_expression() {
+    check(
+        include_str!("deep-expression.wgsl"),
+        r#"error: internal WGSL front end error
+ = note: Parser recursion limit exceeded
+
+"#,
+    );
+}
+
+#[test]
+fn recursion_depth_template() {
+    check(
+        include_str!("deep-template.wgsl"),
+        r#"error: internal WGSL front end error
+ = note: Parser recursion limit exceeded
+
+"#,
+    );
+}
+
 /// Check the result of validating a WGSL program against a pattern.
 ///
 /// Unless you are generating code programmatically, the
@@ -1233,6 +1255,8 @@ fn int64_capability() {
 fn per_vertex_capability() {
     check_validation! {
             r#"
+            enable wgpu_per_vertex;
+
             @fragment
             fn fs_main(@location(0) @interpolate(per_vertex) v: array<f32, 3>) -> @location(0) vec4<f32> {
                 return vec4(v[0], v[1], v[2], 1.0);
@@ -1387,6 +1411,147 @@ fn float16_capability_and_enable() {
             },
             ..
         })
+    }
+}
+
+#[test]
+fn int16_capability_and_enable() {
+    // A zero value expression
+    check_extension_validation! {
+        Capabilities::SHADER_INT16,
+        r#"fn foo() {
+            let a = u16();
+        }
+        "#,
+        r#"error: the `wgpu_int16` enable extension is not enabled
+  ┌─ wgsl:2:21
+  │
+2 │             let a = u16();
+  │                     ^^^ the `wgpu_int16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int16;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "SHADER_INT16", .. }),
+            ..
+        })
+    }
+
+    // Literals (via constructor)
+    check_extension_validation! {
+        Capabilities::SHADER_INT16,
+        r#"fn foo() {
+            let a = u16(1);
+        }
+        "#,
+        r#"error: the `wgpu_int16` enable extension is not enabled
+  ┌─ wgsl:2:21
+  │
+2 │             let a = u16(1);
+  │                     ^^^ the `wgpu_int16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int16;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::Expression {
+                source: naga::valid::ExpressionError::Literal(
+                    naga::valid::LiteralError::Width(
+                        naga::valid::WidthError::MissingCapability { flag: "SHADER_INT16", .. }
+                    )
+                ),
+                ..
+            },
+            ..
+        })
+    }
+
+    // `u16`-typed declarations
+    check_extension_validation! {
+        Capabilities::SHADER_INT16,
+        "var input: u16;",
+        r#"error: the `wgpu_int16` enable extension is not enabled
+  ┌─ wgsl:1:12
+  │
+1 │ var input: u16;
+  │            ^^^ the `wgpu_int16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int16;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "SHADER_INT16", .. }),
+            ..
+        })
+    }
+
+    // `i16`-typed declarations
+    check_extension_validation! {
+        Capabilities::SHADER_INT16,
+        "var input: i16;",
+        r#"error: the `wgpu_int16` enable extension is not enabled
+  ┌─ wgsl:1:12
+  │
+1 │ var input: i16;
+  │            ^^^ the `wgpu_int16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int16;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "SHADER_INT16", .. }),
+            ..
+        })
+    }
+}
+
+#[test]
+fn int16_in_atomic() {
+    check_validation! {
+        "enable wgpu_int16; @group(0) @binding(0) var<storage> a: atomic<u16>;",
+        "enable wgpu_int16; @group(0) @binding(0) var<storage> a: atomic<i16>;":
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::InvalidAtomicWidth(_, 2),
+            ..
+        }),
+        naga::valid::Capabilities::SHADER_INT16
+    }
+}
+
+#[test]
+fn int16_subgroup_bitwise_rejected() {
+    check_validation! {
+        "enable wgpu_int16; @compute @workgroup_size(1) fn main() { var v = i16(1); v = subgroupAnd(v); }",
+        "enable wgpu_int16; @compute @workgroup_size(1) fn main() { var v = i16(1); v = subgroupOr(v); }",
+        "enable wgpu_int16; @compute @workgroup_size(1) fn main() { var v = i16(1); v = subgroupXor(v); }",
+        "enable wgpu_int16; @compute @workgroup_size(1) fn main() { var v = u16(1); v = subgroupAnd(v); }":
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::InvalidSubgroup(
+                    naga::valid::SubgroupError::InvalidOperand(_),
+                ),
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::SHADER_INT16 | naga::valid::Capabilities::SUBGROUP
+    }
+}
+
+#[test]
+fn int16_in_immediate() {
+    check_validation! {
+        "enable wgpu_int16; var<immediate> input: i16;",
+        "enable wgpu_int16; var<immediate> input: u16;",
+        "enable wgpu_int16; var<immediate> input: vec2<i16>;",
+        "enable wgpu_int16; struct S { a: u16 }; var<immediate> input: S;":
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::InvalidImmediateType(
+                naga::valid::ImmediateError::InvalidScalar(_)
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::SHADER_INT16 | naga::valid::Capabilities::IMMEDIATES
     }
 }
 
@@ -3157,6 +3322,27 @@ struct S {
 }
 
 #[test]
+fn global_var_must_use() {
+    check(
+        r#"
+@must_use
+@group(0)
+@binding(0)
+var<storage> x : array<u32>;
+"#,
+        r#"error: attribute `@must_use` is only valid on function declarations
+  ┌─ wgsl:2:2
+  │
+2 │ @must_use
+  │  ^^^^^^^^
+  │
+  = note: place `@must_use` on a function declaration with a return type
+
+"#,
+    )
+}
+
+#[test]
 fn function_param_redefinition_as_param() {
     check(
         "
@@ -3294,7 +3480,8 @@ fn global_initialization_type_mismatch() {
 #[test]
 fn binding_array_local() {
     check_validation! {
-        "fn f() { var x: binding_array<sampler, 4>; }":
+        "enable wgpu_binding_array;
+         fn f() { var x: binding_array<sampler, 4>; }":
         Err(_)
     }
 }
@@ -3302,7 +3489,8 @@ fn binding_array_local() {
 #[test]
 fn binding_array_private() {
     check_validation! {
-        "var<private> x: binding_array<sampler, 4>;":
+        "enable wgpu_binding_array;
+         var<private> x: binding_array<sampler, 4>;":
         Err(_)
     }
 }
@@ -3310,7 +3498,8 @@ fn binding_array_private() {
 #[test]
 fn binding_array_non_struct() {
     check_validation! {
-        "var<storage> x: binding_array<i32, 4>;":
+        "enable wgpu_binding_array;
+         var<storage> x: binding_array<i32, 4>;":
         Err(naga::valid::ValidationError::Type {
             source: naga::valid::TypeError::BindingArrayBaseTypeNotStruct(_),
             ..
@@ -3320,6 +3509,7 @@ fn binding_array_non_struct() {
     check_validation! {
         r#"
             enable wgpu_ray_query;
+            enable wgpu_binding_array;
             @group(0) @binding(0)
             var<storage> ray_query_array: binding_array<ray_query, 10>;
         "#:
@@ -4396,7 +4586,7 @@ fn max_type_size_large_array() {
     // The total size of an array is not resolved until validation. Type aliases
     // don't get spans so the error isn't very helpful.
     check_validation! {
-        "alias LargeArray = array<u32, (1 << 28) + 1>;":
+        "alias LargeArray = array<u32, 1 << 29>;":
         Err(naga::valid::ValidationError::Layouter(
                 naga::proc::LayoutError {
                     inner: naga::proc::LayoutErrorInner::TooLarge,
@@ -4412,9 +4602,9 @@ fn max_type_size_array_of_arrays() {
     // during lowering. Anonymous types don't get spans so this error isn't very
     // helpful.
     check(
-        "alias ArrayOfArrays = array<array<u32, (1 << 28) + 1>, 22>;",
+        "alias ArrayOfArrays = array<array<u32, 1 << 29>, 22>;",
         r#"error: type is too large
- = note: the maximum size is 1073741824 bytes
+ = note: the maximum size is 2147483647 bytes
 
 "#,
     );
@@ -4441,7 +4631,7 @@ fn max_type_size_override_array() {
         .validate(&module)
         .expect("module should validate");
 
-    let overrides = hashbrown::HashMap::from([(String::from("SIZE"), f64::from((1 << 28) + 1))]);
+    let overrides = hashbrown::HashMap::from([(String::from("SIZE"), f64::from(1 << 29))]);
     let err = naga::back::pipeline_constants::process_overrides(&module, &info, None, &overrides)
         .unwrap_err();
     let naga::back::pipeline_constants::PipelineConstantError::ValidationError(err) = err else {
@@ -4463,16 +4653,16 @@ fn max_type_size_array_in_struct() {
     check(
         r#"
             struct ContainsLargeArray {
-                arr: array<u32, (1 << 28) + 1>,
+                arr: array<u32, 1 << 29>,
             }
         "#,
         r#"error: struct member is too large
   ┌─ wgsl:3:17
   │
-3 │                 arr: array<u32, (1 << 28) + 1>,
+3 │                 arr: array<u32, 1 << 29>,
   │                 ^^^ this member exceeds the maximum size
   │
-  = note: the maximum size is 1073741824 bytes
+  = note: the maximum size is 2147483647 bytes
 
 "#,
     );
@@ -4485,20 +4675,20 @@ fn max_type_size_two_arrays_in_struct() {
     check(
         r#"
             struct TwoArrays {
-                arr1: array<u32, 1 << 27>,
-                arr2: array<u32, (1 << 27) + 1>,
+                arr1: array<u32, 1 << 28>,
+                arr2: array<u32, 1 << 28>,
             }
         "#,
         "error: type is too large
   ┌─ wgsl:2:13
   │\x20\x20
 2 │ ╭             struct TwoArrays {
-3 │ │                 arr1: array<u32, 1 << 27>,
-4 │ │                 arr2: array<u32, (1 << 27) + 1>,
+3 │ │                 arr1: array<u32, 1 << 28>,
+4 │ │                 arr2: array<u32, 1 << 28>,
 5 │ │             }
   │ ╰─────────────^ this type exceeds the maximum size
   │\x20\x20
-  = note: the maximum size is 1073741824 bytes
+  = note: the maximum size is 2147483647 bytes
 
 ",
     );
@@ -4513,7 +4703,7 @@ fn max_type_size_array_of_structs() {
             struct NotVeryBigStruct {
                 data: u32,
             }
-            alias BigArrayOfStructs = array<NotVeryBigStruct, (1 << 28) + 1>;
+            alias BigArrayOfStructs = array<NotVeryBigStruct, 1 << 29>;
         "#:
         Err(naga::valid::ValidationError::Layouter(
                 naga::proc::LayoutError {
@@ -4522,6 +4712,50 @@ fn max_type_size_array_of_structs() {
                 }
         ))
     }
+}
+
+#[test]
+fn max_type_size_array_constructor_with_oversize_type() {
+    // An `array(...)` constructor expression invokes the layouter to compute
+    // the stride of the constructed array. If a previously declared type is
+    // oversize, the layouter encounters it and the error must be reported
+    // rather than panicking.
+    //
+    // Regression test for <https://github.com/gfx-rs/wgpu/issues/9440>.
+    check(
+        r#"
+            var<workgroup> big: array<u32, 1 << 29>;
+            const A = array(1);
+        "#,
+        r#"error: type is too large
+ = note: the maximum size is 2147483647 bytes
+
+"#,
+    );
+}
+
+#[test]
+fn max_type_size_concretize_with_oversize_type() {
+    // Concretizing an abstract array (here, indexing it with a non-constant
+    // index forces concretization to a concrete element type) invokes the
+    // layouter to compute the new array's stride. If a previously declared
+    // type is oversize, the layouter encounters it and the error must be
+    // reported rather than panicking.
+    //
+    // Regression test for <https://github.com/gfx-rs/wgpu/issues/9440>.
+    check(
+        r#"
+            const a = array(0.);
+            var<workgroup> big: array<u32, 1 << 29>;
+            fn main(i: u32) {
+                let x = a[i];
+            }
+        "#,
+        r#"error: type is too large
+ = note: the maximum size is 2147483647 bytes
+
+"#,
+    );
 }
 
 #[test]
@@ -4671,9 +4905,165 @@ fn ray_query_vertex_return_enable_extension() {
 }
 
 #[test]
+fn binding_array_enable_extension() {
+    //buffers
+
+    check_extension_validation!(
+        Capabilities::BUFFER_BINDING_ARRAY,
+        r#"struct UniformBuffer { data: u32 }
+@group(0) @binding(0)
+var<uniform> uniform_array: binding_array<UniformBuffer, 5>;"#,
+        r#"error: the `wgpu_binding_array` enable extension is not enabled
+  ┌─ wgsl:3:29
+  │
+3 │ var<uniform> uniform_array: binding_array<UniformBuffer, 5>;
+  │                             ^^^^^^^^^^^^^ the `wgpu_binding_array` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_binding_array;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::BUFFER_BINDING_ARRAY
+            ),
+            ..
+        })
+    );
+
+    check_extension_validation!(
+        Capabilities::STORAGE_BUFFER_BINDING_ARRAY,
+        r#"struct Buffer { data: u32 }
+@group(0) @binding(0)
+var<storage, read> storage_array: binding_array<Buffer, 5>;"#,
+        r#"error: the `wgpu_binding_array` enable extension is not enabled
+  ┌─ wgsl:3:35
+  │
+3 │ var<storage, read> storage_array: binding_array<Buffer, 5>;
+  │                                   ^^^^^^^^^^^^^ the `wgpu_binding_array` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_binding_array;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::STORAGE_BUFFER_BINDING_ARRAY
+            ),
+            ..
+        })
+    );
+
+    //textures and samplers
+    check_extension_validation!(
+        Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY,
+        r#"@group(0) @binding(0)
+        var texture_array_unbounded: binding_array<texture_2d<f32>>;"#,
+        r#"error: the `wgpu_binding_array` enable extension is not enabled
+  ┌─ wgsl:2:38
+  │
+2 │         var texture_array_unbounded: binding_array<texture_2d<f32>>;
+  │                                      ^^^^^^^^^^^^^ the `wgpu_binding_array` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_binding_array;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+            ),
+            ..
+        })
+    );
+
+    check_extension_validation!(
+        Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY,
+        r#"@group(0) @binding(0)
+        var texture_array_bounded: binding_array<texture_2d<f32>, 5>;"#,
+        r#"error: the `wgpu_binding_array` enable extension is not enabled
+  ┌─ wgsl:2:36
+  │
+2 │         var texture_array_bounded: binding_array<texture_2d<f32>, 5>;
+  │                                    ^^^^^^^^^^^^^ the `wgpu_binding_array` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_binding_array;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+            ),
+            ..
+        })
+    );
+
+    check_extension_validation!(
+        Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY,
+        r#"@group(0) @binding(0)
+        var texture_array_2darray: binding_array<texture_2d_array<f32>, 5>;"#,
+        r#"error: the `wgpu_binding_array` enable extension is not enabled
+  ┌─ wgsl:2:36
+  │
+2 │         var texture_array_2darray: binding_array<texture_2d_array<f32>, 5>;
+  │                                    ^^^^^^^^^^^^^ the `wgpu_binding_array` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_binding_array;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+            ),
+            ..
+        })
+    );
+
+    check_extension_validation!(
+        Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY,
+        r#"@group(0) @binding(0)
+        var samp: binding_array<sampler, 5>;"#,
+        r#"error: the `wgpu_binding_array` enable extension is not enabled
+  ┌─ wgsl:2:19
+  │
+2 │         var samp: binding_array<sampler, 5>;
+  │                   ^^^^^^^^^^^^^ the `wgpu_binding_array` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_binding_array;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+            ),
+            ..
+        })
+    );
+
+    check_extension_validation!(
+        Capabilities::STORAGE_TEXTURE_BINDING_ARRAY,
+        r#"@group(0) @binding(0)
+        var texture_array_storage: binding_array<texture_storage_2d<rgba32float, write>, 5>;"#,
+        r#"error: the `wgpu_binding_array` enable extension is not enabled
+  ┌─ wgsl:2:36
+  │
+2 │         var texture_array_storage: binding_array<texture_storage_2d<rgba32float, write>, 5>;
+  │                                    ^^^^^^^^^^^^^ the `wgpu_binding_array` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_binding_array;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::STORAGE_TEXTURE_BINDING_ARRAY
+            ),
+            ..
+        })
+    );
+}
+
+#[test]
 fn binding_array_requires_capability() {
     check_validation! {
         r#"
+            enable wgpu_binding_array;
             struct Buffer { data: u32 }
             @group(0) @binding(0)
             var<storage> storage_array: binding_array<Buffer, 10>;
@@ -4688,6 +5078,7 @@ fn binding_array_requires_capability() {
 
     check_validation! {
         r#"
+            enable wgpu_binding_array; 
             struct Buffer { data: u32 }
             @group(0) @binding(0)
             var<uniform> uniform_array: binding_array<Buffer, 10>;
@@ -4702,6 +5093,7 @@ fn binding_array_requires_capability() {
 
     check_validation! {
         r#"
+            enable wgpu_binding_array;
             @group(0) @binding(0)
             var storage_texture_array: binding_array<texture_storage_2d<rgba8unorm, write>, 10>;
         "#:
@@ -4715,6 +5107,7 @@ fn binding_array_requires_capability() {
 
     check_validation! {
         r#"
+            enable wgpu_binding_array;
             @group(0) @binding(0)
             var sampled_texture_array: binding_array<texture_2d<f32>, 10>;
         "#:
@@ -4728,6 +5121,7 @@ fn binding_array_requires_capability() {
 
     check_validation! {
         r#"
+            enable wgpu_binding_array;
             @group(0) @binding(0)
             var sampler_array: binding_array<sampler, 10>;
         "#:
@@ -4742,6 +5136,7 @@ fn binding_array_requires_capability() {
     // Binding arrays of external textures are not yet supported.
     check_validation! {
         r#"
+            enable wgpu_binding_array;
             @group(0) @binding(0)
             var external_texture_array: binding_array<texture_external, 10>;
         "#:
@@ -4755,6 +5150,7 @@ fn binding_array_requires_capability() {
     // Binding arrays of acceleration structures require a capability.
     check_validation! {
         r#"
+            enable wgpu_binding_array;
             enable wgpu_ray_query;
             @group(0) @binding(0)
             var acc_struct_array: binding_array<acceleration_structure, 10>;
@@ -4952,6 +5348,38 @@ fn mesh_shader_enable_extension() {
         Err(naga::valid::ValidationError::GlobalVariable {
             source: naga::valid::GlobalVariableError::UnsupportedCapability(
                 Capabilities::MESH_SHADER
+            ),
+            ..
+        })
+    );
+}
+
+#[test]
+fn per_vertex_enable_extension() {
+    // `task_payload` address space
+    check_extension_validation!(
+        Capabilities::PER_VERTEX,
+        r#"@fragment
+fn fs_main(@location(0) @interpolate(per_vertex) v: array<f32, 3>) -> @location(0) vec4<f32> {
+    return vec4(v[0], v[1], v[2], 1.0);
+}
+
+        "#,
+        r#"error: the `wgpu_per_vertex` enable extension is not enabled
+  ┌─ wgsl:2:38
+  │
+2 │ fn fs_main(@location(0) @interpolate(per_vertex) v: array<f32, 3>) -> @location(0) vec4<f32> {
+  │                                      ^^^^^^^^^^ the `wgpu_per_vertex` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_per_vertex;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Argument(
+                0,
+                naga::valid::VaryingError::UnsupportedCapability(
+                    naga::valid::Capabilities::PER_VERTEX
+                )
             ),
             ..
         })
@@ -5202,4 +5630,19 @@ fn bitwise_shift_errors() {
         }),
         naga::valid::Capabilities::SHADER_INT64
     }
+}
+
+#[test]
+fn unterminated_block_comment_errors() {
+    check_success("/* Closed */");
+
+    check_error_matches("/* unterminated", "unterminated block comment");
+    check_error_matches(
+        "/* unterminated /* terimated inner */",
+        "unterminated block comment",
+    );
+    check_error_matches(
+        "const N: u32 = 1u; /* Trailing unterminated",
+        "unterminated block comment",
+    )
 }

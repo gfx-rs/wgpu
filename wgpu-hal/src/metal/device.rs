@@ -29,6 +29,14 @@ use crate::{auxil::map_naga_stage, TlasInstance};
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
+/// True on arm64_32 (watchOS ILP32) targets.
+///
+/// There are no Apple OSes that support both 32-bit applications and Metal,
+/// so `target_pointer_width = "32"` is a reliable proxy for ILP32 watchOS
+/// devices (Apple Watch S4–S9, SE, Ultra). Several AGXMetalS4 driver bugs
+/// require workarounds gated on this flag.
+const IS_WATCHOS_ILP32: bool = cfg!(target_pointer_width = "32");
+
 struct CompiledShader {
     library: Retained<ProtocolObject<dyn MTLLibrary>>,
     function: Retained<ProtocolObject<dyn MTLFunction>>,
@@ -158,7 +166,7 @@ impl super::Device {
 
                 let ep_resources = &layout.per_stage_map[naga_stage];
 
-                let bounds_check_policy = if stage.module.bounds_checks.bounds_checks {
+                let bounds_check_policy = if stage.module.runtime_checks.bounds_checks {
                     naga::proc::BoundsCheckPolicy::Restrict
                 } else {
                     naga::proc::BoundsCheckPolicy::Unchecked
@@ -178,8 +186,9 @@ impl super::Device {
                         MTLLanguageVersion::Version3_0 => (3, 0),
                         MTLLanguageVersion::Version3_1 => (3, 1),
                         MTLLanguageVersion::Version3_2 => (3, 2),
+                        MTLLanguageVersion::Version4_0 => (4, 0),
                         // Newer version, fall back to 3.2
-                        _ => (3, 2),
+                        _ => (4, 0),
                     },
                     inline_samplers: Default::default(),
                     spirv_cross_compatibility: false,
@@ -196,7 +205,21 @@ impl super::Device {
                         binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                     },
                     zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
-                    force_loop_bounding: stage.module.bounds_checks.force_loop_bounding,
+                    force_loop_bounding: stage.module.runtime_checks.force_loop_bounding,
+                    task_dispatch_limits: stage
+                        .module
+                        .runtime_checks
+                        .task_shader_dispatch_tracking
+                        .then_some(naga::back::TaskDispatchLimits {
+                            max_mesh_workgroups_per_dim: self
+                                .limits
+                                .max_mesh_workgroups_per_dimension,
+                            max_mesh_workgroups_total: self.limits.max_mesh_workgroup_total_count,
+                        }),
+                    mesh_shader_primitive_indices_clamp: stage
+                        .module
+                        .runtime_checks
+                        .mesh_shader_primitive_indices_clamp,
                 };
 
                 let pipeline_options = naga::back::msl::PipelineOptions {
@@ -325,21 +348,24 @@ impl super::Device {
                     immutable_buffer_mask,
                 })
             }
-            ShaderModuleSource::Passthrough(ref shader) => Ok(CompiledShader {
-                library: shader.library.clone(),
-                function: shader
-                    .library
-                    .newFunctionWithName(&NSString::from_str(stage.entry_point))
-                    .ok_or(crate::PipelineError::EntryPoint(naga_stage))?,
-                wg_size: MTLSize {
-                    width: shader.num_workgroups.0 as usize,
-                    height: shader.num_workgroups.1 as usize,
-                    depth: shader.num_workgroups.2 as usize,
-                },
-                wg_memory_sizes: vec![],
-                sized_bindings: vec![],
-                immutable_buffer_mask: 0,
-            }),
+            ShaderModuleSource::Passthrough(ref shader) => {
+                let size = shader.num_workgroups[stage.entry_point];
+                Ok(CompiledShader {
+                    library: shader.library.clone(),
+                    function: shader
+                        .library
+                        .newFunctionWithName(&NSString::from_str(stage.entry_point))
+                        .ok_or(crate::PipelineError::EntryPoint(naga_stage))?,
+                    wg_size: MTLSize {
+                        width: size.0 as usize,
+                        height: size.1 as usize,
+                        depth: size.2 as usize,
+                    },
+                    wg_memory_sizes: vec![],
+                    sized_bindings: vec![],
+                    immutable_buffer_mask: 0,
+                })
+            }
         }
     }
 
@@ -376,6 +402,7 @@ impl super::Device {
     pub unsafe fn device_from_raw(
         raw: Retained<ProtocolObject<dyn MTLDevice>>,
         features: wgt::Features,
+        limits: &wgt::Limits,
     ) -> super::Device {
         let capabilities_query = super::CapabilitiesQuery::new(&raw);
         let shared = super::AdapterShared::new(raw, &capabilities_query);
@@ -383,6 +410,7 @@ impl super::Device {
             shared: Arc::new(shared),
             features,
             counters: Default::default(),
+            limits: limits.clone(),
         }
     }
 
@@ -473,7 +501,15 @@ impl crate::Device for super::Device {
                 wgt::TextureDimension::D2 => {
                     if desc.sample_count > 1 {
                         unsafe { descriptor.setSampleCount(desc.sample_count as usize) };
-                        MTLTextureType::Type2DMultisample
+
+                        if desc.size.depth_or_array_layers > 1 {
+                            unsafe {
+                                descriptor.setArrayLength(desc.size.depth_or_array_layers as usize)
+                            };
+                            MTLTextureType::Type2DMultisampleArray
+                        } else {
+                            MTLTextureType::Type2DMultisample
+                        }
                     } else if desc.size.depth_or_array_layers > 1 {
                         unsafe {
                             descriptor.setArrayLength(desc.size.depth_or_array_layers as usize)
@@ -493,6 +529,14 @@ impl crate::Device for super::Device {
                 && self.shared.private_caps.supports_memoryless_storage
             {
                 MTLStorageMode::Memoryless
+            } else if IS_WATCHOS_ILP32 {
+                // The AGXMetalS4 driver (A13/S6 GPU) crashes in
+                // copyFromTexture:toBuffer: on Private textures — null deref at
+                // offset 0x50 in the driver's internal texture state. Use Shared
+                // storage which works correctly on Apple's unified memory
+                // architecture and matches what native Swift Metal code uses on
+                // these devices.
+                MTLStorageMode::Shared
             } else {
                 MTLStorageMode::Private
             };
@@ -540,7 +584,9 @@ impl crate::Device for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> DeviceResult<super::TextureView> {
-        let raw_type = if texture.raw_type == MTLTextureType::Type2DMultisample {
+        let raw_type = if texture.raw_type == MTLTextureType::Type2DMultisample
+            || texture.raw_type == MTLTextureType::Type2DMultisampleArray
+        {
             texture.raw_type
         } else {
             conv::map_texture_view_dimension(desc.dimension)
@@ -1136,7 +1182,7 @@ impl crate::Device for super::Device {
         match shader {
             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
                 source: ShaderModuleSource::Naga(naga),
-                bounds_checks: desc.runtime_checks,
+                runtime_checks: desc.runtime_checks,
             }),
             crate::ShaderInput::MetalLib {
                 file,
@@ -1154,7 +1200,7 @@ impl crate::Device for super::Device {
                         num_workgroups,
                     }),
                     // This goes unused for passthrough shaders
-                    bounds_checks: wgt::ShaderRuntimeChecks::unchecked(),
+                    runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
                 })
             }
             crate::ShaderInput::Msl {
@@ -1173,8 +1219,7 @@ impl crate::Device for super::Device {
                         library,
                         num_workgroups,
                     }),
-                    // This goes unused for passthrough shaders
-                    bounds_checks: wgt::ShaderRuntimeChecks::unchecked(),
+                    runtime_checks: desc.runtime_checks,
                 })
             }
             crate::ShaderInput::SpirV(_)
@@ -1243,8 +1288,11 @@ impl crate::Device for super::Device {
             }
 
             // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
-            let supports_mutability =
-                available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0);
+            // Disabled on watchOS ILP32: the AGXMetalS4 driver exhibits instability
+            // when mutability hints are combined with Shared storage mode textures.
+            // Conservative disable until broader device coverage.
+            let supports_mutability = !IS_WATCHOS_ILP32
+                && available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0);
 
             let (primitive_class, raw_primitive_type) =
                 conv::map_primitive_topology(desc.primitive.topology);
@@ -1269,6 +1317,9 @@ impl crate::Device for super::Device {
                     let mut vertex_buffer_mappings =
                         Vec::<naga::back::msl::VertexBufferMapping>::new();
                     for (i, vbl) in vertex_buffers.iter().enumerate() {
+                        let Some(vbl) = vbl else {
+                            continue;
+                        };
                         let mut attributes = Vec::<naga::back::msl::AttributeMapping>::new();
                         for attribute in vbl.attributes.iter() {
                             attributes.push(naga::back::msl::AttributeMapping {
@@ -1343,6 +1394,10 @@ impl crate::Device for super::Device {
                     if !vertex_buffers.is_empty() {
                         let vertex_descriptor = MTLVertexDescriptor::new();
                         for (i, vb) in vertex_buffers.iter().enumerate() {
+                            let Some(vb) = vb else {
+                                continue;
+                            };
+
                             let buffer_index = VERTEX_BUFFER_SLOT_START as usize + i;
                             let buffer_desc = unsafe {
                                 vertex_descriptor
@@ -1361,7 +1416,10 @@ impl crate::Device for super::Device {
                                     .max()
                                     .unwrap_or(0);
                                 unsafe {
-                                    buffer_desc.setStride(wgt::math::align_to(stride as _, 4))
+                                    buffer_desc.setStride(wgt::math::align_to(
+                                        NSUInteger::try_from(stride).unwrap(),
+                                        4,
+                                    ))
                                 };
                                 buffer_desc.setStepFunction(MTLVertexStepFunction::Constant);
                                 unsafe { buffer_desc.setStepRate(0) };
@@ -1657,6 +1715,7 @@ impl crate::Device for super::Device {
 
             let module = desc.stage.module;
             let cs = if let ShaderModuleSource::Passthrough(passthrough_desc) = &module.source {
+                let size = passthrough_desc.num_workgroups[desc.stage.entry_point];
                 CompiledShader {
                     library: passthrough_desc.library.clone(),
                     function: passthrough_desc
@@ -1664,9 +1723,9 @@ impl crate::Device for super::Device {
                         .newFunctionWithName(&NSString::from_str(desc.stage.entry_point))
                         .ok_or(crate::PipelineError::EntryPoint(naga::ShaderStage::Compute))?,
                     wg_size: MTLSize {
-                        width: passthrough_desc.num_workgroups.0 as usize,
-                        height: passthrough_desc.num_workgroups.1 as usize,
-                        depth: passthrough_desc.num_workgroups.2 as usize,
+                        width: size.0 as usize,
+                        height: size.1 as usize,
+                        depth: size.2 as usize,
                     },
                     wg_memory_sizes: vec![],
                     sized_bindings: vec![],
@@ -1821,7 +1880,7 @@ impl crate::Device for super::Device {
         self.counters.fences.add(1);
         // https://developer.apple.com/documentation/metal/mtlsharedevent
         let shared_event = if available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0) {
-            Some(self.shared.device.newSharedEvent().unwrap())
+            self.shared.device.newSharedEvent() // This should be supported on said devices, but some sandbox environments may still restrict it, making it return `None`.
         } else {
             None
         };

@@ -144,7 +144,7 @@ static ZERO_SIZED_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
         let error = pollster::block_on(scope.pop());
         assert!(error.is_some_and(|error| {
             format!("{error}").contains(
-                "Indirect buffer uses bytes 0..12 which overruns indirect buffer of size 0",
+                "Indirect buffer of 12 bytes starting at offset 0 would overrun buffer of size 0",
             )
         }));
     });
@@ -313,7 +313,11 @@ async fn run_test(ctx: &TestingContext, num_workgroups: &[u32; 3]) -> [u32; 3] {
             .await
             .unwrap();
 
-        let view = test_resources.readback_buffer.slice(..).get_mapped_range();
+        let view = test_resources
+            .readback_buffer
+            .slice(..)
+            .get_mapped_range()
+            .unwrap();
 
         let current_res = *bytemuck::from_bytes(&view);
         drop(view);

@@ -59,16 +59,16 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration = GpuTestConfiguration::ne
                     entry_point: Some("double_buffer_vert"),
                     compilation_options: Default::default(),
                     buffers: &[
-                        VertexBufferLayout {
+                        Some(VertexBufferLayout {
                             array_stride: 16,
                             step_mode: VertexStepMode::Vertex,
                             attributes: &vertex_attr_array![0 => Float32x4],
-                        },
-                        VertexBufferLayout {
+                        }),
+                        Some(VertexBufferLayout {
                             array_stride: 4,
                             step_mode: VertexStepMode::Vertex,
                             attributes: &vertex_attr_array![5 => Float32],
-                        },
+                        }),
                     ],
                 },
                 primitive: PrimitiveState::default(),
@@ -97,11 +97,11 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration = GpuTestConfiguration::ne
                     module: &module,
                     entry_point: Some("single_buffer_vert"),
                     compilation_options: Default::default(),
-                    buffers: &[VertexBufferLayout {
+                    buffers: &[Some(VertexBufferLayout {
                         array_stride: 16,
                         step_mode: VertexStepMode::Vertex,
                         attributes: &vertex_attr_array![0 => Float32x4],
-                    }],
+                    })],
                 },
                 primitive: PrimitiveState::default(),
                 depth_stencil: None,

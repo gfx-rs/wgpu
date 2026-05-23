@@ -221,9 +221,26 @@ async fn execute(
 
     // Initialize matrices
     // A is MxK, B is KxN, C is MxN (result)
-    // Use f32 for computation, convert to f16 if needed for GPU
-    let matrix_a_f32: Vec<f32> = (0..M * K).map(|i| (i % 7) as f32 * 0.1).collect();
-    let matrix_b_f32: Vec<f32> = (0..K * N).map(|i| (i % 11) as f32 * 0.1).collect();
+    // Use f32 for computation, convert to f16 if needed for GPU.
+    //
+    // The init weights `i * col_stride + j * row_stride` are chosen so
+    // neither A nor B is symmetric in (i, j): if the row/col index
+    // weighting reduced to the same residue class modulo the divisor,
+    // the matrix would become symmetric and the test would no longer
+    // distinguish row-major from column-major loads. The primes here
+    // (`3, 5` for A; `7, 11` for B) ensure asymmetry for any M/N/K.
+    let matrix_a_f32: Vec<f32> = (0..M * K)
+        .map(|idx| {
+            let (i, j) = (idx / K, idx % K);
+            ((i * 3 + j * 5) % 11) as f32 * 0.1
+        })
+        .collect();
+    let matrix_b_f32: Vec<f32> = (0..K * N)
+        .map(|idx| {
+            let (i, j) = (idx / N, idx % N);
+            ((i * 7 + j * 11) % 13) as f32 * 0.1
+        })
+        .collect();
     let matrix_c_f32: Vec<f32> = vec![0.0; (M * N) as usize];
 
     // Element size depends on precision
@@ -411,14 +428,14 @@ async fn execute(
         .expect("Channel receive failed")
         .expect("Buffer mapping failed");
 
-    let data = buffer_slice.get_mapped_range();
+    let data = buffer_slice.get_mapped_range().unwrap();
 
     // Convert result back to f32 for comparison
     let result: Vec<f32> = if use_f16 {
-        let result_f16: &[f16] = bytemuck::cast_slice(&data);
+        let result_f16: Vec<f16> = bytemuck::allocation::pod_collect_to_vec(&data);
         result_f16.iter().map(|x| x.to_f32()).collect()
     } else {
-        bytemuck::cast_slice::<_, f32>(&data).to_vec()
+        bytemuck::allocation::pod_collect_to_vec(&data)
     };
 
     // Compute reference result on CPU for verification

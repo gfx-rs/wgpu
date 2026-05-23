@@ -58,6 +58,7 @@ static PARTIAL_BINDING_ARRAY_SAMPLERS: GpuTestConfiguration = GpuTestConfigurati
 
 async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
     let shader = r#"
+        enable wgpu_binding_array;
         @group(0) @binding(0)
         var samplers: binding_array<sampler>;
         @group(0) @binding(1)
@@ -267,7 +268,7 @@ async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
     readback_buffer.slice(..).map_async(MapMode::Read, |_| {});
     ctx.device.poll(PollType::wait_indefinitely()).unwrap();
 
-    let readback_buffer_slice = readback_buffer.slice(..).get_mapped_range();
+    let readback_buffer_slice = readback_buffer.slice(..).get_mapped_range().unwrap();
 
     assert_eq!(&readback_buffer_slice[0..8], &expected_output[..]);
 }

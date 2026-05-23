@@ -128,6 +128,11 @@ pub(crate) fn adjust_raw_limits(mut limits: wgt::Limits) -> wgt::Limits {
     limits.max_vertex_buffers = limits
         .max_vertex_buffers
         .min(crate::MAX_VERTEX_BUFFERS as u32);
+    // Once we allow the 2 limits above to be higher than 24 we should use
+    // `cap_limits_to_be_under_the_sum_limit` to cap them under
+    // `max_bind_groups_plus_vertex_buffers`.
+    const { assert!(crate::MAX_BIND_GROUPS + crate::MAX_VERTEX_BUFFERS == 24) };
+    limits.max_bind_groups_plus_vertex_buffers = limits.max_bind_groups_plus_vertex_buffers.min(24);
     limits.max_color_attachments = limits
         .max_color_attachments
         .min(crate::MAX_COLOR_ATTACHMENTS as u32);
@@ -186,6 +191,8 @@ pub(crate) fn adjust_raw_limits(mut limits: wgt::Limits) -> wgt::Limits {
     limits.max_compute_workgroup_size_y = y.min(m);
     limits.max_compute_workgroup_size_z = z.min(m);
     limits.max_compute_invocations_per_workgroup = m.min(x.saturating_mul(y).saturating_mul(z));
+
+    limits.max_immediate_size = limits.max_immediate_size.min(256);
 
     limits
 }

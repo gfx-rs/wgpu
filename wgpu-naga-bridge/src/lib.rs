@@ -25,6 +25,10 @@ pub fn features_to_naga_capabilities(
         downlevel.contains(wgt::DownlevelFlags::SHADER_F16_IN_F32),
     );
     caps.set(
+        Caps::SHADER_INT16,
+        features.contains(wgt::Features::SHADER_I16),
+    );
+    caps.set(
         Caps::PRIMITIVE_INDEX,
         features.contains(wgt::Features::PRIMITIVE_INDEX),
     );

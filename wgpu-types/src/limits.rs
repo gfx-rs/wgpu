@@ -22,6 +22,7 @@ macro_rules! with_limits {
         $macro_name!(max_texture_dimension_3d, Ordering::Less);
         $macro_name!(max_texture_array_layers, Ordering::Less);
         $macro_name!(max_bind_groups, Ordering::Less);
+        $macro_name!(max_bind_groups_plus_vertex_buffers, Ordering::Less);
         $macro_name!(max_bindings_per_bind_group, Ordering::Less);
         $macro_name!(
             max_dynamic_uniform_buffers_per_pipeline_layout,
@@ -67,8 +68,10 @@ macro_rules! with_limits {
         $macro_name!(max_immediate_size, Ordering::Less);
         $macro_name!(max_non_sampler_bindings, Ordering::Less);
 
-        $macro_name!(max_task_mesh_workgroup_total_count, Ordering::Less);
-        $macro_name!(max_task_mesh_workgroups_per_dimension, Ordering::Less);
+        $macro_name!(max_task_workgroup_total_count, Ordering::Less);
+        $macro_name!(max_task_workgroups_per_dimension, Ordering::Less);
+        $macro_name!(max_mesh_workgroup_total_count, Ordering::Less);
+        $macro_name!(max_mesh_workgroups_per_dimension, Ordering::Less);
         $macro_name!(max_task_invocations_per_workgroup, Ordering::Less);
         $macro_name!(max_task_invocations_per_dimension, Ordering::Less);
         $macro_name!(max_mesh_invocations_per_workgroup, Ordering::Less);
@@ -93,7 +96,7 @@ macro_rules! with_limits {
 ///
 /// We provide three different defaults.
 /// - [`Limits::downlevel_defaults()`]. This is a set of limits that is guaranteed to work on almost
-///   all backends, including "downlevel" backends such as OpenGL and D3D11, other than WebGL. For
+///   all backends, including the "downlevel" OpenGL backend, but excluding WebGL2. For
 ///   most applications we recommend using these limits, assuming they are high enough for your
 ///   application, and you do not intend to support WebGL.
 /// - [`Limits::downlevel_webgl2_defaults()`] This is a set of limits that is lower even than the
@@ -144,6 +147,9 @@ pub struct Limits {
     pub max_texture_array_layers: u32,
     /// Amount of bind groups that can be attached to a pipeline at the same time. Defaults to 4. Higher is "better".
     pub max_bind_groups: u32,
+    /// The maximum number of bind group and vertex buffer slots used simultaneously, counting any empty slots below the highest index.
+    /// Defaults to 24. Higher is "better".
+    pub max_bind_groups_plus_vertex_buffers: u32,
     /// Maximum binding index allowed in `create_bind_group_layout`. Defaults to 1000. Higher is "better".
     pub max_bindings_per_bind_group: u32,
     /// Amount of uniform buffer bindings that can be dynamic in a single pipeline. Defaults to 8. Higher is "better".
@@ -229,7 +235,7 @@ pub struct Limits {
     /// The maximum value of the `workgroup_size` Z dimension for a compute stage `ShaderModule` entry-point.
     /// Defaults to 64. Higher is "better".
     pub max_compute_workgroup_size_z: u32,
-    /// The maximum value for each dimension of a `ComputePass::dispatch(x, y, z)` operation.
+    /// The maximum value for each dimension of a `ComputePass::dispatch_workgroups(x, y, z)` operation.
     /// Defaults to 65535. Higher is "better".
     pub max_compute_workgroups_per_dimension: u32,
 
@@ -254,12 +260,20 @@ pub struct Limits {
     /// to create many bind groups at the cost of a large up-front allocation at device creation.
     pub max_non_sampler_bindings: u32,
 
-    /// The maximum total value for a `RenderPass::draw_mesh_tasks(x, y, z)` operation or the
-    /// `@builtin(mesh_task_size)` returned from a task shader.  Higher is "better".
-    pub max_task_mesh_workgroup_total_count: u32,
-    /// The maximum value for each dimension of a `RenderPass::draw_mesh_tasks(x, y, z)` operation.
+    /// The maximum total value for a `RenderPass::draw_mesh_tasks(x, y, z)` call on a mesh pipeline with a task shader.
+    /// Higher is "better".
+    pub max_task_workgroup_total_count: u32,
+    /// The maximum value for each dimension of a `RenderPass::draw_mesh_tasks(x, y, z)` call on a mesh pipeline with a task shader.
+    /// Higher is "better".
+    pub max_task_workgroups_per_dimension: u32,
+    /// The maximum product of arguments of a `RenderPass::draw_mesh_tasks(x, y, z)` operation on a mesh shader pipeline
+    /// without task shaders.
     /// Also for task shader outputs. Higher is "better".
-    pub max_task_mesh_workgroups_per_dimension: u32,
+    pub max_mesh_workgroup_total_count: u32,
+    /// The maximum value for each dimension of a `RenderPass::draw_mesh_tasks(x, y, z)` operation on a mesh shader pipeline
+    /// without task shaders.
+    /// Also for task shader outputs. Higher is "better".
+    pub max_mesh_workgroups_per_dimension: u32,
     // These are fundamentally different. It is very common for limits on mesh shaders to be much lower.
     /// Maximum total number of invocations, or threads, per task shader workgroup. Higher is "better".
     pub max_task_invocations_per_workgroup: u32,
@@ -311,7 +325,7 @@ impl Default for Limits {
 }
 
 impl Limits {
-    /// These default limits are guaranteed to to work on all modern
+    /// These default limits are guaranteed to work on all modern
     /// backends and guaranteed to be supported by WebGPU
     ///
     /// Those limits are as follows:
@@ -323,6 +337,7 @@ impl Limits {
     ///     max_texture_dimension_3d: 2048,
     ///     max_texture_array_layers: 256,
     ///     max_bind_groups: 4,
+    ///     max_bind_groups_plus_vertex_buffers: 24,
     ///     max_bindings_per_bind_group: 1000,
     ///     max_dynamic_uniform_buffers_per_pipeline_layout: 8,
     ///     max_dynamic_storage_buffers_per_pipeline_layout: 4,
@@ -353,8 +368,10 @@ impl Limits {
     ///     max_compute_workgroups_per_dimension: 65535,
     ///     max_immediate_size: 0,
     ///     max_non_sampler_bindings: 1_000_000,
-    ///     max_task_mesh_workgroup_total_count: 0,
-    ///     max_task_mesh_workgroups_per_dimension: 0,
+    ///     max_task_workgroup_total_count: 0,
+    ///     max_task_workgroups_per_dimension: 0,
+    ///     max_mesh_workgroup_total_count: 0,
+    ///     max_mesh_workgroups_per_dimension: 0,
     ///     max_task_invocations_per_workgroup: 0,
     ///     max_task_invocations_per_dimension: 0,
     ///     max_mesh_invocations_per_workgroup: 0,
@@ -382,6 +399,7 @@ impl Limits {
             max_texture_dimension_3d: 2048,
             max_texture_array_layers: 256,
             max_bind_groups: 4,
+            max_bind_groups_plus_vertex_buffers: 24,
             max_bindings_per_bind_group: 1000,
             max_dynamic_uniform_buffers_per_pipeline_layout: 8,
             max_dynamic_storage_buffers_per_pipeline_layout: 4,
@@ -413,8 +431,10 @@ impl Limits {
             max_immediate_size: 0,
             max_non_sampler_bindings: 1_000_000,
 
-            max_task_mesh_workgroup_total_count: 0,
-            max_task_mesh_workgroups_per_dimension: 0,
+            max_task_workgroup_total_count: 0,
+            max_task_workgroups_per_dimension: 0,
+            max_mesh_workgroup_total_count: 0,
+            max_mesh_workgroups_per_dimension: 0,
             max_task_invocations_per_workgroup: 0,
             max_task_invocations_per_dimension: 0,
             max_mesh_invocations_per_workgroup: 0,
@@ -434,7 +454,7 @@ impl Limits {
         }
     }
 
-    /// These default limits are guaranteed to be compatible with GLES-3.1, and D3D11
+    /// These default limits are guaranteed to be compatible with GLES-3.1.
     ///
     /// Those limits are as follows (different from default are marked with *):
     /// ```rust
@@ -445,6 +465,7 @@ impl Limits {
     ///     max_texture_dimension_3d: 256, // *
     ///     max_texture_array_layers: 256,
     ///     max_bind_groups: 4,
+    ///     max_bind_groups_plus_vertex_buffers: 24,
     ///     max_bindings_per_bind_group: 1000,
     ///     max_dynamic_uniform_buffers_per_pipeline_layout: 8,
     ///     max_dynamic_storage_buffers_per_pipeline_layout: 4,
@@ -476,8 +497,10 @@ impl Limits {
     ///     max_buffer_size: 256 << 20, // (256 MiB)
     ///     max_non_sampler_bindings: 1_000_000,
     ///
-    ///     max_task_mesh_workgroup_total_count: 0,
-    ///     max_task_mesh_workgroups_per_dimension: 0,
+    ///     max_task_workgroup_total_count: 0,
+    ///     max_task_workgroups_per_dimension: 0,
+    ///     max_mesh_workgroup_total_count: 0,
+    ///     max_mesh_workgroups_per_dimension: 0,
     ///     max_task_invocations_per_workgroup: 0,
     ///     max_task_invocations_per_dimension: 0,
     ///     max_mesh_invocations_per_workgroup: 0,
@@ -512,7 +535,7 @@ impl Limits {
         }
     }
 
-    /// These default limits are guaranteed to be compatible with GLES-3.0, and D3D11, and WebGL2
+    /// These default limits are guaranteed to be compatible with GLES-3.0 and WebGL2
     ///
     /// Those limits are as follows (different from `downlevel_defaults` are marked with +,
     /// *'s from `downlevel_defaults` shown as well.):
@@ -524,6 +547,7 @@ impl Limits {
     ///     max_texture_dimension_3d: 256, // *
     ///     max_texture_array_layers: 256,
     ///     max_bind_groups: 4,
+    ///     max_bind_groups_plus_vertex_buffers: 24,
     ///     max_bindings_per_bind_group: 1000,
     ///     max_dynamic_uniform_buffers_per_pipeline_layout: 8,
     ///     max_dynamic_storage_buffers_per_pipeline_layout: 0, // +
@@ -555,8 +579,10 @@ impl Limits {
     ///     max_buffer_size: 256 << 20, // (256 MiB),
     ///     max_non_sampler_bindings: 1_000_000,
     ///
-    ///     max_task_mesh_workgroup_total_count: 0,
-    ///     max_task_mesh_workgroups_per_dimension: 0,
+    ///     max_task_workgroup_total_count: 0,
+    ///     max_task_workgroups_per_dimension: 0,
+    ///     max_mesh_workgroup_total_count: 0,
+    ///     max_mesh_workgroups_per_dimension: 0,
     ///     max_task_invocations_per_workgroup: 0,
     ///     max_task_invocations_per_dimension: 0,
     ///     max_mesh_invocations_per_workgroup: 0,
@@ -619,6 +645,7 @@ impl Limits {
             max_texture_dimension_3d: ALLOC_MAX_U32,
             max_texture_array_layers: ALLOC_MAX_U32,
             max_bind_groups: ALLOC_MAX_U32,
+            max_bind_groups_plus_vertex_buffers: ALLOC_MAX_U32,
             max_bindings_per_bind_group: ALLOC_MAX_U32,
             max_dynamic_uniform_buffers_per_pipeline_layout: ALLOC_MAX_U32,
             max_dynamic_storage_buffers_per_pipeline_layout: ALLOC_MAX_U32,
@@ -650,8 +677,10 @@ impl Limits {
             max_immediate_size: ALLOC_MAX_U32,
             max_non_sampler_bindings: ALLOC_MAX_U32,
 
-            max_task_mesh_workgroup_total_count: ALLOC_MAX_U32,
-            max_task_mesh_workgroups_per_dimension: ALLOC_MAX_U32,
+            max_task_workgroup_total_count: ALLOC_MAX_U32,
+            max_task_workgroups_per_dimension: ALLOC_MAX_U32,
+            max_mesh_workgroup_total_count: ALLOC_MAX_U32,
+            max_mesh_workgroups_per_dimension: ALLOC_MAX_U32,
             max_task_invocations_per_workgroup: ALLOC_MAX_U32,
             max_task_invocations_per_dimension: ALLOC_MAX_U32,
             max_mesh_invocations_per_workgroup: ALLOC_MAX_U32,
@@ -705,7 +734,8 @@ impl Limits {
             max_blas_geometry_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
             max_tlas_instance_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
             max_blas_primitive_count: 1 << 28,      // 2^28: Metal's minimum
-            max_acceleration_structures_per_shader_stage: 16, // Vulkan's minimum
+            // On metal acceleration structures are limited because they share buffer slots
+            max_acceleration_structures_per_shader_stage: 1,
             ..self
         }
     }
@@ -731,10 +761,17 @@ impl Limits {
     #[must_use]
     pub const fn using_recommended_minimum_mesh_shader_values(self) -> Self {
         Self {
-            // This limitation comes from metal
-            max_task_mesh_workgroup_total_count: 1024,
-            // This is a DirectX limitation
-            max_task_mesh_workgroups_per_dimension: 256,
+            // These are DirectX limitations (both nvidia and AMD match these exactly on vulkan)
+            // Note that Mac2 (newest intel macs) support up to 1024, but this is low enough,
+            // to make use of mesh shaders nonviable in most cases.
+            // We therefore, don't expose mesh shading on these devices.
+            // In contrast, here is no limit for any A-series or M-series chip.
+            max_task_workgroup_total_count: 2u32.pow(22),
+            max_task_workgroups_per_dimension: 65535,
+            // These are metal limitations
+            // M3 ups both of these to 1M
+            max_mesh_workgroup_total_count: 1024,
+            max_mesh_workgroups_per_dimension: 1024,
             // Nvidia limit on vulkan
             max_task_invocations_per_workgroup: 128,
             max_task_invocations_per_dimension: 64,
@@ -1042,6 +1079,9 @@ bitflags::bitflags! {
         ///
         /// Not supported by Vulkan on Mesa when [`Features::SHADER_F16`] is absent.
         const SHADER_F16_IN_F32 = 1 << 23;
+
+        /// Supports features introduced in MSL 2.1.
+        const MSL2_1 = 1 << 24;
     }
 }
 

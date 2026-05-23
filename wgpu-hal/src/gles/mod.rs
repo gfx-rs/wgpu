@@ -344,14 +344,23 @@ pub struct Buffer {
     size: wgt::BufferAddress,
     /// Flags to use within calls to [`Device::map_buffer`](crate::Device::map_buffer).
     map_flags: u32,
-    data: Option<Arc<MaybeMutex<Vec<u8>>>>,
-    offset_of_current_mapping: Arc<MaybeMutex<wgt::BufferAddress>>,
+    /// Buffer mapping state.
+    ///
+    /// If locked concurrently with the GL context, the GL context should be locked first.
+    map_state: Arc<MaybeMutex<BufferMapState>>,
+}
+
+#[derive(Clone, Debug)]
+struct BufferMapState {
+    /// True if the GL buffer is actually mapped, i.e. not "fake-mapped" with
+    /// an empty slice
+    mapped: bool,
+    data: Option<Vec<u8>>,
+    offset_of_current_mapping: wgt::BufferAddress,
 }
 
 #[cfg(send_sync)]
-unsafe impl Sync for Buffer {}
-#[cfg(send_sync)]
-unsafe impl Send for Buffer {}
+static_assertions::assert_impl_all!(Buffer: Send, Sync);
 
 impl crate::DynBuffer for Buffer {}
 
@@ -607,8 +616,14 @@ impl crate::DynBindGroup for BindGroup {}
 type ShaderId = u32;
 
 #[derive(Debug)]
+pub enum ShaderModuleSource {
+    Naga(crate::NagaShader),
+    Passthrough { source: String },
+}
+
+#[derive(Debug)]
 pub struct ShaderModule {
-    source: crate::NagaShader,
+    source: ShaderModuleSource,
     label: Option<String>,
     id: ShaderId,
 }
@@ -723,7 +738,7 @@ type ProgramCache = FastHashMap<ProgramCacheKey, Result<Arc<PipelineInner>, crat
 pub struct RenderPipeline {
     inner: Arc<PipelineInner>,
     primitive: wgt::PrimitiveState,
-    vertex_buffers: Box<[VertexBufferDesc]>,
+    vertex_buffers: Box<[Option<VertexBufferDesc>]>,
     vertex_attributes: Box<[AttributeDesc]>,
     color_targets: Box<[ColorTargetDesc]>,
     depth: Option<DepthState>,

@@ -151,7 +151,7 @@ async fn partial_update_test(ctx: TestingContext) {
         .await
         .unwrap();
 
-    let data = cpu_buffer.slice(..).get_mapped_range();
+    let data = cpu_buffer.slice(..).get_mapped_range().unwrap();
 
     let floats: &[f32] = bytemuck::cast_slice(&data);
 
@@ -193,7 +193,7 @@ const SHADER2: &str = "
 
     struct VertexOutput {
         @builtin(position) position: vec4f,
-        @location(0) index: u32,
+        @location(0) @interpolate(flat) index: u32,
     }
 
     @vertex fn vertex(
@@ -204,7 +204,7 @@ const SHADER2: &str = "
     }
 
     @fragment fn fragment(
-        @location(0) ix: u32,
+        @location(0) @interpolate(flat) ix: u32,
      ) -> @location(0) vec4f {
         result[ix + 4u] = immediates.fragment_constants[ix];
         return vec4f();
@@ -367,7 +367,7 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
     ctx.async_poll(wgpu::PollType::wait_indefinitely())
         .await
         .unwrap();
-    let mapped_data = cpu_buffer.slice(..).get_mapped_range();
+    let mapped_data = cpu_buffer.slice(..).get_mapped_range().unwrap();
     let result = bytemuck::cast_slice::<u8, i32>(&mapped_data).to_vec();
     drop(mapped_data);
     cpu_buffer.unmap();

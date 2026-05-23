@@ -23,6 +23,14 @@ impl crate::ScalarKind {
 }
 
 impl crate::Scalar {
+    pub const I16: Self = Self {
+        kind: crate::ScalarKind::Sint,
+        width: 2,
+    };
+    pub const U16: Self = Self {
+        kind: crate::ScalarKind::Uint,
+        width: 2,
+    };
     pub const I32: Self = Self {
         kind: crate::ScalarKind::Sint,
         width: 4,
@@ -106,6 +114,8 @@ pub fn concrete_int_scalars() -> impl Iterator<Item = ir::Scalar> {
     [
         ir::Scalar::I32,
         ir::Scalar::U32,
+        ir::Scalar::I16,
+        ir::Scalar::U16,
         ir::Scalar::I64,
         ir::Scalar::U64,
     ]
@@ -601,6 +611,15 @@ macro_rules! define_int_float_limits {
     };
 }
 
+// i16 range [-32768, 32767] fits exactly in f16 (max 65504), f32, and f64.
+// u16 range [0, 65535] fits exactly in f32 and f64. For f16, max exactly
+// representable is 65504 (f16::MAX).
+define_int_float_limits!(i16, half::f16, half::f16::MIN, half::f16::MAX);
+define_int_float_limits!(u16, half::f16, half::f16::ZERO, half::f16::MAX);
+define_int_float_limits!(i16, f32, -32768.0f32, 32767.0f32);
+define_int_float_limits!(u16, f32, 0.0f32, 65535.0f32);
+define_int_float_limits!(i16, f64, -32768.0f64, 32767.0f64);
+define_int_float_limits!(u16, f64, 0.0f64, 65535.0f64);
 define_int_float_limits!(i32, half::f16, half::f16::MIN, half::f16::MAX);
 define_int_float_limits!(u32, half::f16, half::f16::ZERO, half::f16::MAX);
 define_int_float_limits!(i64, half::f16, half::f16::MIN, half::f16::MAX);
@@ -627,12 +646,20 @@ define_int_float_limits!(u64, f64, 0.0f64, 18446744073709549568.0f64);
 /// Returns a tuple of [`crate::Literal`]s representing the minimum and maximum
 /// float values exactly representable by the provided float and integer types.
 /// Panics if `float` is not one of `F16`, `F32`, or `F64`, or `int` is
-/// not one of `I32`, `U32`, `I64`, or `U64`.
+/// not one of `I16`, `U16`, `I32`, `U32`, `I64`, or `U64`.
 pub fn min_max_float_representable_by(
     float: crate::Scalar,
     int: crate::Scalar,
 ) -> (crate::Literal, crate::Literal) {
     match (float, int) {
+        (crate::Scalar::F16, crate::Scalar::I16) => (
+            crate::Literal::F16(i16::min_float()),
+            crate::Literal::F16(i16::max_float()),
+        ),
+        (crate::Scalar::F16, crate::Scalar::U16) => (
+            crate::Literal::F16(u16::min_float()),
+            crate::Literal::F16(u16::max_float()),
+        ),
         (crate::Scalar::F16, crate::Scalar::I32) => (
             crate::Literal::F16(i32::min_float()),
             crate::Literal::F16(i32::max_float()),
@@ -649,6 +676,14 @@ pub fn min_max_float_representable_by(
             crate::Literal::F16(u64::min_float()),
             crate::Literal::F16(u64::max_float()),
         ),
+        (crate::Scalar::F32, crate::Scalar::I16) => (
+            crate::Literal::F32(i16::min_float()),
+            crate::Literal::F32(i16::max_float()),
+        ),
+        (crate::Scalar::F32, crate::Scalar::U16) => (
+            crate::Literal::F32(u16::min_float()),
+            crate::Literal::F32(u16::max_float()),
+        ),
         (crate::Scalar::F32, crate::Scalar::I32) => (
             crate::Literal::F32(i32::min_float()),
             crate::Literal::F32(i32::max_float()),
@@ -664,6 +699,14 @@ pub fn min_max_float_representable_by(
         (crate::Scalar::F32, crate::Scalar::U64) => (
             crate::Literal::F32(u64::min_float()),
             crate::Literal::F32(u64::max_float()),
+        ),
+        (crate::Scalar::F64, crate::Scalar::I16) => (
+            crate::Literal::F64(i16::min_float()),
+            crate::Literal::F64(i16::max_float()),
+        ),
+        (crate::Scalar::F64, crate::Scalar::U16) => (
+            crate::Literal::F64(u16::min_float()),
+            crate::Literal::F64(u16::max_float()),
         ),
         (crate::Scalar::F64, crate::Scalar::I32) => (
             crate::Literal::F64(i32::min_float()),

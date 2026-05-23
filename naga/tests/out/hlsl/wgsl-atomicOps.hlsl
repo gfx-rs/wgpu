@@ -29,23 +29,23 @@ void cs_main(uint3 id : SV_GroupThreadID, uint local_invocation_index : SV_Group
         workgroup_struct = (Struct)0;
     }
     GroupMemoryBarrierWithGroupSync();
-    storage_atomic_scalar.Store(0, asuint(1u));
-    storage_atomic_arr.Store(4, asuint(int(1)));
-    storage_struct.Store(0, asuint(1u));
-    storage_struct.Store(4+4, asuint(int(1)));
-    workgroup_atomic_scalar = 1u;
-    workgroup_atomic_arr[1] = int(1);
-    workgroup_struct.atomic_scalar = 1u;
-    workgroup_struct.atomic_arr[1] = int(1);
+    { uint dummy = 0; storage_atomic_scalar.InterlockedExchange(0, 1u, dummy); }
+    { int dummy_1 = 0; storage_atomic_arr.InterlockedExchange(4, int(1), dummy_1); }
+    { uint dummy_2 = 0; storage_struct.InterlockedExchange(0, 1u, dummy_2); }
+    { int dummy_3 = 0; storage_struct.InterlockedExchange(4+4, int(1), dummy_3); }
+    { uint dummy_4 = 0; InterlockedExchange(workgroup_atomic_scalar, 1u, dummy_4); }
+    { int dummy_5 = 0; InterlockedExchange(workgroup_atomic_arr[1], int(1), dummy_5); }
+    { uint dummy_6 = 0; InterlockedExchange(workgroup_struct.atomic_scalar, 1u, dummy_6); }
+    { int dummy_7 = 0; InterlockedExchange(workgroup_struct.atomic_arr[1], int(1), dummy_7); }
     GroupMemoryBarrierWithGroupSync();
-    uint l0_ = asuint(storage_atomic_scalar.Load(0));
-    int l1_ = asint(storage_atomic_arr.Load(4));
-    uint l2_ = asuint(storage_struct.Load(0));
-    int l3_ = asint(storage_struct.Load(4+4));
-    uint l4_ = workgroup_atomic_scalar;
-    int l5_ = workgroup_atomic_arr[1];
-    uint l6_ = workgroup_struct.atomic_scalar;
-    int l7_ = workgroup_struct.atomic_arr[1];
+    uint l0_; storage_atomic_scalar.InterlockedOr(0, 0, l0_);
+    int l1_; storage_atomic_arr.InterlockedOr(4, 0, l1_);
+    uint l2_; storage_struct.InterlockedOr(0, 0, l2_);
+    int l3_; storage_struct.InterlockedOr(4+4, 0, l3_);
+    uint l4_; InterlockedOr(workgroup_atomic_scalar, 0, l4_);
+    int l5_; InterlockedOr(workgroup_atomic_arr[1], 0, l5_);
+    uint l6_; InterlockedOr(workgroup_struct.atomic_scalar, 0, l6_);
+    int l7_; InterlockedOr(workgroup_struct.atomic_arr[1], 0, l7_);
     GroupMemoryBarrierWithGroupSync();
     uint _e51; storage_atomic_scalar.InterlockedAdd(0, 1u, _e51);
     int _e55; storage_atomic_arr.InterlockedAdd(4, int(1), _e55);

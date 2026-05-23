@@ -197,7 +197,16 @@ impl SurfaceWrapper {
             // If we timed out or the window is occluded, skip this frame:
             CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => None,
             // If the surface is outdated or suboptimal, reconfigure and retry.
-            CurrentSurfaceTexture::Suboptimal(_) | CurrentSurfaceTexture::Outdated => {
+            CurrentSurfaceTexture::Suboptimal(texture) => {
+                drop(texture);
+                surface.configure(&context.device, self.config());
+                match surface.get_current_texture() {
+                    CurrentSurfaceTexture::Success(frame)
+                    | CurrentSurfaceTexture::Suboptimal(frame) => Some(frame),
+                    other => panic!("Failed to acquire next surface texture: {other:?}"),
+                }
+            }
+            CurrentSurfaceTexture::Outdated => {
                 surface.configure(&context.device, self.config());
                 match surface.get_current_texture() {
                     CurrentSurfaceTexture::Success(frame)
@@ -548,7 +557,7 @@ impl<E: Example> ApplicationHandler<AppAction> for App<E> {
                     if let Some(window) = &self.window {
                         window.pre_present_notify();
                     }
-                    frame.present();
+                    context.queue.present(frame);
                 }
 
                 if let Some(window) = &self.window {
@@ -735,7 +744,7 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
                 ctx.async_poll(wgpu::PollType::wait_indefinitely())
                     .await
                     .unwrap();
-                let bytes = dst_buffer_slice.get_mapped_range().to_vec();
+                let bytes = dst_buffer_slice.get_mapped_range().unwrap().to_vec();
 
                 wgpu_test::image::compare_image_output(
                     dbg!(env!("CARGO_MANIFEST_DIR").to_string() + "/../../" + params.image_path),

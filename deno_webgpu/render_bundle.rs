@@ -34,7 +34,7 @@ pub struct GPURenderBundleEncoder {
   pub instance: Instance,
   pub error_handler: super::error::ErrorHandler,
 
-  pub encoder: RefCell<Option<wgpu_core::command::RenderBundleEncoder>>,
+  pub encoder: RefCell<Option<Box<wgpu_core::command::RenderBundleEncoder>>>,
   pub label: String,
 }
 
@@ -278,7 +278,7 @@ impl GPURenderBundleEncoder {
   fn set_vertex_buffer(
     &self,
     #[webidl(options(enforce_range = true))] slot: u32,
-    #[webidl] buffer: Ref<GPUBuffer>, // TODO(wgpu): support nullable buffer
+    #[webidl] buffer: Nullable<Ref<GPUBuffer>>,
     #[webidl(default = 0, options(enforce_range = true))] offset: u64,
     #[webidl(options(enforce_range = true))] size: Option<u64>,
   ) -> Result<(), JsErrorBox> {
@@ -290,7 +290,7 @@ impl GPURenderBundleEncoder {
     wgpu_core::command::bundle_ffi::wgpu_render_bundle_set_vertex_buffer(
       encoder,
       slot,
-      buffer.id,
+      buffer.into_option().map(|buffer| buffer.id),
       offset,
       size.and_then(NonZeroU64::new),
     );

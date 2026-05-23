@@ -36,7 +36,7 @@ void main() {
         }
         {
             uint _e6 = i;
-            int _e8 = _group_0_binding_0_cs[_e6];
+            int _e8 = atomicOr(_group_0_binding_0_cs[_e6], 0);
             old = _e8;
             exchanged = false;
             while(true) {

@@ -244,6 +244,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
+          env-vars: ImageVersion
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: (Linux `aarch64`) Install `aarch64-linux-gnu` `g++`
         if: matrix.target == 'aarch64-unknown-linux-gnu'
@@ -334,6 +336,13 @@ jobs:
           # If we don't check this then errors inside `profiling::scope!()` will not be caught.
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --benches --all-features --features test-build-with-profiling
 
+          # Check wgpu-hal with main backends in isolation to catch missing feature/dependencies activations which may be overlooked when they are dragged in via other features.
+          # (best effort: in theory we'd need to test all combinations)
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features vulkan
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features gles
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features metal
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features dx12
+
           # build docs
           cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
 
@@ -409,6 +418,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: wgpu-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
+          env-vars: ImageVersion
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Reduce MSRV on dependencies
         shell: bash
@@ -481,6 +492,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: core-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
+          env-vars: ImageVersion
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Reduce MSRV on dependencies
         shell: bash
@@ -628,6 +641,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
+          env-vars: ImageVersion
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
           workspaces: |
             . -> target
 
@@ -712,7 +727,7 @@ jobs:
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
@@ -739,6 +754,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: doctests-${{ env.CACHE_SUFFIX }}
+          env-vars: ImageVersion
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Run doctests
         shell: bash
@@ -770,6 +787,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: miri-${{ env.CACHE_SUFFIX }}
+          env-vars: ImageVersion
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Run Miri on selected tests
         shell: bash
@@ -811,7 +830,7 @@ jobs:
           cargo --locked fmt -- --check
 
       - name: Install Taplo
-        uses: uncenter/setup-taplo@v1
+        uses: uncenter/setup-taplo@v2
         with:
           version: "0.9.3"
 
@@ -819,7 +838,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.44.0
+        uses: crate-ci/typos@v1.46.2
 
   check-cts-runner:
     # runtime is normally 2 minutes
@@ -851,6 +870,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: cts-runner-${{ env.CACHE_SUFFIX }}
+          env-vars: ImageVersion
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Build Deno
         run: |

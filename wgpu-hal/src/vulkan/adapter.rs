@@ -436,7 +436,9 @@ impl PhysicalDeviceFeatures {
                 ),
                 _ => None,
             },
-            _16bit_storage: if requested_features.contains(wgt::Features::SHADER_F16) {
+            _16bit_storage: if requested_features
+                .intersects(wgt::Features::SHADER_F16 | wgt::Features::SHADER_I16)
+            {
                 Some(
                     vk::PhysicalDevice16BitStorageFeatures::default()
                         .storage_buffer16_bit_access(true)
@@ -618,9 +620,10 @@ impl PhysicalDeviceFeatures {
                 None
             },
             shader_draw_parameters: if device_api_version >= vk::API_VERSION_1_1 {
+                let needed = requested_features.contains(wgt::Features::SHADER_DRAW_INDEX);
                 Some(
                     vk::PhysicalDeviceShaderDrawParametersFeatures::default()
-                        .shader_draw_parameters(true),
+                        .shader_draw_parameters(needed),
                 )
             } else {
                 None
@@ -672,7 +675,8 @@ impl PhysicalDeviceFeatures {
             | Df::VIEW_FORMATS
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
             | Df::NONBLOCKING_QUERY_RESOLVE
-            | Df::SHADER_F16_IN_F32;
+            | Df::SHADER_F16_IN_F32
+            | Df::MSL2_1;
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,
@@ -736,7 +740,14 @@ impl PhysicalDeviceFeatures {
 
         features.set(F::SHADER_F64, self.core.shader_float64 != 0);
         features.set(F::SHADER_INT64, self.core.shader_int64 != 0);
-        features.set(F::SHADER_I16, self.core.shader_int16 != 0);
+        if let Some(ref bit16) = self._16bit_storage {
+            features.set(
+                F::SHADER_I16,
+                self.core.shader_int16 != 0
+                    && bit16.storage_buffer16_bit_access != 0
+                    && bit16.uniform_and_storage_buffer16_bit_access != 0,
+            );
+        }
 
         features.set(F::PRIMITIVE_INDEX, self.core.geometry_shader != 0);
 
@@ -1019,6 +1030,16 @@ impl PhysicalDeviceFeatures {
             caps.supports_extension(khr::external_memory_win32::NAME),
         );
         features.set(
+            F::VULKAN_EXTERNAL_MEMORY_FD,
+            caps.supports_extension(khr::external_memory_fd::NAME),
+        );
+        features.set(
+            F::VULKAN_EXTERNAL_MEMORY_DMA_BUF,
+            caps.supports_extension(khr::external_memory_fd::NAME)
+                && caps.supports_extension(ext::external_memory_dma_buf::NAME)
+                && caps.supports_extension(ext::image_drm_format_modifier::NAME),
+        );
+        features.set(
             F::EXPERIMENTAL_MESH_SHADER,
             caps.supports_extension(ext::mesh_shader::NAME),
         );
@@ -1190,8 +1211,9 @@ impl PhysicalDeviceProperties {
                 extensions.push(khr::sampler_ycbcr_conversion::NAME);
             }
 
-            // Require `VK_KHR_16bit_storage` if the feature `SHADER_F16` was requested
-            if requested_features.contains(wgt::Features::SHADER_F16) {
+            // Require `VK_KHR_16bit_storage` if `SHADER_F16` or `SHADER_I16` was requested
+            if requested_features.intersects(wgt::Features::SHADER_F16 | wgt::Features::SHADER_I16)
+            {
                 // - Feature `SHADER_F16` also requires `VK_KHR_shader_float16_int8`, but we always
                 //   require that anyway (if it is available) below.
                 // - `VK_KHR_16bit_storage` requires `VK_KHR_storage_buffer_storage_class`, however
@@ -1289,6 +1311,11 @@ impl PhysicalDeviceProperties {
             extensions.push(ext::external_memory_dma_buf::NAME);
         }
 
+        // Optional `VK_EXT_image_drm_format_modifier`
+        if self.supports_extension(ext::image_drm_format_modifier::NAME) {
+            extensions.push(ext::image_drm_format_modifier::NAME);
+        }
+
         // Optional `VK_EXT_memory_budget`
         if self.supports_extension(ext::memory_budget::NAME) {
             extensions.push(ext::memory_budget::NAME);
@@ -1374,9 +1401,14 @@ impl PhysicalDeviceProperties {
     fn to_wgpu_limits(&self) -> wgt::Limits {
         let limits = &self.properties.limits;
 
+        // Default is only implemented for tuples up to a certain size.
         let (
-            mut max_task_mesh_workgroup_total_count,
-            mut max_task_mesh_workgroups_per_dimension,
+            mut max_task_workgroup_total_count,
+            mut max_task_workgroups_per_dimension,
+            mut max_mesh_workgroup_total_count,
+            mut max_mesh_workgroups_per_dimension,
+        ) = Default::default();
+        let (
             mut max_task_invocations_per_workgroup,
             mut max_task_invocations_per_dimension,
             mut max_mesh_invocations_per_workgroup,
@@ -1388,15 +1420,12 @@ impl PhysicalDeviceProperties {
             mut max_mesh_multiview_view_count,
         ) = Default::default();
         if let Some(m) = self.mesh_shader {
-            max_task_mesh_workgroup_total_count = m
-                .max_task_work_group_total_count
-                .min(m.max_mesh_work_group_total_count);
-            max_task_mesh_workgroups_per_dimension = m
-                .max_task_work_group_count
-                .into_iter()
-                .chain(m.max_mesh_work_group_count)
-                .min()
-                .unwrap();
+            max_task_workgroup_total_count = m.max_task_work_group_total_count;
+            max_task_workgroups_per_dimension =
+                m.max_task_work_group_count.into_iter().min().unwrap();
+            max_mesh_workgroup_total_count = m.max_mesh_work_group_total_count;
+            max_mesh_workgroups_per_dimension =
+                m.max_mesh_work_group_count.into_iter().min().unwrap();
             max_task_invocations_per_workgroup = m.max_task_work_group_invocations;
             max_task_invocations_per_dimension =
                 m.max_task_work_group_size.into_iter().min().unwrap();
@@ -1474,13 +1503,20 @@ impl PhysicalDeviceProperties {
             .max_color_attachments
             .min(limits.max_fragment_output_attachments);
 
-        let ignore_max_fragment_combined_output_resources = [
+        let ignore_max_fragment_combined_output_resources_by_device = [
             crate::auxil::db::intel::VENDOR,
             crate::auxil::db::nvidia::VENDOR,
             crate::auxil::db::amd::VENDOR,
             crate::auxil::db::imgtec::VENDOR,
         ]
         .contains(&self.properties.vendor_id);
+        let ignore_max_fragment_combined_output_resources_by_driver = self
+            .driver
+            .map(|driver| [vk::DriverId::MESA_AGXV].contains(&driver.driver_id))
+            .unwrap_or_default();
+        let ignore_max_fragment_combined_output_resources =
+            ignore_max_fragment_combined_output_resources_by_device
+                || ignore_max_fragment_combined_output_resources_by_driver;
 
         if !ignore_max_fragment_combined_output_resources {
             crate::auxil::cap_limits_to_be_under_the_sum_limit(
@@ -1608,6 +1644,8 @@ impl PhysicalDeviceProperties {
             max_texture_dimension_3d: limits.max_image_dimension3_d,
             max_texture_array_layers: limits.max_image_array_layers,
             max_bind_groups: limits.max_bound_descriptor_sets,
+            // No limit.
+            max_bind_groups_plus_vertex_buffers: u32::MAX,
             max_bindings_per_bind_group,
             max_dynamic_uniform_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_uniform_buffers_dynamic,
@@ -1664,8 +1702,11 @@ impl PhysicalDeviceProperties {
                 0
             },
 
-            max_task_mesh_workgroup_total_count,
-            max_task_mesh_workgroups_per_dimension,
+            max_task_workgroup_total_count,
+            max_task_workgroups_per_dimension,
+            max_mesh_workgroup_total_count,
+            max_mesh_workgroups_per_dimension,
+
             max_task_invocations_per_workgroup,
             max_task_invocations_per_dimension,
 
@@ -2493,6 +2534,14 @@ impl super::Adapter {
         } else {
             None
         };
+        let external_memory_fd_fn = if enabled_extensions.contains(&khr::external_memory_fd::NAME) {
+            Some(khr::external_memory_fd::Device::new(
+                &self.instance.raw,
+                &raw_device,
+            ))
+        } else {
+            None
+        };
 
         let naga_options = {
             use naga::back::spv;
@@ -2562,6 +2611,10 @@ impl super::Adapter {
 
             if features.contains(wgt::Features::SHADER_F16) {
                 capabilities.push(spv::Capability::Float16);
+            }
+
+            if features.contains(wgt::Features::SHADER_I16) {
+                capabilities.push(spv::Capability::Int16);
             }
 
             if features.intersects(
@@ -2688,10 +2741,11 @@ impl super::Adapter {
                 binding_map: BTreeMap::default(),
                 debug_info: None,
                 task_dispatch_limits: Some(naga::back::TaskDispatchLimits {
-                    max_mesh_workgroups_per_dim: limits.max_task_mesh_workgroups_per_dimension,
-                    max_mesh_workgroups_total: limits.max_task_mesh_workgroup_total_count,
+                    max_mesh_workgroups_per_dim: limits.max_mesh_workgroups_per_dimension,
+                    max_mesh_workgroups_total: limits.max_mesh_workgroup_total_count,
                 }),
                 mesh_shader_primitive_indices_clamp: true,
+                trace_ray_argument_validation: true,
             }
         };
 
@@ -2736,6 +2790,7 @@ impl super::Adapter {
                 timeline_semaphore: timeline_semaphore_fn,
                 ray_tracing: ray_tracing_fns,
                 mesh_shading: mesh_shading_fns,
+                external_memory_fd: external_memory_fd_fn,
             },
             pipeline_cache_validation_key,
             vendor_id: self.phd_capabilities.properties.vendor_id,
@@ -2762,6 +2817,7 @@ impl super::Adapter {
             family_index,
             relay_semaphores: Mutex::new(relay_semaphores),
             signal_semaphores: Mutex::new(SemaphoreList::new(SemaphoreListMode::Signal)),
+            wait_semaphores: Mutex::new(SemaphoreList::new(SemaphoreListMode::Wait)),
         };
 
         let allocation_sizes = AllocationSizes::from_memory_hints(memory_hints).into();
@@ -2778,7 +2834,7 @@ impl super::Adapter {
                 allocation_sizes,
             })?;
 
-        let desc_allocator = gpu_descriptor::DescriptorAllocator::new(
+        let desc_allocator = super::descriptor::DescriptorAllocator::new(
             if let Some(di) = self.phd_capabilities.descriptor_indexing {
                 di.max_update_after_bind_descriptors_in_all_pools
             } else {

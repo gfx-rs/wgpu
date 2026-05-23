@@ -292,11 +292,11 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
             label: None,
             layout: Some(&ppl),
             vertex: wgpu::VertexState {
-                buffers: &[wgpu::VertexBufferLayout {
+                buffers: &[Some(wgpu::VertexBufferLayout {
                     array_stride: 0, // Calculate, please!
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: test.attributes,
-                }],
+                })],
                 module: &shader,
                 entry_point: Some(test.entry_point),
                 compilation_options: Default::default(),
@@ -391,7 +391,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
         ctx.async_poll(wgpu::PollType::wait_indefinitely())
             .await
             .unwrap();
-        let data: Vec<f32> = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
+        let data: Vec<f32> = bytemuck::cast_slice(&slice.get_mapped_range().unwrap()).to_vec();
 
         let case_name = format!("Case {:?}", test.case);
 

@@ -94,7 +94,7 @@ impl crate::framework::Example for Example {
 
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits {
-            max_immediate_size: 16,
+            max_immediate_size: 12,
             ..wgpu::Limits::default()
         }
         .using_minimum_supported_acceleration_structure_values()
@@ -186,7 +186,7 @@ impl crate::framework::Example for Example {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 16,
+            immediate_size: 12,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -196,11 +196,11 @@ impl crate::framework::Example for Example {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
-                buffers: &[VertexBufferLayout {
+                buffers: &[Some(VertexBufferLayout {
                     array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
                     step_mode: Default::default(),
                     attributes: &vertex_attr_array![0 => Float32x3, 1 => Float32x3],
-                }],
+                })],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -354,7 +354,7 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
     optional_features: wgpu::Features::default(),
     base_test_parameters: wgpu_test::TestParameters::default()
         // https://github.com/gfx-rs/wgpu/issues/9100
-        .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::METAL)),
+        .disable_mtl_shader_validation(),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,
 };

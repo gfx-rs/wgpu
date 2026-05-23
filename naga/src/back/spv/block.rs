@@ -4177,7 +4177,9 @@ impl BlockContext<'_> {
                         }
                     };
                 }
-                Statement::RayPipelineFunction(_) => unreachable!(),
+                Statement::RayPipelineFunction(ref fun) => {
+                    self.write_ray_tracing_pipeline_function(fun, &mut block);
+                }
             }
         }
 

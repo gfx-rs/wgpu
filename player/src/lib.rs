@@ -291,7 +291,7 @@ impl Player {
                 id,
                 data,
                 label,
-                num_workgroups,
+                entry_points,
             } => {
                 let spirv = data.iter().find_map(|a| {
                     if a.kind() == DataKind::Spv {
@@ -303,27 +303,33 @@ impl Player {
                         None
                     }
                 });
-                let dxil = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::Dxil).then(|| loader.load(a)));
-                let hlsl = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::Hlsl).then(|| loader.load_utf8(a)));
-                let metallib = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::MetalLib).then(|| loader.load(a)));
-                let msl = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::Msl).then(|| loader.load_utf8(a)));
-                let glsl = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::Glsl).then(|| loader.load_utf8(a)));
-                let wgsl = data
-                    .iter()
-                    .find_map(|a| (a.kind() == DataKind::Wgsl).then(|| loader.load_utf8(a)));
+                let dxil = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::Dxil).then(|| Cow::Owned(loader.load(a).into_owned()))
+                });
+                let hlsl = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::Hlsl)
+                        .then(|| Cow::Owned(loader.load_utf8(a).into_owned()))
+                });
+                let metallib = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::MetalLib)
+                        .then(|| Cow::Owned(loader.load(a).into_owned()))
+                });
+                let msl = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::Msl)
+                        .then(|| Cow::Owned(loader.load_utf8(a).into_owned()))
+                });
+                let glsl = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::Glsl)
+                        .then(|| Cow::Owned(loader.load_utf8(a).into_owned()))
+                });
+                let wgsl = data.iter().find_map(|a| {
+                    (a.kind() == DataKind::Wgsl)
+                        .then(|| Cow::Owned(loader.load_utf8(a).into_owned()))
+                });
+
                 let desc = wgt::CreateShaderModuleDescriptorPassthrough {
                     label,
-                    num_workgroups,
+                    entry_points,
 
                     spirv,
                     dxil,
@@ -1050,8 +1056,8 @@ impl Player {
                 size_bytes,
                 values_offset,
             },
-            C::Dispatch(groups) => C::Dispatch(groups),
-            C::DispatchIndirect { buffer, offset } => C::DispatchIndirect {
+            C::DispatchWorkgroups(groups) => C::DispatchWorkgroups(groups),
+            C::DispatchWorkgroupsIndirect { buffer, offset } => C::DispatchWorkgroupsIndirect {
                 buffer: self.resolve_buffer_id(buffer),
                 offset,
             },
@@ -1073,6 +1079,26 @@ impl Player {
                 query_index,
             },
             C::EndPipelineStatisticsQuery => C::EndPipelineStatisticsQuery,
+            C::TransitionResources {
+                buffer_transitions,
+                texture_transitions,
+            } => C::TransitionResources {
+                buffer_transitions: buffer_transitions
+                    .into_iter()
+                    .map(|buffer_transition| wgt::BufferTransition {
+                        buffer: self.resolve_buffer_id(buffer_transition.buffer),
+                        state: buffer_transition.state,
+                    })
+                    .collect(),
+                texture_transitions: texture_transitions
+                    .into_iter()
+                    .map(|texture_transition| wgt::TextureTransition {
+                        texture: self.resolve_texture_view_id(texture_transition.texture),
+                        selector: texture_transition.selector,
+                        state: texture_transition.state,
+                    })
+                    .collect(),
+            },
         }
     }
 
@@ -1110,7 +1136,7 @@ impl Player {
                 size,
             } => C::SetVertexBuffer {
                 slot,
-                buffer: self.resolve_buffer_id(buffer),
+                buffer: buffer.map(|buffer| self.resolve_buffer_id(buffer)),
                 offset,
                 size,
             },
@@ -1305,6 +1331,13 @@ impl Player {
                         .collect(),
                 )
             }
+            wgc::ray_tracing::OwnedBlasGeometries::AabbGeometries(geos) => {
+                wgc::ray_tracing::OwnedBlasGeometries::AabbGeometries(
+                    geos.into_iter()
+                        .map(|geo| self.resolve_blas_aabb_geometry(geo))
+                        .collect(),
+                )
+            }
         }
     }
 
@@ -1323,6 +1356,18 @@ impl Player {
             vertex_stride: geometry.vertex_stride,
             first_index: geometry.first_index,
             transform_buffer_offset: geometry.transform_buffer_offset,
+        }
+    }
+
+    fn resolve_blas_aabb_geometry(
+        &self,
+        geometry: wgc::ray_tracing::OwnedBlasAabbGeometry<PointerReferences>,
+    ) -> wgc::ray_tracing::OwnedBlasAabbGeometry<ArcReferences> {
+        wgc::ray_tracing::OwnedBlasAabbGeometry {
+            size: geometry.size,
+            stride: geometry.stride,
+            aabb_buffer: self.resolve_buffer_id(geometry.aabb_buffer),
+            primitive_offset: geometry.primitive_offset,
         }
     }
 

@@ -2,7 +2,6 @@ use alloc::{borrow::ToOwned as _, boxed::Box, ffi::CString, string::String, sync
 use core::{
     ffi::{c_void, CStr},
     marker::PhantomData,
-    mem::ManuallyDrop,
     slice,
     str::FromStr,
 };
@@ -264,11 +263,7 @@ impl super::Instance {
             extensions.push(ext::metal_surface::NAME);
             extensions.push(khr::portability_enumeration::NAME);
         }
-        if cfg!(all(
-            unix,
-            not(target_vendor = "apple"),
-            not(target_family = "wasm")
-        )) {
+        if cfg!(drm) {
             // VK_EXT_acquire_drm_display -> VK_EXT_direct_mode_display -> VK_KHR_display
             extensions.push(ext::acquire_drm_display::NAME);
             extensions.push(ext::direct_mode_display::NAME);
@@ -550,8 +545,8 @@ impl super::Instance {
             crate::vulkan::swapchain::NativeSurface::from_vk_surface_khr(self, surface);
 
         super::Surface {
-            inner: ManuallyDrop::new(Box::new(native_surface)),
             swapchain: RwLock::new(None),
+            inner: Box::new(native_surface),
         }
     }
 
@@ -892,6 +887,10 @@ impl crate::Instance for super::Instance {
                 let connection = display.connection.expect("Pointer to X-Server is not set.");
                 self.create_surface_from_xcb(connection.as_ptr(), handle.window.get())
             }
+            #[cfg(drm)]
+            (Rwh::Drm(handle), Rdh::Drm(display)) => {
+                self.create_surface_from_drm_plane(display.fd, handle.plane)
+            }
             (Rwh::AndroidNdk(handle), _) => {
                 self.create_surface_android(handle.a_native_window.as_ptr())
             }
@@ -984,12 +983,6 @@ impl crate::Instance for super::Instance {
     }
 }
 
-impl Drop for super::Surface {
-    fn drop(&mut self) {
-        unsafe { ManuallyDrop::take(&mut self.inner).delete_surface() };
-    }
-}
-
 impl crate::Surface for super::Surface {
     type A = super::Api;
 
@@ -1016,7 +1009,6 @@ impl crate::Surface for super::Surface {
         if let Some(mut sc) = self.swapchain.write().take() {
             // SAFETY: `unconfigure`'s contract guarantees there are no resources derived from the swapchain in use.
             unsafe { sc.release_resources(device) };
-            unsafe { sc.delete_swapchain() };
         }
     }
 

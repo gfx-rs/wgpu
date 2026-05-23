@@ -28,7 +28,11 @@ mod library_from_metallib;
 mod surface;
 mod time;
 
-use alloc::{string::ToString as _, sync::Arc, vec::Vec};
+use alloc::{
+    string::{String, ToString as _},
+    sync::Arc,
+    vec::Vec,
+};
 use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
 
 use bitflags::bitflags;
@@ -310,12 +314,15 @@ struct CapabilitiesQuery {
     int64_atomics: bool,
     float_atomics: bool,
     mesh_shaders: bool,
-    max_mesh_task_workgroup_count: u32,
+    max_task_workgroup_count: u32,
+    max_mesh_workgroup_count: u32,
     max_task_payload_size: u32,
     supported_vertex_amplification_factor: u32,
     shader_barycentrics: bool,
     supports_memoryless_storage: bool,
     supports_raytracing: bool,
+    shader_per_vertex: bool,
+    supports_multisample_array: bool,
 }
 
 #[derive(Debug)]
@@ -409,27 +416,29 @@ impl AdapterShared {
     }
 
     fn expose(device: Retained<ProtocolObject<dyn MTLDevice>>) -> crate::ExposedAdapter<Api> {
-        let name = device.name().to_string();
-        let capabilities_query = CapabilitiesQuery::new(&device);
-        let shared = AdapterShared::new(device, &capabilities_query);
-        let features = capabilities_query.features();
-        let capabilities = capabilities_query.capabilities();
-        crate::ExposedAdapter {
-            info: wgt::AdapterInfo {
-                name,
-                // These are hardcoded based on typical values for Metal devices
-                //
-                // See <https://github.com/gpuweb/gpuweb/blob/main/proposals/subgroups.md#adapter-info>
-                // for more information.
-                subgroup_min_size: 4,
-                subgroup_max_size: 64,
-                transient_saves_memory: shared.private_caps.supports_memoryless_storage,
-                ..wgt::AdapterInfo::new(shared.private_caps.device_type(), wgt::Backend::Metal)
-            },
-            features,
-            capabilities,
-            adapter: Adapter::new(Arc::new(shared)),
-        }
+        autoreleasepool(|_| {
+            let name = device.name().to_string();
+            let capabilities_query = CapabilitiesQuery::new(&device);
+            let shared = AdapterShared::new(device, &capabilities_query);
+            let features = capabilities_query.features();
+            let capabilities = capabilities_query.capabilities();
+            crate::ExposedAdapter {
+                info: wgt::AdapterInfo {
+                    name,
+                    // These are hardcoded based on typical values for Metal devices
+                    //
+                    // See <https://github.com/gpuweb/gpuweb/blob/main/proposals/subgroups.md#adapter-info>
+                    // for more information.
+                    subgroup_min_size: 4,
+                    subgroup_max_size: 64,
+                    transient_saves_memory: shared.private_caps.supports_memoryless_storage,
+                    ..wgt::AdapterInfo::new(shared.private_caps.device_type(), wgt::Backend::Metal)
+                },
+                features,
+                capabilities,
+                adapter: Adapter::new(Arc::new(shared)),
+            }
+        })
     }
 }
 
@@ -458,6 +467,10 @@ impl Queue {
             timestamp_period,
         }
     }
+
+    pub fn as_raw(&self) -> &ProtocolObject<dyn MTLCommandQueue> {
+        &self.shared.raw
+    }
 }
 
 #[derive(Debug)]
@@ -477,6 +490,7 @@ pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
     counters: Arc<wgt::HalCounters>,
+    limits: wgt::Limits,
 }
 
 pub struct Surface {
@@ -605,6 +619,16 @@ impl crate::Queue for Queue {
 
     unsafe fn get_timestamp_period(&self) -> f32 {
         self.timestamp_period
+    }
+
+    unsafe fn wait_for_idle(&self) -> Result<(), crate::DeviceError> {
+        autoreleasepool(|_| {
+            let command_buffer = self.shared.raw.commandBuffer().unwrap();
+            command_buffer.setLabel(Some(ns_string!("(wgpu internal) wait_for_idle")));
+            command_buffer.commit();
+            command_buffer.waitUntilCompleted();
+        });
+        Ok(())
     }
 }
 
@@ -860,7 +884,7 @@ pub enum ShaderModuleSource {
 #[derive(Debug)]
 pub struct PassthroughShader {
     pub library: Retained<ProtocolObject<dyn MTLLibrary>>,
-    pub num_workgroups: (u32, u32, u32),
+    pub num_workgroups: HashMap<String, (u32, u32, u32)>,
 }
 
 unsafe impl Send for PassthroughShader {}
@@ -869,7 +893,7 @@ unsafe impl Sync for PassthroughShader {}
 #[derive(Debug)]
 pub struct ShaderModule {
     source: ShaderModuleSource,
-    bounds_checks: wgt::ShaderRuntimeChecks,
+    runtime_checks: wgt::ShaderRuntimeChecks,
 }
 
 impl crate::DynShaderModule for ShaderModule {}

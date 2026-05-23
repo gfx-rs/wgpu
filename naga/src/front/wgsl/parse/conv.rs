@@ -172,12 +172,19 @@ pub fn map_built_in(
     Ok(built_in)
 }
 
-pub fn map_interpolation(word: &str, span: Span) -> Result<'_, crate::Interpolation> {
+pub fn map_interpolation(
+    enable_extensions: &EnableExtensions,
+    word: &str,
+    span: Span,
+) -> Result<'static, crate::Interpolation> {
     match word {
         "linear" => Ok(crate::Interpolation::Linear),
         "flat" => Ok(crate::Interpolation::Flat),
         "perspective" => Ok(crate::Interpolation::Perspective),
-        "per_vertex" => Ok(crate::Interpolation::PerVertex),
+        "per_vertex" => {
+            enable_extensions.require(ImplementedEnableExtension::WgpuPerVertex, span)?;
+            Ok(crate::Interpolation::PerVertex)
+        }
         _ => Err(Box::new(Error::UnknownAttribute(span))),
     }
 }
@@ -455,6 +462,8 @@ pub fn map_predeclared_type(
         "i32" => Ti::Scalar(Sc::I32).into(),
         "u32" => Ti::Scalar(Sc::U32).into(),
         "f32" => Ti::Scalar(Sc::F32).into(),
+        "i16" => Ti::Scalar(Sc::I16).into(),
+        "u16" => Ti::Scalar(Sc::U16).into(),
         "f16" => Ti::Scalar(Sc::F16).into(),
         "i64" => Ti::Scalar(Sc::I64).into(),
         "u64" => Ti::Scalar(Sc::U64).into(),
@@ -566,6 +575,9 @@ pub fn map_predeclared_type(
         PredeclaredType::TypeInner(ref ty) if ty.scalar() == Some(Sc::F16) => {
             Some(&[ImplementedEnableExtension::F16])
         }
+        PredeclaredType::TypeInner(ref ty) if matches!(ty.scalar(), Some(s) if s == Sc::I16 || s == Sc::U16) => {
+            Some(&[ImplementedEnableExtension::WgpuInt16])
+        }
         PredeclaredType::RayDesc
         | PredeclaredType::RayIntersection
         | PredeclaredType::TypeGenerator(TypeGenerator::AccelerationStructure)
@@ -575,6 +587,9 @@ pub fn map_predeclared_type(
         ]),
         PredeclaredType::TypeGenerator(TypeGenerator::CooperativeMatrix { .. }) => {
             Some(&[ImplementedEnableExtension::WgpuCooperativeMatrix])
+        }
+        PredeclaredType::TypeGenerator(TypeGenerator::BindingArray) => {
+            Some(&[ImplementedEnableExtension::WgpuBindingArray])
         }
         _ => None,
     };

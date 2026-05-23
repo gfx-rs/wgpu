@@ -184,6 +184,6 @@ fn single_scalar_load(ctx: TestingContext) {
     ctx.device.poll(PollType::wait_indefinitely()).unwrap();
     recv.recv_timeout(Duration::from_secs(10))
         .expect("mapping should not take this long");
-    let val = *bytemuck::from_bytes::<[f32; 4]>(&buffer.slice(..).get_mapped_range());
+    let val = *bytemuck::from_bytes::<[f32; 4]>(&buffer.slice(..).get_mapped_range().unwrap());
     assert_eq!(val, [0.0, 0.0, 0.0, 1.0]);
 }
