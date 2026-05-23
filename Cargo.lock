@@ -916,10 +916,8 @@ checksum = "52560adf09603e58c9a7ee1fe1dcb95a16927b17c127f0ac02d6e768a0e25bc1"
 name = "cts_runner"
 version = "29.0.0"
 dependencies = [
- "deno_console",
  "deno_core",
  "deno_features",
- "deno_url",
  "deno_web",
  "deno_webgpu",
  "deno_webidl",
@@ -952,12 +950,6 @@ dependencies = [
  "serde",
  "uuid",
 ]
-
-[[package]]
-name = "deno_console"
-version = "0.222.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed7dede3d073a7d19e5e127756d80a1a8b570d8345e51192968da142ed290319"
 
 [[package]]
 name = "deno_core"
@@ -1091,12 +1083,6 @@ dependencies = [
  "parking_lot",
  "tokio",
 ]
-
-[[package]]
-name = "deno_url"
-version = "0.222.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54c190c36940b8ba25043e2258775df3cd4af06f28c8a9efd28b50799efe2977"
 
 [[package]]
 name = "deno_web"
