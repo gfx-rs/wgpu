@@ -18,6 +18,7 @@ webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_t
 webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=true;stencilReadOnly=false // https://github.com/gfx-rs/wgpu/issues/8705
 webgpu:api,operation,rendering,3d_texture_slices:* // https://github.com/gfx-rs/wgpu/issues/9455
 
+webgpu:api,validation,buffer,create:new_usages,* // https://github.com/denoland/deno/issues/33846; possibly issues with wgpu extensions
 webgpu:api,validation,buffer,mapping:* // crash
 webgpu:api,validation,capability_checks,features,* // 21%, TypeError not thrown for missing features (needs deno_webgpu fix)
 webgpu:api,validation,capability_checks,limits,* // 60%, workgroup storage size validation unimplemented; interstage vars counting; bind group timing on dx12
@@ -27,6 +28,7 @@ webgpu:api,validation,compute_pipeline:overrides,workgroup_size,limits:* // 0%
 webgpu:api,validation,createBindGroup:buffer,resource_state:* // 0%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,createBindGroup:external_texture,* // 0%, no external external texture in deno
 webgpu:api,validation,createBindGroup:texture,resource_state:* // crash, https://github.com/gfx-rs/wgpu/issues/7881
+webgpu:api,validation,createTexture:new_usages,* // https://github.com/denoland/deno/issues/33846; possibly issues with wgpu extensions
 webgpu:api,validation,createView:texture_state:* // 0%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_ranges:* // ***, https://github.com/gfx-rs/wgpu/issues/8118
 webgpu:api,validation,encoding,cmds,debug:* // 92%, https://github.com/gfx-rs/wgpu/issues/8039
