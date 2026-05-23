@@ -1,13 +1,14 @@
-// Copyright 2018-2025 the Deno authors. MIT license.
+// Copyright 2018-2026 the Deno authors. MIT license.
 
-use deno_core::cppgc::Ptr;
+use deno_core::GarbageCollected;
+use deno_core::WebIDL;
+use deno_core::cppgc::Ref;
 use deno_core::op2;
 use deno_core::webidl::Nullable;
 use deno_core::webidl::WebIdlInterfaceConverter;
-use deno_core::GarbageCollected;
-use deno_core::WebIDL;
 use indexmap::IndexMap;
 
+use crate::Instance;
 use crate::bind_group_layout::GPUBindGroupLayout;
 use crate::error::GPUGenericError;
 use crate::sampler::GPUCompareFunction;
@@ -15,7 +16,6 @@ use crate::shader::GPUShaderModule;
 use crate::texture::GPUTextureFormat;
 use crate::webidl::GPUColorWriteFlags;
 use crate::webidl::GPUPipelineLayoutOrGPUAutoLayoutMode;
-use crate::Instance;
 
 pub struct GPURenderPipeline {
   pub instance: Instance,
@@ -35,7 +35,10 @@ impl WebIdlInterfaceConverter for GPURenderPipeline {
   const NAME: &'static str = "GPURenderPipeline";
 }
 
-impl GarbageCollected for GPURenderPipeline {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPURenderPipeline {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
+
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPURenderPipeline"
   }
@@ -171,7 +174,7 @@ impl From<GPUStencilOperation> for wgpu_types::StencilOperation {
 #[derive(WebIDL)]
 #[webidl(dictionary)]
 pub(crate) struct GPUVertexState {
-  pub module: Ptr<GPUShaderModule>,
+  pub module: Ref<GPUShaderModule>,
   pub entry_point: Option<String>,
   #[webidl(default = Default::default())]
   pub constants: IndexMap<String, f64>,
@@ -182,7 +185,7 @@ pub(crate) struct GPUVertexState {
 #[derive(WebIDL)]
 #[webidl(dictionary)]
 pub(crate) struct GPUFragmentState {
-  pub module: Ptr<GPUShaderModule>,
+  pub module: Ref<GPUShaderModule>,
   pub entry_point: Option<String>,
   #[webidl(default = Default::default())]
   pub constants: IndexMap<String, f64>,

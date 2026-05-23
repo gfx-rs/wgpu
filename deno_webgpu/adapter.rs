@@ -1,26 +1,26 @@
-// Copyright 2018-2025 the Deno authors. MIT license.
+// Copyright 2018-2026 the Deno authors. MIT license.
 
 use std::ops::BitOr;
 use std::rc::Rc;
 
-use deno_core::cppgc::SameObject;
-use deno_core::op2;
-use deno_core::v8;
 use deno_core::GarbageCollected;
 use deno_core::OpState;
 use deno_core::V8TaskSpawner;
 use deno_core::WebIDL;
+use deno_core::cppgc::SameObject;
+use deno_core::op2;
+use deno_core::v8;
 
-use super::device::GPUDevice;
 use super::device::DEVICE_EXTERNAL_MEMORY_SIZE;
+use super::device::GPUDevice;
 use super::queue::GPUQueue;
+use crate::Instance;
 use crate::error::GPUGenericError;
 use crate::webidl::GPUFeatureName;
-use crate::Instance;
 
 #[derive(WebIDL)]
 #[webidl(dictionary)]
-pub(crate) struct GPURequestAdapterOptions {
+pub struct GPURequestAdapterOptions {
   #[webidl(default = "core".into())]
   pub feature_level: String,
   pub power_preference: Option<GPUPowerPreference>,
@@ -30,7 +30,7 @@ pub(crate) struct GPURequestAdapterOptions {
 
 #[derive(WebIDL)]
 #[webidl(enum)]
-pub(crate) enum GPUPowerPreference {
+pub enum GPUPowerPreference {
   LowPower,
   HighPerformance,
 }
@@ -63,7 +63,10 @@ impl Drop for GPUAdapter {
   }
 }
 
-impl GarbageCollected for GPUAdapter {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPUAdapter {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
+
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPUAdapter"
   }
@@ -78,8 +81,7 @@ impl GPUAdapter {
   }
 
   #[getter]
-  #[global]
-  fn info(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
+  fn info(&self, scope: &mut v8::PinScope<'_, '_>) -> v8::Global<v8::Object> {
     self.info.get(scope, |_| {
       let info = self.instance.adapter_get_info(self.id);
 
@@ -88,8 +90,10 @@ impl GPUAdapter {
   }
 
   #[getter]
-  #[global]
-  fn features(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
+  fn features(
+    &self,
+    scope: &mut v8::PinScope<'_, '_>,
+  ) -> v8::Global<v8::Object> {
     self.features.get(scope, |scope| {
       let features = self.instance.adapter_features(self.id);
       // Only expose WebGPU features, not wgpu native-only features
@@ -99,8 +103,7 @@ impl GPUAdapter {
   }
 
   #[getter]
-  #[global]
-  fn limits(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
+  fn limits(&self, scope: &mut v8::PinScope<'_, '_>) -> v8::Global<v8::Object> {
     self.limits.get(scope, |_| {
       let adapter_limits = self.instance.adapter_limits(self.id);
       GPUSupportedLimits(adapter_limits)
@@ -108,11 +111,10 @@ impl GPUAdapter {
   }
 
   #[async_method(fake)]
-  #[global]
   fn request_device(
     &self,
     state: &mut OpState,
-    scope: &mut v8::HandleScope,
+    scope: &mut v8::PinScope<'_, '_>,
     #[webidl] descriptor: GPUDeviceDescriptor,
   ) -> Result<v8::Global<v8::Value>, CreateDeviceError> {
     let supported_features = self.instance.adapter_features(self.id);
@@ -204,10 +206,12 @@ impl GPUAdapter {
       adapter_info: self.info.clone(),
       error_handler,
       adapter: self.id,
+      queue,
       lost_promise: v8::Global::new(scope, lost_promise),
       limits: SameObject::new(),
       features: SameObject::new(),
       weak: std::sync::OnceLock::new(),
+      has_active_capture: std::cell::RefCell::new(false),
     };
     let device = deno_core::cppgc::make_cppgc_object(scope, device);
     let weak_device = v8::Weak::new(scope, device);
@@ -258,7 +262,10 @@ pub enum CreateDeviceError {
 
 pub struct GPUSupportedLimits(pub wgpu_types::Limits);
 
-impl GarbageCollected for GPUSupportedLimits {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPUSupportedLimits {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
+
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPUSupportedLimits"
   }
@@ -458,7 +465,10 @@ impl GPUSupportedLimits {
 
 pub struct GPUSupportedFeatures(v8::Global<v8::Value>);
 
-impl GarbageCollected for GPUSupportedFeatures {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPUSupportedFeatures {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
+
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPUSupportedFeatures"
   }
@@ -466,7 +476,7 @@ impl GarbageCollected for GPUSupportedFeatures {
 
 impl GPUSupportedFeatures {
   pub fn new(
-    scope: &mut v8::HandleScope,
+    scope: &mut v8::PinScope<'_, '_>,
     features: wgpu_types::Features,
   ) -> Self {
     let set = v8::Set::new(scope);
@@ -488,7 +498,6 @@ impl GPUSupportedFeatures {
     Err(GPUGenericError::InvalidConstructor)
   }
 
-  #[global]
   #[symbol("setlike_set")]
   fn set(&self) -> v8::Global<v8::Value> {
     self.0.clone()
@@ -499,7 +508,10 @@ pub struct GPUAdapterInfo {
   pub info: wgpu_types::AdapterInfo,
 }
 
-impl GarbageCollected for GPUAdapterInfo {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPUAdapterInfo {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
+
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPUAdapterInfo"
   }

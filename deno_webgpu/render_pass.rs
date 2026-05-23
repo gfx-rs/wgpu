@@ -1,13 +1,14 @@
-// Copyright 2018-2025 the Deno authors. MIT license.
+// Copyright 2018-2026 the Deno authors. MIT license.
 
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::num::NonZeroU64;
 
-use deno_core::cppgc::Ptr;
+use deno_core::GarbageCollected;
+use deno_core::WebIDL;
+use deno_core::cppgc::Ref;
 use deno_core::op2;
 use deno_core::v8;
-use deno_core::v8::HandleScope;
 use deno_core::v8::Local;
 use deno_core::v8::Value;
 use deno_core::webidl::ContextFn;
@@ -15,16 +16,14 @@ use deno_core::webidl::IntOptions;
 use deno_core::webidl::Nullable;
 use deno_core::webidl::WebIdlConverter;
 use deno_core::webidl::WebIdlError;
-use deno_core::GarbageCollected;
-use deno_core::WebIDL;
 
+use crate::Instance;
 use crate::buffer::GPUBuffer;
 use crate::error::GPUGenericError;
 use crate::render_bundle::GPURenderBundle;
 use crate::texture::GPUTexture;
 use crate::texture::GPUTextureView;
 use crate::webidl::GPUColor;
-use crate::Instance;
 
 pub struct GPURenderPassEncoder {
   pub instance: Instance,
@@ -34,7 +33,9 @@ pub struct GPURenderPassEncoder {
   pub label: String,
 }
 
-impl GarbageCollected for GPURenderPassEncoder {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPURenderPassEncoder {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPURenderPassEncoder"
   }
@@ -164,7 +165,7 @@ impl GPURenderPassEncoder {
 
   #[required(1)]
   #[undefined]
-  fn execute_bundles(&self, #[webidl] bundles: Vec<Ptr<GPURenderBundle>>) {
+  fn execute_bundles(&self, #[webidl] bundles: Vec<Ref<GPURenderBundle>>) {
     let err = self
       .instance
       .render_pass_execute_bundles(
@@ -227,9 +228,9 @@ impl GPURenderPassEncoder {
   #[undefined]
   fn set_bind_group<'a>(
     &self,
-    scope: &mut v8::HandleScope<'a>,
+    scope: &mut v8::PinScope<'a, '_>,
     #[webidl(options(enforce_range = true))] index: u32,
-    #[webidl] bind_group: Nullable<Ptr<crate::bind_group::GPUBindGroup>>,
+    #[webidl] bind_group: Nullable<Ref<crate::bind_group::GPUBindGroup>>,
     dynamic_offsets: v8::Local<'a, v8::Value>,
     dynamic_offsets_data_start: v8::Local<'a, v8::Value>,
     dynamic_offsets_data_length: v8::Local<'a, v8::Value>,
@@ -311,7 +312,7 @@ impl GPURenderPassEncoder {
   #[undefined]
   fn set_pipeline(
     &self,
-    #[webidl] pipeline: Ptr<crate::render_pipeline::GPURenderPipeline>,
+    #[webidl] pipeline: Ref<crate::render_pipeline::GPURenderPipeline>,
   ) {
     let err = self
       .instance
@@ -324,7 +325,7 @@ impl GPURenderPassEncoder {
   #[undefined]
   fn set_index_buffer(
     &self,
-    #[webidl] buffer: Ptr<GPUBuffer>,
+    #[webidl] buffer: Ref<GPUBuffer>,
     #[webidl] index_format: crate::render_pipeline::GPUIndexFormat,
     #[webidl(default = 0, options(enforce_range = true))] offset: u64,
     #[webidl(options(enforce_range = true))] size: Option<u64>,
@@ -347,7 +348,7 @@ impl GPURenderPassEncoder {
   fn set_vertex_buffer(
     &self,
     #[webidl(options(enforce_range = true))] slot: u32,
-    #[webidl] buffer: Ptr<GPUBuffer>, // TODO(wgpu): support nullable buffer
+    #[webidl] buffer: Ref<GPUBuffer>, // TODO(wgpu): support nullable buffer
     #[webidl(default = 0, options(enforce_range = true))] offset: u64,
     #[webidl(options(enforce_range = true))] size: Option<u64>,
   ) {
@@ -414,7 +415,7 @@ impl GPURenderPassEncoder {
   #[undefined]
   fn draw_indirect(
     &self,
-    #[webidl] indirect_buffer: Ptr<GPUBuffer>,
+    #[webidl] indirect_buffer: Ref<GPUBuffer>,
     #[webidl(options(enforce_range = true))] indirect_offset: u64,
   ) {
     let err = self
@@ -432,7 +433,7 @@ impl GPURenderPassEncoder {
   #[undefined]
   fn draw_indexed_indirect(
     &self,
-    #[webidl] indirect_buffer: Ptr<GPUBuffer>,
+    #[webidl] indirect_buffer: Ref<GPUBuffer>,
     #[webidl(options(enforce_range = true))] indirect_offset: u64,
   ) {
     let err = self
@@ -455,7 +456,7 @@ pub(crate) struct GPURenderPassDescriptor {
 
   pub color_attachments: Vec<Nullable<GPURenderPassColorAttachment>>,
   pub depth_stencil_attachment: Option<GPURenderPassDepthStencilAttachment>,
-  pub occlusion_query_set: Option<Ptr<crate::query_set::GPUQuerySet>>,
+  pub occlusion_query_set: Option<Ref<crate::query_set::GPUQuerySet>>,
   pub timestamp_writes: Option<GPURenderPassTimestampWrites>,
   /*#[webidl(default = 50000000)]
   #[options(enforce_range = true)]
@@ -540,7 +541,7 @@ pub(crate) struct GPURenderPassDepthStencilAttachment {
 #[derive(WebIDL)]
 #[webidl(dictionary)]
 pub(crate) struct GPURenderPassTimestampWrites {
-  pub query_set: Ptr<crate::query_set::GPUQuerySet>,
+  pub query_set: Ref<crate::query_set::GPUQuerySet>,
   #[options(enforce_range = true)]
   pub beginning_of_pass_write_index: Option<u32>,
   #[options(enforce_range = true)]
@@ -548,8 +549,8 @@ pub(crate) struct GPURenderPassTimestampWrites {
 }
 
 pub(crate) enum GPUTextureOrView {
-  Texture(Ptr<GPUTexture>),
-  TextureView(Ptr<GPUTextureView>),
+  Texture(Ref<GPUTexture>),
+  TextureView(Ref<GPUTextureView>),
 }
 
 impl GPUTextureOrView {
@@ -565,13 +566,13 @@ impl<'a> WebIdlConverter<'a> for GPUTextureOrView {
   type Options = ();
 
   fn convert<'b>(
-    scope: &mut HandleScope<'a>,
+    scope: &mut v8::PinScope<'a, '_>,
     value: Local<'a, Value>,
     prefix: Cow<'static, str>,
     context: ContextFn<'b>,
     options: &Self::Options,
   ) -> Result<Self, WebIdlError> {
-    <Ptr<GPUTexture>>::convert(
+    <Ref<GPUTexture>>::convert(
       scope,
       value,
       prefix.clone(),
@@ -580,7 +581,7 @@ impl<'a> WebIdlConverter<'a> for GPUTextureOrView {
     )
     .map(Self::Texture)
     .or_else(|_| {
-      <Ptr<GPUTextureView>>::convert(
+      <Ref<GPUTextureView>>::convert(
         scope,
         value,
         prefix.clone(),

@@ -1,4 +1,4 @@
-// Copyright 2018-2025 the Deno authors. MIT license.
+// Copyright 2018-2026 the Deno authors. MIT license.
 
 use std::borrow::Cow;
 use std::cell::RefCell;
@@ -6,16 +6,20 @@ use std::num::NonZero;
 #[cfg(target_vendor = "apple")]
 use std::sync::OnceLock;
 
-use deno_core::cppgc::Ptr;
-use deno_core::op2;
-use deno_core::v8;
-use deno_core::webidl::{IntOptions, WebIdlConverter, WebIdlError};
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
+use deno_core::cppgc::Ref;
+use deno_core::op2;
+use deno_core::v8;
+use deno_core::webidl::IntOptions;
+use deno_core::webidl::WebIdlConverter;
+use deno_core::webidl::WebIdlError;
 use deno_error::JsErrorBox;
 use wgpu_core::command::PassChannel;
-use wgpu_types::{BufferAddress, TexelCopyBufferInfo};
+use wgpu_types::BufferAddress;
+use wgpu_types::TexelCopyBufferInfo;
 
+use crate::Instance;
 use crate::buffer::GPUBuffer;
 use crate::command_buffer::GPUCommandBuffer;
 use crate::compute_pass::GPUComputePassEncoder;
@@ -23,7 +27,6 @@ use crate::error::GPUGenericError;
 use crate::queue::GPUTexelCopyTextureInfo;
 use crate::render_pass::GPURenderPassEncoder;
 use crate::webidl::GPUExtent3D;
-use crate::Instance;
 
 pub struct GPUCommandEncoder {
   pub instance: Instance,
@@ -44,7 +47,10 @@ impl Drop for GPUCommandEncoder {
   }
 }
 
-impl GarbageCollected for GPUCommandEncoder {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPUCommandEncoder {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
+
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPUCommandEncoder"
   }
@@ -191,8 +197,8 @@ impl GPUCommandEncoder {
   #[undefined]
   fn copy_buffer_to_buffer<'a>(
     &self,
-    scope: &mut v8::HandleScope<'a>,
-    #[webidl] source: Ptr<GPUBuffer>,
+    scope: &mut v8::PinScope<'a, '_>,
+    #[webidl] source: Ref<GPUBuffer>,
     arg2: v8::Local<'a, v8::Value>,
     arg3: v8::Local<'a, v8::Value>,
     arg4: v8::Local<'a, v8::Value>,
@@ -205,7 +211,7 @@ impl GPUCommandEncoder {
     };
 
     let source_offset: BufferAddress;
-    let destination: Ptr<GPUBuffer>;
+    let destination: Ref<GPUBuffer>;
     let destination_offset: BufferAddress;
     let size: Option<BufferAddress>;
     // Note that the last argument to either overload of `copy_buffer_to_buffer`
@@ -213,7 +219,7 @@ impl GPUCommandEncoder {
     if arg4.is_undefined() {
       // 3-argument overload
       source_offset = 0;
-      destination = Ptr::<GPUBuffer>::convert(
+      destination = Ref::<GPUBuffer>::convert(
         scope,
         arg2,
         Cow::Borrowed(prefix),
@@ -237,7 +243,7 @@ impl GPUCommandEncoder {
         (|| Cow::Borrowed("sourceOffset")).into(),
         &int_options,
       )?;
-      destination = Ptr::<GPUBuffer>::convert(
+      destination = Ref::<GPUBuffer>::convert(
         scope,
         arg3,
         Cow::Borrowed(prefix),
@@ -387,7 +393,7 @@ impl GPUCommandEncoder {
   #[undefined]
   fn clear_buffer(
     &self,
-    #[webidl] buffer: Ptr<GPUBuffer>,
+    #[webidl] buffer: Ref<GPUBuffer>,
     #[webidl(default = 0, options(enforce_range = true))] offset: u64,
     #[webidl(options(enforce_range = true))] size: Option<u64>,
   ) {
@@ -402,10 +408,10 @@ impl GPUCommandEncoder {
   #[undefined]
   fn resolve_query_set(
     &self,
-    #[webidl] query_set: Ptr<super::query_set::GPUQuerySet>,
+    #[webidl] query_set: Ref<super::query_set::GPUQuerySet>,
     #[webidl(options(enforce_range = true))] first_query: u32,
     #[webidl(options(enforce_range = true))] query_count: u32,
-    #[webidl] destination: Ptr<GPUBuffer>,
+    #[webidl] destination: Ref<GPUBuffer>,
     #[webidl(options(enforce_range = true))] destination_offset: u64,
   ) {
     let err = self
@@ -481,7 +487,7 @@ pub(crate) struct GPUCommandEncoderDescriptor {
 #[derive(WebIDL)]
 #[webidl(dictionary)]
 pub(crate) struct GPUTexelCopyBufferInfo {
-  pub buffer: Ptr<GPUBuffer>,
+  pub buffer: Ref<GPUBuffer>,
   #[webidl(default = 0)]
   #[options(enforce_range = true)]
   offset: u64,

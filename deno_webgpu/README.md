@@ -18,8 +18,8 @@ This op crate is tested primarily by running the
 [WebGPU conformance test suite](https://github.com/gpuweb/cts) using `wgpu`'s
 [`cts_runner`](https://github.com/gfx-rs/wgpu/blob/trunk/README.md#webgpu-conformance-test-suite).
 `cts_runner` also has a few
-[directed tests](https://github.com/gfx-rs/wgpu/tree/trunk/cts_runner/tests)
-to fill in missing coverage.
+[directed tests](https://github.com/gfx-rs/wgpu/tree/trunk/cts_runner/tests) to
+fill in missing coverage.
 
 GPU availability in GitHub CI is limited, so some configurations rely on
 software like DX WARP & Vulkan lavapipe.

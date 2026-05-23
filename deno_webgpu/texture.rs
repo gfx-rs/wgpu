@@ -1,11 +1,11 @@
-// Copyright 2018-2025 the Deno authors. MIT license.
+// Copyright 2018-2026 the Deno authors. MIT license.
 
 use std::sync::OnceLock;
 
-use deno_core::op2;
-use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
+use deno_core::op2;
+use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_error::JsErrorBox;
 use wgpu_types::AstcBlock;
 use wgpu_types::AstcChannel;
@@ -15,9 +15,9 @@ use wgpu_types::TextureDimension;
 use wgpu_types::TextureFormat;
 use wgpu_types::TextureViewDimension;
 
+use crate::Instance;
 use crate::error::GPUGenericError;
 use crate::webidl::GPUTextureUsageFlags;
-use crate::Instance;
 
 #[derive(WebIDL)]
 #[webidl(dictionary)]
@@ -45,6 +45,10 @@ pub struct GPUTexture {
   pub error_handler: super::error::ErrorHandler,
 
   pub id: wgpu_core::id::TextureId,
+  // needed by deno
+  pub device_id: wgpu_core::id::DeviceId,
+  // needed by deno
+  pub queue_id: wgpu_core::id::QueueId,
   pub default_view_id: OnceLock<wgpu_core::id::TextureViewId>,
 
   pub label: String,
@@ -94,7 +98,10 @@ impl WebIdlInterfaceConverter for GPUTexture {
   const NAME: &'static str = "GPUTexture";
 }
 
-impl GarbageCollected for GPUTexture {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPUTexture {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
+
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPUTexture"
   }
@@ -281,7 +288,10 @@ impl WebIdlInterfaceConverter for GPUTextureView {
   const NAME: &'static str = "GPUTextureView";
 }
 
-impl GarbageCollected for GPUTextureView {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPUTextureView {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
+
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPUTextureView"
   }
@@ -331,7 +341,7 @@ impl From<GPUTextureDimension> for TextureDimension {
 
 #[derive(WebIDL, Clone)]
 #[webidl(enum)]
-pub(crate) enum GPUTextureFormat {
+pub enum GPUTextureFormat {
   #[webidl(rename = "r8unorm")]
   R8unorm,
   #[webidl(rename = "r8snorm")]
@@ -718,7 +728,10 @@ impl WebIdlInterfaceConverter for GPUExternalTexture {
   const NAME: &'static str = "GPUExternalTexture";
 }
 
-impl GarbageCollected for GPUExternalTexture {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPUExternalTexture {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
+
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPUExternalTexture"
   }

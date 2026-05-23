@@ -1,15 +1,15 @@
-// Copyright 2018-2025 the Deno authors. MIT license.
+// Copyright 2018-2026 the Deno authors. MIT license.
 
 use std::borrow::Cow;
 
-use deno_core::cppgc::Ptr;
+use deno_core::WebIDL;
+use deno_core::cppgc::Ref;
 use deno_core::v8;
 use deno_core::webidl::ContextFn;
 use deno_core::webidl::IntOptions;
 use deno_core::webidl::WebIdlConverter;
 use deno_core::webidl::WebIdlError;
 use deno_core::webidl::WebIdlErrorKind;
-use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 
 #[derive(WebIDL)]
@@ -34,7 +34,7 @@ impl<'a> WebIdlConverter<'a> for GPUExtent3D {
   type Options = ();
 
   fn convert<'b>(
-    scope: &mut v8::HandleScope<'a>,
+    scope: &mut v8::PinScope<'a, '_>,
     value: v8::Local<'a, v8::Value>,
     prefix: Cow<'static, str>,
     context: ContextFn<'b>,
@@ -51,36 +51,36 @@ impl<'a> WebIdlConverter<'a> for GPUExtent3D {
     }
     if let Ok(obj) = value.try_cast::<v8::Object>() {
       let iter = v8::Symbol::get_iterator(scope);
-      if let Some(iter) = obj.get(scope, iter.into()) {
-        if !iter.is_undefined() {
-          let conv = <Vec<u32>>::convert(
-            scope,
-            value,
-            prefix.clone(),
-            context.borrowed(),
-            &IntOptions {
-              clamp: false,
-              enforce_range: true,
-            },
-          )?;
-          if conv.is_empty() || conv.len() > 3 {
-            return Err(WebIdlError::other(
-              prefix,
-              context,
-              JsErrorBox::type_error(format!(
-                "A sequence of number used as a GPUExtent3D must have between 1 and 3 elements, received {} elements",
-                conv.len()
-              )),
-            ));
-          }
-
-          let mut iter = conv.into_iter();
-          return Ok(GPUExtent3D::Sequence((
-            iter.next().unwrap(),
-            iter.next().unwrap_or(1),
-            iter.next().unwrap_or(1),
-          )));
+      if let Some(iter) = obj.get(scope, iter.into())
+        && !iter.is_undefined()
+      {
+        let conv = <Vec<u32>>::convert(
+          scope,
+          value,
+          prefix.clone(),
+          context.borrowed(),
+          &IntOptions {
+            clamp: false,
+            enforce_range: true,
+          },
+        )?;
+        if conv.is_empty() || conv.len() > 3 {
+          return Err(WebIdlError::other(
+            prefix,
+            context,
+            JsErrorBox::type_error(format!(
+              "A sequence of number used as a GPUExtent3D must have between 1 and 3 elements, received {} elements",
+              conv.len()
+            )),
+          ));
         }
+
+        let mut iter = conv.into_iter();
+        return Ok(GPUExtent3D::Sequence((
+          iter.next().unwrap(),
+          iter.next().unwrap_or(1),
+          iter.next().unwrap_or(1),
+        )));
       }
 
       return Ok(GPUExtent3D::Dict(GPUExtent3DDict::convert(
@@ -144,7 +144,7 @@ impl<'a> WebIdlConverter<'a> for GPUOrigin3D {
   type Options = ();
 
   fn convert<'b>(
-    scope: &mut v8::HandleScope<'a>,
+    scope: &mut v8::PinScope<'a, '_>,
     value: v8::Local<'a, v8::Value>,
     prefix: Cow<'static, str>,
     context: ContextFn<'b>,
@@ -161,36 +161,36 @@ impl<'a> WebIdlConverter<'a> for GPUOrigin3D {
     }
     if let Ok(obj) = value.try_cast::<v8::Object>() {
       let iter = v8::Symbol::get_iterator(scope);
-      if let Some(iter) = obj.get(scope, iter.into()) {
-        if !iter.is_undefined() {
-          let conv = <Vec<u32>>::convert(
-            scope,
-            value,
-            prefix.clone(),
-            context.borrowed(),
-            &IntOptions {
-              clamp: false,
-              enforce_range: true,
-            },
-          )?;
-          if conv.len() > 3 {
-            return Err(WebIdlError::other(
-              prefix,
-              context,
-              JsErrorBox::type_error(format!(
-                "A sequence of number used as a GPUOrigin3D must have at most 3 elements, received {} elements",
-                conv.len()
-              )),
-            ));
-          }
-
-          let mut iter = conv.into_iter();
-          return Ok(GPUOrigin3D::Sequence((
-            iter.next().unwrap_or(0),
-            iter.next().unwrap_or(0),
-            iter.next().unwrap_or(0),
-          )));
+      if let Some(iter) = obj.get(scope, iter.into())
+        && !iter.is_undefined()
+      {
+        let conv = <Vec<u32>>::convert(
+          scope,
+          value,
+          prefix.clone(),
+          context.borrowed(),
+          &IntOptions {
+            clamp: false,
+            enforce_range: true,
+          },
+        )?;
+        if conv.len() > 3 {
+          return Err(WebIdlError::other(
+            prefix,
+            context,
+            JsErrorBox::type_error(format!(
+              "A sequence of number used as a GPUOrigin3D must have at most 3 elements, received {} elements",
+              conv.len()
+            )),
+          ));
         }
+
+        let mut iter = conv.into_iter();
+        return Ok(GPUOrigin3D::Sequence((
+          iter.next().unwrap_or(0),
+          iter.next().unwrap_or(0),
+          iter.next().unwrap_or(0),
+        )));
       }
 
       return Ok(GPUOrigin3D::Dict(GPUOrigin3DDict::convert(
@@ -239,7 +239,7 @@ impl<'a> WebIdlConverter<'a> for GPUColor {
   type Options = ();
 
   fn convert<'b>(
-    scope: &mut v8::HandleScope<'a>,
+    scope: &mut v8::PinScope<'a, '_>,
     value: v8::Local<'a, v8::Value>,
     prefix: Cow<'static, str>,
     context: ContextFn<'b>,
@@ -256,34 +256,34 @@ impl<'a> WebIdlConverter<'a> for GPUColor {
     }
     if let Ok(obj) = value.try_cast::<v8::Object>() {
       let iter = v8::Symbol::get_iterator(scope);
-      if let Some(iter) = obj.get(scope, iter.into()) {
-        if !iter.is_undefined() {
-          let conv = <Vec<f64>>::convert(
-            scope,
-            value,
-            prefix.clone(),
-            context.borrowed(),
-            options,
-          )?;
-          if conv.len() != 4 {
-            return Err(WebIdlError::other(
-              prefix,
-              context,
-              JsErrorBox::type_error(format!(
-                "A sequence of number used as a GPUColor must have exactly 4 elements, received {} elements",
-                conv.len()
-              )),
-            ));
-          }
-
-          let mut iter = conv.into_iter();
-          return Ok(GPUColor::Sequence((
-            iter.next().unwrap(),
-            iter.next().unwrap(),
-            iter.next().unwrap(),
-            iter.next().unwrap(),
-          )));
+      if let Some(iter) = obj.get(scope, iter.into())
+        && !iter.is_undefined()
+      {
+        let conv = <Vec<f64>>::convert(
+          scope,
+          value,
+          prefix.clone(),
+          context.borrowed(),
+          options,
+        )?;
+        if conv.len() != 4 {
+          return Err(WebIdlError::other(
+            prefix,
+            context,
+            JsErrorBox::type_error(format!(
+              "A sequence of number used as a GPUColor must have exactly 4 elements, received {} elements",
+              conv.len()
+            )),
+          ));
         }
+
+        let mut iter = conv.into_iter();
+        return Ok(GPUColor::Sequence((
+          iter.next().unwrap(),
+          iter.next().unwrap(),
+          iter.next().unwrap(),
+          iter.next().unwrap(),
+        )));
       }
 
       return Ok(GPUColor::Dict(GPUColorDict::convert(
@@ -322,7 +322,7 @@ pub(crate) enum GPUAutoLayoutMode {
 }
 
 pub(crate) enum GPUPipelineLayoutOrGPUAutoLayoutMode {
-  PipelineLayout(Ptr<crate::pipeline_layout::GPUPipelineLayout>),
+  PipelineLayout(Ref<crate::pipeline_layout::GPUPipelineLayout>),
   AutoLayoutMode(GPUAutoLayoutMode),
 }
 
@@ -345,7 +345,7 @@ impl<'a> WebIdlConverter<'a> for GPUPipelineLayoutOrGPUAutoLayoutMode {
   type Options = ();
 
   fn convert<'b>(
-    scope: &mut v8::HandleScope<'a>,
+    scope: &mut v8::PinScope<'a, '_>,
     value: v8::Local<'a, v8::Value>,
     prefix: Cow<'static, str>,
     context: ContextFn<'b>,
@@ -367,7 +367,7 @@ impl<'a> WebIdlConverter<'a> for GPUFeatureName {
   type Options = ();
 
   fn convert<'b>(
-    scope: &mut v8::HandleScope<'a>,
+    scope: &mut v8::PinScope<'a, '_>,
     value: v8::Local<'a, v8::Value>,
     prefix: Cow<'static, str>,
     context: ContextFn<'b>,
@@ -402,13 +402,13 @@ impl From<GPUFeatureName> for wgpu_types::Features {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct GPUTextureUsageFlags(pub(crate) wgpu_types::TextureUsages);
+pub struct GPUTextureUsageFlags(pub wgpu_types::TextureUsages);
 
 impl<'a> WebIdlConverter<'a> for GPUTextureUsageFlags {
   type Options = ();
 
   fn convert<'b>(
-    scope: &mut v8::HandleScope<'a>,
+    scope: &mut v8::PinScope<'a, '_>,
     value: v8::Local<'a, v8::Value>,
     prefix: Cow<'static, str>,
     context: ContextFn<'b>,
@@ -457,7 +457,7 @@ impl<'a> WebIdlConverter<'a> for GPUShaderStageFlags {
   type Options = ();
 
   fn convert<'b>(
-    scope: &mut v8::HandleScope<'a>,
+    scope: &mut v8::PinScope<'a, '_>,
     value: v8::Local<'a, v8::Value>,
     prefix: Cow<'static, str>,
     context: ContextFn<'b>,
@@ -500,7 +500,7 @@ impl<'a> WebIdlConverter<'a> for GPUColorWriteFlags {
   type Options = ();
 
   fn convert<'b>(
-    scope: &mut v8::HandleScope<'a>,
+    scope: &mut v8::PinScope<'a, '_>,
     value: v8::Local<'a, v8::Value>,
     prefix: Cow<'static, str>,
     context: ContextFn<'b>,

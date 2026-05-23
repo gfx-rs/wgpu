@@ -1,7 +1,6 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 #![cfg(not(target_arch = "wasm32"))]
 
-use std::sync::Arc;
 use std::{
     env, fmt,
     io::{Read, Write},
@@ -16,7 +15,6 @@ use deno_core::serde_json::json;
 use deno_core::v8;
 use deno_core::JsRuntime;
 use deno_core::RuntimeOptions;
-use deno_web::BlobStore;
 use termcolor::Ansi;
 use termcolor::Color::Red;
 use termcolor::ColorSpec;
@@ -58,9 +56,12 @@ pub async fn run() -> Result<(), AnyError> {
         module_loader: Some(Rc::new(deno_core::FsModuleLoader)),
         extensions: vec![
             deno_webidl::deno_webidl::init(),
-            deno_console::deno_console::init(),
-            deno_url::deno_url::init(),
-            deno_web::deno_web::init::<Permissions>(Arc::new(BlobStore::default()), None),
+            deno_web::deno_web::init(
+                Default::default(),
+                None,
+                Default::default(),
+                Default::default(),
+            ),
             deno_webgpu::deno_webgpu::init(),
             cts_runner::init(),
         ],
@@ -80,10 +81,8 @@ pub async fn run() -> Result<(), AnyError> {
     });
 
     {
-        let context = js_runtime.main_context();
-        let scope = &mut js_runtime.handle_scope();
-        let context_local = v8::Local::new(scope, context);
-        let global_obj = context_local.global(scope);
+        deno_core::scope!(scope, &mut js_runtime);
+        let global_obj = scope.get_current_context().global(scope);
         let bootstrap_str = v8::String::new(scope, "bootstrap").unwrap();
         let bootstrap_fn = global_obj.get(scope, bootstrap_str.into()).unwrap();
         let bootstrap_fn = v8::Local::<v8::Function>::try_from(bootstrap_fn).unwrap();
@@ -113,7 +112,6 @@ deno_core::extension!(
         let mut feature_checker = deno_features::FeatureChecker::default();
         feature_checker.enable_feature(deno_webgpu::UNSTABLE_FEATURE_NAME);
         state.put(feature_checker);
-        state.put(Permissions {});
     }
 );
 
@@ -163,15 +161,6 @@ fn red_bold<S: AsRef<str>>(s: S) -> impl fmt::Display {
     let mut style_spec = ColorSpec::new();
     style_spec.set_fg(Some(Red)).set_bold(true);
     style(s, style_spec)
-}
-
-// NOP permissions
-struct Permissions;
-
-impl deno_web::TimersPermission for Permissions {
-    fn allow_hrtime(&mut self) -> bool {
-        false
-    }
 }
 
 #[tokio::main(flavor = "current_thread")]

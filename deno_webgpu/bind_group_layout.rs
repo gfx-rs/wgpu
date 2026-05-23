@@ -1,13 +1,13 @@
-// Copyright 2018-2025 the Deno authors. MIT license.
+// Copyright 2018-2026 the Deno authors. MIT license.
 
-use deno_core::op2;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
+use deno_core::op2;
 
+use crate::Instance;
 use crate::error::GPUGenericError;
 use crate::texture::GPUTextureViewDimension;
 use crate::webidl::GPUShaderStageFlags;
-use crate::Instance;
 
 pub struct GPUBindGroupLayout {
   pub instance: Instance,
@@ -25,7 +25,9 @@ impl deno_core::webidl::WebIdlInterfaceConverter for GPUBindGroupLayout {
   const NAME: &'static str = "GPUBindGroupLayout";
 }
 
-impl GarbageCollected for GPUBindGroupLayout {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPUBindGroupLayout {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPUBindGroupLayout"
   }

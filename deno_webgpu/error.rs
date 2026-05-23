@@ -1,15 +1,14 @@
-// Copyright 2018-2025 the Deno authors. MIT license.
+// Copyright 2018-2026 the Deno authors. MIT license.
 
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
-use deno_core::cppgc::make_cppgc_object;
-use deno_core::v8;
-
 use deno_core::JsRuntime;
 use deno_core::V8TaskSpawner;
+use deno_core::cppgc::make_cppgc_object;
+use deno_core::v8;
 use wgpu_core::binding_model::CreateBindGroupError;
 use wgpu_core::binding_model::CreateBindGroupLayoutError;
 use wgpu_core::binding_model::CreatePipelineLayoutError;
@@ -23,20 +22,22 @@ use wgpu_core::command::PassStateError;
 use wgpu_core::command::QueryError;
 use wgpu_core::command::RenderBundleError;
 use wgpu_core::command::RenderPassError;
+use wgpu_core::device::DeviceError;
 use wgpu_core::device::queue::QueueSubmitError;
 use wgpu_core::device::queue::QueueWriteError;
-use wgpu_core::device::DeviceError;
 use wgpu_core::pipeline::CreateComputePipelineError;
 use wgpu_core::pipeline::CreateRenderPipelineError;
 use wgpu_core::pipeline::CreateShaderModuleError;
 use wgpu_core::present::ConfigureSurfaceError;
+use wgpu_core::present::SurfaceError;
 use wgpu_core::resource::BufferAccessError;
 use wgpu_core::resource::CreateBufferError;
 use wgpu_core::resource::CreateQuerySetError;
 use wgpu_core::resource::CreateSamplerError;
 use wgpu_core::resource::CreateTextureError;
 use wgpu_core::resource::CreateTextureViewError;
-use wgpu_types::error::{ErrorType, WebGpuError};
+use wgpu_types::error::ErrorType;
+use wgpu_types::error::WebGpuError;
 
 use crate::device::GPUDeviceLostInfo;
 use crate::device::GPUDeviceLostReason;
@@ -376,6 +377,12 @@ impl From<ConfigureSurfaceError> for GPUError {
   }
 }
 
+impl From<SurfaceError> for GPUError {
+  fn from(err: SurfaceError) -> Self {
+    GPUError::from_webgpu(err)
+  }
+}
+
 #[derive(Debug, thiserror::Error, deno_error::JsError)]
 pub enum GPUGenericError {
   #[class(type)]
@@ -399,7 +406,7 @@ impl Display for GPUPipelineErrorReason {
 }
 
 pub(crate) fn make_pipeline_error<'a>(
-  scope: &mut v8::HandleScope<'a>,
+  scope: &mut v8::PinScope<'a, '_>,
   reason: GPUPipelineErrorReason,
   message: &str,
 ) -> v8::Local<'a, v8::Object> {

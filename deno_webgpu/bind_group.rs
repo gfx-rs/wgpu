@@ -1,26 +1,26 @@
-// Copyright 2018-2025 the Deno authors. MIT license.
+// Copyright 2018-2026 the Deno authors. MIT license.
 
 use std::borrow::Cow;
 
-use deno_core::cppgc::Ptr;
+use deno_core::GarbageCollected;
+use deno_core::WebIDL;
+use deno_core::cppgc::Ref;
 use deno_core::op2;
-use deno_core::v8::HandleScope;
 use deno_core::v8::Local;
+use deno_core::v8::PinScope;
 use deno_core::v8::Value;
 use deno_core::webidl::ContextFn;
 use deno_core::webidl::WebIdlConverter;
 use deno_core::webidl::WebIdlError;
 use deno_core::webidl::WebIdlInterfaceConverter;
-use deno_core::GarbageCollected;
-use deno_core::WebIDL;
 
+use crate::Instance;
 use crate::buffer::GPUBuffer;
 use crate::error::GPUGenericError;
 use crate::sampler::GPUSampler;
 use crate::texture::GPUExternalTexture;
 use crate::texture::GPUTexture;
 use crate::texture::GPUTextureView;
-use crate::Instance;
 
 pub struct GPUBindGroup {
   pub instance: Instance,
@@ -38,7 +38,10 @@ impl WebIdlInterfaceConverter for GPUBindGroup {
   const NAME: &'static str = "GPUBindGroup";
 }
 
-impl GarbageCollected for GPUBindGroup {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPUBindGroup {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
+
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPUBindGroup"
   }
@@ -70,7 +73,7 @@ pub(crate) struct GPUBindGroupDescriptor {
   #[webidl(default = String::new())]
   pub label: String,
 
-  pub layout: Ptr<super::bind_group_layout::GPUBindGroupLayout>,
+  pub layout: Ref<super::bind_group_layout::GPUBindGroupLayout>,
   pub entries: Vec<GPUBindGroupEntry>,
 }
 
@@ -85,7 +88,7 @@ pub(crate) struct GPUBindGroupEntry {
 #[derive(WebIDL)]
 #[webidl(dictionary)]
 pub(crate) struct GPUBufferBinding {
-  pub buffer: Ptr<GPUBuffer>,
+  pub buffer: Ref<GPUBuffer>,
   #[webidl(default = 0)]
   #[options(enforce_range = true)]
   pub offset: u64,
@@ -94,25 +97,25 @@ pub(crate) struct GPUBufferBinding {
 }
 
 pub(crate) enum GPUBindingResource {
-  Sampler(Ptr<GPUSampler>),
-  Texture(Ptr<GPUTexture>),
-  TextureView(Ptr<GPUTextureView>),
-  Buffer(Ptr<GPUBuffer>),
+  Sampler(Ref<GPUSampler>),
+  Texture(Ref<GPUTexture>),
+  TextureView(Ref<GPUTextureView>),
+  Buffer(Ref<GPUBuffer>),
   BufferBinding(GPUBufferBinding),
-  ExternalTexture(Ptr<GPUExternalTexture>),
+  ExternalTexture(Ref<GPUExternalTexture>),
 }
 
 impl<'a> WebIdlConverter<'a> for GPUBindingResource {
   type Options = ();
 
   fn convert<'b>(
-    scope: &mut HandleScope<'a>,
+    scope: &mut PinScope<'a, '_>,
     value: Local<'a, Value>,
     prefix: Cow<'static, str>,
     context: ContextFn<'b>,
     options: &Self::Options,
   ) -> Result<Self, WebIdlError> {
-    <Ptr<GPUSampler>>::convert(
+    <Ref<GPUSampler>>::convert(
       scope,
       value,
       prefix.clone(),
@@ -121,7 +124,7 @@ impl<'a> WebIdlConverter<'a> for GPUBindingResource {
     )
     .map(Self::Sampler)
     .or_else(|_| {
-      <Ptr<GPUTexture>>::convert(
+      <Ref<GPUTexture>>::convert(
         scope,
         value,
         prefix.clone(),
@@ -131,7 +134,7 @@ impl<'a> WebIdlConverter<'a> for GPUBindingResource {
       .map(Self::Texture)
     })
     .or_else(|_| {
-      <Ptr<GPUTextureView>>::convert(
+      <Ref<GPUTextureView>>::convert(
         scope,
         value,
         prefix.clone(),
@@ -141,7 +144,7 @@ impl<'a> WebIdlConverter<'a> for GPUBindingResource {
       .map(Self::TextureView)
     })
     .or_else(|_| {
-      <Ptr<GPUBuffer>>::convert(
+      <Ref<GPUBuffer>>::convert(
         scope,
         value,
         prefix.clone(),
@@ -151,7 +154,7 @@ impl<'a> WebIdlConverter<'a> for GPUBindingResource {
       .map(Self::Buffer)
     })
     .or_else(|_| {
-      <Ptr<GPUExternalTexture>>::convert(
+      <Ref<GPUExternalTexture>>::convert(
         scope,
         value,
         prefix.clone(),

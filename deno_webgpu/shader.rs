@@ -1,15 +1,15 @@
-// Copyright 2018-2025 the Deno authors. MIT license.
+// Copyright 2018-2026 the Deno authors. MIT license.
 
+use deno_core::GarbageCollected;
+use deno_core::WebIDL;
 use deno_core::cppgc::make_cppgc_object;
 use deno_core::op2;
 use deno_core::v8;
 use deno_core::webidl::WebIdlInterfaceConverter;
-use deno_core::GarbageCollected;
-use deno_core::WebIDL;
 use wgpu_core::pipeline;
 
-use crate::error::GPUGenericError;
 use crate::Instance;
+use crate::error::GPUGenericError;
 
 pub struct GPUShaderModule {
   pub instance: Instance,
@@ -28,7 +28,10 @@ impl WebIdlInterfaceConverter for GPUShaderModule {
   const NAME: &'static str = "GPUShaderModule";
 }
 
-impl GarbageCollected for GPUShaderModule {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPUShaderModule {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
+
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPUShaderModule"
   }
@@ -55,7 +58,7 @@ impl GPUShaderModule {
 
   fn get_compilation_info<'a>(
     &self,
-    scope: &mut v8::HandleScope<'a>,
+    scope: &mut v8::PinScope<'a, '_>,
   ) -> v8::Local<'a, v8::Promise> {
     let resolver = v8::PromiseResolver::new(scope).unwrap();
     let info = v8::Local::new(scope, self.compilation_info.clone());
@@ -82,7 +85,10 @@ pub struct GPUCompilationMessage {
   length: u64,
 }
 
-impl GarbageCollected for GPUCompilationMessage {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPUCompilationMessage {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
+
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPUCompilationMessage"
   }
@@ -176,7 +182,10 @@ pub struct GPUCompilationInfo {
   messages: v8::Global<v8::Object>,
 }
 
-impl GarbageCollected for GPUCompilationInfo {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPUCompilationInfo {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
+
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPUCompilationInfo"
   }
@@ -185,7 +194,6 @@ impl GarbageCollected for GPUCompilationInfo {
 #[op2]
 impl GPUCompilationInfo {
   #[getter]
-  #[global]
   fn messages(&self) -> v8::Global<v8::Object> {
     self.messages.clone()
   }
@@ -193,7 +201,7 @@ impl GPUCompilationInfo {
 
 impl GPUCompilationInfo {
   pub fn new<'args, 'scope>(
-    scope: &mut v8::HandleScope<'scope>,
+    scope: &mut v8::PinScope<'scope, '_>,
     messages: impl ExactSizeIterator<
       Item = &'args pipeline::CreateShaderModuleError,
     >,

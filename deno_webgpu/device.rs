@@ -1,15 +1,16 @@
-// Copyright 2018-2025 the Deno authors. MIT license.
+// Copyright 2018-2026 the Deno authors. MIT license.
 
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::num::NonZeroU64;
 use std::rc::Rc;
 
-use deno_core::cppgc::{make_cppgc_object, SameObject};
+use deno_core::GarbageCollected;
+use deno_core::cppgc::SameObject;
+use deno_core::cppgc::make_cppgc_object;
 use deno_core::op2;
 use deno_core::v8;
 use deno_core::webidl::WebIdlInterfaceConverter;
-use deno_core::GarbageCollected;
 use deno_error::JsErrorBox;
 use wgpu_core::binding_model::BindingResource;
 use wgpu_core::pipeline::ProgrammableStageDescriptor;
@@ -24,17 +25,20 @@ use super::pipeline_layout::GPUPipelineLayout;
 use super::sampler::GPUSampler;
 use super::shader::GPUShaderModule;
 use super::texture::GPUTexture;
+use crate::Instance;
 use crate::adapter::GPUAdapterInfo;
 use crate::adapter::GPUSupportedFeatures;
 use crate::adapter::GPUSupportedLimits;
 use crate::command_encoder::GPUCommandEncoder;
-use crate::error::{fmt_err, make_pipeline_error};
-use crate::error::{GPUError, GPUGenericError, GPUPipelineErrorReason};
+use crate::error::GPUError;
+use crate::error::GPUGenericError;
+use crate::error::GPUPipelineErrorReason;
+use crate::error::fmt_err;
+use crate::error::make_pipeline_error;
 use crate::query_set::GPUQuerySet;
 use crate::render_bundle::GPURenderBundleEncoder;
 use crate::render_pipeline::GPURenderPipeline;
 use crate::shader::GPUCompilationInfo;
-use crate::Instance;
 
 /// External memory associated with device and queue, to encourage V8 to garbage
 /// collect devices promptly. This seems to be particularly important when
@@ -46,6 +50,7 @@ pub struct GPUDevice {
   pub instance: Instance,
   pub id: wgpu_core::id::DeviceId,
   pub adapter: wgpu_core::id::AdapterId,
+  pub queue: wgpu_core::id::QueueId,
 
   pub label: String,
 
@@ -60,6 +65,7 @@ pub struct GPUDevice {
 
   // Weak reference to the JS object so we can attach a finalizer.
   pub(crate) weak: std::sync::OnceLock<v8::Weak<v8::Object>>,
+  pub has_active_capture: RefCell<bool>,
 }
 
 impl Drop for GPUDevice {
@@ -72,7 +78,10 @@ impl WebIdlInterfaceConverter for GPUDevice {
   const NAME: &'static str = "GPUDevice";
 }
 
-impl GarbageCollected for GPUDevice {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPUDevice {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
+
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPUDevice"
   }
@@ -99,8 +108,10 @@ impl GPUDevice {
   }
 
   #[getter]
-  #[global]
-  fn features(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
+  fn features(
+    &self,
+    scope: &mut v8::PinScope<'_, '_>,
+  ) -> v8::Global<v8::Object> {
     self.features.get(scope, |scope| {
       let features = self.instance.device_features(self.id);
       GPUSupportedFeatures::new(scope, features)
@@ -108,8 +119,7 @@ impl GPUDevice {
   }
 
   #[getter]
-  #[global]
-  fn limits(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
+  fn limits(&self, scope: &mut v8::PinScope<'_, '_>) -> v8::Global<v8::Object> {
     self.limits.get(scope, |_| {
       let limits = self.instance.device_limits(self.id);
       GPUSupportedLimits(limits)
@@ -117,10 +127,9 @@ impl GPUDevice {
   }
 
   #[getter]
-  #[global]
   fn adapter_info(
     &self,
-    scope: &mut v8::HandleScope,
+    scope: &mut v8::PinScope<'_, '_>,
   ) -> v8::Global<v8::Object> {
     self.adapter_info.get(scope, |_| {
       let info = self.instance.adapter_get_info(self.adapter);
@@ -130,7 +139,6 @@ impl GPUDevice {
   }
 
   #[getter]
-  #[global]
   fn queue(&self) -> v8::Global<v8::Object> {
     self.queue_obj.clone()
   }
@@ -158,12 +166,10 @@ impl GPUDevice {
         .size
         .is_multiple_of(wgpu_types::COPY_BUFFER_ALIGNMENT)
     {
-      return Err(JsErrorBox::range_error(
-        format!(
-          "The size of a buffer that is mapped at creation must be a multiple of {}",
-          wgpu_types::COPY_BUFFER_ALIGNMENT,
-        )
-      ));
+      return Err(JsErrorBox::range_error(format!(
+        "The size of a buffer that is mapped at creation must be a multiple of {}",
+        wgpu_types::COPY_BUFFER_ALIGNMENT,
+      )));
     }
 
     // Validation of the usage needs to happen on the device timeline, so
@@ -240,6 +246,8 @@ impl GPUDevice {
       instance: self.instance.clone(),
       error_handler: self.error_handler.clone(),
       id,
+      device_id: self.id,
+      queue_id: self.queue,
       default_view_id: Default::default(),
       label: descriptor.label,
       size: wgpu_descriptor.size,
@@ -471,7 +479,7 @@ impl GPUDevice {
   #[cppgc]
   fn create_shader_module(
     &self,
-    scope: &mut v8::HandleScope<'_>,
+    scope: &mut v8::PinScope<'_, '_>,
     #[webidl] descriptor: super::shader::GPUShaderModuleDescriptor,
   ) -> GPUShaderModule {
     let wgpu_descriptor = wgpu_core::pipeline::ShaderModuleDescriptor {
@@ -526,11 +534,9 @@ impl GPUDevice {
 
   #[async_method(fake)]
   #[required(1)]
-  #[cppgc]
-  #[global]
   fn create_compute_pipeline_async(
     &self,
-    scope: &mut v8::HandleScope,
+    scope: &mut v8::PinScope<'_, '_>,
     #[webidl] descriptor: super::compute_pipeline::GPUComputePipelineDescriptor,
   ) -> v8::Global<v8::Promise> {
     let resolver = v8::PromiseResolver::new(scope).unwrap();
@@ -553,11 +559,9 @@ impl GPUDevice {
 
   #[async_method(fake)]
   #[required(1)]
-  #[cppgc]
-  #[global]
   fn create_render_pipeline_async(
     &self,
-    scope: &mut v8::HandleScope,
+    scope: &mut v8::PinScope<'_, '_>,
     #[webidl] descriptor: super::render_pipeline::GPURenderPipelineDescriptor,
   ) -> v8::Global<v8::Promise> {
     let resolver = v8::PromiseResolver::new(scope).unwrap();
@@ -580,7 +584,7 @@ impl GPUDevice {
 
   fn create_command_encoder<'a>(
     &self,
-    scope: &mut v8::HandleScope<'a>,
+    scope: &mut v8::PinScope<'a, '_>,
     #[webidl] descriptor: Option<
       super::command_encoder::GPUCommandEncoderDescriptor,
     >,
@@ -721,7 +725,6 @@ impl GPUDevice {
   }
 
   #[getter]
-  #[global]
   fn lost(&self) -> v8::Global<v8::Promise> {
     self.lost_promise.clone()
   }
@@ -738,10 +741,9 @@ impl GPUDevice {
   }
 
   #[async_method(fake)]
-  #[global]
   fn pop_error_scope(
     &self,
-    scope: &mut v8::HandleScope,
+    scope: &mut v8::PinScope<'_, '_>,
   ) -> Result<v8::Global<v8::Value>, JsErrorBox> {
     if self.error_handler.is_lost.get().is_some() {
       let val = v8::null(scope).cast::<v8::Value>();
@@ -763,23 +765,6 @@ impl GPUDevice {
     };
 
     Ok(v8::Global::new(scope, val))
-  }
-
-  #[fast]
-  fn start_capture(&self) {
-    unsafe {
-      self
-        .instance
-        .device_start_graphics_debugger_capture(self.id)
-    };
-  }
-  #[fast]
-  fn stop_capture(&self) {
-    self
-      .instance
-      .device_poll(self.id, wgpu_types::PollType::wait_indefinitely())
-      .unwrap();
-    unsafe { self.instance.device_stop_graphics_debugger_capture(self.id) };
   }
 }
 
@@ -1005,7 +990,10 @@ pub struct GPUDeviceLostInfo {
   pub reason: GPUDeviceLostReason,
 }
 
-impl GarbageCollected for GPUDeviceLostInfo {
+// SAFETY: we're sure this can be GCed
+unsafe impl GarbageCollected for GPUDeviceLostInfo {
+  fn trace(&self, _visitor: &mut deno_core::v8::cppgc::Visitor) {}
+
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPUDeviceLostInfo"
   }
@@ -1037,19 +1025,41 @@ impl GPUDeviceLostInfo {
 }
 
 #[op2(fast)]
-pub fn op_webgpu_device_start_capture(#[cppgc] device: &GPUDevice) {
+pub fn op_webgpu_device_start_capture(
+  #[cppgc] device: &GPUDevice,
+) -> Result<(), JsErrorBox> {
+  if *device.has_active_capture.borrow() {
+    return Err(JsErrorBox::type_error("capture already started"));
+  }
+
+  // safety: active check is above, other safety concerns are related to the debugger itself
   unsafe {
     device
       .instance
       .device_start_graphics_debugger_capture(device.id);
   }
+
+  *device.has_active_capture.borrow_mut() = true;
+
+  Ok(())
 }
 
 #[op2(fast)]
-pub fn op_webgpu_device_stop_capture(#[cppgc] device: &GPUDevice) {
+pub fn op_webgpu_device_stop_capture(
+  #[cppgc] device: &GPUDevice,
+) -> Result<(), JsErrorBox> {
+  if !*device.has_active_capture.borrow() {
+    return Err(JsErrorBox::type_error("No capture active"));
+  }
+
+  // safety: active check is above, other safety concerns are related to the debugger itself
   unsafe {
     device
       .instance
       .device_stop_graphics_debugger_capture(device.id);
   }
+
+  *device.has_active_capture.borrow_mut() = false;
+
+  Ok(())
 }
