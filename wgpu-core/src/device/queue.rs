@@ -1690,7 +1690,6 @@ impl Queue {
             // command index guard until we have submitted, to prevent another submission
             // from claiming the next index and reaching `submit` before we do.
             drop(pending_writes);
-            drop(command_index_guard);
 
             // Advance the successful submission index.
             self.device
@@ -1700,6 +1699,13 @@ impl Queue {
 
         // this will register the new submission to the life time tracker
         self.lock_life().track_submission(submit_index, executions);
+
+        // `device.maintain` relies on being able to prevent new submissions by
+        // using `command_index_guard` while also checking whether there are
+        // no tracked submissions to guarantee no new submissions will happen
+        // after a device is lost. This requires `command_index_guard` to be
+        // held over `self.lock_life()`
+        drop(command_index_guard);
 
         Ok(SubmissionResult { snatch_guard })
     }
