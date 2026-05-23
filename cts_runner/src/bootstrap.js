@@ -11,37 +11,35 @@ const {
   ObjectDefineProperty,
   ObjectDefineProperties,
   ObjectSetPrototypeOf,
-  Symbol,
   DateNow,
 } = primordials;
 
-import { pathFromURL } from "ext:deno_web/00_infra.js";
-import * as webidl from "ext:deno_webidl/00_webidl.js";
-import * as globalInterfaces from "ext:deno_web/04_global_interfaces.js";
-import * as event from "ext:deno_web/02_event.js";
-import * as timers from "ext:deno_web/02_timers.js";
-import * as base64 from "ext:deno_web/05_base64.js";
-import * as encoding from "ext:deno_web/08_text_encoding.js";
-import { Console } from "ext:deno_console/01_console.js";
-import * as url from "ext:deno_url/00_url.js";
-import { DOMException } from "ext:deno_web/01_dom_exception.js";
-import * as performance from "ext:deno_web/15_performance.js";
-import { loadWebGPU } from "ext:deno_webgpu/00_init.js";
-import * as imageData from "ext:deno_web/16_image_data.js";
+const { pathFromURL } = core.loadExtScript("ext:deno_web/00_infra.js");
+const webidl = core.loadExtScript("ext:deno_webidl/00_webidl.js");
+const globalInterfaces = core.loadExtScript("ext:deno_web/04_global_interfaces.js");
+const event = core.loadExtScript("ext:deno_web/02_event.js");
+const timers = core.loadExtScript("ext:deno_web/02_timers.js");
+const base64 = core.loadExtScript("ext:deno_web/05_base64.js");
+const encoding = core.loadExtScript("ext:deno_web/08_text_encoding.js");
+const { Console } = core.loadExtScript("ext:deno_web/01_console.js");
+const url = core.loadExtScript("ext:deno_web/00_url.js");
+const { DOMException } = core.loadExtScript("ext:deno_web/01_dom_exception.js");
+const performance = core.loadExtScript("ext:deno_web/15_performance.js");
+const { loadWebGPU } = core.loadExtScript("ext:deno_webgpu/00_init.js");
+const imageData = core.loadExtScript("ext:deno_web/16_image_data.js");
 const webgpu = loadWebGPU();
 webgpu.initGPU();
 
 // imports needed to pass module evaluation
-import "ext:deno_url/01_urlpattern.js";
-import "ext:deno_web/01_mimesniff.js";
-import "ext:deno_web/03_abort_signal.js";
-import "ext:deno_web/06_streams.js";
-import "ext:deno_web/09_file.js";
-import "ext:deno_web/10_filereader.js";
-import "ext:deno_web/12_location.js";
-import "ext:deno_web/13_message_port.js";
-import "ext:deno_web/14_compression.js";
-import "ext:deno_webgpu/02_surface.js";
+core.loadExtScript("ext:deno_web/01_urlpattern.js");
+core.loadExtScript("ext:deno_web/01_mimesniff.js");
+core.loadExtScript("ext:deno_web/03_abort_signal.js");
+core.loadExtScript("ext:deno_web/06_streams.js");
+core.loadExtScript("ext:deno_web/09_file.js");
+core.loadExtScript("ext:deno_web/10_filereader.js");
+core.loadExtScript("ext:deno_web/12_location.js");
+core.loadExtScript("ext:deno_web/13_message_port.js");
+core.loadExtScript("ext:deno_web/14_compression.js");
 
 let globalThis_;
 
