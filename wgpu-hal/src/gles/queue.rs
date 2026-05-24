@@ -377,7 +377,8 @@ impl super::Queue {
                     }
                 }
                 None => {
-                    lock(dst.data.as_ref().unwrap()).as_mut_slice()
+                    let mut map_state = lock(&dst.map_state);
+                    map_state.data.as_mut().unwrap().as_mut_slice()
                         [range.start as usize..range.end as usize]
                         .fill(0);
                 }
@@ -419,8 +420,8 @@ impl super::Queue {
                         };
                     }
                     (Some(src), None) => {
-                        let mut data = lock(dst.data.as_ref().unwrap());
-                        let dst_data = &mut data.as_mut_slice()
+                        let mut map_state = lock(&dst.map_state);
+                        let dst_data = &mut map_state.data.as_mut().unwrap().as_mut_slice()
                             [copy.dst_offset as usize..copy.dst_offset as usize + size];
 
                         unsafe { gl.bind_buffer(copy_src_target, Some(src)) };
@@ -434,8 +435,8 @@ impl super::Queue {
                         };
                     }
                     (None, Some(dst)) => {
-                        let data = lock(src.data.as_ref().unwrap());
-                        let src_data = &data.as_slice()
+                        let map_state = lock(&src.map_state);
+                        let src_data = &map_state.data.as_ref().unwrap().as_slice()
                             [copy.src_offset as usize..copy.src_offset as usize + size];
                         unsafe { gl.bind_buffer(copy_dst_target, Some(dst)) };
                         unsafe {
@@ -775,7 +776,7 @@ impl super::Queue {
                 unsafe { gl.pixel_store_i32(glow::UNPACK_IMAGE_HEIGHT, column_texels as i32) };
                 let mut unbind_unpack_buffer = false;
                 if !dst_format.is_compressed() {
-                    let buffer_data;
+                    let map_state;
                     let unpack_data = match src.raw {
                         Some(buffer) => {
                             unsafe { gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer)) };
@@ -783,9 +784,9 @@ impl super::Queue {
                             glow::PixelUnpackData::BufferOffset(copy.buffer_layout.offset as u32)
                         }
                         None => {
-                            buffer_data = lock(src.data.as_ref().unwrap());
-                            let src_data =
-                                &buffer_data.as_slice()[copy.buffer_layout.offset as usize..];
+                            map_state = lock(&src.map_state);
+                            let src_data = &map_state.data.as_ref().unwrap().as_slice()
+                                [copy.buffer_layout.offset as usize..];
                             glow::PixelUnpackData::Slice(Some(src_data))
                         }
                     };
@@ -837,7 +838,7 @@ impl super::Queue {
                         (bytes_per_image * (copy.size.depth - 1)) + minimum_bytes_per_image;
                     let offset = copy.buffer_layout.offset as u32;
 
-                    let buffer_data;
+                    let map_state;
                     let unpack_data = match src.raw {
                         Some(buffer) => {
                             unsafe { gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer)) };
@@ -847,8 +848,8 @@ impl super::Queue {
                             )
                         }
                         None => {
-                            buffer_data = lock(src.data.as_ref().unwrap());
-                            let src_data = &buffer_data.as_slice()
+                            map_state = lock(&src.map_state);
+                            let src_data = &map_state.data.as_ref().unwrap().as_slice()
                                 [(offset as usize)..(offset + bytes_in_upload) as usize];
                             glow::CompressedPixelUnpackData::Slice(src_data)
                         }
@@ -920,7 +921,7 @@ impl super::Queue {
                 unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo)) };
 
                 let read_pixels = |offset| {
-                    let mut buffer_data;
+                    let mut map_state;
                     let unpack_data = match dst.raw {
                         Some(buffer) => {
                             unsafe { gl.pixel_store_i32(glow::PACK_ROW_LENGTH, row_texels as i32) };
@@ -928,8 +929,9 @@ impl super::Queue {
                             glow::PixelPackData::BufferOffset(offset as u32)
                         }
                         None => {
-                            buffer_data = lock(dst.data.as_ref().unwrap());
-                            let dst_data = &mut buffer_data.as_mut_slice()[offset as usize..];
+                            map_state = lock(&dst.map_state);
+                            let dst_data = &mut map_state.data.as_mut().unwrap().as_mut_slice()
+                                [offset as usize..];
                             glow::PixelPackData::Slice(Some(dst_data))
                         }
                     };
@@ -1094,7 +1096,8 @@ impl super::Queue {
                             };
                         }
                         None => {
-                            let data = &mut lock(dst.data.as_ref().unwrap());
+                            let mut map_state = lock(&dst.map_state);
+                            let data = map_state.data.as_mut().unwrap();
                             let len = query_data.len().min(data.len());
                             data[..len].copy_from_slice(&query_data[..len]);
                         }
