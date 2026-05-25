@@ -876,7 +876,7 @@ pub enum ImmediateUploadError {
     #[error("Ran out of immediate data space. Don't set 4gb of immediates per pass")]
     ImmediateOutOfMemory,
     #[error(
-        "Start offset {start_offset} overruns the immediate data range with a size of {immediate_size}"
+        "Provided immediate data start offset {start_offset} overruns the range with a size of {immediate_size}"
     )]
     StartOffsetOverrun {
         start_offset: u32,
@@ -905,20 +905,6 @@ pub enum ImmediateUploadError {
         start_offset: u32,
         size: u32,
         immediate_size: u32,
-    },
-    #[error("Start index {start_index} overruns the value data range with {data_size} element(s)")]
-    ValueStartIndexOverrun { start_index: u32, data_size: usize },
-    #[error(
-        "Start index {} + count of {} overruns the value data range \
-        with {} element(s)",
-        start_index,
-        count,
-        data_size
-    )]
-    ValueEndIndexOverrun {
-        start_index: u32,
-        count: u32,
-        data_size: usize,
     },
 }
 

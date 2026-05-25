@@ -265,11 +265,7 @@ where
     let values_offset_usize = usize::try_from(values_offset)
         .expect("`values_offset` is outside the bounds of `usize` (!?)");
     if values_offset_usize > immediates_data.len() {
-        return Err(ImmediateUploadError::ValueStartIndexOverrun {
-            start_index: values_offset,
-            data_size: immediates_data.len(),
-        }
-        .into());
+        panic!("Internal error: `set_immediates` values offset ({}) overruns the immediates data length ({})",values_offset,immediates_data.len());
     }
 
     // NOTE: The `validate_immediates_ranges` call above validates `size_bytes` is aligned.
@@ -277,12 +273,7 @@ where
     let size_immediate_elements_usize = usize::try_from(size_immediate_elements)
         .expect("`size_immediate_elements` is outside the bounds of `usize` (!?)");
     if size_immediate_elements_usize > immediates_data.len() - values_offset_usize {
-        return Err(ImmediateUploadError::ValueEndIndexOverrun {
-            start_index: values_offset,
-            count: size_immediate_elements,
-            data_size: immediates_data.len(),
-        }
-        .into());
+        panic!("Internal error: `set_immediates` values offset + count ({} + {}) overruns the immediates data length ({})",values_offset,size_immediate_elements,immediates_data.len());
     }
 
     // NOTE: These additions are will not overflow, because we've validated the range above.

@@ -1678,6 +1678,7 @@ pub mod bundle_ffi {
     ) -> Result<(), ImmediateUploadError> {
         pass::validate_immediates_alignment(offset, data, pass.base.immediates_data.len())?;
 
+        let values_offset = pass.base.immediates_data.len() as u32;
         pass.base.immediates_data.extend(
             data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
@@ -1686,7 +1687,7 @@ pub mod bundle_ffi {
         pass.base.commands.push(RenderCommand::SetImmediate {
             offset,
             size_bytes: data.len() as u32,
-            values_offset: Some(pass.base.immediates_data.len() as u32),
+            values_offset: Some(values_offset),
         });
         Ok(())
     }

@@ -1239,6 +1239,8 @@ impl Global {
             pass::validate_immediates_alignment(offset, data, base.immediates_data.len())
         );
 
+        let values_offset = base.immediates_data.len() as u32;
+
         base.immediates_data.extend(
             data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
@@ -1247,7 +1249,7 @@ impl Global {
         base.commands.push(ArcComputeCommand::SetImmediate {
             offset,
             size_bytes: data.len() as u32,
-            values_offset: base.immediates_data.len() as u32,
+            values_offset,
         });
 
         Ok(())
