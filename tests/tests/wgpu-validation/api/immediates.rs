@@ -265,7 +265,7 @@ fn render_without_setting_immediates_fails() {
         encoder: &mut dyn wgpu::util::RenderEncoder<'a>,
         pipeline: &'a wgpu::RenderPipeline,
     ) {
-        encoder.set_pipeline(&pipeline);
+        encoder.set_pipeline(pipeline);
         encoder.draw(0..4, 0..1);
     }
 
@@ -300,7 +300,7 @@ fn render_with_partial_immediates_fails() {
         encoder: &mut dyn wgpu::util::RenderEncoder<'a>,
         pipeline: &'a wgpu::RenderPipeline,
     ) {
-        encoder.set_pipeline(&pipeline);
+        encoder.set_pipeline(pipeline);
         encoder.set_immediates(0, &[0u8; 8]);
         encoder.draw(0..4, 0..1);
     }
@@ -336,7 +336,7 @@ fn render_with_all_immediates_set_succeeds() {
         encoder: &mut dyn wgpu::util::RenderEncoder<'a>,
         pipeline: &'a wgpu::RenderPipeline,
     ) {
-        encoder.set_pipeline(&pipeline);
+        encoder.set_pipeline(pipeline);
         encoder.set_immediates(0, &[0u8; 16]);
         encoder.draw(0..4, 0..1);
     }
@@ -374,7 +374,7 @@ fn render_with_incremental_immediates_succeeds() {
         encoder: &mut dyn wgpu::util::RenderEncoder<'a>,
         pipeline: &'a wgpu::RenderPipeline,
     ) {
-        encoder.set_pipeline(&pipeline);
+        encoder.set_pipeline(pipeline);
         encoder.set_immediates(0, &[0u8; 8]);
         encoder.set_immediates(8, &[0u8; 8]);
         encoder.draw(0..4, 0..1);
@@ -413,7 +413,7 @@ fn render_bundle_without_resetting_immediates_fails() {
         encoder: &mut dyn wgpu::util::RenderEncoder<'a>,
         pipeline: &'a wgpu::RenderPipeline,
     ) {
-        encoder.set_pipeline(&pipeline);
+        encoder.set_pipeline(pipeline);
         encoder.set_immediates(0, &[0u8; 16]);
         encoder.draw(0..4, 0..1);
     }
@@ -445,7 +445,7 @@ fn render_bundle_with_resetting_immediates_succeeds() {
         encoder: &mut dyn wgpu::util::RenderEncoder<'a>,
         pipeline: &'a wgpu::RenderPipeline,
     ) {
-        encoder.set_pipeline(&pipeline);
+        encoder.set_pipeline(pipeline);
         encoder.set_immediates(0, &[0u8; 16]);
         encoder.draw(0..4, 0..1);
     }
