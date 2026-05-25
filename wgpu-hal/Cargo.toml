@@ -215,6 +215,7 @@ bytemuck = { workspace = true, optional = true, features = ["derive"] }
 hashbrown = { workspace = true }
 ordered-float = { workspace = true, optional = true }
 profiling = { workspace = true, optional = true, default-features = false }
+static_assertions = { workspace = true }
 
 # Backend: GLES
 glow = { workspace = true, optional = true }

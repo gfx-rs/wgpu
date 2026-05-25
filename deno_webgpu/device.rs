@@ -34,6 +34,7 @@ use crate::query_set::GPUQuerySet;
 use crate::render_bundle::GPURenderBundleEncoder;
 use crate::render_pipeline::GPURenderPipeline;
 use crate::shader::GPUCompilationInfo;
+use crate::webidl::GPUTextureUsageFlags;
 use crate::Instance;
 
 /// External memory associated with device and queue, to encourage V8 to garbage
@@ -214,6 +215,12 @@ impl GPUDevice {
     &self,
     #[webidl] descriptor: super::texture::GPUTextureDescriptor,
   ) -> Result<GPUTexture, JsErrorBox> {
+    // Validation of the usage needs to happen on the device timeline, so
+    // don't raise an error immediately if it isn't valid. wgpu will
+    // reject `TextureUsages::empty()`.
+    let usage = wgpu_types::TextureUsages::from_bits(descriptor.usage)
+      .unwrap_or(wgpu_types::TextureUsages::empty());
+
     let wgpu_descriptor = wgpu_core::resource::TextureDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
       size: descriptor.size.into(),
@@ -221,7 +228,7 @@ impl GPUDevice {
       sample_count: descriptor.sample_count,
       dimension: descriptor.dimension.clone().into(),
       format: descriptor.format.clone().into(),
-      usage: descriptor.usage.into(),
+      usage,
       view_formats: descriptor
         .view_formats
         .into_iter()
@@ -247,7 +254,7 @@ impl GPUDevice {
       sample_count: wgpu_descriptor.sample_count,
       dimension: descriptor.dimension,
       format: descriptor.format,
-      usage: descriptor.usage,
+      usage: GPUTextureUsageFlags(usage),
     })
   }
 
