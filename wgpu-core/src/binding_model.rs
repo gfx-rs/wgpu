@@ -1012,8 +1012,6 @@ impl PipelineLayout {
         offset: u32,
         size_bytes: u32,
     ) -> Result<(), ImmediateUploadError> {
-        // Don't need to validate offset and size are multiples of 4 here as them are validated during setting.
-        //
         // Don't need to validate size against the immediate data size limit here,
         // as immediate data ranges are already validated to be within bounds,
         // and we validate that they are within the ranges.

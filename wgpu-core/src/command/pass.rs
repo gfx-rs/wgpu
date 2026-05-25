@@ -252,6 +252,8 @@ where
 {
     api_log!("Pass::set_immediates");
 
+    // Alignment has been validated by `validate_immediates_alignment` when pushing `SetImmediate` commands.
+
     let values_offset = values_offset.ok_or(InvalidValuesOffset)?;
 
     let pipeline_layout = state
@@ -268,7 +270,6 @@ where
         panic!("Internal error: `set_immediates` values offset ({}) overruns the immediates data length ({})",values_offset,immediates_data.len());
     }
 
-    // NOTE: The `validate_immediates_ranges` call above validates `size_bytes` is aligned.
     let size_immediate_elements = size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT;
     let size_immediate_elements_usize = usize::try_from(size_immediate_elements)
         .expect("`size_immediate_elements` is outside the bounds of `usize` (!?)");
