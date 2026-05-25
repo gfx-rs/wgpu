@@ -450,6 +450,17 @@ impl Instance {
             return true;
         }
 
+        // Check "All supported limits must be either the default value or better."
+        let failed_limits = check_limits(&wgt::Limits::defaults(), &raw.capabilities.limits);
+        if !failed_limits.is_empty() {
+            log::debug!(
+                "Adapter {:?} is not WebGPU compliant due to limits: {:?}",
+                raw.info,
+                failed_limits
+            );
+            return false;
+        }
+
         if !raw.capabilities.downlevel.is_webgpu_compliant() {
             let missing_flags = wgt::DownlevelFlags::compliant() - raw.capabilities.downlevel.flags;
             log::debug!(
