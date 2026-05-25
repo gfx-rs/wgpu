@@ -414,18 +414,53 @@ impl Instance {
         })
     }
 
+    /// This function checks that the adapter obeys WebGPU's adapter capability
+    /// guarantees. Most of the limits are adjusted in wgpu-hal's
+    /// `adjust_raw_limits` fn. So we only check the remaining properties here.
+    /// See <https://gpuweb.github.io/gpuweb/#adapter-capability-guarantees>.
     fn adapter_allowed(&self, raw: &hal::DynExposedAdapter) -> bool {
-        let allowed = !self.flags.contains(InstanceFlags::STRICT_WEBGPU_COMPLIANCE)
-            || raw.capabilities.downlevel.is_webgpu_compliant();
-        if !allowed {
+        // Check "All alignment-class limits must be powers of 2."
+        //
+        // Even if the application has not requested strict WebGPU compliance,
+        // non-power-of-two alignment limits are nonsensical, so don't attempt
+        // to use such a device.
+        let min_uniform_buffer_offset_alignment =
+            raw.capabilities.limits.min_uniform_buffer_offset_alignment;
+        if !min_uniform_buffer_offset_alignment.is_power_of_two() {
+            log::error!(
+                "Adapter {:?} min_uniform_buffer_offset_alignment limit is not a power of 2: {:?}",
+                raw.info,
+                min_uniform_buffer_offset_alignment
+            );
+            return false;
+        }
+        let min_storage_buffer_offset_alignment =
+            raw.capabilities.limits.min_storage_buffer_offset_alignment;
+        if !min_storage_buffer_offset_alignment.is_power_of_two() {
+            log::error!(
+                "Adapter {:?} min_storage_buffer_offset_alignment limit is not a power of 2: {:?}",
+                raw.info,
+                min_storage_buffer_offset_alignment
+            );
+            return false;
+        }
+
+        // Following checks are only enabled if `STRICT_WEBGPU_COMPLIANCE` is set.
+        if !self.flags.contains(InstanceFlags::STRICT_WEBGPU_COMPLIANCE) {
+            return true;
+        }
+
+        if !raw.capabilities.downlevel.is_webgpu_compliant() {
             let missing_flags = wgt::DownlevelFlags::compliant() - raw.capabilities.downlevel.flags;
             log::debug!(
                 "Adapter {:?} is not WebGPU compliant due to missing downlevel flags: {:?}",
                 raw.info,
                 missing_flags
             );
+            return false;
         }
-        allowed
+
+        true
     }
 
     pub fn enumerate_adapters(
