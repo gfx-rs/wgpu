@@ -175,8 +175,8 @@ static RENDER_PASS_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
         }
     });
 
-// This shader simply  moves the values from vector_constants and immediates into the
-// result buffer.  It expects to be called 4 times (with vector_index in 0..4) with its
+// This shader simply moves the values from immediates into the
+// result buffer. It expects to be called 4 times (with vertex_index in 0..4) with its
 // topology being PointList, so that each vertex shader call leads to exactly one fragment
 // call.
 const SHADER2: &str = "
