@@ -58,12 +58,7 @@ pub enum RenderCommand<R: ReferenceType> {
         ///
         /// Note: this is not a byte offset like `offset`. Rather, it is the
         /// index of the first `u32` element in `immediates_data` to read.
-        ///
-        /// `None` means zeros should be written to the destination range, and
-        /// there is no corresponding data in `immediates_data`. This is used
-        /// by render bundles, which explicitly clear out any state that
-        /// post-bundle code might see.
-        values_offset: Option<u32>,
+        values_offset: u32,
     },
     Draw {
         vertex_count: u32,

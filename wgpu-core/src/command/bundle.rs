@@ -800,7 +800,7 @@ fn set_immediates(
     state: &mut State,
     offset: u32,
     size_bytes: u32,
-    values_offset: Option<u32>,
+    values_offset: u32,
 ) -> Result<(), RenderBundleErrorInner> {
     let pipeline = state
         .pipeline
@@ -1160,28 +1160,12 @@ impl RenderBundle {
                 } => {
                     let pipeline_layout = pipeline_layout.as_ref().unwrap();
 
-                    if let Some(values_offset) = *values_offset {
-                        let values_end_offset =
-                            (values_offset + size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT) as usize;
-                        let data_slice =
-                            &self.base.immediates_data[(values_offset as usize)..values_end_offset];
+                    let values_end_offset =
+                        (values_offset + size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT) as usize;
+                    let data_slice =
+                        &self.base.immediates_data[(*values_offset as usize)..values_end_offset];
 
-                        unsafe { raw.set_immediates(pipeline_layout.raw(), *offset, data_slice) }
-                    } else {
-                        super::immediates_clear(
-                            *offset,
-                            *size_bytes,
-                            |clear_offset, clear_data| {
-                                unsafe {
-                                    raw.set_immediates(
-                                        pipeline_layout.raw(),
-                                        clear_offset,
-                                        clear_data,
-                                    )
-                                };
-                            },
-                        );
-                    }
+                    unsafe { raw.set_immediates(pipeline_layout.raw(), *offset, data_slice) }
                 }
                 Cmd::Draw {
                     vertex_count,
@@ -1687,7 +1671,7 @@ pub mod bundle_ffi {
         pass.base.commands.push(RenderCommand::SetImmediate {
             offset,
             size_bytes: data.len() as u32,
-            values_offset: Some(values_offset),
+            values_offset,
         });
         Ok(())
     }

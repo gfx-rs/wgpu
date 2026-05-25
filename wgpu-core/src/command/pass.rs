@@ -15,7 +15,6 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::str;
 use thiserror::Error;
-use wgt::error::{ErrorType, WebGpuError};
 use wgt::DynamicOffset;
 
 #[derive(Clone, Debug, Error)]
@@ -30,16 +29,6 @@ pub struct BindGroupIndexOutOfRange {
 #[derive(Clone, Debug, Error)]
 #[error("Pipeline must be set")]
 pub struct MissingPipeline;
-
-#[derive(Clone, Debug, Error)]
-#[error("Setting `values_offset` to be `None` is only for internal use in render bundles")]
-pub struct InvalidValuesOffset;
-
-impl WebGpuError for InvalidValuesOffset {
-    fn webgpu_error_type(&self) -> ErrorType {
-        ErrorType::Validation
-    }
-}
 
 pub(crate) struct PassState<'scope, 'snatch_guard, 'cmd_enc> {
     pub(crate) base: EncodingState<'snatch_guard, 'cmd_enc>,
@@ -201,18 +190,6 @@ where
         .change_pipeline_layout(pipeline_layout, late_sized_buffer_groups)
     {
         f();
-
-        super::immediates_clear(
-            0,
-            pipeline_layout.immediate_size,
-            |clear_offset, clear_data| unsafe {
-                state.base.raw_encoder.set_immediates(
-                    pipeline_layout.raw(),
-                    clear_offset,
-                    clear_data,
-                );
-            },
-        );
     }
     Ok(())
 }
@@ -244,17 +221,15 @@ pub(crate) fn set_immediates<E, F: FnOnce(&[u32])>(
     immediates_data: &[u32],
     offset: u32,
     size_bytes: u32,
-    values_offset: Option<u32>,
+    values_offset: u32,
     f: F,
 ) -> Result<(), E>
 where
-    E: From<ImmediateUploadError> + From<InvalidValuesOffset> + From<MissingPipeline>,
+    E: From<ImmediateUploadError> + From<MissingPipeline>,
 {
     api_log!("Pass::set_immediates");
 
     // Alignment has been validated by `validate_immediates_alignment` when pushing `SetImmediate` commands.
-
-    let values_offset = values_offset.ok_or(InvalidValuesOffset)?;
 
     let pipeline_layout = state
         .binder

@@ -883,8 +883,6 @@ pub enum RenderPassErrorInner {
     #[error("Unable to clear non-present/read-only stencil")]
     InvalidStencilOps,
     #[error(transparent)]
-    InvalidValuesOffset(#[from] pass::InvalidValuesOffset),
-    #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
@@ -1014,7 +1012,6 @@ impl WebGpuError for RenderPassError {
             RenderPassErrorInner::IncompatibleBundleTargets(e) => e.webgpu_error_type(),
             RenderPassErrorInner::InvalidAttachment(e) => e.webgpu_error_type(),
             RenderPassErrorInner::TimestampWrites(e) => e.webgpu_error_type(),
-            RenderPassErrorInner::InvalidValuesOffset(e) => e.webgpu_error_type(),
 
             RenderPassErrorInner::InvalidParentEncoder
             | RenderPassErrorInner::UnsupportedResolveTargetFormat { .. }
@@ -3542,7 +3539,7 @@ impl Global {
         base.commands.push(ArcRenderCommand::SetImmediate {
             offset,
             size_bytes: data.len() as u32,
-            values_offset: Some(values_offset),
+            values_offset,
         });
 
         Ok(())

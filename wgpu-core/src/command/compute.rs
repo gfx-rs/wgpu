@@ -188,9 +188,6 @@ pub enum ComputePassErrorInner {
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     TimestampWrites(#[from] TimestampWritesError),
-    // This one is unreachable, but required for generic pass support
-    #[error(transparent)]
-    InvalidValuesOffset(#[from] pass::InvalidValuesOffset),
 }
 
 /// Error encountered when performing a compute pass, stored for later reporting
@@ -240,7 +237,6 @@ impl WebGpuError for ComputePassError {
             ComputePassErrorInner::MissingDownlevelFlags(e) => e.webgpu_error_type(),
             ComputePassErrorInner::InvalidResource(e) => e.webgpu_error_type(),
             ComputePassErrorInner::TimestampWrites(e) => e.webgpu_error_type(),
-            ComputePassErrorInner::InvalidValuesOffset(e) => e.webgpu_error_type(),
 
             ComputePassErrorInner::InvalidParentEncoder
             | ComputePassErrorInner::BindGroupIndexOutOfRange { .. }
@@ -742,7 +738,7 @@ pub(super) fn encode_compute_pass(
                     &base.immediates_data,
                     offset,
                     size_bytes,
-                    Some(values_offset),
+                    values_offset,
                     |data_slice| {
                         let offset_in_elements = (offset / wgt::IMMEDIATE_DATA_ALIGNMENT) as usize;
                         let size_in_elements =
