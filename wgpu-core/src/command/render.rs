@@ -6,8 +6,8 @@ use arrayvec::ArrayVec;
 use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
-    BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, TextureSelector,
-    TextureUsages, TextureViewDimension, VertexStepMode,
+    BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, InstanceFlags,
+    TextureSelector, TextureUsages, TextureViewDimension, VertexStepMode,
 };
 
 use crate::{
@@ -109,6 +109,7 @@ pub struct PassChannel<V> {
 impl<V: Copy + Default> PassChannel<Option<V>> {
     fn resolve(
         &self,
+        instance_flags: InstanceFlags,
         handle_clear: impl Fn(Option<V>) -> Result<V, AttachmentError>,
     ) -> Result<ResolvedPassChannel<V>, AttachmentError> {
         if self.read_only {
@@ -123,7 +124,12 @@ impl<V: Copy + Default> PassChannel<Option<V>> {
             Ok(ResolvedPassChannel::Operational(wgt::Operations {
                 load: match self.load_op.ok_or(AttachmentError::NoLoad)? {
                     LoadOp::Clear(clear_value) => LoadOp::Clear(handle_clear(clear_value)?),
-                    LoadOp::DontCare(token) => LoadOp::DontCare(token),
+                    LoadOp::DontCare(token) => {
+                        if instance_flags.contains(InstanceFlags::STRICT_WEBGPU_COMPLIANCE) {
+                            return Err(AttachmentError::LoadOpDontCareUnderStrictWebgpuCompliance);
+                        }
+                        LoadOp::DontCare(token)
+                    }
                     LoadOp::Load => LoadOp::Load,
                 },
                 store: self.store_op.ok_or(AttachmentError::NoStore)?,
@@ -803,6 +809,8 @@ pub enum ColorAttachmentError {
     },
     #[error("Color attachment's usage contains {0:?}. This can only be used with StoreOp::{1:?}, but StoreOp::{2:?} was provided")]
     InvalidUsageForStoreOp(TextureUsages, StoreOp, StoreOp),
+    #[error("Color attachment's load op is `LoadOp::DontCare` but `InstanceFlags::STRICT_WEBGPU_COMPLIANCE` is set")]
+    LoadOpDontCareUnderStrictWebgpuCompliance,
 }
 
 impl WebGpuError for ColorAttachmentError {
@@ -838,6 +846,8 @@ pub enum AttachmentError {
     NoClearValue,
     #[error("Clear value ({0}) must be between 0.0 and 1.0, inclusive")]
     ClearValueOutOfRange(f32),
+    #[error("Load op is `DontCare` but `InstanceFlags::STRICT_WEBGPU_COMPLIANCE` is set")]
+    LoadOpDontCareUnderStrictWebgpuCompliance,
 }
 
 impl WebGpuError for AttachmentError {
@@ -1688,7 +1698,7 @@ impl RenderPassInfo {
         raw: &mut dyn hal::DynCommandEncoder,
         snatch_guard: &SnatchGuard,
         scope: &mut UsageScope<'_>,
-        instance_flags: wgt::InstanceFlags,
+        instance_flags: InstanceFlags,
     ) -> Result<(), RenderPassErrorInner> {
         profiling::scope!("RenderPassInfo::finish");
         unsafe {
@@ -1811,6 +1821,16 @@ impl Global {
                     let view = texture_views.get(*view_id).get()?;
                     view.same_device(device)?;
 
+                    if matches!(*load_op, LoadOp::DontCare(..))
+                        && device
+                            .instance_flags
+                            .contains(InstanceFlags::STRICT_WEBGPU_COMPLIANCE)
+                    {
+                        return Err(RenderPassErrorInner::ColorAttachment(
+                            ColorAttachmentError::LoadOpDontCareUnderStrictWebgpuCompliance,
+                        ));
+                    }
+
                     if view.desc.usage.contains(TextureUsages::TRANSIENT)
                         && *store_op != StoreOp::Discard
                     {
@@ -1862,7 +1882,7 @@ impl Global {
                     Some(ResolvedRenderPassDepthStencilAttachment {
                         view,
                         depth: if format.has_depth_aspect() {
-                            depth_stencil_attachment.depth.resolve(|clear| if let Some(clear) = clear {
+                            depth_stencil_attachment.depth.resolve(device.instance_flags, |clear| if let Some(clear) = clear {
                                 // If this.depthLoadOp is "clear", this.depthClearValue must be provided and must be between 0.0 and 1.0, inclusive.
                                 if !(0.0..=1.0).contains(&clear) {
                                     Err(AttachmentError::ClearValueOutOfRange(clear))
@@ -1882,7 +1902,7 @@ impl Global {
                             ResolvedPassChannel::ReadOnly
                         },
                         stencil: if format.has_stencil_aspect() {
-                            depth_stencil_attachment.stencil.resolve(|clear| {
+                            depth_stencil_attachment.stencil.resolve(device.instance_flags, |clear| {
                                 Ok(convert_stencil_value(clear.unwrap_or_default(), Some(format)))
                             })?
                         } else {
