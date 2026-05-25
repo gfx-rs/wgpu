@@ -398,30 +398,21 @@ impl GPURenderBundleEncoder {
   ) -> Result<(), JsErrorBox> {
     let data = transform_buffer(scope, data_arg, data_offset, data_size)?;
 
-    // Validate immediate offset to avoid `wgpu_render_bundle_set_immediates` panic.
-    if !offset.is_multiple_of(wgpu_types::IMMEDIATE_DATA_ALIGNMENT) {
-      let err = GPUError::Validation(
-        wgpu_core::binding_model::ImmediateUploadError::StartOffsetUnaligned(
-          offset,
-        )
-        .to_string(),
-      );
-      self.error_handler.push_error(Some(err));
-    } else {
-      let mut encoder = self.encoder.borrow_mut();
-      let encoder = encoder.as_mut().ok_or_else(|| {
-        JsErrorBox::generic("Encoder has already been finished")
-      })?;
+    let mut encoder = self.encoder.borrow_mut();
+    let encoder = encoder.as_mut().ok_or_else(|| {
+      JsErrorBox::generic("Encoder has already been finished")
+    })?;
 
-      unsafe {
-        wgpu_core::command::bundle_ffi::wgpu_render_bundle_set_immediates(
-          encoder,
-          offset,
-          data.len() as u32,
-          data.as_ptr(),
-        );
-      }
+    if let Err(err) =
+      wgpu_core::command::bundle_ffi::wgpu_render_bundle_set_immediates(
+        encoder, offset, data,
+      )
+    {
+      self
+        .error_handler
+        .push_error(Some(GPUError::Validation(err.to_string())));
     }
+
     Ok(())
   }
 }

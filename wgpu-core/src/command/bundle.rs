@@ -160,7 +160,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct RenderBundleEncoder {
-    base: BasePass<RenderCommand<IdReferences>, Infallible>,
+    pub(crate) base: BasePass<RenderCommand<IdReferences>, Infallible>,
     parent_id: id::DeviceId,
     pub(crate) context: RenderPassContext,
     pub(crate) is_depth_read_only: bool,
@@ -298,6 +298,10 @@ impl RenderBundleEncoder {
 
     pub fn parent(&self) -> id::DeviceId {
         self.parent_id
+    }
+
+    pub fn label(&self) -> Option<&str> {
+        self.base.label.as_deref()
     }
 
     /// Convert this encoder's commands into a [`RenderBundle`].
@@ -1589,8 +1593,12 @@ where
 
 pub mod bundle_ffi {
     use super::{RenderBundleEncoder, RenderCommand};
-    use crate::{command::DrawCommandFamily, id, RawString};
-    use core::{convert::TryInto, slice};
+    use crate::{
+        binding_model::ImmediateUploadError,
+        command::{pass, DrawCommandFamily},
+        id, RawString,
+    };
+    use core::slice;
     use wgt::{BufferAddress, BufferSize, DynamicOffset, IndexFormat};
 
     /// # Safety
@@ -1663,42 +1671,24 @@ pub mod bundle_ffi {
         encoder.set_index_buffer(buffer, index_format, offset, size);
     }
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given pointer is
-    /// valid for `data` elements.
-    pub unsafe fn wgpu_render_bundle_set_immediates(
+    pub fn wgpu_render_bundle_set_immediates(
         pass: &mut RenderBundleEncoder,
         offset: u32,
-        size_bytes: u32,
-        data: *const u8,
-    ) {
-        assert_eq!(
-            offset & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1),
-            0,
-            "Immediate data offset must be aligned to 4 bytes."
-        );
-        assert_eq!(
-            size_bytes & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1),
-            0,
-            "Immediate data size must be aligned to 4 bytes."
-        );
-        let data_slice = unsafe { slice::from_raw_parts(data, size_bytes as usize) };
-        let value_offset = pass.base.immediates_data.len().try_into().expect(
-            "Ran out of immediate data space. Don't set 4gb of immediates per RenderBundle.",
-        );
+        data: &[u8],
+    ) -> Result<(), ImmediateUploadError> {
+        pass::validate_immediates_alignment(offset, data, pass.base.immediates_data.len())?;
 
         pass.base.immediates_data.extend(
-            data_slice
-                .chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
+            data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
         );
 
         pass.base.commands.push(RenderCommand::SetImmediate {
             offset,
-            size_bytes,
-            values_offset: Some(value_offset),
+            size_bytes: data.len() as u32,
+            values_offset: Some(pass.base.immediates_data.len() as u32),
         });
+        Ok(())
     }
 
     pub fn wgpu_render_bundle_draw(

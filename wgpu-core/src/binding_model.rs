@@ -873,6 +873,8 @@ impl WebGpuError for CreatePipelineLayoutError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ImmediateUploadError {
+    #[error("Ran out of immediate data space. Don't set 4gb of immediates per pass")]
+    ImmediateOutOfMemory,
     #[error(
         "Start offset {start_offset} overruns the immediate data range with a size of {immediate_size}"
     )]
@@ -1024,17 +1026,11 @@ impl PipelineLayout {
         offset: u32,
         size_bytes: u32,
     ) -> Result<(), ImmediateUploadError> {
+        // Don't need to validate offset and size are multiples of 4 here as them are validated during setting.
+        //
         // Don't need to validate size against the immediate data size limit here,
         // as immediate data ranges are already validated to be within bounds,
         // and we validate that they are within the ranges.
-
-        if !offset.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
-            return Err(ImmediateUploadError::StartOffsetUnaligned(offset));
-        }
-
-        if !size_bytes.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
-            return Err(ImmediateUploadError::SizeUnaligned(offset));
-        }
 
         if offset > self.immediate_size {
             return Err(ImmediateUploadError::StartOffsetOverrun {
