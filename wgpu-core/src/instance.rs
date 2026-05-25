@@ -17,7 +17,7 @@ use crate::{
     DOWNLEVEL_WARNING_MESSAGE,
 };
 
-use wgt::{Backend, Backends, PowerPreference};
+use wgt::{Backend, Backends, InstanceFlags, PowerPreference};
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
 
@@ -51,7 +51,7 @@ pub struct Instance {
     /// `instance_per_backend` instead.
     supported_backends: Backends,
 
-    pub flags: wgt::InstanceFlags,
+    pub flags: InstanceFlags,
 
     /// Non-lifetimed [`raw_window_handle::DisplayHandle`], for keepalive and validation purposes in
     /// [`Self::create_surface()`].
@@ -153,7 +153,7 @@ impl Instance {
             instance_per_backend: vec![(A::VARIANT, Box::new(hal_instance))],
             requested_backends: A::VARIANT.into(),
             supported_backends: A::VARIANT.into(),
-            flags: wgt::InstanceFlags::default(),
+            flags: InstanceFlags::default(),
             display: None, // TODO: Extract display from HAL instance if available?
         }
     }
@@ -414,6 +414,20 @@ impl Instance {
         })
     }
 
+    fn adapter_allowed(&self, raw: &hal::DynExposedAdapter) -> bool {
+        let allowed = !self.flags.contains(InstanceFlags::STRICT_WEBGPU_COMPLIANCE)
+            || raw.capabilities.downlevel.is_webgpu_compliant();
+        if !allowed {
+            let missing_flags = wgt::DownlevelFlags::compliant() - raw.capabilities.downlevel.flags;
+            log::debug!(
+                "Adapter {:?} is not WebGPU compliant due to missing downlevel flags: {:?}",
+                raw.info,
+                missing_flags
+            );
+        }
+        allowed
+    }
+
     pub fn enumerate_adapters(
         &self,
         backends: Backends,
@@ -441,6 +455,7 @@ impl Instance {
                         self.adjust_limits_for_indirect_validation(&mut raw.capabilities.limits);
                         raw
                     })
+                    .filter(|raw| self.adapter_allowed(raw))
                     .filter_map(|raw| {
                         if apply_limit_buckets {
                             limits::apply_limit_buckets(raw)
@@ -526,10 +541,13 @@ impl Instance {
                 }
             }
 
-            let backend_adapters = backend_adapters.into_iter().map(|mut raw| {
-                self.adjust_limits_for_indirect_validation(&mut raw.capabilities.limits);
-                raw
-            });
+            let backend_adapters = backend_adapters
+                .into_iter()
+                .map(|mut raw| {
+                    self.adjust_limits_for_indirect_validation(&mut raw.capabilities.limits);
+                    raw
+                })
+                .filter(|raw| self.adapter_allowed(raw));
 
             if desc.apply_limit_buckets {
                 adapters.extend(backend_adapters.filter_map(limits::apply_limit_buckets));
@@ -607,10 +625,7 @@ impl Instance {
     fn adjust_limits_for_indirect_validation(&self, limits: &mut wgt::Limits) {
         // Indirect draw validation can't support u64 offsets,
         // lower max buffer and binding size to fit in an u32.
-        if self
-            .flags
-            .contains(wgt::InstanceFlags::VALIDATION_INDIRECT_CALL)
-        {
+        if self.flags.contains(InstanceFlags::VALIDATION_INDIRECT_CALL) {
             limits.max_buffer_size = limits.max_buffer_size.min(u32::MAX as u64);
             limits.max_uniform_buffer_binding_size =
                 limits.max_uniform_buffer_binding_size.min(u32::MAX as u64);
@@ -820,7 +835,7 @@ impl Adapter {
         self: &Arc<Self>,
         hal_device: hal::DynOpenDevice,
         desc: &DeviceDescriptor,
-        instance_flags: wgt::InstanceFlags,
+        instance_flags: InstanceFlags,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
@@ -839,7 +854,7 @@ impl Adapter {
     pub fn create_device_and_queue(
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
-        instance_flags: wgt::InstanceFlags,
+        instance_flags: InstanceFlags,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         // Verify all features were exposed by the adapter
         if !self.raw.features.contains(desc.required_features) {
