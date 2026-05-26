@@ -20,31 +20,6 @@ pub struct PipelineCompilationOptions<'a> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
-    /// Required subgroup size for this stage.
-    ///
-    /// Defaults to [`SubgroupSize::Varying`]. Setting any other value requires
-    /// [`Features::SUBGROUP_SIZE_CONTROL`].
-    ///
-    /// Intended for SPIR-V passthrough shaders on Vulkan. The WebGPU
-    /// [`subgroup-size-control` proposal][proposal] specifies a `@subgroup_size`
-    /// WGSL attribute on the entry point as the way to request a specific size
-    /// for WGSL/Naga shaders; SPIR-V passthrough shaders cannot carry such an
-    /// attribute, so the request is threaded through the pipeline-creation API
-    /// instead. For non-passthrough shaders, prefer the WGSL attribute once it
-    /// is supported, and leave this field at its default.
-    ///
-    /// **HLSL passthrough shaders are not affected by this field.** HLSL
-    /// specifies the wave size via a `[WaveSize(n)]` attribute on the entry
-    /// point, which must be embedded in the shader source itself. Even if
-    /// [`Features::SUBGROUP_SIZE_CONTROL`] is someday advertised on a D3D12
-    /// backend, this field will have no effect on HLSL passthrough shaders.
-    ///
-    /// **MetalLib/MSL passthrough shaders are also not affected.** Metal
-    /// provides no API to control the SIMD-group width; it is fixed by the
-    /// hardware.
-    ///
-    /// [proposal]: https://github.com/gpuweb/gpuweb/blob/main/proposals/subgroup-size-control.md
-    pub subgroup_size: SubgroupSize,
 }
 
 impl Default for PipelineCompilationOptions<'_> {
@@ -52,7 +27,6 @@ impl Default for PipelineCompilationOptions<'_> {
         Self {
             constants: Default::default(),
             zero_initialize_workgroup_memory: true,
-            subgroup_size: SubgroupSize::Varying,
         }
     }
 }

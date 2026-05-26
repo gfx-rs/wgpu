@@ -665,7 +665,6 @@ impl Player {
                 entry_point: desc.stage.entry_point,
                 constants: desc.stage.constants,
                 zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
-                subgroup_size: desc.stage.subgroup_size,
             },
             cache: desc.cache.map(|id| self.resolve_pipeline_cache_id(id)),
         }
@@ -688,7 +687,6 @@ impl Player {
                             zero_initialize_workgroup_memory: vertex_state
                                 .stage
                                 .zero_initialize_workgroup_memory,
-                            subgroup_size: vertex_state.stage.subgroup_size,
                         },
                         buffers: vertex_state.buffers,
                     },
@@ -703,7 +701,6 @@ impl Player {
                         zero_initialize_workgroup_memory: task
                             .stage
                             .zero_initialize_workgroup_memory,
-                        subgroup_size: task.stage.subgroup_size,
                     },
                 });
                 let resolved_mesh = wgc::pipeline::ResolvedMeshState {
@@ -714,7 +711,6 @@ impl Player {
                         zero_initialize_workgroup_memory: mesh_state
                             .stage
                             .zero_initialize_workgroup_memory,
-                        subgroup_size: mesh_state.stage.subgroup_size,
                     },
                 };
                 wgc::pipeline::RenderPipelineVertexProcessor::Mesh(resolved_task, resolved_mesh)
@@ -731,7 +727,6 @@ impl Player {
                     zero_initialize_workgroup_memory: fragment_state
                         .stage
                         .zero_initialize_workgroup_memory,
-                    subgroup_size: fragment_state.stage.subgroup_size,
                 },
                 targets: fragment_state.targets,
             });

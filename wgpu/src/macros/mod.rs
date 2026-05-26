@@ -145,6 +145,7 @@ macro_rules! include_spirv_raw {
                     name: $crate::__macro_helpers::Cow::Borrowed("main"),
                     // This is unused for SPIR-V
                     workgroup_size: (0, 0, 0),
+                    subgroup_size: $crate::SubgroupSize::Varying,
                 }]),
                 dxil: None,
                 metallib: None,

@@ -82,10 +82,12 @@ fn metal_test(ctx: TestingContext) {
                     wgpu::PassthroughShaderEntryPoint {
                         name: "vs_main".into(),
                         workgroup_size: (0, 0, 0),
+                        subgroup_size: wgpu::SubgroupSize::Varying,
                     },
                     wgpu::PassthroughShaderEntryPoint {
                         name: "fs_main".into(),
                         workgroup_size: (0, 0, 0),
+                        subgroup_size: wgpu::SubgroupSize::Varying,
                     },
                 ]),
                 msl: Some(metal_source()),
@@ -193,10 +195,12 @@ fn metallib_test(ctx: TestingContext) {
                     wgpu::PassthroughShaderEntryPoint {
                         name: "vs_main".into(),
                         workgroup_size: (0, 0, 0),
+                        subgroup_size: wgpu::SubgroupSize::Varying,
                     },
                     wgpu::PassthroughShaderEntryPoint {
                         name: "fs_main".into(),
                         workgroup_size: (0, 0, 0),
+                        subgroup_size: wgpu::SubgroupSize::Varying,
                     },
                 ]),
                 metallib: Some(std::borrow::Cow::Borrowed(&source)),
@@ -227,10 +231,12 @@ fn hlsl_test(ctx: TestingContext) {
                     wgpu::PassthroughShaderEntryPoint {
                         name: "vs_main".into(),
                         workgroup_size: (0, 0, 0),
+                        subgroup_size: wgpu::SubgroupSize::Varying,
                     },
                     wgpu::PassthroughShaderEntryPoint {
                         name: "fs_main".into(),
                         workgroup_size: (0, 0, 0),
+                        subgroup_size: wgpu::SubgroupSize::Varying,
                     },
                 ]),
                 hlsl: Some(hlsl_source()),
@@ -305,6 +311,7 @@ fn dxil_test(ctx: TestingContext) {
                 entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
                     name: "vs_main".into(),
                     workgroup_size: (0, 0, 0),
+                    subgroup_size: wgpu::SubgroupSize::Varying,
                 }]),
                 dxil: Some(vertex_source),
                 ..Default::default()
@@ -318,6 +325,7 @@ fn dxil_test(ctx: TestingContext) {
                 entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
                     name: "fs_main".into(),
                     workgroup_size: (0, 0, 0),
+                    subgroup_size: wgpu::SubgroupSize::Varying,
                 }]),
                 dxil: Some(fragment_source),
                 ..Default::default()
@@ -378,10 +386,12 @@ fn spirv_test(ctx: TestingContext) {
                     wgpu::PassthroughShaderEntryPoint {
                         name: "vs_main".into(),
                         workgroup_size: (0, 0, 0),
+                        subgroup_size: wgpu::SubgroupSize::Varying,
                     },
                     wgpu::PassthroughShaderEntryPoint {
                         name: "fs_main".into(),
                         workgroup_size: (0, 0, 0),
+                        subgroup_size: wgpu::SubgroupSize::Varying,
                     },
                 ]),
                 spirv: Some(spirv_source(test_hash)),
@@ -435,6 +445,7 @@ fn glsl_test(ctx: TestingContext) {
                 entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
                     name: "vs_main".into(),
                     workgroup_size: (0, 0, 0),
+                    subgroup_size: wgpu::SubgroupSize::Varying,
                 }]),
                 glsl: Some(glsl_vertex_source(&ctx)),
                 ..Default::default()
@@ -446,6 +457,7 @@ fn glsl_test(ctx: TestingContext) {
                 entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
                     name: "fs_main".into(),
                     workgroup_size: (0, 0, 0),
+                    subgroup_size: wgpu::SubgroupSize::Varying,
                 }]),
                 glsl: Some(glsl_fragment_source(&ctx)),
                 ..Default::default()
@@ -494,6 +506,7 @@ fn all_passthrough_shaders_binary(ctx: TestingContext) {
         entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
             name: "vs_main".into(),
             workgroup_size: (0, 0, 0),
+            subgroup_size: wgpu::SubgroupSize::Varying,
         }]),
         #[cfg(not(target_arch = "wasm32"))]
         spirv: Some(spirv_source(test_hash)),
@@ -510,6 +523,7 @@ fn all_passthrough_shaders_binary(ctx: TestingContext) {
         entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
             name: "fs_main".into(),
             workgroup_size: (0, 0, 0),
+            subgroup_size: wgpu::SubgroupSize::Varying,
         }]),
         #[cfg(not(target_arch = "wasm32"))]
         dxil: Some(dxil_fragment_source(test_hash)),
@@ -532,6 +546,7 @@ fn all_passthrough_shader_source(ctx: TestingContext) {
         entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
             name: "vs_main".into(),
             workgroup_size: (0, 0, 0),
+            subgroup_size: wgpu::SubgroupSize::Varying,
         }]),
         #[cfg(not(target_arch = "wasm32"))]
         spirv: Some(spirv_source(test_hash)),
@@ -546,6 +561,7 @@ fn all_passthrough_shader_source(ctx: TestingContext) {
         entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
             name: "fs_main".into(),
             workgroup_size: (0, 0, 0),
+            subgroup_size: wgpu::SubgroupSize::Varying,
         }]),
         glsl: Some(glsl_fragment_source(&ctx)),
         ..desc
@@ -566,6 +582,7 @@ fn explicit_layout_validation(ctx: TestingContext) {
         entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
             name: "vs_main".into(),
             workgroup_size: (0, 0, 0),
+            subgroup_size: wgpu::SubgroupSize::Varying,
         }]),
         #[cfg(not(target_arch = "wasm32"))]
         spirv: Some(spirv_source(test_hash)),
@@ -580,6 +597,7 @@ fn explicit_layout_validation(ctx: TestingContext) {
         entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
             name: "fs_main".into(),
             workgroup_size: (0, 0, 0),
+            subgroup_size: wgpu::SubgroupSize::Varying,
         }]),
         glsl: Some(glsl_fragment_source(&ctx)),
         ..desc

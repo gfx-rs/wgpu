@@ -92,6 +92,18 @@ impl ShaderModule {
         self.raw.as_ref()
     }
 
+    /// Returns the [`wgt::SubgroupSize`] requested for the given entry point at
+    /// shader-module creation time. For non-passthrough modules and unknown
+    /// entry-point names, defaults to [`wgt::SubgroupSize::Varying`].
+    pub(crate) fn entry_point_subgroup_size(&self, entry_point: &str) -> wgt::SubgroupSize {
+        match self.interface {
+            ShaderMetaData::Passthrough(ref interface) => interface
+                .entry_point(entry_point)
+                .map_or(wgt::SubgroupSize::Varying, |e| e.subgroup_size),
+            ShaderMetaData::Interface(_) => wgt::SubgroupSize::Varying,
+        }
+    }
+
     pub(crate) fn finalize_entry_point_name(
         &self,
         stage: naga::ShaderStage,
@@ -103,21 +115,16 @@ impl ShaderModule {
             }
             ShaderMetaData::Passthrough(ref interface) => {
                 if let Some(ep) = entry_point {
-                    if interface.entry_point_names.contains(ep) {
+                    if interface.entry_point(ep).is_some() {
                         Ok(ep.to_owned())
                     } else {
                         Err(validation::StageError::MissingEntryPoint(ep.to_owned()))
                     }
                 } else {
-                    if interface.entry_point_names.len() != 1 {
+                    if interface.entry_points.len() != 1 {
                         return Err(validation::StageError::MultipleEntryPointsFound);
                     }
-                    Ok(interface
-                        .entry_point_names
-                        .iter()
-                        .next()
-                        .unwrap()
-                        .to_owned())
+                    Ok(interface.entry_points[0].name.clone())
                 }
             }
         }
@@ -159,6 +166,35 @@ pub enum CreateShaderModuleError {
         "Generic passthrough shaders which use GLSL or DXIL must contain exactly one entry point."
     )]
     IncorrectPassthroughEntryPointCount,
+    #[error(
+        "Subgroup size {size} on entry point {entry_point:?} is not a power of two in [{min}, {max}] (subgroup_min_size, subgroup_max_size)"
+    )]
+    InvalidSubgroupSize {
+        entry_point: String,
+        size: u32,
+        min: u32,
+        max: u32,
+    },
+    #[error(
+        "`SubgroupSize::Full` on entry point {entry_point:?} requires `@workgroup_size` x to be at least subgroup_min_size ({subgroup_min_size}); got {workgroup_size_x}"
+    )]
+    WorkgroupSizeTooSmallForFullSubgroups {
+        entry_point: String,
+        workgroup_size_x: u32,
+        subgroup_min_size: u32,
+    },
+    #[error(
+        "`SubgroupSize::Fixed({subgroup_size})` on entry point {entry_point:?} requires `@workgroup_size` x to be a multiple of {subgroup_size}; got {workgroup_size_x}"
+    )]
+    WorkgroupSizeXNotMultipleOfSubgroupSize {
+        entry_point: String,
+        workgroup_size_x: u32,
+        subgroup_size: u32,
+    },
+    #[error(
+        "Non-`SubgroupSize::Varying` subgroup size on entry point {entry_point:?} is only supported for SPIR-V passthrough shaders"
+    )]
+    SubgroupSizeNotSupportedForBackend { entry_point: String },
 }
 
 impl WebGpuError for CreateShaderModuleError {
@@ -172,7 +208,11 @@ impl WebGpuError for CreateShaderModuleError {
             Self::Validation(..)
             | Self::InvalidGroupIndex { .. }
             | Self::IncorrectPassthroughEntryPointCount
-            | Self::NotCompiledForBackend => ErrorType::Validation,
+            | Self::NotCompiledForBackend
+            | Self::InvalidSubgroupSize { .. }
+            | Self::WorkgroupSizeTooSmallForFullSubgroups { .. }
+            | Self::WorkgroupSizeXNotMultipleOfSubgroupSize { .. }
+            | Self::SubgroupSizeNotSupportedForBackend { .. } => ErrorType::Validation,
             #[cfg(feature = "wgsl")]
             Self::Parsing(..) => ErrorType::Validation,
             #[cfg(feature = "glsl")]
@@ -209,20 +249,6 @@ pub struct ProgrammableStageDescriptor<'a, SM = ShaderModuleId> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
-    /// Required subgroup size for this stage. Defaults to
-    /// [`wgt::SubgroupSize::Varying`]. Setting any other value requires
-    /// [`wgt::Features::SUBGROUP_SIZE_CONTROL`].
-    ///
-    /// Intended for SPIR-V passthrough shaders on Vulkan. The WebGPU
-    /// `subgroup-size-control` proposal specifies a `@subgroup_size` WGSL
-    /// attribute on the entry point for WGSL/Naga shaders; SPIR-V passthrough
-    /// shaders cannot carry such an attribute, so the request is threaded
-    /// through here instead. HLSL passthrough shaders (D3D12) use `[WaveSize]`
-    /// in the shader source and are not affected by this field; MetalLib/MSL
-    /// passthrough shaders are not affected either, as Metal has no API to
-    /// control the SIMD-group width.
-    #[cfg_attr(feature = "serde", serde(default))]
-    pub subgroup_size: wgt::SubgroupSize,
 }
 
 /// cbindgen:ignore
@@ -295,24 +321,6 @@ pub enum CreateComputePipelineError {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
-    #[error(
-        "Subgroup size {size} is not a power of two in [{min}, {max}] (subgroup_min_size, subgroup_max_size)"
-    )]
-    InvalidSubgroupSize { size: u32, min: u32, max: u32 },
-    #[error(
-        "`SubgroupSize::Full` requires `@workgroup_size` x to be at least subgroup_min_size ({subgroup_min_size}); got {workgroup_size_x}"
-    )]
-    WorkgroupSizeTooSmallForFullSubgroups {
-        workgroup_size_x: u32,
-        subgroup_min_size: u32,
-    },
-    #[error(
-        "`SubgroupSize::Fixed({subgroup_size})` requires `@workgroup_size` x to be a multiple of {subgroup_size}; got {workgroup_size_x}"
-    )]
-    WorkgroupSizeXNotMultipleOfSubgroupSize {
-        workgroup_size_x: u32,
-        subgroup_size: u32,
-    },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
@@ -328,9 +336,6 @@ impl WebGpuError for CreateComputePipelineError {
             Self::Stage(e) => e.webgpu_error_type(),
             Self::Internal(_) => ErrorType::Internal,
             Self::PipelineConstants(_) => ErrorType::Validation,
-            Self::InvalidSubgroupSize { .. } => ErrorType::Validation,
-            Self::WorkgroupSizeTooSmallForFullSubgroups { .. } => ErrorType::Validation,
-            Self::WorkgroupSizeXNotMultipleOfSubgroupSize { .. } => ErrorType::Validation,
         }
     }
 }
@@ -798,28 +803,8 @@ pub enum CreateRenderPipelineError {
         "but no render target for the pipeline was specified."
     ))]
     NoTargetSpecified,
-    #[error(
-        "Subgroup size {size} is not a power of two in [{min}, {max}] (subgroup_min_size, subgroup_max_size)"
-    )]
-    InvalidSubgroupSize { size: u32, min: u32, max: u32 },
     #[error("`SubgroupSize::Full` is only valid on compute, task, and mesh stages")]
     FullSubgroupsNotAllowed,
-    #[error(
-        "`SubgroupSize::Full` on {stage:?} stage requires `@workgroup_size` x to be at least subgroup_min_size ({subgroup_min_size}); got {workgroup_size_x}"
-    )]
-    WorkgroupSizeTooSmallForFullSubgroups {
-        stage: wgt::ShaderStages,
-        workgroup_size_x: u32,
-        subgroup_min_size: u32,
-    },
-    #[error(
-        "`SubgroupSize::Fixed({subgroup_size})` on {stage:?} stage requires `@workgroup_size` x to be a multiple of {subgroup_size}; got {workgroup_size_x}"
-    )]
-    WorkgroupSizeXNotMultipleOfSubgroupSize {
-        stage: wgt::ShaderStages,
-        workgroup_size_x: u32,
-        subgroup_size: u32,
-    },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
@@ -854,10 +839,7 @@ impl WebGpuError for CreateRenderPipelineError {
             | Self::DualSourceBlendingWithMultipleColorTargets { .. }
             | Self::NoTargetSpecified
             | Self::PipelineConstants { .. }
-            | Self::InvalidSubgroupSize { .. }
             | Self::FullSubgroupsNotAllowed
-            | Self::WorkgroupSizeTooSmallForFullSubgroups { .. }
-            | Self::WorkgroupSizeXNotMultipleOfSubgroupSize { .. }
             | Self::VertexAttributeStrideTooLarge { .. } => ErrorType::Validation,
         }
     }

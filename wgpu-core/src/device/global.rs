@@ -1427,7 +1427,6 @@ impl Global {
                         zero_initialize_workgroup_memory: vertex
                             .stage
                             .zero_initialize_workgroup_memory,
-                        subgroup_size: vertex.stage.subgroup_size,
                     };
                     RenderPipelineVertexProcessor::Vertex(ResolvedVertexState {
                         stage,
@@ -1458,7 +1457,6 @@ impl Global {
                             zero_initialize_workgroup_memory: task
                                 .stage
                                 .zero_initialize_workgroup_memory,
-                            subgroup_size: task.stage.subgroup_size,
                         };
                         Some(ResolvedTaskState { stage: state })
                     } else {
@@ -1486,7 +1484,6 @@ impl Global {
                         zero_initialize_workgroup_memory: mesh
                             .stage
                             .zero_initialize_workgroup_memory,
-                        subgroup_size: mesh.stage.subgroup_size,
                     };
                     RenderPipelineVertexProcessor::Mesh(
                         task_module,
@@ -1516,7 +1513,6 @@ impl Global {
                     entry_point: state.stage.entry_point.clone(),
                     constants: state.stage.constants.clone(),
                     zero_initialize_workgroup_memory: state.stage.zero_initialize_workgroup_memory,
-                    subgroup_size: state.stage.subgroup_size,
                 };
                 Some(ResolvedFragmentState {
                     stage,
@@ -1686,7 +1682,6 @@ impl Global {
                 entry_point: desc.stage.entry_point.clone(),
                 constants: desc.stage.constants.clone(),
                 zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
-                subgroup_size: desc.stage.subgroup_size,
             };
 
             let desc = ResolvedComputePipelineDescriptor {

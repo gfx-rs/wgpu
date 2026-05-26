@@ -104,6 +104,21 @@ pub struct PassthroughShaderEntryPoint<'a> {
     /// Number of workgroups in each dimension x, y and z. Only used for metal with
     /// compute-like shader stages.
     pub workgroup_size: (u32, u32, u32),
+    /// Required subgroup size for this entry point.
+    ///
+    /// Defaults to [`SubgroupSize::Varying`]. Setting any other value requires
+    /// [`Features::SUBGROUP_SIZE_CONTROL`].
+    ///
+    /// Only honored for SPIR-V (Vulkan) passthrough shaders, where it maps to
+    /// `VkPipelineShaderStageRequiredSubgroupSizeCreateInfo`. HLSL passthrough
+    /// shaders specify the wave size via a `[WaveSize(n)]` attribute embedded
+    /// in the shader source, and MetalLib/MSL provides no API for it. Module
+    /// creation rejects any non-[`SubgroupSize::Varying`] value when the
+    /// module's source language is anything other than SPIR-V.
+    ///
+    /// [`Features::SUBGROUP_SIZE_CONTROL`]: crate::Features::SUBGROUP_SIZE_CONTROL
+    /// [`SubgroupSize::Varying`]: crate::SubgroupSize::Varying
+    pub subgroup_size: crate::SubgroupSize,
 }
 
 /// Descriptor for a shader module given by any of several sources.
