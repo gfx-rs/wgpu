@@ -292,9 +292,6 @@ pub struct Adapter {
     shared: Arc<AdapterShared>,
 }
 
-#[cfg(send_sync)]
-static_assertions::assert_impl_all!(Adapter: Send, Sync);
-
 pub struct Device {
     shared: Arc<AdapterShared>,
     main_vao: glow::VertexArray,

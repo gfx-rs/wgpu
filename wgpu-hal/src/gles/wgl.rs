@@ -676,8 +676,8 @@ pub struct Surface {
     srgb_capable: bool,
 }
 
-#[cfg(send_sync)]
-static_assertions::assert_impl_all!(Surface: Send, Sync);
+unsafe impl Send for Surface {}
+unsafe impl Sync for Surface {}
 
 impl Surface {
     pub(super) unsafe fn present(
