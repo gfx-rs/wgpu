@@ -1932,8 +1932,10 @@ pub enum SubgroupSize {
     /// can fit and pipeline creation fails. (Vulkan forbids partial subgroups
     /// when `REQUIRE_FULL_SUBGROUPS_BIT` is set.)
     ///
-    /// Only valid on compute, task, and mesh stages. Setting this on a vertex
-    /// or fragment stage is a pipeline creation error.
+    /// For SPIR-V passthrough shaders this is valid on compute, task, and
+    /// mesh stages; setting it on a vertex or fragment stage is a
+    /// render-pipeline creation error. The eventual WGSL `@subgroup_size`
+    /// attribute will be compute-only, matching the WebGPU proposal.
     ///
     /// [`AdapterInfo::subgroup_min_size`]: crate::AdapterInfo::subgroup_min_size
     /// [`AdapterInfo::subgroup_max_size`]: crate::AdapterInfo::subgroup_max_size
@@ -1948,6 +1950,13 @@ pub enum SubgroupSize {
     ///   [`AdapterInfo::subgroup_max_size`] (inclusive).
     /// - For compute, task, and mesh stages, `workgroup_size.x` must be a
     ///   multiple of the requested size (Vulkan requirement).
+    ///
+    /// For SPIR-V passthrough shaders, the set of stages that can carry a
+    /// fixed subgroup size is implementation-dependent (Vulkan's
+    /// `requiredSubgroupSizeStages`), so wgpu forwards the request and lets
+    /// the driver reject unsupported stages at pipeline creation. The
+    /// eventual WGSL `@subgroup_size` attribute will be compute-only,
+    /// matching the WebGPU proposal.
     ///
     /// (The proposal also constrains the total workgroup size against a
     /// `maxComputeWorkgroupSubgroups` limit; wgpu does not yet expose that

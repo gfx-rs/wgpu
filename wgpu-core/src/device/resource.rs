@@ -367,9 +367,12 @@ impl Device {
     /// All checks that depend only on the module itself live here:
     ///
     /// - Non-[`Varying`] values require [`Features::SUBGROUP_SIZE_CONTROL`].
-    /// - Non-[`Varying`] values are only honored for SPIR-V passthrough; on
-    ///   non-Vulkan backends or non-SPIR-V sources, reject them rather than
-    ///   silently ignoring.
+    /// - Non-[`Varying`] values are only honored for SPIR-V passthrough; if
+    ///   the descriptor carries any non-SPIR-V source, reject the request
+    ///   rather than silently dropping it on a backend that won't consume the
+    ///   SPIR-V.
+    /// - The entry point's `workgroup_size.x` must be non-zero, since the
+    ///   checks below would otherwise pass vacuously.
     /// - For [`Fixed(n)`], `n` must be a power of two within
     ///   `[subgroup_min_size, subgroup_max_size]`, and the entry point's
     ///   `workgroup_size.x` must be a multiple of `n` (WebGPU
@@ -397,10 +400,17 @@ impl Device {
             return Ok(());
         };
         self.require_features(wgt::Features::SUBGROUP_SIZE_CONTROL)?;
-        // `subgroup_size` only has a backend mapping for SPIR-V (Vulkan).
-        // Reject it loudly on every other source to avoid silently ignoring
-        // the request.
-        if descriptor.spirv.is_none() {
+        // `subgroup_size` only has a backend mapping for SPIR-V (Vulkan). If
+        // the descriptor carries any non-SPIR-V source, reject loudly: on a
+        // non-Vulkan backend the request would otherwise be silently dropped.
+        if descriptor.spirv.is_none()
+            || descriptor.dxil.is_some()
+            || descriptor.hlsl.is_some()
+            || descriptor.metallib.is_some()
+            || descriptor.msl.is_some()
+            || descriptor.glsl.is_some()
+            || descriptor.wgsl.is_some()
+        {
             return Err(
                 pipeline::CreateShaderModuleError::SubgroupSizeNotSupportedForBackend {
                     entry_point: varying_entry_point.name.to_string(),
@@ -411,8 +421,21 @@ impl Device {
         let min = info.subgroup_min_size;
         let max = info.subgroup_max_size;
         for ep in descriptor.entry_points.iter() {
+            if matches!(ep.subgroup_size, wgt::SubgroupSize::Varying) {
+                continue;
+            }
+            // Required for the per-variant checks below to be meaningful: a
+            // zero `workgroup_size.x` would trivially satisfy
+            // `is_multiple_of(n)` and never satisfy `>= subgroup_min_size`.
+            if ep.workgroup_size.0 == 0 {
+                return Err(
+                    pipeline::CreateShaderModuleError::MissingWorkgroupSizeForSubgroupSize {
+                        entry_point: ep.name.to_string(),
+                    },
+                );
+            }
             match ep.subgroup_size {
-                wgt::SubgroupSize::Varying => {}
+                wgt::SubgroupSize::Varying => unreachable!(),
                 wgt::SubgroupSize::Full => {
                     if ep.workgroup_size.0 < min {
                         return Err(

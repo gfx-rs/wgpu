@@ -184,6 +184,10 @@ pub enum CreateShaderModuleError {
         subgroup_min_size: u32,
     },
     #[error(
+        "Non-`SubgroupSize::Varying` subgroup size on entry point {entry_point:?} requires `PassthroughShaderEntryPoint::workgroup_size` to be set (with a non-zero x component)"
+    )]
+    MissingWorkgroupSizeForSubgroupSize { entry_point: String },
+    #[error(
         "`SubgroupSize::Fixed({subgroup_size})` on entry point {entry_point:?} requires `@workgroup_size` x to be a multiple of {subgroup_size}; got {workgroup_size_x}"
     )]
     WorkgroupSizeXNotMultipleOfSubgroupSize {
@@ -212,6 +216,7 @@ impl WebGpuError for CreateShaderModuleError {
             | Self::InvalidSubgroupSize { .. }
             | Self::WorkgroupSizeTooSmallForFullSubgroups { .. }
             | Self::WorkgroupSizeXNotMultipleOfSubgroupSize { .. }
+            | Self::MissingWorkgroupSizeForSubgroupSize { .. }
             | Self::SubgroupSizeNotSupportedForBackend { .. } => ErrorType::Validation,
             #[cfg(feature = "wgsl")]
             Self::Parsing(..) => ErrorType::Validation,
@@ -320,8 +325,6 @@ pub enum CreateComputePipelineError {
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error(transparent)]
-    MissingFeatures(#[from] MissingFeatures),
-    #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
 
@@ -331,7 +334,6 @@ impl WebGpuError for CreateComputePipelineError {
             Self::Device(e) => e.webgpu_error_type(),
             Self::InvalidResource(e) => e.webgpu_error_type(),
             Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
-            Self::MissingFeatures(e) => e.webgpu_error_type(),
             Self::Implicit(e) => e.webgpu_error_type(),
             Self::Stage(e) => e.webgpu_error_type(),
             Self::Internal(_) => ErrorType::Internal,

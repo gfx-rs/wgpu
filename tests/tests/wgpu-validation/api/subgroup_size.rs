@@ -182,6 +182,55 @@ fn non_varying_requires_subgroup_size_control_feature() {
 }
 
 #[test]
+fn non_varying_requires_workgroup_size() {
+    let device = noop_device_with_subgroup_range(Features::SUBGROUP_SIZE_CONTROL, 4, 64);
+
+    static ENTRY: &[PassthroughShaderEntryPoint<'static>] = &[PassthroughShaderEntryPoint {
+        name: Cow::Borrowed("main"),
+        workgroup_size: (0, 0, 0),
+        subgroup_size: SubgroupSize::Fixed(32),
+    }];
+
+    fail(
+        &device,
+        || unsafe {
+            device.create_shader_module_passthrough(passthrough_descriptor(
+                ENTRY,
+                Some(dummy_spirv()),
+                None,
+            ))
+        },
+        Some("requires `PassthroughShaderEntryPoint::workgroup_size`"),
+    );
+}
+
+#[test]
+fn non_varying_rejects_mixed_sources() {
+    let device = noop_device_with_subgroup_range(Features::SUBGROUP_SIZE_CONTROL, 4, 64);
+
+    static ENTRY: &[PassthroughShaderEntryPoint<'static>] = &[PassthroughShaderEntryPoint {
+        name: Cow::Borrowed("main"),
+        workgroup_size: (32, 1, 1),
+        subgroup_size: SubgroupSize::Fixed(32),
+    }];
+
+    // Descriptor carries both SPIR-V and WGSL: only Vulkan would honor
+    // `subgroup_size`, so the request must be rejected loudly rather than
+    // silently dropped on any backend that consumes the WGSL.
+    fail(
+        &device,
+        || unsafe {
+            device.create_shader_module_passthrough(passthrough_descriptor(
+                ENTRY,
+                Some(dummy_spirv()),
+                Some(Cow::Borrowed("@compute @workgroup_size(32) fn main() {}")),
+            ))
+        },
+        Some("only supported for SPIR-V passthrough"),
+    );
+}
+
+#[test]
 fn non_varying_only_supported_for_spirv_source() {
     let device = noop_device_with_subgroup_range(Features::SUBGROUP_SIZE_CONTROL, 4, 64);
 

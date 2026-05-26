@@ -101,21 +101,34 @@ impl Default for ShaderRuntimeChecks {
 pub struct PassthroughShaderEntryPoint<'a> {
     /// The name of the entry point. Only used in validation and for GLSL or DXIL.
     pub name: Cow<'a, str>,
-    /// Number of workgroups in each dimension x, y and z. Only used for metal with
-    /// compute-like shader stages.
+    /// Workgroup size in each dimension x, y and z.
+    ///
+    /// Used by the Metal backend for compute-like shader stages, where the
+    /// value is forwarded to the dispatch and must match the local size
+    /// declared in the shader.
+    ///
+    /// Additionally required (with `x > 0`, matching the value declared in
+    /// the shader) whenever [`subgroup_size`] is anything other than
+    /// [`SubgroupSize::Varying`], so module-creation validation can check the
+    /// `subgroup-size-control` rules (`workgroup_size.x` is a multiple of
+    /// `Fixed(n)`, or at least `subgroup_min_size` for `Full`).
+    ///
+    /// [`subgroup_size`]: Self::subgroup_size
+    /// [`SubgroupSize::Varying`]: crate::SubgroupSize::Varying
     pub workgroup_size: (u32, u32, u32),
     /// Required subgroup size for this entry point.
     ///
     /// Defaults to [`SubgroupSize::Varying`]. Setting any other value requires
-    /// [`Features::SUBGROUP_SIZE_CONTROL`].
+    /// [`Features::SUBGROUP_SIZE_CONTROL`] and a populated [`workgroup_size`].
     ///
     /// Only honored for SPIR-V (Vulkan) passthrough shaders, where it maps to
     /// `VkPipelineShaderStageRequiredSubgroupSizeCreateInfo`. HLSL passthrough
     /// shaders specify the wave size via a `[WaveSize(n)]` attribute embedded
     /// in the shader source, and MetalLib/MSL provides no API for it. Module
     /// creation rejects any non-[`SubgroupSize::Varying`] value when the
-    /// module's source language is anything other than SPIR-V.
+    /// descriptor carries a non-SPIR-V source.
     ///
+    /// [`workgroup_size`]: Self::workgroup_size
     /// [`Features::SUBGROUP_SIZE_CONTROL`]: crate::Features::SUBGROUP_SIZE_CONTROL
     /// [`SubgroupSize::Varying`]: crate::SubgroupSize::Varying
     pub subgroup_size: crate::SubgroupSize,
