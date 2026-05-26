@@ -61,7 +61,9 @@ static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_sync(|ctx| {
         ctx.instance.poll_all(false);
 
-        let pre_report = ctx.instance.generate_report().unwrap();
+        let Some(pre_report) = ctx.instance.generate_report() else {
+            return; // wgpu-native custom backend doesn't support generate_report
+        };
 
         let TestingContext {
             instance,
