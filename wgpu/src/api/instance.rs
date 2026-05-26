@@ -83,7 +83,7 @@ impl Instance {
         }
 
         #[cfg(custom)]
-        {
+        if std::env::var("WGPU_NO_CUSTOM_BACKEND").as_deref() != Ok("1") {
             let factory_val = INSTANCE_FACTORY.load(Ordering::Acquire);
             if factory_val != 0 {
                 // SAFETY: stored via `set_instance_factory` which accepts exactly this fn type.
