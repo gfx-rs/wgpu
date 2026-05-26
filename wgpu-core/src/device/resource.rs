@@ -367,10 +367,8 @@ impl Device {
     /// All checks that depend only on the module itself live here:
     ///
     /// - Non-[`Varying`] values require [`Features::SUBGROUP_SIZE_CONTROL`].
-    /// - Non-[`Varying`] values are only honored for SPIR-V passthrough; if
-    ///   the descriptor carries any non-SPIR-V source, reject the request
-    ///   rather than silently dropping it on a backend that won't consume the
-    ///   SPIR-V.
+    /// - Non-[`Varying`] values are only honored for SPIR-V passthrough on Vulkan;
+    ///   other backends reject the request.
     /// - The entry point's `workgroup_size.x` must be non-zero, since the
     ///   checks below would otherwise pass vacuously.
     /// - For [`Fixed(n)`], `n` must be a power of two within
@@ -400,16 +398,10 @@ impl Device {
             return Ok(());
         };
         self.require_features(wgt::Features::SUBGROUP_SIZE_CONTROL)?;
-        // `subgroup_size` only has a backend mapping for SPIR-V (Vulkan). If
-        // the descriptor carries any non-SPIR-V source, reject loudly: on a
-        // non-Vulkan backend the request would otherwise be silently dropped.
+        // `subgroup_size` only has a backend mapping for SPIR-V (Vulkan).
+        // `Noop` is allowed for validation tests.
         if descriptor.spirv.is_none()
-            || descriptor.dxil.is_some()
-            || descriptor.hlsl.is_some()
-            || descriptor.metallib.is_some()
-            || descriptor.msl.is_some()
-            || descriptor.glsl.is_some()
-            || descriptor.wgsl.is_some()
+            || !matches!(self.backend(), wgt::Backend::Vulkan | wgt::Backend::Noop)
         {
             return Err(
                 pipeline::CreateShaderModuleError::SubgroupSizeNotSupportedForBackend {
