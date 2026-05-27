@@ -234,6 +234,16 @@ pub fn map_feature(f: native::WGPUFeatureName) -> Option<wgpu::Features> {
         native::WGPUNativeFeature_CooperativeMatrix => {
             Some(Features::EXPERIMENTAL_COOPERATIVE_MATRIX)
         }
+        native::WGPUNativeFeature_MeshShader => Some(Features::EXPERIMENTAL_MESH_SHADER),
+        native::WGPUNativeFeature_RayHitVertexReturn => {
+            Some(Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)
+        }
+        native::WGPUNativeFeature_MeshShaderMultiview => {
+            Some(Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW)
+        }
+        native::WGPUNativeFeature_MeshShaderPoints => {
+            Some(Features::EXPERIMENTAL_MESH_SHADER_POINTS)
+        }
         native::WGPUNativeFeature_ShaderPerVertex => Some(Features::SHADER_PER_VERTEX),
         native::WGPUNativeFeature_ShaderDrawIndex => Some(Features::SHADER_DRAW_INDEX),
         native::WGPUNativeFeature_AccelerationStructureBindingArray => {
@@ -264,12 +274,6 @@ pub fn map_supported_features(sf: &native::WGPUSupportedFeatures) -> wgpu::Featu
             result.insert(feat);
         }
     }
-    // wgpu-native hardcodes experimental_features: disabled() when converting
-    // WGPUDeviceDescriptor to wgpu-core's DeviceDescriptor, so requesting
-    // experimental features via request_device always fails. Strip them here so
-    // the test infra marks tests that need them as Unsupported rather than running
-    // and SIGABRTing.
-    result &= !wgpu::Features::all_experimental_mask();
     result
 }
 
@@ -512,6 +516,22 @@ pub fn features_to_native(features: wgpu::Features) -> Vec<native::WGPUFeatureNa
     push!(
         Features::EXPERIMENTAL_COOPERATIVE_MATRIX,
         native::WGPUNativeFeature_CooperativeMatrix
+    );
+    push!(
+        Features::EXPERIMENTAL_MESH_SHADER,
+        native::WGPUNativeFeature_MeshShader
+    );
+    push!(
+        Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN,
+        native::WGPUNativeFeature_RayHitVertexReturn
+    );
+    push!(
+        Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
+        native::WGPUNativeFeature_MeshShaderMultiview
+    );
+    push!(
+        Features::EXPERIMENTAL_MESH_SHADER_POINTS,
+        native::WGPUNativeFeature_MeshShaderPoints
     );
     push!(
         Features::SHADER_PER_VERTEX,

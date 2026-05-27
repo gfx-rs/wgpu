@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fs::File, io::BufWriter};
+use std::{collections::BTreeMap, fs::File, io::BufWriter, sync::Mutex};
 
 fn unified_diff(label: &str, a: &str, b: &str) -> String {
     use std::{fs, process::Command};
@@ -20,19 +20,18 @@ fn adapter_key(info: &wgpu::AdapterInfo) -> String {
 }
 
 // Normalized view of an adapter for comparison purposes.
-// - Experimental features stripped (wgpu-c-backend intentionally omits them).
-// - Texture format features sorted by format name for deterministic JSON output
-//   (HashMap iteration order is random).
+// Texture format features sorted by format name for deterministic JSON output
+// (HashMap iteration order is random).
 #[derive(serde::Serialize)]
 struct NormalizedAdapter<'a> {
     info: &'a wgpu::AdapterInfo,
-    features: wgpu::Features,
+    features: &'a wgpu::Features,
     limits: &'a wgpu::Limits,
+    downlevel_caps: &'a wgpu::DownlevelCapabilities,
     texture_format_features: BTreeMap<String, &'a wgpu::TextureFormatFeatures>,
 }
 
 fn normalize(dev: &crate::report::AdapterReport) -> NormalizedAdapter<'_> {
-    let features = dev.features & !wgpu::Features::all_experimental_mask();
     let texture_format_features = dev
         .texture_format_features
         .iter()
@@ -40,8 +39,9 @@ fn normalize(dev: &crate::report::AdapterReport) -> NormalizedAdapter<'_> {
         .collect();
     NormalizedAdapter {
         info: &dev.info,
-        features,
+        features: &dev.features,
         limits: &dev.limits,
+        downlevel_caps: &dev.downlevel_caps,
         texture_format_features,
     }
 }
@@ -50,13 +50,27 @@ fn to_json(value: &impl serde::Serialize) -> String {
     serde_json::to_string_pretty(value).unwrap()
 }
 
+// Serializes access to WGPU_NO_CUSTOM_BACKEND so parallel tests don't clobber each other.
+static ENV_MUTEX: Mutex<()> = Mutex::new(());
+
 #[test]
 fn custom_backend_matches_wgpu_core() {
+    let _guard = ENV_MUTEX.lock().unwrap();
+
     let with_custom = crate::report::GpuReport::generate();
 
     std::env::set_var("WGPU_NO_CUSTOM_BACKEND", "1");
     let without_custom = crate::report::GpuReport::generate();
     std::env::remove_var("WGPU_NO_CUSTOM_BACKEND");
+
+    drop(_guard);
+
+    let custom_map: std::collections::HashMap<String, &crate::report::AdapterReport> =
+        with_custom
+            .devices
+            .iter()
+            .map(|d| (adapter_key(&d.info), d))
+            .collect();
 
     let without_map: std::collections::HashMap<String, &crate::report::AdapterReport> =
         without_custom
@@ -67,12 +81,13 @@ fn custom_backend_matches_wgpu_core() {
 
     let mut failures: Vec<String> = Vec::new();
 
+    // Every custom-backend adapter must exist in wgpu-core and match it.
     for custom_dev in &with_custom.devices {
         let key = adapter_key(&custom_dev.info);
         let Some(core_dev) = without_map.get(&key) else {
-            println!(
-                "custom_backend_matches_wgpu_core: skipping {key} (not in wgpu-core run)"
-            );
+            failures.push(format!(
+                "Adapter '{key}' present in custom-backend run but missing from wgpu-core run"
+            ));
             continue;
         };
 
@@ -84,6 +99,16 @@ fn custom_backend_matches_wgpu_core() {
                 "Adapter '{}' differs:\n{}",
                 key,
                 unified_diff(&key.replace('/', "_"), &a, &b)
+            ));
+        }
+    }
+
+    // Every wgpu-core adapter must also be present in the custom-backend run.
+    for core_dev in &without_custom.devices {
+        let key = adapter_key(&core_dev.info);
+        if !custom_map.contains_key(&key) {
+            failures.push(format!(
+                "Adapter '{key}' present in wgpu-core run but missing from custom-backend run"
             ));
         }
     }
@@ -107,7 +132,9 @@ const ENV_VAR_SAVE: &str = "WGPU_INFO_SAVE_GPUCONFIG_REPORT";
 // Needs to be kept in sync with the test in xtask/src/test.rs
 #[test]
 fn generate_gpuconfig_report() {
+    let _guard = ENV_MUTEX.lock().unwrap();
     let report = crate::report::GpuReport::generate();
+    drop(_guard);
 
     // If we don't get the env var, just test that we can generate the report, but don't save it
     // to avoid a race condition when other tests are reading the file.
