@@ -303,14 +303,9 @@ impl DeviceInterface for CDevice {
                         }),
                     ));
                 }
-                // Unknown binding types: leave the entry zeroed so wgpu-native treats it
-                // as an unrecognized entry and generates a validation error. This is safe
-                // only for binding types that don't trigger the "invalid entry" panic in
-                // wgpu-native's map_bind_group_layout_entry (which fires when none of the
-                // standard types match AND no as_layout chain is present).
-                // NOTE: any truly unknown variant here will still SIGABRT via the same
-                // panic path — they must be added above before shipping.
-                _ => {}
+                e => {
+                    panic!("wgpu-c-backend: unsupported BindingType variant: {e:?}");
+                }
             }
             entries.push(entry);
         }
@@ -1693,8 +1688,18 @@ impl DeviceInterface for CDevice {
             userdata1: std::ptr::addr_of_mut!(out).cast(),
             userdata2: std::ptr::null_mut(),
         };
-        self.error_scope_depth.fetch_sub(1, Ordering::Relaxed);
+        // Decrement after the call so cross-device submit checks see the correct depth
+        // if the pop fails (status != Success) or the callback doesn't fire synchronously.
         unsafe { wgpuDevicePopErrorScope(self.ptr, callback_info) };
+        // AllowSpontaneous should fire synchronously for pop_error_scope, so out.error
+        // must be Some by here. If it's None the callback didn't fire — we'd return
+        // "no error" silently, which is wrong. Catch this in debug builds.
+        debug_assert!(
+            out.error.is_some(),
+            "pop_error_scope: AllowSpontaneous callback did not fire synchronously; \
+             error result may be silently suppressed"
+        );
+        self.error_scope_depth.fetch_sub(1, Ordering::Relaxed);
         Box::pin(future::ready(out.error.unwrap_or(None)))
     }
 
@@ -1794,9 +1799,16 @@ impl DeviceInterface for CDevice {
 
     fn destroy(&self) {
         unsafe { wgpuDeviceDestroy(self.ptr) };
-        // wgpu-native does not wire WGPUDeviceLostCallbackInfo to wgpu-core's
-        // device_lost_closure, so the callback never fires automatically after
-        // wgpuDeviceDestroy. Call it directly here, matching the expected semantics.
+        // wgpu-native currently does not fire WGPUDeviceLostCallbackInfo from
+        // wgpuDeviceDestroy (the callback is registered but not wired to wgpu-core's
+        // device_lost_closure), so we fire it manually here.
+        //
+        // If wgpu-native is fixed to fire the C callback, device_lost_cb in adapter.rs
+        // will have already called .take() on the handler, and this block sees None and
+        // skips — no double-fire.
+        //
+        // KNOWN LIMITATION: GPU-initiated device loss (driver crash, GPU hang, timeout)
+        // never reaches here. Only explicit Device::destroy() fires the callback.
         if let Some(callback) = self.device_lost_handler.lock().unwrap().take() {
             crate::catch_callback_panic(|| {
                 callback(wgpu::DeviceLostReason::Destroyed, String::new())
@@ -1869,10 +1881,24 @@ impl QueueInterface for CQueue {
 
     fn validate_write_buffer(
         &self,
-        _buffer: &DispatchBuffer,
-        _offset: wgpu::BufferAddress,
-        _size: wgpu::BufferSize,
+        buffer: &DispatchBuffer,
+        offset: wgpu::BufferAddress,
+        size: wgpu::BufferSize,
     ) -> Option<()> {
+        let buf_ptr = buffer.as_custom::<CBuffer>().unwrap().ptr;
+        let buf_size = unsafe { wgpuBufferGetSize(buf_ptr) };
+        let buf_usage = unsafe { wgpuBufferGetUsage(buf_ptr) };
+        let sz = size.get();
+
+        if buf_usage & native::WGPUBufferUsage_CopyDst == 0 {
+            return None;
+        }
+        if offset % 4 != 0 || sz % 4 != 0 {
+            return None;
+        }
+        if offset.saturating_add(sz) > buf_size {
+            return None;
+        }
         Some(())
     }
 

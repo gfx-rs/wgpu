@@ -125,7 +125,21 @@ impl AdapterInterface for CAdapter {
             // If no handler set, silently ignore (don't abort like wgpu-native's default).
         }
 
-        // Device lost callback: delegates to the handler registered via set_device_lost_callback().
+        // Device lost callback registered with wgpu-native at device creation time.
+        //
+        // CURRENT STATE: wgpu-native does not invoke this callback — it does not wire
+        // WGPUDeviceLostCallbackInfo to wgpu-core's device_lost_closure, so neither
+        // wgpuDeviceDestroy nor a GPU-initiated loss (driver crash, timeout) triggers it.
+        // The explicit-destroy case is handled by CDevice::destroy() as a Rust-side fallback.
+        //
+        // FORWARD COMPAT: The registration is kept so that if wgpu-native is fixed to fire
+        // this callback (for either destroy or GPU loss), the `.take()` below prevents
+        // double-firing with CDevice::destroy()'s fallback.  GPU-initiated loss would then
+        // work automatically without any change here.
+        //
+        // KNOWN LIMITATION: GPU-initiated device loss (driver crash, GPU hang, timeout)
+        // never fires the wgpu device-lost callback via this backend. That requires
+        // wgpu-native to wire the spontaneous callback path.
         unsafe extern "C" fn device_lost_cb(
             _device: *const native::WGPUDevice,
             reason: native::WGPUDeviceLostReason,
@@ -134,6 +148,8 @@ impl AdapterInterface for CAdapter {
             _userdata2: *mut std::ffi::c_void,
         ) {
             let handler = unsafe { &*(userdata1 as *const DeviceLostHandler) };
+            // .take() ensures at most one fire: if this runs, CDevice::destroy()'s fallback
+            // will see None and skip its manual invocation.
             let callback = handler.lock().unwrap().take();
             if let Some(callback) = callback {
                 let reason_wgpu = match reason {
@@ -156,8 +172,7 @@ impl AdapterInterface for CAdapter {
         let device_lost_handler: Box<DeviceLostHandler> = Box::new(Mutex::new(None));
         let device_lost_ptr = device_lost_handler.as_ref() as *const DeviceLostHandler;
 
-        let (memory_hints, mem_min, mem_max) =
-            conv::memory_hints_to_native(&desc.memory_hints);
+        let (memory_hints, mem_min, mem_max) = conv::memory_hints_to_native(&desc.memory_hints);
         let mut device_extras = native::WGPUDeviceDescriptorExtras {
             chain: native::WGPUChainedStruct {
                 next: std::ptr::null_mut(),
@@ -286,7 +301,8 @@ impl AdapterInterface for CAdapter {
             sType: native::WGPUSType_NativeLimits,
         };
         let mut limits: native::WGPULimits = unsafe { std::mem::zeroed() };
-        limits.nextInChain = std::ptr::from_mut::<native::WGPUChainedStruct>(&mut native_limits.chain);
+        limits.nextInChain =
+            std::ptr::from_mut::<native::WGPUChainedStruct>(&mut native_limits.chain);
         unsafe { wgpuAdapterGetLimits(self.ptr, Some(&mut limits)) };
         conv::map_limits(&limits, Some(&native_limits))
     }
@@ -331,7 +347,11 @@ impl AdapterInterface for CAdapter {
             native::WGPUShaderModel_Sm4 => wgpu::ShaderModel::Sm4,
             _ => wgpu::ShaderModel::Sm5,
         };
-        wgpu::DownlevelCapabilities { flags, limits: wgpu::DownlevelLimits {}, shader_model }
+        wgpu::DownlevelCapabilities {
+            flags,
+            limits: wgpu::DownlevelLimits {},
+            shader_model,
+        }
     }
 
     fn get_info(&self) -> wgpu::AdapterInfo {
@@ -382,11 +402,7 @@ impl AdapterInterface for CAdapter {
             count
         ];
         unsafe {
-            wgpuAdapterGetCooperativeMatrixProperties(
-                self.ptr,
-                c_props.as_mut_ptr(),
-                c_props.len(),
-            )
+            wgpuAdapterGetCooperativeMatrixProperties(self.ptr, c_props.as_mut_ptr(), c_props.len())
         };
         c_props
             .into_iter()

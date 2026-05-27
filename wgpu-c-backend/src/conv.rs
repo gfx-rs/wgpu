@@ -560,7 +560,10 @@ pub fn features_to_native(features: wgpu::Features) -> Vec<native::WGPUFeatureNa
         Features::MEMORY_DECORATION_VOLATILE,
         native::WGPUNativeFeature_MemoryDecorationVolatile
     );
-    push!(Features::EXTERNAL_TEXTURE, native::WGPUNativeFeature_ExternalTexture);
+    push!(
+        Features::EXTERNAL_TEXTURE,
+        native::WGPUNativeFeature_ExternalTexture
+    );
     push!(
         Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
         native::WGPUNativeFeature_ExtendedAccelerationStructureVertexFormats
@@ -654,7 +657,10 @@ pub fn native_limits_from_wgpu(l: &wgpu::Limits) -> native::WGPUNativeLimits {
     out
 }
 
-pub fn map_limits(c: &native::WGPULimits, extras: Option<&native::WGPUNativeLimits>) -> wgpu::Limits {
+pub fn map_limits(
+    c: &native::WGPULimits,
+    extras: Option<&native::WGPUNativeLimits>,
+) -> wgpu::Limits {
     let mut l = wgpu::Limits::default();
     // wgpuAdapterGetLimits / wgpuDeviceGetLimits always fill all standard fields with the real
     // hardware values.  Do NOT use a sentinel check here: u32::MAX is a valid hardware limit (e.g.
@@ -696,8 +702,14 @@ pub fn map_limits(c: &native::WGPULimits, extras: Option<&native::WGPUNativeLimi
         max_uniform_buffers_per_shader_stage,
         c.maxUniformBuffersPerShaderStage
     );
-    set!(max_uniform_buffer_binding_size, c.maxUniformBufferBindingSize);
-    set!(max_storage_buffer_binding_size, c.maxStorageBufferBindingSize);
+    set!(
+        max_uniform_buffer_binding_size,
+        c.maxUniformBufferBindingSize
+    );
+    set!(
+        max_storage_buffer_binding_size,
+        c.maxStorageBufferBindingSize
+    );
     set!(
         min_uniform_buffer_offset_alignment,
         c.minUniformBufferOffsetAlignment
@@ -751,13 +763,31 @@ pub fn map_limits(c: &native::WGPULimits, extras: Option<&native::WGPUNativeLimi
             n.maxBindingArrayAccelerationStructureElementsPerShaderStage
         );
         set!(max_task_workgroup_total_count, n.maxTaskWorkgroupTotalCount);
-        set!(max_task_workgroups_per_dimension, n.maxTaskWorkgroupsPerDimension);
+        set!(
+            max_task_workgroups_per_dimension,
+            n.maxTaskWorkgroupsPerDimension
+        );
         set!(max_mesh_workgroup_total_count, n.maxMeshWorkgroupTotalCount);
-        set!(max_mesh_workgroups_per_dimension, n.maxMeshWorkgroupsPerDimension);
-        set!(max_task_invocations_per_workgroup, n.maxTaskInvocationsPerWorkgroup);
-        set!(max_task_invocations_per_dimension, n.maxTaskInvocationsPerDimension);
-        set!(max_mesh_invocations_per_workgroup, n.maxMeshInvocationsPerWorkgroup);
-        set!(max_mesh_invocations_per_dimension, n.maxMeshInvocationsPerDimension);
+        set!(
+            max_mesh_workgroups_per_dimension,
+            n.maxMeshWorkgroupsPerDimension
+        );
+        set!(
+            max_task_invocations_per_workgroup,
+            n.maxTaskInvocationsPerWorkgroup
+        );
+        set!(
+            max_task_invocations_per_dimension,
+            n.maxTaskInvocationsPerDimension
+        );
+        set!(
+            max_mesh_invocations_per_workgroup,
+            n.maxMeshInvocationsPerWorkgroup
+        );
+        set!(
+            max_mesh_invocations_per_dimension,
+            n.maxMeshInvocationsPerDimension
+        );
         set!(max_task_payload_size, n.maxTaskPayloadSize);
         set!(max_mesh_output_vertices, n.maxMeshOutputVertices);
         set!(max_mesh_output_primitives, n.maxMeshOutputPrimitives);
@@ -1002,20 +1032,62 @@ pub fn map_texture_format(v: native::WGPUTextureFormat) -> Option<wgpu::TextureF
         native::WGPUNativeTextureFormat_Rgba16Snorm => Some(TF::Rgba16Snorm),
         native::WGPUNativeTextureFormat_NV12 => Some(TF::NV12),
         native::WGPUNativeTextureFormat_P010 => Some(TF::P010),
-        native::WGPUNativeTextureFormat_Astc4x4Sfloat => Some(TF::Astc { block: AstcBlock::B4x4, channel: AstcChannel::Hdr }),
-        native::WGPUNativeTextureFormat_Astc5x4Sfloat => Some(TF::Astc { block: AstcBlock::B5x4, channel: AstcChannel::Hdr }),
-        native::WGPUNativeTextureFormat_Astc5x5Sfloat => Some(TF::Astc { block: AstcBlock::B5x5, channel: AstcChannel::Hdr }),
-        native::WGPUNativeTextureFormat_Astc6x5Sfloat => Some(TF::Astc { block: AstcBlock::B6x5, channel: AstcChannel::Hdr }),
-        native::WGPUNativeTextureFormat_Astc6x6Sfloat => Some(TF::Astc { block: AstcBlock::B6x6, channel: AstcChannel::Hdr }),
-        native::WGPUNativeTextureFormat_Astc8x5Sfloat => Some(TF::Astc { block: AstcBlock::B8x5, channel: AstcChannel::Hdr }),
-        native::WGPUNativeTextureFormat_Astc8x6Sfloat => Some(TF::Astc { block: AstcBlock::B8x6, channel: AstcChannel::Hdr }),
-        native::WGPUNativeTextureFormat_Astc8x8Sfloat => Some(TF::Astc { block: AstcBlock::B8x8, channel: AstcChannel::Hdr }),
-        native::WGPUNativeTextureFormat_Astc10x5Sfloat => Some(TF::Astc { block: AstcBlock::B10x5, channel: AstcChannel::Hdr }),
-        native::WGPUNativeTextureFormat_Astc10x6Sfloat => Some(TF::Astc { block: AstcBlock::B10x6, channel: AstcChannel::Hdr }),
-        native::WGPUNativeTextureFormat_Astc10x8Sfloat => Some(TF::Astc { block: AstcBlock::B10x8, channel: AstcChannel::Hdr }),
-        native::WGPUNativeTextureFormat_Astc10x10Sfloat => Some(TF::Astc { block: AstcBlock::B10x10, channel: AstcChannel::Hdr }),
-        native::WGPUNativeTextureFormat_Astc12x10Sfloat => Some(TF::Astc { block: AstcBlock::B12x10, channel: AstcChannel::Hdr }),
-        native::WGPUNativeTextureFormat_Astc12x12Sfloat => Some(TF::Astc { block: AstcBlock::B12x12, channel: AstcChannel::Hdr }),
+        native::WGPUNativeTextureFormat_Astc4x4Sfloat => Some(TF::Astc {
+            block: AstcBlock::B4x4,
+            channel: AstcChannel::Hdr,
+        }),
+        native::WGPUNativeTextureFormat_Astc5x4Sfloat => Some(TF::Astc {
+            block: AstcBlock::B5x4,
+            channel: AstcChannel::Hdr,
+        }),
+        native::WGPUNativeTextureFormat_Astc5x5Sfloat => Some(TF::Astc {
+            block: AstcBlock::B5x5,
+            channel: AstcChannel::Hdr,
+        }),
+        native::WGPUNativeTextureFormat_Astc6x5Sfloat => Some(TF::Astc {
+            block: AstcBlock::B6x5,
+            channel: AstcChannel::Hdr,
+        }),
+        native::WGPUNativeTextureFormat_Astc6x6Sfloat => Some(TF::Astc {
+            block: AstcBlock::B6x6,
+            channel: AstcChannel::Hdr,
+        }),
+        native::WGPUNativeTextureFormat_Astc8x5Sfloat => Some(TF::Astc {
+            block: AstcBlock::B8x5,
+            channel: AstcChannel::Hdr,
+        }),
+        native::WGPUNativeTextureFormat_Astc8x6Sfloat => Some(TF::Astc {
+            block: AstcBlock::B8x6,
+            channel: AstcChannel::Hdr,
+        }),
+        native::WGPUNativeTextureFormat_Astc8x8Sfloat => Some(TF::Astc {
+            block: AstcBlock::B8x8,
+            channel: AstcChannel::Hdr,
+        }),
+        native::WGPUNativeTextureFormat_Astc10x5Sfloat => Some(TF::Astc {
+            block: AstcBlock::B10x5,
+            channel: AstcChannel::Hdr,
+        }),
+        native::WGPUNativeTextureFormat_Astc10x6Sfloat => Some(TF::Astc {
+            block: AstcBlock::B10x6,
+            channel: AstcChannel::Hdr,
+        }),
+        native::WGPUNativeTextureFormat_Astc10x8Sfloat => Some(TF::Astc {
+            block: AstcBlock::B10x8,
+            channel: AstcChannel::Hdr,
+        }),
+        native::WGPUNativeTextureFormat_Astc10x10Sfloat => Some(TF::Astc {
+            block: AstcBlock::B10x10,
+            channel: AstcChannel::Hdr,
+        }),
+        native::WGPUNativeTextureFormat_Astc12x10Sfloat => Some(TF::Astc {
+            block: AstcBlock::B12x10,
+            channel: AstcChannel::Hdr,
+        }),
+        native::WGPUNativeTextureFormat_Astc12x12Sfloat => Some(TF::Astc {
+            block: AstcBlock::B12x12,
+            channel: AstcChannel::Hdr,
+        }),
         _ => None,
     }
 }
@@ -1134,14 +1206,14 @@ fn astc_to_native(block: wgpu::AstcBlock, channel: wgpu::AstcChannel) -> native:
         (B::B12x10, C::UnormSrgb) => native::WGPUTextureFormat_ASTC12x10UnormSrgb,
         (B::B12x12, C::Unorm) => native::WGPUTextureFormat_ASTC12x12Unorm,
         (B::B12x12, C::UnormSrgb) => native::WGPUTextureFormat_ASTC12x12UnormSrgb,
-        (B::B4x4,  C::Hdr) => native::WGPUNativeTextureFormat_Astc4x4Sfloat,
-        (B::B5x4,  C::Hdr) => native::WGPUNativeTextureFormat_Astc5x4Sfloat,
-        (B::B5x5,  C::Hdr) => native::WGPUNativeTextureFormat_Astc5x5Sfloat,
-        (B::B6x5,  C::Hdr) => native::WGPUNativeTextureFormat_Astc6x5Sfloat,
-        (B::B6x6,  C::Hdr) => native::WGPUNativeTextureFormat_Astc6x6Sfloat,
-        (B::B8x5,  C::Hdr) => native::WGPUNativeTextureFormat_Astc8x5Sfloat,
-        (B::B8x6,  C::Hdr) => native::WGPUNativeTextureFormat_Astc8x6Sfloat,
-        (B::B8x8,  C::Hdr) => native::WGPUNativeTextureFormat_Astc8x8Sfloat,
+        (B::B4x4, C::Hdr) => native::WGPUNativeTextureFormat_Astc4x4Sfloat,
+        (B::B5x4, C::Hdr) => native::WGPUNativeTextureFormat_Astc5x4Sfloat,
+        (B::B5x5, C::Hdr) => native::WGPUNativeTextureFormat_Astc5x5Sfloat,
+        (B::B6x5, C::Hdr) => native::WGPUNativeTextureFormat_Astc6x5Sfloat,
+        (B::B6x6, C::Hdr) => native::WGPUNativeTextureFormat_Astc6x6Sfloat,
+        (B::B8x5, C::Hdr) => native::WGPUNativeTextureFormat_Astc8x5Sfloat,
+        (B::B8x6, C::Hdr) => native::WGPUNativeTextureFormat_Astc8x6Sfloat,
+        (B::B8x8, C::Hdr) => native::WGPUNativeTextureFormat_Astc8x8Sfloat,
         (B::B10x5, C::Hdr) => native::WGPUNativeTextureFormat_Astc10x5Sfloat,
         (B::B10x6, C::Hdr) => native::WGPUNativeTextureFormat_Astc10x6Sfloat,
         (B::B10x8, C::Hdr) => native::WGPUNativeTextureFormat_Astc10x8Sfloat,
@@ -1548,13 +1620,13 @@ pub fn border_color_to_native(c: wgpu::SamplerBorderColor) -> native::WGPUSample
     }
 }
 
-pub fn memory_hints_to_native(
-    hints: &wgpu::MemoryHints,
-) -> (native::WGPUMemoryHints, u64, u64) {
+pub fn memory_hints_to_native(hints: &wgpu::MemoryHints) -> (native::WGPUMemoryHints, u64, u64) {
     match hints {
         wgpu::MemoryHints::Performance => (native::WGPUMemoryHints_Performance, 0, 0),
         wgpu::MemoryHints::MemoryUsage => (native::WGPUMemoryHints_MemoryUsage, 0, 0),
-        wgpu::MemoryHints::Manual { suballocated_device_memory_block_size } => (
+        wgpu::MemoryHints::Manual {
+            suballocated_device_memory_block_size,
+        } => (
             native::WGPUMemoryHints_Manual,
             suballocated_device_memory_block_size.start,
             suballocated_device_memory_block_size.end,
@@ -1605,8 +1677,14 @@ pub fn image_copy_buffer_to_native(
     native::WGPUTexelCopyBufferInfo {
         layout: native::WGPUTexelCopyBufferLayout {
             offset: icb.layout.offset,
-            bytesPerRow: icb.layout.bytes_per_row.unwrap_or(native::WGPU_COPY_STRIDE_UNDEFINED),
-            rowsPerImage: icb.layout.rows_per_image.unwrap_or(native::WGPU_COPY_STRIDE_UNDEFINED),
+            bytesPerRow: icb
+                .layout
+                .bytes_per_row
+                .unwrap_or(native::WGPU_COPY_STRIDE_UNDEFINED),
+            rowsPerImage: icb
+                .layout
+                .rows_per_image
+                .unwrap_or(native::WGPU_COPY_STRIDE_UNDEFINED),
         },
         buffer: buf_ptr,
     }
@@ -1671,7 +1749,9 @@ pub fn storage_texture_access_to_native(
         wgpu::StorageTextureAccess::WriteOnly => native::WGPUStorageTextureAccess_WriteOnly,
         wgpu::StorageTextureAccess::ReadOnly => native::WGPUStorageTextureAccess_ReadOnly,
         wgpu::StorageTextureAccess::ReadWrite => native::WGPUStorageTextureAccess_ReadWrite,
-        wgpu::StorageTextureAccess::Atomic => wgpu_native::conv::WGPU_NATIVE_STORAGE_TEXTURE_ACCESS_ATOMIC,
+        wgpu::StorageTextureAccess::Atomic => {
+            wgpu_native::conv::WGPU_NATIVE_STORAGE_TEXTURE_ACCESS_ATOMIC
+        }
     }
 }
 

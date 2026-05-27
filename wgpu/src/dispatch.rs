@@ -573,7 +573,10 @@ pub trait RenderBundleEncoderInterface: CommonTraits {
         Self: Sized;
 
     /// Object-safe version of `finish` used by the custom backend's dyn dispatch.
-    fn finish_boxed(self: Box<Self>, desc: &crate::RenderBundleDescriptor<'_>) -> DispatchRenderBundle;
+    fn finish_boxed(
+        self: Box<Self>,
+        desc: &crate::RenderBundleDescriptor<'_>,
+    ) -> DispatchRenderBundle;
 }
 
 pub trait CommandBufferInterface: CommonTraits {}

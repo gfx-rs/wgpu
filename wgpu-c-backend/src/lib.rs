@@ -317,13 +317,22 @@ impl InstanceInterface for CInstance {
             });
         }
 
+        // Extract the raw WGPUSurface pointer from the compatible_surface if provided.
+        // Surface::as_custom returns None if the surface was not created by this backend,
+        // in which case we fall back to null (no surface constraint).
+        let compatible_surface_ptr: native::WGPUSurface = options
+            .compatible_surface
+            .and_then(|s| s.as_custom::<surface::CSurface>())
+            .map(|cs| cs.ptr)
+            .unwrap_or(std::ptr::null_mut());
+
         let c_options = native::WGPURequestAdapterOptions {
             nextInChain: std::ptr::null_mut(),
-            featureLevel: native::WGPUFeatureLevel_Core,
+            featureLevel: native::WGPUFeatureLevel_Undefined,
             powerPreference: conv::power_preference_to_native(options.power_preference),
             forceFallbackAdapter: options.force_fallback_adapter as u32,
             backendType: native::WGPUBackendType_Undefined,
-            compatibleSurface: std::ptr::null_mut(),
+            compatibleSurface: compatible_surface_ptr,
         };
 
         let mut out = Out { result: None };
@@ -375,7 +384,9 @@ impl InstanceInterface for CInstance {
     fn wgsl_language_features(&self) -> wgpu::WgslLanguageFeatures {
         let bits = wgpu_native::wgpuGetWgslLanguageFeatures();
         let mut out = wgpu::WgslLanguageFeatures::empty();
-        if bits & wgpu_native::native::WGPUWgslLanguageFeatures_ReadOnlyAndReadWriteStorageTextures != 0 {
+        if bits & wgpu_native::native::WGPUWgslLanguageFeatures_ReadOnlyAndReadWriteStorageTextures
+            != 0
+        {
             out |= wgpu::WgslLanguageFeatures::ReadOnlyAndReadWriteStorageTextures;
         }
         if bits & wgpu_native::native::WGPUWgslLanguageFeatures_Packed4x8IntegerDotProduct != 0 {

@@ -1,6 +1,6 @@
 use std::ptr::NonNull;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use wgpu::custom::*;
 use wgpu_native::{native, *};
@@ -149,20 +149,22 @@ impl BufferInterface for CBuffer {
         }
 
         let ptr = unsafe { wgpuBufferGetMappedRange(self.ptr, offset, size) };
-        let (ptr, _is_const): (*mut u8, bool) = if ptr.is_null() {
+        let (ptr, read_only) = if ptr.is_null() {
+            // wgpuBufferGetMappedRange returns null for MapMode::Read buffers.
+            // Fall back to the const variant; write_slice will panic if called.
             let cp = unsafe { wgpuBufferGetConstMappedRange(self.ptr, offset, size) };
+            if cp.is_null() {
+                panic!("wgpu-native: buffer mapped range pointer is null");
+            }
             (cp as *mut u8, true)
         } else {
             (ptr, false)
         };
 
-        if ptr.is_null() {
-            panic!("wgpu-native: buffer mapped range pointer is null");
-        }
-
         Ok(DispatchBufferMappedRange::custom(CBufferMappedRange {
             ptr: ptr.cast::<u8>(),
             len: size,
+            read_only,
         }))
     }
 
@@ -181,6 +183,11 @@ impl BufferInterface for CBuffer {
 pub struct CBufferMappedRange {
     pub(crate) ptr: *mut u8,
     pub(crate) len: usize,
+    // True when the buffer was mapped MapMode::Read: wgpuBufferGetMappedRange returns
+    // null for read-only mappings, so ptr comes from wgpuBufferGetConstMappedRange.
+    // write_slice on a read-only pointer is UB; we panic here as a dispatch-layer guard
+    // (the wgpu public API should have prevented this via MapMode checks already).
+    read_only: bool,
 }
 impl std::fmt::Debug for CBufferMappedRange {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -202,6 +209,9 @@ impl BufferMappedRangeInterface for CBufferMappedRange {
     }
 
     unsafe fn write_slice(&mut self) -> wgpu::WriteOnly<'_, [u8]> {
+        if self.read_only {
+            panic!("write_slice called on a read-only (MapMode::Read) buffer mapped range");
+        }
         let nn =
             unsafe { NonNull::slice_from_raw_parts(NonNull::new_unchecked(self.ptr), self.len) };
         unsafe { wgpu::WriteOnly::new(nn) }
@@ -543,7 +553,10 @@ c_resource!(
 );
 
 impl ExternalTextureInterface for CExternalTexture {
-    fn destroy(&self) {}
+    fn destroy(&self) {
+        // wgpu-native does not expose wgpuExternalTextureDestroy; the underlying
+        // resource is released when CExternalTexture is dropped via wgpuExternalTextureRelease.
+    }
 }
 
 // ── CQueueWriteBuffer ─────────────────────────────────────────────────────────
