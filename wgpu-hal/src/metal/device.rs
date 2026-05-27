@@ -1808,73 +1808,78 @@ impl crate::Device for super::Device {
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> DeviceResult<super::QuerySet> {
-        autoreleasepool(|_| {
-            match desc.ty {
-                wgt::QueryType::Occlusion => {
-                    let size = desc.count as u64 * crate::QUERY_SIZE;
-                    let options = MTLResourceOptions::empty();
-                    //TODO: HazardTrackingModeUntracked
-                    let raw_buffer = self
-                        .shared
-                        .device
-                        .newBufferWithLength_options(size as usize, options)
-                        .unwrap();
-                    if let Some(label) = desc.label {
-                        raw_buffer.setLabel(Some(&NSString::from_str(label)));
-                    }
-                    Ok(super::QuerySet {
-                        raw_buffer,
-                        counter_sample_buffer: None,
-                        ty: desc.ty,
-                    })
+        autoreleasepool(|_| match desc.ty {
+            wgt::QueryType::Occlusion => {
+                let size = desc.count as u64 * crate::QUERY_SIZE;
+                let mut options = MTLResourceOptions::empty();
+                if available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0) {
+                    options |= MTLResourceOptions::HazardTrackingModeUntracked;
                 }
-                wgt::QueryType::Timestamp => {
-                    let size = desc.count as u64 * crate::QUERY_SIZE;
-                    let device = &self.shared.device;
-                    let destination_buffer = device
-                        .newBufferWithLength_options(size as usize, MTLResourceOptions::empty())
-                        .unwrap();
+                let raw_buffer = self
+                    .shared
+                    .device
+                    .newBufferWithLength_options(size as usize, options)
+                    .unwrap();
+                if let Some(label) = desc.label {
+                    raw_buffer.setLabel(Some(&NSString::from_str(label)));
+                }
+                Ok(super::QuerySet {
+                    raw_buffer,
+                    counter_sample_buffer: None,
+                    ty: desc.ty,
+                })
+            }
+            wgt::QueryType::Timestamp => {
+                let size = desc.count as u64 * crate::QUERY_SIZE;
+                let device = &self.shared.device;
 
-                    let csb_desc = MTLCounterSampleBufferDescriptor::new();
-                    csb_desc.setStorageMode(MTLStorageMode::Shared);
-                    unsafe { csb_desc.setSampleCount(desc.count as _) };
-                    if let Some(label) = desc.label {
-                        csb_desc.setLabel(&NSString::from_str(label));
+                let mut options = MTLResourceOptions::empty();
+                if available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0) {
+                    options |= MTLResourceOptions::HazardTrackingModeUntracked;
+                }
+                let destination_buffer = device
+                    .newBufferWithLength_options(size as usize, options)
+                    .unwrap();
+
+                let csb_desc = MTLCounterSampleBufferDescriptor::new();
+                csb_desc.setStorageMode(MTLStorageMode::Shared);
+                unsafe { csb_desc.setSampleCount(desc.count as _) };
+                if let Some(label) = desc.label {
+                    csb_desc.setLabel(&NSString::from_str(label));
+                }
+
+                let counter_sets = device.counterSets().unwrap();
+                let timestamp_counter = match counter_sets
+                    .iter()
+                    .find(|cs| &*cs.name() == ns_string!("timestamp"))
+                {
+                    Some(counter) => counter,
+                    None => {
+                        log::error!("Failed to obtain timestamp counter set.");
+                        return Err(crate::DeviceError::Unexpected);
                     }
+                };
+                csb_desc.setCounterSet(Some(&timestamp_counter));
 
-                    let counter_sets = device.counterSets().unwrap();
-                    let timestamp_counter = match counter_sets
-                        .iter()
-                        .find(|cs| &*cs.name() == ns_string!("timestamp"))
-                    {
-                        Some(counter) => counter,
-                        None => {
-                            log::error!("Failed to obtain timestamp counter set.");
+                let counter_sample_buffer =
+                    match device.newCounterSampleBufferWithDescriptor_error(&csb_desc) {
+                        Ok(buffer) => buffer,
+                        Err(err) => {
+                            log::error!("Failed to create counter sample buffer: {err:?}");
                             return Err(crate::DeviceError::Unexpected);
                         }
                     };
-                    csb_desc.setCounterSet(Some(&timestamp_counter));
 
-                    let counter_sample_buffer =
-                        match device.newCounterSampleBufferWithDescriptor_error(&csb_desc) {
-                            Ok(buffer) => buffer,
-                            Err(err) => {
-                                log::error!("Failed to create counter sample buffer: {err:?}");
-                                return Err(crate::DeviceError::Unexpected);
-                            }
-                        };
+                self.counters.query_sets.add(1);
 
-                    self.counters.query_sets.add(1);
-
-                    Ok(super::QuerySet {
-                        raw_buffer: destination_buffer,
-                        counter_sample_buffer: Some(counter_sample_buffer),
-                        ty: desc.ty,
-                    })
-                }
-                _ => {
-                    todo!()
-                }
+                Ok(super::QuerySet {
+                    raw_buffer: destination_buffer,
+                    counter_sample_buffer: Some(counter_sample_buffer),
+                    ty: desc.ty,
+                })
+            }
+            _ => {
+                todo!()
             }
         })
     }
