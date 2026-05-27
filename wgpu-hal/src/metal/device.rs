@@ -1811,10 +1811,7 @@ impl crate::Device for super::Device {
         autoreleasepool(|_| match desc.ty {
             wgt::QueryType::Occlusion => {
                 let size = desc.count as u64 * crate::QUERY_SIZE;
-                let mut options = MTLResourceOptions::empty();
-                if available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0) {
-                    options |= MTLResourceOptions::HazardTrackingModeUntracked;
-                }
+                let options = MTLResourceOptions::empty();
                 let raw_buffer = self
                     .shared
                     .device
@@ -1833,14 +1830,9 @@ impl crate::Device for super::Device {
                 let size = desc.count as u64 * crate::QUERY_SIZE;
                 let device = &self.shared.device;
 
-                let mut options = MTLResourceOptions::empty();
-                if available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0) {
-                    options |= MTLResourceOptions::HazardTrackingModeUntracked;
-                }
                 let destination_buffer = device
-                    .newBufferWithLength_options(size as usize, options)
+                    .newBufferWithLength_options(size as usize, MTLResourceOptions::empty())
                     .unwrap();
-
                 let csb_desc = MTLCounterSampleBufferDescriptor::new();
                 csb_desc.setStorageMode(MTLStorageMode::Shared);
                 unsafe { csb_desc.setSampleCount(desc.count as _) };
