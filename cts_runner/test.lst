@@ -232,7 +232,7 @@ fails-if(dx12) webgpu:api,validation,encoding,programmable,pipeline_immediate:re
 //FAIL: webgpu:api,validation,encoding,programmable,pipeline_immediate:required_slots_set:*
 // 97%, scenario="multiple_variables";usage="partial" fails.
 // https://github.com/gfx-rs/wgpu/issues/8556
-webgpu:api,validation,encoding,programmable,pipeline_immediate:unused_variable:*
+fails-if(dx12) webgpu:api,validation,encoding,programmable,pipeline_immediate:unused_variable:*
 webgpu:api,validation,encoding,queries,begin_end:nesting:*
 webgpu:api,validation,encoding,queries,begin_end:occlusion_query,*
 webgpu:api,validation,encoding,queries,general:occlusion_query,*
