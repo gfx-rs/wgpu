@@ -347,6 +347,7 @@ impl DeviceInterface for CDevice {
             _buffers: Vec<native::WGPUBuffer>,
             _samplers: Vec<native::WGPUSampler>,
             _texture_views: Vec<native::WGPUTextureView>,
+            _tlases: Vec<native::WGPUTlas>,
         }
         let mut extras_by_entry: Vec<(usize, Box<ExtrasStorage>)> = Vec::new();
 
@@ -385,10 +386,13 @@ impl DeviceInterface for CDevice {
                                 textureViews: std::ptr::null(),
                                 textureViewCount: 0,
                                 tlas: tlas_ptr,
+                                tlases: std::ptr::null(),
+                                tlasCount: 0,
                             },
                             _buffers: Vec::new(),
                             _samplers: Vec::new(),
                             _texture_views: Vec::new(),
+                            _tlases: Vec::new(),
                         }),
                     ));
                 }
@@ -414,10 +418,13 @@ impl DeviceInterface for CDevice {
                                 textureViews: std::ptr::null(),
                                 textureViewCount: 0,
                                 tlas: std::ptr::null_mut(),
+                                tlases: std::ptr::null(),
+                                tlasCount: 0,
                             },
                             _buffers: bufs,
                             _samplers: Vec::new(),
                             _texture_views: Vec::new(),
+                            _tlases: Vec::new(),
                         }),
                     ));
                 }
@@ -443,10 +450,13 @@ impl DeviceInterface for CDevice {
                                 textureViews: std::ptr::null(),
                                 textureViewCount: 0,
                                 tlas: std::ptr::null_mut(),
+                                tlases: std::ptr::null(),
+                                tlasCount: 0,
                             },
                             _buffers: Vec::new(),
                             _samplers: samps,
                             _texture_views: Vec::new(),
+                            _tlases: Vec::new(),
                         }),
                     ));
                 }
@@ -472,14 +482,49 @@ impl DeviceInterface for CDevice {
                                 textureViews: tv_ptr,
                                 textureViewCount: tv_len,
                                 tlas: std::ptr::null_mut(),
+                                tlases: std::ptr::null(),
+                                tlasCount: 0,
                             },
                             _buffers: Vec::new(),
                             _samplers: Vec::new(),
                             _texture_views: tvs,
+                            _tlases: Vec::new(),
                         }),
                     ));
                 }
-                // AccelerationStructureArray and ExternalTexture are not supported.
+                wgpu::BindingResource::AccelerationStructureArray(arr) => {
+                    let tlas_ptrs: Vec<native::WGPUTlas> = arr
+                        .iter()
+                        .map(|tlas| tlas.as_custom::<CTlas>().unwrap().ptr)
+                        .collect();
+                    let tlas_ptr = if tlas_ptrs.is_empty() { std::ptr::null() } else { tlas_ptrs.as_ptr() };
+                    let tlas_len = tlas_ptrs.len();
+                    extras_by_entry.push((
+                        idx,
+                        Box::new(ExtrasStorage {
+                            extras: native::WGPUBindGroupEntryExtras {
+                                chain: native::WGPUChainedStruct {
+                                    next: std::ptr::null_mut(),
+                                    sType: native::WGPUSType_BindGroupEntryExtras,
+                                },
+                                buffers: std::ptr::null(),
+                                bufferCount: 0,
+                                samplers: std::ptr::null(),
+                                samplerCount: 0,
+                                textureViews: std::ptr::null(),
+                                textureViewCount: 0,
+                                tlas: std::ptr::null_mut(),
+                                tlases: tlas_ptr,
+                                tlasCount: tlas_len,
+                            },
+                            _buffers: Vec::new(),
+                            _samplers: Vec::new(),
+                            _texture_views: Vec::new(),
+                            _tlases: tlas_ptrs,
+                        }),
+                    ));
+                }
+                // ExternalTexture is not supported.
                 _ => unimplemented!("wgpu-native does not support this binding resource type"),
             }
             entries.push(entry);

@@ -140,7 +140,6 @@ unsafe impl Sync for CSurfaceOutputDetail {}
 
 impl SurfaceOutputDetailInterface for CSurfaceOutputDetail {
     fn texture_discard(&self) {
-        // Discard: present with the texture, wgpu-native doesn't have an explicit discard.
-        // The surface texture is released when the CTexture is dropped.
+        unsafe { wgpuSurfaceDiscardTexture(self.surface_ptr) };
     }
 }

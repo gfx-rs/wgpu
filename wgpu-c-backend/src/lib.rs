@@ -371,6 +371,17 @@ impl InstanceInterface for CInstance {
     }
 
     fn wgsl_language_features(&self) -> wgpu::WgslLanguageFeatures {
-        wgpu::WgslLanguageFeatures::empty()
+        let bits = wgpu_native::wgpuGetWgslLanguageFeatures();
+        let mut out = wgpu::WgslLanguageFeatures::empty();
+        if bits & wgpu_native::native::WGPUWgslLanguageFeatures_ReadOnlyAndReadWriteStorageTextures != 0 {
+            out |= wgpu::WgslLanguageFeatures::ReadOnlyAndReadWriteStorageTextures;
+        }
+        if bits & wgpu_native::native::WGPUWgslLanguageFeatures_Packed4x8IntegerDotProduct != 0 {
+            out |= wgpu::WgslLanguageFeatures::Packed4x8IntegerDotProduct;
+        }
+        if bits & wgpu_native::native::WGPUWgslLanguageFeatures_PointerCompositeAccess != 0 {
+            out |= wgpu::WgslLanguageFeatures::PointerCompositeAccess;
+        }
+        out
     }
 }
