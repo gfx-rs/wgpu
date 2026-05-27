@@ -3,6 +3,8 @@
 //! The 2 current bugs being tested are presentation after no usage of surface texture
 //! and queue destruction immediately after present
 
+extern crate wgpu_c_backend;
+
 use std::sync::Arc;
 
 use winit::application::ApplicationHandler;

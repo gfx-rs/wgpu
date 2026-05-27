@@ -1,6 +1,8 @@
 #![allow(clippy::arc_with_non_send_sync, reason = "False positive on wasm")]
 #![warn(clippy::allow_attributes)]
 
+extern crate wgpu_c_backend;
+
 pub mod framework;
 pub mod utils;
 

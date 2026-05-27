@@ -14,3 +14,4 @@ wgpu = { version = "29.0.0", features = [
     "wgsl",
 ], default-features = false }
 pollster = { version = "0.4", features = ["macro"] }
+wgpu-c-backend.workspace = true

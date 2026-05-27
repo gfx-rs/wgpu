@@ -5,6 +5,8 @@
 //! Known to reproduce on Apple M4 Max, macOS 26.3 (Tahoe).
 //! Dropped writes appear as various tile-shaped black holes that flicker around each frame.
 
+extern crate wgpu_c_backend;
+
 use std::sync::Arc;
 
 use winit::application::ApplicationHandler;
