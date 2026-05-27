@@ -3532,7 +3532,7 @@ impl Global {
             pass::validate_immediates_alignment(offset, data)
         );
 
-        // TODO: `values_offset` can use larger type than `u32`.
+        // TODO: `values_offset` is only used to index the data, so it should be `usize` instead of `u32`.
         let values_offset = base.immediates_data.len().try_into().unwrap();
 
         base.immediates_data.extend(
