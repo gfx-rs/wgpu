@@ -1232,8 +1232,8 @@ pub struct BindGroup {
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) used: BindGroupStates,
-    pub(crate) used_buffer_ranges: Vec<BufferInitTrackerAction>,
-    pub(crate) used_texture_ranges: Vec<TextureInitTrackerAction>,
+    pub(crate) buffer_init_actions: Vec<BufferInitTrackerAction>,
+    pub(crate) texture_init_actions: Vec<TextureInitTrackerAction>,
     /// INVARIANT: Sorted by binding index order.
     pub(crate) dynamic_binding_info: Vec<BindGroupDynamicBindingData>,
     /// Actual binding sizes for buffers that don't have `min_binding_size`
@@ -1257,13 +1257,11 @@ impl BindGroup {
         &'a self,
         guard: &'a SnatchGuard,
     ) -> Result<&'a dyn hal::DynBindGroup, DestroyedResourceError> {
-        // Clippy insist on writing it this way. The idea is to return None
-        // if any of the raw buffer is not valid anymore.
-        for buffer in &self.used_buffer_ranges {
-            buffer.buffer.try_raw(guard)?;
+        for buffer in self.used.buffers.used_resources() {
+            buffer.try_raw(guard)?;
         }
-        for texture in &self.used_texture_ranges {
-            texture.texture.try_raw(guard)?;
+        for texture in self.used.views.used_textures() {
+            texture.try_raw(guard)?;
         }
 
         self.raw
