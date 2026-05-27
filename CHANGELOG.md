@@ -46,7 +46,7 @@ Bottom level categories:
 
 #### Metal
 
-- Enable manual hazard tracking and resource transitions for buffers and textures. This reduces driver overhead by utilizing wgpu's internal resource tracking instead of Metal's automatic tracking. By @vahidk in [#XXXX](https://github.com/gfx-rs/wgpu/pull/XXXX)
+- Enable manual hazard tracking and resource transitions for buffers and textures. This reduces driver overhead by utilizing wgpu's internal resource tracking instead of Metal's automatic tracking. By @vahidk in [#9596](https://github.com/gfx-rs/wgpu/pull/9596)
 
 ### Major changes
 
