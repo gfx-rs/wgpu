@@ -1239,8 +1239,8 @@ impl Global {
             pass::validate_immediates_alignment(offset, data)
         );
 
-        // TODO: `values_offset` can overflow.
-        let values_offset = base.immediates_data.len() as u32;
+        // TODO: `values_offset` can use larger type than `u32`.
+        let values_offset = base.immediates_data.len().try_into().unwrap();
 
         base.immediates_data.extend(
             data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)

@@ -592,8 +592,9 @@ impl RenderBundleEncoder {
     pub fn set_immediates(&mut self, offset: u32, data: &[u8]) -> Result<(), ImmediateUploadError> {
         pass::validate_immediates_alignment(offset, data)?;
 
-        // TODO: `values_offset` can overflow.
-        let values_offset = self.base.immediates_data.len() as u32;
+        // TODO: `values_offset` can use larger type than `u32`.
+        let values_offset = self.base.immediates_data.len().try_into().unwrap();
+
         self.base.immediates_data.extend(
             data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
