@@ -986,7 +986,6 @@ impl Player {
             error,
             commands,
             dynamic_offsets,
-            immediates_data,
             string_data,
         } = pass;
 
@@ -998,7 +997,6 @@ impl Player {
                 .map(|cmd| self.resolve_compute_command(cmd))
                 .collect(),
             dynamic_offsets,
-            immediates_data,
             string_data,
         }
     }
@@ -1012,7 +1010,6 @@ impl Player {
             error,
             commands,
             dynamic_offsets,
-            immediates_data,
             string_data,
         } = pass;
 
@@ -1024,7 +1021,6 @@ impl Player {
                 .map(|cmd| self.resolve_render_command(cmd))
                 .collect(),
             dynamic_offsets,
-            immediates_data,
             string_data,
         }
     }
@@ -1045,15 +1041,7 @@ impl Player {
                 bind_group: bind_group.map(|bg| self.resolve_bind_group_id(bg)),
             },
             C::SetPipeline(id) => C::SetPipeline(self.resolve_compute_pipeline_id(id)),
-            C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            } => C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            },
+            C::SetImmediate { offset, data } => C::SetImmediate { offset, data },
             C::DispatchWorkgroups(groups) => C::DispatchWorkgroups(groups),
             C::DispatchWorkgroupsIndirect { buffer, offset } => C::DispatchWorkgroupsIndirect {
                 buffer: self.resolve_buffer_id(buffer),
@@ -1150,15 +1138,7 @@ impl Player {
                 depth_max,
             },
             C::SetScissor(rect) => C::SetScissor(rect),
-            C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            } => C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            },
+            C::SetImmediate { offset, data } => C::SetImmediate { offset, data },
             C::Draw {
                 vertex_count,
                 instance_count,

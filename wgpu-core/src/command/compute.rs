@@ -192,9 +192,6 @@ pub enum ComputePassErrorInner {
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     TimestampWrites(#[from] TimestampWritesError),
-    // This one is unreachable, but required for generic pass support
-    #[error(transparent)]
-    InvalidValuesOffset(#[from] pass::InvalidValuesOffset),
 }
 
 /// Error encountered when performing a compute pass, stored for later reporting
@@ -244,7 +241,6 @@ impl WebGpuError for ComputePassError {
             ComputePassErrorInner::MissingDownlevelFlags(e) => e.webgpu_error_type(),
             ComputePassErrorInner::InvalidResource(e) => e.webgpu_error_type(),
             ComputePassErrorInner::TimestampWrites(e) => e.webgpu_error_type(),
-            ComputePassErrorInner::InvalidValuesOffset(e) => e.webgpu_error_type(),
 
             ComputePassErrorInner::InvalidParentEncoder
             | ComputePassErrorInner::BindGroupIndexOutOfRange { .. }
@@ -262,12 +258,6 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
 
     active_query: Option<(Arc<resource::QuerySet>, u32)>,
 
-    immediates: Vec<u32>,
-
-    /// A bitmask, tracking which 4-byte slots have been written via `set_immediates`.
-    /// Checked against the pipeline's required slots before each dispatch.
-    immediate_slots_set: naga::valid::ImmediateSlots,
-
     intermediate_trackers: Tracker,
 }
 
@@ -277,18 +267,33 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
             self.pass.binder.check_compatibility(pipeline.as_ref())?;
             self.pass.binder.check_late_buffer_bindings()?;
             if !self
+                .pass
                 .immediate_slots_set
                 .contains(pipeline.immediate_slots_required)
             {
                 return Err(DispatchError::MissingImmediateData {
                     missing: pipeline
                         .immediate_slots_required
-                        .difference(self.immediate_slots_set),
+                        .difference(self.pass.immediate_slots_set),
                 });
             }
             Ok(())
         } else {
             Err(DispatchError::MissingPipeline(pass::MissingPipeline))
+        }
+    }
+
+    unsafe fn flush_immediates(&mut self) {
+        if !self.pass.immediates.is_empty() && self.pass.immediates_dirty {
+            let layout = &self.pipeline.as_ref().unwrap().layout;
+            unsafe {
+                self.pass.base.raw_encoder.set_immediates(
+                    layout.raw(),
+                    0,
+                    bytemuck::cast_slice(&self.pass.immediates),
+                );
+            }
+            self.pass.immediates_dirty = false;
         }
     }
 
@@ -635,12 +640,11 @@ pub(super) fn encode_compute_pass(
             pending_discard_init_fixups: SurfacesInDiscardState::new(),
             scope: device.new_usage_scope(),
             string_offset: 0,
+            immediates: Vec::new(),
+            immediates_dirty: false,
+            immediate_slots_set: Default::default(),
         },
         active_query: None,
-
-        immediates: Vec::new(),
-
-        immediate_slots_set: Default::default(),
 
         intermediate_trackers: Tracker::new(
             device.ordered_buffer_usages,
@@ -742,29 +746,10 @@ pub(super) fn encode_compute_pass(
                 let scope = PassErrorScope::SetPipelineCompute;
                 set_pipeline(&mut state, device, pipeline).map_pass_err(scope)?;
             }
-            ArcComputeCommand::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            } => {
+            ArcComputeCommand::SetImmediate { offset, data } => {
                 let scope = PassErrorScope::SetImmediate;
-                pass::set_immediates::<ComputePassErrorInner, _>(
-                    &mut state.pass,
-                    &base.immediates_data,
-                    offset,
-                    size_bytes,
-                    Some(values_offset),
-                    |data_slice| {
-                        let offset_in_elements = (offset / wgt::IMMEDIATE_DATA_ALIGNMENT) as usize;
-                        let size_in_elements =
-                            (size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT) as usize;
-                        state.immediates[offset_in_elements..][..size_in_elements]
-                            .copy_from_slice(data_slice);
-                    },
-                )
-                .map_pass_err(scope)?;
-                state.immediate_slots_set |=
-                    naga::valid::ImmediateSlots::from_range(offset, size_bytes);
+                pass::set_immediates::<ComputePassErrorInner>(&mut state.pass, offset, &data)
+                    .map_pass_err(scope)?;
             }
             ArcComputeCommand::DispatchWorkgroups(groups) => {
                 let scope = PassErrorScope::Dispatch { indirect: false };
@@ -923,18 +908,7 @@ fn set_pipeline(
         &mut state.pass,
         &pipeline.layout,
         &pipeline.late_sized_buffer_groups,
-        || {
-            // This only needs to be here for compute pipelines because they use immediates for
-            // validating indirect draws.
-            state.immediates.clear();
-            // Note that can only be one range for each stage. See the `MoreThanOneImmediateRangePerStage` error.
-            if pipeline.layout.immediate_size != 0 {
-                // Note that non-0 range start doesn't work anyway https://github.com/gfx-rs/wgpu/issues/4502
-                let len = pipeline.layout.immediate_size as usize
-                    / wgt::IMMEDIATE_DATA_ALIGNMENT as usize;
-                state.immediates.extend(core::iter::repeat_n(0, len));
-            }
-        },
+        || {},
     )
 }
 
@@ -944,6 +918,7 @@ fn dispatch_workgroups(state: &mut State, groups: [u32; 3]) -> Result<(), Comput
     state.is_ready()?;
 
     state.flush_bindings(None, false)?;
+    unsafe { state.flush_immediates() };
 
     let groups_size_limit = state
         .pass
@@ -1090,31 +1065,23 @@ fn dispatch_workgroups_indirect(
 
         // reset state
         {
-            let pipeline = state.pipeline.as_ref().unwrap();
-
             unsafe {
                 state
                     .pass
                     .base
                     .raw_encoder
-                    .set_compute_pipeline(pipeline.raw());
+                    .set_compute_pipeline(state.pipeline.as_ref().unwrap().raw());
             }
 
-            if !state.immediates.is_empty() {
-                unsafe {
-                    state.pass.base.raw_encoder.set_immediates(
-                        pipeline.layout.raw(),
-                        0,
-                        &state.immediates,
-                    );
-                }
-            }
+            // Immediates is always dirty because state is reset.
+            state.pass.immediates_dirty = true;
+            unsafe { state.flush_immediates() };
 
             for (i, group, dynamic_offsets) in state.pass.binder.list_valid() {
                 let raw_bg = group.try_raw(state.pass.base.snatch_guard)?;
                 unsafe {
                     state.pass.base.raw_encoder.set_bind_group(
-                        pipeline.layout.raw(),
+                        state.pipeline.as_ref().unwrap().layout.raw(),
                         i as u32,
                         raw_bg,
                         dynamic_offsets,
@@ -1147,7 +1114,7 @@ fn dispatch_workgroups_indirect(
         }
     } else {
         state.flush_bindings(Some(&buffer), true)?;
-
+        unsafe { state.flush_immediates() };
         let buf_raw = buffer.try_raw(state.pass.base.snatch_guard)?;
         unsafe {
             state
@@ -1261,17 +1228,9 @@ impl Global {
             pass::validate_immediates_alignment(offset, size_bytes)
         );
 
-        let values_offset = base.immediates_data.len().try_into().unwrap();
-
-        base.immediates_data.extend(
-            data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
-                .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
-        );
-
         base.commands.push(ArcComputeCommand::SetImmediate {
             offset,
-            size_bytes: data.len() as u32,
-            values_offset,
+            data: data.to_vec(),
         });
 
         Ok(())

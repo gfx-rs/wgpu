@@ -15,7 +15,6 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::str;
 use thiserror::Error;
-use wgt::error::{ErrorType, WebGpuError};
 use wgt::DynamicOffset;
 
 #[derive(Clone, Debug, Error)]
@@ -30,16 +29,6 @@ pub struct BindGroupIndexOutOfRange {
 #[derive(Clone, Debug, Error)]
 #[error("Pipeline must be set")]
 pub struct MissingPipeline;
-
-#[derive(Clone, Debug, Error)]
-#[error("Setting `values_offset` to be `None` is only for internal use in render bundles")]
-pub struct InvalidValuesOffset;
-
-impl WebGpuError for InvalidValuesOffset {
-    fn webgpu_error_type(&self) -> ErrorType {
-        ErrorType::Validation
-    }
-}
 
 pub(crate) struct PassState<'scope, 'snatch_guard, 'cmd_enc> {
     pub(crate) base: EncodingState<'snatch_guard, 'cmd_enc>,
@@ -57,6 +46,14 @@ pub(crate) struct PassState<'scope, 'snatch_guard, 'cmd_enc> {
     pub(crate) dynamic_offset_count: usize,
 
     pub(crate) string_offset: usize,
+
+    pub(crate) immediates: Vec<u8>,
+
+    pub(crate) immediates_dirty: bool,
+
+    /// A bitmask, tracking which 4-byte slots have been written via `set_immediates`.
+    /// Checked against the pipeline's required slots before each draw call.
+    pub(crate) immediate_slots_set: naga::valid::ImmediateSlots,
 }
 
 pub(crate) fn set_bind_group<E>(
@@ -200,19 +197,8 @@ where
         .binder
         .change_pipeline_layout(pipeline_layout, late_sized_buffer_groups)
     {
+        state.immediates_dirty = true;
         f();
-
-        super::immediates_clear(
-            0,
-            pipeline_layout.immediate_size,
-            |clear_offset, clear_data| unsafe {
-                state.base.raw_encoder.set_immediates(
-                    pipeline_layout.raw(),
-                    clear_offset,
-                    clear_data,
-                );
-            },
-        );
     }
     Ok(())
 }
@@ -232,67 +218,37 @@ pub(crate) fn validate_immediates_alignment(
     Ok(())
 }
 
-pub(crate) fn set_immediates<E, F: FnOnce(&[u32])>(
-    state: &mut PassState,
-    immediates_data: &[u32],
-    offset: u32,
-    size_bytes: u32,
-    values_offset: Option<u32>,
-    f: F,
-) -> Result<(), E>
+pub(crate) fn set_immediates<E>(state: &mut PassState, offset: u32, data: &[u8]) -> Result<(), E>
 where
-    E: From<ImmediateUploadError> + From<InvalidValuesOffset> + From<MissingPipeline>,
+    E: From<ImmediateUploadError>,
 {
     api_log!("Pass::set_immediates");
 
-    // Alignment has been validated by `validate_immediates_alignment` when pushing `SetImmediate` commands.
+    // Alignment and `data.len()` has been validated when pushing `SetImmediate` commands.
 
-    let values_offset = values_offset.ok_or(InvalidValuesOffset)?;
-
-    let pipeline_layout = state
-        .binder
-        .pipeline_layout
-        .as_ref()
-        .ok_or(MissingPipeline)?;
-
-    pipeline_layout.validate_immediates_ranges(offset, size_bytes)?;
-
-    let values_offset_usize = usize::try_from(values_offset)
-        .expect("`values_offset` is outside the bounds of `usize` (!?)");
-    if values_offset_usize > immediates_data.len() {
-        panic!(
-            "Internal error: `set_immediates` values offset ({}) \
-            overruns the immediates data length ({})",
-            values_offset,
-            immediates_data.len()
-        );
+    let limit = state.base.device.limits.max_immediate_size;
+    let beyond_limit_err = ImmediateUploadError::EndOffsetBeyondLimit {
+        start_offset: offset,
+        size: data.len() as u32,
+        limit,
+    };
+    if data
+        .len()
+        .checked_add(offset as usize)
+        .ok_or(beyond_limit_err.clone())?
+        > limit as usize
+    {
+        return Err(beyond_limit_err.into());
     }
 
-    let size_immediate_elements = size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT;
-    let size_immediate_elements_usize = usize::try_from(size_immediate_elements)
-        .expect("`size_immediate_elements` is outside the bounds of `usize` (!?)");
-    if size_immediate_elements_usize > immediates_data.len() - values_offset_usize {
-        panic!(
-            "Internal error: `set_immediates` values offset + count ({} + {}) \
-            overruns the immediates data length ({})",
-            values_offset,
-            size_immediate_elements,
-            immediates_data.len()
-        );
+    let end_offset = offset as usize + data.len();
+    if state.immediates.len() < end_offset {
+        state.immediates.resize(end_offset, 0);
     }
+    state.immediates[(offset as usize)..][..data.len()].copy_from_slice(data);
+    state.immediate_slots_set |= naga::valid::ImmediateSlots::from_range(offset, data.len() as u32);
+    state.immediates_dirty = true;
 
-    // NOTE: These additions are will not overflow, because we've validated the range above.
-    let values_end_offset = values_offset_usize + size_immediate_elements_usize;
-    let data_slice = &immediates_data[(values_offset_usize)..values_end_offset];
-
-    f(data_slice);
-
-    unsafe {
-        state
-            .base
-            .raw_encoder
-            .set_immediates(pipeline_layout.raw(), offset, data_slice)
-    }
     Ok(())
 }
 

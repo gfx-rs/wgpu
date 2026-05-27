@@ -374,7 +374,6 @@ impl fmt::Debug for RenderPass {
             .field("depth_stencil_target", &self.depth_stencil_attachment)
             .field("command count", &self.base.commands.len())
             .field("dynamic offset count", &self.base.dynamic_offsets.len())
-            .field("immediate data u32 count", &self.base.immediates_data.len())
             .field("multiview mask", &self.multiview_mask)
             .finish()
     }
@@ -658,10 +657,6 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
 
     pass: pass::PassState<'scope, 'snatch_guard, 'cmd_enc>,
 
-    /// A bitmask, tracking which 4-byte slots have been written via `set_immediates`.
-    /// Checked against the pipeline's required slots before each draw call.
-    immediate_slots_set: naga::valid::ImmediateSlots,
-
     active_occlusion_query: Option<(Arc<QuerySet>, u32)>,
     active_pipeline_statistics_query: Option<(Arc<QuerySet>, u32)>,
 }
@@ -702,18 +697,33 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
                 });
             }
             if !self
+                .pass
                 .immediate_slots_set
                 .contains(pipeline.immediate_slots_required)
             {
                 return Err(DrawError::MissingImmediateData {
                     missing: pipeline
                         .immediate_slots_required
-                        .difference(self.immediate_slots_set),
+                        .difference(self.pass.immediate_slots_set),
                 });
             }
             Ok(())
         } else {
             Err(DrawError::MissingPipeline(pass::MissingPipeline))
+        }
+    }
+
+    unsafe fn flush_immediates(&mut self) {
+        if !self.pass.immediates.is_empty() && self.pass.immediates_dirty {
+            let layout = &self.pipeline.as_ref().unwrap().layout;
+            unsafe {
+                self.pass.base.raw_encoder.set_immediates(
+                    layout.raw(),
+                    0,
+                    bytemuck::cast_slice(&self.pass.immediates),
+                );
+            }
+            self.pass.immediates_dirty = false;
         }
     }
 
@@ -732,7 +742,7 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         self.pipeline = None;
         self.index.reset();
         self.vertex = Default::default();
-        self.immediate_slots_set = Default::default();
+        self.pass.immediate_slots_set = Default::default();
     }
 
     /// Flush dirty vertex buffer slots to the HAL encoder in preparation for a draw call.
@@ -938,8 +948,6 @@ pub enum RenderPassErrorInner {
     #[error("Unable to clear non-present/read-only stencil")]
     InvalidStencilOps,
     #[error(transparent)]
-    InvalidValuesOffset(#[from] pass::InvalidValuesOffset),
-    #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
@@ -1069,7 +1077,6 @@ impl WebGpuError for RenderPassError {
             RenderPassErrorInner::IncompatibleBundleTargets(e) => e.webgpu_error_type(),
             RenderPassErrorInner::InvalidAttachment(e) => e.webgpu_error_type(),
             RenderPassErrorInner::TimestampWrites(e) => e.webgpu_error_type(),
-            RenderPassErrorInner::InvalidValuesOffset(e) => e.webgpu_error_type(),
 
             RenderPassErrorInner::InvalidParentEncoder
             | RenderPassErrorInner::UnsupportedResolveTargetFormat { .. }
@@ -2278,9 +2285,11 @@ pub(super) fn encode_render_pass(
                 dynamic_offset_count: 0,
 
                 string_offset: 0,
-            },
 
-            immediate_slots_set: Default::default(),
+                immediates: Vec::new(),
+                immediates_dirty: false,
+                immediate_slots_set: Default::default(),
+            },
 
             active_occlusion_query: None,
             active_pipeline_statistics_query: None,
@@ -2343,23 +2352,10 @@ pub(super) fn encode_render_pass(
                     let scope = PassErrorScope::SetViewport;
                     set_viewport(&mut state, rect, depth_min, depth_max).map_pass_err(scope)?;
                 }
-                ArcRenderCommand::SetImmediate {
-                    offset,
-                    size_bytes,
-                    values_offset,
-                } => {
+                ArcRenderCommand::SetImmediate { offset, data } => {
                     let scope = PassErrorScope::SetImmediate;
-                    pass::set_immediates::<RenderPassErrorInner, _>(
-                        &mut state.pass,
-                        &base.immediates_data,
-                        offset,
-                        size_bytes,
-                        values_offset,
-                        |_| {},
-                    )
-                    .map_pass_err(scope)?;
-                    state.immediate_slots_set |=
-                        naga::valid::ImmediateSlots::from_range(offset, size_bytes);
+                    pass::set_immediates::<RenderPassErrorInner>(&mut state.pass, offset, &data)
+                        .map_pass_err(scope)?;
                 }
                 ArcRenderCommand::SetScissor(rect) => {
                     let scope = PassErrorScope::SetScissorRect;
@@ -3008,6 +3004,7 @@ fn draw(
     state.is_ready(DrawCommandFamily::Draw)?;
     state.flush_vertex_buffers()?;
     state.flush_bindings()?;
+    unsafe { state.flush_immediates() };
 
     state
         .vertex
@@ -3044,6 +3041,7 @@ fn draw_indexed(
     state.is_ready(DrawCommandFamily::DrawIndexed)?;
     state.flush_vertex_buffers()?;
     state.flush_bindings()?;
+    unsafe { state.flush_immediates() };
 
     let last_index = first_index as u64 + index_count as u64;
     let index_limit = state.index.limit;
@@ -3085,6 +3083,7 @@ fn draw_mesh_tasks(
 
     state.flush_bindings()?;
     validate_mesh_draw_multiview(state)?;
+    unsafe { state.flush_immediates() };
 
     let limits = &state.pass.base.device.limits;
     let (groups_size_limit, max_groups) = if state.pipeline.as_ref().unwrap().has_task_shader {
@@ -3137,6 +3136,7 @@ fn multi_draw_indirect(
     state.is_ready(family)?;
     state.flush_vertex_buffers()?;
     state.flush_bindings()?;
+    unsafe { state.flush_immediates() };
 
     if family == DrawCommandFamily::DrawMeshTasks {
         validate_mesh_draw_multiview(state)?;
@@ -3332,6 +3332,7 @@ fn multi_draw_indirect_count(
     state.is_ready(family)?;
     state.flush_vertex_buffers()?;
     state.flush_bindings()?;
+    unsafe { state.flush_immediates() };
 
     if family == DrawCommandFamily::DrawMeshTasks {
         validate_mesh_draw_multiview(state)?;
@@ -3742,17 +3743,9 @@ impl Global {
             pass::validate_immediates_alignment(offset, size_bytes)
         );
 
-        let values_offset = base.immediates_data.len().try_into().unwrap();
-
-        base.immediates_data.extend(
-            data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
-                .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
-        );
-
         base.commands.push(ArcRenderCommand::SetImmediate {
             offset,
-            size_bytes: data.len() as u32,
-            values_offset: Some(values_offset),
+            data: data.to_vec(),
         });
 
         Ok(())

@@ -895,16 +895,15 @@ pub enum ImmediateUploadError {
     )]
     SizeUnaligned(u32),
     #[error(
-        "Provided immediate data start offset {} + size {} overruns the immediate data range \
-        with a size of {}",
+        "Provided immediate data start offset {} + size {} overruns `max_immediate_size` {} ",
         start_offset,
         size,
-        immediate_size
+        limit
     )]
-    EndOffsetOverrun {
+    EndOffsetBeyondLimit {
         start_offset: u32,
         size: u32,
-        immediate_size: u32,
+        limit: u32,
     },
 }
 
@@ -1004,34 +1003,6 @@ impl PipelineLayout {
         let bgl = self.bind_group_layouts.get(group as usize)?;
         let bgl = bgl.as_ref()?;
         bgl.entries.get(binding)
-    }
-
-    /// Validate immediates match up with expected ranges.
-    pub(crate) fn validate_immediates_ranges(
-        &self,
-        offset: u32,
-        size_bytes: u32,
-    ) -> Result<(), ImmediateUploadError> {
-        // Don't need to validate size against the immediate data size limit here,
-        // as immediate data ranges are already validated to be within bounds,
-        // and we validate that they are within the ranges.
-
-        if offset > self.immediate_size {
-            return Err(ImmediateUploadError::StartOffsetOverrun {
-                start_offset: offset,
-                immediate_size: self.immediate_size,
-            });
-        }
-
-        if size_bytes > self.immediate_size - offset {
-            return Err(ImmediateUploadError::EndOffsetOverrun {
-                start_offset: offset,
-                size: size_bytes,
-                immediate_size: self.immediate_size,
-            });
-        }
-
-        Ok(())
     }
 }
 

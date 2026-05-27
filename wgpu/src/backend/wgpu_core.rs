@@ -548,6 +548,7 @@ pub struct CoreCommandBuffer {
 #[derive(Debug)]
 pub struct CoreRenderBundleEncoder {
     pub(crate) context: ContextWgpuCore,
+    error_sink: ErrorSink,
     encoder: Box<wgc::command::RenderBundleEncoder>,
     id: crate::cmp::Identifier,
 }
@@ -1825,6 +1826,7 @@ impl dispatch::DeviceInterface for CoreDevice {
 
         CoreRenderBundleEncoder {
             context: self.context.clone(),
+            error_sink: Arc::clone(&self.error_sink),
             encoder,
             id: crate::cmp::Identifier::create(),
         }
@@ -3902,14 +3904,19 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     where
         Self: Sized,
     {
+        let label = self.encoder.label().map(alloc::string::ToString::to_string);
         let (id, error) = self.context.0.render_bundle_encoder_finish(
             self.encoder,
             &desc.map_label(|l| l.map(Borrowed)),
             None,
         );
         if let Some(err) = error {
-            self.context
-                .handle_error_fatal(err, "RenderBundleEncoder::finish");
+            self.context.handle_error(
+                &self.error_sink,
+                err,
+                label.as_deref(),
+                "RenderBundleEncoder::finish",
+            );
         }
         CoreRenderBundle {
             context: self.context.clone(),
