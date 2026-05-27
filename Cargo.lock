@@ -4736,6 +4736,7 @@ dependencies = [
  "termcolor",
  "tracy-client",
  "wgpu",
+ "wgpu-c-backend",
 ]
 
 [[package]]
@@ -4745,6 +4746,7 @@ dependencies = [
  "env_logger",
  "pollster",
  "wgpu",
+ "wgpu-c-backend",
  "winit",
 ]
 
@@ -4755,6 +4757,7 @@ dependencies = [
  "env_logger",
  "pollster",
  "wgpu",
+ "wgpu-c-backend",
  "winit",
 ]
 
@@ -4838,6 +4841,7 @@ dependencies = [
  "env_logger",
  "pollster",
  "wgpu",
+ "wgpu-c-backend",
 ]
 
 [[package]]
@@ -4847,6 +4851,7 @@ dependencies = [
  "env_logger",
  "pollster",
  "wgpu",
+ "wgpu-c-backend",
  "winit",
 ]
 
@@ -4885,6 +4890,7 @@ dependencies = [
  "web-sys",
  "web-time",
  "wgpu",
+ "wgpu-c-backend",
  "wgpu-test",
  "winit",
 ]
