@@ -1648,7 +1648,40 @@ impl DeviceInterface for CDevice {
     }
 
     fn generate_allocator_report(&self) -> Option<wgpu::AllocatorReport> {
-        None
+        let report = unsafe { wgpuDeviceGetAllocatorReport(self.ptr) };
+        if report.available == 0 {
+            unsafe { wgpuAllocatorReportFreeMembers(report) };
+            return None;
+        }
+        let allocations = unsafe {
+            std::slice::from_raw_parts(report.allocations, report.allocationCount)
+        }
+        .iter()
+        .map(|a| wgpu::wgt::AllocationReport {
+            name: unsafe { wgpu_native::utils::string_view_into_str(a.name) }
+                .unwrap_or("")
+                .to_owned(),
+            offset: a.offset,
+            size: a.size,
+        })
+        .collect();
+        let blocks = unsafe {
+            std::slice::from_raw_parts(report.blocks, report.blockCount)
+        }
+        .iter()
+        .map(|b| wgpu::wgt::MemoryBlockReport {
+            size: b.size,
+            allocations: b.allocationStart..b.allocationEnd,
+        })
+        .collect();
+        let result = wgpu::AllocatorReport {
+            allocations,
+            blocks,
+            total_allocated_bytes: report.totalAllocatedBytes,
+            total_reserved_bytes: report.totalReservedBytes,
+        };
+        unsafe { wgpuAllocatorReportFreeMembers(report) };
+        Some(result)
     }
 
     fn destroy(&self) {

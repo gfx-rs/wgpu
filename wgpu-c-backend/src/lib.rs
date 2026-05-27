@@ -344,9 +344,8 @@ impl InstanceInterface for CInstance {
         Box::pin(future::ready(out.result.unwrap_or(Err(not_found))))
     }
 
-    fn poll_all_devices(&self, _force_wait: bool) -> bool {
-        unsafe { wgpuInstanceProcessEvents(self.ptr) };
-        true
+    fn poll_all_devices(&self, force_wait: bool) -> bool {
+        unsafe { wgpuInstancePollAllDevices(self.ptr, force_wait) }
     }
 
     fn enumerate_adapters(&self, backends: wgpu::Backends) -> Pin<Box<dyn EnumerateAdapterFuture>> {

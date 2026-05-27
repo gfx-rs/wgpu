@@ -288,7 +288,35 @@ impl AdapterInterface for CAdapter {
     }
 
     fn downlevel_capabilities(&self) -> wgpu::DownlevelCapabilities {
-        wgpu::DownlevelCapabilities::default()
+        let c = unsafe { wgpuAdapterGetDownlevelCapabilities(self.ptr) };
+        let mut flags = wgpu::DownlevelFlags::empty();
+        macro_rules! flag {
+            ($native:ident => $wgpu:ident) => {
+                if c.flags & native::$native != 0 {
+                    flags |= wgpu::DownlevelFlags::$wgpu;
+                }
+            };
+        }
+        flag!(WGPUDownlevelFlags_ComputeShaders => COMPUTE_SHADERS);
+        flag!(WGPUDownlevelFlags_FragmentWritableStorage => FRAGMENT_WRITABLE_STORAGE);
+        flag!(WGPUDownlevelFlags_IndirectExecution => INDIRECT_EXECUTION);
+        flag!(WGPUDownlevelFlags_BaseVertex => BASE_VERTEX);
+        flag!(WGPUDownlevelFlags_ReadOnlyDepthStencil => READ_ONLY_DEPTH_STENCIL);
+        flag!(WGPUDownlevelFlags_CubeArrayTextures => CUBE_ARRAY_TEXTURES);
+        flag!(WGPUDownlevelFlags_ComparisonSamplers => COMPARISON_SAMPLERS);
+        flag!(WGPUDownlevelFlags_VertexStorage => VERTEX_STORAGE);
+        flag!(WGPUDownlevelFlags_AnisotropicFiltering => ANISOTROPIC_FILTERING);
+        flag!(WGPUDownlevelFlags_FragmentStorage => FRAGMENT_STORAGE);
+        flag!(WGPUDownlevelFlags_MultisampledShading => MULTISAMPLED_SHADING);
+        flag!(WGPUDownlevelFlags_UnrestrictedIndexBuffer => UNRESTRICTED_INDEX_BUFFER);
+        flag!(WGPUDownlevelFlags_DepthBiasClamp => DEPTH_BIAS_CLAMP);
+        flag!(WGPUDownlevelFlags_UnrestrictedExternalTextureCopies => UNRESTRICTED_EXTERNAL_TEXTURE_COPIES);
+        let shader_model = match c.shaderModel {
+            native::WGPUShaderModel_Sm2 => wgpu::ShaderModel::Sm2,
+            native::WGPUShaderModel_Sm4 => wgpu::ShaderModel::Sm4,
+            _ => wgpu::ShaderModel::Sm5,
+        };
+        wgpu::DownlevelCapabilities { flags, limits: wgpu::DownlevelLimits {}, shader_model }
     }
 
     fn get_info(&self) -> wgpu::AdapterInfo {
