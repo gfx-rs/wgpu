@@ -21,10 +21,10 @@ use deno_error::JsErrorBox;
 
 use crate::buffer::GPUBuffer;
 use crate::error::GPUGenericError;
+use crate::get_data_slice;
 use crate::render_bundle::GPURenderBundle;
 use crate::texture::GPUTexture;
 use crate::texture::GPUTextureView;
-use crate::get_data_slice;
 use crate::webidl::GPUColor;
 use crate::Instance;
 

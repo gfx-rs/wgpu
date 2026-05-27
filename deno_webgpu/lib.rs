@@ -338,7 +338,7 @@ fn get_data_slice<'a>(
     if len == 0 {
       (EMPTY, 1)
     } else {
-      let bpe = typed_array.byte_length() - len;
+      let bpe = typed_array.byte_length() / len;
       let byte_offset = typed_array.byte_offset();
       let byte_len = typed_array.byte_length();
       let ab = typed_array.buffer(scope).unwrap();
