@@ -182,6 +182,9 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
   - Added new `InvalidWorkgroupSizeError`, which is now used by `DrawError::InvalidGroupSize` and `StageError::InvalidWorkgroupSize`.
   - Added `BuildAccelerationStructureError` variant `OffsetLimitedTo4GB` and changed `IndirectBufferOverrun` to contain offset and size rather than start and end offsets.
   - `IndexFormat::byte_size` now returns `u32` instead of `usize`.
+- BREAKING: `map_label` helpers have changed slightly. By @beicause and @andyleiserson in [#9480](https://github.com/gfx-rs/wgpu/pull/9480), [#9481](https://github.com/gfx-rs/wgpu/pull/9481), and [#9526](https://github.com/gfx-rs/wgpu/pull/9526).
+  - `TextureDescriptor::map_label_and_view_formats` and `SurfaceConfiguration::map_view_formats` now take `FnOnce(&V)` instead of `FnOnce(V)`.
+  - All `map_label` helpers except `CreateShaderModuleDescriptorPassthrough` now have the signature `map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K)` (previously the lifetimes were implicit and thus could differ).
 
 #### Validation
 

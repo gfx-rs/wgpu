@@ -344,6 +344,11 @@ struct Inner {
     srgb_kind: SrgbFrameBufferKind,
 }
 
+#[cfg(send_sync)]
+unsafe impl Send for Inner {}
+#[cfg(send_sync)]
+unsafe impl Sync for Inner {}
+
 // Different calls to `eglGetPlatformDisplay` may return the same `Display`, making it a global
 // state of all our `EglContext`s. This forces us to track the number of such context to prevent
 // terminating the display if it's currently used by another `EglContext`.
@@ -707,8 +712,8 @@ impl Instance {
     }
 }
 
-unsafe impl Send for Instance {}
-unsafe impl Sync for Instance {}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(Instance: Send, Sync);
 
 impl crate::Instance for Instance {
     type A = super::Api;

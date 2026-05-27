@@ -728,6 +728,7 @@ impl Device {
     /// implementation of a reference-counted structure).
     /// The snatch lock must not be held while this function is called.
     pub(crate) fn deferred_resource_destruction(&self) {
+        // Note that the deferred_destroy list may contain duplicate entries.
         let deferred_destroy = mem::take(&mut *self.deferred_destroy.lock());
         for item in deferred_destroy {
             match item {
@@ -2874,7 +2875,7 @@ impl Device {
         bb: &'a binding_model::ResolvedBufferBinding,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
-        used_buffer_ranges: &mut Vec<BufferInitTrackerAction>,
+        buffer_init_actions: &mut Vec<BufferInitTrackerAction>,
         dynamic_binding_info: &mut Vec<binding_model::BindGroupDynamicBindingData>,
         late_buffer_binding_sizes: &mut FastHashMap<u32, wgt::BufferSize>,
         used: &mut BindGroupStates,
@@ -2999,7 +3000,7 @@ impl Device {
             binding_model::buffer_binding_type_bounds_check_alignment(&self.alignments, binding_ty);
         let visible_size = align_to(bind_size, bounds_check_alignment);
 
-        used_buffer_ranges.extend(buffer.initialization_status.read().create_action(
+        buffer_init_actions.extend(buffer.initialization_status.read().create_action(
             buffer,
             bb.offset..bb.offset + visible_size,
             MemoryInitKind::NeedsInitializedMemory,
@@ -3063,7 +3064,7 @@ impl Device {
         decl: &wgt::BindGroupLayoutEntry,
         view: &'a Arc<TextureView>,
         used: &mut BindGroupStates,
-        used_texture_ranges: &mut Vec<TextureInitTrackerAction>,
+        texture_init_actions: &mut Vec<TextureInitTrackerAction>,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<hal::TextureBinding<'a, dyn hal::DynTextureView>, CreateBindGroupError> {
         view.same_device(self)?;
@@ -3079,7 +3080,7 @@ impl Device {
 
         let texture = &view.parent;
 
-        used_texture_ranges.push(TextureInitTrackerAction {
+        texture_init_actions.push(TextureInitTrackerAction {
             texture: texture.clone(),
             range: TextureInitRange {
                 mip_range: view.desc.range.mip_range(texture.desc.mip_level_count),
@@ -3277,8 +3278,8 @@ impl Device {
         // fill out the descriptors
         let mut used = BindGroupStates::new();
 
-        let mut used_buffer_ranges = Vec::new();
-        let mut used_texture_ranges = Vec::new();
+        let mut buffer_init_actions = Vec::new();
+        let mut texture_init_actions = Vec::new();
         let mut hal_entries = Vec::with_capacity(desc.entries.len());
         let mut hal_buffers = Vec::new();
         let mut hal_samplers = Vec::new();
@@ -3299,7 +3300,7 @@ impl Device {
                         bb,
                         binding,
                         decl,
-                        &mut used_buffer_ranges,
+                        &mut buffer_init_actions,
                         &mut dynamic_binding_info,
                         &mut late_buffer_binding_sizes,
                         &mut used,
@@ -3320,7 +3321,7 @@ impl Device {
                             bb,
                             binding,
                             decl,
-                            &mut used_buffer_ranges,
+                            &mut buffer_init_actions,
                             &mut dynamic_binding_info,
                             &mut late_buffer_binding_sizes,
                             &mut used,
@@ -3370,7 +3371,7 @@ impl Device {
                             decl,
                             view,
                             &mut used,
-                            &mut used_texture_ranges,
+                            &mut texture_init_actions,
                             &snatch_guard,
                         )?;
                         let res_index = hal_textures.len();
@@ -3389,7 +3390,7 @@ impl Device {
                             decl,
                             view,
                             &mut used,
-                            &mut used_texture_ranges,
+                            &mut texture_init_actions,
                             &snatch_guard,
                         )?;
 
@@ -3490,8 +3491,8 @@ impl Device {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.bind_groups.clone()),
             used,
-            used_buffer_ranges,
-            used_texture_ranges,
+            buffer_init_actions,
+            texture_init_actions,
             dynamic_binding_info,
             late_buffer_binding_infos,
         };
@@ -3499,12 +3500,12 @@ impl Device {
         let bind_group = Arc::new(bind_group);
 
         let weak_ref = Arc::downgrade(&bind_group);
-        for range in &bind_group.used_texture_ranges {
-            let mut bind_groups = range.texture.bind_groups.lock();
+        for texture in bind_group.used.views.used_textures() {
+            let mut bind_groups = texture.bind_groups.lock();
             bind_groups.push(weak_ref.clone());
         }
-        for range in &bind_group.used_buffer_ranges {
-            let mut bind_groups = range.buffer.bind_groups.lock();
+        for buffer in bind_group.used.buffers.used_resources() {
+            let mut bind_groups = buffer.bind_groups.lock();
             bind_groups.push(weak_ref.clone());
         }
 

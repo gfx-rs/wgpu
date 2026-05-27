@@ -30,7 +30,6 @@ webgpu:api,validation,createBindGroup:external_texture,* // 0%, no external exte
 webgpu:api,validation,createBindGroup:texture,resource_state:* // crash, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,createTexture:new_usages,* // https://github.com/denoland/deno/issues/33846; possibly issues with wgpu extensions
 webgpu:api,validation,createView:texture_state:* // 0%, https://github.com/gfx-rs/wgpu/issues/7881
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_ranges:* // ***, https://github.com/gfx-rs/wgpu/issues/8118
 webgpu:api,validation,encoding,cmds,debug:* // 92%, https://github.com/gfx-rs/wgpu/issues/8039
 webgpu:api,validation,encoding,cmds,render,draw:max_draw_count:* // https://github.com/gfx-rs/wgpu/issues/8737
 webgpu:api,validation,encoding,cmds,render,indirect_draw:indirect_offset_alignment:* // render bundle
