@@ -17,7 +17,6 @@ use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 
 use crate::buffer::GPUBuffer;
-use crate::error::GPUError;
 use crate::error::GPUGenericError;
 use crate::get_data_slice;
 use crate::texture::GPUTextureFormat;
@@ -403,12 +402,14 @@ impl GPURenderBundleEncoder {
       JsErrorBox::generic("Encoder has already been finished")
     })?;
 
-    if let Err(err) = encoder.set_immediates(offset, data) {
-      self
-        .error_handler
-        .push_error(Some(GPUError::from_webgpu(err)));
+    unsafe {
+      wgpu_core::command::bundle_ffi::wgpu_render_bundle_set_immediates(
+        encoder,
+        offset,
+        data.len().try_into().unwrap(),
+        data.as_ptr(),
+      );
     }
-
     Ok(())
   }
 }

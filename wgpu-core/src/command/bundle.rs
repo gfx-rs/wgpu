@@ -99,10 +99,11 @@ use wgt::error::{ErrorType, WebGpuError};
 #[cfg(feature = "trace")]
 use crate::command::ArcReferences;
 use crate::{
-    binding_model::{BindError, BindGroup, ImmediateUploadError, PipelineLayout},
+    binding_model::{BindError, BindGroup, PipelineLayout},
     command::{
-        bind::Binder, BasePass, BindGroupStateChange, ColorAttachmentError, DrawError,
-        IdReferences, MapPassErr, PassErrorScope, RenderCommand, RenderCommandError, StateChange,
+        bind::Binder, pass::validate_immediates_alignment, BasePass, BindGroupStateChange,
+        ColorAttachmentError, DrawError, IdReferences, MapPassErr, PassErrorScope, RenderCommand,
+        RenderCommandError, StateChange,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
@@ -588,25 +589,6 @@ impl RenderBundleEncoder {
             size,
         });
     }
-
-    pub fn set_immediates(&mut self, offset: u32, data: &[u8]) -> Result<(), ImmediateUploadError> {
-        pass::validate_immediates_alignment(offset, data)?;
-
-        // TODO: `values_offset` is only used to index the data, so it should be `usize` instead of `u32`.
-        let values_offset = self.base.immediates_data.len().try_into().unwrap();
-
-        self.base.immediates_data.extend(
-            data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
-                .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
-        );
-
-        self.base.commands.push(RenderCommand::SetImmediate {
-            offset,
-            size_bytes: data.len() as u32,
-            values_offset: Some(values_offset),
-        });
-        Ok(())
-    }
 }
 
 fn set_bind_group(
@@ -821,6 +803,8 @@ fn set_immediates(
     size_bytes: u32,
     values_offset: Option<u32>,
 ) -> Result<(), RenderBundleErrorInner> {
+    validate_immediates_alignment(offset, size_bytes)?;
+
     let pipeline = state
         .pipeline
         .as_deref()
@@ -1686,9 +1670,6 @@ pub mod bundle_ffi {
         encoder.set_index_buffer(buffer, index_format, offset, size);
     }
 
-    /// FFI version of [`RenderBundleEncoder::set_immediates`].
-    /// This will panic if validation fails, i.e. if data length overflows [`u32::MAX`] or `offset`/`size_bytes` is unaligned.
-    ///
     /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
@@ -1700,7 +1681,20 @@ pub mod bundle_ffi {
         data: *const u8,
     ) {
         let data_slice = unsafe { slice::from_raw_parts(data, size_bytes as usize) };
-        pass.set_immediates(offset, data_slice).unwrap();
+        let value_offset = pass.base.immediates_data.len().try_into().expect(
+            "Ran out of immediate data space. Don't set 4gb of immediates per RenderBundle.",
+        );
+        pass.base.immediates_data.extend(
+            data_slice
+                .chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
+                .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
+        );
+
+        pass.base.commands.push(RenderCommand::SetImmediate {
+            offset,
+            size_bytes,
+            values_offset: Some(value_offset),
+        });
     }
 
     pub fn wgpu_render_bundle_draw(

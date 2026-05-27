@@ -548,7 +548,6 @@ pub struct CoreCommandBuffer {
 #[derive(Debug)]
 pub struct CoreRenderBundleEncoder {
     pub(crate) context: ContextWgpuCore,
-    error_sink: ErrorSink,
     encoder: Box<wgc::command::RenderBundleEncoder>,
     id: crate::cmp::Identifier,
 }
@@ -1826,7 +1825,6 @@ impl dispatch::DeviceInterface for CoreDevice {
 
         CoreRenderBundleEncoder {
             context: self.context.clone(),
-            error_sink: Arc::clone(&self.error_sink),
             encoder,
             id: crate::cmp::Identifier::create(),
         }
@@ -3841,12 +3839,12 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     }
 
     fn set_immediates(&mut self, offset: u32, data: &[u8]) {
-        if let Err(err) = self.encoder.set_immediates(offset, data) {
-            self.context.handle_error(
-                &self.error_sink,
-                err,
-                self.encoder.label(),
-                "RenderBundleEncoder::set_immediates",
+        unsafe {
+            wgpu_core::command::bundle_ffi::wgpu_render_bundle_set_immediates(
+                &mut self.encoder,
+                offset,
+                data.len().try_into().unwrap(),
+                data.as_ptr(),
             );
         }
     }

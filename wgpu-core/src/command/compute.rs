@@ -1233,13 +1233,17 @@ impl Global {
         let scope = PassErrorScope::SetImmediate;
         let base = pass_base!(pass, scope);
 
+        let size_bytes = pass_try!(
+            base,
+            scope,
+            u32::try_from(data.len()).map_err(|_| ImmediateUploadError::ImmediateOutOfMemory)
+        );
         pass_try!(
             base,
             scope,
-            pass::validate_immediates_alignment(offset, data)
+            pass::validate_immediates_alignment(offset, size_bytes)
         );
 
-        // TODO: `values_offset` is only used to index the data, so it should be `usize` instead of `u32`.
         let values_offset = base.immediates_data.len().try_into().unwrap();
 
         base.immediates_data.extend(

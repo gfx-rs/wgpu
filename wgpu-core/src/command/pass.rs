@@ -219,11 +219,8 @@ where
 
 pub(crate) fn validate_immediates_alignment(
     offset: u32,
-    data: &[u8],
+    size_bytes: u32,
 ) -> Result<(), ImmediateUploadError> {
-    let size_bytes =
-        u32::try_from(data.len()).map_err(|_| ImmediateUploadError::ImmediateOutOfMemory)?;
-
     if !offset.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
         return Err(ImmediateUploadError::StartOffsetUnaligned(offset));
     }
