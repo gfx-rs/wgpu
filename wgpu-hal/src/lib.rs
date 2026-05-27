@@ -636,6 +636,9 @@ pub trait Api: Clone + fmt::Debug + Sized + WasmNotSendSync + 'static {
     /// before a lower-valued operation, then waiting for the fence to reach the
     /// lower value could return before the lower-valued operation has actually
     /// finished.
+    /// 
+    /// Fences are internally syncronised by the hal, and so should not need to be
+    /// contained in external synchronisation primitives.
     type Fence: DynFence;
 
     type BindGroupLayout: DynBindGroupLayout;
@@ -718,6 +721,8 @@ pub trait Surface: WasmNotSendSync {
     /// If you do not wish to display the texture, you must pass the
     /// [`SurfaceTexture`] to [`self.discard_texture`], so that it can be reused
     /// by future acquisitions.
+    /// 
+    /// The fence is internally synchronised by the hal.
     ///
     /// # Portability
     ///
