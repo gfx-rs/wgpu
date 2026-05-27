@@ -50,3 +50,4 @@ serde_json.workspace = true
 termcolor.workspace = true
 tracy-client = { workspace = true, optional = true }
 wgpu.workspace = true
+wgpu-c-backend.workspace = true
