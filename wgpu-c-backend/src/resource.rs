@@ -533,3 +533,40 @@ impl BlasInterface for CBlas {
 c_resource!(CTlas, native::WGPUTlas, wgpuTlasRelease);
 
 impl TlasInterface for CTlas {}
+
+// ── CQueueWriteBuffer ─────────────────────────────────────────────────────────
+//
+// wgpu-native has no GPU staging buffer API, so we use a CPU Vec that is
+// flushed to the GPU via wgpuQueueWriteBuffer in write_staging_buffer.
+// This lets Queue::write_buffer_with work correctly.
+
+pub struct CQueueWriteBuffer {
+    pub(crate) data: Vec<u8>,
+}
+
+impl std::fmt::Debug for CQueueWriteBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CQueueWriteBuffer")
+            .field("len", &self.data.len())
+            .finish()
+    }
+}
+
+unsafe impl Send for CQueueWriteBuffer {}
+unsafe impl Sync for CQueueWriteBuffer {}
+
+impl QueueWriteBufferInterface for CQueueWriteBuffer {
+    fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    unsafe fn write_slice(&mut self) -> wgpu::WriteOnly<'_, [u8]> {
+        let nn = unsafe {
+            NonNull::slice_from_raw_parts(
+                NonNull::new_unchecked(self.data.as_mut_ptr()),
+                self.data.len(),
+            )
+        };
+        unsafe { wgpu::WriteOnly::new(nn) }
+    }
+}

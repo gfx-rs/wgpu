@@ -162,34 +162,55 @@ impl DeviceInterface for CDevice {
             let ptr = unsafe { wgpuDeviceCreateShaderModule(self.ptr, Some(&c_desc)) };
             return DispatchShaderModule::custom(CShaderModule { ptr });
         }
-        if let Some(spirv) = &desc.spirv {
-            let native_eps: Vec<native::WGPUPassthroughShaderEntryPoint> = desc
-                .entry_points
-                .iter()
-                .map(|ep| native::WGPUPassthroughShaderEntryPoint {
-                    name: conv::str_to_string_view(&ep.name),
-                    workgroupSizeX: ep.workgroup_size.0,
-                    workgroupSizeY: ep.workgroup_size.1,
-                    workgroupSizeZ: ep.workgroup_size.2,
-                })
-                .collect();
-            let c_desc = native::WGPUShaderModuleDescriptorPassthrough {
-                label: label_sv,
-                entryPointCount: native_eps.len(),
-                entryPoints: native_eps.as_ptr(),
-                spirvSize: spirv.len() as u32,
-                spirv: spirv.as_ptr(),
-                dxilSize: 0,
-                dxil: std::ptr::null(),
-                hlsl: conv::null_string_view(),
-                metallibSize: 0,
-                metallib: std::ptr::null(),
-                msl: conv::null_string_view(),
-            };
-            let ptr = unsafe { wgpuDeviceCreateShaderModulePassthrough(self.ptr, Some(&c_desc)) };
-            return DispatchShaderModule::custom(CShaderModule { ptr });
+        // All non-WGSL formats go through WGPUShaderModuleDescriptorPassthrough.
+        // Fill in every available format; wgpu-native picks the right one for the platform.
+        if desc.spirv.is_none()
+            && desc.dxil.is_none()
+            && desc.hlsl.is_none()
+            && desc.metallib.is_none()
+            && desc.msl.is_none()
+        {
+            unimplemented!(
+                "wgpu-native: passthrough descriptor has no supported shader format (GLSL not supported)"
+            );
         }
-        unimplemented!("wgpu-native: no supported shader format in passthrough descriptor")
+        let native_eps: Vec<native::WGPUPassthroughShaderEntryPoint> = desc
+            .entry_points
+            .iter()
+            .map(|ep| native::WGPUPassthroughShaderEntryPoint {
+                name: conv::str_to_string_view(&ep.name),
+                workgroupSizeX: ep.workgroup_size.0,
+                workgroupSizeY: ep.workgroup_size.1,
+                workgroupSizeZ: ep.workgroup_size.2,
+            })
+            .collect();
+        let c_desc = native::WGPUShaderModuleDescriptorPassthrough {
+            label: label_sv,
+            entryPointCount: native_eps.len(),
+            entryPoints: native_eps.as_ptr(),
+            spirvSize: desc.spirv.as_ref().map(|s| s.len() as u32).unwrap_or(0),
+            spirv: desc.spirv.as_ref().map(|s| s.as_ptr()).unwrap_or(std::ptr::null()),
+            dxilSize: desc.dxil.as_ref().map(|d| d.len()).unwrap_or(0),
+            dxil: desc.dxil.as_ref().map(|d| d.as_ptr()).unwrap_or(std::ptr::null()),
+            hlsl: desc
+                .hlsl
+                .as_deref()
+                .map(conv::str_to_string_view)
+                .unwrap_or_else(conv::null_string_view),
+            metallibSize: desc.metallib.as_ref().map(|m| m.len()).unwrap_or(0),
+            metallib: desc
+                .metallib
+                .as_ref()
+                .map(|m| m.as_ptr())
+                .unwrap_or(std::ptr::null()),
+            msl: desc
+                .msl
+                .as_deref()
+                .map(conv::str_to_string_view)
+                .unwrap_or_else(conv::null_string_view),
+        };
+        let ptr = unsafe { wgpuDeviceCreateShaderModulePassthrough(self.ptr, Some(&c_desc)) };
+        DispatchShaderModule::custom(CShaderModule { ptr })
     }
 
     fn create_bind_group_layout(
@@ -1654,8 +1675,10 @@ impl QueueInterface for CQueue {
         };
     }
 
-    fn create_staging_buffer(&self, _size: wgpu::BufferSize) -> Option<DispatchQueueWriteBuffer> {
-        None
+    fn create_staging_buffer(&self, size: wgpu::BufferSize) -> Option<DispatchQueueWriteBuffer> {
+        Some(DispatchQueueWriteBuffer::custom(CQueueWriteBuffer {
+            data: vec![0u8; size.get() as usize],
+        }))
     }
 
     fn validate_write_buffer(
@@ -1664,17 +1687,26 @@ impl QueueInterface for CQueue {
         _offset: wgpu::BufferAddress,
         _size: wgpu::BufferSize,
     ) -> Option<()> {
-        None
+        Some(())
     }
 
     fn write_staging_buffer(
         &self,
-        _buffer: &DispatchBuffer,
-        _offset: wgpu::BufferAddress,
-        _staging_buffer: &DispatchQueueWriteBuffer,
+        buffer: &DispatchBuffer,
+        offset: wgpu::BufferAddress,
+        staging_buffer: &DispatchQueueWriteBuffer,
     ) {
-        // wgpu-native has no staging buffer API.
-        unimplemented!("wgpu-native does not expose staging buffers")
+        let buf_ptr = buffer.as_custom::<CBuffer>().unwrap().ptr;
+        let wb = staging_buffer.as_custom::<CQueueWriteBuffer>().unwrap();
+        unsafe {
+            wgpuQueueWriteBuffer(
+                self.ptr,
+                buf_ptr,
+                offset,
+                wb.data.as_ptr().cast(),
+                wb.data.len(),
+            )
+        };
     }
 
     fn write_texture(
