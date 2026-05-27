@@ -89,7 +89,8 @@ pub fn map_texture_uses_to_render_stages(uses: wgt::TextureUses) -> MTLRenderSta
     if uses.intersects(wgt::TextureUses::COLOR_TARGET) {
         stages |= MTLRenderStages::Fragment;
     }
-    if uses.intersects(wgt::TextureUses::DEPTH_STENCIL_READ | wgt::TextureUses::DEPTH_STENCIL_WRITE) {
+    if uses.intersects(wgt::TextureUses::DEPTH_STENCIL_READ | wgt::TextureUses::DEPTH_STENCIL_WRITE)
+    {
         stages |= MTLRenderStages::Vertex | MTLRenderStages::Fragment;
     }
     stages

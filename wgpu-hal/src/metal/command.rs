@@ -495,11 +495,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         self.raw_cmd_buf = Some(raw);
 
-        self.state.inter_pass_event = if available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0) {
-            self.shared.device.newSharedEvent()
-        } else {
-            None
-        };
+        self.state.inter_pass_event =
+            if available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0) {
+                self.shared.device.newSharedEvent()
+            } else {
+                None
+            };
         self.state.inter_pass_event_value = 0;
 
         Ok(())
@@ -564,7 +565,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
         for bar in barriers {
             if self.state.render.is_some() || self.state.compute.is_some() {
                 has_intra_pass = true;
-                intra_pass_scope |= conv::map_buffer_uses_to_barrier_scope(bar.usage.from | bar.usage.to);
+                intra_pass_scope |=
+                    conv::map_buffer_uses_to_barrier_scope(bar.usage.from | bar.usage.to);
             } else {
                 needs_inter_pass = true;
             }
@@ -608,7 +610,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
         for bar in barriers {
             if self.state.render.is_some() || self.state.compute.is_some() {
                 has_intra_pass = true;
-                intra_pass_scope |= conv::map_texture_uses_to_barrier_scope(bar.usage.from | bar.usage.to);
+                intra_pass_scope |=
+                    conv::map_texture_uses_to_barrier_scope(bar.usage.from | bar.usage.to);
                 intra_pass_after |= conv::map_texture_uses_to_render_stages(bar.usage.from);
                 intra_pass_before |= conv::map_texture_uses_to_render_stages(bar.usage.to);
             } else {
