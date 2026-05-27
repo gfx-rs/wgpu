@@ -14,7 +14,8 @@ use objc2_metal::{
     MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer, MTLCommandBufferStatus,
     MTLCompileOptions, MTLComputePipelineDescriptor, MTLComputePipelineState,
     MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode, MTLDepthStencilDescriptor,
-    MTLDevice, MTLFunction, MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion,
+    MTLDevice, MTLFunction, MTLHazardTrackingMode,
+    MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion,
     MTLLibrary, MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
     MTLPipelineBufferDescriptorArray, MTLPipelineOption, MTLPixelFormat, MTLPrimitiveTopologyClass,
     MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
@@ -442,7 +443,9 @@ impl crate::Device for super::Device {
         };
         options.set(MTLResourceOptions::CPUCacheModeWriteCombined, map_write);
 
-        //TODO: HazardTrackingModeUntracked
+        if available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0) {
+            options |= MTLResourceOptions::HazardTrackingModeUntracked;
+        }
 
         autoreleasepool(|_| {
             let raw = self
@@ -548,6 +551,10 @@ impl crate::Device for super::Device {
             descriptor.setPixelFormat(mtl_format);
             descriptor.setUsage(conv::map_texture_usage(desc.format, desc.usage));
             descriptor.setStorageMode(mtl_storage_mode);
+
+            if available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0) {
+                descriptor.setHazardTrackingMode(MTLHazardTrackingMode::Untracked);
+            }
 
             let raw = self
                 .shared

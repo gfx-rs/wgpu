@@ -1112,6 +1112,9 @@ struct CommandState {
 
     /// Timer query that should be executed when the next pass starts.
     pending_timer_queries: Vec<(QuerySet, u32)>,
+
+    inter_pass_event: Option<Retained<ProtocolObject<dyn MTLSharedEvent>>>,
+    inter_pass_event_value: u64,
 }
 
 pub struct CommandEncoder {

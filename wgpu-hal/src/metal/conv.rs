@@ -4,8 +4,8 @@ use objc2_metal::{
     MTLAccelerationStructureBoundingBoxGeometryDescriptor, MTLAccelerationStructureDescriptor,
     MTLAccelerationStructureGeometryDescriptor, MTLAccelerationStructureInstanceDescriptorType,
     MTLAccelerationStructureTriangleGeometryDescriptor, MTLAccelerationStructureUsage,
-    MTLAttributeFormat, MTLBlendFactor, MTLBlendOperation, MTLBlitOption, MTLClearColor,
-    MTLColorWriteMask, MTLCompareFunction, MTLCullMode, MTLIndexType,
+    MTLAttributeFormat, MTLBarrierScope, MTLBlendFactor, MTLBlendOperation, MTLBlitOption,
+    MTLClearColor, MTLColorWriteMask, MTLCompareFunction, MTLCullMode, MTLIndexType,
     MTLInstanceAccelerationStructureDescriptor, MTLOrigin,
     MTLPrimitiveAccelerationStructureDescriptor, MTLPrimitiveTopologyClass, MTLPrimitiveType,
     MTLRenderStages, MTLResourceUsage, MTLSamplerAddressMode, MTLSamplerBorderColor,
@@ -45,6 +45,54 @@ pub fn map_texture_usage(format: wgt::TextureFormat, usage: wgt::TextureUses) ->
     );
 
     mtl_usage
+}
+
+pub fn map_texture_uses_to_barrier_scope(uses: wgt::TextureUses) -> MTLBarrierScope {
+    let mut scope = MTLBarrierScope::empty();
+    if uses.intersects(
+        wgt::TextureUses::RESOURCE
+            | wgt::TextureUses::STORAGE_READ_ONLY
+            | wgt::TextureUses::STORAGE_WRITE_ONLY
+            | wgt::TextureUses::STORAGE_READ_WRITE
+            | wgt::TextureUses::STORAGE_ATOMIC,
+    ) {
+        scope |= MTLBarrierScope::Textures;
+    }
+    if uses.intersects(
+        wgt::TextureUses::COLOR_TARGET
+            | wgt::TextureUses::DEPTH_STENCIL_READ
+            | wgt::TextureUses::DEPTH_STENCIL_WRITE,
+    ) {
+        scope |= MTLBarrierScope::RenderTargets;
+    }
+    scope
+}
+
+pub fn map_buffer_uses_to_barrier_scope(_uses: wgt::BufferUses) -> MTLBarrierScope {
+    MTLBarrierScope::Buffers
+}
+
+pub fn map_texture_uses_to_render_stages(uses: wgt::TextureUses) -> MTLRenderStages {
+    let mut stages = MTLRenderStages::empty();
+    // Since TextureUses doesn't distinguish between stages, we assume all stages
+    // for resources that are not attachments.
+    if uses.intersects(
+        wgt::TextureUses::RESOURCE
+            | wgt::TextureUses::STORAGE_READ_ONLY
+            | wgt::TextureUses::STORAGE_WRITE_ONLY
+            | wgt::TextureUses::STORAGE_READ_WRITE
+            | wgt::TextureUses::STORAGE_ATOMIC,
+    ) {
+        stages |= MTLRenderStages::Vertex | MTLRenderStages::Fragment;
+        // Add Object/Mesh stages if supported?
+    }
+    if uses.intersects(wgt::TextureUses::COLOR_TARGET) {
+        stages |= MTLRenderStages::Fragment;
+    }
+    if uses.intersects(wgt::TextureUses::DEPTH_STENCIL_READ | wgt::TextureUses::DEPTH_STENCIL_WRITE) {
+        stages |= MTLRenderStages::Vertex | MTLRenderStages::Fragment;
+    }
+    stages
 }
 
 pub fn map_texture_view_dimension(dim: wgt::TextureViewDimension) -> MTLTextureType {

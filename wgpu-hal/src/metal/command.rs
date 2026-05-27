@@ -1,16 +1,17 @@
 use objc2::{
+    available,
     rc::{autoreleasepool, Retained},
     runtime::ProtocolObject,
 };
 use objc2_foundation::{NSRange, NSString, NSUInteger};
 use objc2_metal::{
-    MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLBlitCommandEncoder,
-    MTLBlitPassDescriptor, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandEncoder,
-    MTLCommandQueue, MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLCounterDontSample,
-    MTLDevice, MTLLoadAction, MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor,
-    MTLResidencySet, MTLResidencySetDescriptor, MTLSamplerState, MTLScissorRect, MTLSize,
-    MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping, MTLViewport,
-    MTLVisibilityResultMode,
+    MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLBarrierScope,
+    MTLBlitCommandEncoder, MTLBlitPassDescriptor, MTLBuffer, MTLCommandBuffer,
+    MTLCommandBufferStatus, MTLCommandEncoder, MTLCommandQueue, MTLComputeCommandEncoder,
+    MTLComputePassDescriptor, MTLCounterDontSample, MTLDevice, MTLLoadAction, MTLPrimitiveType,
+    MTLRenderCommandEncoder, MTLRenderPassDescriptor, MTLRenderStages, MTLResidencySet,
+    MTLResidencySetDescriptor, MTLSamplerState, MTLScissorRect, MTLSize, MTLStoreAction,
+    MTLTexture, MTLVertexAmplificationViewMapping, MTLViewport, MTLVisibilityResultMode,
 };
 
 use super::{
@@ -43,6 +44,8 @@ impl Default for super::CommandState {
             vertex_buffer_size_map: Default::default(),
             immediates: Vec::new(),
             pending_timer_queries: Vec::new(),
+            inter_pass_event: None,
+            inter_pass_event_value: 0,
         }
     }
 }
@@ -492,6 +495,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         self.raw_cmd_buf = Some(raw);
 
+        self.state.inter_pass_event = if available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0) {
+            self.shared.device.newSharedEvent()
+        } else {
+            None
+        };
+        self.state.inter_pass_event_value = 0;
+
         Ok(())
     }
 
@@ -543,16 +553,92 @@ impl crate::CommandEncoder for super::CommandEncoder {
         //do nothing
     }
 
-    unsafe fn transition_buffers<'a, T>(&mut self, _barriers: T)
+    unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
     where
         T: Iterator<Item = crate::BufferBarrier<'a, super::Buffer>>,
     {
+        let mut needs_inter_pass = false;
+        let mut intra_pass_scope = MTLBarrierScope::empty();
+        let mut has_intra_pass = false;
+
+        for bar in barriers {
+            if self.state.render.is_some() || self.state.compute.is_some() {
+                has_intra_pass = true;
+                intra_pass_scope |= conv::map_buffer_uses_to_barrier_scope(bar.usage.from | bar.usage.to);
+            } else {
+                needs_inter_pass = true;
+            }
+        }
+
+        if needs_inter_pass {
+            self.leave_blit();
+            self.leave_acceleration_structure_builder();
+            if let Some(event) = self.state.inter_pass_event.as_ref() {
+                self.state.inter_pass_event_value += 1;
+                let value = self.state.inter_pass_event_value;
+                let raw_cmd_buf = self.raw_cmd_buf.as_ref().unwrap();
+                raw_cmd_buf.encodeSignalEvent_value(event.as_ref(), value);
+                raw_cmd_buf.encodeWaitForEvent_value(event.as_ref(), value);
+            }
+        }
+
+        if has_intra_pass {
+            if let Some(encoder) = self.state.render.as_ref() {
+                encoder.memoryBarrierWithScope_afterStages_beforeStages(
+                    intra_pass_scope,
+                    MTLRenderStages::Vertex | MTLRenderStages::Fragment,
+                    MTLRenderStages::Vertex | MTLRenderStages::Fragment,
+                );
+            } else if let Some(encoder) = self.state.compute.as_ref() {
+                encoder.memoryBarrierWithScope(intra_pass_scope);
+            }
+        }
     }
 
-    unsafe fn transition_textures<'a, T>(&mut self, _barriers: T)
+    unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
     where
         T: Iterator<Item = crate::TextureBarrier<'a, super::Texture>>,
     {
+        let mut needs_inter_pass = false;
+        let mut intra_pass_scope = MTLBarrierScope::empty();
+        let mut intra_pass_after = MTLRenderStages::empty();
+        let mut intra_pass_before = MTLRenderStages::empty();
+        let mut has_intra_pass = false;
+
+        for bar in barriers {
+            if self.state.render.is_some() || self.state.compute.is_some() {
+                has_intra_pass = true;
+                intra_pass_scope |= conv::map_texture_uses_to_barrier_scope(bar.usage.from | bar.usage.to);
+                intra_pass_after |= conv::map_texture_uses_to_render_stages(bar.usage.from);
+                intra_pass_before |= conv::map_texture_uses_to_render_stages(bar.usage.to);
+            } else {
+                needs_inter_pass = true;
+            }
+        }
+
+        if needs_inter_pass {
+            self.leave_blit();
+            self.leave_acceleration_structure_builder();
+            if let Some(event) = self.state.inter_pass_event.as_ref() {
+                self.state.inter_pass_event_value += 1;
+                let value = self.state.inter_pass_event_value;
+                let raw_cmd_buf = self.raw_cmd_buf.as_ref().unwrap();
+                raw_cmd_buf.encodeSignalEvent_value(event.as_ref(), value);
+                raw_cmd_buf.encodeWaitForEvent_value(event.as_ref(), value);
+            }
+        }
+
+        if has_intra_pass {
+            if let Some(encoder) = self.state.render.as_ref() {
+                encoder.memoryBarrierWithScope_afterStages_beforeStages(
+                    intra_pass_scope,
+                    intra_pass_after,
+                    intra_pass_before,
+                );
+            } else if let Some(encoder) = self.state.compute.as_ref() {
+                encoder.memoryBarrierWithScope(intra_pass_scope);
+            }
+        }
     }
 
     unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {
