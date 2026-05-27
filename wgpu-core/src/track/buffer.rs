@@ -57,13 +57,9 @@ impl BufferBindGroupState {
             .sort_unstable_by_key(|(b, _)| b.tracker_index());
     }
 
-    /// Returns a list of all buffers tracked. May contain duplicates.
-    pub fn used_tracker_indices(&self) -> impl Iterator<Item = TrackerIndex> + '_ {
-        self.buffers
-            .iter()
-            .map(|(b, _)| b.tracker_index())
-            .collect::<Vec<_>>()
-            .into_iter()
+    /// Returns an iterator over the tracked buffers. May contain duplicates.
+    pub fn used_resources(&self) -> impl Iterator<Item = &Arc<Buffer>> {
+        self.buffers.iter().map(|(b, _)| b)
     }
 
     /// Adds the given resource with the given state.

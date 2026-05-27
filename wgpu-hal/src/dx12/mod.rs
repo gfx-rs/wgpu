@@ -1128,8 +1128,8 @@ pub struct Sampler {
 
 impl crate::DynSampler for Sampler {}
 
-unsafe impl Send for Sampler {}
-unsafe impl Sync for Sampler {}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(Sampler: Send, Sync);
 
 #[derive(Debug)]
 pub struct QuerySet {
