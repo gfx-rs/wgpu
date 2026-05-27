@@ -153,6 +153,13 @@ pub fn map_feature(f: native::WGPUFeatureName) -> Option<wgpu::Features> {
         native::WGPUFeatureName_ClipDistances => Some(Features::CLIP_DISTANCES),
         native::WGPUFeatureName_DualSourceBlending => Some(Features::DUAL_SOURCE_BLENDING),
         native::WGPUFeatureName_PrimitiveIndex => Some(Features::PRIMITIVE_INDEX),
+        native::WGPUNativeFeature_AddressModeClampToZero => {
+            Some(Features::ADDRESS_MODE_CLAMP_TO_ZERO)
+        }
+        native::WGPUNativeFeature_AddressModeClampToBorder => {
+            Some(Features::ADDRESS_MODE_CLAMP_TO_BORDER)
+        }
+        native::WGPUNativeFeature_PassthroughShaders => Some(Features::PASSTHROUGH_SHADERS),
         native::WGPUNativeFeature_Immediates => Some(Features::IMMEDIATES),
         native::WGPUNativeFeature_TextureAdapterSpecificFormatFeatures => {
             Some(Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
@@ -237,6 +244,13 @@ pub fn map_feature(f: native::WGPUFeatureName) -> Option<wgpu::Features> {
         }
         native::WGPUNativeFeature_MemoryDecorationVolatile => {
             Some(Features::MEMORY_DECORATION_VOLATILE)
+        }
+        native::WGPUNativeFeature_ExternalTexture => Some(Features::EXTERNAL_TEXTURE),
+        native::WGPUNativeFeature_ExtendedAccelerationStructureVertexFormats => {
+            Some(Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS)
+        }
+        native::WGPUNativeFeature_VulkanExternalMemoryFd => {
+            Some(Features::VULKAN_EXTERNAL_MEMORY_FD)
         }
         _ => None,
     }
@@ -333,6 +347,18 @@ pub fn features_to_native(features: wgpu::Features) -> Vec<native::WGPUFeatureNa
     push!(
         Features::PRIMITIVE_INDEX,
         native::WGPUFeatureName_PrimitiveIndex
+    );
+    push!(
+        Features::ADDRESS_MODE_CLAMP_TO_ZERO,
+        native::WGPUNativeFeature_AddressModeClampToZero
+    );
+    push!(
+        Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+        native::WGPUNativeFeature_AddressModeClampToBorder
+    );
+    push!(
+        Features::PASSTHROUGH_SHADERS,
+        native::WGPUNativeFeature_PassthroughShaders
     );
     push!(Features::IMMEDIATES, native::WGPUNativeFeature_Immediates);
     push!(
@@ -507,6 +533,15 @@ pub fn features_to_native(features: wgpu::Features) -> Vec<native::WGPUFeatureNa
         Features::MEMORY_DECORATION_VOLATILE,
         native::WGPUNativeFeature_MemoryDecorationVolatile
     );
+    push!(Features::EXTERNAL_TEXTURE, native::WGPUNativeFeature_ExternalTexture);
+    push!(
+        Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
+        native::WGPUNativeFeature_ExtendedAccelerationStructureVertexFormats
+    );
+    push!(
+        Features::VULKAN_EXTERNAL_MEMORY_FD,
+        native::WGPUNativeFeature_VulkanExternalMemoryFd
+    );
     out
 }
 
@@ -551,131 +586,133 @@ pub fn limits_to_native(l: &wgpu::Limits) -> native::WGPULimits {
     out
 }
 
-pub fn map_limits(c: &native::WGPULimits) -> wgpu::Limits {
+pub fn map_limits(c: &native::WGPULimits, extras: Option<&native::WGPUNativeLimits>) -> wgpu::Limits {
     let mut l = wgpu::Limits::default();
+    // wgpuAdapterGetLimits / wgpuDeviceGetLimits always fill all standard fields with the real
+    // hardware values.  Do NOT use a sentinel check here: u32::MAX is a valid hardware limit (e.g.
+    // Metal reports u32::MAX for maxBindingsPerBindGroup) and skipping it would leave the field at
+    // the WebGPU default (1000), which differs from what wgpu-core reports directly.
     macro_rules! set {
-        ($field:ident, $src:expr, $undef:expr) => {
-            if $src != $undef {
-                l.$field = $src as _;
-            }
+        ($field:ident, $src:expr) => {
+            l.$field = $src as _;
         };
     }
-    set!(max_texture_dimension_1d, c.maxTextureDimension1D, u32::MAX);
-    set!(max_texture_dimension_2d, c.maxTextureDimension2D, u32::MAX);
-    set!(max_texture_dimension_3d, c.maxTextureDimension3D, u32::MAX);
-    set!(max_texture_array_layers, c.maxTextureArrayLayers, u32::MAX);
-    set!(max_bind_groups, c.maxBindGroups, u32::MAX);
-    set!(
-        max_bindings_per_bind_group,
-        c.maxBindingsPerBindGroup,
-        u32::MAX
-    );
+    set!(max_texture_dimension_1d, c.maxTextureDimension1D);
+    set!(max_texture_dimension_2d, c.maxTextureDimension2D);
+    set!(max_texture_dimension_3d, c.maxTextureDimension3D);
+    set!(max_texture_array_layers, c.maxTextureArrayLayers);
+    set!(max_bind_groups, c.maxBindGroups);
+    set!(max_bindings_per_bind_group, c.maxBindingsPerBindGroup);
     set!(
         max_dynamic_uniform_buffers_per_pipeline_layout,
-        c.maxDynamicUniformBuffersPerPipelineLayout,
-        u32::MAX
+        c.maxDynamicUniformBuffersPerPipelineLayout
     );
     set!(
         max_dynamic_storage_buffers_per_pipeline_layout,
-        c.maxDynamicStorageBuffersPerPipelineLayout,
-        u32::MAX
+        c.maxDynamicStorageBuffersPerPipelineLayout
     );
     set!(
         max_sampled_textures_per_shader_stage,
-        c.maxSampledTexturesPerShaderStage,
-        u32::MAX
+        c.maxSampledTexturesPerShaderStage
     );
-    set!(
-        max_samplers_per_shader_stage,
-        c.maxSamplersPerShaderStage,
-        u32::MAX
-    );
+    set!(max_samplers_per_shader_stage, c.maxSamplersPerShaderStage);
     set!(
         max_storage_buffers_per_shader_stage,
-        c.maxStorageBuffersPerShaderStage,
-        u32::MAX
+        c.maxStorageBuffersPerShaderStage
     );
     set!(
         max_storage_textures_per_shader_stage,
-        c.maxStorageTexturesPerShaderStage,
-        u32::MAX
+        c.maxStorageTexturesPerShaderStage
     );
     set!(
         max_uniform_buffers_per_shader_stage,
-        c.maxUniformBuffersPerShaderStage,
-        u32::MAX
+        c.maxUniformBuffersPerShaderStage
     );
-    set!(
-        max_uniform_buffer_binding_size,
-        c.maxUniformBufferBindingSize,
-        u64::MAX
-    );
-    set!(
-        max_storage_buffer_binding_size,
-        c.maxStorageBufferBindingSize,
-        u64::MAX
-    );
+    set!(max_uniform_buffer_binding_size, c.maxUniformBufferBindingSize);
+    set!(max_storage_buffer_binding_size, c.maxStorageBufferBindingSize);
     set!(
         min_uniform_buffer_offset_alignment,
-        c.minUniformBufferOffsetAlignment,
-        u32::MAX
+        c.minUniformBufferOffsetAlignment
     );
     set!(
         min_storage_buffer_offset_alignment,
-        c.minStorageBufferOffsetAlignment,
-        u32::MAX
+        c.minStorageBufferOffsetAlignment
     );
-    set!(max_vertex_buffers, c.maxVertexBuffers, u32::MAX);
-    set!(max_buffer_size, c.maxBufferSize, u64::MAX);
-    set!(max_vertex_attributes, c.maxVertexAttributes, u32::MAX);
-    set!(
-        max_vertex_buffer_array_stride,
-        c.maxVertexBufferArrayStride,
-        u32::MAX
-    );
+    set!(max_vertex_buffers, c.maxVertexBuffers);
+    set!(max_buffer_size, c.maxBufferSize);
+    set!(max_vertex_attributes, c.maxVertexAttributes);
+    set!(max_vertex_buffer_array_stride, c.maxVertexBufferArrayStride);
     set!(
         max_inter_stage_shader_variables,
-        c.maxInterStageShaderVariables,
-        u32::MAX
+        c.maxInterStageShaderVariables
     );
-    set!(max_color_attachments, c.maxColorAttachments, u32::MAX);
+    set!(max_color_attachments, c.maxColorAttachments);
     set!(
         max_color_attachment_bytes_per_sample,
-        c.maxColorAttachmentBytesPerSample,
-        u32::MAX
+        c.maxColorAttachmentBytesPerSample
     );
     set!(
         max_compute_workgroup_storage_size,
-        c.maxComputeWorkgroupStorageSize,
-        u32::MAX
+        c.maxComputeWorkgroupStorageSize
     );
     set!(
         max_compute_invocations_per_workgroup,
-        c.maxComputeInvocationsPerWorkgroup,
-        u32::MAX
+        c.maxComputeInvocationsPerWorkgroup
     );
-    set!(
-        max_compute_workgroup_size_x,
-        c.maxComputeWorkgroupSizeX,
-        u32::MAX
-    );
-    set!(
-        max_compute_workgroup_size_y,
-        c.maxComputeWorkgroupSizeY,
-        u32::MAX
-    );
-    set!(
-        max_compute_workgroup_size_z,
-        c.maxComputeWorkgroupSizeZ,
-        u32::MAX
-    );
+    set!(max_compute_workgroup_size_x, c.maxComputeWorkgroupSizeX);
+    set!(max_compute_workgroup_size_y, c.maxComputeWorkgroupSizeY);
+    set!(max_compute_workgroup_size_z, c.maxComputeWorkgroupSizeZ);
     set!(
         max_compute_workgroups_per_dimension,
-        c.maxComputeWorkgroupsPerDimension,
-        u32::MAX
+        c.maxComputeWorkgroupsPerDimension
     );
-    set!(max_immediate_size, c.maxImmediateSize, u32::MAX);
+    set!(max_immediate_size, c.maxImmediateSize);
+    if let Some(n) = extras {
+        set!(max_non_sampler_bindings, n.maxNonSamplerBindings);
+        set!(
+            max_binding_array_elements_per_shader_stage,
+            n.maxBindingArrayElementsPerShaderStage
+        );
+        set!(
+            max_binding_array_sampler_elements_per_shader_stage,
+            n.maxBindingArraySamplerElementsPerShaderStage
+        );
+        set!(max_multiview_view_count, n.maxMultiviewViewCount);
+        set!(
+            max_binding_array_acceleration_structure_elements_per_shader_stage,
+            n.maxBindingArrayAccelerationStructureElementsPerShaderStage
+        );
+        set!(max_task_workgroup_total_count, n.maxTaskWorkgroupTotalCount);
+        set!(max_task_workgroups_per_dimension, n.maxTaskWorkgroupsPerDimension);
+        set!(max_mesh_workgroup_total_count, n.maxMeshWorkgroupTotalCount);
+        set!(max_mesh_workgroups_per_dimension, n.maxMeshWorkgroupsPerDimension);
+        set!(max_task_invocations_per_workgroup, n.maxTaskInvocationsPerWorkgroup);
+        set!(max_task_invocations_per_dimension, n.maxTaskInvocationsPerDimension);
+        set!(max_mesh_invocations_per_workgroup, n.maxMeshInvocationsPerWorkgroup);
+        set!(max_mesh_invocations_per_dimension, n.maxMeshInvocationsPerDimension);
+        set!(max_task_payload_size, n.maxTaskPayloadSize);
+        set!(max_mesh_output_vertices, n.maxMeshOutputVertices);
+        set!(max_mesh_output_primitives, n.maxMeshOutputPrimitives);
+        set!(max_mesh_output_layers, n.maxMeshOutputLayers);
+        set!(max_mesh_multiview_view_count, n.maxMeshMultiviewViewCount);
+        set!(max_blas_primitive_count, n.maxBlasPrimitiveCount as u32);
+        set!(max_blas_geometry_count, n.maxBlasGeometryCount as u32);
+        set!(max_tlas_instance_count, n.maxTlasInstanceCount as u32);
+        set!(
+            max_acceleration_structures_per_shader_stage,
+            n.maxAccelerationStructuresPerShaderStage
+        );
+    }
     l
+}
+
+pub fn map_texture_format_capabilities(
+    caps: &native::WGPUNativeTextureFormatCapabilities,
+) -> wgpu::TextureFormatFeatures {
+    wgpu::TextureFormatFeatures {
+        allowed_usages: wgpu::TextureUsages::from_bits_truncate(caps.allowedUsages as u32),
+        flags: wgpu::TextureFormatFeatureFlags::from_bits_truncate(caps.flags),
+    }
 }
 
 // ── Adapter info ──────────────────────────────────────────────────────────────
@@ -892,6 +929,21 @@ pub fn map_texture_format(v: native::WGPUTextureFormat) -> Option<wgpu::TextureF
         native::WGPUNativeTextureFormat_Rgba16Unorm => Some(TF::Rgba16Unorm),
         native::WGPUNativeTextureFormat_Rgba16Snorm => Some(TF::Rgba16Snorm),
         native::WGPUNativeTextureFormat_NV12 => Some(TF::NV12),
+        native::WGPUNativeTextureFormat_P010 => Some(TF::P010),
+        native::WGPUNativeTextureFormat_Astc4x4Sfloat => Some(TF::Astc { block: AstcBlock::B4x4, channel: AstcChannel::Hdr }),
+        native::WGPUNativeTextureFormat_Astc5x4Sfloat => Some(TF::Astc { block: AstcBlock::B5x4, channel: AstcChannel::Hdr }),
+        native::WGPUNativeTextureFormat_Astc5x5Sfloat => Some(TF::Astc { block: AstcBlock::B5x5, channel: AstcChannel::Hdr }),
+        native::WGPUNativeTextureFormat_Astc6x5Sfloat => Some(TF::Astc { block: AstcBlock::B6x5, channel: AstcChannel::Hdr }),
+        native::WGPUNativeTextureFormat_Astc6x6Sfloat => Some(TF::Astc { block: AstcBlock::B6x6, channel: AstcChannel::Hdr }),
+        native::WGPUNativeTextureFormat_Astc8x5Sfloat => Some(TF::Astc { block: AstcBlock::B8x5, channel: AstcChannel::Hdr }),
+        native::WGPUNativeTextureFormat_Astc8x6Sfloat => Some(TF::Astc { block: AstcBlock::B8x6, channel: AstcChannel::Hdr }),
+        native::WGPUNativeTextureFormat_Astc8x8Sfloat => Some(TF::Astc { block: AstcBlock::B8x8, channel: AstcChannel::Hdr }),
+        native::WGPUNativeTextureFormat_Astc10x5Sfloat => Some(TF::Astc { block: AstcBlock::B10x5, channel: AstcChannel::Hdr }),
+        native::WGPUNativeTextureFormat_Astc10x6Sfloat => Some(TF::Astc { block: AstcBlock::B10x6, channel: AstcChannel::Hdr }),
+        native::WGPUNativeTextureFormat_Astc10x8Sfloat => Some(TF::Astc { block: AstcBlock::B10x8, channel: AstcChannel::Hdr }),
+        native::WGPUNativeTextureFormat_Astc10x10Sfloat => Some(TF::Astc { block: AstcBlock::B10x10, channel: AstcChannel::Hdr }),
+        native::WGPUNativeTextureFormat_Astc12x10Sfloat => Some(TF::Astc { block: AstcBlock::B12x10, channel: AstcChannel::Hdr }),
+        native::WGPUNativeTextureFormat_Astc12x12Sfloat => Some(TF::Astc { block: AstcBlock::B12x12, channel: AstcChannel::Hdr }),
         _ => None,
     }
 }
@@ -974,8 +1026,8 @@ pub fn texture_format_to_native(f: wgpu::TextureFormat) -> native::WGPUTextureFo
         TF::Rgba16Unorm => native::WGPUNativeTextureFormat_Rgba16Unorm,
         TF::Rgba16Snorm => native::WGPUNativeTextureFormat_Rgba16Snorm,
         TF::NV12 => native::WGPUNativeTextureFormat_NV12,
+        TF::P010 => native::WGPUNativeTextureFormat_P010,
         TF::R64Uint => wgpu_native::conv::WGPU_NATIVE_TEXTURE_FORMAT_R64_UINT,
-        _ => native::WGPUTextureFormat_Undefined,
     }
 }
 
@@ -1010,7 +1062,20 @@ fn astc_to_native(block: wgpu::AstcBlock, channel: wgpu::AstcChannel) -> native:
         (B::B12x10, C::UnormSrgb) => native::WGPUTextureFormat_ASTC12x10UnormSrgb,
         (B::B12x12, C::Unorm) => native::WGPUTextureFormat_ASTC12x12Unorm,
         (B::B12x12, C::UnormSrgb) => native::WGPUTextureFormat_ASTC12x12UnormSrgb,
-        _ => native::WGPUTextureFormat_Undefined,
+        (B::B4x4,  C::Hdr) => native::WGPUNativeTextureFormat_Astc4x4Sfloat,
+        (B::B5x4,  C::Hdr) => native::WGPUNativeTextureFormat_Astc5x4Sfloat,
+        (B::B5x5,  C::Hdr) => native::WGPUNativeTextureFormat_Astc5x5Sfloat,
+        (B::B6x5,  C::Hdr) => native::WGPUNativeTextureFormat_Astc6x5Sfloat,
+        (B::B6x6,  C::Hdr) => native::WGPUNativeTextureFormat_Astc6x6Sfloat,
+        (B::B8x5,  C::Hdr) => native::WGPUNativeTextureFormat_Astc8x5Sfloat,
+        (B::B8x6,  C::Hdr) => native::WGPUNativeTextureFormat_Astc8x6Sfloat,
+        (B::B8x8,  C::Hdr) => native::WGPUNativeTextureFormat_Astc8x8Sfloat,
+        (B::B10x5, C::Hdr) => native::WGPUNativeTextureFormat_Astc10x5Sfloat,
+        (B::B10x6, C::Hdr) => native::WGPUNativeTextureFormat_Astc10x6Sfloat,
+        (B::B10x8, C::Hdr) => native::WGPUNativeTextureFormat_Astc10x8Sfloat,
+        (B::B10x10, C::Hdr) => native::WGPUNativeTextureFormat_Astc10x10Sfloat,
+        (B::B12x10, C::Hdr) => native::WGPUNativeTextureFormat_Astc12x10Sfloat,
+        (B::B12x12, C::Hdr) => native::WGPUNativeTextureFormat_Astc12x12Sfloat,
     }
 }
 

@@ -264,9 +264,15 @@ impl AdapterInterface for CAdapter {
     }
 
     fn limits(&self) -> wgpu::Limits {
+        let mut native_limits: native::WGPUNativeLimits = unsafe { std::mem::zeroed() };
+        native_limits.chain = native::WGPUChainedStruct {
+            next: std::ptr::null_mut(),
+            sType: native::WGPUSType_NativeLimits,
+        };
         let mut limits: native::WGPULimits = unsafe { std::mem::zeroed() };
+        limits.nextInChain = std::ptr::from_mut::<native::WGPUChainedStruct>(&mut native_limits.chain);
         unsafe { wgpuAdapterGetLimits(self.ptr, Some(&mut limits)) };
-        conv::map_limits(&limits)
+        conv::map_limits(&limits, Some(&native_limits))
     }
 
     fn downlevel_capabilities(&self) -> wgpu::DownlevelCapabilities {
@@ -281,9 +287,21 @@ impl AdapterInterface for CAdapter {
         &self,
         format: wgpu::TextureFormat,
     ) -> wgpu::TextureFormatFeatures {
-        // wgpu-native has no per-format feature query, so fall back to the
-        // WebGPU-guaranteed minimums, conditioned on the adapter's actual features.
-        format.guaranteed_format_features(self.features())
+        let native_fmt = conv::texture_format_to_native(format);
+        if native_fmt == native::WGPUTextureFormat_Undefined {
+            return format.guaranteed_format_features(self.features());
+        }
+        let mut caps = native::WGPUNativeTextureFormatCapabilities {
+            allowedUsages: 0,
+            flags: 0,
+        };
+        let status = unsafe {
+            wgpuAdapterGetTextureFormatCapabilities(self.ptr, native_fmt, Some(&mut caps))
+        };
+        if status != native::WGPUStatus_Success {
+            return format.guaranteed_format_features(self.features());
+        }
+        conv::map_texture_format_capabilities(&caps)
     }
 
     fn get_presentation_timestamp(&self) -> wgpu::PresentationTimestamp {

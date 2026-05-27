@@ -58,9 +58,15 @@ impl DeviceInterface for CDevice {
     }
 
     fn limits(&self) -> wgpu::Limits {
+        let mut native_limits: native::WGPUNativeLimits = unsafe { std::mem::zeroed() };
+        native_limits.chain = native::WGPUChainedStruct {
+            next: std::ptr::null_mut(),
+            sType: native::WGPUSType_NativeLimits,
+        };
         let mut limits: native::WGPULimits = unsafe { std::mem::zeroed() };
+        limits.nextInChain = std::ptr::from_mut::<native::WGPUChainedStruct>(&mut native_limits.chain);
         unsafe { wgpuDeviceGetLimits(self.ptr, Some(&mut limits)) };
-        conv::map_limits(&limits)
+        conv::map_limits(&limits, Some(&native_limits))
     }
 
     fn adapter_info(&self) -> wgpu::AdapterInfo {
@@ -70,13 +76,27 @@ impl DeviceInterface for CDevice {
     fn create_shader_module(
         &self,
         desc: wgpu::ShaderModuleDescriptor<'_>,
-        _shader_bound_checks: wgpu::ShaderRuntimeChecks,
+        shader_bound_checks: wgpu::ShaderRuntimeChecks,
     ) -> DispatchShaderModule {
         let label = desc.label.map(|s| s.to_owned());
         let label_sv = label
             .as_deref()
             .map(conv::str_to_string_view)
             .unwrap_or(conv::null_string_view());
+
+        let mut extras = native::WGPUShaderModuleDescriptorExtras {
+            chain: native::WGPUChainedStruct {
+                next: std::ptr::null_mut(),
+                sType: native::WGPUSType_ShaderModuleDescriptorExtras,
+            },
+            boundsChecks: shader_bound_checks.bounds_checks as _,
+            forceLoopBounding: shader_bound_checks.force_loop_bounding as _,
+            rayQueryInitializationTracking: shader_bound_checks
+                .ray_query_initialization_tracking as _,
+            taskShaderDispatchTracking: shader_bound_checks.task_shader_dispatch_tracking as _,
+            meshShaderPrimitiveIndicesClamp: shader_bound_checks
+                .mesh_shader_primitive_indices_clamp as _,
+        };
 
         match &desc.source {
             #[cfg(feature = "wgsl")]
@@ -89,10 +109,10 @@ impl DeviceInterface for CDevice {
                     },
                     code: code_sv,
                 };
+                extras.chain.next =
+                    std::ptr::from_mut::<native::WGPUChainedStruct>(&mut wgsl_chain.chain);
                 let c_desc = native::WGPUShaderModuleDescriptor {
-                    nextInChain: std::ptr::from_mut::<native::WGPUChainedStruct>(
-                        &mut wgsl_chain.chain,
-                    ),
+                    nextInChain: std::ptr::from_mut::<native::WGPUChainedStruct>(&mut extras.chain),
                     label: label_sv,
                 };
                 let ptr = unsafe { wgpuDeviceCreateShaderModule(self.ptr, Some(&c_desc)) };
@@ -100,12 +120,20 @@ impl DeviceInterface for CDevice {
             }
             #[cfg(feature = "spirv")]
             wgpu::ShaderSource::SpirV(words) => {
-                let c_desc = native::WGPUShaderModuleDescriptorSpirV {
+                let c_desc = native::WGPUShaderModuleDescriptorPassthrough {
                     label: label_sv,
-                    sourceSize: words.len() as u32,
-                    source: words.as_ptr(),
+                    entryPointCount: 0,
+                    entryPoints: std::ptr::null(),
+                    spirvSize: words.len() as u32,
+                    spirv: words.as_ptr(),
+                    dxilSize: 0,
+                    dxil: std::ptr::null(),
+                    hlsl: conv::null_string_view(),
+                    metallibSize: 0,
+                    metallib: std::ptr::null(),
+                    msl: conv::null_string_view(),
                 };
-                let ptr = unsafe { wgpuDeviceCreateShaderModuleSpirV(self.ptr, Some(&c_desc)) };
+                let ptr = unsafe { wgpuDeviceCreateShaderModulePassthrough(self.ptr, Some(&c_desc)) };
                 DispatchShaderModule::custom(CShaderModule { ptr })
             }
             _ => unimplemented!("wgpu-native does not support this shader source type"),
@@ -135,12 +163,30 @@ impl DeviceInterface for CDevice {
             return DispatchShaderModule::custom(CShaderModule { ptr });
         }
         if let Some(spirv) = &desc.spirv {
-            let c_desc = native::WGPUShaderModuleDescriptorSpirV {
+            let native_eps: Vec<native::WGPUPassthroughShaderEntryPoint> = desc
+                .entry_points
+                .iter()
+                .map(|ep| native::WGPUPassthroughShaderEntryPoint {
+                    name: conv::str_to_string_view(&ep.name),
+                    workgroupSizeX: ep.workgroup_size.0,
+                    workgroupSizeY: ep.workgroup_size.1,
+                    workgroupSizeZ: ep.workgroup_size.2,
+                })
+                .collect();
+            let c_desc = native::WGPUShaderModuleDescriptorPassthrough {
                 label: label_sv,
-                sourceSize: spirv.len() as u32,
-                source: spirv.as_ptr(),
+                entryPointCount: native_eps.len(),
+                entryPoints: native_eps.as_ptr(),
+                spirvSize: spirv.len() as u32,
+                spirv: spirv.as_ptr(),
+                dxilSize: 0,
+                dxil: std::ptr::null(),
+                hlsl: conv::null_string_view(),
+                metallibSize: 0,
+                metallib: std::ptr::null(),
+                msl: conv::null_string_view(),
             };
-            let ptr = unsafe { wgpuDeviceCreateShaderModuleSpirV(self.ptr, Some(&c_desc)) };
+            let ptr = unsafe { wgpuDeviceCreateShaderModulePassthrough(self.ptr, Some(&c_desc)) };
             return DispatchShaderModule::custom(CShaderModule { ptr });
         }
         unimplemented!("wgpu-native: no supported shader format in passthrough descriptor")

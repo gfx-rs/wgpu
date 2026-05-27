@@ -327,8 +327,13 @@ wgpu-hal = { path = "./wgpu-hal" }
 wgpu-types = { path = "./wgpu-types" }
 naga = { path = "./naga" }
 
-env_logger = { version = "0.11", git = "https://github.com/rust-cli/env_logger.git", rev = "d550741" }
-libtest-mimic = { version = "0.8", git = "https://github.com/cwfitzgerald/libtest-mimic.git", rev = "9979b3c" }
+# Redirect wgpu-native's git dependencies to local workspace crates so they share one version
+[patch."https://github.com/inner-daemons/wgpu.git"]
+wgpu-core = { path = "./wgpu-core" }
+wgpu-hal = { path = "./wgpu-hal" }
+wgpu-types = { path = "./wgpu-types" }
+naga = { path = "./naga" }
+
 
 
 
