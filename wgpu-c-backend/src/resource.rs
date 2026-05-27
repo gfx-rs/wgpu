@@ -534,6 +534,18 @@ c_resource!(CTlas, native::WGPUTlas, wgpuTlasRelease);
 
 impl TlasInterface for CTlas {}
 
+// ── CExternalTexture ──────────────────────────────────────────────────────────
+
+c_resource!(
+    CExternalTexture,
+    native::WGPUExternalTexture,
+    wgpuExternalTextureRelease
+);
+
+impl ExternalTextureInterface for CExternalTexture {
+    fn destroy(&self) {}
+}
+
 // ── CQueueWriteBuffer ─────────────────────────────────────────────────────────
 //
 // wgpu-native has no GPU staging buffer API, so we use a CPU Vec that is

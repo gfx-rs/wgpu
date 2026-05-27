@@ -1855,3 +1855,24 @@ pub fn acceleration_structure_geometry_flags_to_native(
     }
     out
 }
+
+pub fn external_texture_format_to_native(
+    f: wgpu::ExternalTextureFormat,
+) -> native::WGPUExternalTextureFormat {
+    match f {
+        wgpu::ExternalTextureFormat::Rgba => native::WGPUExternalTextureFormat_Rgba,
+        wgpu::ExternalTextureFormat::Nv12 => native::WGPUExternalTextureFormat_Nv12,
+        wgpu::ExternalTextureFormat::Yu12 => native::WGPUExternalTextureFormat_Yu12,
+    }
+}
+
+pub fn external_transfer_function_to_native(
+    tf: wgpu::ExternalTextureTransferFunction,
+) -> native::WGPUExternalTextureTransferFunction {
+    native::WGPUExternalTextureTransferFunction {
+        a: tf.a,
+        b: tf.b,
+        g: tf.g,
+        k: tf.k,
+    }
+}

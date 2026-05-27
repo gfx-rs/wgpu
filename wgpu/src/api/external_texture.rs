@@ -19,6 +19,11 @@ impl ExternalTexture {
     pub fn destroy(&self) {
         self.inner.destroy();
     }
+
+    /// Returns custom implementation of ExternalTexture (if custom backend and is internally T)
+    pub fn as_custom<T: custom::ExternalTextureInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
 }
 
 /// Describes an [`ExternalTexture`].

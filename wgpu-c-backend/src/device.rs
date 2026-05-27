@@ -364,6 +364,8 @@ impl DeviceInterface for CDevice {
             _tlases: Vec<native::WGPUTlas>,
         }
         let mut extras_by_entry: Vec<(usize, Box<ExtrasStorage>)> = Vec::new();
+        let mut et_extras_by_entry: Vec<(usize, Box<native::WGPUExternalTextureBindingEntry>)> =
+            Vec::new();
 
         let mut entries: Vec<native::WGPUBindGroupEntry> = Vec::with_capacity(desc.entries.len());
         for (idx, e) in desc.entries.iter().enumerate() {
@@ -553,7 +555,19 @@ impl DeviceInterface for CDevice {
                         }),
                     ));
                 }
-                // ExternalTexture is not supported.
+                wgpu::BindingResource::ExternalTexture(et) => {
+                    let et_ptr = et.as_custom::<CExternalTexture>().unwrap().ptr;
+                    et_extras_by_entry.push((
+                        idx,
+                        Box::new(native::WGPUExternalTextureBindingEntry {
+                            chain: native::WGPUChainedStruct {
+                                next: std::ptr::null_mut(),
+                                sType: native::WGPUSType_ExternalTextureBindingEntry,
+                            },
+                            externalTexture: et_ptr,
+                        }),
+                    ));
+                }
                 _ => unimplemented!("wgpu-native does not support this binding resource type"),
             }
             entries.push(entry);
@@ -565,6 +579,10 @@ impl DeviceInterface for CDevice {
         for (idx, storage) in &extras_by_entry {
             entries[*idx].nextInChain =
                 std::ptr::from_ref::<native::WGPUChainedStruct>(&storage.extras.chain) as *mut _;
+        }
+        for (idx, et_storage) in &et_extras_by_entry {
+            entries[*idx].nextInChain =
+                std::ptr::from_ref::<native::WGPUChainedStruct>(&et_storage.chain) as *mut _;
         }
 
         let c_desc = native::WGPUBindGroupDescriptor {
@@ -1325,11 +1343,47 @@ impl DeviceInterface for CDevice {
 
     fn create_external_texture(
         &self,
-        _desc: &wgpu::ExternalTextureDescriptor<'_>,
-        _planes: &[&wgpu::TextureView],
+        desc: &wgpu::ExternalTextureDescriptor<'_>,
+        planes: &[&wgpu::TextureView],
     ) -> DispatchExternalTexture {
-        // wgpu-native has no external texture support.
-        unimplemented!("wgpu-native does not support external textures")
+        let label = desc.label.map(|s| s.to_owned());
+        let label_sv = label
+            .as_deref()
+            .map(conv::str_to_string_view)
+            .unwrap_or(conv::null_string_view());
+        let plane_ptrs: Vec<native::WGPUTextureView> = planes
+            .iter()
+            .map(|tv| tv.as_custom::<CTextureView>().unwrap().ptr)
+            .collect();
+        let c_desc = native::WGPUExternalTextureDescriptor {
+            label: label_sv,
+            width: desc.width,
+            height: desc.height,
+            format: conv::external_texture_format_to_native(desc.format),
+            yuvConversionMatrix: desc.yuv_conversion_matrix,
+            gamutConversionMatrix: desc.gamut_conversion_matrix,
+            srcTransferFunction: conv::external_transfer_function_to_native(
+                desc.src_transfer_function,
+            ),
+            dstTransferFunction: conv::external_transfer_function_to_native(
+                desc.dst_transfer_function,
+            ),
+            sampleTransform: desc.sample_transform,
+            loadTransform: desc.load_transform,
+        };
+        let ptr = unsafe {
+            wgpuDeviceCreateExternalTexture(
+                self.ptr,
+                Some(&c_desc),
+                if plane_ptrs.is_empty() {
+                    std::ptr::null()
+                } else {
+                    plane_ptrs.as_ptr()
+                },
+                plane_ptrs.len(),
+            )
+        };
+        DispatchExternalTexture::custom(CExternalTexture { ptr })
     }
 
     fn create_blas(
