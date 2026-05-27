@@ -227,7 +227,7 @@ webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="
 webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setViewport"
 webgpu:api,validation,encoding,encoder_state:*
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:*
-webgpu:api,validation,encoding,programmable,pipeline_immediate:overprovisioned_immediate_data:*
+fails-if(dx12) webgpu:api,validation,encoding,programmable,pipeline_immediate:overprovisioned_immediate_data:*
 webgpu:api,validation,encoding,programmable,pipeline_immediate:render_bundle_execution_state_invalidation:*
 //FAIL: webgpu:api,validation,encoding,programmable,pipeline_immediate:required_slots_set:*
 // 97%, scenario="multiple_variables";usage="partial" fails.
