@@ -19,8 +19,8 @@ use deno_error::JsErrorBox;
 use crate::buffer::GPUBuffer;
 use crate::error::GPUError;
 use crate::error::GPUGenericError;
+use crate::get_data_slice;
 use crate::texture::GPUTextureFormat;
-use crate::transform_buffer;
 use crate::Instance;
 
 fn c_string_truncated_at_first_nul<T: Into<Vec<u8>>>(
@@ -396,21 +396,17 @@ impl GPURenderBundleEncoder {
     #[webidl(default = 0, options(enforce_range = true))] data_offset: u64,
     #[webidl(options(enforce_range = true))] data_size: Option<u64>,
   ) -> Result<(), JsErrorBox> {
-    let data = transform_buffer(scope, data_arg, data_offset, data_size)?;
+    let data = get_data_slice(scope, data_arg, data_offset, data_size)?;
 
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut().ok_or_else(|| {
       JsErrorBox::generic("Encoder has already been finished")
     })?;
 
-    if let Err(err) =
-      wgpu_core::command::bundle_ffi::wgpu_render_bundle_set_immediates(
-        encoder, offset, data,
-      )
-    {
+    if let Err(err) = encoder.set_immediates(offset, data) {
       self
         .error_handler
-        .push_error(Some(GPUError::Validation(err.to_string())));
+        .push_error(Some(GPUError::from_webgpu(err)));
     }
 
     Ok(())

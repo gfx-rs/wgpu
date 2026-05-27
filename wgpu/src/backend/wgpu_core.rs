@@ -3841,7 +3841,7 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     }
 
     fn set_immediates(&mut self, offset: u32, data: &[u8]) {
-        if let Err(err) = wgpu_render_bundle_set_immediates(&mut self.encoder, offset, data) {
+        if let Err(err) = self.encoder.set_immediates(offset, data) {
             self.context.handle_error(
                 &self.error_sink,
                 err,

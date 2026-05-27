@@ -15,7 +15,7 @@ use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 
 use crate::error::GPUGenericError;
-use crate::transform_buffer;
+use crate::get_data_slice;
 use crate::Instance;
 
 pub struct GPUComputePassEncoder {
@@ -243,7 +243,7 @@ impl GPUComputePassEncoder {
     #[webidl(default = 0, options(enforce_range = true))] data_offset: u64,
     #[webidl(options(enforce_range = true))] data_size: Option<u64>,
   ) -> Result<(), JsErrorBox> {
-    let data = transform_buffer(scope, data_arg, data_offset, data_size)?;
+    let data = get_data_slice(scope, data_arg, data_offset, data_size)?;
 
     let err = self
       .instance

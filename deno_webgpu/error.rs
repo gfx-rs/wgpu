@@ -194,7 +194,7 @@ impl Display for GPUError {
 impl std::error::Error for GPUError {}
 
 impl GPUError {
-  fn from_webgpu(e: impl WebGpuError) -> Self {
+  pub(crate) fn from_webgpu(e: impl WebGpuError) -> Self {
     match e.webgpu_error_type() {
       ErrorType::Internal => GPUError::Internal,
       ErrorType::DeviceLost => GPUError::Lost(GPUDeviceLostReason::Unknown), // TODO: this variant should be ignored, register the lost callback instead.

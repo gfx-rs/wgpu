@@ -24,7 +24,7 @@ use crate::error::GPUGenericError;
 use crate::render_bundle::GPURenderBundle;
 use crate::texture::GPUTexture;
 use crate::texture::GPUTextureView;
-use crate::transform_buffer;
+use crate::get_data_slice;
 use crate::webidl::GPUColor;
 use crate::Instance;
 
@@ -458,7 +458,7 @@ impl GPURenderPassEncoder {
     #[webidl(default = 0, options(enforce_range = true))] data_offset: u64,
     #[webidl(options(enforce_range = true))] data_size: Option<u64>,
   ) -> Result<(), JsErrorBox> {
-    let data = transform_buffer(scope, data_arg, data_offset, data_size)?;
+    let data = get_data_slice(scope, data_arg, data_offset, data_size)?;
 
     let err = self
       .instance

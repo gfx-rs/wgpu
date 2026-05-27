@@ -317,13 +317,16 @@ fn operation_error(
 }
 
 /// Validate the input data (AllowSharedBufferSource) and return the slice that applied the offset and size,
-/// or return Err if validation fails. Used in `Queue::write_buffer` and `set_immediates`.
-fn transform_buffer<'a, 'b>(
+/// or return `Err` if validation fails.
+///
+/// See also the content timeline requirements of <https://gpuweb.github.io/gpuweb/#dom-gpuqueue-writebuffer>
+/// and <https://gpuweb.github.io/gpuweb/#dom-gpubindingcommandsmixin-setimmediates>
+fn get_data_slice<'a>(
   scope: &mut v8::HandleScope,
   data_arg: v8::Local<'a, v8::Value>,
   data_offset: u64,
   data_size: Option<u64>,
-) -> Result<&'b [u8], JsErrorBox> {
+) -> Result<&'a [u8], JsErrorBox> {
   const EMPTY: &[u8] = &[];
   // Per the WebGPU spec, dataOffset and size are in elements (not bytes)
   // when data is a TypedArray, and in bytes otherwise.
@@ -331,10 +334,11 @@ fn transform_buffer<'a, 'b>(
     v8::Local::<v8::TypedArray>::try_from(data_arg)
   {
     let len = typed_array.length();
+    // Avoid panicking as data of zero length array is `None`.
     if len == 0 {
       (EMPTY, 1)
     } else {
-      let bpe = (typed_array.byte_length()).checked_div(len).unwrap_or(1);
+      let bpe = typed_array.byte_length() - len;
       let byte_offset = typed_array.byte_offset();
       let byte_len = typed_array.byte_length();
       let ab = typed_array.buffer(scope).unwrap();
@@ -348,6 +352,7 @@ fn transform_buffer<'a, 'b>(
     }
   } else if let Ok(ab) = v8::Local::<v8::ArrayBuffer>::try_from(data_arg) {
     let byte_len = ab.byte_length();
+    // Avoid panicking as data of zero length array is `None`.
     if byte_len == 0 {
       (EMPTY, 1)
     } else {
@@ -360,6 +365,7 @@ fn transform_buffer<'a, 'b>(
   } else if let Ok(ab) = v8::Local::<v8::SharedArrayBuffer>::try_from(data_arg)
   {
     let byte_len = ab.byte_length();
+    // Avoid panicking as data of zero length array is `None`.
     if byte_len == 0 {
       (EMPTY, 1)
     } else {
@@ -391,25 +397,30 @@ fn transform_buffer<'a, 'b>(
     ));
   };
 
-  let data_offset_bytes = data_offset as usize * bytes_per_element;
+  let data_offset_bytes = data_offset * bytes_per_element as u64;
   let content_size_bytes = if let Some(data_size) = data_size {
-    data_size as usize * bytes_per_element
+    data_size * bytes_per_element as u64
   } else {
-    buf
-      .len()
+    (buf.len() as u64)
       .checked_sub(data_offset_bytes)
       .ok_or(operation_error("data offset is out of bounds"))?
   };
-  if data_offset_bytes + content_size_bytes > buf.len() {
+  if data_offset_bytes + content_size_bytes > buf.len() as u64 {
     return Err(operation_error("The end index of data is out of bounds"));
   }
 
   // Both `Queue::write_buffer` and `set_immediates` require content size to be a multiple of 4
+  const {
+    assert!(wgpu_types::COPY_BUFFER_ALIGNMENT == 4);
+    assert!(wgpu_types::IMMEDIATE_DATA_ALIGNMENT == 4);
+  }
   if !content_size_bytes.is_multiple_of(4) {
     return Err(operation_error("content size is not a multiple of 4"));
   }
 
-  let data = &buf[data_offset_bytes..(data_offset_bytes + content_size_bytes)];
+  // We have validated data offset and content size are within the bounds.
+  let data = &buf[(data_offset_bytes as usize)
+    ..((data_offset_bytes + content_size_bytes) as usize)];
 
   Ok(data)
 }

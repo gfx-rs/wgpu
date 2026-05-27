@@ -1236,9 +1236,10 @@ impl Global {
         pass_try!(
             base,
             scope,
-            pass::validate_immediates_alignment(offset, data, base.immediates_data.len())
+            pass::validate_immediates_alignment(offset, data)
         );
 
+        // TODO: `values_offset` can overflow.
         let values_offset = base.immediates_data.len() as u32;
 
         base.immediates_data.extend(
