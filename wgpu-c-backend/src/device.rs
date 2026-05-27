@@ -1349,13 +1349,41 @@ impl DeviceInterface for CDevice {
             .as_deref()
             .map(conv::str_to_string_view)
             .unwrap_or(conv::null_string_view());
+
+        // PipelineStatistics queries require WGPUQuerySetDescriptorExtras listing the
+        // specific statistics to collect.
+        let ps_names: Vec<native::WGPUPipelineStatisticName>;
+        let mut ps_extras_opt: Option<native::WGPUQuerySetDescriptorExtras> = None;
+
+        if let wgpu::QueryType::PipelineStatistics(flags) = desc.ty {
+            ps_names = conv::pipeline_statistics_to_native(flags);
+            ps_extras_opt = Some(native::WGPUQuerySetDescriptorExtras {
+                chain: native::WGPUChainedStruct {
+                    next: std::ptr::null_mut(),
+                    sType: native::WGPUSType_QuerySetDescriptorExtras,
+                },
+                pipelineStatistics: if ps_names.is_empty() {
+                    std::ptr::null()
+                } else {
+                    ps_names.as_ptr()
+                },
+                pipelineStatisticCount: ps_names.len(),
+            });
+        } else {
+            ps_names = Vec::new();
+        }
+
         let c_desc = native::WGPUQuerySetDescriptor {
-            nextInChain: std::ptr::null_mut(),
+            nextInChain: ps_extras_opt
+                .as_mut()
+                .map(|e| std::ptr::from_mut::<native::WGPUChainedStruct>(&mut e.chain))
+                .unwrap_or(std::ptr::null_mut()),
             label: label_sv,
             type_: conv::query_type_to_native(desc.ty),
             count: desc.count,
         };
         let ptr = unsafe { wgpuDeviceCreateQuerySet(self.ptr, Some(&c_desc)) };
+        let _ = ps_names; // ensure Vec stays alive until after the call
         DispatchQuerySet::custom(CQuerySet { ptr })
     }
 

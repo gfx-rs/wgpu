@@ -1736,6 +1736,28 @@ pub fn surface_status_from_native(
     }
 }
 
+pub fn pipeline_statistics_to_native(
+    flags: wgpu::PipelineStatisticsTypes,
+) -> Vec<native::WGPUPipelineStatisticName> {
+    let mut out = Vec::new();
+    if flags.contains(wgpu::PipelineStatisticsTypes::VERTEX_SHADER_INVOCATIONS) {
+        out.push(native::WGPUPipelineStatisticName_VertexShaderInvocations);
+    }
+    if flags.contains(wgpu::PipelineStatisticsTypes::CLIPPER_INVOCATIONS) {
+        out.push(native::WGPUPipelineStatisticName_ClipperInvocations);
+    }
+    if flags.contains(wgpu::PipelineStatisticsTypes::CLIPPER_PRIMITIVES_OUT) {
+        out.push(native::WGPUPipelineStatisticName_ClipperPrimitivesOut);
+    }
+    if flags.contains(wgpu::PipelineStatisticsTypes::FRAGMENT_SHADER_INVOCATIONS) {
+        out.push(native::WGPUPipelineStatisticName_FragmentShaderInvocations);
+    }
+    if flags.contains(wgpu::PipelineStatisticsTypes::COMPUTE_SHADER_INVOCATIONS) {
+        out.push(native::WGPUPipelineStatisticName_ComputeShaderInvocations);
+    }
+    out
+}
+
 pub fn cooperative_scalar_type_from_native(
     t: native::WGPUNativeCooperativeScalarType,
 ) -> wgpu::wgt::CooperativeScalarType {
