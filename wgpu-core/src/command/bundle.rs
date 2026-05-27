@@ -161,7 +161,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct RenderBundleEncoder {
-    pub(crate) base: BasePass<RenderCommand<IdReferences>, Infallible>,
+    base: BasePass<RenderCommand<IdReferences>, Infallible>,
     parent_id: id::DeviceId,
     pub(crate) context: RenderPassContext,
     pub(crate) is_depth_read_only: bool,
@@ -299,10 +299,6 @@ impl RenderBundleEncoder {
 
     pub fn parent(&self) -> id::DeviceId {
         self.parent_id
-    }
-
-    pub fn label(&self) -> Option<&str> {
-        self.base.label.as_deref()
     }
 
     /// Convert this encoder's commands into a [`RenderBundle`].
