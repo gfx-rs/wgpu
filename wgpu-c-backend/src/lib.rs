@@ -160,12 +160,15 @@ impl InstanceInterface for CInstance {
             } => match raw_window_handle {
                 #[cfg(target_os = "macos")]
                 RawWindowHandle::AppKit(h) => {
+                    // ns_view is an NSView*, not a CAMetalLayer*. Use raw_window_metal to
+                    // install/retrieve a CAMetalLayer on the view before handing it to wgpu-native.
+                    let layer = unsafe { raw_window_metal::Layer::from_ns_view(h.ns_view) };
                     let mut src = native::WGPUSurfaceSourceMetalLayer {
                         chain: native::WGPUChainedStruct {
                             next: std::ptr::null_mut(),
                             sType: native::WGPUSType_SurfaceSourceMetalLayer,
                         },
-                        layer: h.ns_view.as_ptr(),
+                        layer: layer.as_ptr().as_ptr().cast(),
                     };
                     let c_desc = native::WGPUSurfaceDescriptor {
                         nextInChain: std::ptr::from_mut::<native::WGPUChainedStruct>(

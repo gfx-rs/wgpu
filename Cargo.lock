@@ -4766,6 +4766,7 @@ name = "wgpu-c-backend"
 version = "29.0.0"
 dependencies = [
  "ctor",
+ "raw-window-metal",
  "wgpu",
  "wgpu-native",
 ]
