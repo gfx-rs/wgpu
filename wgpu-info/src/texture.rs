@@ -2,6 +2,7 @@ use exhaust::Exhaust;
 
 #[test]
 fn test_compute_render_extent() {
+    let _guard = crate::INSTANCE_MUTEX.lock().unwrap();
     for format in wgpu::TextureFormat::exhaust() {
         let desc = wgpu::TextureDescriptor {
             label: None,
