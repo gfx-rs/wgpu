@@ -300,11 +300,11 @@ web-sys = { version = "0.3.85", default-features = false }
 web-time = "1.1.0"
 
 # deno dependencies
-deno_core = "0.401.0"
-deno_features = "0.45.0"
-deno_web = "0.279.0"
-deno_webidl = "0.248.0"
-deno_image = "0.24.0"
+deno_core = "0.402.0"
+deno_features = "0.46.0"
+deno_web = "0.280.0"
+deno_webidl = "0.249.0"
+deno_image = "0.25.0"
 deno_webgpu = { version = "0.215.0", path = "./deno_webgpu" }
 deno_unsync = "0.4.4"
 deno_error = "0.7.0"
