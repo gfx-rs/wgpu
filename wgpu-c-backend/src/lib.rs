@@ -69,7 +69,6 @@ fn instance_create(desc: InstanceDescriptor) -> Result<wgpu::Instance, InstanceD
     if desc.backends.intersection(WGPU_NATIVE_BACKENDS).is_empty() {
         return Err(desc);
     }
-    println!("Using wgpu-native instance");
     Ok(wgpu::Instance::from_custom(CInstance::new(desc)))
 }
 
@@ -372,7 +371,6 @@ impl InstanceInterface for CInstance {
     }
 
     fn wgsl_language_features(&self) -> wgpu::WgslLanguageFeatures {
-        // wgpu-native has no WGSL language features query.
-        unimplemented!("wgpu-native does not expose WGSL language features")
+        wgpu::WgslLanguageFeatures::empty()
     }
 }

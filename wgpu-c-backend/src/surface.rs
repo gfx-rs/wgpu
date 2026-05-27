@@ -69,8 +69,15 @@ impl SurfaceInterface for CSurface {
             .iter()
             .map(|&f| conv::texture_format_to_native(f))
             .collect();
+        let mut sc_extras = native::WGPUSurfaceConfigurationExtras {
+            chain: native::WGPUChainedStruct {
+                next: std::ptr::null_mut(),
+                sType: native::WGPUSType_SurfaceConfigurationExtras,
+            },
+            desiredMaximumFrameLatency: config.desired_maximum_frame_latency,
+        };
         let c_config = native::WGPUSurfaceConfiguration {
-            nextInChain: std::ptr::null_mut(),
+            nextInChain: std::ptr::from_mut::<native::WGPUChainedStruct>(&mut sc_extras.chain),
             device: device_ptr,
             format: conv::texture_format_to_native(config.format),
             usage: conv::texture_usage_to_native(config.usage),

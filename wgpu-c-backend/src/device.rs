@@ -319,32 +319,158 @@ impl DeviceInterface for CDevice {
         }
         let layout_ptr = layout.ptr;
 
-        let entries: Vec<native::WGPUBindGroupEntry> = desc
-            .entries
-            .iter()
-            .map(|e| {
-                let mut entry: native::WGPUBindGroupEntry = unsafe { std::mem::zeroed() };
-                entry.binding = e.binding;
-                entry.size = u64::MAX;
-                match &e.resource {
-                    wgpu::BindingResource::Buffer(bb) => {
-                        entry.buffer = bb.buffer.as_custom::<CBuffer>().unwrap().ptr;
-                        entry.offset = bb.offset;
-                        entry.size = bb.size.map(|s| s.get()).unwrap_or(u64::MAX);
-                    }
-                    wgpu::BindingResource::Sampler(s) => {
-                        entry.sampler = s.as_custom::<CSampler>().unwrap().ptr;
-                    }
-                    wgpu::BindingResource::TextureView(tv) => {
-                        entry.textureView = tv.as_custom::<CTextureView>().unwrap().ptr;
-                    }
-                    // BufferArray/SamplerArray/TextureViewArray/AccelerationStructure/ExternalTexture
-                    // are not supported by the standard wgpu-native bind group API.
-                    _ => unimplemented!("wgpu-native does not support this binding resource type"),
+        // Boxed extras storage for entries that need WGPUBindGroupEntryExtras.
+        // Box gives stable heap addresses even after Vec reallocation.
+        struct ExtrasStorage {
+            extras: native::WGPUBindGroupEntryExtras,
+            _buffers: Vec<native::WGPUBuffer>,
+            _samplers: Vec<native::WGPUSampler>,
+            _texture_views: Vec<native::WGPUTextureView>,
+        }
+        let mut extras_by_entry: Vec<(usize, Box<ExtrasStorage>)> = Vec::new();
+
+        let mut entries: Vec<native::WGPUBindGroupEntry> =
+            Vec::with_capacity(desc.entries.len());
+        for (idx, e) in desc.entries.iter().enumerate() {
+            let mut entry: native::WGPUBindGroupEntry = unsafe { std::mem::zeroed() };
+            entry.binding = e.binding;
+            entry.size = u64::MAX;
+            match &e.resource {
+                wgpu::BindingResource::Buffer(bb) => {
+                    entry.buffer = bb.buffer.as_custom::<CBuffer>().unwrap().ptr;
+                    entry.offset = bb.offset;
+                    entry.size = bb.size.map(|s| s.get()).unwrap_or(u64::MAX);
                 }
-                entry
-            })
-            .collect();
+                wgpu::BindingResource::Sampler(s) => {
+                    entry.sampler = s.as_custom::<CSampler>().unwrap().ptr;
+                }
+                wgpu::BindingResource::TextureView(tv) => {
+                    entry.textureView = tv.as_custom::<CTextureView>().unwrap().ptr;
+                }
+                wgpu::BindingResource::AccelerationStructure(tlas) => {
+                    let tlas_ptr = tlas.as_custom::<CTlas>().unwrap().ptr;
+                    extras_by_entry.push((
+                        idx,
+                        Box::new(ExtrasStorage {
+                            extras: native::WGPUBindGroupEntryExtras {
+                                chain: native::WGPUChainedStruct {
+                                    next: std::ptr::null_mut(),
+                                    sType: native::WGPUSType_BindGroupEntryExtras,
+                                },
+                                buffers: std::ptr::null(),
+                                bufferCount: 0,
+                                samplers: std::ptr::null(),
+                                samplerCount: 0,
+                                textureViews: std::ptr::null(),
+                                textureViewCount: 0,
+                                tlas: tlas_ptr,
+                            },
+                            _buffers: Vec::new(),
+                            _samplers: Vec::new(),
+                            _texture_views: Vec::new(),
+                        }),
+                    ));
+                }
+                wgpu::BindingResource::BufferArray(arr) => {
+                    let bufs: Vec<native::WGPUBuffer> = arr
+                        .iter()
+                        .map(|bb| bb.buffer.as_custom::<CBuffer>().unwrap().ptr)
+                        .collect();
+                    let buf_ptr = if bufs.is_empty() { std::ptr::null() } else { bufs.as_ptr() };
+                    let buf_len = bufs.len();
+                    extras_by_entry.push((
+                        idx,
+                        Box::new(ExtrasStorage {
+                            extras: native::WGPUBindGroupEntryExtras {
+                                chain: native::WGPUChainedStruct {
+                                    next: std::ptr::null_mut(),
+                                    sType: native::WGPUSType_BindGroupEntryExtras,
+                                },
+                                buffers: buf_ptr,
+                                bufferCount: buf_len,
+                                samplers: std::ptr::null(),
+                                samplerCount: 0,
+                                textureViews: std::ptr::null(),
+                                textureViewCount: 0,
+                                tlas: std::ptr::null_mut(),
+                            },
+                            _buffers: bufs,
+                            _samplers: Vec::new(),
+                            _texture_views: Vec::new(),
+                        }),
+                    ));
+                }
+                wgpu::BindingResource::SamplerArray(arr) => {
+                    let samps: Vec<native::WGPUSampler> = arr
+                        .iter()
+                        .map(|s| s.as_custom::<CSampler>().unwrap().ptr)
+                        .collect();
+                    let samp_ptr = if samps.is_empty() { std::ptr::null() } else { samps.as_ptr() };
+                    let samp_len = samps.len();
+                    extras_by_entry.push((
+                        idx,
+                        Box::new(ExtrasStorage {
+                            extras: native::WGPUBindGroupEntryExtras {
+                                chain: native::WGPUChainedStruct {
+                                    next: std::ptr::null_mut(),
+                                    sType: native::WGPUSType_BindGroupEntryExtras,
+                                },
+                                buffers: std::ptr::null(),
+                                bufferCount: 0,
+                                samplers: samp_ptr,
+                                samplerCount: samp_len,
+                                textureViews: std::ptr::null(),
+                                textureViewCount: 0,
+                                tlas: std::ptr::null_mut(),
+                            },
+                            _buffers: Vec::new(),
+                            _samplers: samps,
+                            _texture_views: Vec::new(),
+                        }),
+                    ));
+                }
+                wgpu::BindingResource::TextureViewArray(arr) => {
+                    let tvs: Vec<native::WGPUTextureView> = arr
+                        .iter()
+                        .map(|tv| tv.as_custom::<CTextureView>().unwrap().ptr)
+                        .collect();
+                    let tv_ptr = if tvs.is_empty() { std::ptr::null() } else { tvs.as_ptr() };
+                    let tv_len = tvs.len();
+                    extras_by_entry.push((
+                        idx,
+                        Box::new(ExtrasStorage {
+                            extras: native::WGPUBindGroupEntryExtras {
+                                chain: native::WGPUChainedStruct {
+                                    next: std::ptr::null_mut(),
+                                    sType: native::WGPUSType_BindGroupEntryExtras,
+                                },
+                                buffers: std::ptr::null(),
+                                bufferCount: 0,
+                                samplers: std::ptr::null(),
+                                samplerCount: 0,
+                                textureViews: tv_ptr,
+                                textureViewCount: tv_len,
+                                tlas: std::ptr::null_mut(),
+                            },
+                            _buffers: Vec::new(),
+                            _samplers: Vec::new(),
+                            _texture_views: tvs,
+                        }),
+                    ));
+                }
+                // AccelerationStructureArray and ExternalTexture are not supported.
+                _ => unimplemented!("wgpu-native does not support this binding resource type"),
+            }
+            entries.push(entry);
+        }
+
+        // Wire chain pointers now that entries Vec is finalized (no more reallocation).
+        // Box<ExtrasStorage> guarantees the extras struct and its backing Vecs don't move,
+        // so the raw pointers into _buffers/_samplers/_texture_views remain valid.
+        for (idx, storage) in &extras_by_entry {
+            entries[*idx].nextInChain =
+                &storage.extras.chain as *const native::WGPUChainedStruct as *mut _;
+        }
 
         let c_desc = native::WGPUBindGroupDescriptor {
             nextInChain: std::ptr::null_mut(),
@@ -650,7 +776,7 @@ impl DeviceInterface for CDevice {
                 sType: native::WGPUSType_RenderPipelineDescriptorExtras,
             },
             cache: render_cache_ptr,
-            multiviewMask: 0,
+            multiviewMask: desc.multiview_mask.map_or(0, |v| v.get()),
             zeroInitializeWorkgroupMemory: desc
                 .vertex
                 .compilation_options
@@ -908,7 +1034,7 @@ impl DeviceInterface for CDevice {
                 sType: native::WGPUSType_MeshPipelineDescriptorExtras,
             },
             cache: mesh_cache_ptr,
-            multiviewMask: 0,
+            multiviewMask: desc.multiview.map_or(0, |v| v.get()),
             zeroInitializeWorkgroupMemory: desc
                 .mesh
                 .compilation_options
@@ -1094,16 +1220,90 @@ impl DeviceInterface for CDevice {
 
     fn create_blas(
         &self,
-        _desc: &wgpu::CreateBlasDescriptor<'_>,
-        _sizes: wgpu::BlasGeometrySizeDescriptors,
+        desc: &wgpu::CreateBlasDescriptor<'_>,
+        sizes: wgpu::BlasGeometrySizeDescriptors,
     ) -> (Option<u64>, DispatchBlas) {
-        // wgpu-native has no ray tracing support.
-        unimplemented!("wgpu-native does not support acceleration structures")
+        let label = desc.label.map(|s| s.to_owned());
+        let label_sv = label
+            .as_deref()
+            .map(conv::str_to_string_view)
+            .unwrap_or(conv::null_string_view());
+        let c_desc = native::WGPUBlasDescriptor {
+            nextInChain: std::ptr::null_mut(),
+            label: label_sv,
+            flags: conv::acceleration_structure_flags_to_native(desc.flags),
+            updateMode: conv::acceleration_structure_update_mode_to_native(desc.update_mode),
+        };
+        let ptr = match sizes {
+            wgpu::BlasGeometrySizeDescriptors::Triangles { ref descriptors } => {
+                let c_tris: Vec<native::WGPUBlasTriangleGeometrySizeDescriptor> = descriptors
+                    .iter()
+                    .map(|d| native::WGPUBlasTriangleGeometrySizeDescriptor {
+                        vertexFormat: conv::vertex_format_to_native(d.vertex_format),
+                        vertexCount: d.vertex_count,
+                        indexFormat: d
+                            .index_format
+                            .map(conv::index_format_to_native)
+                            .unwrap_or(native::WGPUIndexFormat_Undefined),
+                        indexCount: d.index_count.unwrap_or(0),
+                        flags: conv::acceleration_structure_geometry_flags_to_native(d.flags),
+                    })
+                    .collect();
+                let c_sizes = native::WGPUBlasSizeDescriptors {
+                    kind: native::WGPUBlasGeometryKind_Triangles,
+                    triangleDescriptors: if c_tris.is_empty() {
+                        std::ptr::null()
+                    } else {
+                        c_tris.as_ptr()
+                    },
+                    triangleDescriptorCount: c_tris.len(),
+                    aabbDescriptors: std::ptr::null(),
+                    aabbDescriptorCount: 0,
+                };
+                unsafe { wgpuDeviceCreateBlas(self.ptr, Some(&c_desc), c_sizes) }
+            }
+            wgpu::BlasGeometrySizeDescriptors::AABBs { ref descriptors } => {
+                let c_aabbs: Vec<native::WGPUBlasAABBGeometrySizeDescriptor> = descriptors
+                    .iter()
+                    .map(|d| native::WGPUBlasAABBGeometrySizeDescriptor {
+                        primitiveCount: d.primitive_count,
+                        flags: conv::acceleration_structure_geometry_flags_to_native(d.flags),
+                    })
+                    .collect();
+                let c_sizes = native::WGPUBlasSizeDescriptors {
+                    kind: native::WGPUBlasGeometryKind_AABBs,
+                    triangleDescriptors: std::ptr::null(),
+                    triangleDescriptorCount: 0,
+                    aabbDescriptors: if c_aabbs.is_empty() {
+                        std::ptr::null()
+                    } else {
+                        c_aabbs.as_ptr()
+                    },
+                    aabbDescriptorCount: c_aabbs.len(),
+                };
+                unsafe { wgpuDeviceCreateBlas(self.ptr, Some(&c_desc), c_sizes) }
+            }
+        };
+        let raw_handle = unsafe { wgpuBlasGetHandle(ptr) };
+        let handle = if raw_handle == 0 { None } else { Some(raw_handle) };
+        (handle, DispatchBlas::custom(CBlas { ptr }))
     }
 
-    fn create_tlas(&self, _desc: &wgpu::CreateTlasDescriptor<'_>) -> DispatchTlas {
-        // wgpu-native has no ray tracing support.
-        unimplemented!("wgpu-native does not support acceleration structures")
+    fn create_tlas(&self, desc: &wgpu::CreateTlasDescriptor<'_>) -> DispatchTlas {
+        let label = desc.label.map(|s| s.to_owned());
+        let label_sv = label
+            .as_deref()
+            .map(conv::str_to_string_view)
+            .unwrap_or(conv::null_string_view());
+        let c_desc = native::WGPUTlasDescriptor {
+            nextInChain: std::ptr::null_mut(),
+            label: label_sv,
+            maxInstances: desc.max_instances,
+            flags: conv::acceleration_structure_flags_to_native(desc.flags),
+            updateMode: conv::acceleration_structure_update_mode_to_native(desc.update_mode),
+        };
+        let ptr = unsafe { wgpuDeviceCreateTlas(self.ptr, Some(&c_desc)) };
+        DispatchTlas::custom(CTlas { ptr })
     }
 
     fn create_sampler(&self, desc: &wgpu::SamplerDescriptor<'_>) -> DispatchSampler {
@@ -1112,8 +1312,18 @@ impl DeviceInterface for CDevice {
             .as_deref()
             .map(conv::str_to_string_view)
             .unwrap_or(conv::null_string_view());
+        let mut extras = desc.border_color.map(|bc| native::WGPUSamplerDescriptorExtras {
+            chain: native::WGPUChainedStruct {
+                next: std::ptr::null_mut(),
+                sType: native::WGPUSType_SamplerDescriptorExtras,
+            },
+            borderColor: conv::border_color_to_native(bc),
+        });
         let c_desc = native::WGPUSamplerDescriptor {
-            nextInChain: std::ptr::null_mut(),
+            nextInChain: extras
+                .as_mut()
+                .map(|e| std::ptr::from_mut::<native::WGPUChainedStruct>(&mut e.chain))
+                .unwrap_or(std::ptr::null_mut()),
             label: label_sv,
             addressModeU: conv::address_mode_to_native(desc.address_mode_u),
             addressModeV: conv::address_mode_to_native(desc.address_mode_v),
@@ -1312,8 +1522,35 @@ impl DeviceInterface for CDevice {
     }
 
     fn get_internal_counters(&self) -> wgpu::InternalCounters {
-        // wgpu-native has no internal counters query.
-        unimplemented!("wgpu-native does not expose internal counters")
+        let c = unsafe { wgpuDeviceGetInternalCounters(self.ptr) };
+        let hal = c.hal;
+        let make = |v: i64| {
+            let c = wgpu::wgt::InternalCounter::new();
+            c.set(v as isize);
+            c
+        };
+        wgpu::InternalCounters {
+            core: wgpu::wgt::CoreCounters {},
+            hal: wgpu::wgt::HalCounters {
+                buffers: make(hal.buffers),
+                textures: make(hal.textures),
+                texture_views: make(hal.textureViews),
+                bind_groups: make(hal.bindGroups),
+                bind_group_layouts: make(hal.bindGroupLayouts),
+                render_pipelines: make(hal.renderPipelines),
+                compute_pipelines: make(hal.computePipelines),
+                pipeline_layouts: make(hal.pipelineLayouts),
+                samplers: make(hal.samplers),
+                command_encoders: make(hal.commandEncoders),
+                shader_modules: make(hal.shaderModules),
+                query_sets: make(hal.querySets),
+                fences: make(hal.fences),
+                buffer_memory: make(hal.bufferMemory),
+                texture_memory: make(hal.textureMemory),
+                acceleration_structure_memory: make(hal.accelerationStructureMemory),
+                memory_allocations: make(hal.memoryAllocations),
+            },
+        }
     }
 
     fn generate_allocator_report(&self) -> Option<wgpu::AllocatorReport> {
@@ -1506,9 +1743,12 @@ impl QueueInterface for CQueue {
         unsafe { wgpuQueueOnSubmittedWorkDone(self.ptr, callback_info) };
     }
 
-    fn compact_blas(&self, _blas: &DispatchBlas) -> (Option<u64>, DispatchBlas) {
-        // wgpu-native has no ray tracing support.
-        unimplemented!("wgpu-native does not support acceleration structures")
+    fn compact_blas(&self, blas: &DispatchBlas) -> (Option<u64>, DispatchBlas) {
+        let old_ptr = blas.as_custom::<CBlas>().unwrap().ptr;
+        let new_ptr = unsafe { wgpuQueueCompactBlas(self.ptr, old_ptr) };
+        let raw_handle = unsafe { wgpuBlasGetHandle(new_ptr) };
+        let handle = if raw_handle == 0 { None } else { Some(raw_handle) };
+        (handle, DispatchBlas::custom(CBlas { ptr: new_ptr }))
     }
 
     fn present(&self, detail: &DispatchSurfaceOutputDetail) {

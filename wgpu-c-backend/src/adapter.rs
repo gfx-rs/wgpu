@@ -152,8 +152,20 @@ impl AdapterInterface for CAdapter {
         let device_lost_handler: Box<DeviceLostHandler> = Box::new(Mutex::new(None));
         let device_lost_ptr = device_lost_handler.as_ref() as *const DeviceLostHandler;
 
+        let (memory_hints, mem_min, mem_max) =
+            conv::memory_hints_to_native(&desc.memory_hints);
+        let mut device_extras = native::WGPUDeviceDescriptorExtras {
+            chain: native::WGPUChainedStruct {
+                next: std::ptr::null_mut(),
+                sType: native::WGPUSType_DeviceDescriptorExtras,
+            },
+            memoryHints: memory_hints,
+            suballocatedDeviceMemoryBlockSizeMin: mem_min,
+            suballocatedDeviceMemoryBlockSizeMax: mem_max,
+            experimentalFeaturesEnabled: desc.experimental_features.is_enabled() as _,
+        };
         let c_desc = native::WGPUDeviceDescriptor {
-            nextInChain: std::ptr::null_mut(),
+            nextInChain: std::ptr::from_mut::<native::WGPUChainedStruct>(&mut device_extras.chain),
             label: label_sv,
             requiredFeatureCount: required_features.len(),
             requiredFeatures: required_features.as_mut_ptr(),
@@ -250,9 +262,9 @@ impl AdapterInterface for CAdapter {
         Box::pin(future::ready(result))
     }
 
-    fn is_surface_supported(&self, _surface: &DispatchSurface) -> bool {
-        // wgpu-native has no wgpuAdapterIsSurfaceSupported equivalent.
-        unimplemented!("wgpu-native does not expose adapter surface support query")
+    fn is_surface_supported(&self, surface: &DispatchSurface) -> bool {
+        let surface_ptr = surface.as_custom::<crate::surface::CSurface>().unwrap().ptr;
+        unsafe { wgpuAdapterIsSurfaceSupported(self.ptr, surface_ptr) != 0 }
     }
 
     fn features(&self) -> wgpu::Features {
@@ -305,12 +317,44 @@ impl AdapterInterface for CAdapter {
     }
 
     fn get_presentation_timestamp(&self) -> wgpu::PresentationTimestamp {
-        // wgpu-native has no presentation timestamp query.
-        unimplemented!("wgpu-native does not expose presentation timestamps")
+        let ts = unsafe { wgpuAdapterGetPresentationTimestamp(self.ptr) };
+        wgpu::PresentationTimestamp(ts.nanoseconds as u128)
     }
 
     fn cooperative_matrix_properties(&self) -> Vec<wgpu::wgt::CooperativeMatrixProperties> {
-        // wgpu-native has no cooperative matrix properties query.
-        unimplemented!("wgpu-native does not expose cooperative matrix properties")
+        let count =
+            unsafe { wgpuAdapterGetCooperativeMatrixProperties(self.ptr, std::ptr::null_mut(), 0) };
+        if count == 0 {
+            return Vec::new();
+        }
+        let mut c_props = vec![
+            native::WGPUCooperativeMatrixProperties {
+                mSize: 0,
+                nSize: 0,
+                kSize: 0,
+                abType: native::WGPUNativeCooperativeScalarType_F32,
+                crType: native::WGPUNativeCooperativeScalarType_F32,
+                saturatingAccumulation: 0,
+            };
+            count
+        ];
+        unsafe {
+            wgpuAdapterGetCooperativeMatrixProperties(
+                self.ptr,
+                c_props.as_mut_ptr(),
+                c_props.len(),
+            )
+        };
+        c_props
+            .into_iter()
+            .map(|p| wgpu::wgt::CooperativeMatrixProperties {
+                m_size: p.mSize,
+                n_size: p.nSize,
+                k_size: p.kSize,
+                ab_type: conv::cooperative_scalar_type_from_native(p.abType),
+                cr_type: conv::cooperative_scalar_type_from_native(p.crType),
+                saturating_accumulation: p.saturatingAccumulation != 0,
+            })
+            .collect()
     }
 }

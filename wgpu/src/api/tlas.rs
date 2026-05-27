@@ -81,6 +81,13 @@ impl Tlas {
         self.inner.as_custom()
     }
 
+    #[cfg(custom)]
+    /// Returns the index of the lowest instance that has been modified since the last build.
+    /// Custom backends use this to perform partial TLAS updates.
+    pub fn lowest_unmodified(&self) -> u32 {
+        self.lowest_unmodified
+    }
+
     /// Get a reference to all instances.
     pub fn get(&self) -> &[Option<TlasInstance>] {
         &self.instances

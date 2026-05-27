@@ -479,3 +479,57 @@ c_resource!(
 );
 
 impl RenderBundleInterface for CRenderBundle {}
+
+// ── CBlas ─────────────────────────────────────────────────────────────────────
+
+pub struct CBlas {
+    pub(crate) ptr: native::WGPUBlas,
+}
+impl std::fmt::Debug for CBlas {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CBlas").field("ptr", &self.ptr).finish()
+    }
+}
+unsafe impl Send for CBlas {}
+unsafe impl Sync for CBlas {}
+impl Drop for CBlas {
+    fn drop(&mut self) {
+        unsafe { wgpuBlasRelease(self.ptr) };
+    }
+}
+
+impl BlasInterface for CBlas {
+    fn prepare_compact_async(&self, callback: BlasCompactCallback) {
+        unsafe extern "C" fn compact_cb(
+            success: native::WGPUBool,
+            userdata1: *mut std::ffi::c_void,
+            _userdata2: *mut std::ffi::c_void,
+        ) {
+            let cb = unsafe { *Box::from_raw(userdata1 as *mut BlasCompactCallback) };
+            if success != 0 {
+                cb(Ok(()));
+            } else {
+                cb(Err(wgpu::BlasAsyncError));
+            }
+        }
+        let boxed: Box<BlasCompactCallback> = Box::new(callback);
+        let callback_info = native::WGPUBlasCompactCallbackInfo {
+            nextInChain: std::ptr::null(),
+            mode: native::WGPUCallbackMode_AllowSpontaneous,
+            callback: Some(compact_cb),
+            userdata1: Box::into_raw(boxed) as *mut _,
+            userdata2: std::ptr::null_mut(),
+        };
+        unsafe { wgpuBlasPrepareCompactAsync(self.ptr, callback_info) };
+    }
+
+    fn ready_for_compaction(&self) -> bool {
+        unsafe { wgpuBlasReadyForCompaction(self.ptr) != 0 }
+    }
+}
+
+// ── CTlas ─────────────────────────────────────────────────────────────────────
+
+c_resource!(CTlas, native::WGPUTlas, wgpuTlasRelease);
+
+impl TlasInterface for CTlas {}

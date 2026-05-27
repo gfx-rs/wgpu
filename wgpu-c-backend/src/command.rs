@@ -266,8 +266,15 @@ impl CommandEncoderInterface for CCommandEncoder {
             .map(|qs| qs.as_custom::<CQuerySet>().unwrap().ptr)
             .unwrap_or(std::ptr::null());
 
+        let mut rp_extras = native::WGPURenderPassDescriptorExtras {
+            chain: native::WGPUChainedStruct {
+                next: std::ptr::null_mut(),
+                sType: native::WGPUSType_RenderPassDescriptorExtras,
+            },
+            multiviewMask: desc.multiview_mask.map_or(0, |v| v.get()),
+        };
         let c_desc = native::WGPURenderPassDescriptor {
-            nextInChain: std::ptr::null_mut(),
+            nextInChain: std::ptr::from_mut::<native::WGPUChainedStruct>(&mut rp_extras.chain),
             label: label_sv,
             colorAttachmentCount: color_attachments.len(),
             colorAttachments: if color_attachments.is_empty() {
@@ -371,20 +378,193 @@ impl CommandEncoderInterface for CCommandEncoder {
 
     fn mark_acceleration_structures_built<'a>(
         &self,
-        _blas: &mut dyn Iterator<Item = &'a wgpu::Blas>,
-        _tlas: &mut dyn Iterator<Item = &'a wgpu::Tlas>,
+        blas: &mut dyn Iterator<Item = &'a wgpu::Blas>,
+        tlas: &mut dyn Iterator<Item = &'a wgpu::Tlas>,
     ) {
-        // wgpu-native does not expose ray tracing acceleration structures.
-        unimplemented!("wgpu-native does not expose acceleration structures")
+        let blas_ptrs: Vec<native::WGPUBlas> =
+            blas.map(|b| b.as_custom::<CBlas>().unwrap().ptr).collect();
+        let tlas_ptrs: Vec<native::WGPUTlas> =
+            tlas.map(|t| t.as_custom::<CTlas>().unwrap().ptr).collect();
+        unsafe {
+            wgpuCommandEncoderMarkAccelerationStructuresBuilt(
+                self.ptr,
+                blas_ptrs.len(),
+                blas_ptrs.as_ptr(),
+                tlas_ptrs.len(),
+                tlas_ptrs.as_ptr(),
+            )
+        };
     }
 
     fn build_acceleration_structures<'a>(
         &self,
-        _blas: &mut dyn Iterator<Item = &'a wgpu::BlasBuildEntry<'a>>,
-        _tlas: &mut dyn Iterator<Item = &'a wgpu::Tlas>,
+        blas: &mut dyn Iterator<Item = &'a wgpu::BlasBuildEntry<'a>>,
+        tlas: &mut dyn Iterator<Item = &'a wgpu::Tlas>,
     ) {
-        // wgpu-native does not expose ray tracing acceleration structures.
-        unimplemented!("wgpu-native does not expose acceleration structures")
+        struct EntryStorage {
+            c_tri_sizes: Vec<native::WGPUBlasTriangleGeometrySizeDescriptor>,
+            c_tris: Vec<native::WGPUBlasTriangleGeometry>,
+            c_aabb_sizes: Vec<native::WGPUBlasAABBGeometrySizeDescriptor>,
+            c_aabbs: Vec<native::WGPUBlasAABBGeometry>,
+        }
+
+        let mut all_storage: Vec<EntryStorage> = Vec::new();
+        let mut c_entries: Vec<native::WGPUBlasBuildEntry> = Vec::new();
+
+        for entry in blas {
+            let blas_ptr = entry.blas.as_custom::<CBlas>().unwrap().ptr;
+            let mut storage = EntryStorage {
+                c_tri_sizes: Vec::new(),
+                c_tris: Vec::new(),
+                c_aabb_sizes: Vec::new(),
+                c_aabbs: Vec::new(),
+            };
+
+            let c_entry = match &entry.geometry {
+                wgpu::BlasGeometries::TriangleGeometries(tris) => {
+                    storage.c_tri_sizes = tris
+                        .iter()
+                        .map(|tg| native::WGPUBlasTriangleGeometrySizeDescriptor {
+                            vertexFormat: conv::vertex_format_to_native(tg.size.vertex_format),
+                            vertexCount: tg.size.vertex_count,
+                            indexFormat: tg
+                                .size
+                                .index_format
+                                .map(conv::index_format_to_native)
+                                .unwrap_or(native::WGPUIndexFormat_Undefined),
+                            indexCount: tg.size.index_count.unwrap_or(0),
+                            flags: conv::acceleration_structure_geometry_flags_to_native(
+                                tg.size.flags,
+                            ),
+                        })
+                        .collect();
+                    storage.c_tris = tris
+                        .iter()
+                        .zip(storage.c_tri_sizes.iter())
+                        .map(|(tg, c_size)| native::WGPUBlasTriangleGeometry {
+                            nextInChain: std::ptr::null(),
+                            size: c_size as *const _,
+                            vertexBuffer: tg
+                                .vertex_buffer
+                                .as_custom::<CBuffer>()
+                                .unwrap()
+                                .ptr,
+                            indexBuffer: tg
+                                .index_buffer
+                                .and_then(|b| b.as_custom::<CBuffer>())
+                                .map(|b| b.ptr)
+                                .unwrap_or(std::ptr::null_mut()),
+                            transformBuffer: tg
+                                .transform_buffer
+                                .and_then(|b| b.as_custom::<CBuffer>())
+                                .map(|b| b.ptr)
+                                .unwrap_or(std::ptr::null_mut()),
+                            firstVertex: tg.first_vertex,
+                            vertexStride: tg.vertex_stride,
+                            firstIndex: tg.first_index.unwrap_or(0),
+                            transformBufferOffset: tg.transform_buffer_offset.unwrap_or(0),
+                        })
+                        .collect();
+                    native::WGPUBlasBuildEntry {
+                        blas: blas_ptr,
+                        geometryKind: native::WGPUBlasGeometryKind_Triangles,
+                        triangleGeometries: storage.c_tris.as_ptr(),
+                        triangleGeometryCount: storage.c_tris.len(),
+                        aabbGeometries: std::ptr::null(),
+                        aabbGeometryCount: 0,
+                    }
+                }
+                wgpu::BlasGeometries::AabbGeometries(aabbs) => {
+                    storage.c_aabb_sizes = aabbs
+                        .iter()
+                        .map(|ag| native::WGPUBlasAABBGeometrySizeDescriptor {
+                            primitiveCount: ag.size.primitive_count,
+                            flags: conv::acceleration_structure_geometry_flags_to_native(
+                                ag.size.flags,
+                            ),
+                        })
+                        .collect();
+                    storage.c_aabbs = aabbs
+                        .iter()
+                        .zip(storage.c_aabb_sizes.iter())
+                        .map(|(ag, c_size)| native::WGPUBlasAABBGeometry {
+                            nextInChain: std::ptr::null(),
+                            size: c_size as *const _,
+                            stride: ag.stride,
+                            aabbBuffer: ag
+                                .aabb_buffer
+                                .as_custom::<CBuffer>()
+                                .unwrap()
+                                .ptr,
+                            primitiveOffset: ag.primitive_offset,
+                        })
+                        .collect();
+                    native::WGPUBlasBuildEntry {
+                        blas: blas_ptr,
+                        geometryKind: native::WGPUBlasGeometryKind_AABBs,
+                        triangleGeometries: std::ptr::null(),
+                        triangleGeometryCount: 0,
+                        aabbGeometries: storage.c_aabbs.as_ptr(),
+                        aabbGeometryCount: storage.c_aabbs.len(),
+                    }
+                }
+            };
+            all_storage.push(storage);
+            c_entries.push(c_entry);
+        }
+
+        // Build TLAS packages. Each Tlas carries its instance list and lowest_unmodified.
+        // instances_storage keeps the WGPUTlasInstance Vecs alive across the C call.
+        let mut instances_storage: Vec<Vec<native::WGPUTlasInstance>> = Vec::new();
+        let mut c_tlas_packages: Vec<native::WGPUTlasPackage> = Vec::new();
+
+        for t in tlas {
+            let tlas_ptr = t.as_custom::<CTlas>().unwrap().ptr;
+            let lowest = t.lowest_unmodified();
+            let c_instances: Vec<native::WGPUTlasInstance> = t
+                .get()
+                .iter()
+                .map(|opt_inst| native::WGPUTlasInstance {
+                    blas: opt_inst
+                        .as_ref()
+                        .and_then(|i| i.blas_as_custom::<CBlas>())
+                        .map(|b| b.ptr)
+                        .unwrap_or(std::ptr::null_mut()),
+                    transform: opt_inst
+                        .as_ref()
+                        .map(|i| i.transform)
+                        .unwrap_or([0.0; 12]),
+                    customData: opt_inst.as_ref().map(|i| i.custom_data).unwrap_or(0),
+                    mask: opt_inst.as_ref().map(|i| i.mask).unwrap_or(0),
+                })
+                .collect();
+            let pkg = native::WGPUTlasPackage {
+                tlas: tlas_ptr,
+                instances: if c_instances.is_empty() {
+                    std::ptr::null()
+                } else {
+                    c_instances.as_ptr()
+                },
+                instanceCount: c_instances.len(),
+                lowestUnmodified: lowest,
+            };
+            instances_storage.push(c_instances);
+            c_tlas_packages.push(pkg);
+        }
+
+        unsafe {
+            wgpuCommandEncoderBuildAccelerationStructures(
+                self.ptr,
+                c_entries.len(),
+                c_entries.as_ptr(),
+                c_tlas_packages.len(),
+                if c_tlas_packages.is_empty() {
+                    std::ptr::null()
+                } else {
+                    c_tlas_packages.as_ptr()
+                },
+            )
+        };
     }
 
     fn transition_resources<'a>(

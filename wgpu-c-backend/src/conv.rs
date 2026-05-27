@@ -207,6 +207,7 @@ pub fn map_feature(f: native::WGPUFeatureName) -> Option<wgpu::Features> {
         native::WGPUNativeFeature_ShaderF64 => Some(Features::SHADER_F64),
         native::WGPUNativeFeature_ShaderI16 => Some(Features::SHADER_I16),
         native::WGPUNativeFeature_ShaderEarlyDepthTest => Some(Features::SHADER_EARLY_DEPTH_TEST),
+        native::WGPUFeatureName_Subgroups => Some(Features::SUBGROUP),
         native::WGPUNativeFeature_Subgroup => Some(Features::SUBGROUP),
         native::WGPUNativeFeature_SubgroupVertex => Some(Features::SUBGROUP_VERTEX),
         native::WGPUNativeFeature_SubgroupBarrier => Some(Features::SUBGROUP_BARRIER),
@@ -261,6 +262,12 @@ pub fn map_feature(f: native::WGPUFeatureName) -> Option<wgpu::Features> {
         }
         native::WGPUNativeFeature_VulkanExternalMemoryFd => {
             Some(Features::VULKAN_EXTERNAL_MEMORY_FD)
+        }
+        native::WGPUNativeFeature_VulkanExternalMemoryDmaBuf => {
+            Some(Features::VULKAN_EXTERNAL_MEMORY_DMA_BUF)
+        }
+        native::WGPUNativeFeature_VulkanGoogleDisplayTiming => {
+            Some(Features::VULKAN_GOOGLE_DISPLAY_TIMING)
         }
         _ => None,
     }
@@ -562,6 +569,14 @@ pub fn features_to_native(features: wgpu::Features) -> Vec<native::WGPUFeatureNa
         Features::VULKAN_EXTERNAL_MEMORY_FD,
         native::WGPUNativeFeature_VulkanExternalMemoryFd
     );
+    push!(
+        Features::VULKAN_EXTERNAL_MEMORY_DMA_BUF,
+        native::WGPUNativeFeature_VulkanExternalMemoryDmaBuf
+    );
+    push!(
+        Features::VULKAN_GOOGLE_DISPLAY_TIMING,
+        native::WGPUNativeFeature_VulkanGoogleDisplayTiming
+    );
     out
 }
 
@@ -777,6 +792,8 @@ pub fn map_texture_format(v: native::WGPUTextureFormat) -> Option<wgpu::TextureF
         native::WGPUTextureFormat_R32Float => Some(TF::R32Float),
         native::WGPUTextureFormat_R32Uint => Some(TF::R32Uint),
         native::WGPUTextureFormat_R32Sint => Some(TF::R32Sint),
+        native::WGPUTextureFormat_RG16Unorm => Some(TF::Rg16Unorm),
+        native::WGPUTextureFormat_RG16Snorm => Some(TF::Rg16Snorm),
         native::WGPUTextureFormat_RG16Uint => Some(TF::Rg16Uint),
         native::WGPUTextureFormat_RG16Sint => Some(TF::Rg16Sint),
         native::WGPUTextureFormat_RG16Float => Some(TF::Rg16Float),
@@ -794,6 +811,8 @@ pub fn map_texture_format(v: native::WGPUTextureFormat) -> Option<wgpu::TextureF
         native::WGPUTextureFormat_RG32Float => Some(TF::Rg32Float),
         native::WGPUTextureFormat_RG32Uint => Some(TF::Rg32Uint),
         native::WGPUTextureFormat_RG32Sint => Some(TF::Rg32Sint),
+        native::WGPUTextureFormat_RGBA16Unorm => Some(TF::Rgba16Unorm),
+        native::WGPUTextureFormat_RGBA16Snorm => Some(TF::Rgba16Snorm),
         native::WGPUTextureFormat_RGBA16Uint => Some(TF::Rgba16Uint),
         native::WGPUTextureFormat_RGBA16Sint => Some(TF::Rgba16Sint),
         native::WGPUTextureFormat_RGBA16Float => Some(TF::Rgba16Float),
@@ -985,6 +1004,8 @@ pub fn texture_format_to_native(f: wgpu::TextureFormat) -> native::WGPUTextureFo
         TF::R32Float => native::WGPUTextureFormat_R32Float,
         TF::R32Uint => native::WGPUTextureFormat_R32Uint,
         TF::R32Sint => native::WGPUTextureFormat_R32Sint,
+        TF::Rg16Unorm => native::WGPUTextureFormat_RG16Unorm,
+        TF::Rg16Snorm => native::WGPUTextureFormat_RG16Snorm,
         TF::Rg16Uint => native::WGPUTextureFormat_RG16Uint,
         TF::Rg16Sint => native::WGPUTextureFormat_RG16Sint,
         TF::Rg16Float => native::WGPUTextureFormat_RG16Float,
@@ -1002,6 +1023,8 @@ pub fn texture_format_to_native(f: wgpu::TextureFormat) -> native::WGPUTextureFo
         TF::Rg32Float => native::WGPUTextureFormat_RG32Float,
         TF::Rg32Uint => native::WGPUTextureFormat_RG32Uint,
         TF::Rg32Sint => native::WGPUTextureFormat_RG32Sint,
+        TF::Rgba16Unorm => native::WGPUTextureFormat_RGBA16Unorm,
+        TF::Rgba16Snorm => native::WGPUTextureFormat_RGBA16Snorm,
         TF::Rgba16Uint => native::WGPUTextureFormat_RGBA16Uint,
         TF::Rgba16Sint => native::WGPUTextureFormat_RGBA16Sint,
         TF::Rgba16Float => native::WGPUTextureFormat_RGBA16Float,
@@ -1041,10 +1064,6 @@ pub fn texture_format_to_native(f: wgpu::TextureFormat) -> native::WGPUTextureFo
         TF::Astc { block, channel } => astc_to_native(block, channel),
         TF::R16Unorm => native::WGPUNativeTextureFormat_R16Unorm,
         TF::R16Snorm => native::WGPUNativeTextureFormat_R16Snorm,
-        TF::Rg16Unorm => native::WGPUNativeTextureFormat_Rg16Unorm,
-        TF::Rg16Snorm => native::WGPUNativeTextureFormat_Rg16Snorm,
-        TF::Rgba16Unorm => native::WGPUNativeTextureFormat_Rgba16Unorm,
-        TF::Rgba16Snorm => native::WGPUNativeTextureFormat_Rgba16Snorm,
         TF::NV12 => native::WGPUNativeTextureFormat_NV12,
         TF::P010 => native::WGPUNativeTextureFormat_P010,
         TF::R64Uint => wgpu_native::conv::WGPU_NATIVE_TEXTURE_FORMAT_R64_UINT,
@@ -1479,8 +1498,34 @@ pub fn address_mode_to_native(m: wgpu::AddressMode) -> native::WGPUAddressMode {
         wgpu::AddressMode::ClampToEdge => native::WGPUAddressMode_ClampToEdge,
         wgpu::AddressMode::Repeat => native::WGPUAddressMode_Repeat,
         wgpu::AddressMode::MirrorRepeat => native::WGPUAddressMode_MirrorRepeat,
-        // wgpu-native has no ClampToBorder; fall back to ClampToEdge.
-        wgpu::AddressMode::ClampToBorder => native::WGPUAddressMode_ClampToEdge,
+        wgpu::AddressMode::ClampToBorder => {
+            native::WGPUNativeAddressMode_ClampToBorder as native::WGPUAddressMode
+        }
+    }
+}
+
+pub fn border_color_to_native(c: wgpu::SamplerBorderColor) -> native::WGPUSamplerBorderColor {
+    match c {
+        wgpu::SamplerBorderColor::TransparentBlack => {
+            native::WGPUSamplerBorderColor_TransparentBlack
+        }
+        wgpu::SamplerBorderColor::OpaqueBlack => native::WGPUSamplerBorderColor_OpaqueBlack,
+        wgpu::SamplerBorderColor::OpaqueWhite => native::WGPUSamplerBorderColor_OpaqueWhite,
+        wgpu::SamplerBorderColor::Zero => native::WGPUSamplerBorderColor_Zero,
+    }
+}
+
+pub fn memory_hints_to_native(
+    hints: &wgpu::MemoryHints,
+) -> (native::WGPUMemoryHints, u64, u64) {
+    match hints {
+        wgpu::MemoryHints::Performance => (native::WGPUMemoryHints_Performance, 0, 0),
+        wgpu::MemoryHints::MemoryUsage => (native::WGPUMemoryHints_MemoryUsage, 0, 0),
+        wgpu::MemoryHints::Manual { suballocated_device_memory_block_size } => (
+            native::WGPUMemoryHints_Manual,
+            suballocated_device_memory_block_size.start,
+            suballocated_device_memory_block_size.end,
+        ),
     }
 }
 
@@ -1689,4 +1734,69 @@ pub fn surface_status_from_native(
         native::WGPUSurfaceGetCurrentTextureStatus_Lost => wgpu::SurfaceStatus::Lost,
         _ => wgpu::SurfaceStatus::Lost,
     }
+}
+
+pub fn cooperative_scalar_type_from_native(
+    t: native::WGPUNativeCooperativeScalarType,
+) -> wgpu::wgt::CooperativeScalarType {
+    match t {
+        native::WGPUNativeCooperativeScalarType_F16 => wgpu::wgt::CooperativeScalarType::F16,
+        native::WGPUNativeCooperativeScalarType_I32 => wgpu::wgt::CooperativeScalarType::I32,
+        native::WGPUNativeCooperativeScalarType_U32 => wgpu::wgt::CooperativeScalarType::U32,
+        _ => wgpu::wgt::CooperativeScalarType::F32,
+    }
+}
+
+pub fn acceleration_structure_flags_to_native(
+    f: wgpu::AccelerationStructureFlags,
+) -> native::WGPUAccelerationStructureFlags {
+    let mut out = native::WGPUAccelerationStructureFlags_None;
+    if f.contains(wgpu::AccelerationStructureFlags::ALLOW_UPDATE) {
+        out |= native::WGPUAccelerationStructureFlags_AllowUpdate;
+    }
+    if f.contains(wgpu::AccelerationStructureFlags::ALLOW_COMPACTION) {
+        out |= native::WGPUAccelerationStructureFlags_AllowCompaction;
+    }
+    if f.contains(wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE) {
+        out |= native::WGPUAccelerationStructureFlags_PreferFastTrace;
+    }
+    if f.contains(wgpu::AccelerationStructureFlags::PREFER_FAST_BUILD) {
+        out |= native::WGPUAccelerationStructureFlags_PreferFastBuild;
+    }
+    if f.contains(wgpu::AccelerationStructureFlags::LOW_MEMORY) {
+        out |= native::WGPUAccelerationStructureFlags_LowMemory;
+    }
+    if f.contains(wgpu::AccelerationStructureFlags::USE_TRANSFORM) {
+        out |= native::WGPUAccelerationStructureFlags_UseTransform;
+    }
+    if f.contains(wgpu::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN) {
+        out |= native::WGPUAccelerationStructureFlags_AllowRayHitVertexReturn;
+    }
+    out
+}
+
+pub fn acceleration_structure_update_mode_to_native(
+    m: wgpu::AccelerationStructureUpdateMode,
+) -> native::WGPUAccelerationStructureUpdateMode {
+    match m {
+        wgpu::AccelerationStructureUpdateMode::Build => {
+            native::WGPUAccelerationStructureUpdateMode_Build
+        }
+        wgpu::AccelerationStructureUpdateMode::PreferUpdate => {
+            native::WGPUAccelerationStructureUpdateMode_PreferUpdate
+        }
+    }
+}
+
+pub fn acceleration_structure_geometry_flags_to_native(
+    f: wgpu::AccelerationStructureGeometryFlags,
+) -> native::WGPUAccelerationStructureGeometryFlags {
+    let mut out = native::WGPUAccelerationStructureGeometryFlags_None;
+    if f.contains(wgpu::AccelerationStructureGeometryFlags::OPAQUE) {
+        out |= native::WGPUAccelerationStructureGeometryFlags_Opaque;
+    }
+    if f.contains(wgpu::AccelerationStructureGeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION) {
+        out |= native::WGPUAccelerationStructureGeometryFlags_NoDuplicateAnyHitInvocation;
+    }
+    out
 }
