@@ -692,6 +692,11 @@ struct PipelineInner {
     clip_distance_count: u32,
 }
 
+#[cfg(send_sync)]
+unsafe impl Sync for PipelineInner {}
+#[cfg(send_sync)]
+unsafe impl Send for PipelineInner {}
+
 #[derive(Clone, Debug)]
 struct DepthState {
     function: u32,
@@ -750,9 +755,7 @@ pub struct RenderPipeline {
 impl crate::DynRenderPipeline for RenderPipeline {}
 
 #[cfg(send_sync)]
-unsafe impl Sync for RenderPipeline {}
-#[cfg(send_sync)]
-unsafe impl Send for RenderPipeline {}
+static_assertions::assert_impl_all!(RenderPipeline: Send, Sync);
 
 #[derive(Debug)]
 pub struct ComputePipeline {
@@ -762,9 +765,7 @@ pub struct ComputePipeline {
 impl crate::DynComputePipeline for ComputePipeline {}
 
 #[cfg(send_sync)]
-unsafe impl Sync for ComputePipeline {}
-#[cfg(send_sync)]
-unsafe impl Send for ComputePipeline {}
+static_assertions::assert_impl_all!(ComputePipeline: Send, Sync);
 
 #[derive(Debug)]
 pub struct QuerySet {

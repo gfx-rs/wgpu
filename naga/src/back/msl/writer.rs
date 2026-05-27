@@ -529,17 +529,17 @@ pub struct Writer<W> {
     pub(super) names: FastHashMap<NameKey, String>,
     pub(super) named_expressions: crate::NamedExpressions,
     /// Set of expressions that need to be baked to avoid unnecessary repetition in output
-    pub(super) need_bake_expressions: back::NeedBakeExpressions,
+    need_bake_expressions: back::NeedBakeExpressions,
     pub(super) namer: proc::Namer,
     pub(super) wrapped_functions: FastHashSet<WrappedFunction>,
     #[cfg(test)]
-    pub(super) put_expression_stack_pointers: FastHashSet<*const ()>,
+    put_expression_stack_pointers: FastHashSet<*const ()>,
     #[cfg(test)]
-    pub(super) put_block_stack_pointers: FastHashSet<*const ()>,
+    put_block_stack_pointers: FastHashSet<*const ()>,
     /// Set of (struct type, struct field index) denoting which fields require
     /// padding inserted **before** them (i.e. between fields at index - 1 and index)
-    pub(super) struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
-    pub(super) needs_object_memory_barriers: bool,
+    struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
+    needs_object_memory_barriers: bool,
 }
 
 impl crate::Scalar {

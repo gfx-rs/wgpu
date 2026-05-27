@@ -1499,9 +1499,9 @@ impl State {
         self.commands
             .extend(entries.map(|(i, bind_group, dynamic_offsets)| {
                 self.buffer_memory_init_actions
-                    .extend_from_slice(&bind_group.used_buffer_ranges);
+                    .extend_from_slice(&bind_group.buffer_init_actions);
                 self.texture_memory_init_actions
-                    .extend_from_slice(&bind_group.used_texture_ranges);
+                    .extend_from_slice(&bind_group.texture_init_actions);
 
                 self.flat_dynamic_offsets.extend_from_slice(dynamic_offsets);
 

@@ -241,7 +241,10 @@ pub struct SurfaceConfiguration<V> {
 
 impl<V: Clone> SurfaceConfiguration<V> {
     /// Map `view_formats` of the texture descriptor into another.
-    pub fn map_view_formats<M>(&self, fun: impl FnOnce(V) -> M) -> SurfaceConfiguration<M> {
+    pub fn map_view_formats<'a, M>(
+        &'a self,
+        fun: impl FnOnce(&'a V) -> M,
+    ) -> SurfaceConfiguration<M> {
         SurfaceConfiguration {
             usage: self.usage,
             format: self.format,
@@ -250,7 +253,7 @@ impl<V: Clone> SurfaceConfiguration<V> {
             present_mode: self.present_mode,
             desired_maximum_frame_latency: self.desired_maximum_frame_latency,
             alpha_mode: self.alpha_mode,
-            view_formats: fun(self.view_formats.clone()),
+            view_formats: fun(&self.view_formats),
         }
     }
 }
