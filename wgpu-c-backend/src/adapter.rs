@@ -79,8 +79,12 @@ impl AdapterInterface for CAdapter {
         // Build the feature list from required_features.
         let mut required_features = conv::features_to_native(desc.required_features);
 
-        // Build the limits struct.
-        let c_limits = conv::limits_to_native(&desc.required_limits);
+        // Build the limits structs. The standard WGPULimits covers WebGPU core limits;
+        // WGPUNativeLimits covers extended wgpu-native limits (BLAS, mesh shaders, etc.).
+        let mut c_native_limits = conv::native_limits_from_wgpu(&desc.required_limits);
+        let mut c_limits = conv::limits_to_native(&desc.required_limits);
+        c_limits.nextInChain =
+            std::ptr::from_mut::<native::WGPUChainedStruct>(&mut c_native_limits.chain);
 
         let label = desc.label.map(|s| s.to_owned());
         let label_sv = label
@@ -302,15 +306,26 @@ impl AdapterInterface for CAdapter {
         flag!(WGPUDownlevelFlags_IndirectExecution => INDIRECT_EXECUTION);
         flag!(WGPUDownlevelFlags_BaseVertex => BASE_VERTEX);
         flag!(WGPUDownlevelFlags_ReadOnlyDepthStencil => READ_ONLY_DEPTH_STENCIL);
+        flag!(WGPUDownlevelFlags_NonPowerOfTwoMipmappedTextures => NON_POWER_OF_TWO_MIPMAPPED_TEXTURES);
         flag!(WGPUDownlevelFlags_CubeArrayTextures => CUBE_ARRAY_TEXTURES);
         flag!(WGPUDownlevelFlags_ComparisonSamplers => COMPARISON_SAMPLERS);
+        flag!(WGPUDownlevelFlags_IndependentBlend => INDEPENDENT_BLEND);
         flag!(WGPUDownlevelFlags_VertexStorage => VERTEX_STORAGE);
         flag!(WGPUDownlevelFlags_AnisotropicFiltering => ANISOTROPIC_FILTERING);
         flag!(WGPUDownlevelFlags_FragmentStorage => FRAGMENT_STORAGE);
         flag!(WGPUDownlevelFlags_MultisampledShading => MULTISAMPLED_SHADING);
+        flag!(WGPUDownlevelFlags_DepthTextureAndBufferCopies => DEPTH_TEXTURE_AND_BUFFER_COPIES);
+        flag!(WGPUDownlevelFlags_WebGpuTextureFormatSupport => WEBGPU_TEXTURE_FORMAT_SUPPORT);
+        flag!(WGPUDownlevelFlags_BufferBindingsNot16ByteAligned => BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED);
         flag!(WGPUDownlevelFlags_UnrestrictedIndexBuffer => UNRESTRICTED_INDEX_BUFFER);
+        flag!(WGPUDownlevelFlags_FullDrawIndexUint32 => FULL_DRAW_INDEX_UINT32);
         flag!(WGPUDownlevelFlags_DepthBiasClamp => DEPTH_BIAS_CLAMP);
+        flag!(WGPUDownlevelFlags_ViewFormats => VIEW_FORMATS);
         flag!(WGPUDownlevelFlags_UnrestrictedExternalTextureCopies => UNRESTRICTED_EXTERNAL_TEXTURE_COPIES);
+        flag!(WGPUDownlevelFlags_SurfaceViewFormats => SURFACE_VIEW_FORMATS);
+        flag!(WGPUDownlevelFlags_NonblockingQueryResolve => NONBLOCKING_QUERY_RESOLVE);
+        flag!(WGPUDownlevelFlags_ShaderF16InF32 => SHADER_F16_IN_F32);
+        flag!(WGPUDownlevelFlags_Msl21 => MSL2_1);
         let shader_model = match c.shaderModel {
             native::WGPUShaderModel_Sm2 => wgpu::ShaderModel::Sm2,
             native::WGPUShaderModel_Sm4 => wgpu::ShaderModel::Sm4,

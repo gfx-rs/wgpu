@@ -334,10 +334,6 @@ wgpu-hal = { path = "./wgpu-hal" }
 wgpu-types = { path = "./wgpu-types" }
 naga = { path = "./naga" }
 
-
-
-
-
 [profile.release]
 lto = "thin"
 debug = true

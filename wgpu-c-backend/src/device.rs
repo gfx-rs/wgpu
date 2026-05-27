@@ -695,8 +695,18 @@ impl DeviceInterface for CDevice {
 
         // Primitive state.
         let prim = &desc.primitive;
+        let mut primitive_extras = native::WGPUPrimitiveStateExtras {
+            chain: native::WGPUChainedStruct {
+                next: std::ptr::null_mut(),
+                sType: native::WGPUSType_PrimitiveStateExtras,
+            },
+            polygonMode: conv::polygon_mode_to_native(prim.polygon_mode),
+            conservative: prim.conservative as u32,
+        };
         let c_primitive = native::WGPUPrimitiveState {
-            nextInChain: std::ptr::null_mut(),
+            nextInChain: std::ptr::from_mut::<native::WGPUChainedStruct>(
+                &mut primitive_extras.chain,
+            ),
             topology: conv::primitive_topology_to_native(prim.topology),
             stripIndexFormat: prim
                 .strip_index_format
@@ -953,8 +963,18 @@ impl DeviceInterface for CDevice {
 
         // Primitive state.
         let prim = &desc.primitive;
+        let mut primitive_extras = native::WGPUPrimitiveStateExtras {
+            chain: native::WGPUChainedStruct {
+                next: std::ptr::null_mut(),
+                sType: native::WGPUSType_PrimitiveStateExtras,
+            },
+            polygonMode: conv::polygon_mode_to_native(prim.polygon_mode),
+            conservative: prim.conservative as u32,
+        };
         let c_primitive = native::WGPUPrimitiveState {
-            nextInChain: std::ptr::null_mut(),
+            nextInChain: std::ptr::from_mut::<native::WGPUChainedStruct>(
+                &mut primitive_extras.chain,
+            ),
             topology: conv::primitive_topology_to_native(prim.topology),
             stripIndexFormat: prim
                 .strip_index_format

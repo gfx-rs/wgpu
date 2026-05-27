@@ -621,6 +621,39 @@ pub fn limits_to_native(l: &wgpu::Limits) -> native::WGPULimits {
     out
 }
 
+pub fn native_limits_from_wgpu(l: &wgpu::Limits) -> native::WGPUNativeLimits {
+    let mut out: native::WGPUNativeLimits = unsafe { std::mem::zeroed() };
+    out.chain = native::WGPUChainedStruct {
+        next: std::ptr::null_mut(),
+        sType: native::WGPUSType_NativeLimits,
+    };
+    out.maxNonSamplerBindings = l.max_non_sampler_bindings;
+    out.maxBindingArrayElementsPerShaderStage = l.max_binding_array_elements_per_shader_stage;
+    out.maxBindingArraySamplerElementsPerShaderStage =
+        l.max_binding_array_sampler_elements_per_shader_stage;
+    out.maxMultiviewViewCount = l.max_multiview_view_count;
+    out.maxBindingArrayAccelerationStructureElementsPerShaderStage =
+        l.max_binding_array_acceleration_structure_elements_per_shader_stage;
+    out.maxTaskWorkgroupTotalCount = l.max_task_workgroup_total_count;
+    out.maxTaskWorkgroupsPerDimension = l.max_task_workgroups_per_dimension;
+    out.maxMeshWorkgroupTotalCount = l.max_mesh_workgroup_total_count;
+    out.maxMeshWorkgroupsPerDimension = l.max_mesh_workgroups_per_dimension;
+    out.maxTaskInvocationsPerWorkgroup = l.max_task_invocations_per_workgroup;
+    out.maxTaskInvocationsPerDimension = l.max_task_invocations_per_dimension;
+    out.maxMeshInvocationsPerWorkgroup = l.max_mesh_invocations_per_workgroup;
+    out.maxMeshInvocationsPerDimension = l.max_mesh_invocations_per_dimension;
+    out.maxTaskPayloadSize = l.max_task_payload_size;
+    out.maxMeshOutputVertices = l.max_mesh_output_vertices;
+    out.maxMeshOutputPrimitives = l.max_mesh_output_primitives;
+    out.maxMeshOutputLayers = l.max_mesh_output_layers;
+    out.maxMeshMultiviewViewCount = l.max_mesh_multiview_view_count;
+    out.maxBlasPrimitiveCount = l.max_blas_primitive_count as u64;
+    out.maxBlasGeometryCount = l.max_blas_geometry_count as u64;
+    out.maxTlasInstanceCount = l.max_tlas_instance_count as u64;
+    out.maxAccelerationStructuresPerShaderStage = l.max_acceleration_structures_per_shader_stage;
+    out
+}
+
 pub fn map_limits(c: &native::WGPULimits, extras: Option<&native::WGPUNativeLimits>) -> wgpu::Limits {
     let mut l = wgpu::Limits::default();
     // wgpuAdapterGetLimits / wgpuDeviceGetLimits always fill all standard fields with the real
