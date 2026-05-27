@@ -64,7 +64,8 @@ impl DeviceInterface for CDevice {
             sType: native::WGPUSType_NativeLimits,
         };
         let mut limits: native::WGPULimits = unsafe { std::mem::zeroed() };
-        limits.nextInChain = std::ptr::from_mut::<native::WGPUChainedStruct>(&mut native_limits.chain);
+        limits.nextInChain =
+            std::ptr::from_mut::<native::WGPUChainedStruct>(&mut native_limits.chain);
         unsafe { wgpuDeviceGetLimits(self.ptr, Some(&mut limits)) };
         conv::map_limits(&limits, Some(&native_limits))
     }
@@ -91,11 +92,11 @@ impl DeviceInterface for CDevice {
             },
             boundsChecks: shader_bound_checks.bounds_checks as _,
             forceLoopBounding: shader_bound_checks.force_loop_bounding as _,
-            rayQueryInitializationTracking: shader_bound_checks
-                .ray_query_initialization_tracking as _,
+            rayQueryInitializationTracking: shader_bound_checks.ray_query_initialization_tracking
+                as _,
             taskShaderDispatchTracking: shader_bound_checks.task_shader_dispatch_tracking as _,
-            meshShaderPrimitiveIndicesClamp: shader_bound_checks
-                .mesh_shader_primitive_indices_clamp as _,
+            meshShaderPrimitiveIndicesClamp: shader_bound_checks.mesh_shader_primitive_indices_clamp
+                as _,
         };
 
         match &desc.source {
@@ -133,7 +134,8 @@ impl DeviceInterface for CDevice {
                     metallib: std::ptr::null(),
                     msl: conv::null_string_view(),
                 };
-                let ptr = unsafe { wgpuDeviceCreateShaderModulePassthrough(self.ptr, Some(&c_desc)) };
+                let ptr =
+                    unsafe { wgpuDeviceCreateShaderModulePassthrough(self.ptr, Some(&c_desc)) };
                 DispatchShaderModule::custom(CShaderModule { ptr })
             }
             _ => unimplemented!("wgpu-native does not support this shader source type"),
@@ -189,9 +191,17 @@ impl DeviceInterface for CDevice {
             entryPointCount: native_eps.len(),
             entryPoints: native_eps.as_ptr(),
             spirvSize: desc.spirv.as_ref().map(|s| s.len() as u32).unwrap_or(0),
-            spirv: desc.spirv.as_ref().map(|s| s.as_ptr()).unwrap_or(std::ptr::null()),
+            spirv: desc
+                .spirv
+                .as_ref()
+                .map(|s| s.as_ptr())
+                .unwrap_or(std::ptr::null()),
             dxilSize: desc.dxil.as_ref().map(|d| d.len()).unwrap_or(0),
-            dxil: desc.dxil.as_ref().map(|d| d.as_ptr()).unwrap_or(std::ptr::null()),
+            dxil: desc
+                .dxil
+                .as_ref()
+                .map(|d| d.as_ptr())
+                .unwrap_or(std::ptr::null()),
             hlsl: desc
                 .hlsl
                 .as_deref()
@@ -309,9 +319,10 @@ impl DeviceInterface for CDevice {
         // Box<T> guarantees the inner T doesn't move, so the raw pointer stays valid
         // for the duration of the wgpuDeviceCreateBindGroupLayout call below.
         for (idx, chain) in &as_chains {
-            entries[*idx].nextInChain =
-                chain.as_ref() as *const native::WGPUAccelerationStructureBindingLayout
-                    as *mut native::WGPUChainedStruct;
+            entries[*idx].nextInChain = std::ptr::from_ref::<
+                native::WGPUAccelerationStructureBindingLayout,
+            >(chain.as_ref())
+                as *mut native::WGPUChainedStruct;
         }
 
         let c_desc = native::WGPUBindGroupLayoutDescriptor {
@@ -325,7 +336,10 @@ impl DeviceInterface for CDevice {
             },
         };
         let ptr = unsafe { wgpuDeviceCreateBindGroupLayout(self.ptr, Some(&c_desc)) };
-        DispatchBindGroupLayout::custom(CBindGroupLayout { ptr, device_ptr: self.ptr })
+        DispatchBindGroupLayout::custom(CBindGroupLayout {
+            ptr,
+            device_ptr: self.ptr,
+        })
     }
 
     fn create_bind_group(&self, desc: &wgpu::BindGroupDescriptor<'_>) -> DispatchBindGroup {
@@ -351,8 +365,7 @@ impl DeviceInterface for CDevice {
         }
         let mut extras_by_entry: Vec<(usize, Box<ExtrasStorage>)> = Vec::new();
 
-        let mut entries: Vec<native::WGPUBindGroupEntry> =
-            Vec::with_capacity(desc.entries.len());
+        let mut entries: Vec<native::WGPUBindGroupEntry> = Vec::with_capacity(desc.entries.len());
         for (idx, e) in desc.entries.iter().enumerate() {
             let mut entry: native::WGPUBindGroupEntry = unsafe { std::mem::zeroed() };
             entry.binding = e.binding;
@@ -401,7 +414,11 @@ impl DeviceInterface for CDevice {
                         .iter()
                         .map(|bb| bb.buffer.as_custom::<CBuffer>().unwrap().ptr)
                         .collect();
-                    let buf_ptr = if bufs.is_empty() { std::ptr::null() } else { bufs.as_ptr() };
+                    let buf_ptr = if bufs.is_empty() {
+                        std::ptr::null()
+                    } else {
+                        bufs.as_ptr()
+                    };
                     let buf_len = bufs.len();
                     extras_by_entry.push((
                         idx,
@@ -433,7 +450,11 @@ impl DeviceInterface for CDevice {
                         .iter()
                         .map(|s| s.as_custom::<CSampler>().unwrap().ptr)
                         .collect();
-                    let samp_ptr = if samps.is_empty() { std::ptr::null() } else { samps.as_ptr() };
+                    let samp_ptr = if samps.is_empty() {
+                        std::ptr::null()
+                    } else {
+                        samps.as_ptr()
+                    };
                     let samp_len = samps.len();
                     extras_by_entry.push((
                         idx,
@@ -465,7 +486,11 @@ impl DeviceInterface for CDevice {
                         .iter()
                         .map(|tv| tv.as_custom::<CTextureView>().unwrap().ptr)
                         .collect();
-                    let tv_ptr = if tvs.is_empty() { std::ptr::null() } else { tvs.as_ptr() };
+                    let tv_ptr = if tvs.is_empty() {
+                        std::ptr::null()
+                    } else {
+                        tvs.as_ptr()
+                    };
                     let tv_len = tvs.len();
                     extras_by_entry.push((
                         idx,
@@ -497,7 +522,11 @@ impl DeviceInterface for CDevice {
                         .iter()
                         .map(|tlas| tlas.as_custom::<CTlas>().unwrap().ptr)
                         .collect();
-                    let tlas_ptr = if tlas_ptrs.is_empty() { std::ptr::null() } else { tlas_ptrs.as_ptr() };
+                    let tlas_ptr = if tlas_ptrs.is_empty() {
+                        std::ptr::null()
+                    } else {
+                        tlas_ptrs.as_ptr()
+                    };
                     let tlas_len = tlas_ptrs.len();
                     extras_by_entry.push((
                         idx,
@@ -535,7 +564,7 @@ impl DeviceInterface for CDevice {
         // so the raw pointers into _buffers/_samplers/_texture_views remain valid.
         for (idx, storage) in &extras_by_entry {
             entries[*idx].nextInChain =
-                &storage.extras.chain as *const native::WGPUChainedStruct as *mut _;
+                std::ptr::from_ref::<native::WGPUChainedStruct>(&storage.extras.chain) as *mut _;
         }
 
         let c_desc = native::WGPUBindGroupDescriptor {
@@ -1189,9 +1218,8 @@ impl DeviceInterface for CDevice {
                 sType: native::WGPUSType_ComputePipelineDescriptorExtras,
             },
             cache: cache_ptr,
-            zeroInitializeWorkgroupMemory: desc
-                .compilation_options
-                .zero_initialize_workgroup_memory as _,
+            zeroInitializeWorkgroupMemory: desc.compilation_options.zero_initialize_workgroup_memory
+                as _,
         };
         let c_desc = native::WGPUComputePipelineDescriptor {
             nextInChain: std::ptr::from_mut::<native::WGPUChainedStruct>(&mut extras.chain),
@@ -1371,7 +1399,11 @@ impl DeviceInterface for CDevice {
             }
         };
         let raw_handle = unsafe { wgpuBlasGetHandle(ptr) };
-        let handle = if raw_handle == 0 { None } else { Some(raw_handle) };
+        let handle = if raw_handle == 0 {
+            None
+        } else {
+            Some(raw_handle)
+        };
         (handle, DispatchBlas::custom(CBlas { ptr }))
     }
 
@@ -1398,13 +1430,15 @@ impl DeviceInterface for CDevice {
             .as_deref()
             .map(conv::str_to_string_view)
             .unwrap_or(conv::null_string_view());
-        let mut extras = desc.border_color.map(|bc| native::WGPUSamplerDescriptorExtras {
-            chain: native::WGPUChainedStruct {
-                next: std::ptr::null_mut(),
-                sType: native::WGPUSType_SamplerDescriptorExtras,
-            },
-            borderColor: conv::border_color_to_native(bc),
-        });
+        let mut extras = desc
+            .border_color
+            .map(|bc| native::WGPUSamplerDescriptorExtras {
+                chain: native::WGPUChainedStruct {
+                    next: std::ptr::null_mut(),
+                    sType: native::WGPUSType_SamplerDescriptorExtras,
+                },
+                borderColor: conv::border_color_to_native(bc),
+            });
         let c_desc = native::WGPUSamplerDescriptor {
             nextInChain: extras
                 .as_mut()
@@ -1490,7 +1524,10 @@ impl DeviceInterface for CDevice {
             label: label_sv,
         };
         let ptr = unsafe { wgpuDeviceCreateCommandEncoder(self.ptr, Some(&c_desc)) };
-        DispatchCommandEncoder::custom(CCommandEncoder { ptr, device_ptr: self.ptr })
+        DispatchCommandEncoder::custom(CCommandEncoder {
+            ptr,
+            device_ptr: self.ptr,
+        })
     }
 
     fn create_render_bundle_encoder(
@@ -1673,27 +1710,24 @@ impl DeviceInterface for CDevice {
             unsafe { wgpuAllocatorReportFreeMembers(report) };
             return None;
         }
-        let allocations = unsafe {
-            std::slice::from_raw_parts(report.allocations, report.allocationCount)
-        }
-        .iter()
-        .map(|a| wgpu::wgt::AllocationReport {
-            name: unsafe { wgpu_native::utils::string_view_into_str(a.name) }
-                .unwrap_or("")
-                .to_owned(),
-            offset: a.offset,
-            size: a.size,
-        })
-        .collect();
-        let blocks = unsafe {
-            std::slice::from_raw_parts(report.blocks, report.blockCount)
-        }
-        .iter()
-        .map(|b| wgpu::wgt::MemoryBlockReport {
-            size: b.size,
-            allocations: b.allocationStart..b.allocationEnd,
-        })
-        .collect();
+        let allocations =
+            unsafe { std::slice::from_raw_parts(report.allocations, report.allocationCount) }
+                .iter()
+                .map(|a| wgpu::wgt::AllocationReport {
+                    name: unsafe { wgpu_native::utils::string_view_into_str(a.name) }
+                        .unwrap_or("")
+                        .to_owned(),
+                    offset: a.offset,
+                    size: a.size,
+                })
+                .collect();
+        let blocks = unsafe { std::slice::from_raw_parts(report.blocks, report.blockCount) }
+            .iter()
+            .map(|b| wgpu::wgt::MemoryBlockReport {
+                size: b.size,
+                allocations: b.allocationStart..b.allocationEnd,
+            })
+            .collect();
         let result = wgpu::AllocatorReport {
             allocations,
             blocks,
@@ -1818,8 +1852,12 @@ impl QueueInterface for CQueue {
         let c_dst = conv::image_copy_texture_to_native(&texture, tex_ptr);
         let c_layout = native::WGPUTexelCopyBufferLayout {
             offset: data_layout.offset,
-            bytesPerRow: data_layout.bytes_per_row.unwrap_or(native::WGPU_COPY_STRIDE_UNDEFINED),
-            rowsPerImage: data_layout.rows_per_image.unwrap_or(native::WGPU_COPY_STRIDE_UNDEFINED),
+            bytesPerRow: data_layout
+                .bytes_per_row
+                .unwrap_or(native::WGPU_COPY_STRIDE_UNDEFINED),
+            rowsPerImage: data_layout
+                .rows_per_image
+                .unwrap_or(native::WGPU_COPY_STRIDE_UNDEFINED),
         };
         let c_size = conv::extent3d_to_native(size);
         unsafe {
@@ -1857,10 +1895,9 @@ impl QueueInterface for CQueue {
         // wgpu-native's wgpuQueueSubmitForIndex calls handle_error_fatal (which panics)
         // for fatal validation errors. Catch those panics here so they re-raise cleanly
         // in Rust context instead of aborting due to unwinding through extern "C" frames.
-        let result =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
-                wgpuQueueSubmitForIndex(self.ptr, ptrs.len(), ptrs.as_ptr())
-            }));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+            wgpuQueueSubmitForIndex(self.ptr, ptrs.len(), ptrs.as_ptr())
+        }));
         match result {
             Ok(idx) => idx,
             Err(payload) => std::panic::resume_unwind(payload),
@@ -1905,7 +1942,11 @@ impl QueueInterface for CQueue {
         let old_ptr = blas.as_custom::<CBlas>().unwrap().ptr;
         let new_ptr = unsafe { wgpuQueueCompactBlas(self.ptr, old_ptr) };
         let raw_handle = unsafe { wgpuBlasGetHandle(new_ptr) };
-        let handle = if raw_handle == 0 { None } else { Some(raw_handle) };
+        let handle = if raw_handle == 0 {
+            None
+        } else {
+            Some(raw_handle)
+        };
         (handle, DispatchBlas::custom(CBlas { ptr: new_ptr }))
     }
 

@@ -301,7 +301,10 @@ impl CommandEncoderInterface for CCommandEncoder {
                 }),
             )
         };
-        DispatchCommandBuffer::custom(CCommandBuffer { ptr, device_ptr: self.device_ptr })
+        DispatchCommandBuffer::custom(CCommandBuffer {
+            ptr,
+            device_ptr: self.device_ptr,
+        })
     }
 
     fn clear_texture(
@@ -443,12 +446,8 @@ impl CommandEncoderInterface for CCommandEncoder {
                         .zip(storage.c_tri_sizes.iter())
                         .map(|(tg, c_size)| native::WGPUBlasTriangleGeometry {
                             nextInChain: std::ptr::null(),
-                            size: c_size as *const _,
-                            vertexBuffer: tg
-                                .vertex_buffer
-                                .as_custom::<CBuffer>()
-                                .unwrap()
-                                .ptr,
+                            size: std::ptr::from_ref(c_size),
+                            vertexBuffer: tg.vertex_buffer.as_custom::<CBuffer>().unwrap().ptr,
                             indexBuffer: tg
                                 .index_buffer
                                 .and_then(|b| b.as_custom::<CBuffer>())
@@ -489,13 +488,9 @@ impl CommandEncoderInterface for CCommandEncoder {
                         .zip(storage.c_aabb_sizes.iter())
                         .map(|(ag, c_size)| native::WGPUBlasAABBGeometry {
                             nextInChain: std::ptr::null(),
-                            size: c_size as *const _,
+                            size: std::ptr::from_ref(c_size),
                             stride: ag.stride,
-                            aabbBuffer: ag
-                                .aabb_buffer
-                                .as_custom::<CBuffer>()
-                                .unwrap()
-                                .ptr,
+                            aabbBuffer: ag.aabb_buffer.as_custom::<CBuffer>().unwrap().ptr,
                             primitiveOffset: ag.primitive_offset,
                         })
                         .collect();
@@ -530,10 +525,7 @@ impl CommandEncoderInterface for CCommandEncoder {
                         .and_then(|i| i.blas_as_custom::<CBlas>())
                         .map(|b| b.ptr)
                         .unwrap_or(std::ptr::null_mut()),
-                    transform: opt_inst
-                        .as_ref()
-                        .map(|i| i.transform)
-                        .unwrap_or([0.0; 12]),
+                    transform: opt_inst.as_ref().map(|i| i.transform).unwrap_or([0.0; 12]),
                     customData: opt_inst.as_ref().map(|i| i.custom_data).unwrap_or(0),
                     mask: opt_inst.as_ref().map(|i| i.mask).unwrap_or(0),
                 })
@@ -740,7 +732,10 @@ impl RenderBundleEncoderInterface for CRenderBundleEncoder {
         DispatchRenderBundle::custom(CRenderBundle { ptr })
     }
 
-    fn finish_boxed(self: Box<Self>, desc: &wgpu::RenderBundleDescriptor<'_>) -> DispatchRenderBundle {
+    fn finish_boxed(
+        self: Box<Self>,
+        desc: &wgpu::RenderBundleDescriptor<'_>,
+    ) -> DispatchRenderBundle {
         (*self).finish(desc)
     }
 }
