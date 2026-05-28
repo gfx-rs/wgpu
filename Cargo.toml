@@ -20,7 +20,6 @@ members = [
     "tests",
     "wgpu-core",
     "wgpu-core/platform-deps/*",
-    "wgpu-c-backend/",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-macros",
@@ -46,7 +45,6 @@ default-members = [
     "tests",
     "wgpu-core",
     "wgpu-core/platform-deps/*",
-    "wgpu-c-backend/",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-macros",
@@ -85,10 +83,10 @@ wgpu = { version = "29.0.0", path = "./wgpu", default-features = false, features
     "vulkan-portability",
     "angle",
     "static-dxc",
+    "custom-backend-override",
     "noop",               # This should be removed if we ever have non-test crates that depend on wgpu
 ] }
 wgpu-core = { version = "29.0.0", path = "./wgpu-core" }
-wgpu-c-backend = { path = "./wgpu-c-backend", version = "29.0.0" }
 wgpu-hal = { version = "29.0.0", path = "./wgpu-hal" }
 wgpu-macros = { version = "29.0.0", path = "./wgpu-macros" }
 wgpu-naga-bridge = { version = "29.0.0", path = "./wgpu-naga-bridge" }

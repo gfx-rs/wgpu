@@ -1,5 +1,3 @@
-extern crate wgpu_c_backend;
-
 struct ExampleDesc {
     name: &'static str,
     function: fn(),

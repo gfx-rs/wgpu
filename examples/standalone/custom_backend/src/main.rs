@@ -1,5 +1,3 @@
-extern crate wgpu_c_backend;
-
 use std::marker::PhantomData;
 
 use custom::{Counter, CustomShaderModule};

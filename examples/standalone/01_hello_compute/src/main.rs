@@ -10,8 +10,6 @@
 /// floating point multiplication is a very simple operation so the transfer/submission overhead
 /// is quite a lot higher than the actual computation. This is normal and shows that the GPU
 /// needs a lot higher work/transfer ratio to come out ahead.
-extern crate wgpu_c_backend;
-
 use std::{num::NonZeroU64, str::FromStr};
 use wgpu::util::DeviceExt;
 

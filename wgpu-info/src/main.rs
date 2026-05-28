@@ -4,8 +4,6 @@
 #[cfg(test)]
 use std::sync::Mutex;
 
-extern crate wgpu_c_backend;
-
 mod cli;
 mod human;
 mod report;

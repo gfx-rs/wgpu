@@ -334,26 +334,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bindgen"
-version = "0.72.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "993776b509cfb49c750f11b8f07a46fa23e0a1386ffc01fb1e7d343efc387895"
-dependencies = [
- "bitflags 2.11.1",
- "cexpr",
- "clang-sys",
- "itertools 0.13.0",
- "log",
- "prettyplease",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash 2.1.2",
- "shlex",
- "syn",
-]
-
-[[package]]
 name = "bit-set"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -826,17 +806,7 @@ checksum = "83cf0d42651b16c6dfe68685716d18480d18a9c39c62d76e8cf3eb6ed5d8bcbf"
 dependencies = [
  "ctor-proc-macro",
  "dtor",
- "link-section 0.2.1",
-]
-
-[[package]]
-name = "ctor"
-version = "1.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d765eb1c0bda10d31e0ea185f5ee15da532d60b0912d2bd1441783439e749c5"
-dependencies = [
- "link-section 0.17.2",
- "linktime-proc-macro",
+ "link-section",
 ]
 
 [[package]]
@@ -1101,8 +1071,8 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
- "wgpu-core 29.0.0",
- "wgpu-types 29.0.0",
+ "wgpu-core",
+ "wgpu-types",
 ]
 
 [[package]]
@@ -2258,18 +2228,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b685d66585d646efe09fec763d796c291049c8b6bf84e04954bffc8748341f0d"
 
 [[package]]
-name = "link-section"
-version = "0.17.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d1e908a416d6e9f725743b84a36feea40c4c131e805fbc26d61f9f451f36080"
-
-[[package]]
-name = "linktime-proc-macro"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a44cd706ff0d503ee32b2071166510ca27e281228de10cd3aa8d35ff94560f81"
-
-[[package]]
 name = "linux-raw-sys"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2472,32 +2430,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "naga"
-version = "29.0.0"
-source = "git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91#43f076a46f8aa89ebb4cc618afe3258a740a7c91"
-dependencies = [
- "arrayvec",
- "bit-set 0.10.0",
- "bitflags 2.11.1",
- "cfg-if",
- "cfg_aliases",
- "codespan-reporting",
- "half",
- "hashbrown 0.16.1",
- "indexmap",
- "libm",
- "log",
- "num-traits",
- "once_cell",
- "petgraph 0.8.3",
- "pp-rs",
- "rustc-hash 1.1.0",
- "spirv",
- "thiserror 2.0.18",
- "unicode-ident",
-]
-
-[[package]]
 name = "naga-cli"
 version = "29.0.0"
 dependencies = [
@@ -2507,7 +2439,7 @@ dependencies = [
  "codespan-reporting",
  "env_logger",
  "log",
- "naga 29.0.0",
+ "naga",
 ]
 
 [[package]]
@@ -2517,7 +2449,7 @@ dependencies = [
  "arbitrary",
  "cfg_aliases",
  "libfuzzer-sys",
- "naga 29.0.0",
+ "naga",
 ]
 
 [[package]]
@@ -2525,7 +2457,7 @@ name = "naga-test"
 version = "29.0.0"
 dependencies = [
  "bitflags 2.11.1",
- "naga 29.0.0",
+ "naga",
  "ron",
  "serde",
  "serde_json",
@@ -3182,8 +3114,8 @@ dependencies = [
  "raw-window-handle",
  "ron",
  "serde",
- "wgpu-core 29.0.0",
- "wgpu-types 29.0.0",
+ "wgpu-core",
+ "wgpu-types",
  "winit",
 ]
 
@@ -4412,7 +4344,7 @@ version = "137.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33995a1fee055ff743281cde33a41f0d618ee0bdbe8bdf6859e11864499c2595"
 dependencies = [
- "bindgen 0.71.1",
+ "bindgen",
  "bitflags 2.11.1",
  "fslock",
  "gzip-header",
@@ -4761,7 +4693,7 @@ dependencies = [
  "js-sys",
  "libloading 0.9.0",
  "log",
- "naga 29.0.0",
+ "naga",
  "parking_lot",
  "portable-atomic",
  "profiling",
@@ -4771,9 +4703,9 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
- "wgpu-core 29.0.0",
- "wgpu-hal 29.0.0",
- "wgpu-types 29.0.0",
+ "wgpu-core",
+ "wgpu-hal",
+ "wgpu-types",
 ]
 
 [[package]]
@@ -4783,7 +4715,7 @@ dependencies = [
  "anyhow",
  "bincode 2.0.1",
  "bytemuck",
- "naga 29.0.0",
+ "naga",
  "naga-test",
  "nanorand",
  "pico-args",
@@ -4795,7 +4727,6 @@ dependencies = [
  "termcolor",
  "tracy-client",
  "wgpu",
- "wgpu-c-backend",
 ]
 
 [[package]]
@@ -4805,7 +4736,6 @@ dependencies = [
  "env_logger",
  "pollster",
  "wgpu",
- "wgpu-c-backend",
  "winit",
 ]
 
@@ -4816,19 +4746,7 @@ dependencies = [
  "env_logger",
  "pollster",
  "wgpu",
- "wgpu-c-backend",
  "winit",
-]
-
-[[package]]
-name = "wgpu-c-backend"
-version = "29.0.0"
-dependencies = [
- "ctor 1.0.6",
- "log",
- "raw-window-metal",
- "wgpu",
- "wgpu-native",
 ]
 
 [[package]]
@@ -4846,7 +4764,7 @@ dependencies = [
  "indexmap",
  "log",
  "macro_rules_attribute",
- "naga 29.0.0",
+ "naga",
  "once_cell",
  "parking_lot",
  "portable-atomic",
@@ -4857,96 +4775,41 @@ dependencies = [
  "serde",
  "smallvec",
  "thiserror 2.0.18",
- "wgpu-core-deps-apple 29.0.0",
- "wgpu-core-deps-emscripten 29.0.0",
+ "wgpu-core-deps-apple",
+ "wgpu-core-deps-emscripten",
  "wgpu-core-deps-wasm",
- "wgpu-core-deps-windows-linux-android 29.0.0",
- "wgpu-hal 29.0.0",
- "wgpu-naga-bridge 29.0.0",
- "wgpu-types 29.0.0",
-]
-
-[[package]]
-name = "wgpu-core"
-version = "29.0.0"
-source = "git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91#43f076a46f8aa89ebb4cc618afe3258a740a7c91"
-dependencies = [
- "arrayvec",
- "bit-set 0.10.0",
- "bit-vec 0.9.1",
- "bitflags 2.11.1",
- "bytemuck",
- "cfg_aliases",
- "document-features",
- "hashbrown 0.16.1",
- "indexmap",
- "log",
- "naga 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
- "once_cell",
- "parking_lot",
- "profiling",
- "raw-window-handle",
- "rustc-hash 1.1.0",
- "smallvec",
- "thiserror 2.0.18",
- "wgpu-core-deps-apple 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
- "wgpu-core-deps-emscripten 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
- "wgpu-core-deps-windows-linux-android 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
- "wgpu-hal 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
- "wgpu-naga-bridge 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
- "wgpu-types 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
+ "wgpu-core-deps-windows-linux-android",
+ "wgpu-hal",
+ "wgpu-naga-bridge",
+ "wgpu-types",
 ]
 
 [[package]]
 name = "wgpu-core-deps-apple"
 version = "29.0.0"
 dependencies = [
- "wgpu-hal 29.0.0",
-]
-
-[[package]]
-name = "wgpu-core-deps-apple"
-version = "29.0.0"
-source = "git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91#43f076a46f8aa89ebb4cc618afe3258a740a7c91"
-dependencies = [
- "wgpu-hal 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
+ "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-emscripten"
 version = "29.0.0"
 dependencies = [
- "wgpu-hal 29.0.0",
-]
-
-[[package]]
-name = "wgpu-core-deps-emscripten"
-version = "29.0.0"
-source = "git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91#43f076a46f8aa89ebb4cc618afe3258a740a7c91"
-dependencies = [
- "wgpu-hal 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
+ "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-wasm"
 version = "29.0.0"
 dependencies = [
- "wgpu-hal 29.0.0",
+ "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-windows-linux-android"
 version = "29.0.0"
 dependencies = [
- "wgpu-hal 29.0.0",
-]
-
-[[package]]
-name = "wgpu-core-deps-windows-linux-android"
-version = "29.0.0"
-source = "git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91#43f076a46f8aa89ebb4cc618afe3258a740a7c91"
-dependencies = [
- "wgpu-hal 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
+ "wgpu-hal",
 ]
 
 [[package]]
@@ -4957,7 +4820,6 @@ dependencies = [
  "env_logger",
  "pollster",
  "wgpu",
- "wgpu-c-backend",
 ]
 
 [[package]]
@@ -4967,7 +4829,6 @@ dependencies = [
  "env_logger",
  "pollster",
  "wgpu",
- "wgpu-c-backend",
  "winit",
 ]
 
@@ -4977,7 +4838,6 @@ version = "0.0.0"
 dependencies = [
  "pollster",
  "wgpu",
- "wgpu-c-backend",
 ]
 
 [[package]]
@@ -5007,7 +4867,6 @@ dependencies = [
  "web-sys",
  "web-time",
  "wgpu",
- "wgpu-c-backend",
  "wgpu-test",
  "winit",
 ]
@@ -5040,7 +4899,7 @@ dependencies = [
  "libloading 0.8.9",
  "log",
  "mach-dxcompiler-rs",
- "naga 29.0.0",
+ "naga",
  "ndk-sys",
  "objc2 0.6.4",
  "objc2-core-foundation",
@@ -5062,63 +4921,12 @@ dependencies = [
  "wasm-bindgen",
  "wayland-sys",
  "web-sys",
- "wgpu-naga-bridge 29.0.0",
- "wgpu-types 29.0.0",
+ "wgpu-naga-bridge",
+ "wgpu-types",
  "windows",
  "windows-core",
  "windows-result",
  "winit",
-]
-
-[[package]]
-name = "wgpu-hal"
-version = "29.0.0"
-source = "git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91#43f076a46f8aa89ebb4cc618afe3258a740a7c91"
-dependencies = [
- "android_system_properties",
- "arrayvec",
- "ash",
- "bit-set 0.10.0",
- "bitflags 2.11.1",
- "block2 0.6.2",
- "bytemuck",
- "cfg-if",
- "cfg_aliases",
- "glow",
- "glutin_wgl_sys",
- "gpu-allocator",
- "hashbrown 0.16.1",
- "js-sys",
- "khronos-egl",
- "libc",
- "libloading 0.8.9",
- "log",
- "naga 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
- "ndk-sys",
- "objc2 0.6.4",
- "objc2-core-foundation",
- "objc2-foundation 0.3.2",
- "objc2-metal 0.3.2",
- "objc2-quartz-core 0.3.2",
- "once_cell",
- "ordered-float",
- "parking_lot",
- "profiling",
- "range-alloc",
- "raw-window-handle",
- "raw-window-metal",
- "renderdoc-sys",
- "smallvec",
- "static_assertions",
- "thiserror 2.0.18",
- "wasm-bindgen",
- "wayland-sys",
- "web-sys",
- "wgpu-naga-bridge 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
- "wgpu-types 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
- "windows",
- "windows-core",
- "windows-result",
 ]
 
 [[package]]
@@ -5135,7 +4943,6 @@ dependencies = [
  "serde",
  "serde_json",
  "wgpu",
- "wgpu-c-backend",
 ]
 
 [[package]]
@@ -5151,36 +4958,8 @@ dependencies = [
 name = "wgpu-naga-bridge"
 version = "29.0.0"
 dependencies = [
- "naga 29.0.0",
- "wgpu-types 29.0.0",
-]
-
-[[package]]
-name = "wgpu-naga-bridge"
-version = "29.0.0"
-source = "git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91#43f076a46f8aa89ebb4cc618afe3258a740a7c91"
-dependencies = [
- "naga 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
- "wgpu-types 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
-]
-
-[[package]]
-name = "wgpu-native"
-version = "0.0.0"
-source = "git+https://github.com/inner-daemons/wgpu-native?branch=wgpu-native-complete#f60a71411409c908e01007c16374592acee56a2e"
-dependencies = [
- "bindgen 0.72.1",
- "bitflags 2.11.1",
- "log",
- "naga 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
- "parking_lot",
- "paste",
- "raw-window-handle",
- "smallvec",
- "thiserror 2.0.18",
- "wgpu-core 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
- "wgpu-hal 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
- "wgpu-types 29.0.0 (git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91)",
+ "naga",
+ "wgpu-types",
 ]
 
 [[package]]
@@ -5195,7 +4974,7 @@ dependencies = [
  "cargo_metadata",
  "cfg-if",
  "console_log",
- "ctor 0.10.1",
+ "ctor",
  "env_logger",
  "futures-lite",
  "glam",
@@ -5205,7 +4984,7 @@ dependencies = [
  "js-sys",
  "libtest-mimic",
  "log",
- "naga 29.0.0",
+ "naga",
  "nanorand",
  "nv-flip",
  "parking_lot",
@@ -5222,11 +5001,10 @@ dependencies = [
  "wasm-bindgen-test",
  "web-sys",
  "wgpu",
- "wgpu-c-backend",
- "wgpu-core 29.0.0",
- "wgpu-hal 29.0.0",
+ "wgpu-core",
+ "wgpu-hal",
  "wgpu-macros",
- "wgpu-types 29.0.0",
+ "wgpu-types",
 ]
 
 [[package]]
@@ -5242,20 +5020,6 @@ dependencies = [
  "raw-window-handle",
  "serde",
  "serde_json",
- "static_assertions",
- "web-sys",
-]
-
-[[package]]
-name = "wgpu-types"
-version = "29.0.0"
-source = "git+https://github.com/gfx-rs/wgpu.git?rev=43f076a46f8aa89ebb4cc618afe3258a740a7c91#43f076a46f8aa89ebb4cc618afe3258a740a7c91"
-dependencies = [
- "bitflags 2.11.1",
- "bytemuck",
- "js-sys",
- "log",
- "raw-window-handle",
  "static_assertions",
  "web-sys",
 ]

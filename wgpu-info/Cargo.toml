@@ -21,7 +21,6 @@ pollster.workspace = true
 serde = { workspace = true, features = ["default"] }
 serde_json.workspace = true
 wgpu = { workspace = true, features = ["exhaust"] }
-wgpu-c-backend.workspace = true
 
 [lints.clippy]
 disallowed_types = "allow"
