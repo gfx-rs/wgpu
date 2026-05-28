@@ -1761,21 +1761,13 @@ impl DeviceInterface for CDevice {
         poll_type: wgpu::wgt::PollType<u64>,
     ) -> Result<wgpu::PollStatus, wgpu::PollError> {
         let result = match poll_type {
-            wgpu::wgt::PollType::Poll => {
-                unsafe { wgpuDevicePoll(self.ptr, false, None) }
-            }
+            wgpu::wgt::PollType::Poll => unsafe { wgpuDevicePoll(self.ptr, false, None, 0) },
             wgpu::wgt::PollType::Wait {
                 submission_index,
-                timeout: None,
-            } => unsafe { wgpuDevicePoll(self.ptr, true, submission_index.as_ref()) },
-            wgpu::wgt::PollType::Wait {
-                submission_index,
-                timeout: Some(timeout_dur),
+                timeout,
             } => {
-                let timeout_ns = timeout_dur.as_nanos() as u64;
-                unsafe {
-                    wgpuDevicePollWithTimeout(self.ptr, true, submission_index.as_ref(), timeout_ns)
-                }
+                let timeout_ns = timeout.map_or(0, |d| d.as_nanos() as u64);
+                unsafe { wgpuDevicePoll(self.ptr, true, submission_index.as_ref(), timeout_ns) }
             }
         };
         // Re-raise any panic that occurred inside a map callback during polling.

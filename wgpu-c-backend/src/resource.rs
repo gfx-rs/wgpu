@@ -153,7 +153,7 @@ impl BufferInterface for CBuffer {
             && crate::CALLBACK_PANIC.lock().unwrap().is_none()
             && std::time::Instant::now() < deadline
         {
-            unsafe { wgpuDevicePoll(self.device_ptr, false, None) };
+            unsafe { wgpuDevicePoll(self.device_ptr, false, None, 0) };
             std::thread::yield_now();
         }
         // Re-raise any panic that occurred in the callback.
