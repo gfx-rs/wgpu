@@ -230,7 +230,8 @@ impl BackendOptions {
             gl: GlBackendOptions::from_env_or_default(),
             dx12: Dx12BackendOptions::from_env_or_default(),
             noop: NoopBackendOptions::from_env_or_default(),
-            skip_custom_backend_library: false,
+            skip_custom_backend_library: crate::env::var("WGPU_NO_CUSTOM_BACKEND").as_deref()
+                == Some("1"),
         }
     }
 

@@ -2,34 +2,21 @@ use crate::{dispatch::InstanceInterface, util::Mutex, *};
 use alloc::vec::Vec;
 use core::future::Future;
 
-#[cfg(feature = "custom-backend-override")]
-#[expect(improper_ctypes_definitions)]
-type InstanceFactory =
-    unsafe extern "C" fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor>;
-
-#[cfg(feature = "custom-backend-override")]
-static OVERRIDE_INSTANCE_FACTORY: std::sync::OnceLock<
-    Option<libloading::Symbol<'_, InstanceFactory>>,
+#[cfg(custom)]
+static INSTANCE_FACTORY: std::sync::OnceLock<
+    fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor>,
 > = std::sync::OnceLock::new();
 
-#[cfg(feature = "custom-backend-override")]
-fn get_override_instance_factory() -> Option<libloading::Symbol<'static, InstanceFactory>> {
-    #[cfg(feature = "custom-backend-override")]
-    {
-        OVERRIDE_INSTANCE_FACTORY
-            .get_or_init(|| unsafe {
-                let dll_path = std::env::var("WGPU_CUSTOM_BACKEND_LIBRARY").ok()?;
-                let library = libloading::Library::new(dll_path).ok()?;
-                let boxed = alloc::boxed::Box::new(library);
-                let library_ref = alloc::boxed::Box::leak(boxed);
-                let func: libloading::Symbol<'_, InstanceFactory> =
-                    library_ref.get(b"instance_factory").ok()?;
-                Some(func)
-            })
-            .clone()
-    }
-    #[cfg(not(custom))]
-    None
+/// Register a factory that can intercept [`Instance::new`] for custom backends.
+///
+/// The factory receives the [`InstanceDescriptor`] and returns `Ok(Instance)` to
+/// take ownership of the request, or `Err(desc)` to fall through to the built-in backend.
+///
+/// Only the first call takes effect; subsequent calls are ignored. This is enforced by
+/// [`OnceLock`] and avoids the need for `unsafe transmute` or pointer-to-integer casts.
+#[cfg(custom)]
+pub fn set_instance_factory(f: fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor>) {
+    let _ = INSTANCE_FACTORY.set(f);
 }
 
 bitflags::bitflags! {
@@ -90,10 +77,10 @@ impl Instance {
     ///   this method will panic; see [`Instance::enabled_backend_features()`].
     #[allow(clippy::allow_attributes, unreachable_code)]
     pub fn new(mut desc: InstanceDescriptor) -> Self {
-        #[cfg(feature = "custom-backend-override")]
+        #[cfg(custom)]
         if !desc.backend_options.skip_custom_backend_library {
-            if let Some(factory) = get_override_instance_factory() {
-                match unsafe { factory(desc) } {
+            if let Some(factory) = INSTANCE_FACTORY.get() {
+                match factory(desc) {
                     Ok(inst) => return inst,
                     Err(returned_desc) => desc = returned_desc,
                 }
