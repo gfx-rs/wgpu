@@ -318,10 +318,6 @@ ndk-sys = "0.6"
 # These overrides allow our examples to explicitly depend on release crates
 [patch.crates-io]
 wgpu = { path = "./wgpu" }
-wgpu-core = { path = "./wgpu-core" }
-wgpu-hal = { path = "./wgpu-hal" }
-wgpu-types = { path = "./wgpu-types" }
-naga = { path = "./naga" }
 
 env_logger = { version = "0.11", git = "https://github.com/rust-cli/env_logger.git", rev = "d550741" }
 libtest-mimic = { version = "0.8", git = "https://github.com/cwfitzgerald/libtest-mimic.git", rev = "9979b3c" }

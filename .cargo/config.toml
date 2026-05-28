@@ -1,9 +1,2 @@
 [alias]
 xtask = "run -p wgpu-xtask --"
-
-# Prefer dynamically-linked wgpu / wgpu-core (crate-type = ["rlib", "dylib"]).
-# This speeds up linking for tests and examples by avoiding static re-linking on
-# every incremental build.  For static release binaries, override at the
-# command line: RUSTFLAGS="" cargo build --release
-[build]
-rustflags = ["-C", "prefer-dynamic"]

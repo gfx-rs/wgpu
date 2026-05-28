@@ -215,8 +215,11 @@ pub struct BackendOptions {
     pub dx12: Dx12BackendOptions,
     /// Options for the noop backend, [`Backend::Noop`].
     pub noop: NoopBackendOptions,
-    /// If false and the `custom` feature is enabled for wgpu, wgpu may attempt to search
-    /// for a custom backend implementation in an external library
+    /// If false and the `custom` feature is enabled for wgpu, and if an override
+    /// instance factory was setup, wgpu will return a custom instance created from
+    /// that factory.
+    ///
+    /// Noop on wgpu-core.
     pub skip_custom_backend_library: bool,
 }
 
