@@ -1,6 +1,7 @@
-use crate::{dispatch::InstanceInterface, util::Mutex, *};
 use alloc::vec::Vec;
 use core::future::Future;
+
+use crate::{dispatch::InstanceInterface, util::Mutex, *};
 
 #[cfg(custom)]
 static INSTANCE_FACTORY: std::sync::OnceLock<
@@ -12,10 +13,9 @@ static INSTANCE_FACTORY: std::sync::OnceLock<
 /// The factory receives the [`InstanceDescriptor`] and returns `Ok(Instance)` to
 /// take ownership of the request, or `Err(desc)` to fall through to the built-in backend.
 ///
-/// Only the first call takes effect; subsequent calls are ignored. This is enforced by
-/// [`OnceLock`] and avoids the need for `unsafe transmute` or pointer-to-integer casts.
+/// Only the first call takes effect; subsequent calls are ignored.
 ///
-/// [`OnceLock`]: std::sync::OnceLock
+/// This can be safely called from a constructor.
 #[cfg(custom)]
 pub fn set_instance_factory(f: fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor>) {
     let _ = INSTANCE_FACTORY.set(f);

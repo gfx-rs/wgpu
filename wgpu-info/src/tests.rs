@@ -1,7 +1,6 @@
 use std::{collections::BTreeMap, fs::File, io::BufWriter};
 
-use crate::INSTANCE_MUTEX;
-
+/// Prints a pretty diff of 2 json strings
 fn unified_diff(label: &str, a: &str, b: &str) -> String {
     use std::{fs, process::Command};
     let dir = std::env::temp_dir();
@@ -54,16 +53,8 @@ fn to_json(value: &impl serde::Serialize) -> String {
 
 #[test]
 fn custom_backend_matches_wgpu_core() {
-    let _guard = INSTANCE_MUTEX.lock().unwrap();
-
-    let with_custom = crate::report::GpuReport::generate();
-
-    // TODO: this isn't thread-safe. We need a lock on instance creation in tests.
-    std::env::set_var("WGPU_NO_CUSTOM_BACKEND", "1");
-    let without_custom = crate::report::GpuReport::generate();
-    std::env::remove_var("WGPU_NO_CUSTOM_BACKEND");
-
-    drop(_guard);
+    let with_custom = crate::report::GpuReport::generate(false);
+    let without_custom = crate::report::GpuReport::generate(true);
 
     let custom_map: std::collections::HashMap<String, &crate::report::AdapterReport> = with_custom
         .devices
@@ -131,9 +122,7 @@ const ENV_VAR_SAVE: &str = "WGPU_INFO_SAVE_GPUCONFIG_REPORT";
 // Needs to be kept in sync with the test in xtask/src/test.rs
 #[test]
 fn generate_gpuconfig_report() {
-    let _guard = INSTANCE_MUTEX.lock().unwrap();
-    let report = crate::report::GpuReport::generate();
-    drop(_guard);
+    let report = crate::report::GpuReport::generate(false);
 
     // If we don't get the env var, just test that we can generate the report, but don't save it
     // to avoid a race condition when other tests are reading the file.

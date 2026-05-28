@@ -84,7 +84,7 @@ pub fn main() -> anyhow::Result<()> {
             crate::report::GpuReport::from_json(&json).context("Could not parse JSON")?
         }
         // Generate the report natively
-        None => crate::report::GpuReport::generate(),
+        None => crate::report::GpuReport::generate(false),
     };
 
     // Setup output writer

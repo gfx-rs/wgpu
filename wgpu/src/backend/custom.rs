@@ -92,6 +92,7 @@ dyn_type!(pub mut struct DynCommandEncoder(dyn CommandEncoderInterface));
 dyn_type!(pub mut struct DynComputePass(dyn ComputePassInterface));
 dyn_type!(pub mut struct DynRenderPass(dyn RenderPassInterface));
 dyn_type!(pub mut struct DynCommandBuffer(dyn CommandBufferInterface));
+
 // DynRenderBundleEncoder uses Box instead of Arc so that finish_boxed(self: Box<Self>)
 // can be dispatched through the trait object (consuming the encoder).
 #[derive(Debug)]
@@ -131,11 +132,6 @@ impl core::ops::DerefMut for DynRenderBundleEncoder {
 
 // Eq/Ord/Hash for DynRenderBundleEncoder are based on the heap allocation address.
 //
-// Each encoder is a unique Box<T> allocated by `Device::create_render_bundle_encoder`.
-// Box<T> guarantees the inner value's address is stable for its lifetime, so comparing
-// data-pointer addresses is a sound identity check — two distinct encoders always differ,
-// and the same encoder always compares equal to itself.
-//
 // These impls are not semantically meaningful (we never sort or deduplicate encoders by
 // "value") but are required to satisfy bounds imposed by the dispatch enum machinery.
 impl PartialEq for DynRenderBundleEncoder {
@@ -147,6 +143,7 @@ impl PartialEq for DynRenderBundleEncoder {
     }
 }
 impl Eq for DynRenderBundleEncoder {}
+
 impl PartialOrd for DynRenderBundleEncoder {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         Some(self.cmp(other))
@@ -159,12 +156,14 @@ impl Ord for DynRenderBundleEncoder {
         a.cmp(&b)
     }
 }
+
 impl core::hash::Hash for DynRenderBundleEncoder {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         let addr = self.0.as_ref() as *const dyn RenderBundleEncoderInterface as *const () as usize;
         addr.hash(state);
     }
 }
+
 dyn_type!(pub ref struct DynRenderBundle(dyn RenderBundleInterface));
 dyn_type!(pub ref struct DynSurface(dyn SurfaceInterface));
 dyn_type!(pub ref struct DynSurfaceOutputDetail(dyn SurfaceOutputDetailInterface));

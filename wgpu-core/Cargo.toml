@@ -33,7 +33,6 @@ ignored = ["cfg_aliases"]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wgpu_validate_locks)'] }
 
 [lib]
-crate-type = ["rlib", "dylib"]
 
 [features]
 #! See documentation for the `wgpu` crate for more in-depth information on these features.

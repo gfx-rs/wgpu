@@ -720,7 +720,8 @@ pub struct RequestDeviceError {
 }
 
 impl RequestDeviceError {
-    /// Construct an error from a custom backend message.
+    /// Construct an error from a custom backend message. This is mainly useful for custom backends.
+    #[cfg(custom)]
     pub fn from_message(message: String) -> Self {
         RequestDeviceError {
             inner: RequestDeviceErrorKind::Custom(message),
@@ -742,6 +743,7 @@ pub(crate) enum RequestDeviceErrorKind {
     WebGpu(String),
 
     /// Error from a custom backend.
+    #[cfg(custom)]
     Custom(String),
 }
 
@@ -756,6 +758,7 @@ impl fmt::Display for RequestDeviceError {
             RequestDeviceErrorKind::WebGpu(error) => {
                 write!(_f, "{error}")
             }
+            #[cfg(custom)]
             RequestDeviceErrorKind::Custom(msg) => write!(_f, "{msg}"),
             #[cfg(not(any(webgpu, wgpu_core)))]
             _ => unimplemented!("unknown `RequestDeviceErrorKind`"),
@@ -770,6 +773,7 @@ impl error::Error for RequestDeviceError {
             RequestDeviceErrorKind::Core(error) => error.source(),
             #[cfg(webgpu)]
             RequestDeviceErrorKind::WebGpu(_) => None,
+            #[cfg(custom)]
             RequestDeviceErrorKind::Custom(_) => None,
             #[cfg(not(any(webgpu, wgpu_core)))]
             _ => unimplemented!("unknown `RequestDeviceErrorKind`"),

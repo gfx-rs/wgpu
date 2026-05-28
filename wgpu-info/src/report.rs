@@ -17,9 +17,10 @@ pub struct GpuReport {
 }
 
 impl GpuReport {
-    pub fn generate() -> Self {
+    pub fn generate(skip_custom: bool) -> Self {
         let instance = wgpu::Instance::new({
             let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
+            desc.backend_options.skip_custom_backend_library = skip_custom;
             desc.backend_options.dx12.shader_compiler = Dx12Compiler::StaticDxc;
             desc.flags = wgpu::InstanceFlags::debugging();
             desc.with_env()
