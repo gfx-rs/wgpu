@@ -674,28 +674,24 @@ fn calculate_src_buffer_binding_size(buffer_size: u64, limits: &Limits) -> u64 {
 
 /// Splits the given `offset` into a dynamic offset & offset.
 fn calculate_src_offsets(buffer_size: u64, limits: &Limits, offset: u64) -> (u64, u64) {
+    const MAX_DATA_SIZE: u64 = 20; // indexed indirect draw params are 20B
     let binding_size = calculate_src_buffer_binding_size(buffer_size, limits);
-
     let min_storage_buffer_offset_alignment = limits.min_storage_buffer_offset_alignment as u64;
 
-    let chunk_adjustment = match min_storage_buffer_offset_alignment {
-        // No need to adjust since the src_offset is 4 byte aligned.
-        4 => 0,
-        // With 16/20 bytes of data we can straddle up to 2 8 byte boundaries:
-        //  - 16 bytes of data: (4|8|4)
-        //  - 20 bytes of data: (4|8|8, 8|8|4)
-        8 => 2,
-        // With 16/20 bytes of data we can straddle up to 1 16+ byte boundary:
-        //  - 16 bytes of data: (4|12, 8|8, 12|4)
-        //  - 20 bytes of data: (4|16, 8|12, 12|8, 16|4)
-        16.. => 1,
-        _ => unreachable!(),
-    };
-
-    let chunks = binding_size / min_storage_buffer_offset_alignment;
-    let dynamic_offset_stride =
-        chunks.saturating_sub(chunk_adjustment) * min_storage_buffer_offset_alignment;
-
+    // Align the max offset in the binding and treat it as the stride between
+    // dynamic offsets.
+    //
+    // `dynamic_offset_stride` could just be `min_storage_buffer_offset_alignment`
+    // but we want to make it as large as possible since setting dynamic
+    // offsets requires extra calls to setBindGroup and then to dispatch,
+    // calls which we want to minimize.
+    //
+    // Use `MAX_DATA_SIZE` instead of the actual `data_size` so that the
+    // resulting stride is the same for both indexed and non-indexed draw calls,
+    // reducing the likelihood of `out_dynamic_offset` being different.
+    let dynamic_offset_stride = binding_size.saturating_sub(MAX_DATA_SIZE)
+        / min_storage_buffer_offset_alignment
+        * min_storage_buffer_offset_alignment;
     if dynamic_offset_stride == 0 {
         return (0, offset);
     }
