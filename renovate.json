@@ -86,7 +86,7 @@
     {
       "description": "Rust toolchain should be stable - 3 in accordance with maximum-MSRV policy.",
       "matchManager": "rust-toolchain",
-      "minimumReleaseAge": "18 weeks",
+      "minimumReleaseAge": "18 weeks"
     }
   ],
   "customManagers": [
