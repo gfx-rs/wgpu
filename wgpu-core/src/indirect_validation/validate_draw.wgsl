@@ -45,9 +45,9 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u) {
     let vertex_or_index_count = src[src_base_offset + 0];
 
     {
-        let can_overflow = is_bit_set(metadata.dst_offset, 30);
+        let overflow_permitted = is_bit_set(metadata.dst_offset, 30);
         let sub_overflows = metadata.vertex_or_index_limit < first_vertex_or_index;
-        failed |= sub_overflows && !can_overflow;
+        failed |= sub_overflows && !overflow_permitted;
         let vertex_or_index_limit = metadata.vertex_or_index_limit - first_vertex_or_index;
         failed |= vertex_or_index_limit < vertex_or_index_count;
     }
@@ -56,9 +56,9 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u) {
     let instance_count = src[src_base_offset + 1];
 
     {
-        let can_overflow = is_bit_set(metadata.dst_offset, 31);
+        let overflow_permitted = is_bit_set(metadata.dst_offset, 31);
         let sub_overflows = metadata.instance_limit < first_instance;
-        failed |= sub_overflows && !can_overflow;
+        failed |= sub_overflows && !overflow_permitted;
         let instance_limit = metadata.instance_limit - first_instance;
         failed |= instance_limit < instance_count;
     }
