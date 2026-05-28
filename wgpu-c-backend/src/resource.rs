@@ -147,8 +147,7 @@ impl BufferInterface for CBuffer {
         // settle later; any panic that arrives after we return is stored in the
         // global CALLBACK_PANIC and will be picked up by the next resume_callback_panic
         // call (e.g. inside device.poll()).
-        let deadline =
-            std::time::Instant::now() + std::time::Duration::from_millis(50);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(50);
         while !self.is_mapped.load(Ordering::Acquire)
             && crate::CALLBACK_PANIC.lock().unwrap().is_none()
             && std::time::Instant::now() < deadline

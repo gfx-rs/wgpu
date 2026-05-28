@@ -5156,7 +5156,7 @@ dependencies = [
 [[package]]
 name = "wgpu-native"
 version = "0.0.0"
-source = "git+https://github.com/inner-daemons/wgpu-native?branch=wgpu-native-complete#01a34e94dc38505f0f883233d6fda0951890b3a9"
+source = "git+https://github.com/inner-daemons/wgpu-native?branch=wgpu-native-complete#f60a71411409c908e01007c16374592acee56a2e"
 dependencies = [
  "bindgen 0.72.1",
  "bitflags 2.11.1",

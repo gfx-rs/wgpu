@@ -1,6 +1,6 @@
+use crate::{dispatch::InstanceInterface, util::Mutex, *};
 use alloc::vec::Vec;
 use core::future::Future;
-use crate::{dispatch::InstanceInterface, util::Mutex, *};
 
 #[cfg(custom)]
 static INSTANCE_FACTORY: std::sync::OnceLock<
