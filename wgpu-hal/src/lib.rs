@@ -635,7 +635,7 @@ pub trait Api: Clone + fmt::Debug + Sized + WasmNotSendSync + 'static {
     /// lower value could return before the lower-valued operation has actually
     /// finished.
     ///
-    /// Fences are internally syncronised by the hal, and so should not need to be
+    /// Fences are internally synchronised by the hal, and so should not need to be
     /// contained in external synchronisation primitives.
     type Fence: DynFence;
 
