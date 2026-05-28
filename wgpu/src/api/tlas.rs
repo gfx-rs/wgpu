@@ -80,8 +80,7 @@ impl Tlas {
     pub fn as_custom<T: crate::custom::TlasInterface>(&self) -> Option<&T> {
         self.inner.as_custom()
     }
-
-    /// Returns the index of the lowest instance that has been modified since the last build.
+    /// Returns the index of the first instance that has not been modified since the last build.
     /// Custom backends use this to perform partial TLAS updates.
     #[cfg(custom)]
     pub fn lowest_unmodified(&self) -> u32 {
