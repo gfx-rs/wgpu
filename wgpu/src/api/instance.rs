@@ -4,9 +4,8 @@ use core::future::Future;
 use crate::{dispatch::InstanceInterface, util::Mutex, *};
 
 #[cfg(custom)]
-static INSTANCE_FACTORY: std::sync::OnceLock<
-    fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor>,
-> = std::sync::OnceLock::new();
+static INSTANCE_FACTORY: core::sync::atomic::AtomicUsize =
+    core::sync::atomic::AtomicUsize::new(0);
 
 /// Register a factory that can intercept [`Instance::new`] for custom backends.
 ///
@@ -18,7 +17,13 @@ static INSTANCE_FACTORY: std::sync::OnceLock<
 /// This can be safely called from a constructor.
 #[cfg(custom)]
 pub fn set_instance_factory(f: fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor>) {
-    let _ = INSTANCE_FACTORY.set(f);
+    // 0 is the sentinel for "not set"; fn pointers are never null.
+    let _ = INSTANCE_FACTORY.compare_exchange(
+        0,
+        f as usize,
+        core::sync::atomic::Ordering::Release,
+        core::sync::atomic::Ordering::Relaxed,
+    );
 }
 
 bitflags::bitflags! {
@@ -81,7 +86,12 @@ impl Instance {
     pub fn new(mut desc: InstanceDescriptor) -> Self {
         #[cfg(custom)]
         if !desc.backend_options.skip_custom_backend_library {
-            if let Some(factory) = INSTANCE_FACTORY.get() {
+            let addr = INSTANCE_FACTORY.load(core::sync::atomic::Ordering::Acquire);
+            if addr != 0 {
+                // SAFETY: addr was written by set_instance_factory via `f as usize`,
+                // where f is a valid fn pointer of this exact type.
+                let factory: fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor> =
+                    unsafe { core::mem::transmute(addr) };
                 match factory(desc) {
                     Ok(inst) => return inst,
                     Err(returned_desc) => desc = returned_desc,
