@@ -5597,3 +5597,13 @@ name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
+
+[[patch.unused]]
+name = "env_logger"
+version = "0.11.9"
+source = "git+https://github.com/rust-cli/env_logger.git?rev=d550741#d550741cdcd1d64f8a564158d9d0b2554f5d900d"
+
+[[patch.unused]]
+name = "libtest-mimic"
+version = "0.8.1"
+source = "git+https://github.com/cwfitzgerald/libtest-mimic.git?rev=9979b3c#9979b3c1aa932bd210505029e4639aafa6e3d4f3"
