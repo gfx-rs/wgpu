@@ -6,6 +6,7 @@ pub use crate::dispatch::*;
 
 use alloc::boxed::Box;
 use alloc::sync::Arc;
+use core::sync::atomic::{AtomicU64, Ordering};
 
 macro_rules! dyn_type {
     // cloning of arc forbidden
@@ -93,25 +94,35 @@ dyn_type!(pub mut struct DynComputePass(dyn ComputePassInterface));
 dyn_type!(pub mut struct DynRenderPass(dyn RenderPassInterface));
 dyn_type!(pub mut struct DynCommandBuffer(dyn CommandBufferInterface));
 
+static NEXT_RENDER_BUNDLE_ENCODER_ID: AtomicU64 = AtomicU64::new(0);
+
 // DynRenderBundleEncoder uses Box instead of Arc so that finish_boxed(self: Box<Self>)
 // can be dispatched through the trait object (consuming the encoder).
 #[derive(Debug)]
-pub(crate) struct DynRenderBundleEncoder(Box<dyn RenderBundleEncoderInterface>);
+pub(crate) struct DynRenderBundleEncoder {
+    // Unique identity for Eq/Ord/Hash. The data pointer of the boxed trait object is
+    // not safe to use for identity because ZST impls share the same dangling address.
+    id: u64,
+    inner: Box<dyn RenderBundleEncoderInterface>,
+}
 
 impl DynRenderBundleEncoder {
     pub(crate) fn new<T: RenderBundleEncoderInterface>(t: T) -> Self {
-        Self(Box::new(t))
+        Self {
+            id: NEXT_RENDER_BUNDLE_ENCODER_ID.fetch_add(1, Ordering::Relaxed),
+            inner: Box::new(t),
+        }
     }
 
     pub(crate) fn downcast<T: RenderBundleEncoderInterface>(&self) -> Option<&T> {
-        self.0.as_ref().as_any().downcast_ref()
+        self.inner.as_ref().as_any().downcast_ref()
     }
 
     pub(crate) fn finish_boxed(
         self,
         desc: &crate::RenderBundleDescriptor<'_>,
     ) -> crate::dispatch::DispatchRenderBundle {
-        self.0.finish_boxed(desc)
+        self.inner.finish_boxed(desc)
     }
 }
 
@@ -119,27 +130,24 @@ impl core::ops::Deref for DynRenderBundleEncoder {
     type Target = dyn RenderBundleEncoderInterface;
     #[inline]
     fn deref(&self) -> &Self::Target {
-        self.0.as_ref()
+        self.inner.as_ref()
     }
 }
 
 impl core::ops::DerefMut for DynRenderBundleEncoder {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.as_mut()
+        self.inner.as_mut()
     }
 }
 
-// Eq/Ord/Hash for DynRenderBundleEncoder are based on the heap allocation address.
+// Eq/Ord/Hash for DynRenderBundleEncoder are based on a unique id assigned at construction.
 //
 // These impls are not semantically meaningful (we never sort or deduplicate encoders by
 // "value") but are required to satisfy bounds imposed by the dispatch enum machinery.
 impl PartialEq for DynRenderBundleEncoder {
     fn eq(&self, other: &Self) -> bool {
-        core::ptr::addr_eq(
-            self.0.as_ref() as *const dyn RenderBundleEncoderInterface,
-            other.0.as_ref() as *const dyn RenderBundleEncoderInterface,
-        )
+        self.id == other.id
     }
 }
 impl Eq for DynRenderBundleEncoder {}
@@ -151,16 +159,13 @@ impl PartialOrd for DynRenderBundleEncoder {
 }
 impl Ord for DynRenderBundleEncoder {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        let a = self.0.as_ref() as *const dyn RenderBundleEncoderInterface as *const () as usize;
-        let b = other.0.as_ref() as *const dyn RenderBundleEncoderInterface as *const () as usize;
-        a.cmp(&b)
+        self.id.cmp(&other.id)
     }
 }
 
 impl core::hash::Hash for DynRenderBundleEncoder {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        let addr = self.0.as_ref() as *const dyn RenderBundleEncoderInterface as *const () as usize;
-        addr.hash(state);
+        self.id.hash(state);
     }
 }
 
