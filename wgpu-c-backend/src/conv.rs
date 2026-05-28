@@ -649,9 +649,9 @@ pub fn native_limits_from_wgpu(l: &wgpu::Limits) -> native::WGPUNativeLimits {
     out.maxMeshOutputPrimitives = l.max_mesh_output_primitives;
     out.maxMeshOutputLayers = l.max_mesh_output_layers;
     out.maxMeshMultiviewViewCount = l.max_mesh_multiview_view_count;
-    out.maxBlasPrimitiveCount = l.max_blas_primitive_count as u64;
-    out.maxBlasGeometryCount = l.max_blas_geometry_count as u64;
-    out.maxTlasInstanceCount = l.max_tlas_instance_count as u64;
+    out.maxBlasPrimitiveCount = l.max_blas_primitive_count;
+    out.maxBlasGeometryCount = l.max_blas_geometry_count;
+    out.maxTlasInstanceCount = l.max_tlas_instance_count;
     out.maxAccelerationStructuresPerShaderStage = l.max_acceleration_structures_per_shader_stage;
     out
 }
@@ -792,9 +792,9 @@ pub fn map_limits(
         set!(max_mesh_output_primitives, n.maxMeshOutputPrimitives);
         set!(max_mesh_output_layers, n.maxMeshOutputLayers);
         set!(max_mesh_multiview_view_count, n.maxMeshMultiviewViewCount);
-        set!(max_blas_primitive_count, n.maxBlasPrimitiveCount as u32);
-        set!(max_blas_geometry_count, n.maxBlasGeometryCount as u32);
-        set!(max_tlas_instance_count, n.maxTlasInstanceCount as u32);
+        set!(max_blas_primitive_count, n.maxBlasPrimitiveCount);
+        set!(max_blas_geometry_count, n.maxBlasGeometryCount);
+        set!(max_tlas_instance_count, n.maxTlasInstanceCount);
         set!(
             max_acceleration_structures_per_shader_stage,
             n.maxAccelerationStructuresPerShaderStage

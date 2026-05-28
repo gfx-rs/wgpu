@@ -42,11 +42,9 @@ impl Drop for CDevice {
         // wgpu-native's WGPUDeviceImpl::drop calls device_poll which can panic via
         // handle_error_fatal if the device is in an error state. Catch that here so it
         // doesn't abort during Drop (re-panicking in Drop causes an immediate abort).
-        if let Err(payload) =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
-                wgpuDeviceRelease(self.ptr);
-            }))
-        {
+        if let Err(payload) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+            wgpuDeviceRelease(self.ptr);
+        })) {
             let msg = payload
                 .downcast_ref::<String>()
                 .map(String::as_str)
@@ -1911,7 +1909,7 @@ impl QueueInterface for CQueue {
         if buf_usage & native::WGPUBufferUsage_CopyDst == 0 {
             return None;
         }
-        if offset % 4 != 0 || sz % 4 != 0 {
+        if !offset.is_multiple_of(4) || !sz.is_multiple_of(4) {
             return None;
         }
         if offset.saturating_add(sz) > buf_size {
