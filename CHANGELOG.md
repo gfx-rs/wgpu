@@ -131,7 +131,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
     };
   ```
   By @AdrianEddy in [#9496](https://github.com/gfx-rs/wgpu/pull/9496).
-- Add `as_custom` to many new API types, which increases the capabilites of custom backends. Also fixed render bundles on custom backends. By @inner-daemons in [#9605](https://github.com/gfx-rs/wgpu/pull/9605).
+- Add `as_custom` to many new API types, which increases the capabilities of custom backends. Also fixed render bundles on custom backends. By @inner-daemons in [#9605](https://github.com/gfx-rs/wgpu/pull/9605).
 
 #### Metal
 
