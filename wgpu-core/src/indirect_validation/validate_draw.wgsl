@@ -12,6 +12,7 @@ struct MetadataEntry {
     vertex_or_index_limit: u32,
     instance_limit: u32,
 }
+const OFFSET_MASK: u32 = 0x3FFFFFFF;
 
 struct MetadataRange {
     start: u32,
@@ -38,8 +39,8 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u) {
     var failed = false;
 
     let is_indexed = is_bit_set(metadata.src_offset, 31);
-    let src_base_offset = ((metadata.src_offset << 2) >> 2);
-    let dst_base_offset = ((metadata.dst_offset << 2) >> 2);
+    let src_base_offset = metadata.src_offset & OFFSET_MASK;
+    let dst_base_offset = metadata.dst_offset & OFFSET_MASK;
 
     let first_vertex_or_index = src[src_base_offset + 2];
     let vertex_or_index_count = src[src_base_offset + 0];
