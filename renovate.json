@@ -82,6 +82,11 @@
       "matchPackageNames": ["https://github.com/gpuweb/cts"],
       "changelogUrl": "https://github.com/gpuweb/cts/commits/main",
       "versioning": "git"
+    },
+    {
+      "description": "Rust toolchain should be stable - 3 in accordance with maximum-MSRV policy.",
+      "matchManager": "rust-toolchain",
+      "minimumReleaseAge": "18 weeks"
     }
   ],
   "customManagers": [
