@@ -3,7 +3,7 @@ use super::{
     CreateIndirectValidationPipelineError,
 };
 use crate::{
-    command::RenderPassErrorInner,
+    command::{get_src_stride_of_indirect_args, RenderPassErrorInner},
     device::{queue::TempResource, Device, DeviceError},
     hal_label,
     lock::{rank, Mutex},
@@ -673,10 +673,27 @@ fn calculate_src_buffer_binding_size(buffer_size: u64, limits: &Limits) -> u64 {
 }
 
 /// Splits the given `offset` into a dynamic offset & offset.
-fn calculate_src_offsets(buffer_size: u64, limits: &Limits, offset: u64) -> (u64, u64) {
+fn calculate_src_offsets(
+    buffer_size: u64,
+    limits: &Limits,
+    offset: u64,
+    data_size: u64,
+) -> (u64, u64) {
     const MAX_DATA_SIZE: u64 = 20; // indexed indirect draw params are 20B
     let binding_size = calculate_src_buffer_binding_size(buffer_size, limits);
     let min_storage_buffer_offset_alignment = limits.min_storage_buffer_offset_alignment as u64;
+
+    assert!([16, MAX_DATA_SIZE].contains(&data_size));
+    assert!([32, 64, 128, 256].contains(&min_storage_buffer_offset_alignment));
+    assert!(buffer_size >= data_size);
+    assert!(offset <= buffer_size - data_size);
+    assert!(binding_size <= buffer_size);
+
+    // Invariants that the outputs of this function must satisfy:
+    // - out_dynamic_offset + out_offset = offset
+    // - out_dynamic_offset % min_storage_buffer_offset_alignment = 0
+    // - out_dynamic_offset + binding_size <= buffer_size
+    // - out_offset + data_size <= binding_size
 
     // Align the max offset in the binding and treat it as the stride between
     // dynamic offsets.
@@ -987,7 +1004,9 @@ impl DrawBatcher {
 
         let buffer_size = src_buffer.size;
         let limits = device.adapter.limits();
-        let (src_dynamic_offset, src_offset) = calculate_src_offsets(buffer_size, &limits, offset);
+        let data_size = get_src_stride_of_indirect_args(family);
+        let (src_dynamic_offset, src_offset) =
+            calculate_src_offsets(buffer_size, &limits, offset, data_size);
 
         let src_buffer_tracker_index = src_buffer.tracker_index();
 
