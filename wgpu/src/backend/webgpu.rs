@@ -1141,19 +1141,13 @@ impl ContextWebGpu {
             }
         };
 
-        // An error here indicated that WebGPU is disabled in the browser.
-        let context: webgpu_sys::GpuCanvasContext =
-            context
-                .dyn_into()
-                .map_err(|actual| crate::CreateSurfaceError {
-                    inner: crate::CreateSurfaceErrorKind::Web(format!(
-                        "`canvas.getContext()` returned a value that did not coerce to \
-                        `GPUCanvasContext`. \
-                        This is likely because WebGPU is disabled in this browser. \
-                        Expected: `GPUCanvasContext`, Actual: `{}`",
-                        actual.to_string()
-                    )),
-                })?;
+        /* Use unchecked_into instead of dyn_into: the instanceof check that dyn_into
+         * performs for GpuCanvasContext fails in some wasm-bindgen configurations even
+         * when the object is correct (e.g. certain browser extensions or cross-realm
+         * scenarios interfere with the JS prototype chain). getContext("webgpu") already
+         * guarantees the returned object is a GPUCanvasContext when it succeeds, so the
+         * instanceof check is redundant and only causes spurious surface creation errors. */
+        let context: webgpu_sys::GpuCanvasContext = context.unchecked_into();
 
         Ok(WebSurface {
             gpu: self.gpu.clone(),
