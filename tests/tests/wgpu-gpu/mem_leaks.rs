@@ -26,7 +26,10 @@ async fn draw_test_with_reports(
 
     use wgpu::util::DeviceExt;
 
-    let global_report = ctx.instance.generate_report().unwrap();
+    // Custom backends may fail here but should still be testable.
+    let Some(global_report) = ctx.instance.generate_report() else {
+        return;
+    };
     let report = global_report.hub_report();
     assert_eq!(report.devices.num_allocated, 1);
     assert_eq!(report.queues.num_allocated, 1);

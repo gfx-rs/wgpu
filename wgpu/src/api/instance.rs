@@ -3,6 +3,28 @@ use core::future::Future;
 
 use crate::{dispatch::InstanceInterface, util::Mutex, *};
 
+#[cfg(custom)]
+static INSTANCE_FACTORY: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
+
+/// Register a factory that can intercept [`Instance::new`] for custom backends.
+///
+/// The factory receives the [`InstanceDescriptor`] and returns `Ok(Instance)` to
+/// take ownership of the request, or `Err(desc)` to fall through to the built-in backend.
+///
+/// Only the first call takes effect; subsequent calls are ignored.
+///
+/// This can be safely called from a constructor.
+#[cfg(custom)]
+pub fn set_instance_factory(f: fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor>) {
+    // 0 is the sentinel for "not set"; fn pointers are never null.
+    let _ = INSTANCE_FACTORY.compare_exchange(
+        0,
+        f as usize,
+        core::sync::atomic::Ordering::Release,
+        core::sync::atomic::Ordering::Relaxed,
+    );
+}
+
 bitflags::bitflags! {
     /// WGSL language extensions.
     ///
@@ -59,8 +81,23 @@ impl Instance {
     ///
     /// - If no backend feature for the active target platform is enabled,
     ///   this method will panic; see [`Instance::enabled_backend_features()`].
-    #[allow(clippy::allow_attributes, unreachable_code)]
-    pub fn new(desc: InstanceDescriptor) -> Self {
+    #[allow(clippy::allow_attributes, unreachable_code, unused_mut)]
+    pub fn new(mut desc: InstanceDescriptor) -> Self {
+        #[cfg(custom)]
+        if !desc.backend_options.skip_custom_backend_library {
+            let addr = INSTANCE_FACTORY.load(core::sync::atomic::Ordering::Acquire);
+            if addr != 0 {
+                // SAFETY: addr was written by set_instance_factory via `f as usize`,
+                // where f is a valid fn pointer of this exact type.
+                let factory: fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor> =
+                    unsafe { core::mem::transmute(addr) };
+                match factory(desc) {
+                    Ok(inst) => return inst,
+                    Err(returned_desc) => desc = returned_desc,
+                }
+            }
+        }
+
         if Self::enabled_backend_features().is_empty() {
             panic!(
                 "No wgpu backend feature that is implemented for the target platform was enabled. \

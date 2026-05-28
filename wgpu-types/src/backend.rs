@@ -215,6 +215,12 @@ pub struct BackendOptions {
     pub dx12: Dx12BackendOptions,
     /// Options for the noop backend, [`Backend::Noop`].
     pub noop: NoopBackendOptions,
+    /// If false and the `custom` feature is enabled for wgpu, and if an override
+    /// instance factory was setup, wgpu will return a custom instance created from
+    /// that factory.
+    ///
+    /// Noop on wgpu-core.
+    pub skip_custom_backend_library: bool,
 }
 
 impl BackendOptions {
@@ -227,6 +233,8 @@ impl BackendOptions {
             gl: GlBackendOptions::from_env_or_default(),
             dx12: Dx12BackendOptions::from_env_or_default(),
             noop: NoopBackendOptions::from_env_or_default(),
+            skip_custom_backend_library: crate::env::var("WGPU_NO_CUSTOM_BACKEND").as_deref()
+                == Some("1"),
         }
     }
 
@@ -239,6 +247,7 @@ impl BackendOptions {
             gl: self.gl.with_env(),
             dx12: self.dx12.with_env(),
             noop: self.noop.with_env(),
+            skip_custom_backend_library: false,
         }
     }
 }

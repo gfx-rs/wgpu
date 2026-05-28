@@ -61,7 +61,7 @@ static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_sync(|ctx| {
         ctx.instance.poll_all(false);
 
-        let pre_report = ctx.instance.generate_report().unwrap();
+        let pre_report = ctx.instance.generate_report();
 
         let TestingContext {
             instance,
@@ -73,6 +73,9 @@ static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
         drop(queue);
         drop(device);
 
+        let Some(pre_report) = pre_report else {
+            return;
+        };
         let post_report = instance.generate_report().unwrap();
 
         assert_ne!(

@@ -200,6 +200,8 @@ impl GPU {
             },
             gl: wgpu_types::GlBackendOptions::default(),
             noop: wgpu_types::NoopBackendOptions::default(),
+            // Noop in wgpu-core
+            skip_custom_backend_library: true,
           },
           display: None,
         },

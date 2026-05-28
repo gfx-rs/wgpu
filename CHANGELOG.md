@@ -112,6 +112,14 @@ Zero-size buffer bindings are still not permitted. `BufferBinding` now implement
 
 By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
+#### Overriding instance creation
+
+Instance creation can now be overridden by calling `set_instance_factory`. This lets you coerce other code using wgpu to use a custom backend.
+
+Requires the `custom` feature. Can be explicitly opted out of by setting `InstanceDescriptor.backend_options.skip_custom_backend_library` when creating an instance.
+
+By @inner-daemons in [#9606](https://github.com/gfx-rs/wgpu/pull/9606).
+
 ### Added/New Features
 
 #### General
