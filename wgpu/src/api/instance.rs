@@ -77,7 +77,7 @@ impl Instance {
     ///
     /// - If no backend feature for the active target platform is enabled,
     ///   this method will panic; see [`Instance::enabled_backend_features()`].
-    #[allow(clippy::allow_attributes, unreachable_code)]
+    #[allow(clippy::allow_attributes, unreachable_code, unused_mut)]
     pub fn new(mut desc: InstanceDescriptor) -> Self {
         #[cfg(custom)]
         if !desc.backend_options.skip_custom_backend_library {
