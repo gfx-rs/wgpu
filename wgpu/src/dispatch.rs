@@ -571,6 +571,22 @@ pub trait RenderBundleEncoderInterface: CommonTraits {
     fn finish(self, desc: &crate::RenderBundleDescriptor<'_>) -> DispatchRenderBundle
     where
         Self: Sized;
+
+    /// Object-safe version of `finish` for dyn dispatch through `Box<dyn RenderBundleEncoderInterface>`.
+    ///
+    /// A default implementation cannot be provided here: a default that calls `finish` would
+    /// require `Self: Sized` (to move out of the box), which would remove the method from the
+    /// vtable and break object safety. Every concrete backend must implement this as:
+    /// ```ignore
+    /// fn finish_boxed(self: Box<Self>, desc: &RenderBundleDescriptor<'_>) -> DispatchRenderBundle {
+    ///     (*self).finish(desc)
+    /// }
+    /// ```
+    #[cfg(custom)]
+    fn finish_boxed(
+        self: Box<Self>,
+        desc: &crate::RenderBundleDescriptor<'_>,
+    ) -> DispatchRenderBundle;
 }
 
 pub trait CommandBufferInterface: CommonTraits {}
