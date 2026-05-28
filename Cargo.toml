@@ -306,8 +306,7 @@ deno_web = "0.280.0"
 deno_webidl = "0.249.0"
 deno_image = "0.25.0"
 deno_webgpu = { version = "0.215.0", path = "./deno_webgpu" }
-deno_unsync = "0.4.4"
-deno_error = "0.7.0"
+deno_error = "0.7.3"
 tokio = "1.47"
 termcolor = "1.4.1"
 

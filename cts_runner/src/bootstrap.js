@@ -16,7 +16,9 @@ const {
 
 const { pathFromURL } = core.loadExtScript("ext:deno_web/00_infra.js");
 const webidl = core.loadExtScript("ext:deno_webidl/00_webidl.js");
-const globalInterfaces = core.loadExtScript("ext:deno_web/04_global_interfaces.js");
+const globalInterfaces = core.loadExtScript(
+  "ext:deno_web/04_global_interfaces.js"
+);
 const event = core.loadExtScript("ext:deno_web/02_event.js");
 const timers = core.loadExtScript("ext:deno_web/02_timers.js");
 const base64 = core.loadExtScript("ext:deno_web/05_base64.js");
