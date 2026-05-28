@@ -215,6 +215,9 @@ pub struct BackendOptions {
     pub dx12: Dx12BackendOptions,
     /// Options for the noop backend, [`Backend::Noop`].
     pub noop: NoopBackendOptions,
+    /// If false and the `custom` feature is enabled for wgpu, wgpu may attempt to search
+    /// for a custom backend implementation in an external library
+    pub skip_custom_backend_library: bool,
 }
 
 impl BackendOptions {
@@ -227,6 +230,7 @@ impl BackendOptions {
             gl: GlBackendOptions::from_env_or_default(),
             dx12: Dx12BackendOptions::from_env_or_default(),
             noop: NoopBackendOptions::from_env_or_default(),
+            skip_custom_backend_library: false,
         }
     }
 
@@ -239,6 +243,7 @@ impl BackendOptions {
             gl: self.gl.with_env(),
             dx12: self.dx12.with_env(),
             noop: self.noop.with_env(),
+            skip_custom_backend_library: false,
         }
     }
 }

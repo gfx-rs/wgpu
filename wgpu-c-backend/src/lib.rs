@@ -62,8 +62,13 @@ const WGPU_NATIVE_BACKENDS: wgpu::Backends = wgpu::Backends::VULKAN
     .union(wgpu::Backends::DX12)
     .union(wgpu::Backends::GL);
 
+#[expect(clippy::missing_safety_doc)]
+#[expect(improper_ctypes_definitions)]
 #[expect(clippy::result_large_err)]
-fn instance_create(desc: InstanceDescriptor) -> Result<wgpu::Instance, InstanceDescriptor> {
+#[no_mangle]
+pub unsafe extern "C" fn instance_factory(
+    desc: InstanceDescriptor,
+) -> Result<wgpu::Instance, InstanceDescriptor> {
     // Pass through to wgpu-core's built-in factory when the requested backends
     // don't include anything wgpu-native can handle (e.g. Backends::empty(),
     // Backends::NOOP, Backends::BROWSER_WEBGPU). wgpu-core will generate the
@@ -72,11 +77,6 @@ fn instance_create(desc: InstanceDescriptor) -> Result<wgpu::Instance, InstanceD
         return Err(desc);
     }
     Ok(wgpu::Instance::from_custom(CInstance::new(desc)))
-}
-
-#[ctor::ctor(unsafe)]
-fn register_factory() {
-    wgpu::set_instance_factory(instance_create);
 }
 
 #[derive(Debug)]

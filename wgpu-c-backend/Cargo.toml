@@ -9,6 +9,9 @@ repository.workspace = true
 license.workspace = true
 keywords.workspace = true
 
+[lib]
+crate-type = ["dylib"]
+
 [features]
 default = ["wgsl"]
 wgsl = ["wgpu/wgsl"]
