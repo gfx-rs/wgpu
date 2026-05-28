@@ -63,7 +63,14 @@ impl Draw {
         required_features: &wgt::Features,
         instance_flags: wgt::InstanceFlags,
         backend: wgt::Backend,
+        limits: &Limits,
     ) -> Result<Self, CreateIndirectValidationPipelineError> {
+        // Indirect draw validation doesn't support buffer sizes higher than u32
+        // since its offsets in the shader and dynamic offsets are u32.
+        //
+        // See also: `u64_offset_to_u32_offset`.
+        assert!(limits.max_buffer_size <= u32::MAX as u64);
+
         let module = create_validation_module(device, instance_flags)?;
 
         let metadata_bind_group_layout = create_bind_group_layout(
@@ -437,7 +444,7 @@ impl Draw {
                     pipeline_layout,
                     1,
                     src_bind_group,
-                    &[batch.src_dynamic_offset as u32],
+                    &[u64_offset_to_u32_offset(batch.src_dynamic_offset)],
                 );
             }
 
@@ -901,11 +908,7 @@ impl MetadataEntry {
     ) -> Self {
         const U32_MAX_AS_U64: u64 = u32::MAX as u64;
 
-        // NOTE: buffer sizes should never exceed `u32::MAX`.
-        assert!(src_offset <= U32_MAX_AS_U64);
-        assert!(dst_offset <= U32_MAX_AS_U64);
-
-        let src_offset = src_offset as u32;
+        let src_offset = u64_offset_to_u32_offset(src_offset);
         let src_offset = src_offset / 4; // translate byte offset to offset in u32's
 
         // `src_offset` needs at most 30 bits,
@@ -923,7 +926,7 @@ impl MetadataEntry {
         let instance_limit_bit_32 = (instance_limit >> 32) as u32; // extract bit 32
         let instance_limit = instance_limit as u32; // truncate the limit to a u32
 
-        let dst_offset = dst_offset as u32;
+        let dst_offset = u64_offset_to_u32_offset(dst_offset);
         let dst_offset = dst_offset / 4; // translate byte offset to offset in u32's
 
         // `dst_offset` needs at most 30 bits,
@@ -1040,6 +1043,13 @@ impl DrawBatcher {
 
         Ok((dst_resource_index, dst_offset))
     }
+}
+
+/// Indirect draw validation doesn't support u64 offsets.
+///
+/// This fn should never panic due to the assert in [`Draw::new`].
+fn u64_offset_to_u32_offset(offset: u64) -> u32 {
+    offset.try_into().unwrap()
 }
 
 #[cfg(test)]

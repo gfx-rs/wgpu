@@ -437,6 +437,10 @@ impl Instance {
             adapters.extend(
                 hal_adapters
                     .into_iter()
+                    .map(|mut raw| {
+                        self.adjust_limits_for_indirect_validation(&mut raw.capabilities.limits);
+                        raw
+                    })
                     .filter_map(|raw| {
                         if apply_limit_buckets {
                             limits::apply_limit_buckets(raw)
@@ -522,14 +526,15 @@ impl Instance {
                 }
             }
 
+            let backend_adapters = backend_adapters.into_iter().map(|mut raw| {
+                self.adjust_limits_for_indirect_validation(&mut raw.capabilities.limits);
+                raw
+            });
+
             if desc.apply_limit_buckets {
-                adapters.extend(
-                    backend_adapters
-                        .into_iter()
-                        .filter_map(limits::apply_limit_buckets),
-                );
+                adapters.extend(backend_adapters.filter_map(limits::apply_limit_buckets));
             } else {
-                adapters.append(&mut backend_adapters);
+                adapters.extend(backend_adapters);
             }
         }
 
@@ -594,6 +599,23 @@ impl Instance {
                 no_adapter_backends,
                 incompatible_surface_backends,
             })
+        }
+    }
+
+    /// This is similar to wgpu-hal's `adjust_raw_limits` but tailored to
+    /// wgpu-core's constraints.
+    fn adjust_limits_for_indirect_validation(&self, limits: &mut wgt::Limits) {
+        // Indirect draw validation can't support u64 offsets,
+        // lower max buffer and binding size to fit in an u32.
+        if self
+            .flags
+            .contains(wgt::InstanceFlags::VALIDATION_INDIRECT_CALL)
+        {
+            limits.max_buffer_size = limits.max_buffer_size.min(u32::MAX as u64);
+            limits.max_uniform_buffer_binding_size =
+                limits.max_uniform_buffer_binding_size.min(u32::MAX as u64);
+            limits.max_storage_buffer_binding_size =
+                limits.max_storage_buffer_binding_size.min(u32::MAX as u64);
         }
     }
 
