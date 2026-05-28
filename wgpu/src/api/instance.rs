@@ -14,6 +14,8 @@ static INSTANCE_FACTORY: std::sync::OnceLock<
 ///
 /// Only the first call takes effect; subsequent calls are ignored. This is enforced by
 /// [`OnceLock`] and avoids the need for `unsafe transmute` or pointer-to-integer casts.
+///
+/// [`OnceLock`]: std::sync::OnceLock
 #[cfg(custom)]
 pub fn set_instance_factory(f: fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor>) {
     let _ = INSTANCE_FACTORY.set(f);
