@@ -1236,9 +1236,8 @@ dependencies = [
 
 [[package]]
 name = "env_filter"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32e90c2accc4b07a8456ea0debdc2e7587bdd890680d71173a15d4ae604f6eef"
+version = "1.0.0"
+source = "git+https://github.com/rust-cli/env_logger.git?rev=d550741#d550741cdcd1d64f8a564158d9d0b2554f5d900d"
 dependencies = [
  "log",
  "regex",
@@ -1246,9 +1245,8 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.11.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0621c04f2196ac3f488dd583365b9c09be011a4ab8b9f37248ffcc8f6198b56a"
+version = "0.11.9"
+source = "git+https://github.com/rust-cli/env_logger.git?rev=d550741#d550741cdcd1d64f8a564158d9d0b2554f5d900d"
 dependencies = [
  "anstream",
  "anstyle",
@@ -2169,9 +2167,8 @@ dependencies = [
 
 [[package]]
 name = "libtest-mimic"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14e6ba06f0ade6e504aff834d7c34298e5155c6baca353cc6a4aaff2f9fd7f33"
+version = "0.8.1"
+source = "git+https://github.com/cwfitzgerald/libtest-mimic.git?rev=9979b3c#9979b3c1aa932bd210505029e4639aafa6e3d4f3"
 dependencies = [
  "anstream",
  "anstyle",
@@ -5597,13 +5594,3 @@ name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
-
-[[patch.unused]]
-name = "env_logger"
-version = "0.11.9"
-source = "git+https://github.com/rust-cli/env_logger.git?rev=d550741#d550741cdcd1d64f8a564158d9d0b2554f5d900d"
-
-[[patch.unused]]
-name = "libtest-mimic"
-version = "0.8.1"
-source = "git+https://github.com/cwfitzgerald/libtest-mimic.git?rev=9979b3c#9979b3c1aa932bd210505029e4639aafa6e3d4f3"
