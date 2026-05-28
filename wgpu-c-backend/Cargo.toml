@@ -16,6 +16,7 @@ spirv = ["wgpu/spirv"]
 
 [dependencies]
 ctor.workspace = true
+log.workspace = true
 wgpu = { workspace = true, features = ["custom"] }
 wgpu-native = { package = "wgpu-native", git = "https://github.com/inner-daemons/wgpu-native", branch = "wgpu-native-complete" }
 

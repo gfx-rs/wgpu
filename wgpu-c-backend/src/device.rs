@@ -41,10 +41,19 @@ impl Drop for CDevice {
     fn drop(&mut self) {
         // wgpu-native's WGPUDeviceImpl::drop calls device_poll which can panic via
         // handle_error_fatal if the device is in an error state. Catch that here so it
-        // doesn't abort during Drop.
-        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            unsafe { wgpuDeviceRelease(self.ptr) };
-        }));
+        // doesn't abort during Drop (re-panicking in Drop causes an immediate abort).
+        if let Err(payload) =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+                wgpuDeviceRelease(self.ptr);
+            }))
+        {
+            let msg = payload
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| payload.downcast_ref::<&str>().copied())
+                .unwrap_or("(non-string panic payload)");
+            log::error!("wgpu-c-backend: panic in wgpuDeviceRelease during drop: {msg}");
+        }
     }
 }
 
@@ -1625,6 +1634,15 @@ impl DeviceInterface for CDevice {
     }
 
     fn set_device_lost_callback(&self, device_lost_callback: BoxDeviceLostCallback) {
+        // KNOWN LIMITATION: this callback only fires for explicit Device::destroy().
+        // wgpu-native does not wire WGPUDeviceLostCallbackInfo to wgpu-core's
+        // spontaneous loss path, so GPU-initiated loss (driver crash, timeout, etc.)
+        // will never invoke this callback via the C backend.
+        log::warn!(
+            "wgpu-c-backend: device-lost callback registered; note that GPU-initiated \
+             device loss (driver crash, timeout) will NOT trigger this callback — \
+             only explicit Device::destroy() does. See adapter.rs device_lost_cb."
+        );
         *self.device_lost_handler.lock().unwrap() = Some(device_lost_callback);
     }
 

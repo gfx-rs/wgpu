@@ -129,6 +129,15 @@ impl core::ops::DerefMut for DynRenderBundleEncoder {
     }
 }
 
+// Eq/Ord/Hash for DynRenderBundleEncoder are based on the heap allocation address.
+//
+// Each encoder is a unique Box<T> allocated by `Device::create_render_bundle_encoder`.
+// Box<T> guarantees the inner value's address is stable for its lifetime, so comparing
+// data-pointer addresses is a sound identity check — two distinct encoders always differ,
+// and the same encoder always compares equal to itself.
+//
+// These impls are not semantically meaningful (we never sort or deduplicate encoders by
+// "value") but are required to satisfy bounds imposed by the dispatch enum machinery.
 impl PartialEq for DynRenderBundleEncoder {
     fn eq(&self, other: &Self) -> bool {
         core::ptr::addr_eq(

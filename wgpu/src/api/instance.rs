@@ -1,20 +1,22 @@
 use alloc::vec::Vec;
 use core::future::Future;
-#[cfg(custom)]
-use core::sync::atomic::{AtomicUsize, Ordering};
-
 use crate::{dispatch::InstanceInterface, util::Mutex, *};
 
 #[cfg(custom)]
-static INSTANCE_FACTORY: AtomicUsize = AtomicUsize::new(0);
+static INSTANCE_FACTORY: std::sync::OnceLock<
+    fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor>,
+> = std::sync::OnceLock::new();
 
 /// Register a factory that can intercept [`Instance::new`] for custom backends.
 ///
 /// The factory receives the [`InstanceDescriptor`] and returns `Ok(Instance)` to
 /// take ownership of the request, or `Err(desc)` to fall through to the built-in backend.
+///
+/// Only the first call takes effect; subsequent calls are ignored. This is enforced by
+/// [`OnceLock`] and avoids the need for `unsafe transmute` or pointer-to-integer casts.
 #[cfg(custom)]
 pub fn set_instance_factory(f: fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor>) {
-    INSTANCE_FACTORY.store(f as usize, Ordering::Release);
+    let _ = INSTANCE_FACTORY.set(f);
 }
 
 bitflags::bitflags! {
@@ -84,11 +86,7 @@ impl Instance {
 
         #[cfg(custom)]
         if std::env::var("WGPU_NO_CUSTOM_BACKEND").as_deref() != Ok("1") {
-            let factory_val = INSTANCE_FACTORY.load(Ordering::Acquire);
-            if factory_val != 0 {
-                // SAFETY: stored via `set_instance_factory` which accepts exactly this fn type.
-                let factory: fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor> =
-                    unsafe { core::mem::transmute(factory_val) };
+            if let Some(factory) = INSTANCE_FACTORY.get() {
                 match factory(desc) {
                     Ok(inst) => return inst,
                     Err(returned_desc) => desc = returned_desc,

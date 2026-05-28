@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use wgpu_native::native;
 
 // ── Instance ──────────────────────────────────────────────────────────────────
@@ -1343,14 +1342,6 @@ pub fn texture_dimension_to_native(d: wgpu::TextureDimension) -> native::WGPUTex
         wgpu::TextureDimension::D1 => native::WGPUTextureDimension_1D,
         wgpu::TextureDimension::D2 => native::WGPUTextureDimension_2D,
         wgpu::TextureDimension::D3 => native::WGPUTextureDimension_3D,
-    }
-}
-
-pub fn map_texture_dimension(d: native::WGPUTextureDimension) -> wgpu::TextureDimension {
-    match d {
-        native::WGPUTextureDimension_1D => wgpu::TextureDimension::D1,
-        native::WGPUTextureDimension_3D => wgpu::TextureDimension::D3,
-        _ => wgpu::TextureDimension::D2,
     }
 }
 
