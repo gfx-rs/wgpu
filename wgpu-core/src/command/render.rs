@@ -3046,7 +3046,9 @@ fn multi_draw_indirect(
         }
     }
 
-    if state.pass.base.device.indirect_validation.is_some() {
+    if state.pass.base.device.indirect_validation.is_some()
+        && family != DrawCommandFamily::DrawMeshTasks
+    {
         state
             .pass
             .scope
