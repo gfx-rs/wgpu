@@ -72,7 +72,7 @@ fn instance_create(desc: InstanceDescriptor) -> Result<wgpu::Instance, InstanceD
     Ok(wgpu::Instance::from_custom(CInstance::new(desc)))
 }
 
-#[ctor::ctor]
+#[ctor::ctor(unsafe)]
 fn register_factory() {
     wgpu::set_instance_factory(instance_create);
 }
