@@ -3914,6 +3914,7 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
         .into()
     }
 
+    #[cfg(custom)]
     fn finish_boxed(
         self: Box<Self>,
         desc: &crate::RenderBundleDescriptor<'_>,

@@ -582,6 +582,7 @@ pub trait RenderBundleEncoderInterface: CommonTraits {
     ///     (*self).finish(desc)
     /// }
     /// ```
+    #[cfg(custom)]
     fn finish_boxed(
         self: Box<Self>,
         desc: &crate::RenderBundleDescriptor<'_>,

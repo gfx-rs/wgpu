@@ -3893,6 +3893,7 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         .into()
     }
 
+    #[cfg(custom)]
     fn finish_boxed(
         self: Box<Self>,
         desc: &crate::RenderBundleDescriptor<'_>,
