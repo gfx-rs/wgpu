@@ -1041,3 +1041,91 @@ impl DrawBatcher {
         Ok((dst_resource_index, dst_offset))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn calculate_src_offsets_test() {
+        const MBUS: u64 = 256 << 20; // default max_buffer_size
+        const MBIS: u64 = 128 << 20; // default max_storage_buffer_binding_size
+
+        #[rustfmt::skip]
+        let cases: &[(u64, u64, u32, u64, u64, u64, u64)] = &[
+            // (buffer_size, max_binding_size, offset_alignment, data_size, offset, out_dynamic_offset, out_offset)
+
+            // data at start of buffer
+            (MBUS, MBIS, 32,  16, 0, 0, 0),
+            // data at end of buffer
+            (MBUS, MBIS, 32,  16, MBUS - 16, MBIS, MBIS - 16),
+            // data at end of buffer, where buffer_size % alignment != 0
+            (MBUS + 4, MBUS, 32, 16, MBUS + 4 - 16, 32, MBUS - 32 + 4 - 16),
+            // data before/straddling/after middle of the buffer with
+            // max binding size limit being half of the buffer size
+            // alignment = 32
+            (512, 256, 32,  16, 240, 224, 16), // before middle
+            (512, 256, 32,  16, 248, 224, 24), // straddling middle
+            (512, 256, 32,  16, 256, 224, 32), // after middle
+            // alignment = 64
+            (512, 256, 64,  16, 240, 192, 48), // before middle
+            (512, 256, 64,  16, 248, 192, 56), // straddling middle
+            (512, 256, 64,  16, 256, 192, 64), // after middle
+            // alignment = 128
+            (512, 256, 128, 16, 240, 128, 112), // before middle
+            (512, 256, 128, 16, 248, 128, 120), // straddling middle
+            (512, 256, 128, 16, 256, 256, 0), // after middle
+            // as above but with data_size = 20
+            // alignment = 32
+            (512, 256, 32,  20, 236, 224, 12), // before middle
+            (512, 256, 32,  20, 244, 224, 20), // straddling middle
+            (512, 256, 32,  20, 252, 224, 28), // after middle
+            // alignment = 64
+            (512, 256, 64,  20, 236, 192, 44), // before middle
+            (512, 256, 64,  20, 244, 192, 52), // straddling middle
+            (512, 256, 64,  20, 252, 192, 60), // after middle
+            // alignment = 128
+            (512, 256, 128, 20, 236, 128, 108), // before middle
+            (512, 256, 128, 20, 244, 128, 116), // straddling middle
+            (512, 256, 128, 20, 252, 128, 124), // after middle
+        ];
+
+        for &(
+            buffer_size,
+            max_storage_buffer_binding_size,
+            min_storage_buffer_offset_alignment,
+            data_size,
+            offset,
+            expected_out_dynamic_offset,
+            expected_out_offset,
+        ) in cases
+        {
+            let limits = Limits {
+                max_storage_buffer_binding_size,
+                min_storage_buffer_offset_alignment,
+                ..Limits::default()
+            };
+            let (out_dynamic_offset, out_offset) =
+                calculate_src_offsets(buffer_size, &limits, offset, data_size);
+            let binding_size = calculate_src_buffer_binding_size(buffer_size, &limits);
+            // check invariants
+            assert_eq!(out_dynamic_offset + out_offset, offset);
+            assert_eq!(
+                out_dynamic_offset % min_storage_buffer_offset_alignment as u64,
+                0
+            );
+            assert!(out_dynamic_offset + binding_size <= buffer_size);
+            assert!(out_offset + data_size <= binding_size);
+            // check output matches
+            assert_eq!(
+                (out_dynamic_offset, out_offset),
+                (expected_out_dynamic_offset, expected_out_offset),
+                "buffer_size={buffer_size} \
+                 max_binding_size={max_storage_buffer_binding_size} \
+                 offset_alignment={min_storage_buffer_offset_alignment} \
+                 data_size={data_size} \
+                 offset={offset}"
+            );
+        }
+    }
+}
