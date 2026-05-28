@@ -124,7 +124,10 @@ impl DeviceInterface for CDevice {
                     label: label_sv,
                 };
                 let ptr = unsafe { wgpuDeviceCreateShaderModule(self.ptr, Some(&c_desc)) };
-                DispatchShaderModule::custom(CShaderModule { ptr })
+                DispatchShaderModule::custom(CShaderModule {
+                    ptr,
+                    is_passthrough: false,
+                })
             }
             #[cfg(feature = "spirv")]
             wgpu::ShaderSource::SpirV(words) => {
@@ -143,7 +146,10 @@ impl DeviceInterface for CDevice {
                 };
                 let ptr =
                     unsafe { wgpuDeviceCreateShaderModulePassthrough(self.ptr, Some(&c_desc)) };
-                DispatchShaderModule::custom(CShaderModule { ptr })
+                DispatchShaderModule::custom(CShaderModule {
+                    ptr,
+                    is_passthrough: false,
+                })
             }
             _ => unimplemented!("wgpu-native does not support this shader source type"),
         }
@@ -169,7 +175,10 @@ impl DeviceInterface for CDevice {
                 label: label_sv,
             };
             let ptr = unsafe { wgpuDeviceCreateShaderModule(self.ptr, Some(&c_desc)) };
-            return DispatchShaderModule::custom(CShaderModule { ptr });
+            return DispatchShaderModule::custom(CShaderModule {
+                ptr,
+                is_passthrough: true,
+            });
         }
         // All non-WGSL formats go through WGPUShaderModuleDescriptorPassthrough.
         // Fill in every available format; wgpu-native picks the right one for the platform.
@@ -227,7 +236,10 @@ impl DeviceInterface for CDevice {
                 .unwrap_or_else(conv::null_string_view),
         };
         let ptr = unsafe { wgpuDeviceCreateShaderModulePassthrough(self.ptr, Some(&c_desc)) };
-        DispatchShaderModule::custom(CShaderModule { ptr })
+        DispatchShaderModule::custom(CShaderModule {
+            ptr,
+            is_passthrough: true,
+        })
     }
 
     fn create_bind_group_layout(
@@ -651,8 +663,25 @@ impl DeviceInterface for CDevice {
             .map(|l| l.as_custom::<CPipelineLayout>().unwrap().ptr)
             .unwrap_or(std::ptr::null_mut());
 
+        // Validate: layout: None is not supported with passthrough shader modules.
+        // wgpu-core rejects this because it cannot reflect layout from a passthrough
+        // shader; the C backend must match that behaviour explicitly.
+        let v_shader = desc.vertex.module.as_custom::<CShaderModule>().unwrap();
+        let f_shader = desc
+            .fragment
+            .as_ref()
+            .and_then(|f| f.module.as_custom::<CShaderModule>());
+        if desc.layout.is_none()
+            && (v_shader.is_passthrough || f_shader.is_some_and(|f| f.is_passthrough))
+        {
+            panic!(
+                "wgpu-c-backend: `layout: None` is not supported with passthrough shader \
+                 modules — provide an explicit PipelineLayout"
+            );
+        }
+
         // Vertex state.
-        let v_module = desc.vertex.module.as_custom::<CShaderModule>().unwrap().ptr;
+        let v_module = v_shader.ptr;
         let v_ep_owned = desc.vertex.entry_point.map(|s| s.to_owned());
         let v_ep_sv = v_ep_owned
             .as_deref()
@@ -1304,9 +1333,9 @@ impl DeviceInterface for CDevice {
         };
         let ptr = unsafe { wgpuDeviceCreateBuffer(self.ptr, Some(&c_desc)) };
         let buf = if desc.mapped_at_creation {
-            CBuffer::new_mapped_at_creation(ptr)
+            CBuffer::new_mapped_at_creation(ptr, self.ptr)
         } else {
-            CBuffer::new(ptr)
+            CBuffer::new(ptr, self.ptr)
         };
         DispatchBuffer::custom(buf)
     }
@@ -1731,13 +1760,24 @@ impl DeviceInterface for CDevice {
         &self,
         poll_type: wgpu::wgt::PollType<u64>,
     ) -> Result<wgpu::PollStatus, wgpu::PollError> {
-        let (wait, submission_index) = match poll_type {
-            wgpu::wgt::PollType::Poll => (false, None),
+        let result = match poll_type {
+            wgpu::wgt::PollType::Poll => {
+                unsafe { wgpuDevicePoll(self.ptr, false, None) }
+            }
             wgpu::wgt::PollType::Wait {
-                submission_index, ..
-            } => (true, submission_index),
+                submission_index,
+                timeout: None,
+            } => unsafe { wgpuDevicePoll(self.ptr, true, submission_index.as_ref()) },
+            wgpu::wgt::PollType::Wait {
+                submission_index,
+                timeout: Some(timeout_dur),
+            } => {
+                let timeout_ns = timeout_dur.as_nanos() as u64;
+                unsafe {
+                    wgpuDevicePollWithTimeout(self.ptr, true, submission_index.as_ref(), timeout_ns)
+                }
+            }
         };
-        let result = unsafe { wgpuDevicePoll(self.ptr, wait, submission_index.as_ref()) };
         // Re-raise any panic that occurred inside a map callback during polling.
         crate::resume_callback_panic();
         if result {

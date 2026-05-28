@@ -35,6 +35,8 @@ macro_rules! c_resource {
 
 pub struct CBuffer {
     pub(crate) ptr: native::WGPUBuffer,
+    // Device that owns this buffer — used to poll for pending map callbacks.
+    pub(crate) device_ptr: native::WGPUDevice,
     // Tracks whether the buffer is currently mapped. Set to true by a
     // successful map_async callback; reset to false by unmap(). Prevents
     // calling wgpuBufferGetMappedRange on an unmapped buffer, which would
@@ -58,16 +60,21 @@ impl Drop for CBuffer {
 }
 
 impl CBuffer {
-    pub(crate) fn new(ptr: native::WGPUBuffer) -> Self {
+    pub(crate) fn new(ptr: native::WGPUBuffer, device_ptr: native::WGPUDevice) -> Self {
         CBuffer {
             ptr,
+            device_ptr,
             is_mapped: Arc::new(AtomicBool::new(false)),
         }
     }
 
-    pub(crate) fn new_mapped_at_creation(ptr: native::WGPUBuffer) -> Self {
+    pub(crate) fn new_mapped_at_creation(
+        ptr: native::WGPUBuffer,
+        device_ptr: native::WGPUDevice,
+    ) -> Self {
         CBuffer {
             ptr,
+            device_ptr,
             is_mapped: Arc::new(AtomicBool::new(true)),
         }
     }
@@ -130,7 +137,26 @@ impl BufferInterface for CBuffer {
                 callback_info,
             )
         };
-        // Re-raise any panic that occurred if the callback fired synchronously.
+
+        // With AllowSpontaneous the callback may fire on a wgpu-native background
+        // thread.  Spin briefly (up to ~50 ms) so that if the GPU work was already
+        // done the callback completes before we return.  This lets catch_unwind in
+        // the test framework observe the panic — matching wgpu-core's behaviour
+        // where the callback fires synchronously when the buffer is already ready.
+        // For buffers that genuinely need more time we give up and let the callback
+        // settle later; any panic that arrives after we return is stored in the
+        // global CALLBACK_PANIC and will be picked up by the next resume_callback_panic
+        // call (e.g. inside device.poll()).
+        let deadline =
+            std::time::Instant::now() + std::time::Duration::from_millis(50);
+        while !self.is_mapped.load(Ordering::Acquire)
+            && crate::CALLBACK_PANIC.lock().unwrap().is_none()
+            && std::time::Instant::now() < deadline
+        {
+            unsafe { wgpuDevicePoll(self.device_ptr, false, None) };
+            std::thread::yield_now();
+        }
+        // Re-raise any panic that occurred in the callback.
         crate::resume_callback_panic();
     }
 
@@ -281,11 +307,28 @@ impl SamplerInterface for CSampler {}
 
 // ── CShaderModule ─────────────────────────────────────────────────────────────
 
-c_resource!(
-    CShaderModule,
-    native::WGPUShaderModule,
-    wgpuShaderModuleRelease
-);
+pub struct CShaderModule {
+    pub(crate) ptr: native::WGPUShaderModule,
+    /// True when created via `create_shader_module_passthrough`.  Used to
+    /// detect the invalid combination of a passthrough shader module with
+    /// `layout: None` in `create_render_pipeline` / `create_compute_pipeline`.
+    pub(crate) is_passthrough: bool,
+}
+impl std::fmt::Debug for CShaderModule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CShaderModule")
+            .field("ptr", &self.ptr)
+            .field("is_passthrough", &self.is_passthrough)
+            .finish()
+    }
+}
+unsafe impl Send for CShaderModule {}
+unsafe impl Sync for CShaderModule {}
+impl Drop for CShaderModule {
+    fn drop(&mut self) {
+        unsafe { wgpuShaderModuleRelease(self.ptr) };
+    }
+}
 
 impl ShaderModuleInterface for CShaderModule {
     fn get_compilation_info(&self) -> std::pin::Pin<Box<dyn ShaderCompilationInfoFuture>> {

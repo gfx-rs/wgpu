@@ -16,25 +16,27 @@ use std::pin::Pin;
 // we catch any panic with `catch_unwind` and store it here. The caller then
 // checks `resume_callback_panic()` after the C function returns to re-raise it
 // on the Rust side where it can propagate normally.
-
-thread_local! {
-    static CALLBACK_PANIC: std::cell::RefCell<Option<Box<dyn std::any::Any + Send + 'static>>> =
-        std::cell::RefCell::new(None);
-}
+//
+// We use a global `Mutex` rather than `thread_local!` so that panics from
+// callbacks that fire spontaneously on wgpu-native's background threads
+// (WGPUCallbackMode_AllowSpontaneous) are visible when `resume_callback_panic`
+// is called on the test/calling thread. Only the first panic is kept; subsequent
+// ones are silently dropped (matching the previous per-thread behaviour).
+pub(crate) static CALLBACK_PANIC: std::sync::Mutex<
+    Option<Box<dyn std::any::Any + Send + 'static>>,
+> = std::sync::Mutex::new(None);
 
 pub(crate) fn catch_callback_panic<F: FnOnce()>(f: F) {
     if let Err(payload) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
-        CALLBACK_PANIC.with(|p| {
-            let mut guard = p.borrow_mut();
-            if guard.is_none() {
-                *guard = Some(payload);
-            }
-        });
+        let mut guard = CALLBACK_PANIC.lock().unwrap();
+        if guard.is_none() {
+            *guard = Some(payload);
+        }
     }
 }
 
 pub(crate) fn resume_callback_panic() {
-    if let Some(payload) = CALLBACK_PANIC.with(|p| p.borrow_mut().take()) {
+    if let Some(payload) = CALLBACK_PANIC.lock().unwrap().take() {
         std::panic::resume_unwind(payload);
     }
 }
