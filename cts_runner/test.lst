@@ -164,7 +164,10 @@ fails-if(vulkan) webgpu:api,operation,vertex_state,correctness:array_stride_zero
 webgpu:api,operation,vertex_state,correctness:non_zero_array_stride_and_attribute_offset:*
 webgpu:api,operation,vertex_state,correctness:setVertexBuffer_offset_and_attribute_offset:*
 
-webgpu:api,validation,buffer,create:*
+webgpu:api,validation,buffer,create:createBuffer_invalid_and_oom,*
+webgpu:api,validation,buffer,create:limit,*
+webgpu:api,validation,buffer,create:size,*
+webgpu:api,validation,buffer,create:usage,*
 webgpu:api,validation,buffer,destroy:*
 webgpu:api,validation,capability_checks,features,clip_distances:*
 webgpu:api,validation,capability_checks,features,texture_component_swizzle:*
@@ -228,7 +231,14 @@ webgpu:api,validation,createBindGroupLayout:visibility,*
 webgpu:api,validation,createBindGroupLayout:visibility:*
 webgpu:api,validation,createPipelineLayout:*
 webgpu:api,validation,createSampler:*
-webgpu:api,validation,createTexture:*
+webgpu:api,validation,createTexture:dimension_type_and_format_compatibility:*
+webgpu:api,validation,createTexture:mipLevelCount,*
+webgpu:api,validation,createTexture:sample_count,*
+webgpu:api,validation,createTexture:sampleCount,*
+webgpu:api,validation,createTexture:texture_size,*
+webgpu:api,validation,createTexture:texture_usage,*
+webgpu:api,validation,createTexture:viewFormats:*
+webgpu:api,validation,createTexture:zero_size_and_usage:*
 webgpu:api,validation,createView:array_layers:*
 webgpu:api,validation,createView:aspect:*
 webgpu:api,validation,createView:cube_faces_square:*
@@ -243,19 +253,7 @@ webgpu:api,validation,encoding,beginRenderPass:*
 webgpu:api,validation,encoding,cmds,clearBuffer:*
 webgpu:api,validation,encoding,cmds,compute_pass:*
 webgpu:api,validation,encoding,cmds,copyBufferToBuffer:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_aspects:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_ranges_with_compressed_texture_formats:*
-// Intermittently fails on dx12, https://github.com/gfx-rs/wgpu/issues/8118
-fails-if(dx12) webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_ranges:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_with_invalid_or_destroyed_texture:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_within_same_texture:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:depth_stencil_copy_restrictions:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:mipmap_level:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:multisampled_copy_restrictions:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:sample_count:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:texture_format_compatibility:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:texture_usage:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:texture,device_mismatch:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:*
 webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="compute%20pass"
 webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="non-pass"
 //FAIL: webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="render%20bundle"
@@ -463,7 +461,7 @@ webgpu:shader,execution,expression,call,builtin,firstLeadingBit:*
 fails-if(dx12) webgpu:shader,execution,expression,call,builtin,textureDimensions:*
 webgpu:shader,execution,expression,call,builtin,textureNumLayers:*
 webgpu:shader,execution,expression,call,builtin,textureNumLevels:*
-webgpu:shader,execution,expression,call,builtin,textureNumSamples:*
+fails-if(dx12) webgpu:shader,execution,expression,call,builtin,textureNumSamples:*
 webgpu:shader,execution,expression,call,builtin,textureSample:sampled_1d_coords:*
 webgpu:shader,execution,expression,call,builtin,textureSampleBaseClampToEdge:2d_coords:stage="c";textureType="texture_2d<f32>";*
 // NOTE: This is supposed to be an exhaustive listing underneath

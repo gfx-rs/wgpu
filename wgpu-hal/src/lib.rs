@@ -219,8 +219,6 @@
     clippy::single_match,
     // Push commands are more regular than macros.
     clippy::vec_init_then_push,
-    // We unsafe impl `Send` for a reason.
-    clippy::non_send_fields_in_send_ty,
     // TODO!
     clippy::missing_safety_doc,
     // It gets in the way a lot and does not prevent bugs in practice.
@@ -1937,7 +1935,7 @@ pub struct InstanceDescriptor<'a> {
     pub memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     pub backend_options: wgt::BackendOptions,
     pub telemetry: Option<Telemetry>,
-    /// This is a borrow because the surrounding `core::Instance` keeps the the owned display handle
+    /// This is a borrow because the surrounding `core::Instance` keeps the owned display handle
     /// alive already.
     pub display: Option<DisplayHandle<'a>>,
 }

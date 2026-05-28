@@ -86,7 +86,7 @@ pub struct CreateBlasDescriptor<L> {
 
 impl<L> CreateBlasDescriptor<L> {
     /// Takes a closure and maps the label of the blas descriptor into another.
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CreateBlasDescriptor<K> {
+    pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> CreateBlasDescriptor<K> {
         CreateBlasDescriptor {
             label: fun(&self.label),
             flags: self.flags,
@@ -112,7 +112,7 @@ pub struct CreateTlasDescriptor<L> {
 
 impl<L> CreateTlasDescriptor<L> {
     /// Takes a closure and maps the label of the blas descriptor into another.
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CreateTlasDescriptor<K> {
+    pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> CreateTlasDescriptor<K> {
         CreateTlasDescriptor {
             label: fun(&self.label),
             flags: self.flags,

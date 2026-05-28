@@ -46,6 +46,10 @@ impl ParseError {
         &self.message
     }
 
+    pub fn notes(&self) -> impl ExactSizeIterator<Item = &str> + '_ {
+        self.notes.iter().map(|note| note.as_str())
+    }
+
     fn diagnostic(&self) -> Diagnostic<()> {
         let diagnostic = Diagnostic::error()
             .with_message(self.message.to_string())
@@ -129,6 +133,36 @@ impl core::fmt::Display for ParseError {
 }
 
 impl core::error::Error for ParseError {}
+
+#[cfg(test)]
+mod parse_error_tests {
+
+    #[test]
+    fn test_notes() {
+        use crate::front::wgsl::parse_str;
+        // wgsl code and notes taken from: `cross_vec2()` in naga/tests/naga/wgsl_errors.rs
+        assert_eq!(
+            parse_str(
+                r#"
+            fn x() -> f32 {
+                return cross(vec2(0., 1.), vec2(0., 1.));
+            }
+        "#,
+            )
+            .unwrap_err()
+            .notes()
+            .collect::<super::Vec<_>>(),
+            [
+                "`cross` accepts the following types for argument #1:",
+                "allowed type: vec3<{AbstractFloat}>",
+                "allowed type: vec3<f32>",
+                "allowed type: vec3<f16>",
+                "allowed type: vec3<f64>"
+            ]
+            .to_vec()
+        );
+    }
+}
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ExpectedToken<'a> {
