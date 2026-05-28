@@ -714,15 +714,11 @@ fn calculate_src_offsets(
     }
 
     let max_dynamic_offset = buffer_size - binding_size;
-    let max_dynamic_offset_index = max_dynamic_offset / dynamic_offset_stride;
+    let out_dynamic_offset =
+        max_dynamic_offset.min(offset / dynamic_offset_stride * dynamic_offset_stride);
+    let out_offset = offset - out_dynamic_offset;
 
-    let src_dynamic_offset_index = offset / dynamic_offset_stride;
-
-    let src_dynamic_offset =
-        src_dynamic_offset_index.min(max_dynamic_offset_index) * dynamic_offset_stride;
-    let src_offset = offset - src_dynamic_offset;
-
-    (src_dynamic_offset, src_offset)
+    (out_dynamic_offset, out_offset)
 }
 
 #[derive(Debug)]
