@@ -725,15 +725,12 @@ fn handle_dst_texture_init(
     // clear first since we don't track subrects. This means that in rare cases
     // even a *destination* texture of a transfer may need an immediate texture
     // init.
-    let dst_init_kind = if has_copy_partial_init_tracker_coverage(
-        copy_size,
-        destination.mip_level,
-        &texture.desc,
-    ) {
-        MemoryInitKind::NeedsInitializedMemory
-    } else {
-        MemoryInitKind::ImplicitlyInitialized
-    };
+    let dst_init_kind =
+        if has_copy_partial_init_tracker_coverage(copy_size, destination, &texture.desc) {
+            MemoryInitKind::NeedsInitializedMemory
+        } else {
+            MemoryInitKind::ImplicitlyInitialized
+        };
 
     handle_texture_init(state, dst_init_kind, destination, copy_size, texture)?;
     Ok(())
