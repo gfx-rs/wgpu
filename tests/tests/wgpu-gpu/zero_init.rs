@@ -19,7 +19,7 @@ static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_A
     GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
     .run_async(|mut ctx| async move {
-        let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
+        let mut case = DiscardTestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
         case.create_command_encoder();
         case.discard();
         case.submit_command_encoder();
@@ -36,7 +36,7 @@ static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_I
     GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
     .run_async(|mut ctx| async move {
-        let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
+        let mut case = DiscardTestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
         case.create_command_encoder();
         case.discard();
         case.copy_texture_to_buffer();
@@ -63,7 +63,7 @@ static DISCARDING_DEPTH_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_I
             TextureFormat::Depth24PlusStencil8,
             TextureFormat::Depth32Float,
         ] {
-            let mut case = TestCase::new(&mut ctx, format);
+            let mut case = DiscardTestCase::new(&mut ctx, format);
             case.create_command_encoder();
             case.discard();
             case.copy_texture_to_buffer();
@@ -92,7 +92,7 @@ static DISCARDING_EITHER_DEPTH_OR_STENCIL_ASPECT_TEST: GpuTestConfiguration =
                 TextureFormat::Depth24PlusStencil8,
                 TextureFormat::Depth32Float,
             ] {
-                let mut case = TestCase::new(&mut ctx, format);
+                let mut case = DiscardTestCase::new(&mut ctx, format);
                 case.create_command_encoder();
                 case.discard_depth();
                 case.submit_command_encoder();
@@ -109,7 +109,7 @@ static DISCARDING_EITHER_DEPTH_OR_STENCIL_ASPECT_TEST: GpuTestConfiguration =
             }
         });
 
-struct TestCase<'ctx> {
+struct DiscardTestCase<'ctx> {
     ctx: &'ctx mut TestingContext,
     format: TextureFormat,
     texture: Texture,
@@ -117,7 +117,7 @@ struct TestCase<'ctx> {
     encoder: Option<CommandEncoder>,
 }
 
-impl<'ctx> TestCase<'ctx> {
+impl<'ctx> DiscardTestCase<'ctx> {
     pub fn new(ctx: &'ctx mut TestingContext, format: TextureFormat) -> Self {
         let extra_usages = match format {
             TextureFormat::Depth24Plus | TextureFormat::Depth24PlusStencil8 => {

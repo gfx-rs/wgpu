@@ -81,7 +81,7 @@ mod vertex_formats;
 mod vertex_indices;
 mod vertex_state;
 mod write_texture;
-mod zero_init_texture_after_discard;
+mod zero_init;
 
 fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     let mut tests = Vec::new();
@@ -163,7 +163,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     vertex_indices::all_tests(&mut tests);
     vertex_state::all_tests(&mut tests);
     write_texture::all_tests(&mut tests);
-    zero_init_texture_after_discard::all_tests(&mut tests);
+    zero_init::all_tests(&mut tests);
     naga_capabilities::all_tests(&mut tests);
 
     tests
