@@ -4,9 +4,9 @@
 
 pub use crate::dispatch::*;
 
+use crate::cmp::AtomicU64;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
-use crate::cmp::AtomicU64;
 use core::sync::atomic::Ordering;
 
 macro_rules! dyn_type {
