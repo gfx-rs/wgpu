@@ -11,18 +11,25 @@ static INSTANCE_FACTORY: core::sync::atomic::AtomicUsize = core::sync::atomic::A
 /// The factory receives the [`InstanceDescriptor`] and returns `Ok(Instance)` to
 /// take ownership of the request, or `Err(desc)` to fall through to the built-in backend.
 ///
-/// Only the first call takes effect; subsequent calls are ignored.
+/// Only the first call takes effect.
+///
+/// Returns `true` if this call registered the factory, or `false` if a factory
+/// was already registered and this call was ignored.
 ///
 /// This can be safely called from a constructor.
 #[cfg(custom)]
-pub fn set_instance_factory(f: fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor>) {
+pub fn set_instance_factory(
+    f: fn(InstanceDescriptor) -> Result<Instance, InstanceDescriptor>,
+) -> bool {
     // 0 is the sentinel for "not set"; fn pointers are never null.
-    let _ = INSTANCE_FACTORY.compare_exchange(
-        0,
-        f as usize,
-        core::sync::atomic::Ordering::Release,
-        core::sync::atomic::Ordering::Relaxed,
-    );
+    INSTANCE_FACTORY
+        .compare_exchange(
+            0,
+            f as usize,
+            core::sync::atomic::Ordering::Release,
+            core::sync::atomic::Ordering::Relaxed,
+        )
+        .is_ok()
 }
 
 bitflags::bitflags! {
