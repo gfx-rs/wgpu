@@ -852,10 +852,8 @@ impl Buffer {
     /// Other errors are returned within `BufferMapPendingClosure`.
     #[must_use]
     pub(crate) fn map(&self, snatch_guard: &SnatchGuard) -> Option<BufferMapPendingClosure> {
-        // This _cannot_ be inlined into the match. If it is, the lock will be held
-        // open through the whole match, resulting in a deadlock when we try to re-lock
-        // the buffer back to active.
-        let mapping = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
+        let mut map_state = self.map_state.lock();
+        let mapping = mem::replace(&mut *map_state, BufferMapState::Idle);
         let pending_mapping = match mapping {
             BufferMapState::Waiting(pending_mapping) => pending_mapping,
             // Mapping cancelled
@@ -863,7 +861,7 @@ impl Buffer {
             // Mapping queued at least twice by map -> unmap -> map
             // and was already successfully mapped below
             BufferMapState::Active { .. } => {
-                *self.map_state.lock() = mapping;
+                *map_state = mapping;
                 return None;
             }
             _ => panic!("No pending mapping."),
@@ -879,7 +877,7 @@ impl Buffer {
                 snatch_guard,
             ) {
                 Ok(mapping) => {
-                    *self.map_state.lock() = BufferMapState::Active {
+                    *map_state = BufferMapState::Active {
                         mapping,
                         range: pending_mapping.range.clone(),
                         host,
@@ -889,7 +887,7 @@ impl Buffer {
                 Err(e) => Err(e),
             }
         } else {
-            *self.map_state.lock() = BufferMapState::Active {
+            *map_state = BufferMapState::Active {
                 mapping: hal::BufferMapping {
                     ptr: NonNull::dangling(),
                     is_coherent: true,
@@ -1067,6 +1065,53 @@ impl Buffer {
         if let Some(last_submit_index) = last_submit_index {
             life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use alloc::sync::Arc;
+    use core::time::Duration;
+    use std::sync::mpsc;
+
+    use super::*;
+
+    #[test]
+    fn temporary_idle_map_state_is_not_observable_without_lock() {
+        let map_state = Arc::new(Mutex::new(rank::BUFFER_MAP_STATE, BufferMapState::Idle));
+        let mut guard = map_state.lock();
+        let previous = mem::replace(&mut *guard, BufferMapState::Idle);
+
+        let (started_sender, started_receiver) = mpsc::channel();
+        let (acquired_sender, acquired_receiver) = mpsc::channel();
+        let map_state_clone = Arc::clone(&map_state);
+
+        std::thread::scope(|scope| {
+            scope.spawn(move || {
+                started_sender.send(()).unwrap();
+                let _guard = map_state_clone.lock();
+                acquired_sender.send(()).unwrap();
+            });
+
+            started_receiver.recv().unwrap();
+            assert!(acquired_receiver
+                .recv_timeout(Duration::from_millis(50))
+                .is_err());
+
+            *guard = BufferMapState::Active {
+                mapping: hal::BufferMapping {
+                    ptr: NonNull::dangling(),
+                    is_coherent: true,
+                },
+                range: 0..0,
+                host: HostMap::Read,
+            };
+            drop(guard);
+
+            acquired_receiver.recv().unwrap();
+        });
+
+        drop(previous);
     }
 }
 

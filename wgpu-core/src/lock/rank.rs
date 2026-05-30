@@ -168,6 +168,7 @@ define_lock_ranks! {
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
     rank BUFFER_MAP_STATE "Buffer::map_state" followed by {
+        BUFFER_INITIALIZATION_STATUS,
         DEVICE_TRACE,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
