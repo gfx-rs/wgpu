@@ -70,6 +70,16 @@ fn store_hal_ops(store: StoreOp) -> hal::AttachmentOps {
     }
 }
 
+// Stencil clear and reference value should take the LSBs.
+//
+// Currently only 8-bit stencil formats are supported, so `value & 255` is OK.
+//
+// This fixes CTS `webgpu:api,operation,render_pass,clear_value:stencil_clear_value:*`
+// on metal and buggy drivers.
+fn truncate_stencil_value(value: u32) -> u32 {
+    value & 255
+}
+
 /// Describes an individual channel within a render pass, such as color, depth, or stencil.
 ///
 /// A channel must either be read-only, or it must specify both load and store
@@ -1833,7 +1843,7 @@ impl Global {
             }
 
             arc_desc.depth_stencil_attachment =
-            // https://gpuweb.github.io/gpuweb/#abstract-opdef-gpurenderpassdepthstencilattachment-gpurenderpassdepthstencilattachment-valid-usage
+                // https://gpuweb.github.io/gpuweb/#abstract-opdef-gpurenderpassdepthstencilattachment-gpurenderpassdepthstencilattachment-valid-usage
                 if let Some(depth_stencil_attachment) = desc.depth_stencil_attachment {
                     let view = texture_views.get(depth_stencil_attachment.view).get()?;
                     view.same_device(device)?;
@@ -1868,7 +1878,9 @@ impl Global {
                             ResolvedPassChannel::ReadOnly
                         },
                         stencil: if format.has_stencil_aspect() {
-                            depth_stencil_attachment.stencil.resolve(|clear| Ok(clear.unwrap_or_default()))?
+                            depth_stencil_attachment.stencil.resolve(|clear| {
+                                Ok(truncate_stencil_value(clear.unwrap_or_default()))
+                            })?
                         } else {
                             if depth_stencil_attachment.stencil.load_op.is_some() || depth_stencil_attachment.stencil.store_op.is_some() {
                                 return Err(RenderPassErrorInner::InvalidAttachment(AttachmentError::StencilOpsWithoutAspect {
@@ -3502,7 +3514,7 @@ impl Global {
     ) -> Result<(), PassStateError> {
         let scope = PassErrorScope::SetStencilReference;
         let base = pass_base!(pass, scope);
-
+        let value = truncate_stencil_value(value);
         base.commands
             .push(ArcRenderCommand::SetStencilReference(value));
 
