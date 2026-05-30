@@ -581,7 +581,7 @@ fn copy_buffer_to_texture_forbidden_format_aspect() {
     }
 }
 
-/// Ensures that attempting to create a texture with [`wgpu::TextureUsages::TRANSIENT`]
+/// Ensures that attempting to create a texture with [`wgpu::TextureUsages::TRANSIENT_ATTACHMENT`]
 /// and its unsupported usages fails validation.
 #[test]
 fn transient_invalid_usage() {
@@ -595,7 +595,7 @@ fn transient_invalid_usage() {
 
     let invalid_usages = wgpu::TextureUsages::all()
         - wgpu::TextureUsages::RENDER_ATTACHMENT
-        - wgpu::TextureUsages::TRANSIENT;
+        - wgpu::TextureUsages::TRANSIENT_ATTACHMENT;
 
     for usage in invalid_usages {
         let invalid_texture_descriptor = wgpu::TextureDescriptor {
@@ -605,13 +605,15 @@ fn transient_invalid_usage() {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT | usage,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TRANSIENT_ATTACHMENT
+                | usage,
             view_formats: &[],
         };
         fail(
             &device,
             || device.create_texture(&invalid_texture_descriptor),
-            Some(&format!("Texture usage TextureUsages(TRANSIENT) is not compatible with texture usage {usage:?}")),
+            Some(&format!("Texture usage TextureUsages(TRANSIENT_ATTACHMENT) is not compatible with texture usage {usage:?}")),
         );
     }
 
@@ -622,17 +624,17 @@ fn transient_invalid_usage() {
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::TRANSIENT,
+        usage: wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
         view_formats: &[],
     };
     fail(
         &device,
         || device.create_texture(&invalid_texture_descriptor),
-        Some("Invalid usage flags TextureUsages(TRANSIENT)"),
+        Some("Invalid usage flags TextureUsages(TRANSIENT_ATTACHMENT)"),
     );
 }
 
-/// Ensures that attempting to use a texture of [`wgpu::TextureUsages::TRANSIENT`]
+/// Ensures that attempting to use a texture of [`wgpu::TextureUsages::TRANSIENT_ATTACHMENT`]
 /// with [`wgpu::StoreOp::Store`] fails validation.
 #[test]
 fn transient_invalid_storeop() {
@@ -651,7 +653,7 @@ fn transient_invalid_storeop() {
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
         view_formats: &[],
     });
 
@@ -681,6 +683,6 @@ fn transient_invalid_storeop() {
 
             encoder.finish()
         },
-      Some("Color attachment's usage contains TextureUsages(TRANSIENT). This can only be used with StoreOp::Discard, but StoreOp::Store was provided")
+      Some("Color attachment with `TRANSIENT_ATTACHMENT` usage can only be used with (`LoadOp::Clear`/`LoadOp::DontCare`, `StoreOp::Discard`), but `(Clear(Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }), Store)` was provided")
     );
 }

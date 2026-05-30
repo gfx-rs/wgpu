@@ -183,12 +183,14 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
   - `TextureDescriptor::map_label_and_view_formats` and `SurfaceConfiguration::map_view_formats` now take `FnOnce(&V)` instead of `FnOnce(V)`.
   - All `map_label` helpers except `CreateShaderModuleDescriptorPassthrough` now have the signature `map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K)` (previously the lifetimes were implicit and thus could differ).
 - Relaxed locking within `wgpu-core` to enable queue submission processing on one thread to proceed while another thread is blocked in a device poll. To facilitate this, `wgpu-hal` fences are now internally synchronized. By @Vecvec in [#9475](https://github.com/gfx-rs/wgpu/pull/9475).
+- BREAKING: `AdapterInfo::transient_saves_memory` now is `Option<bool>` instead of `bool`. It is `None` on web and `Some` on native platforms. By @beicause in [#9568](https://github.com/gfx-rs/wgpu/pull/9568).
 
 #### Validation
 
 - Add clip distances validation for `maxInterStageShaderVariables`. By @ErichDonGubler in [#8762](https://github.com/gfx-rs/wgpu/pull/8762). This may break some existing programs, but it compiles with the WebGPU spec.
 - Bring immediates in line with webgpu spec. By @atlv24 in [#9280](https://github.com/gfx-rs/wgpu/pull/9280).
 - Validate `LoadOp` and `StoreOp` are `None` for attachments without corresponding depth or stencil aspect. By @beicause in [#9567](https://github.com/gfx-rs/wgpu/pull/9567).
+- BREAKING: `TextureUsages::TRANSIENT` is renamed to `TextureUsages::TRANSIENT_ATTACHMENT` and brought in line with WebGPU spec. By @beicause in [#9568](https://github.com/gfx-rs/wgpu/pull/9568).
 
 #### DX12
 

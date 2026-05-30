@@ -787,8 +787,11 @@ pub enum ColorAttachmentError {
         mip_level: u32,
         depth_or_array_layer: u32,
     },
-    #[error("Color attachment's usage contains {0:?}. This can only be used with StoreOp::{1:?}, but StoreOp::{2:?} was provided")]
-    InvalidUsageForStoreOp(TextureUsages, StoreOp, StoreOp),
+    #[error(
+        "Color attachment with `TRANSIENT_ATTACHMENT` usage can only be used with \
+        (`LoadOp::Clear`/`LoadOp::DontCare`, `StoreOp::Discard`), but `{0:?}` was provided"
+    )]
+    InvalidTransientAttachmentOp((LoadOp<Color>, StoreOp)),
 }
 
 impl WebGpuError for ColorAttachmentError {
@@ -802,6 +805,16 @@ impl WebGpuError for ColorAttachmentError {
 pub enum AttachmentError {
     #[error("The format of the depth-stencil attachment ({0:?}) is not a depth-or-stencil format")]
     InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
+    #[error(
+        "Depth attachment with `TRANSIENT_ATTACHMENT` usage can only be used with \
+        (`LoadOp::Clear`/`LoadOp::DontCare`, `StoreOp::Discard`), but `{0:?}` was provided"
+    )]
+    InvalidTransientDepthAttachmentOp((Option<LoadOp<Option<f32>>>, Option<StoreOp>)),
+    #[error(
+        "Stencil attachment with `TRANSIENT_ATTACHMENT` usage can only be used with \
+        (`LoadOp::Clear`/`LoadOp::DontCare`, `StoreOp::Discard`), but `{0:?}` was provided"
+    )]
+    InvalidTransientStencilAttachmentOp((Option<LoadOp<Option<u32>>>, Option<StoreOp>)),
     #[error("LoadOp must be None for read-only attachments")]
     ReadOnlyWithLoad,
     #[error("StoreOp must be None for read-only attachments")]
@@ -851,6 +864,11 @@ pub enum RenderPassErrorInner {
     UnsupportedResolveTargetFormat {
         location: AttachmentErrorLocation,
         format: wgt::TextureFormat,
+    },
+    #[error("The usage of the {location} (`{usage:?}`) is not resolvable")]
+    UnsupportedResolveTargetUsage {
+        location: AttachmentErrorLocation,
+        usage: TextureUsages,
     },
     #[error("No color attachments or depth attachments were provided, at least one attachment of any kind must be provided")]
     MissingAttachments,
@@ -1034,6 +1052,7 @@ impl WebGpuError for RenderPassError {
 
             RenderPassErrorInner::InvalidParentEncoder
             | RenderPassErrorInner::UnsupportedResolveTargetFormat { .. }
+            | RenderPassErrorInner::UnsupportedResolveTargetUsage { .. }
             | RenderPassErrorInner::MissingAttachments
             | RenderPassErrorInner::TextureViewIsNotRenderable { .. }
             | RenderPassErrorInner::AttachmentsDimensionMismatch { .. }
@@ -1528,6 +1547,16 @@ impl RenderPassInfo {
                         format: resolve_view.desc.format,
                     });
                 }
+                if resolve_view
+                    .desc
+                    .usage
+                    .contains(TextureUsages::TRANSIENT_ATTACHMENT)
+                {
+                    return Err(RenderPassErrorInner::UnsupportedResolveTargetUsage {
+                        location: resolve_location,
+                        usage: resolve_view.desc.usage,
+                    });
+                }
 
                 texture_memory_actions.register_implicit_init(
                     &resolve_view.parent,
@@ -1797,15 +1826,17 @@ impl Global {
                     let view = texture_views.get(*view_id).get()?;
                     view.same_device(device)?;
 
-                    if view.desc.usage.contains(TextureUsages::TRANSIENT)
-                        && *store_op != StoreOp::Discard
+                    if view
+                        .desc
+                        .usage
+                        .contains(TextureUsages::TRANSIENT_ATTACHMENT)
+                        && (!matches!(*load_op, LoadOp::Clear(_) | LoadOp::DontCare(_))
+                            || *store_op != StoreOp::Discard)
                     {
                         return Err(RenderPassErrorInner::ColorAttachment(
-                            ColorAttachmentError::InvalidUsageForStoreOp(
-                                TextureUsages::TRANSIENT,
-                                StoreOp::Discard,
-                                *store_op,
-                            ),
+                            ColorAttachmentError::InvalidTransientAttachmentOp((
+                                *load_op, *store_op,
+                            )),
                         ));
                     }
 
@@ -1843,6 +1874,26 @@ impl Global {
                         return Err(RenderPassErrorInner::InvalidAttachment(AttachmentError::InvalidDepthStencilAttachmentFormat(
                             view.desc.format,
                         )));
+                    }
+
+                    if view.desc.usage.contains(TextureUsages::TRANSIENT_ATTACHMENT){
+                       if format.has_depth_aspect() && !matches!(
+                            (depth_stencil_attachment.depth.load_op, depth_stencil_attachment.depth.store_op),
+                            (Some(LoadOp::Clear(_)), Some(StoreOp::Discard)) | (Some(LoadOp::DontCare(_)), Some(StoreOp::Discard))
+                        ) {
+                            return Err(RenderPassErrorInner::InvalidAttachment(AttachmentError::InvalidTransientDepthAttachmentOp(
+                                (depth_stencil_attachment.depth.load_op, depth_stencil_attachment.depth.store_op),
+                            )));
+                       }
+
+                       if format.has_stencil_aspect() && !matches!(
+                            (depth_stencil_attachment.stencil.load_op, depth_stencil_attachment.stencil.store_op),
+                            (Some(LoadOp::Clear(_)), Some(StoreOp::Discard)) | (Some(LoadOp::DontCare(_)), Some(StoreOp::Discard))
+                        ) {
+                            return Err(RenderPassErrorInner::InvalidAttachment(AttachmentError::InvalidTransientStencilAttachmentOp(
+                                (depth_stencil_attachment.stencil.load_op, depth_stencil_attachment.stencil.store_op),
+                            )));
+                        }
                     }
 
                     Some(ResolvedRenderPassDepthStencilAttachment {

@@ -1708,6 +1708,8 @@ pub enum CreateTextureError {
     InvalidFormatUsages(wgt::TextureUsages, wgt::TextureFormat, bool),
     #[error("The view format {0:?} is not compatible with texture format {1:?}, only changing srgb-ness is allowed.")]
     InvalidViewFormat(wgt::TextureFormat, wgt::TextureFormat),
+    #[error("Transient texture view formats must be empty")]
+    InvalidTransientTextureViewFormats,
     #[error("Texture usages {0:?} are not allowed on a texture of dimensions {1:?}")]
     InvalidDimensionUsages(wgt::TextureUsages, wgt::TextureDimension),
     #[error("Texture usage STORAGE_BINDING is not allowed for multisampled textures")]
@@ -1718,6 +1720,10 @@ pub enum CreateTextureError {
     InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
     #[error("Multisampled textures must have RENDER_ATTACHMENT usage")]
     MultisampledNotRenderAttachment,
+    #[error("Transient texture mip level count ({0}) must be 1")]
+    InvalidTransientTextureMipLevelCount(u32),
+    #[error("Transient texture layer count ({0}) must be 1")]
+    InvalidTransientTextureLayerCount(u32),
     #[error("Texture format {0:?} can't be used due to missing features")]
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
     #[error(transparent)]
@@ -1756,6 +1762,9 @@ impl WebGpuError for CreateTextureError {
             | Self::InvalidMultisampledStorageBinding
             | Self::InvalidMultisampledFormat(_)
             | Self::InvalidSampleCount(..)
+            | Self::InvalidTransientTextureMipLevelCount(_)
+            | Self::InvalidTransientTextureLayerCount(_)
+            | Self::InvalidTransientTextureViewFormats
             | Self::MultisampledNotRenderAttachment => ErrorType::Validation,
         }
     }
@@ -1956,6 +1965,13 @@ pub enum CreateTextureViewError {
         texture: wgt::TextureFormat,
         view: wgt::TextureFormat,
     },
+    #[error(
+        "The texture view (`{view:?}`) from transient texture (`{texture:?}`) must have the same usage"
+    )]
+    InvalidTransientTextureViewUsage {
+        texture: wgt::TextureUsages,
+        view: wgt::TextureUsages,
+    },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
@@ -1984,6 +2000,7 @@ impl WebGpuError for CreateTextureViewError {
             | Self::TextureViewFormatNotRenderable(_)
             | Self::TextureViewFormatNotStorage(_)
             | Self::InvalidTextureViewUsage { .. }
+            | Self::InvalidTransientTextureViewUsage { .. }
             | Self::MissingFeatures(_) => ErrorType::Validation,
         }
     }

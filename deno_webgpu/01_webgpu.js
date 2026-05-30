@@ -467,6 +467,9 @@ class GPUTextureUsage {
     webidl.illegalConstructor();
   }
 
+  // TODO: CTS `webgpu:api,validation,createTexture:new_usages:*` fails
+  // because it use `Object.values` to check exposed usages
+  // which do not include these static getter
   static get COPY_SRC() {
     return 0x01;
   }
@@ -481,6 +484,9 @@ class GPUTextureUsage {
   }
   static get RENDER_ATTACHMENT() {
     return 0x10;
+  }
+  static get TRANSIENT_ATTACHMENT() {
+    return 0x20;
   }
 }
 

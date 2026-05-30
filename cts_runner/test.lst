@@ -45,7 +45,7 @@ webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_t
 webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=true;stencilReadOnly=true
 webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="stencil8";*
 
-webgpu:api,operation,render_pass,storeOp:*
+webgpu:api,operation,render_pass,*
 webgpu:api,operation,render_pipeline,overrides:*
 webgpu:api,operation,render_pipeline,pipeline_output_targets:color,component_count,blend:*
 webgpu:api,operation,rendering,basic:clear:*
@@ -130,12 +130,15 @@ webgpu:api,validation,createBindGroupLayout:visibility,*
 webgpu:api,validation,createBindGroupLayout:visibility:*
 webgpu:api,validation,createPipelineLayout:*
 webgpu:api,validation,createSampler:*
+webgpu:api,validation,createTexture:depthOrArrayLayers_and_mipLevelCount_for_transient_attachments:*
 webgpu:api,validation,createTexture:dimension_type_and_format_compatibility:*
 webgpu:api,validation,createTexture:mipLevelCount,*
 webgpu:api,validation,createTexture:sample_count,*
 webgpu:api,validation,createTexture:sampleCount,*
 webgpu:api,validation,createTexture:texture_size,*
 webgpu:api,validation,createTexture:texture_usage,*
+//FAIL: webgpu:api,validation,createTexture:usage:*
+// See the comments about `GPUTextureUsage` in `deno_webgpu/01_webgpu.js`
 webgpu:api,validation,createTexture:viewFormats:*
 webgpu:api,validation,createTexture:zero_size_and_usage:*
 webgpu:api,validation,createView:array_layers:*
@@ -144,6 +147,8 @@ webgpu:api,validation,createView:cube_faces_square:*
 webgpu:api,validation,createView:dimension:*
 webgpu:api,validation,createView:format:*
 webgpu:api,validation,createView:mip_levels:*
+//FAIL: webgpu:api,validation,createView:texture_state:*
+//FAIL: webgpu:api,validation,createView:texture_view_usage_of_multiple_usages:*
 webgpu:api,validation,createView:texture_view_usage_with_view_format:*
 webgpu:api,validation,createView:texture_view_usage:*
 webgpu:api,validation,debugMarker:*
