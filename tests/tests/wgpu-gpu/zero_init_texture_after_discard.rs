@@ -274,7 +274,7 @@ impl<'ctx> TestCase<'ctx> {
                 depth_stencil_attachment: self.format.is_depth_stencil_format().then_some(
                     RenderPassDepthStencilAttachment {
                         view: &self.texture.create_view(&TextureViewDescriptor::default()),
-                        depth_ops: Some(Operations {
+                        depth_ops: self.format.has_depth_aspect().then_some(Operations {
                             load: LoadOp::Load,
                             store: StoreOp::Discard,
                         }),
@@ -304,7 +304,7 @@ impl<'ctx> TestCase<'ctx> {
                             load: LoadOp::Clear(0.0),
                             store: StoreOp::Store,
                         }),
-                        stencil_ops: Some(Operations {
+                        stencil_ops: self.format.has_stencil_aspect().then_some(Operations {
                             load: LoadOp::Load,
                             store: StoreOp::Discard,
                         }),

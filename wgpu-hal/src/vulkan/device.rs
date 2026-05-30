@@ -10,7 +10,7 @@ use core::{
 use arrayvec::ArrayVec;
 use ash::{ext, vk};
 use hashbrown::hash_map::Entry;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 
 use super::{conv, descriptor::DescriptorCounts, RawTlasInstance};
 use crate::TlasInstance;
@@ -2279,11 +2279,11 @@ impl crate::Device for super::Device {
 
             super::Fence::TimelineSemaphore(raw)
         } else {
-            super::Fence::FencePool {
+            super::Fence::FencePool(RwLock::new(super::FencePool {
                 last_completed: 0,
                 active: Vec::new(),
                 free: Vec::new(),
-            }
+            }))
         })
     }
     unsafe fn destroy_fence(&self, fence: super::Fence) {
@@ -2291,13 +2291,17 @@ impl crate::Device for super::Device {
             super::Fence::TimelineSemaphore(raw) => {
                 unsafe { self.shared.raw.destroy_semaphore(raw, None) };
             }
-            super::Fence::FencePool {
-                active,
-                free,
-                last_completed: _,
-            } => {
+            super::Fence::FencePool(pool) => {
+                let super::FencePool {
+                    active,
+                    free,
+                    last_completed: _,
+                } = pool.into_inner();
+
                 for (_, raw) in active {
-                    unsafe { self.shared.raw.destroy_fence(raw, None) };
+                    unsafe {
+                        self.shared.raw.destroy_fence(Arc::into_inner(raw).expect("Fence should have its reference count be one by the end of each function"), None)
+                    };
                 }
                 for raw in free {
                     unsafe { self.shared.raw.destroy_fence(raw, None) };
@@ -2829,17 +2833,28 @@ impl super::DeviceShared {
                     Err(other) => Err(super::map_host_device_oom_and_lost_err(other)),
                 }
             }
-            super::Fence::FencePool {
-                last_completed,
-                ref active,
-                free: _,
-            } => {
+            super::Fence::FencePool(ref pool) => {
+                let pool = pool.read();
+                let super::FencePool {
+                    last_completed,
+                    ref active,
+                    free: _,
+                } = *pool;
                 if wait_value <= last_completed {
                     Ok(true)
                 } else {
                     match active.iter().find(|&&(value, _)| value >= wait_value) {
-                        Some(&(_, raw)) => {
-                            match unsafe { self.raw.wait_for_fences(&[raw], true, timeout_ns) } {
+                        Some((_, fence)) => {
+                            // clone to show we are using this fence while the pool is unlocked.
+                            let fence = fence.clone();
+                            drop(pool);
+                            match unsafe {
+                                self.raw.wait_for_fences(
+                                    core::slice::from_ref(&fence),
+                                    true,
+                                    timeout_ns,
+                                )
+                            } {
                                 Ok(()) => Ok(true),
                                 Err(vk::Result::TIMEOUT) => Ok(false),
                                 Err(other) => Err(super::map_host_device_oom_and_lost_err(other)),
