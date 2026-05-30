@@ -52,7 +52,7 @@ webgpu:api,operation,render_pass,clear_value:stencil_clear_value:stencilClearVal
 webgpu:api,operation,render_pass,clear_value:stencil_clear_value:stencilClearValue=258;applyStencilClearValueAsStencilReferenceValue=false;*
 fails-if(metal) webgpu:api,operation,render_pass,clear_value:stencil_clear_value:stencilClearValue=258;applyStencilClearValueAsStencilReferenceValue=true;*
 webgpu:api,operation,render_pass,clear_value:stencil_clear_value:stencilClearValue=65539;applyStencilClearValueAsStencilReferenceValue=false;*
-fails-if(metal) webgpu:api,operation,render_pass,clear_value:stencil_clear_value:stencilClearValue=65539;applyStencilClearValueAsStencilReferenceValue=true
+fails-if(metal) webgpu:api,operation,render_pass,clear_value:stencil_clear_value:stencilClearValue=65539;applyStencilClearValueAsStencilReferenceValue=true;*
 webgpu:api,operation,render_pass,resolve:*
 webgpu:api,operation,render_pass,storeOp:*
 webgpu:api,operation,render_pass,storeop2:*
