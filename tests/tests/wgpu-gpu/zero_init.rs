@@ -1,3 +1,11 @@
+//! Tests for zero-initialization of resources.
+//!
+//! It is common for allocations on a fresh heap to coincidentally be zero, which can cause
+//! these tests to produce false negatives. One way to make them more reliable is to run
+//! them on llvmpipe with `LVP_POISON_MEMORY=true` in the environment.
+
+use core::num::NonZeroU64;
+
 use wgpu::*;
 use wgpu_test::{
     gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, GpuTestInitializer,
@@ -18,6 +26,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         WRITE_TEXTURE_PLANE1_LEAVES_PLANE0_UNINIT_P010,
         WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH24PLUS_STENCIL8,
         WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH32FLOAT_STENCIL8,
+        DYNAMIC_OFFSET_BUFFER_BINDING_INIT,
     ]);
 }
 
@@ -820,3 +829,146 @@ async fn check_write_aspect_leaves_other_uninit(
         data[nonzero.unwrap()],
     );
 }
+
+// Test that buffer ranges are properly initialized when used with a dynamic offset binding.
+#[gpu_test]
+static DYNAMIC_OFFSET_BUFFER_BINDING_INIT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| async move {
+        // `OFFSET` must be aligned to minStorageBufferOffsetAlignment; WebGPU guarantees 256.
+        const OFFSET: u32 = 256;
+        const BUFFER_SIZE: u64 = 4096;
+        const BINDING_SIZE: u64 = 4;
+
+        let input = ctx.device.create_buffer(&BufferDescriptor {
+            label: None,
+            size: BUFFER_SIZE,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+        let output = ctx.device.create_buffer(&BufferDescriptor {
+            label: None,
+            size: BINDING_SIZE,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let readback = ctx.device.create_buffer(&BufferDescriptor {
+            label: None,
+            size: BINDING_SIZE,
+            usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Shader reads input[0] (which the dynamic offset shifts to `OFFSET / 4`) and writes it
+        // to output[0].
+        let shader_src = "
+            @group(0) @binding(0) var<storage, read> input: array<u32, 1>;
+            @group(0) @binding(1) var<storage, read_write> output: array<u32, 1>;
+            @compute @workgroup_size(1)
+            fn main() {
+                output[0] = input[0];
+            }
+            ";
+        let module = ctx.device.create_shader_module(ShaderModuleDescriptor {
+            label: None,
+            source: ShaderSource::Wgsl(shader_src.into()),
+        });
+        let bgl = ctx
+            .device
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: true,
+                            min_binding_size: NonZeroU64::new(4),
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: NonZeroU64::new(4),
+                        },
+                        count: None,
+                    },
+                ],
+            });
+        let pipeline_layout = ctx
+            .device
+            .create_pipeline_layout(&PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[Some(&bgl)],
+                immediate_size: 0,
+            });
+        let pipeline = ctx
+            .device
+            .create_compute_pipeline(&ComputePipelineDescriptor {
+                label: None,
+                layout: Some(&pipeline_layout),
+                module: &module,
+                entry_point: Some("main"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
+
+        let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &bgl,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::Buffer(BufferBinding {
+                        buffer: &input,
+                        offset: 0,
+                        size: NonZeroU64::new(4),
+                    }),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::Buffer(BufferBinding {
+                        buffer: &output,
+                        offset: 0,
+                        size: NonZeroU64::new(4),
+                    }),
+                },
+            ],
+        });
+
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor { label: None });
+        {
+            let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[OFFSET]);
+            pass.dispatch_workgroups(1, 1, 1);
+        }
+        encoder.copy_buffer_to_buffer(&output, 0, &readback, 0, BINDING_SIZE);
+        ctx.queue.submit(Some(encoder.finish()));
+
+        let slice = readback.slice(..);
+        slice.map_async(MapMode::Read, |_| ());
+        ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
+        let data: Vec<u8> = slice.get_mapped_range().unwrap().to_vec();
+
+        let nonzero = data.iter().position(|&b| b != 0);
+        assert!(
+            nonzero.is_none(),
+            "dynamic-offset bind group read back non-zero from unwritten \
+                 region of a fresh storage buffer; first non-zero byte at offset \
+                 {} = 0x{:02x}",
+            nonzero.unwrap(),
+            data[nonzero.unwrap()],
+        );
+    });
