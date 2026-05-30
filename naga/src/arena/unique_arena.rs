@@ -61,6 +61,11 @@ impl<T> UniqueArena<T> {
         self.span_info.clear();
     }
 
+    /// Replaces this arena with an empty one, returning the old data.
+    pub fn take(&mut self) -> Self {
+        core::mem::take(self)
+    }
+
     /// Return the span associated with `handle`.
     ///
     /// If a value has been inserted multiple times, the span returned is the
