@@ -1904,7 +1904,7 @@ impl crate::Queue for super::Queue {
         &self,
         command_buffers: &[&super::CommandBuffer],
         _surface_textures: &[&super::Texture],
-        (signal_fence, signal_value): (&mut super::Fence, crate::FenceValue),
+        (signal_fence, signal_value): (&super::Fence, crate::FenceValue),
     ) -> Result<(), crate::DeviceError> {
         let shared = Arc::clone(&self.shared);
         let gl = &shared.context.lock();

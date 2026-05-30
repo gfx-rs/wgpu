@@ -698,7 +698,9 @@ bitflags_array! {
         const PIPELINE_STATISTICS_QUERY = 1 << 4;
         /// Allows for timestamp queries directly on command encoders.
         ///
-        /// Implies [`Features::TIMESTAMP_QUERY`] is supported.
+        /// Adapters that support this feature also support
+        /// [`Features::TIMESTAMP_QUERY`]. Both features must be requested
+        /// explicitly to use timestamp queries on command encoders.
         ///
         /// Additionally allows for timestamp writes on command encoders
         /// using [`CommandEncoder::write_timestamp`].
@@ -714,9 +716,13 @@ bitflags_array! {
         #[doc = link_to_wgpu_docs!(["`CommandEncoder::write_timestamp`"]: "struct.CommandEncoder.html#method.write_timestamp")]
         #[name("wgpu-timestamp-query-inside-encoders")]
         const TIMESTAMP_QUERY_INSIDE_ENCODERS = 1 << 5;
-        /// Allows for timestamp queries directly on command encoders.
+        /// Allows for timestamp queries directly inside render and compute passes.
         ///
-        /// Implies [`Features::TIMESTAMP_QUERY`] & [`Features::TIMESTAMP_QUERY_INSIDE_ENCODERS`] is supported.
+        /// Adapters that support this feature also support
+        /// [`Features::TIMESTAMP_QUERY`] and [`Features::TIMESTAMP_QUERY_INSIDE_ENCODERS`].
+        /// This feature must be requested with [`Features::TIMESTAMP_QUERY`] to use timestamp
+        /// queries inside passes. Additionally, [`Features::TIMESTAMP_QUERY_INSIDE_ENCODERS`]
+        /// must be requested to use timestamp queries on command encoders.
         ///
         /// Additionally allows for timestamp queries to be used inside render & compute passes using:
         /// - [`RenderPass::write_timestamp`]
