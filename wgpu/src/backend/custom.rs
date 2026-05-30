@@ -6,7 +6,8 @@ pub use crate::dispatch::*;
 
 use alloc::boxed::Box;
 use alloc::sync::Arc;
-use core::sync::atomic::{AtomicU64, Ordering};
+use crate::cmp::AtomicU64;
+use core::sync::atomic::Ordering;
 
 macro_rules! dyn_type {
     // cloning of arc forbidden
