@@ -1530,8 +1530,8 @@ fn f64_runtime_literals() {
     );
     let error = result.unwrap_err().into_inner();
     assert!(matches!(
-        error,
-        crate::valid::ValidationError::Function {
+        error.0.as_ref(),
+        crate::valid::ValidationErrorInner::Function {
             source: super::FunctionError::Expression {
                 source: ExpressionError::Literal(LiteralError::Width(
                     super::r#type::WidthError::MissingCapability {
@@ -1561,8 +1561,8 @@ fn f64_const_literals() {
     );
     let error = result.unwrap_err().into_inner();
     assert!(matches!(
-        error,
-        crate::valid::ValidationError::ConstExpression {
+        error.0.as_ref(),
+        crate::valid::ValidationErrorInner::ConstExpression {
             source: ConstExpressionError::Literal(LiteralError::Width(
                 super::r#type::WidthError::MissingCapability {
                     name: "f64",

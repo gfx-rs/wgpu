@@ -2,7 +2,7 @@
 
 use core::{convert::TryInto, hash::Hash};
 
-use super::{TypeError, ValidationError};
+use super::{TypeError, ValidationErrorInner};
 use crate::non_max_u32::NonMaxU32;
 use crate::{
     arena::{BadHandle, BadRangeError},
@@ -30,7 +30,9 @@ impl super::Validator {
     /// Errors returned by this method are intentionally sparse, for simplicity of implementation.
     /// It is expected that only buggy frontends or fuzzers should ever emit IR that fails this
     /// validation pass.
-    pub(super) fn validate_module_handles(module: &crate::Module) -> Result<(), ValidationError> {
+    pub(super) fn validate_module_handles(
+        module: &crate::Module,
+    ) -> Result<(), ValidationErrorInner> {
         let &crate::Module {
             ref constants,
             ref overrides,
@@ -300,7 +302,7 @@ impl super::Validator {
                             .contains(&struct_member_index)
                             .then_some(())
                             // TODO: what errors should this be?
-                            .ok_or_else(|| ValidationError::Type {
+                            .ok_or_else(|| ValidationErrorInner::Type {
                                 handle: ty,
                                 name: struct_type.name.as_ref().map_or_else(
                                     || "members length incorrect".to_string(),
@@ -312,7 +314,7 @@ impl super::Validator {
                     _ => {
                         // TODO: internal error ? We should never get here.
                         // If entering there, it's probably that we forgot to adjust a handle in the compact phase.
-                        return Err(ValidationError::Type {
+                        return Err(ValidationErrorInner::Type {
                             handle: ty,
                             name: struct_type
                                 .name
@@ -885,21 +887,21 @@ impl super::Validator {
     }
 }
 
-impl From<BadHandle> for ValidationError {
+impl From<BadHandle> for ValidationErrorInner {
     fn from(source: BadHandle) -> Self {
-        Self::InvalidHandle(source.into())
+        ValidationErrorInner::InvalidHandle(source.into())
     }
 }
 
-impl From<FwdDepError> for ValidationError {
+impl From<FwdDepError> for ValidationErrorInner {
     fn from(source: FwdDepError) -> Self {
-        Self::InvalidHandle(source.into())
+        ValidationErrorInner::InvalidHandle(source.into())
     }
 }
 
-impl From<BadRangeError> for ValidationError {
+impl From<BadRangeError> for ValidationErrorInner {
     fn from(source: BadRangeError) -> Self {
-        Self::InvalidHandle(source.into())
+        ValidationErrorInner::InvalidHandle(source.into())
     }
 }
 
