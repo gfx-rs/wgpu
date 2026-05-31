@@ -1,4 +1,4 @@
-use alloc::{borrow::Cow, sync::Arc, vec::Vec};
+use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::{convert::Infallible, fmt, num::NonZeroU32, ops::Range, str};
 use smallvec::SmallVec;
 
@@ -999,22 +999,21 @@ impl From<ImmediateUploadError> for RenderPassErrorInner {
 pub struct RenderPassError {
     pub scope: PassErrorScope,
     #[source]
-    pub(super) inner: RenderPassErrorInner,
+    pub(super) inner: Box<RenderPassErrorInner>,
 }
 
 impl<E: Into<RenderPassErrorInner>> MapPassErr<RenderPassError> for E {
     fn map_pass_err(self, scope: PassErrorScope) -> RenderPassError {
         RenderPassError {
             scope,
-            inner: self.into(),
+            inner: Box::new(self.into()),
         }
     }
 }
 
 impl WebGpuError for RenderPassError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let Self { scope: _, inner } = self;
-        match inner {
+        match self.inner.as_ref() {
             RenderPassErrorInner::Device(e) => e.webgpu_error_type(),
             RenderPassErrorInner::ColorAttachment(e) => e.webgpu_error_type(),
             RenderPassErrorInner::EncoderState(e) => e.webgpu_error_type(),
@@ -1993,21 +1992,19 @@ impl Global {
 
         let base = pass.base.take();
 
-        if let Err(RenderPassError {
-            inner:
-                RenderPassErrorInner::EncoderState(
-                    err @ (EncoderStateError::Locked | EncoderStateError::Ended),
-                ),
-            scope: _,
-        }) = base
-        {
-            // Most encoding errors are detected and raised within `finish()`.
-            //
-            // However, we raise a validation error here if the pass was opened
-            // within another pass, or on a finished encoder. The latter is
-            // particularly important, because in that case reporting errors via
-            // `CommandEncoder::finish` is not possible.
-            return Err(err.clone());
+        if let Err(RenderPassError { inner, scope: _ }) = &base {
+            if let RenderPassErrorInner::EncoderState(
+                err @ (EncoderStateError::Locked | EncoderStateError::Ended),
+            ) = inner.as_ref()
+            {
+                // Most encoding errors are detected and raised within `finish()`.
+                //
+                // However, we raise a validation error here if the pass was opened
+                // within another pass, or on a finished encoder. The latter is
+                // particularly important, because in that case reporting errors via
+                // `CommandEncoder::finish` is not possible.
+                return Err(err.clone());
+            }
         }
 
         cmd_buf_data.push_with(|| -> Result<_, RenderPassError> {

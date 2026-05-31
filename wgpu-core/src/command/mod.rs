@@ -1583,23 +1583,18 @@ impl CommandEncoderError {
                     inner: ComputePassErrorInner::DestroyedResource(_),
                     ..
                 })
-                | Self::RenderPass(RenderPassError {
-                    inner: RenderPassErrorInner::DestroyedResource(_),
-                    ..
-                })
-                | Self::RenderPass(RenderPassError {
-                    inner: RenderPassErrorInner::RenderCommand(
-                        RenderCommandError::DestroyedResource(_)
-                    ),
-                    ..
-                })
-                | Self::RenderPass(RenderPassError {
-                    inner: RenderPassErrorInner::RenderCommand(RenderCommandError::BindingError(
-                        BindingError::DestroyedResource(_)
-                    )),
-                    ..
-                })
-        )
+        ) || if let Self::RenderPass(pass_error) = self {
+            matches!(
+                pass_error.inner.as_ref(),
+                RenderPassErrorInner::DestroyedResource(_)
+                    | RenderPassErrorInner::RenderCommand(RenderCommandError::DestroyedResource(_))
+                    | RenderPassErrorInner::RenderCommand(RenderCommandError::BindingError(
+                        BindingError::DestroyedResource(_),
+                    ))
+            )
+        } else {
+            false
+        }
     }
 }
 

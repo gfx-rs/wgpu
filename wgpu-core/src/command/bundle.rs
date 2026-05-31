@@ -80,6 +80,7 @@ index format changes.
 
 use alloc::{
     borrow::{Cow, ToOwned as _},
+    boxed::Box,
     string::String,
     sync::Arc,
     vec::Vec,
@@ -1548,13 +1549,12 @@ where
 pub struct RenderBundleError {
     pub scope: PassErrorScope,
     #[source]
-    inner: RenderBundleErrorInner,
+    inner: Box<RenderBundleErrorInner>,
 }
 
 impl WebGpuError for RenderBundleError {
     fn webgpu_error_type(&self) -> ErrorType {
-        let Self { scope: _, inner } = self;
-        match inner {
+        match self.inner.as_ref() {
             RenderBundleErrorInner::Create(e) => e.webgpu_error_type(),
             RenderBundleErrorInner::Device(e) => e.webgpu_error_type(),
             RenderBundleErrorInner::RenderCommand(e) => e.webgpu_error_type(),
@@ -1570,7 +1570,7 @@ impl RenderBundleError {
     pub fn from_device_error(e: DeviceError) -> Self {
         Self {
             scope: PassErrorScope::Bundle,
-            inner: e.into(),
+            inner: Box::new(e.into()),
         }
     }
 }
@@ -1582,7 +1582,7 @@ where
     fn map_pass_err(self, scope: PassErrorScope) -> RenderBundleError {
         RenderBundleError {
             scope,
-            inner: self.into(),
+            inner: Box::new(self.into()),
         }
     }
 }
