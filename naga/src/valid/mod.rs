@@ -475,14 +475,18 @@ pub enum OverrideError {
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 #[error(transparent)]
-pub struct ValidationError(pub Box<ValidationErrorInner>);
+pub struct ValidationError {
+    pub inner: Box<ValidationErrorInner>,
+}
 
 impl<T> From<T> for ValidationError
 where
     T: Into<ValidationErrorInner>,
 {
     fn from(value: T) -> Self {
-        ValidationError(Box::new(value.into()))
+        ValidationError {
+            inner: Box::new(value.into()),
+        }
     }
 }
 

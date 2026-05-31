@@ -1530,7 +1530,7 @@ fn f64_runtime_literals() {
     );
     let error = result.unwrap_err().into_inner();
     assert!(matches!(
-        error.0.as_ref(),
+        error.inner.as_ref(),
         crate::valid::ValidationErrorInner::Function {
             source: super::FunctionError::Expression {
                 source: ExpressionError::Literal(LiteralError::Width(
@@ -1561,7 +1561,7 @@ fn f64_const_literals() {
     );
     let error = result.unwrap_err().into_inner();
     assert!(matches!(
-        error.0.as_ref(),
+        error.inner.as_ref(),
         crate::valid::ValidationErrorInner::ConstExpression {
             source: ConstExpressionError::Literal(LiteralError::Width(
                 super::r#type::WidthError::MissingCapability {

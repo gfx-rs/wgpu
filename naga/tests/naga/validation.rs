@@ -772,7 +772,7 @@ fn bad_texture_dimensions_level() {
 
     fn is_bad_level_error(result: Result<ModuleInfo, naga::valid::ValidationError>) -> bool {
         matches!(
-            result.map_err(|err| *err.0),
+            result.map_err(|err| *err.inner),
             Err(naga::valid::ValidationErrorInner::Function {
                 handle: _,
                 name: _,
@@ -923,7 +923,7 @@ fn invalid_local_var_override_sized_array() {
         .into_inner();
 
     assert!(matches!(
-        err.0.as_ref(),
+        err.inner.as_ref(),
         valid::ValidationErrorInner::Function {
             source: valid::FunctionError::LocalVariable {
                 name: local_var_name,
@@ -963,7 +963,7 @@ fn invalid_zero_value_runtime_array() {
         .into_inner();
 
     assert!(matches!(
-        err.0.as_ref(),
+        err.inner.as_ref(),
         valid::ValidationErrorInner::Function {
             source: valid::FunctionError::LocalVariable {
                 name: local_var_name,
@@ -1004,7 +1004,7 @@ fn invalid_zero_value_override_array() {
         .into_inner();
 
     assert!(matches!(
-        err.0.as_ref(),
+        err.inner.as_ref(),
         valid::ValidationErrorInner::Function {
             source: valid::FunctionError::LocalVariable {
                 name: local_var_name,
@@ -1059,7 +1059,7 @@ fn invalid_zero_value_texture() {
         .into_inner();
 
     assert!(matches!(
-        err.0.as_ref(),
+        err.inner.as_ref(),
         valid::ValidationErrorInner::Function {
             source: valid::FunctionError::LocalVariable {
                 name: local_var_name,
@@ -1127,7 +1127,7 @@ fn invalid_constructor_runtime_array() {
         .into_inner();
 
     assert!(matches!(
-        err.0.as_ref(),
+        err.inner.as_ref(),
         valid::ValidationErrorInner::Function {
             source: valid::FunctionError::LocalVariable {
                 name: local_var_name,
@@ -1186,7 +1186,7 @@ fn invalid_constructor_unsized_struct() {
         .into_inner();
 
     assert!(matches!(
-        err.0.as_ref(),
+        err.inner.as_ref(),
         valid::ValidationErrorInner::Function {
             source: valid::FunctionError::LocalVariable {
                 source: valid::LocalVariableError::InvalidType(_),
@@ -1670,7 +1670,7 @@ fn unexpected_task_payload() {
     );
 
     assert!(matches!(
-        err.0.as_ref(),
+        err.inner.as_ref(),
         valid::ValidationErrorInner::EntryPoint {
             source: valid::EntryPointError::UnexpectedTaskPayload,
             ..
@@ -1690,7 +1690,7 @@ fn coherent_requires_capability() {
         .validate(&module)
         .expect_err("should fail without capability");
     assert!(matches!(
-        err.into_inner().0.as_ref(),
+        err.into_inner().inner.as_ref(),
         valid::ValidationErrorInner::GlobalVariable {
             source: valid::GlobalVariableError::CoherentNotSupported,
             ..
@@ -1717,7 +1717,7 @@ fn volatile_requires_capability() {
         .validate(&module)
         .expect_err("should fail without capability");
     assert!(matches!(
-        err.into_inner().0.as_ref(),
+        err.into_inner().inner.as_ref(),
         valid::ValidationErrorInner::GlobalVariable {
             source: valid::GlobalVariableError::VolatileNotSupported,
             ..
@@ -1744,7 +1744,7 @@ fn memory_decorations_require_storage_address_space() {
     .validate(&module)
     .expect_err("should fail on non-storage address space");
     assert!(matches!(
-        err.into_inner().0.as_ref(),
+        err.into_inner().inner.as_ref(),
         valid::ValidationErrorInner::GlobalVariable {
             source: valid::GlobalVariableError::InvalidMemoryDecorationsAddressSpace,
             ..
