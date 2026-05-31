@@ -197,6 +197,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 #### naga
 
 - Switched from using an `intersector` to using an `intersection_query` on metal so AABBs and non-opaque triangles can be handled. By @Vecvec in [#9304](https://github.com/gfx-rs/wgpu/pull/9304).
+- BREAKING: `naga::valid::ValidationError` now is a newtype around `Box<ValidationErrorInner>` to avoid Clippy `large_result_err` warning. By @beicause in [#9612](https://github.com/gfx-rs/wgpu/pull/9612)
 
 ### Bug Fixes
 
