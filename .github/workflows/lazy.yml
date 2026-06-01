@@ -27,6 +27,7 @@ jobs:
   parse-dota2:
     name: "Validate Shaders: Dota2"
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -55,6 +56,7 @@ jobs:
   parse-vulkan-tutorial-shaders:
     name: "Validate Shaders: Sascha Willems Vulkan Tutorial"
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -92,6 +94,7 @@ jobs:
   dneto0_spirv-samples:
     name: "Validate Shaders: dneto0 spirv-samples"
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

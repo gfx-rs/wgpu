@@ -28,6 +28,8 @@ concurrency:
 
 jobs:
   discover-standalone-examples:
+    permissions: {}
+
     timeout-minutes: 5
 
     runs-on: ubuntu-latest
@@ -55,6 +57,8 @@ jobs:
           echo "$matrix"
 
   cargo-generate:
+    permissions: {}
+
     timeout-minutes: 5
 
     runs-on: ubuntu-latest

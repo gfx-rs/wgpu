@@ -21,6 +21,7 @@ jobs:
   naga-validate-windows:
     name: "Validate: HLSL"
     runs-on: windows-latest
+    permissions: {}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -70,6 +71,7 @@ jobs:
   naga-validate-macos:
     name: "Validate: MSL"
     runs-on: macos-26
+    permissions: {}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -102,6 +104,7 @@ jobs:
   naga-validate-linux:
     name: "Validate: SPIR-V/GLSL/DOT/WGSL"
     runs-on: ubuntu-24.04
+    permissions: {}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
