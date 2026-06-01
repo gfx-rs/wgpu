@@ -215,6 +215,8 @@ jobs:
     name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -418,6 +420,8 @@ jobs:
     name: wgpu MSRV Check ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -494,6 +498,8 @@ jobs:
     name: Core MSRV Check ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -554,6 +560,8 @@ jobs:
       # Also, allow unexpected_cfgs because it is very common and spammy when using old deps.
       RUSTFLAGS: -A unexpected_cfgs
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -596,6 +604,8 @@ jobs:
 
     name: Test WebAssembly
     runs-on: ubuntu-latest
+
+    permissions: {}
 
     steps:
       - name: Checkout repo
@@ -651,6 +661,8 @@ jobs:
 
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+
+    permissions: {}
 
     steps:
       - name: Checkout repo
@@ -783,6 +795,8 @@ jobs:
     name: Doctest
     runs-on: ubuntu-latest
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -815,6 +829,8 @@ jobs:
 
     name: Miri (limited scope)
     runs-on: ubuntu-latest
+
+    permissions: {}
 
     steps:
       - name: Checkout repo
@@ -853,6 +869,7 @@ jobs:
 
     name: Format & Typos
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -891,6 +908,7 @@ jobs:
 
     name: Clippy cts_runner
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -933,6 +951,7 @@ jobs:
 
     name: "cargo-deny advisories"
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -953,6 +972,7 @@ jobs:
 
     name: "cargo-deny"
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
