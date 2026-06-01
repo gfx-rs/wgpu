@@ -217,7 +217,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install toolchain (repo MSRV - tier 1 or 2)
         if: matrix.tier == 1 || matrix.tier == 2
@@ -418,7 +418,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install core MSRV toolchain
         run: |
@@ -492,7 +492,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install core MSRV toolchain
         run: |
@@ -550,7 +550,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install toolchain
         run: |
@@ -591,7 +591,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install repo MSRV toolchain
         run: |
@@ -644,7 +644,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install repo MSRV toolchain
         run: |
@@ -773,7 +773,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install repo MSRV toolchain
         run: |
@@ -804,7 +804,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Miri is *only* available on nightly.
       - name: Install nightly toolchain
@@ -839,7 +839,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install repo MSRV toolchain
         run: |
@@ -875,7 +875,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install MSRV toolchain
         run: |
@@ -915,7 +915,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v2
@@ -933,7 +933,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v2
