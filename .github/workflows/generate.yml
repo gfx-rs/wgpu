@@ -38,7 +38,7 @@ jobs:
       matrix: ${{ steps.discover.outputs.matrix }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Find standalone examples
         id: discover
@@ -66,7 +66,7 @@ jobs:
     name: "${{ matrix.name }}"
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # We can't rely on an override here, as that would only set
       # the toolchain for the current directory, not the newly generated project.
