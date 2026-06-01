@@ -991,6 +991,27 @@ pub struct CommandEncoder {
 unsafe impl Send for CommandEncoder {}
 unsafe impl Sync for CommandEncoder {}
 
+impl CommandEncoder {
+    /// Returns the raw D3D12 graphics command list currently being recorded, or `None` when the
+    /// encoder is not recording (outside a `begin_encoding`/`end_encoding` pair).
+    ///
+    /// This mirrors the Vulkan backend's `CommandEncoder::raw_handle()`, exposing the in-flight
+    /// list so native libraries that must record onto wgpu's command list (NVIDIA NGX/DLSS, AMD
+    /// FidelityFX, etc.) can interoperate through `as_hal_mut`. See
+    /// <https://github.com/gfx-rs/wgpu/issues/8888>.
+    ///
+    /// # Safety
+    ///
+    /// - The returned reference must not outlive the current encoding; do not retain it past
+    ///   `end_encoding`/`discard_encoding`.
+    /// - The caller must not `Close` or `Reset` the list, and must restore any pipeline,
+    ///   descriptor-heap, and root-signature state it changes before returning control to wgpu, or
+    ///   subsequent wgpu commands may misbehave.
+    pub unsafe fn raw_command_list(&self) -> Option<&Direct3D12::ID3D12GraphicsCommandList> {
+        self.list.as_ref()
+    }
+}
+
 impl fmt::Debug for CommandEncoder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CommandEncoder")
