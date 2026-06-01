@@ -146,6 +146,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
 - Added support for mesh shaders in naga's HLSL writer, completing DX12 support for mesh shaders. By @inner-daemons in [#8752](https://github.com/gfx-rs/wgpu/pull/8752).
 - Added `dx12::Queue::add_wait_fence` / `add_signal_fence` (and matching `remove_*` companions). They stage `ID3D12CommandQueue::Wait` / `Signal` calls on the next `Queue::submit`. The wait calls are issued before the submit's `ExecuteCommandLists`, the signal calls after wgpu's own `Signal(signal_fence, signal_value)`. Cross-API interop crates use this to GPU-side gate / publish wgpu submits against foreign-API fences. By @AdrianEddy in [#9463](https://github.com/gfx-rs/wgpu/pull/9463).
+- Added `dx12::CommandEncoder::raw_command_list()`, exposing the recording `ID3D12GraphicsCommandList` (returns `Some` while the encoder is encoding) so native D3D12 libraries — NVIDIA NGX/DLSS, AMD FidelityFX — can record onto wgpu's in-flight command list via `as_hal_mut`, mirroring the Vulkan backend's `CommandEncoder::raw_handle()`. By @jtbirdsell in [#9613](https://github.com/gfx-rs/wgpu/pull/9613).
 
 #### Vulkan
 
