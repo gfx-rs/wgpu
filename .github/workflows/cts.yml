@@ -103,7 +103,7 @@ jobs:
           tool: cargo-llvm-cov
 
       - name: caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           # The version number can be incremented for cache busting.
           prefix-key: v3-rust-${{ hashFiles('cts_runner/revision.txt') }}
