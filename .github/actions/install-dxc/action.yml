@@ -14,4 +14,5 @@ runs:
         7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll}
 
         # We need to use cygpath to convert PWD to a windows path as we're using bash.
-        cygpath --windows "$PWD/dxc" >> "$GITHUB_PATH"
+        echo "WGPU_DX12_COMPILER=$(cygpath --windows "$PWD/dxc/dxcompiler.dll")" >> "$GITHUB_ENV"
+        echo "DENO_WEBGPU_DX12_COMPILER=$(cygpath --windows "$PWD/dxc/dxcompiler.dll")" >> "$GITHUB_ENV"
