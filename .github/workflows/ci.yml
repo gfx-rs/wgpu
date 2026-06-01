@@ -255,7 +255,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -437,7 +437,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           key: wgpu-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -511,7 +511,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           key: core-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -669,7 +669,7 @@ jobs:
         # Cache step must go before warp and mesa install on windows as they write into the
         # target directory, and rust-cache will overwrite the entirety of the target directory.
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -782,7 +782,7 @@ jobs:
           cargo -V
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           key: doctests-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -815,7 +815,7 @@ jobs:
           cargo -V
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           key: miri-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -894,7 +894,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           key: cts-runner-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
