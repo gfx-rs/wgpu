@@ -46,9 +46,9 @@ use objc2::{
 use objc2_foundation::ns_string;
 use objc2_metal::{
     MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLArgumentBuffersTier,
-    MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandQueue,
-    MTLComputeCommandEncoder, MTLComputePipelineState, MTLCounterSampleBuffer, MTLCullMode,
-    MTLDepthClipMode, MTLDepthStencilState, MTLDevice, MTLDrawable, MTLIndexType,
+    MTLBinaryArchive, MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus,
+    MTLCommandQueue, MTLComputeCommandEncoder, MTLComputePipelineState, MTLCounterSampleBuffer,
+    MTLCullMode, MTLDepthClipMode, MTLDepthStencilState, MTLDevice, MTLDrawable, MTLIndexType,
     MTLLanguageVersion, MTLLibrary, MTLPrimitiveType, MTLReadWriteTextureTier,
     MTLRenderCommandEncoder, MTLRenderPipelineState, MTLRenderStages, MTLResource,
     MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize, MTLTexture, MTLTextureType,
@@ -1150,10 +1150,56 @@ impl crate::DynCommandBuffer for CommandBuffer {}
 unsafe impl Send for CommandBuffer {}
 unsafe impl Sync for CommandBuffer {}
 
+/// A persistent pipeline cache backed by an [`MTLBinaryArchive`].
+///
+/// Holds compiled pipeline binaries that can be serialized to bytes
+/// (`Device::pipeline_cache_get_data`) and reloaded into a later archive
+/// (`Device::create_pipeline_cache`), so a pipeline compiled in a previous run
+/// is loaded from the archive instead of recompiled by the driver.
 #[derive(Debug)]
-pub struct PipelineCache;
+pub struct PipelineCache {
+    pub(super) archive: Retained<ProtocolObject<dyn MTLBinaryArchive>>,
+}
+
+// SAFETY: `MTLBinaryArchive` is an Obj-C object that Apple documents as usable
+// across threads; pipeline creation may add to it from any thread.
+unsafe impl Send for PipelineCache {}
+unsafe impl Sync for PipelineCache {}
 
 impl crate::DynPipelineCache for PipelineCache {}
+
+/// A uniquely-named scratch file in the temp dir, removed on drop.
+///
+/// Bridges wgpu's byte-oriented pipeline-cache HAL (`PipelineCacheDescriptor::data`,
+/// `pipeline_cache_get_data -> Vec<u8>`) to [`MTLBinaryArchive`], which can only load
+/// from / serialize to a *file URL* — there is no in-memory API. The seed bytes are
+/// written here to be loaded, and serialization targets here to be read back.
+pub(super) struct PipelineCacheScratch {
+    path: std::path::PathBuf,
+}
+
+impl PipelineCacheScratch {
+    pub(super) fn new() -> Self {
+        use core::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let unique = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "wgpu-metal-pipeline-cache-{}-{unique}.bin",
+            std::process::id(),
+        ));
+        Self { path }
+    }
+
+    pub(super) fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+}
+
+impl Drop for PipelineCacheScratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
 
 #[derive(Debug)]
 pub struct AccelerationStructure {

@@ -9,14 +9,15 @@ use objc2::{
     rc::{autoreleasepool, Retained},
     runtime::ProtocolObject,
 };
-use objc2_foundation::{ns_string, NSError, NSRange, NSString, NSUInteger};
+use objc2_foundation::{ns_string, NSArray, NSError, NSRange, NSString, NSUInteger, NSURL};
 use objc2_metal::{
-    MTLAccelerationStructure, MTLAccelerationStructureInstanceOptions, MTLBuffer,
-    MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer, MTLCommandBufferStatus,
-    MTLCompileOptions, MTLComputePipelineDescriptor, MTLComputePipelineState,
-    MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode, MTLDepthStencilDescriptor,
-    MTLDevice, MTLFunction, MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion,
-    MTLLibrary, MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
+    MTLAccelerationStructure, MTLAccelerationStructureInstanceOptions, MTLBinaryArchive,
+    MTLBinaryArchiveDescriptor, MTLBuffer, MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer,
+    MTLCommandBufferStatus, MTLCompileOptions, MTLComputePipelineDescriptor,
+    MTLComputePipelineState, MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode,
+    MTLDepthStencilDescriptor, MTLDevice, MTLFunction,
+    MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion, MTLLibrary,
+    MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
     MTLPipelineBufferDescriptorArray, MTLPipelineOption, MTLPixelFormat, MTLPrimitiveTopologyClass,
     MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
     MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
@@ -1763,6 +1764,14 @@ impl crate::Device for super::Device {
                 descriptor.setLabel(Some(&NSString::from_str(name)));
             }
 
+            // Bind the pipeline cache's archive so the driver loads this pipeline
+            // from it on a hit instead of recompiling (no `FailOnBinaryArchiveMiss`
+            // — a miss just compiles normally).
+            if let Some(cache) = desc.cache {
+                let archives = NSArray::from_slice(&[cache.archive.as_ref()]);
+                descriptor.setBinaryArchives(Some(&archives));
+            }
+
             let raw = self
                 .shared
                 .device
@@ -1780,6 +1789,16 @@ impl crate::Device for super::Device {
                     )
                 })?;
 
+            // Grow the archive with this pipeline so a later `pipeline_cache_get_data`
+            // serializes it. Adding an already-present pipeline is a no-op; caching is
+            // best-effort, so errors are ignored. (Possible future optimization: only
+            // add on a real miss, detected via a `FailOnBinaryArchiveMiss` probe.)
+            if let Some(cache) = desc.cache {
+                let _ = cache
+                    .archive
+                    .addComputePipelineFunctionsWithDescriptor_error(&descriptor);
+            }
+
             self.counters.compute_pipelines.add(1);
 
             Ok(super::ComputePipeline { raw, cs_info })
@@ -1792,11 +1811,69 @@ impl crate::Device for super::Device {
 
     unsafe fn create_pipeline_cache(
         &self,
-        _desc: &crate::PipelineCacheDescriptor<'_>,
+        desc: &crate::PipelineCacheDescriptor<'_>,
     ) -> Result<super::PipelineCache, crate::PipelineCacheError> {
-        Ok(super::PipelineCache)
+        autoreleasepool(|_| {
+            // `MTLBinaryArchive` only seeds from a file URL, so if we were handed
+            // previously-serialized bytes, round-trip them through a scratch file.
+            // A stale or corrupt archive (different GPU / OS / Metal version) makes
+            // creation fail — in that case we fall back to an empty archive and let
+            // pipelines recompile, never erroring on a bad cache.
+            let archive = desc
+                .data
+                .and_then(|data| {
+                    let scratch = super::PipelineCacheScratch::new();
+                    std::fs::write(scratch.path(), data).ok()?;
+                    let url = NSURL::from_file_path(scratch.path())?;
+                    let archive_desc = MTLBinaryArchiveDescriptor::new();
+                    archive_desc.setUrl(Some(&url));
+                    self.shared
+                        .device
+                        .newBinaryArchiveWithDescriptor_error(&archive_desc)
+                        .ok()
+                })
+                .map(Ok)
+                .unwrap_or_else(|| {
+                    let archive_desc = MTLBinaryArchiveDescriptor::new();
+                    self.shared
+                        .device
+                        .newBinaryArchiveWithDescriptor_error(&archive_desc)
+                        .map_err(|_| {
+                            crate::PipelineCacheError::Device(crate::DeviceError::Unexpected)
+                        })
+                })?;
+            Ok(super::PipelineCache { archive })
+        })
     }
-    unsafe fn destroy_pipeline_cache(&self, _: super::PipelineCache) {}
+
+    fn pipeline_cache_validation_key(&self) -> Option<[u8; 16]> {
+        // Partition caches by GPU (the device's IORegistry id) so a blob from a
+        // different device is rejected at the wgpu-core layer before it reaches
+        // `create_pipeline_cache`. Staleness across OS / driver / Metal updates is
+        // additionally caught by `MTLBinaryArchive`'s own validation plus the
+        // empty-archive fallback above.
+        const SCHEMA: u64 = 0x7767_7075_6d70_6c63; // bump if the encoding changes
+        let registry_id = self.shared.device.registryID();
+        let mut key = [0u8; 16];
+        key[..8].copy_from_slice(&registry_id.to_le_bytes());
+        key[8..].copy_from_slice(&SCHEMA.to_le_bytes());
+        Some(key)
+    }
+
+    unsafe fn pipeline_cache_get_data(&self, cache: &super::PipelineCache) -> Option<Vec<u8>> {
+        // `MTLBinaryArchive` only serializes to a file URL; serialize to a scratch
+        // file and read it back as the byte blob wgpu-core persists.
+        autoreleasepool(|_| {
+            let scratch = super::PipelineCacheScratch::new();
+            let url = NSURL::from_file_path(scratch.path())?;
+            cache.archive.serializeToURL_error(&url).ok()?;
+            std::fs::read(scratch.path()).ok()
+        })
+    }
+
+    unsafe fn destroy_pipeline_cache(&self, _cache: super::PipelineCache) {
+        // Dropping the `PipelineCache` releases the `MTLBinaryArchive` (ARC).
+    }
 
     unsafe fn create_query_set(
         &self,

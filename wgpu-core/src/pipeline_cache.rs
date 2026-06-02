@@ -233,6 +233,19 @@ fn adapter_key(adapter: &AdapterInfo) -> Result<[u8; 15], PipelineCacheValidatio
             ];
             Ok(adapter)
         }
+        wgt::Backend::Metal => {
+            // The Metal backend's `MTLBinaryArchive`-backed cache supports
+            // serialization (`pipeline_cache_validation_key` returns `Some`). The
+            // finer GPU discrimination lives in that validation key (the device's
+            // registry id); this adapter key is the coarse vendor/device identity,
+            // namespaced with a distinct sentinel (254) from Vulkan (255).
+            let v: [u8; 4] = adapter.vendor.to_be_bytes();
+            let d: [u8; 4] = adapter.device.to_be_bytes();
+            let adapter = [
+                254, 254, 254, v[0], v[1], v[2], v[3], d[0], d[1], d[2], d[3], 254, 254, 254, 254,
+            ];
+            Ok(adapter)
+        }
         _ => Err(PipelineCacheValidationError::Unsupported),
     }
 }
