@@ -71,12 +71,16 @@ fn store_hal_ops(store: StoreOp) -> hal::AttachmentOps {
 }
 
 // Stencil clear and reference value should take the LSBs.
-//
-// Currently only 8-bit stencil formats are supported, so `value & 255` is OK.
-//
-// This fixes CTS `webgpu:api,operation,render_pass,clear_value:stencil_clear_value:*`
-// on metal and buggy drivers.
-fn truncate_stencil_value(value: u32) -> u32 {
+fn convert_stencil_value(value: u32, format: Option<wgt::TextureFormat>) -> u32 {
+    let Some(format) = format else {
+        return value;
+    };
+    let Some(stencil_format) = format.aspect_specific_format(wgt::TextureAspect::StencilOnly)
+    else {
+        return value;
+    };
+    // Currently only 8-bit stencil formats are supported
+    assert_eq!(stencil_format, wgt::TextureFormat::Stencil8);
     value & 255
 }
 
@@ -1879,7 +1883,7 @@ impl Global {
                         },
                         stencil: if format.has_stencil_aspect() {
                             depth_stencil_attachment.stencil.resolve(|clear| {
-                                Ok(truncate_stencil_value(clear.unwrap_or_default()))
+                                Ok(convert_stencil_value(clear.unwrap_or_default(), Some(format)))
                             })?
                         } else {
                             if depth_stencil_attachment.stencil.load_op.is_some() || depth_stencil_attachment.stencil.store_op.is_some() {
@@ -3514,7 +3518,12 @@ impl Global {
     ) -> Result<(), PassStateError> {
         let scope = PassErrorScope::SetStencilReference;
         let base = pass_base!(pass, scope);
-        let value = truncate_stencil_value(value);
+        let value = convert_stencil_value(
+            value,
+            pass.depth_stencil_attachment
+                .as_ref()
+                .map(|at| at.view.desc.format),
+        );
         base.commands
             .push(ArcRenderCommand::SetStencilReference(value));
 
