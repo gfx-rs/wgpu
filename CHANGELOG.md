@@ -134,7 +134,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
 #### Metal
 
-- Implement `Features::PIPELINE_CACHE` via `MTLBinaryArchive`, so compiled compute and render pipelines can be serialized and reloaded across runs instead of recompiled. By @michaelnorman-au in [#99999](https://github.com/gfx-rs/wgpu/pull/99999).
+- Implement `Features::PIPELINE_CACHE` via `MTLBinaryArchive`, so compiled compute and render pipelines can be serialized and reloaded across runs instead of recompiled. By @michaelnorman-au in [#9623](https://github.com/gfx-rs/wgpu/pull/9623).
 - Unconditionally enable `Features::CLIP_DISTANCES`. By @ErichDonGubler in [#9270](https://github.com/gfx-rs/wgpu/pull/9270).
 - Added full support for mesh shaders, including in WGSL shaders. By @inner-daemons in [#8739](https://github.com/gfx-rs/wgpu/pull/8739).
 
