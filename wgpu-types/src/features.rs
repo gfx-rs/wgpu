@@ -1161,10 +1161,10 @@ bitflags_array! {
         ///
         /// Supported platforms:
         /// - Vulkan
+        /// - Metal (via `MTLBinaryArchive`)
         ///
         /// Unimplemented Platforms:
         /// - DX12
-        /// - Metal
         #[name("wgpu-pipeline-cache")]
         const PIPELINE_CACHE = 1 << 41;
         /// Allows shaders to use i64 and u64 atomic min and max.

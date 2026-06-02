@@ -1,4 +1,4 @@
-use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
+use alloc::{borrow::ToOwned as _, string::ToString as _, sync::Arc, vec::Vec};
 use core::{ptr::NonNull, sync::atomic};
 use parking_lot::RwLock;
 use std::{thread, time};
@@ -1652,32 +1652,39 @@ impl crate::Device for super::Device {
                 };
             }
 
-            // Bind the pipeline cache's archive on the standard render path so the
-            // driver loads this pipeline from it on a hit instead of recompiling
-            // (no `FailOnBinaryArchiveMiss` — a miss just compiles). Mesh render
-            // pipeline descriptors don't expose `binaryArchives`, so mesh pipelines
-            // are not archive-cached.
-            if let (Some(cache), MetalGenericRenderPipelineDescriptor::Standard(d)) =
-                (desc.cache, &descriptor)
-            {
-                let archives = NSArray::from_slice(&[cache.archive.as_ref()]);
-                d.setBinaryArchives(Some(&archives));
-            }
-
             // Create the pipeline from descriptor
             let raw = match descriptor {
                 MetalGenericRenderPipelineDescriptor::Standard(d) => {
-                    let raw = self
-                        .shared
-                        .device
-                        .newRenderPipelineStateWithDescriptor_error(&d);
+                    // Bind the cache's archive so the driver loads this pipeline from
+                    // it on a hit instead of recompiling (no `FailOnBinaryArchiveMiss`
+                    // — a miss just compiles). Held under the read lock so a load is
+                    // not raced by a concurrent grow. (Mesh render pipeline descriptors
+                    // don't expose `binaryArchives`, so the Mesh arm below can't be
+                    // archive-cached.)
+                    let raw = {
+                        let _read = desc.cache.map(|cache| {
+                            let guard = cache.archive_lock.read();
+                            let archives = NSArray::from_slice(&[cache.archive.as_ref()]);
+                            d.setBinaryArchives(Some(&archives));
+                            guard
+                        });
+                        self.shared
+                            .device
+                            .newRenderPipelineStateWithDescriptor_error(&d)
+                    };
                     // Grow the archive with this pipeline so a later
-                    // `pipeline_cache_get_data` serializes it (best-effort; adding an
-                    // already-present pipeline is a no-op).
+                    // `pipeline_cache_get_data` serializes it (best-effort). The write
+                    // lock excludes concurrent loads/grows.
                     if let Some(cache) = desc.cache {
-                        let _ = cache
+                        let _guard = cache.archive_lock.write();
+                        if let Err(e) = cache
                             .archive
-                            .addRenderPipelineFunctionsWithDescriptor_error(&d);
+                            .addRenderPipelineFunctionsWithDescriptor_error(&d)
+                        {
+                            log::debug!(
+                                "metal: failed to add render pipeline to binary archive: {e:?}"
+                            );
+                        }
                     }
                     raw
                 }
@@ -1789,11 +1796,16 @@ impl crate::Device for super::Device {
 
             // Bind the pipeline cache's archive so the driver loads this pipeline
             // from it on a hit instead of recompiling (no `FailOnBinaryArchiveMiss`
-            // — a miss just compiles normally).
-            if let Some(cache) = desc.cache {
+            // — a miss just compiles normally). The read lock lets concurrent
+            // compiles load from the archive in parallel while excluding a
+            // concurrent grow/serialize (see `PipelineCache::archive_lock`); it is
+            // held across creation so the load isn't raced by an `add`.
+            let cache_read = desc.cache.map(|cache| {
+                let guard = cache.archive_lock.read();
                 let archives = NSArray::from_slice(&[cache.archive.as_ref()]);
                 descriptor.setBinaryArchives(Some(&archives));
-            }
+                guard
+            });
 
             let raw = self
                 .shared
@@ -1803,6 +1815,7 @@ impl crate::Device for super::Device {
                     MTLPipelineOption::empty(),
                     None,
                 );
+            drop(cache_read);
 
             let raw: Retained<ProtocolObject<dyn MTLComputePipelineState>> =
                 raw.map_err(|e: Retained<NSError>| {
@@ -1814,12 +1827,17 @@ impl crate::Device for super::Device {
 
             // Grow the archive with this pipeline so a later `pipeline_cache_get_data`
             // serializes it. Adding an already-present pipeline is a no-op; caching is
-            // best-effort, so errors are ignored. (Possible future optimization: only
-            // add on a real miss, detected via a `FailOnBinaryArchiveMiss` probe.)
+            // best-effort. The write lock excludes concurrent loads/grows. (Possible
+            // future optimization: only add on a real miss, detected via a
+            // `FailOnBinaryArchiveMiss` probe.)
             if let Some(cache) = desc.cache {
-                let _ = cache
+                let _guard = cache.archive_lock.write();
+                if let Err(e) = cache
                     .archive
-                    .addComputePipelineFunctionsWithDescriptor_error(&descriptor);
+                    .addComputePipelineFunctionsWithDescriptor_error(&descriptor)
+                {
+                    log::debug!("metal: failed to add compute pipeline to binary archive: {e:?}");
+                }
             }
 
             self.counters.compute_pipelines.add(1);
@@ -1865,28 +1883,40 @@ impl crate::Device for super::Device {
                             crate::PipelineCacheError::Device(crate::DeviceError::Unexpected)
                         })
                 })?;
-            Ok(super::PipelineCache { archive })
+            Ok(super::PipelineCache {
+                archive,
+                archive_lock: RwLock::new(()),
+            })
         })
     }
 
     fn pipeline_cache_validation_key(&self) -> Option<[u8; 16]> {
-        // Partition caches by GPU (the device's IORegistry id) so a blob from a
-        // different device is rejected at the wgpu-core layer before it reaches
-        // `create_pipeline_cache`. Staleness across OS / driver / Metal updates is
-        // additionally caught by `MTLBinaryArchive`'s own validation plus the
-        // empty-archive fallback above.
+        // Partition caches by GPU so a blob from a different device is rejected at
+        // the wgpu-core layer before it reaches `create_pipeline_cache`. We key off
+        // the GPU *name* (e.g. "Apple M4 Pro") rather than `registryID`: the name is
+        // stable across reboots, whereas a registry id can change (e.g. eGPU
+        // hot-plug), which would spuriously invalidate a good cache every boot.
+        // Staleness across OS / driver / Metal updates is caught by
+        // `MTLBinaryArchive`'s own validation plus the empty-archive fallback above.
         const SCHEMA: u64 = 0x7767_7075_6d70_6c63; // bump if the encoding changes
-        let registry_id = self.shared.device.registryID();
+        let name = self.shared.device.name().to_string();
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325; // FNV-1a offset basis
+        for b in name.as_bytes() {
+            h ^= u64::from(*b);
+            h = h.wrapping_mul(0x100_0000_01b3);
+        }
         let mut key = [0u8; 16];
-        key[..8].copy_from_slice(&registry_id.to_le_bytes());
+        key[..8].copy_from_slice(&h.to_le_bytes());
         key[8..].copy_from_slice(&SCHEMA.to_le_bytes());
         Some(key)
     }
 
     unsafe fn pipeline_cache_get_data(&self, cache: &super::PipelineCache) -> Option<Vec<u8>> {
         // `MTLBinaryArchive` only serializes to a file URL; serialize to a scratch
-        // file and read it back as the byte blob wgpu-core persists.
+        // file and read it back as the byte blob wgpu-core persists. Take the write
+        // lock so serialization sees a consistent archive (no concurrent grow).
         autoreleasepool(|_| {
+            let _guard = cache.archive_lock.write();
             let scratch = super::PipelineCacheScratch::new();
             let url = NSURL::from_file_path(scratch.path())?;
             cache.archive.serializeToURL_error(&url).ok()?;

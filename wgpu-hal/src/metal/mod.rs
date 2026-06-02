@@ -1159,10 +1159,21 @@ unsafe impl Sync for CommandBuffer {}
 #[derive(Debug)]
 pub struct PipelineCache {
     pub(super) archive: Retained<ProtocolObject<dyn MTLBinaryArchive>>,
+    /// Serializes mutation of `archive`. wgpu allows pipeline creation from
+    /// multiple threads against one cache, but Apple does **not** document
+    /// `MTLBinaryArchive`'s `add*PipelineFunctions` / `serializeToURL` as
+    /// thread-safe (unlike Vulkan's `VkPipelineCache`, which is). We model the
+    /// access conservatively: pipeline creation takes a **read** lock (loading
+    /// from the archive concurrently is fine), while growing the archive
+    /// (`add*PipelineFunctions`) and serializing it take the **write** lock, so a
+    /// grow never races a load or another grow. If Apple confirms these are
+    /// internally synchronized, this can be dropped to allow lock-free parallel
+    /// cached compiles.
+    pub(super) archive_lock: RwLock<()>,
 }
 
-// SAFETY: `MTLBinaryArchive` is an Obj-C object that Apple documents as usable
-// across threads; pipeline creation may add to it from any thread.
+// SAFETY: `MTLBinaryArchive` is an Obj-C object usable across threads; access to
+// its non-thread-safe mutators is serialized via `archive_lock` (see above).
 unsafe impl Send for PipelineCache {}
 unsafe impl Sync for PipelineCache {}
 
