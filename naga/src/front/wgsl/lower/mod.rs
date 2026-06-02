@@ -2554,9 +2554,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 access
             }
             ast::Expression::String(_) => {
-                return Err(Box::new(Error::Internal(
-                    "String literals are only supported in debugPrintf",
-                )));
+                return Err(Box::new(Error::InvalidStringLiteral {
+                    span,
+                    description: "String literals are only supported in debugPrintf",
+                }))
             }
         };
 
@@ -3933,6 +3934,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
 
                     let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block
+                        .extend(rctx.emitter.finish(&rctx.function.expressions));
+                    rctx.emitter.start(&rctx.function.expressions);
                     rctx.block.push(
                         ir::Statement::DebugPrintf {
                             format,

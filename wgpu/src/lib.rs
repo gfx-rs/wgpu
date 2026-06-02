@@ -44,6 +44,7 @@
 //!
 //! - 🧪EXPERIMENTAL🧪 [Ray Tracing](https://github.com/gfx-rs/wgpu/blob/v30/docs/api-specs/ray_tracing.md).
 //! - 🧪EXPERIMENTAL🧪 [Mesh Shading](https://github.com/gfx-rs/wgpu/blob/v30/docs/api-specs/mesh_shading.md).
+//! - [Shader `debugPrintf`](https://github.com/gfx-rs/wgpu/blob/v30/docs/api-specs/debug_printf.md).
 //!
 //! ## Shader Support
 //!

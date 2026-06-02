@@ -101,28 +101,13 @@ impl crate::Adapter for super::Adapter {
                     cq_desc.setLogState(Some(&log_state));
 
                     let handler = StackBlock::new(
-                        |subsystem: *mut NSString,
-                         category: *mut NSString,
+                        |_subsystem: *mut NSString,
+                         _category: *mut NSString,
                          _level: MTLLogLevel,
                          message: NonNull<NSString>| {
-                            // SAFETY: message is NonNull<NSString>
-                            let msg = unsafe { message.as_ref() }.to_string();
-
-                            let cat = if !category.is_null() {
-                                // SAFETY: we checked for null, and category is an NSString ptr
-                                unsafe { (*category).to_string() }
-                            } else {
-                                "null".to_string()
-                            };
-
-                            let sub = if !subsystem.is_null() {
-                                // SAFETY: we checked for null, and subsystem is an NSString ptr
-                                unsafe { (*subsystem).to_string() }
-                            } else {
-                                "null".to_string()
-                            };
-
-                            println!("[{sub}::{cat}] {msg}");
+                            // SAFETY: message is NonNull<NSString>.
+                            let message = unsafe { message.as_ref() }.to_string();
+                            println!("[debugPrintf] {message}");
                         },
                     );
 

@@ -524,6 +524,10 @@ pub(crate) enum Error<'a> {
     FunctionMustUseReturnsVoid(Span, Span),
     FunctionMustUseOnNonFunction(Span),
     InvalidWorkGroupUniformLoad(Span),
+    InvalidStringLiteral {
+        span: Span,
+        description: &'static str,
+    },
     Internal(&'static str),
     ExpectedConstExprConcreteIntegerScalar(Span),
     ExpectedNonNegative(Span),
@@ -1348,6 +1352,11 @@ impl<'a> Error<'a> {
                 labels: vec![(*span, "".into())],
                 notes: vec!["passed type must be a workgroup pointer".into()],
                 message: "incorrect type passed to workgroupUniformLoad".into(),
+            },
+            Error::InvalidStringLiteral { span, description } => ParseError {
+                message: description.to_string(),
+                labels: vec![(span, "invalid string literal".into())],
+                notes: vec![],
             },
             Error::Internal(message) => ParseError {
                 notes: vec![(*message).into()],

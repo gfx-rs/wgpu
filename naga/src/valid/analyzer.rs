@@ -1213,6 +1213,7 @@ impl FunctionInfo {
                 } => {
                     let mut requirements = UniformityRequirements::empty();
                     for &expr in arguments {
+                        let _ = self.add_ref(expr);
                         requirements |= self.expressions[expr.index()].uniformity.requirements;
                     }
                     FunctionUniformity {

@@ -238,7 +238,7 @@ pub enum FunctionError {
     PayloadPointerNotGlobal,
     #[error("Expression {0:?} is used before it is defined/emitted")]
     InvalidExpression(Handle<crate::Expression>),
-    #[error("Argument {0:?} for `debugPrintf` must be a supported scalar or vector type")]
+    #[error("Argument {0:?} for `debugPrintf` must be a supported scalar type")]
     InvalidDebugPrintfArgument(Handle<crate::Expression>),
 }
 
@@ -1780,6 +1780,19 @@ impl super::Validator {
                     format: _,
                     ref arguments,
                 } => {
+                    if !self
+                        .capabilities
+                        .contains(super::Capabilities::DEBUG_PRINTF)
+                    {
+                        return Err(FunctionError::MissingCapability(
+                            super::Capabilities::DEBUG_PRINTF,
+                        )
+                        .with_span_static(
+                            span,
+                            "`debugPrintf` requires the DEBUG_PRINTF capability",
+                        ));
+                    }
+
                     for &argument in arguments {
                         let ty =
                             context.resolve_type_inner(argument, &self.valid_expression_set)?;

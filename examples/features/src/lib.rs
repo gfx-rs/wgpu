@@ -10,7 +10,6 @@ pub mod bunnymark;
 pub mod conservative_raster;
 pub mod cooperative_matrix;
 pub mod cube;
-pub mod debug_printf;
 pub mod error_scope;
 pub mod hello_synchronization;
 pub mod hello_triangle;

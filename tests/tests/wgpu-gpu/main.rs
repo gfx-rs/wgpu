@@ -28,6 +28,7 @@ mod cloneable_types;
 mod compute_pass_ownership;
 mod compute_pass_transition_resources;
 mod create_surface_error;
+mod debug_printf;
 mod device;
 mod dispatch_workgroups_indirect;
 mod draw_index;
@@ -105,6 +106,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     #[cfg(wasm_test)]
     create_surface_error::all_tests(&mut tests);
 
+    debug_printf::all_tests(&mut tests);
     device::all_tests(&mut tests);
     dispatch_workgroups_indirect::all_tests(&mut tests);
     draw_index::all_tests(&mut tests);

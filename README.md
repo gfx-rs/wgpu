@@ -91,6 +91,12 @@ See the [documentation](https://docs.rs/wgpu/latest/wgpu/index.html?search=env) 
 
 When running the CTS, use the variables `DENO_WEBGPU_ADAPTER_NAME`, `DENO_WEBGPU_BACKEND`, `DENO_WEBGPU_POWER_PREFERENCE`, `DENO_WEBGPU_DX12_COMPILER`, and `DENO_WEBGPU_STRICT_COMPLIANCE`.
 
+## Extension Specifications
+
+Some native-only functionality extends beyond core WebGPU. See the API specs for details:
+
+- [Shader `debugPrintf`](./docs/api-specs/debug_printf.md)
+
 ## Repo Overview
 
 For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./docs/big-picture.png).
