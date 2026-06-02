@@ -742,20 +742,22 @@ impl super::CapabilitiesQuery {
             ),
             sampler_clamp_to_border: Self::supports_any(device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
             indirect_draw_dispatch: Self::supports_any(device, INDIRECT_DRAW_DISPATCH_SUPPORT),
-            indirect_command_buffers_rendering: Self::supports_any(
-                device,
-                INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT,
-            ) || (icb_family_check
-                && (device.supportsFamily(MTLGPUFamily::Apple3)
-                    || device.supportsFamily(MTLGPUFamily::Mac2)
-                    || device.supportsFamily(MTLGPUFamily::Metal3))),
-            indirect_command_buffers_compute: Self::supports_any(
-                device,
-                INDIRECT_COMMAND_BUFFERS_COMPUTE_SUPPORT,
-            ) || (icb_family_check
-                && (device.supportsFamily(MTLGPUFamily::Apple3)
-                    || device.supportsFamily(MTLGPUFamily::Mac2)
-                    || device.supportsFamily(MTLGPUFamily::Metal3))),
+            // Apple's paravirtual Metal device advertises the relevant feature
+            // sets/families but aborts when executing render ICBs in CI. Keep
+            // ICB enablement to real Metal devices until the virtual driver is
+            // validated separately.
+            indirect_command_buffers_rendering: !is_virtual
+                && (Self::supports_any(device, INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT)
+                    || (icb_family_check
+                        && (device.supportsFamily(MTLGPUFamily::Apple3)
+                            || device.supportsFamily(MTLGPUFamily::Mac2)
+                            || device.supportsFamily(MTLGPUFamily::Metal3)))),
+            indirect_command_buffers_compute: !is_virtual
+                && (Self::supports_any(device, INDIRECT_COMMAND_BUFFERS_COMPUTE_SUPPORT)
+                    || (icb_family_check
+                        && (device.supportsFamily(MTLGPUFamily::Apple3)
+                            || device.supportsFamily(MTLGPUFamily::Mac2)
+                            || device.supportsFamily(MTLGPUFamily::Metal3)))),
             base_vertex_first_instance_drawing: Self::supports_any(
                 device,
                 BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
