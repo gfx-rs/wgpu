@@ -1,0 +1,5 @@
+capabilities = "DEBUG_PRINTF"
+targets = "SPIRV | METAL | WGSL"
+
+[spv]
+version = [1, 0]
