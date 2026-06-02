@@ -442,7 +442,12 @@ static WRITE_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_NV12: GpuTestConfiguration =
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_NV12)
-                .limits(Limits::downlevel_defaults()),
+                .limits(Limits::downlevel_defaults())
+                .expect_fail(
+                    // https://github.com/gfx-rs/wgpu/issues/9627
+                    FailureCase::backend(wgpu::Backends::DX12)
+                        .panic("called `Option::unwrap()` on a `None` value"),
+                ),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -462,7 +467,12 @@ static WRITE_TEXTURE_PLANE1_LEAVES_PLANE0_UNINIT_NV12: GpuTestConfiguration =
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_NV12)
-                .limits(Limits::downlevel_defaults()),
+                .limits(Limits::downlevel_defaults())
+                .expect_fail(
+                    // https://github.com/gfx-rs/wgpu/issues/9627
+                    FailureCase::backend(wgpu::Backends::DX12)
+                        .panic("called `Option::unwrap()` on a `None` value"),
+                ),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -482,7 +492,12 @@ static WRITE_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_P010: GpuTestConfiguration =
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_P010 | Features::TEXTURE_FORMAT_16BIT_NORM)
-                .limits(Limits::downlevel_defaults()),
+                .limits(Limits::downlevel_defaults())
+                .expect_fail(
+                    // https://github.com/gfx-rs/wgpu/issues/9627
+                    FailureCase::backend(wgpu::Backends::DX12)
+                        .panic("called `Option::unwrap()` on a `None` value"),
+                ),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -502,7 +517,12 @@ static WRITE_TEXTURE_PLANE1_LEAVES_PLANE0_UNINIT_P010: GpuTestConfiguration =
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_P010 | Features::TEXTURE_FORMAT_16BIT_NORM)
-                .limits(Limits::downlevel_defaults()),
+                .limits(Limits::downlevel_defaults())
+                .expect_fail(
+                    // https://github.com/gfx-rs/wgpu/issues/9627
+                    FailureCase::backend(wgpu::Backends::DX12)
+                        .panic("called `Option::unwrap()` on a `None` value"),
+                ),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -545,7 +565,12 @@ static COPY_BUFFER_TO_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_NV12: GpuTestConfigura
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_NV12)
-                .limits(Limits::downlevel_defaults()),
+                .limits(Limits::downlevel_defaults())
+                .expect_fail(
+                    // https://github.com/gfx-rs/wgpu/issues/9627
+                    FailureCase::backend(wgpu::Backends::DX12)
+                        .panic("called `Option::unwrap()` on a `None` value"),
+                ),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
