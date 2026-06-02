@@ -1,5 +1,8 @@
 capabilities = "DEBUG_PRINTF"
 targets = "SPIRV | METAL | WGSL"
 
+[msl]
+lang_version = [3, 2]
+
 [spv]
 version = [1, 0]
