@@ -1652,12 +1652,35 @@ impl crate::Device for super::Device {
                 };
             }
 
+            // Bind the pipeline cache's archive on the standard render path so the
+            // driver loads this pipeline from it on a hit instead of recompiling
+            // (no `FailOnBinaryArchiveMiss` — a miss just compiles). Mesh render
+            // pipeline descriptors don't expose `binaryArchives`, so mesh pipelines
+            // are not archive-cached.
+            if let (Some(cache), MetalGenericRenderPipelineDescriptor::Standard(d)) =
+                (desc.cache, &descriptor)
+            {
+                let archives = NSArray::from_slice(&[cache.archive.as_ref()]);
+                d.setBinaryArchives(Some(&archives));
+            }
+
             // Create the pipeline from descriptor
             let raw = match descriptor {
-                MetalGenericRenderPipelineDescriptor::Standard(d) => self
-                    .shared
-                    .device
-                    .newRenderPipelineStateWithDescriptor_error(&d),
+                MetalGenericRenderPipelineDescriptor::Standard(d) => {
+                    let raw = self
+                        .shared
+                        .device
+                        .newRenderPipelineStateWithDescriptor_error(&d);
+                    // Grow the archive with this pipeline so a later
+                    // `pipeline_cache_get_data` serializes it (best-effort; adding an
+                    // already-present pipeline is a no-op).
+                    if let Some(cache) = desc.cache {
+                        let _ = cache
+                            .archive
+                            .addRenderPipelineFunctionsWithDescriptor_error(&d);
+                    }
+                    raw
+                }
                 MetalGenericRenderPipelineDescriptor::Mesh(d) => self
                     .shared
                     .device
