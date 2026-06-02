@@ -206,6 +206,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Fix incorrect checks for dynamic binding bounds when calling an encoder's `set_bind_group` in passes and bundles. By @ErichDonGubler in [#9308](https://github.com/gfx-rs/wgpu/pull/9308).
 - Writes from `Queue::write_buffer` are now flushed by calls to `Buffer::map_async` for that same buffer, to prevent reading stale data. `on_submitted_work_done` also now flushes pending writes. By @andyleiserson in [#9307](https://github.com/gfx-rs/wgpu/pull/9307).
 - Fix missing dependency feature activations when building wgpu-hal with gles/dx12 in isolation. By @wumpf in [#9325](https://github.com/gfx-rs/wgpu/pull/9325)
+- Stencil clear and reference values are now truncated to 8 bits. By @beicause in [#9607](https://github.com/gfx-rs/wgpu/pull/9607).
 
 #### naga
 
