@@ -50,9 +50,9 @@ use objc2_metal::{
     MTLComputeCommandEncoder, MTLComputePipelineState, MTLCounterSampleBuffer, MTLCullMode,
     MTLDepthClipMode, MTLDepthStencilState, MTLDevice, MTLDrawable, MTLIndexType,
     MTLLanguageVersion, MTLLibrary, MTLPrimitiveType, MTLReadWriteTextureTier,
-    MTLRenderCommandEncoder, MTLRenderPipelineState, MTLRenderStages, MTLResource,
-    MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize, MTLTexture, MTLTextureType,
-    MTLTriangleFillMode, MTLWinding,
+    MTLRenderCommandEncoder, MTLRenderPassDescriptor, MTLRenderPipelineState, MTLRenderStages,
+    MTLResource, MTLResourceUsage, MTLSamplerState, MTLScissorRect, MTLSharedEvent, MTLSize,
+    MTLTexture, MTLTextureType, MTLTriangleFillMode, MTLViewport, MTLWinding,
 };
 use objc2_quartz_core::CAMetalLayer;
 use parking_lot::{Mutex, RwLock};
@@ -323,6 +323,8 @@ struct CapabilitiesQuery {
     supports_raytracing: bool,
     shader_per_vertex: bool,
     supports_multisample_array: bool,
+    indirect_command_buffers_rendering: bool,
+    indirect_command_buffers_compute: bool,
 }
 
 #[derive(Debug)]
@@ -334,6 +336,12 @@ struct PrivateCapabilities {
     timestamp_query_support: TimestampQuerySupport,
     supports_memoryless_storage: bool,
     mesh_shaders: bool,
+    /// Metal ICB rendering is intentionally tracked separately from
+    /// `MULTI_DRAW_INDIRECT_COUNT`: WebGPU indirect-args buffers still need a
+    /// GPU command-generation pass before this can be exposed as non-emulated
+    /// multi-draw.
+    indirect_command_buffers_rendering: bool,
+    indirect_command_buffers_compute: bool,
 }
 
 #[derive(Debug)]
@@ -390,6 +398,7 @@ struct AdapterShared {
     private_texture_format_caps: PrivateTextureFormatCapabilities,
     settings: Settings,
     presentation_timer: time::PresentationTimer,
+    icb_command_pipelines: Mutex<Option<command::IcbCommandPipelines>>,
 }
 
 #[cfg(send_sync)]
@@ -412,6 +421,7 @@ impl AdapterShared {
             device,
             settings: Settings::default(),
             presentation_timer: time::PresentationTimer::new(),
+            icb_command_pipelines: Mutex::new(None),
         }
     }
 
@@ -997,6 +1007,33 @@ pub struct RenderPipeline {
     )>,
 }
 
+#[derive(Clone)]
+struct RenderPipelineState {
+    raw: Retained<ProtocolObject<dyn MTLRenderPipelineState>>,
+    raw_triangle_fill_mode: MTLTriangleFillMode,
+    raw_front_winding: MTLWinding,
+    raw_cull_mode: MTLCullMode,
+    raw_depth_clip_mode: Option<MTLDepthClipMode>,
+    depth_stencil: Option<(
+        Retained<ProtocolObject<dyn MTLDepthStencilState>>,
+        wgt::DepthBiasState,
+    )>,
+}
+
+#[derive(Clone)]
+struct VertexBufferState {
+    buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+    offset: usize,
+}
+
+#[derive(Clone)]
+struct RenderPassResumeState {
+    descriptor: Retained<MTLRenderPassDescriptor>,
+    can_resume_for_icb: bool,
+    multiview_mask: Option<core::num::NonZeroU32>,
+    label: Option<String>,
+}
+
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPipeline: Send, Sync);
 
@@ -1086,6 +1123,14 @@ struct CommandState {
         Option<Retained<ProtocolObject<dyn MTLAccelerationStructureCommandEncoder>>>,
     render: Option<Retained<ProtocolObject<dyn MTLRenderCommandEncoder>>>,
     compute: Option<Retained<ProtocolObject<dyn MTLComputeCommandEncoder>>>,
+    render_pass: Option<RenderPassResumeState>,
+    current_render_pipeline: Option<RenderPipelineState>,
+    bound_vertex_buffers: Vec<Option<VertexBufferState>>,
+    current_viewport: Option<MTLViewport>,
+    current_scissor: Option<MTLScissorRect>,
+    current_stencil_reference: Option<u32>,
+    current_blend_color: Option<[f32; 4]>,
+    render_bind_groups_active: bool,
     raw_primitive_type: MTLPrimitiveType,
     index: Option<IndexState>,
     stage_infos: MultiStageData<PipelineStageInfo>,

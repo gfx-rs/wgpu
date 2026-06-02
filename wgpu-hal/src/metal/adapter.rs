@@ -543,6 +543,22 @@ const INDIRECT_DRAW_DISPATCH_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily1_v1,
 ];
 
+/// "Indirect command buffers (rendering)" in the Metal feature set tables.
+///
+/// Apple documents this as Apple3/Mac2-class functionality in the modern
+/// family table, while older sample code used the feature-set form below.
+/// Keep both checks so A12/A14 and older A10X-era devices are handled by the
+/// runtime capability query instead of by a hard-coded marketing-family table.
+const INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily3_v4,
+    MTLFeatureSet::tvOS_GPUFamily2_v1,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
+];
+
+/// "Indirect command buffers (compute)" in the Metal feature set tables.
+const INDIRECT_COMMAND_BUFFERS_COMPUTE_SUPPORT: &[MTLFeatureSet] =
+    INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT;
+
 /// "Base vertex/instance drawing" in the Metal feature set tables
 ///
 /// in our terms, `base_vertex` and `first_instance` must be 0
@@ -615,6 +631,17 @@ impl super::CapabilitiesQuery {
         let os_type = super::OsType::new(version, device);
 
         let family_check = available!(macos = 10.15, ios = 13.0, tvos = 13.0, visionos = 1.0);
+        // ICB support has been empirically validated on A12/iOS 18+ and
+        // S8/watchOS 11+ hardware even where older public tables lag behind.
+        // Keep this narrower than `family_check` so watchOS does not inherit
+        // unrelated family-based feature exposure.
+        let icb_family_check = available!(
+            macos = 10.15,
+            ios = 13.0,
+            tvos = 13.0,
+            visionos = 1.0,
+            watchos = 11.0
+        );
         let metal3 = family_check && device.supportsFamily(MTLGPUFamily::Metal3);
         let metal4 = family_check && device.supportsFamily(MTLGPUFamily::Metal4);
         let mut sample_count_mask = crate::TextureFormatCapabilities::MULTISAMPLE_X4; // 1 and 4 samples are supported on all devices
@@ -715,6 +742,20 @@ impl super::CapabilitiesQuery {
             ),
             sampler_clamp_to_border: Self::supports_any(device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
             indirect_draw_dispatch: Self::supports_any(device, INDIRECT_DRAW_DISPATCH_SUPPORT),
+            indirect_command_buffers_rendering: Self::supports_any(
+                device,
+                INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT,
+            ) || (icb_family_check
+                && (device.supportsFamily(MTLGPUFamily::Apple3)
+                    || device.supportsFamily(MTLGPUFamily::Mac2)
+                    || device.supportsFamily(MTLGPUFamily::Metal3))),
+            indirect_command_buffers_compute: Self::supports_any(
+                device,
+                INDIRECT_COMMAND_BUFFERS_COMPUTE_SUPPORT,
+            ) || (icb_family_check
+                && (device.supportsFamily(MTLGPUFamily::Apple3)
+                    || device.supportsFamily(MTLGPUFamily::Mac2)
+                    || device.supportsFamily(MTLGPUFamily::Metal3))),
             base_vertex_first_instance_drawing: Self::supports_any(
                 device,
                 BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
@@ -1476,6 +1517,8 @@ impl super::CapabilitiesQuery {
             timestamp_query_support: self.timestamp_query_support,
             supports_memoryless_storage: self.supports_memoryless_storage,
             mesh_shaders: self.mesh_shaders,
+            indirect_command_buffers_rendering: self.indirect_command_buffers_rendering,
+            indirect_command_buffers_compute: self.indirect_command_buffers_compute,
         }
     }
 

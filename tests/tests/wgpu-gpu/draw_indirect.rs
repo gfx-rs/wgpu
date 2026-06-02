@@ -1,3 +1,5 @@
+use std::{mem::size_of, num::NonZeroU64};
+
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     vertex_attr_array,
@@ -29,6 +31,8 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         INDIRECT_BUFFER_OFFSETS,
         MULTI_DRAW_INDEXED_INDIRECT,
         MULTI_DRAW_INDIRECT,
+        MULTI_DRAW_INDIRECT_GPU_GENERATED_ARGS,
+        MULTI_DRAW_INDEXED_INDIRECT_GPU_GENERATED_ARGS,
     ]);
 }
 
@@ -354,6 +358,378 @@ async fn run_test_inner(
     };
     assert!(succeeded);
 }
+
+fn create_gpu_generated_args_pipeline(
+    ctx: &TestingContext,
+    shader_src: &str,
+    args_buffer: &wgpu::Buffer,
+    args_size: u64,
+) -> (wgpu::ComputePipeline, wgpu::BindGroup) {
+    let shader = ctx
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(shader_src.into()),
+        });
+    let bind_group_layout = ctx
+        .device
+        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: NonZeroU64::new(args_size),
+                },
+                count: None,
+            }],
+        });
+    let pipeline_layout = ctx
+        .device
+        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[Some(&bind_group_layout)],
+            immediate_size: 0,
+        });
+    let pipeline = ctx
+        .device
+        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: Some("cs_main"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
+    let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: args_buffer.as_entire_binding(),
+        }],
+    });
+
+    (pipeline, bind_group)
+}
+
+fn create_indirect_render_pipeline(
+    ctx: &TestingContext,
+    indexed: bool,
+) -> (wgpu::RenderPipeline, wgpu::Buffer, Option<wgpu::Buffer>) {
+    let shader = ctx
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(
+                "
+                    @vertex
+                    fn vs_main(@location(0) position: vec2f) -> @builtin(position) vec4f {
+                        return vec4f(position, 0.0, 1.0);
+                    }
+
+                    @fragment
+                    fn fs_main() -> @location(0) vec4f {
+                        return vec4f(1.0);
+                    }
+                "
+                .into(),
+            ),
+        });
+    let pipeline = ctx
+        .device
+        .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: None,
+            vertex: wgpu::VertexState {
+                buffers: &[Some(wgpu::VertexBufferLayout {
+                    array_stride: 8,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &vertex_attr_array![0 => Float32x2],
+                })],
+                module: &shader,
+                entry_point: Some("vs_main"),
+                compilation_options: Default::default(),
+            },
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: wgpu::TextureFormat::Rgba8Unorm,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
+
+    let vertex_buffer_content = if indexed {
+        &[
+            -1.0f32, -1.0, // Bottom left
+            1.0, 1.0, // Top right
+            -1.0, 1.0, // Top left
+            1.0, -1.0, // Bottom right
+        ][..]
+    } else {
+        &[
+            -1.0f32, -1.0, // Bottom left
+            1.0, 1.0, // Top right
+            -1.0, 1.0, // Top left
+            -1.0, -1.0, // Bottom left
+            1.0, -1.0, // Bottom right
+            1.0, 1.0, // Top right
+        ][..]
+    };
+    let vertex_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(vertex_buffer_content),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let index_buffer = indexed.then(|| {
+        let index_buffer_content = [
+            0u32, 1, 2, // Triangle 1
+            0, 3, 1, // Triangle 2
+        ];
+        ctx.device.create_buffer_init(&BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&index_buffer_content),
+            usage: wgpu::BufferUsages::INDEX,
+        })
+    });
+
+    (pipeline, vertex_buffer, index_buffer)
+}
+
+async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
+    let indirect_stride = if indexed {
+        size_of::<wgpu::util::DrawIndexedIndirectArgs>() as u64
+    } else {
+        size_of::<wgpu::util::DrawIndirectArgs>() as u64
+    };
+    let indirect_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 2 * indirect_stride,
+        usage: wgpu::BufferUsages::INDIRECT
+            | wgpu::BufferUsages::COPY_DST
+            | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+    let args_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: &vec![0; (2 * indirect_stride) as usize],
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+    });
+
+    let draw_shader_src = "
+        @group(0) @binding(0) var<storage, read_write> args: array<u32, 8>;
+
+        @compute @workgroup_size(1)
+        fn cs_main(@builtin(global_invocation_id) id: vec3u) {
+            if (id.x != 0u) {
+                return;
+            }
+            args[0] = 3u;
+            args[1] = 1u;
+            args[2] = 0u;
+            args[3] = 0u;
+            args[4] = 3u;
+            args[5] = 1u;
+            args[6] = 3u;
+            args[7] = 0u;
+        }
+    ";
+    let indexed_draw_shader_src = "
+        @group(0) @binding(0) var<storage, read_write> args: array<u32, 10>;
+
+        @compute @workgroup_size(1)
+        fn cs_main(@builtin(global_invocation_id) id: vec3u) {
+            if (id.x != 0u) {
+                return;
+            }
+            args[0] = 3u;
+            args[1] = 1u;
+            args[2] = 0u;
+            args[3] = 0u;
+            args[4] = 0u;
+            args[5] = 3u;
+            args[6] = 1u;
+            args[7] = 3u;
+            args[8] = 0u;
+            args[9] = 0u;
+        }
+    ";
+    let (compute_pipeline, bind_group) = create_gpu_generated_args_pipeline(
+        &ctx,
+        if indexed {
+            indexed_draw_shader_src
+        } else {
+            draw_shader_src
+        },
+        &args_buffer,
+        2 * indirect_stride,
+    );
+    let (render_pipeline, vertex_buffer, index_buffer) =
+        create_indirect_render_pipeline(&ctx, indexed);
+
+    let out_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: 256,
+            height: 256,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let out_texture_view = out_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+    let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 256 * 256 * 4,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let indirect_readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 2 * indirect_stride,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let expected_draw_args: &[u32] = if indexed {
+        &[3, 1, 0, 0, 0, 3, 1, 3, 0, 0]
+    } else {
+        &[3, 1, 0, 0, 3, 1, 3, 0]
+    };
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    {
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
+        cpass.set_pipeline(&compute_pipeline);
+        cpass.set_bind_group(0, &bind_group, &[]);
+        cpass.dispatch_workgroups(1, 1, 1);
+    }
+    encoder.copy_buffer_to_buffer(&args_buffer, 0, &indirect_buffer, 0, 2 * indirect_stride);
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+                resolve_target: None,
+                view: &out_texture_view,
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+
+        rpass.set_pipeline(&render_pipeline);
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        if let Some(index_buffer) = index_buffer.as_ref() {
+            rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            rpass.multi_draw_indexed_indirect(&indirect_buffer, 0, 2);
+        } else {
+            rpass.multi_draw_indirect(&indirect_buffer, 0, 2);
+        }
+    }
+
+    encoder.copy_buffer_to_buffer(
+        &indirect_buffer,
+        0,
+        &indirect_readback_buffer,
+        0,
+        2 * indirect_stride,
+    );
+
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &out_texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback_buffer,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(256 * 4),
+                rows_per_image: None,
+            },
+        },
+        wgpu::Extent3d {
+            width: 256,
+            height: 256,
+            depth_or_array_layers: 1,
+        },
+    );
+
+    ctx.queue.submit([encoder.finish()]);
+
+    let slice = readback_buffer.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |_| ());
+    let indirect_slice = indirect_readback_buffer.slice(..);
+    indirect_slice.map_async(wgpu::MapMode::Read, |_| ());
+
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
+
+    let indirect_data = indirect_slice.get_mapped_range().unwrap();
+    assert_eq!(
+        bytemuck::cast_slice::<u8, u32>(&indirect_data),
+        expected_draw_args
+    );
+
+    let data = slice.get_mapped_range().unwrap();
+    let first_bad_pixel = data.chunks_exact(4).position(|rgba| rgba != [u8::MAX; 4]);
+    if let Some(first_bad_pixel) = first_bad_pixel {
+        let non_zero_pixels = data.chunks_exact(4).filter(|rgba| *rgba != [0; 4]).count();
+        eprintln!(
+            "first_bad_pixel={first_bad_pixel} rgba={:?} non_zero_pixels={non_zero_pixels}",
+            &data[first_bad_pixel * 4..first_bad_pixel * 4 + 4]
+        );
+    }
+    assert_eq!(first_bad_pixel, None);
+}
+
+#[gpu_test]
+static MULTI_DRAW_INDIRECT_GPU_GENERATED_ARGS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION),
+    )
+    .run_async(|ctx| run_gpu_generated_multi_draw_test(ctx, false));
+
+#[gpu_test]
+static MULTI_DRAW_INDEXED_INDIRECT_GPU_GENERATED_ARGS: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .test_features_limits()
+                .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION),
+        )
+        .run_async(|ctx| run_gpu_generated_multi_draw_test(ctx, true));
 
 macro_rules! make_test {
     ($name:ident, $test_data:expr) => {

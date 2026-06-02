@@ -1286,6 +1286,9 @@ impl crate::Device for super::Device {
                 unsafe fn setMaxVertexAmplificationCount(&self, count: NSUInteger) {
                     unsafe { descriptor_fn!(self.setMaxVertexAmplificationCount(count)) }
                 }
+                fn setSupportIndirectCommandBuffers(&self, enabled: bool) {
+                    descriptor_fn!(self.setSupportIndirectCommandBuffers(enabled));
+                }
             }
 
             // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
@@ -1649,6 +1652,9 @@ impl crate::Device for super::Device {
                 unsafe {
                     descriptor.setMaxVertexAmplificationCount(mv.get().count_ones() as usize)
                 };
+            }
+            if self.shared.private_caps.indirect_command_buffers_rendering {
+                descriptor.setSupportIndirectCommandBuffers(true);
             }
 
             // Create the pipeline from descriptor

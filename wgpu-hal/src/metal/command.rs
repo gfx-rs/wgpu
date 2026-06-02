@@ -4,13 +4,16 @@ use objc2::{
 };
 use objc2_foundation::{NSRange, NSString, NSUInteger};
 use objc2_metal::{
-    MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLBlitCommandEncoder,
-    MTLBlitPassDescriptor, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandEncoder,
-    MTLCommandQueue, MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLCounterDontSample,
-    MTLDevice, MTLLoadAction, MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor,
-    MTLResidencySet, MTLResidencySetDescriptor, MTLSamplerState, MTLScissorRect, MTLSize,
-    MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping, MTLViewport,
-    MTLVisibilityResultMode,
+    MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLArgumentEncoder,
+    MTLBlitCommandEncoder, MTLBlitPassDescriptor, MTLBuffer, MTLCommandBuffer,
+    MTLCommandBufferStatus, MTLCommandEncoder, MTLCommandQueue, MTLCompileOptions,
+    MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLComputePipelineState,
+    MTLCounterDontSample, MTLDevice, MTLFunction, MTLIndexType, MTLIndirectCommandBuffer,
+    MTLIndirectCommandBufferDescriptor, MTLIndirectCommandType, MTLLibrary, MTLLoadAction,
+    MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor, MTLResidencySet,
+    MTLResidencySetDescriptor, MTLResource, MTLResourceOptions, MTLResourceUsage, MTLSamplerState,
+    MTLScissorRect, MTLSize, MTLStorageMode, MTLStoreAction, MTLTexture,
+    MTLVertexAmplificationViewMapping, MTLViewport, MTLVisibilityResultMode,
 };
 
 use super::{
@@ -23,11 +26,159 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::{ops::Range, ptr::NonNull, sync::atomic};
+use core::{mem::size_of, ops::Range, ptr::NonNull, sync::atomic};
 use smallvec::SmallVec;
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
+const ICB_WORKGROUP_WIDTH: usize = 64;
+
+const ICB_GENERATION_SHADER: &str = r#"
+#include <metal_stdlib>
+#include <metal_command_buffer>
+using namespace metal;
+
+struct WgpuIcbArguments {
+    command_buffer icb [[id(0)]];
+};
+
+struct WgpuDrawIndirectArgs {
+    uint vertex_count;
+    uint instance_count;
+    uint first_vertex;
+    uint first_instance;
+};
+
+struct WgpuDrawIndexedIndirectArgs {
+    uint index_count;
+    uint instance_count;
+    uint first_index;
+    int base_vertex;
+    uint first_instance;
+};
+
+kernel void wgpu_generate_mdi_icb(
+    device WgpuIcbArguments& icb_args [[buffer(0)]],
+    const device WgpuDrawIndirectArgs* draw_args [[buffer(1)]],
+    constant uint& primitive_type_value [[buffer(2)]],
+    uint tid [[thread_position_in_grid]])
+{
+    const WgpuDrawIndirectArgs args = draw_args[tid];
+    render_command cmd(icb_args.icb, tid);
+    if (args.vertex_count == 0 || args.instance_count == 0) {
+        cmd.reset();
+        return;
+    }
+    const primitive_type primitive = static_cast<primitive_type>(primitive_type_value);
+    cmd.draw_primitives(
+        primitive,
+        args.first_vertex,
+        args.vertex_count,
+        args.instance_count,
+        args.first_instance);
+}
+
+kernel void wgpu_generate_indexed_mdi_icb_u16(
+    device WgpuIcbArguments& icb_args [[buffer(0)]],
+    const device WgpuDrawIndexedIndirectArgs* draw_args [[buffer(1)]],
+    const device ushort* index_buffer [[buffer(2)]],
+    constant uint& primitive_type_value [[buffer(3)]],
+    uint tid [[thread_position_in_grid]])
+{
+    const WgpuDrawIndexedIndirectArgs args = draw_args[tid];
+    render_command cmd(icb_args.icb, tid);
+    if (args.index_count == 0 || args.instance_count == 0) {
+        cmd.reset();
+        return;
+    }
+    const primitive_type primitive = static_cast<primitive_type>(primitive_type_value);
+    cmd.draw_indexed_primitives(
+        primitive,
+        args.index_count,
+        index_buffer + args.first_index,
+        args.instance_count,
+        args.base_vertex,
+        args.first_instance);
+}
+
+kernel void wgpu_generate_indexed_mdi_icb_u32(
+    device WgpuIcbArguments& icb_args [[buffer(0)]],
+    const device WgpuDrawIndexedIndirectArgs* draw_args [[buffer(1)]],
+    const device uint* index_buffer [[buffer(2)]],
+    constant uint& primitive_type_value [[buffer(3)]],
+    uint tid [[thread_position_in_grid]])
+{
+    const WgpuDrawIndexedIndirectArgs args = draw_args[tid];
+    render_command cmd(icb_args.icb, tid);
+    if (args.index_count == 0 || args.instance_count == 0) {
+        cmd.reset();
+        return;
+    }
+    const primitive_type primitive = static_cast<primitive_type>(primitive_type_value);
+    cmd.draw_indexed_primitives(
+        primitive,
+        args.index_count,
+        index_buffer + args.first_index,
+        args.instance_count,
+        args.base_vertex,
+        args.first_instance);
+}
+"#;
+
+#[derive(Clone)]
+pub(super) struct IcbCommandPipelines {
+    draw: IcbCommandPipeline,
+    indexed_u16: IcbCommandPipeline,
+    indexed_u32: IcbCommandPipeline,
+}
+
+#[derive(Clone)]
+struct IcbCommandPipeline {
+    function: Retained<ProtocolObject<dyn MTLFunction>>,
+    pipeline: Retained<ProtocolObject<dyn MTLComputePipelineState>>,
+}
+
+impl IcbCommandPipelines {
+    fn new(shared: &super::AdapterShared) -> Result<Self, crate::DeviceError> {
+        let options = MTLCompileOptions::new();
+        options.setLanguageVersion(shared.private_caps.msl_version);
+
+        let library = shared
+            .device
+            .newLibraryWithSource_options_error(
+                &NSString::from_str(ICB_GENERATION_SHADER),
+                Some(&options),
+            )
+            .map_err(|err| {
+                log::error!("failed to compile Metal ICB generation shader: {err}");
+                crate::DeviceError::Unexpected
+            })?;
+
+        let make_pipeline = |name: &str| -> Result<IcbCommandPipeline, crate::DeviceError> {
+            let function = library
+                .newFunctionWithName(&NSString::from_str(name))
+                .ok_or_else(|| {
+                    log::error!("Metal ICB generation function '{name}' was not found");
+                    crate::DeviceError::Unexpected
+                })?;
+            let pipeline = shared
+                .device
+                .newComputePipelineStateWithFunction_error(&function)
+                .map_err(|err| {
+                    log::error!("failed to create Metal ICB generation pipeline '{name}': {err}");
+                    crate::DeviceError::Unexpected
+                })?;
+
+            Ok(IcbCommandPipeline { function, pipeline })
+        };
+
+        Ok(Self {
+            draw: make_pipeline("wgpu_generate_mdi_icb")?,
+            indexed_u16: make_pipeline("wgpu_generate_indexed_mdi_icb_u16")?,
+            indexed_u32: make_pipeline("wgpu_generate_indexed_mdi_icb_u32")?,
+        })
+    }
+}
 
 impl Default for super::CommandState {
     fn default() -> Self {
@@ -36,6 +187,14 @@ impl Default for super::CommandState {
             acceleration_structure_builder: None,
             render: None,
             compute: None,
+            render_pass: None,
+            current_render_pipeline: None,
+            bound_vertex_buffers: Vec::new(),
+            current_viewport: None,
+            current_scissor: None,
+            current_stencil_reference: None,
+            current_blend_color: None,
+            render_bind_groups_active: false,
             raw_primitive_type: MTLPrimitiveType::Point,
             index: None,
             stage_infos: Default::default(),
@@ -303,6 +462,473 @@ impl super::CommandEncoder {
         self.leave_acceleration_structure_builder();
     }
 
+    fn get_icb_command_pipelines(&self) -> Result<IcbCommandPipelines, crate::DeviceError> {
+        let mut pipelines = self.shared.icb_command_pipelines.lock();
+        if pipelines.is_none() {
+            *pipelines = Some(IcbCommandPipelines::new(&self.shared)?);
+        }
+        Ok(pipelines.as_ref().unwrap().clone())
+    }
+
+    fn can_use_icb_multi_draw(&self, indexed: bool, draw_count: u32) -> bool {
+        if draw_count <= 1
+            || !self.shared.private_caps.indirect_command_buffers_compute
+            || !self.shared.private_caps.indirect_command_buffers_rendering
+            || self.state.current_render_pipeline.is_none()
+            || self.state.render_bind_groups_active
+            || !self.state.immediates.is_empty()
+        {
+            return false;
+        }
+
+        if indexed && self.state.index.is_none() {
+            return false;
+        }
+
+        self.state
+            .render_pass
+            .as_ref()
+            .is_some_and(|pass| pass.can_resume_for_icb)
+    }
+
+    fn mark_render_pass_store_actions_for_icb_resume(descriptor: &MTLRenderPassDescriptor) {
+        for index in 0..crate::MAX_COLOR_ATTACHMENTS {
+            let attachment = unsafe {
+                descriptor
+                    .colorAttachments()
+                    .objectAtIndexedSubscript(index)
+            };
+            if attachment.texture().is_some() {
+                attachment.setLoadAction(MTLLoadAction::Load);
+                attachment.setStoreAction(MTLStoreAction::Store);
+            }
+        }
+
+        let depth_attachment = descriptor.depthAttachment();
+        if depth_attachment.texture().is_some() {
+            depth_attachment.setLoadAction(MTLLoadAction::Load);
+            depth_attachment.setStoreAction(MTLStoreAction::Store);
+        }
+
+        let stencil_attachment = descriptor.stencilAttachment();
+        if stencil_attachment.texture().is_some() {
+            stencil_attachment.setLoadAction(MTLLoadAction::Load);
+            stencil_attachment.setStoreAction(MTLStoreAction::Store);
+        }
+    }
+
+    fn apply_vertex_amplification(
+        encoder: &ProtocolObject<dyn MTLRenderCommandEncoder>,
+        multiview_mask: Option<core::num::NonZeroU32>,
+    ) {
+        if let Some(mv) = multiview_mask {
+            // Most likely the API just wasn't thought about enough. It's not
+            // like they ever allow you to use enough views to overflow a
+            // 32-bit bitmask.
+            let mv = mv.get();
+            let msb = 32 - mv.leading_zeros();
+            let mut maps: SmallVec<[MTLVertexAmplificationViewMapping; 32]> = SmallVec::new();
+            for i in 0..msb {
+                if (mv & (1 << i)) != 0 {
+                    maps.push(MTLVertexAmplificationViewMapping {
+                        renderTargetArrayIndexOffset: i,
+                        viewportArrayIndexOffset: i,
+                    });
+                }
+            }
+            unsafe {
+                encoder.setVertexAmplificationCount_viewMappings(
+                    mv.count_ones() as usize,
+                    maps.as_ptr(),
+                )
+            };
+        }
+    }
+
+    unsafe fn suspend_render_for_icb(&mut self) -> bool {
+        let Some(render_pass) = self.state.render_pass.as_ref() else {
+            return false;
+        };
+        let Some(encoder) = self.state.render.take() else {
+            return false;
+        };
+
+        Self::mark_render_pass_store_actions_for_icb_resume(&render_pass.descriptor);
+        encoder.endEncoding();
+        true
+    }
+
+    unsafe fn resume_render_after_icb(&mut self) {
+        let render_pass = self.state.render_pass.as_ref().unwrap().clone();
+        let raw = self.raw_cmd_buf.as_ref().unwrap();
+        let encoder = raw
+            .renderCommandEncoderWithDescriptor(&render_pass.descriptor)
+            .unwrap();
+
+        Self::apply_vertex_amplification(&encoder, render_pass.multiview_mask);
+        if let Some(label) = render_pass.label.as_ref() {
+            encoder.setLabel(Some(&NSString::from_str(label)));
+        }
+
+        self.state.render = Some(encoder);
+        unsafe { self.restore_render_state_after_icb() };
+    }
+
+    unsafe fn restore_render_state_after_icb(&mut self) {
+        let encoder = self.state.render.clone().unwrap();
+
+        if let Some(ref pipeline) = self.state.current_render_pipeline {
+            encoder.setRenderPipelineState(&pipeline.raw);
+            encoder.setFrontFacingWinding(pipeline.raw_front_winding);
+            encoder.setCullMode(pipeline.raw_cull_mode);
+            encoder.setTriangleFillMode(pipeline.raw_triangle_fill_mode);
+            if let Some(depth_clip) = pipeline.raw_depth_clip_mode {
+                encoder.setDepthClipMode(depth_clip);
+            }
+            if let Some((ref state, bias)) = pipeline.depth_stencil {
+                encoder.setDepthStencilState(Some(state));
+                encoder.setDepthBias_slopeScale_clamp(
+                    bias.constant as f32,
+                    bias.slope_scale,
+                    bias.clamp,
+                );
+            }
+        }
+
+        for (index, buffer) in self.state.bound_vertex_buffers.iter().enumerate() {
+            if let Some(buffer) = buffer {
+                unsafe {
+                    encoder.setVertexBuffer_offset_atIndex(
+                        Some(&buffer.buffer),
+                        buffer.offset,
+                        index,
+                    )
+                };
+            }
+        }
+
+        if let Some((index, sizes)) = self
+            .state
+            .make_sizes_buffer_update(naga::ShaderStage::Vertex, &mut self.temp.binding_sizes)
+        {
+            unsafe {
+                encoder.setVertexBytes_length_atIndex(
+                    NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
+                    sizes.len() * WORD_SIZE,
+                    index as _,
+                )
+            };
+        }
+        if let Some((index, sizes)) = self
+            .state
+            .make_sizes_buffer_update(naga::ShaderStage::Fragment, &mut self.temp.binding_sizes)
+        {
+            unsafe {
+                encoder.setFragmentBytes_length_atIndex(
+                    NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
+                    sizes.len() * WORD_SIZE,
+                    index as _,
+                )
+            };
+        }
+
+        if let Some(viewport) = self.state.current_viewport {
+            encoder.setViewport(viewport);
+        }
+        if let Some(scissor) = self.state.current_scissor {
+            encoder.setScissorRect(scissor);
+        }
+        if let Some(stencil_reference) = self.state.current_stencil_reference {
+            encoder.setStencilFrontReferenceValue_backReferenceValue(
+                stencil_reference,
+                stencil_reference,
+            );
+        }
+        if let Some(color) = self.state.current_blend_color {
+            encoder.setBlendColorRed_green_blue_alpha(color[0], color[1], color[2], color[3]);
+        }
+    }
+
+    unsafe fn generate_icb_from_draw_args(
+        &mut self,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+        draw_count: u32,
+    ) -> Result<Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>, crate::DeviceError> {
+        let pipelines = self.get_icb_command_pipelines()?;
+        let descriptor = MTLIndirectCommandBufferDescriptor::new();
+        descriptor.setCommandTypes(MTLIndirectCommandType::Draw);
+        descriptor.setInheritPipelineState(true);
+        descriptor.setInheritBuffers(true);
+        descriptor.setMaxVertexBufferBindCount(self.state.bound_vertex_buffers.len());
+        descriptor.setMaxFragmentBufferBindCount(0);
+
+        let icb = unsafe {
+            self.shared
+                .device
+                .newIndirectCommandBufferWithDescriptor_maxCommandCount_options(
+                    &descriptor,
+                    draw_count as usize,
+                    MTLResourceOptions::StorageModePrivate,
+                )
+        }
+        .ok_or(crate::DeviceError::Unexpected)?;
+
+        let range = NSRange {
+            location: 0,
+            length: draw_count as usize,
+        };
+
+        unsafe {
+            self.enter_blit()
+                .resetCommandsInBuffer_withRange(&icb, range);
+        }
+        self.leave_blit();
+
+        let argument_encoder =
+            unsafe { pipelines.draw.function.newArgumentEncoderWithBufferIndex(0) };
+        let argument_buffer = self
+            .shared
+            .device
+            .newBufferWithLength_options(
+                argument_encoder.encodedLength(),
+                MTLResourceOptions::StorageModeShared,
+            )
+            .ok_or(crate::DeviceError::Unexpected)?;
+        unsafe {
+            argument_encoder.setArgumentBuffer_offset(Some(&argument_buffer), 0);
+            argument_encoder.setIndirectCommandBuffer_atIndex(Some(&icb), 0);
+        }
+
+        let raw = self.raw_cmd_buf.as_ref().unwrap();
+        let compute = raw.computeCommandEncoder().unwrap();
+        compute.setComputePipelineState(&pipelines.draw.pipeline);
+        unsafe {
+            compute.setBuffer_offset_atIndex(Some(&argument_buffer), 0, 0);
+            compute.setBuffer_offset_atIndex(Some(&buffer.raw), offset as usize, 1);
+            let primitive_type_value = self.state.raw_primitive_type.0;
+            compute.setBytes_length_atIndex(
+                NonNull::from(&primitive_type_value).cast(),
+                size_of::<NSUInteger>(),
+                2,
+            );
+            compute.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Write);
+        }
+        compute.dispatchThreads_threadsPerThreadgroup(
+            MTLSize {
+                width: draw_count as usize,
+                height: 1,
+                depth: 1,
+            },
+            MTLSize {
+                width: ICB_WORKGROUP_WIDTH.min(draw_count as usize),
+                height: 1,
+                depth: 1,
+            },
+        );
+        compute.endEncoding();
+
+        unsafe {
+            self.enter_blit()
+                .optimizeIndirectCommandBuffer_withRange(&icb, range);
+        }
+        self.leave_blit();
+
+        Ok(icb)
+    }
+
+    unsafe fn generate_icb_from_indexed_draw_args(
+        &mut self,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+        draw_count: u32,
+    ) -> Result<Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>, crate::DeviceError> {
+        let pipelines = self.get_icb_command_pipelines()?;
+        let (index_buffer, index_offset, raw_index_type) = {
+            let index = self.state.index.as_ref().unwrap();
+            (index.buffer_ptr, index.offset, index.raw_type)
+        };
+        let pipeline = match raw_index_type {
+            MTLIndexType::UInt16 => &pipelines.indexed_u16,
+            MTLIndexType::UInt32 => &pipelines.indexed_u32,
+            _ => return Err(crate::DeviceError::Unexpected),
+        };
+
+        let descriptor = MTLIndirectCommandBufferDescriptor::new();
+        descriptor.setCommandTypes(MTLIndirectCommandType::DrawIndexed);
+        descriptor.setInheritPipelineState(true);
+        descriptor.setInheritBuffers(true);
+        descriptor.setMaxVertexBufferBindCount(self.state.bound_vertex_buffers.len());
+        descriptor.setMaxFragmentBufferBindCount(0);
+
+        let icb = unsafe {
+            self.shared
+                .device
+                .newIndirectCommandBufferWithDescriptor_maxCommandCount_options(
+                    &descriptor,
+                    draw_count as usize,
+                    MTLResourceOptions::StorageModePrivate,
+                )
+        }
+        .ok_or(crate::DeviceError::Unexpected)?;
+
+        let range = NSRange {
+            location: 0,
+            length: draw_count as usize,
+        };
+
+        unsafe {
+            self.enter_blit()
+                .resetCommandsInBuffer_withRange(&icb, range);
+        }
+        self.leave_blit();
+
+        let argument_encoder = unsafe { pipeline.function.newArgumentEncoderWithBufferIndex(0) };
+        let argument_buffer = self
+            .shared
+            .device
+            .newBufferWithLength_options(
+                argument_encoder.encodedLength(),
+                MTLResourceOptions::StorageModeShared,
+            )
+            .ok_or(crate::DeviceError::Unexpected)?;
+        unsafe {
+            argument_encoder.setArgumentBuffer_offset(Some(&argument_buffer), 0);
+            argument_encoder.setIndirectCommandBuffer_atIndex(Some(&icb), 0);
+        }
+
+        let raw = self.raw_cmd_buf.as_ref().unwrap();
+        let compute = raw.computeCommandEncoder().unwrap();
+        compute.setComputePipelineState(&pipeline.pipeline);
+        unsafe {
+            compute.setBuffer_offset_atIndex(Some(&argument_buffer), 0, 0);
+            compute.setBuffer_offset_atIndex(Some(&buffer.raw), offset as usize, 1);
+            compute.setBuffer_offset_atIndex(Some(index_buffer.as_ref()), index_offset as usize, 2);
+            let primitive_type_value = self.state.raw_primitive_type.0;
+            compute.setBytes_length_atIndex(
+                NonNull::from(&primitive_type_value).cast(),
+                size_of::<NSUInteger>(),
+                3,
+            );
+            compute.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Write);
+        }
+        compute.dispatchThreads_threadsPerThreadgroup(
+            MTLSize {
+                width: draw_count as usize,
+                height: 1,
+                depth: 1,
+            },
+            MTLSize {
+                width: ICB_WORKGROUP_WIDTH.min(draw_count as usize),
+                height: 1,
+                depth: 1,
+            },
+        );
+        compute.endEncoding();
+
+        unsafe {
+            self.enter_blit()
+                .optimizeIndirectCommandBuffer_withRange(&icb, range);
+        }
+        self.leave_blit();
+
+        Ok(icb)
+    }
+
+    unsafe fn draw_indirect_via_icb(
+        &mut self,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+        draw_count: u32,
+    ) -> bool {
+        if !self.can_use_icb_multi_draw(false, draw_count) {
+            return false;
+        }
+
+        unsafe {
+            if !self.suspend_render_for_icb() {
+                return false;
+            }
+        }
+
+        let icb = match unsafe { self.generate_icb_from_draw_args(buffer, offset, draw_count) } {
+            Ok(icb) => icb,
+            Err(err) => {
+                log::warn!(
+                    "failed to generate Metal ICB for multi_draw_indirect: {err:?}; falling back"
+                );
+                unsafe { self.resume_render_after_icb() };
+                return false;
+            }
+        };
+
+        unsafe { self.resume_render_after_icb() };
+        let encoder = self.state.render.as_ref().unwrap();
+        #[allow(deprecated)]
+        unsafe {
+            encoder.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Read);
+            encoder.executeCommandsInBuffer_withRange(
+                &icb,
+                NSRange {
+                    location: 0,
+                    length: draw_count as usize,
+                },
+            );
+        }
+        true
+    }
+
+    unsafe fn draw_indexed_indirect_via_icb(
+        &mut self,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+        draw_count: u32,
+    ) -> bool {
+        if !self.can_use_icb_multi_draw(true, draw_count) {
+            return false;
+        }
+
+        unsafe {
+            if !self.suspend_render_for_icb() {
+                return false;
+            }
+        }
+
+        let icb = match unsafe {
+            self.generate_icb_from_indexed_draw_args(buffer, offset, draw_count)
+        } {
+            Ok(icb) => icb,
+            Err(err) => {
+                log::warn!(
+                    "failed to generate Metal ICB for multi_draw_indexed_indirect: {err:?}; falling back"
+                );
+                unsafe { self.resume_render_after_icb() };
+                return false;
+            }
+        };
+
+        unsafe { self.resume_render_after_icb() };
+        let encoder = self.state.render.as_ref().unwrap();
+        #[allow(deprecated)]
+        unsafe {
+            encoder.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Read);
+            if let Some(index) = self.state.index.as_ref() {
+                encoder.useResource_usage(
+                    ProtocolObject::from_ref(index.buffer_ptr.as_ref()),
+                    MTLResourceUsage::Read,
+                );
+            }
+            encoder.executeCommandsInBuffer_withRange(
+                &icb,
+                NSRange {
+                    location: 0,
+                    length: draw_count as usize,
+                },
+            );
+        }
+        true
+    }
+
     /// Updates the bindings for a single shader stage, called in `set_bind_group`.
     fn update_bind_group_state(
         &mut self,
@@ -408,6 +1034,14 @@ impl super::CommandEncoder {
 
 impl super::CommandState {
     fn reset(&mut self) {
+        self.render_pass = None;
+        self.current_render_pipeline = None;
+        self.bound_vertex_buffers.clear();
+        self.current_viewport = None;
+        self.current_scissor = None;
+        self.current_stencil_reference = None;
+        self.current_blend_color = None;
+        self.render_bind_groups_active = false;
         self.storage_buffer_length_map.clear();
         self.vertex_buffer_size_map.clear();
         self.stage_infos.vs.clear();
@@ -871,18 +1505,24 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         autoreleasepool(|_| {
             let descriptor = MTLRenderPassDescriptor::new();
+            let mut can_resume_for_icb =
+                desc.timestamp_writes.is_none() && desc.occlusion_query_set.is_none();
 
             for (i, at) in desc.color_attachments.iter().enumerate() {
                 if let Some(at) = at.as_ref() {
                     let at_descriptor =
                         unsafe { descriptor.colorAttachments().objectAtIndexedSubscript(i) };
                     at_descriptor.setTexture(Some(&at.target.view.raw));
+                    if at.target.view.raw.storageMode() == MTLStorageMode::Memoryless {
+                        can_resume_for_icb = false;
+                    }
                     if let Some(depth_slice) = at.depth_slice {
                         at_descriptor.setDepthPlane(depth_slice as usize);
                     }
                     if let Some(ref resolve) = at.resolve_target {
                         //Note: the selection of levels and slices is already handled by `TextureView`
                         at_descriptor.setResolveTexture(Some(&resolve.view.raw));
+                        can_resume_for_icb = false;
                     }
                     let load_action = if at.ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
@@ -898,6 +1538,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         at.ops.contains(crate::AttachmentOps::STORE),
                         at.resolve_target.is_some(),
                     );
+                    if !at.ops.contains(crate::AttachmentOps::STORE) {
+                        can_resume_for_icb = false;
+                    }
                     at_descriptor.setLoadAction(load_action);
                     at_descriptor.setStoreAction(store_action);
                 }
@@ -907,6 +1550,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 if at.target.view.aspects.contains(crate::FormatAspects::DEPTH) {
                     let at_descriptor = descriptor.depthAttachment();
                     at_descriptor.setTexture(Some(&at.target.view.raw));
+                    if at.target.view.raw.storageMode() == MTLStorageMode::Memoryless {
+                        can_resume_for_icb = false;
+                    }
 
                     let load_action = if at.depth_ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
@@ -921,6 +1567,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     let store_action = if at.depth_ops.contains(crate::AttachmentOps::STORE) {
                         MTLStoreAction::Store
                     } else {
+                        can_resume_for_icb = false;
                         MTLStoreAction::DontCare
                     };
                     at_descriptor.setLoadAction(load_action);
@@ -934,6 +1581,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 {
                     let at_descriptor = descriptor.stencilAttachment();
                     at_descriptor.setTexture(Some(&at.target.view.raw));
+                    if at.target.view.raw.storageMode() == MTLStorageMode::Memoryless {
+                        can_resume_for_icb = false;
+                    }
 
                     let load_action = if at.stencil_ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
@@ -951,6 +1601,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     let store_action = if at.stencil_ops.contains(crate::AttachmentOps::STORE) {
                         MTLStoreAction::Store
                     } else {
+                        can_resume_for_icb = false;
                         MTLStoreAction::DontCare
                     };
                     at_descriptor.setLoadAction(load_action);
@@ -1019,31 +1670,17 @@ impl crate::CommandEncoder for super::CommandEncoder {
             }
             let raw = self.raw_cmd_buf.as_ref().unwrap();
             let encoder = raw.renderCommandEncoderWithDescriptor(&descriptor).unwrap();
-            if let Some(mv) = desc.multiview_mask {
-                // Most likely the API just wasn't thought about enough. It's not like they ever allow you
-                // to use enough views to overflow a 32-bit bitmask.
-                let mv = mv.get();
-                let msb = 32 - mv.leading_zeros();
-                let mut maps: SmallVec<[MTLVertexAmplificationViewMapping; 32]> = SmallVec::new();
-                for i in 0..msb {
-                    if (mv & (1 << i)) != 0 {
-                        maps.push(MTLVertexAmplificationViewMapping {
-                            renderTargetArrayIndexOffset: i,
-                            viewportArrayIndexOffset: i,
-                        });
-                    }
-                }
-                unsafe {
-                    encoder.setVertexAmplificationCount_viewMappings(
-                        mv.count_ones() as usize,
-                        maps.as_ptr(),
-                    )
-                };
-            }
+            Self::apply_vertex_amplification(&encoder, desc.multiview_mask);
             if let Some(label) = desc.label {
                 encoder.setLabel(Some(&NSString::from_str(label)));
             }
             self.state.render = Some(encoder);
+            self.state.render_pass = Some(super::RenderPassResumeState {
+                descriptor,
+                can_resume_for_icb,
+                multiview_mask: desc.multiview_mask,
+                label: desc.label.map(str::to_owned),
+            });
         });
 
         Ok(())
@@ -1051,6 +1688,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn end_render_pass(&mut self) {
         self.state.render.take().unwrap().endEncoding();
+        self.state.render_pass = None;
     }
 
     unsafe fn set_bind_group(
@@ -1066,6 +1704,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let render_encoder = self.state.render.clone();
         let compute_encoder = self.state.compute.clone();
         if let Some(encoder) = render_encoder {
+            self.state.render_bind_groups_active = true;
             self.update_bind_group_state(
                 Encoder::Vertex(&encoder),
                 // All zeros, as vs comes first
@@ -1242,6 +1881,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         self.state.raw_primitive_type = pipeline.raw_primitive_type;
+        self.state.current_render_pipeline = Some(super::RenderPipelineState {
+            raw: pipeline.raw.clone(),
+            raw_triangle_fill_mode: pipeline.raw_triangle_fill_mode,
+            raw_front_winding: pipeline.raw_front_winding,
+            raw_cull_mode: pipeline.raw_cull_mode,
+            raw_depth_clip_mode: pipeline.raw_depth_clip_mode,
+            depth_stencil: pipeline.depth_stencil.clone(),
+        });
         match pipeline.vs_info {
             Some(ref info) => self.state.stage_infos.vs.assign_from(info),
             None => self.state.stage_infos.vs.clear(),
@@ -1388,6 +2035,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 buffer_index as usize,
             )
         };
+        if self.state.bound_vertex_buffers.len() <= buffer_index as usize {
+            self.state
+                .bound_vertex_buffers
+                .resize_with(buffer_index as usize + 1, || None);
+        }
+        self.state.bound_vertex_buffers[buffer_index as usize] = Some(super::VertexBufferState {
+            buffer: binding.buffer.raw.clone(),
+            offset: binding.offset as usize,
+        });
 
         let buffer_size = binding.resolve_size();
         if buffer_size > 0 {
@@ -1420,14 +2076,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
             depth_range.end
         };
         let encoder = self.state.render.as_ref().unwrap();
-        encoder.setViewport(MTLViewport {
+        let viewport = MTLViewport {
             originX: rect.x as _,
             originY: rect.y as _,
             width: rect.w as _,
             height: rect.h as _,
             znear: depth_range.start as _,
             zfar: zfar as _,
-        });
+        };
+        encoder.setViewport(viewport);
+        self.state.current_viewport = Some(viewport);
     }
     unsafe fn set_scissor_rect(&mut self, rect: &crate::Rect<u32>) {
         //TODO: support empty scissors by modifying the viewport
@@ -1439,14 +2097,17 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
         let encoder = self.state.render.as_ref().unwrap();
         encoder.setScissorRect(scissor);
+        self.state.current_scissor = Some(scissor);
     }
     unsafe fn set_stencil_reference(&mut self, value: u32) {
         let encoder = self.state.render.as_ref().unwrap();
         encoder.setStencilFrontReferenceValue_backReferenceValue(value, value);
+        self.state.current_stencil_reference = Some(value);
     }
     unsafe fn set_blend_constants(&mut self, color: &[f32; 4]) {
         let encoder = self.state.render.as_ref().unwrap();
         encoder.setBlendColorRed_green_blue_alpha(color[0], color[1], color[2], color[3]);
+        self.state.current_blend_color = Some(*color);
     }
 
     unsafe fn draw(
@@ -1560,6 +2221,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
         mut offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
+        if unsafe { self.draw_indirect_via_icb(buffer, offset, draw_count) } {
+            return;
+        }
         let encoder = self.state.render.as_ref().unwrap();
         for _ in 0..draw_count {
             unsafe {
@@ -1579,6 +2243,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
         mut offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
+        if unsafe { self.draw_indexed_indirect_via_icb(buffer, offset, draw_count) } {
+            return;
+        }
         let encoder = self.state.render.as_ref().unwrap();
         let index = self.state.index.as_ref().unwrap();
         for _ in 0..draw_count {
