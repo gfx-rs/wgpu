@@ -1922,19 +1922,13 @@ impl crate::Device for super::Device {
             }
         }
 
-        if let Some(deadline) =
-            timeout.and_then(|timeout| std::time::Instant::now().checked_add(timeout))
-        {
-            while *lock < wait_value {
-                let result = condvar.wait_until(&mut lock, deadline);
-                if result.timed_out() {
-                    return Ok(*lock >= wait_value);
-                }
+        if let Some(timeout) = timeout {
+            let result = condvar.wait_while_for(&mut lock, |value| *value < wait_value, timeout);
+            if result.timed_out() {
+                return Ok(*lock >= wait_value);
             }
         } else {
-            while *lock < wait_value {
-                condvar.wait(&mut lock);
-            }
+            condvar.wait_while(&mut lock, |value| *value < wait_value);
         }
 
         Ok(true)

@@ -1050,8 +1050,11 @@ impl Fence {
         let mut max_value = *self.sync.0.lock();
         let pending_command_buffers = self.pending_command_buffers.read();
         for &(value, ref cmd_buf) in pending_command_buffers.iter() {
-            if cmd_buf.status() == MTLCommandBufferStatus::Completed {
-                max_value = value;
+            match cmd_buf.status() {
+                MTLCommandBufferStatus::Completed | MTLCommandBufferStatus::Error => {
+                    max_value = value;
+                }
+                _ => {}
             }
         }
         max_value
