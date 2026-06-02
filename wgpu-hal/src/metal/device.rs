@@ -404,8 +404,7 @@ impl super::Device {
     }
 
     pub unsafe fn texture_from_raw_planar(
-        plane0: Retained<ProtocolObject<dyn MTLTexture>>,
-        plane1: Retained<ProtocolObject<dyn MTLTexture>>,
+        planes: [Retained<ProtocolObject<dyn MTLTexture>>; 2],
         format: wgt::TextureFormat,
         raw_type: MTLTextureType,
         array_layers: u32,
@@ -413,6 +412,7 @@ impl super::Device {
         copy_size: crate::CopyExtent,
         drop_callback: Option<DropCallback>,
     ) -> super::Texture {
+        let [plane0, plane1] = planes;
         super::Texture {
             raw: plane0,
             plane1: Some(plane1),
