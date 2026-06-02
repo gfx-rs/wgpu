@@ -266,6 +266,7 @@ impl<A: hal::Api> Example<A> {
                     entry_point: "vs_main",
                     constants: &constants,
                     zero_initialize_workgroup_memory: true,
+                    subgroup_size: wgpu_types::SubgroupSize::Varying,
                 },
                 vertex_buffers: &[],
             },
@@ -274,6 +275,7 @@ impl<A: hal::Api> Example<A> {
                 entry_point: "fs_main",
                 constants: &constants,
                 zero_initialize_workgroup_memory: true,
+                subgroup_size: wgpu_types::SubgroupSize::Varying,
             }),
             primitive: wgpu_types::PrimitiveState {
                 topology: wgpu_types::PrimitiveTopology::TriangleStrip,

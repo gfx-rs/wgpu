@@ -7,7 +7,7 @@ use alloc::{
 use core::fmt;
 
 use arrayvec::ArrayVec;
-use hashbrown::{hash_map::Entry, HashSet};
+use hashbrown::hash_map::Entry;
 use shader_io_deductions::{display_deductions_as_optional_list, MaxVertexShaderOutputDeduction};
 use thiserror::Error;
 use wgt::{
@@ -305,8 +305,21 @@ pub struct Interface {
 }
 
 #[derive(Debug)]
+pub struct PassthroughEntryPoint {
+    pub name: String,
+    pub workgroup_size: (u32, u32, u32),
+    pub subgroup_size: wgt::SubgroupSize,
+}
+
+#[derive(Debug)]
 pub struct PassthroughInterface {
-    pub entry_point_names: HashSet<String>,
+    pub entry_points: Vec<PassthroughEntryPoint>,
+}
+
+impl PassthroughInterface {
+    pub fn entry_point(&self, name: &str) -> Option<&PassthroughEntryPoint> {
+        self.entry_points.iter().find(|e| e.name == name)
+    }
 }
 
 // Most shaders will use a standard interface which is very large.
@@ -1340,6 +1353,17 @@ impl Interface {
         self.entry_points
             .get(&(stage, entry_point_name.to_string()))
             .map_or(Default::default(), |ep| ep.immediate_slots_required)
+    }
+
+    /// Returns the `@workgroup_size` of the given entry point, if any.
+    pub fn workgroup_size(
+        &self,
+        stage: naga::ShaderStage,
+        entry_point_name: &str,
+    ) -> Option<[u32; 3]> {
+        self.entry_points
+            .get(&(stage, entry_point_name.to_string()))
+            .map(|ep| ep.workgroup_size)
     }
 
     pub fn finalize_entry_point_name(

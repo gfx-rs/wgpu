@@ -92,6 +92,18 @@ impl ShaderModule {
         self.raw.as_ref()
     }
 
+    /// Returns the [`wgt::SubgroupSize`] requested for the given entry point at
+    /// shader-module creation time. For non-passthrough modules and unknown
+    /// entry-point names, defaults to [`wgt::SubgroupSize::Varying`].
+    pub(crate) fn entry_point_subgroup_size(&self, entry_point: &str) -> wgt::SubgroupSize {
+        match self.interface {
+            ShaderMetaData::Passthrough(ref interface) => interface
+                .entry_point(entry_point)
+                .map_or(wgt::SubgroupSize::Varying, |e| e.subgroup_size),
+            ShaderMetaData::Interface(_) => wgt::SubgroupSize::Varying,
+        }
+    }
+
     pub(crate) fn finalize_entry_point_name(
         &self,
         stage: naga::ShaderStage,
@@ -103,21 +115,16 @@ impl ShaderModule {
             }
             ShaderMetaData::Passthrough(ref interface) => {
                 if let Some(ep) = entry_point {
-                    if interface.entry_point_names.contains(ep) {
+                    if interface.entry_point(ep).is_some() {
                         Ok(ep.to_owned())
                     } else {
                         Err(validation::StageError::MissingEntryPoint(ep.to_owned()))
                     }
                 } else {
-                    if interface.entry_point_names.len() != 1 {
+                    if interface.entry_points.len() != 1 {
                         return Err(validation::StageError::MultipleEntryPointsFound);
                     }
-                    Ok(interface
-                        .entry_point_names
-                        .iter()
-                        .next()
-                        .unwrap()
-                        .to_owned())
+                    Ok(interface.entry_points[0].name.clone())
                 }
             }
         }
@@ -159,6 +166,39 @@ pub enum CreateShaderModuleError {
         "Generic passthrough shaders which use GLSL or DXIL must contain exactly one entry point."
     )]
     IncorrectPassthroughEntryPointCount,
+    #[error(
+        "Subgroup size {size} on entry point {entry_point:?} is not a power of two in [{min}, {max}] (subgroup_min_size, subgroup_max_size)"
+    )]
+    InvalidSubgroupSize {
+        entry_point: String,
+        size: u32,
+        min: u32,
+        max: u32,
+    },
+    #[error(
+        "`SubgroupSize::Full` on entry point {entry_point:?} requires `@workgroup_size` x to be at least subgroup_min_size ({subgroup_min_size}); got {workgroup_size_x}"
+    )]
+    WorkgroupSizeTooSmallForFullSubgroups {
+        entry_point: String,
+        workgroup_size_x: u32,
+        subgroup_min_size: u32,
+    },
+    #[error(
+        "Non-`SubgroupSize::Varying` subgroup size on entry point {entry_point:?} requires `PassthroughShaderEntryPoint::workgroup_size` to be set (with a non-zero x component)"
+    )]
+    MissingWorkgroupSizeForSubgroupSize { entry_point: String },
+    #[error(
+        "`SubgroupSize::Fixed({subgroup_size})` on entry point {entry_point:?} requires `@workgroup_size` x to be a multiple of {subgroup_size}; got {workgroup_size_x}"
+    )]
+    WorkgroupSizeXNotMultipleOfSubgroupSize {
+        entry_point: String,
+        workgroup_size_x: u32,
+        subgroup_size: u32,
+    },
+    #[error(
+        "Non-`SubgroupSize::Varying` subgroup size on entry point {entry_point:?} is only supported for SPIR-V passthrough shaders"
+    )]
+    SubgroupSizeNotSupportedForBackend { entry_point: String },
 }
 
 impl WebGpuError for CreateShaderModuleError {
@@ -172,7 +212,12 @@ impl WebGpuError for CreateShaderModuleError {
             Self::Validation(..)
             | Self::InvalidGroupIndex { .. }
             | Self::IncorrectPassthroughEntryPointCount
-            | Self::NotCompiledForBackend => ErrorType::Validation,
+            | Self::NotCompiledForBackend
+            | Self::InvalidSubgroupSize { .. }
+            | Self::WorkgroupSizeTooSmallForFullSubgroups { .. }
+            | Self::WorkgroupSizeXNotMultipleOfSubgroupSize { .. }
+            | Self::MissingWorkgroupSizeForSubgroupSize { .. }
+            | Self::SubgroupSizeNotSupportedForBackend { .. } => ErrorType::Validation,
             #[cfg(feature = "wgsl")]
             Self::Parsing(..) => ErrorType::Validation,
             #[cfg(feature = "glsl")]
@@ -760,6 +805,8 @@ pub enum CreateRenderPipelineError {
         "but no render target for the pipeline was specified."
     ))]
     NoTargetSpecified,
+    #[error("`SubgroupSize::Full` is only valid on compute, task, and mesh stages")]
+    FullSubgroupsNotAllowed,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
@@ -794,6 +841,7 @@ impl WebGpuError for CreateRenderPipelineError {
             | Self::DualSourceBlendingWithMultipleColorTargets { .. }
             | Self::NoTargetSpecified
             | Self::PipelineConstants { .. }
+            | Self::FullSubgroupsNotAllowed
             | Self::VertexAttributeStrideTooLarge { .. } => ErrorType::Validation,
         }
     }

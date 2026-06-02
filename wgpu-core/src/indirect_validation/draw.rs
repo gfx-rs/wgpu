@@ -598,6 +598,7 @@ fn create_validation_pipeline(
                 ),
             ]),
             zero_initialize_workgroup_memory: false,
+            subgroup_size: wgt::SubgroupSize::Varying,
         },
         cache: None,
     };

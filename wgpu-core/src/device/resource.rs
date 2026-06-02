@@ -356,6 +356,108 @@ impl Device {
         }
     }
 
+    /// Validate the `subgroup_size` requests on every entry point of a
+    /// passthrough shader module descriptor.
+    ///
+    /// All checks that depend only on the module itself live here:
+    ///
+    /// - Non-[`Varying`] values require [`Features::SUBGROUP_SIZE_CONTROL`].
+    /// - Non-[`Varying`] values are only honored for SPIR-V passthrough on Vulkan;
+    ///   other backends reject the request.
+    /// - The entry point's `workgroup_size.x` must be non-zero, since the
+    ///   checks below would otherwise pass vacuously.
+    /// - For [`Fixed(n)`], `n` must be a power of two within
+    ///   `[subgroup_min_size, subgroup_max_size]`, and the entry point's
+    ///   `workgroup_size.x` must be a multiple of `n` (WebGPU
+    ///   `subgroup-size-control` proposal; Vulkan requirement).
+    /// - For [`Full`], the entry point's `workgroup_size.x` must be at least
+    ///   `subgroup_min_size` so that one full subgroup can fit.
+    ///
+    /// The stage-dependent check ([`Full`] is invalid on vertex/fragment) is
+    /// applied at render-pipeline creation, since it depends on how the module
+    /// is used.
+    ///
+    /// [`Varying`]: wgt::SubgroupSize::Varying
+    /// [`Full`]: wgt::SubgroupSize::Full
+    /// [`Fixed(n)`]: wgt::SubgroupSize::Fixed
+    /// [`Features::SUBGROUP_SIZE_CONTROL`]: wgt::Features::SUBGROUP_SIZE_CONTROL
+    fn validate_passthrough_subgroup_sizes(
+        &self,
+        descriptor: &pipeline::ShaderModuleDescriptorPassthrough<'_>,
+    ) -> Result<(), pipeline::CreateShaderModuleError> {
+        let Some(varying_entry_point) = descriptor
+            .entry_points
+            .iter()
+            .find(|e| !matches!(e.subgroup_size, wgt::SubgroupSize::Varying))
+        else {
+            return Ok(());
+        };
+        self.require_features(wgt::Features::SUBGROUP_SIZE_CONTROL)?;
+        // `subgroup_size` only has a backend mapping for SPIR-V (Vulkan).
+        // `Noop` is allowed for validation tests.
+        if descriptor.spirv.is_none()
+            || !matches!(self.backend(), wgt::Backend::Vulkan | wgt::Backend::Noop)
+        {
+            return Err(
+                pipeline::CreateShaderModuleError::SubgroupSizeNotSupportedForBackend {
+                    entry_point: varying_entry_point.name.to_string(),
+                },
+            );
+        }
+        let info = &self.adapter.raw.info;
+        let min = info.subgroup_min_size;
+        let max = info.subgroup_max_size;
+        for ep in descriptor.entry_points.iter() {
+            if matches!(ep.subgroup_size, wgt::SubgroupSize::Varying) {
+                continue;
+            }
+            // Required for the per-variant checks below to be meaningful: a
+            // zero `workgroup_size.x` would trivially satisfy
+            // `is_multiple_of(n)` and never satisfy `>= subgroup_min_size`.
+            if ep.workgroup_size.0 == 0 {
+                return Err(
+                    pipeline::CreateShaderModuleError::MissingWorkgroupSizeForSubgroupSize {
+                        entry_point: ep.name.to_string(),
+                    },
+                );
+            }
+            match ep.subgroup_size {
+                wgt::SubgroupSize::Varying => unreachable!(),
+                wgt::SubgroupSize::Full => {
+                    if ep.workgroup_size.0 < min {
+                        return Err(
+                            pipeline::CreateShaderModuleError::WorkgroupSizeTooSmallForFullSubgroups {
+                                entry_point: ep.name.to_string(),
+                                workgroup_size_x: ep.workgroup_size.0,
+                                subgroup_min_size: min,
+                            },
+                        );
+                    }
+                }
+                wgt::SubgroupSize::Fixed(n) => {
+                    if !n.is_power_of_two() || n < min || n > max {
+                        return Err(pipeline::CreateShaderModuleError::InvalidSubgroupSize {
+                            entry_point: ep.name.to_string(),
+                            size: n,
+                            min,
+                            max,
+                        });
+                    }
+                    if !ep.workgroup_size.0.is_multiple_of(n) {
+                        return Err(
+                            pipeline::CreateShaderModuleError::WorkgroupSizeXNotMultipleOfSubgroupSize {
+                                entry_point: ep.name.to_string(),
+                                workgroup_size_x: ep.workgroup_size.0,
+                                subgroup_size: n,
+                            },
+                        );
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// # Safety
     ///
     /// - See [wgpu::Device::start_graphics_debugger_capture][api] for details the safety.
@@ -2419,6 +2521,8 @@ impl Device {
         self.check_is_valid()?;
         self.require_features(wgt::Features::PASSTHROUGH_SHADERS)?;
 
+        self.validate_passthrough_subgroup_sizes(descriptor)?;
+
         // Mainly important for GLSL or SPIR-V or DXIL, which each take exactly 1 entry point.
         if (descriptor.dxil.is_some() || descriptor.glsl.is_some())
             && descriptor.entry_points.len() != 1
@@ -2501,10 +2605,14 @@ impl Device {
             raw: ManuallyDrop::new(raw),
             device: self.clone(),
             interface: ShaderMetaData::Passthrough(PassthroughInterface {
-                entry_point_names: descriptor
+                entry_points: descriptor
                     .entry_points
                     .iter()
-                    .map(|e| e.name.to_string())
+                    .map(|e| validation::PassthroughEntryPoint {
+                        name: e.name.to_string(),
+                        workgroup_size: e.workgroup_size,
+                        subgroup_size: e.subgroup_size,
+                    })
                     .collect(),
             }),
             label: descriptor.label.to_string(),
@@ -3943,6 +4051,7 @@ impl Device {
                 entry_point: final_entry_point_name.as_ref(),
                 constants: &desc.stage.constants,
                 zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
+                subgroup_size: shader_module.entry_point_subgroup_size(&final_entry_point_name),
             },
             cache: cache.as_ref().map(|it| it.raw()),
         };
@@ -4457,6 +4566,12 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
+                    let vertex_subgroup_size =
+                        vertex_shader_module.entry_point_subgroup_size(&_vertex_entry_point_name);
+                    if matches!(vertex_subgroup_size, wgt::SubgroupSize::Full) {
+                        return Err(pipeline::CreateRenderPipelineError::FullSubgroupsNotAllowed);
+                    }
+
                     if let Some(interface) = vertex_shader_module.interface.interface() {
                         immediate_slots_required |= interface
                             .immediate_slots_required(stage.to_naga(), &_vertex_entry_point_name);
@@ -4478,6 +4593,7 @@ impl Device {
                         constants: &stage_desc.constants,
                         zero_initialize_workgroup_memory: stage_desc
                             .zero_initialize_workgroup_memory,
+                        subgroup_size: vertex_subgroup_size,
                     })
                 };
             }
@@ -4524,6 +4640,8 @@ impl Device {
                         constants: &stage_desc.constants,
                         zero_initialize_workgroup_memory: stage_desc
                             .zero_initialize_workgroup_memory,
+                        subgroup_size: task_shader_module
+                            .entry_point_subgroup_size(&_task_entry_point_name),
                     })
                 } else {
                     None
@@ -4568,6 +4686,8 @@ impl Device {
                         constants: &stage_desc.constants,
                         zero_initialize_workgroup_memory: stage_desc
                             .zero_initialize_workgroup_memory,
+                        subgroup_size: mesh_shader_module
+                            .entry_point_subgroup_size(&_mesh_entry_point_name),
                     })
                 };
             }
@@ -4601,6 +4721,12 @@ impl Device {
                     )
                     .map_err(stage_err)?;
 
+                let fragment_subgroup_size =
+                    shader_module.entry_point_subgroup_size(&fragment_entry_point_name);
+                if matches!(fragment_subgroup_size, wgt::SubgroupSize::Full) {
+                    return Err(pipeline::CreateRenderPipelineError::FullSubgroupsNotAllowed);
+                }
+
                 if let Some(interface) = shader_module.interface.interface() {
                     immediate_slots_required |= interface
                         .immediate_slots_required(stage.to_naga(), &fragment_entry_point_name);
@@ -4624,6 +4750,7 @@ impl Device {
                     zero_initialize_workgroup_memory: fragment_state
                         .stage
                         .zero_initialize_workgroup_memory,
+                    subgroup_size: fragment_subgroup_size,
                 })
             }
             None => None,

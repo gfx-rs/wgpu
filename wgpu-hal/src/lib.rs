@@ -2452,6 +2452,10 @@ pub struct ProgrammableStage<'a, M: DynShaderModule + ?Sized> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
+    /// Required subgroup size for this stage.
+    ///
+    /// Honored on backends that advertise [`wgt::Features::SUBGROUP_SIZE_CONTROL`].
+    pub subgroup_size: wgt::SubgroupSize,
 }
 
 impl<M: DynShaderModule + ?Sized> Clone for ProgrammableStage<'_, M> {
@@ -2461,6 +2465,7 @@ impl<M: DynShaderModule + ?Sized> Clone for ProgrammableStage<'_, M> {
             entry_point: self.entry_point,
             constants: self.constants,
             zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
+            subgroup_size: self.subgroup_size,
         }
     }
 }

@@ -220,6 +220,7 @@ impl TimestampNormalizer {
                     entry_point: "main",
                     constants: &constants,
                     zero_initialize_workgroup_memory: false,
+                    subgroup_size: wgt::SubgroupSize::Varying,
                 },
                 cache: None,
             };

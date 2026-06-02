@@ -1157,6 +1157,18 @@ bitflags_array! {
         /// This is a native only feature.
         #[name("wgpu-subgroup-barrier")]
         const SUBGROUP_BARRIER = 1 << 40;
+        /// Allows requesting a specific subgroup size or full subgroups for a
+        /// shader stage via [`SubgroupSize::Fixed`] / [`SubgroupSize::Full`].
+        ///
+        /// Without this feature, only [`SubgroupSize::Varying`] (the default)
+        /// is accepted.
+        ///
+        /// Supported Platforms:
+        /// - Vulkan (with `VK_EXT_subgroup_size_control`, promoted to Vulkan 1.3)
+        ///
+        /// This is a native only feature.
+        #[name("wgpu-subgroup-size-control")]
+        const SUBGROUP_SIZE_CONTROL = 1 << 24;
         /// Allows the use of pipeline cache objects
         ///
         /// Supported platforms:
@@ -1873,6 +1885,92 @@ impl Features {
         }
         formats
     }
+}
+
+/// Required subgroup size for a shader stage.
+///
+/// Setting any value other than [`SubgroupSize::Varying`] requires
+/// [`Features::SUBGROUP_SIZE_CONTROL`]. Honored on Vulkan via
+/// `VK_EXT_subgroup_size_control`. On backends that do not advertise the
+/// feature, non-`Varying` values are rejected at pipeline creation.
+///
+/// This API is a precursor to the WebGPU [`subgroup-size-control`
+/// proposal][proposal], which models the same capability as a `@subgroup_size`
+/// WGSL attribute on compute entry points. The validation rules applied here
+/// to [`Fixed`] mirror the ones the proposal places on the attribute, so
+/// shaders authored against `Fixed(n)` should remain valid once the WGSL
+/// attribute lands. [`Full`] is a wgpu extension that has no counterpart in
+/// the proposal.
+///
+/// [`Fixed`]: SubgroupSize::Fixed
+/// [`Full`]: SubgroupSize::Full
+/// [proposal]: https://github.com/gpuweb/gpuweb/blob/main/proposals/subgroup-size-control.md
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum SubgroupSize {
+    /// The implementation chooses the subgroup size, between
+    /// [`AdapterInfo::subgroup_min_size`] and [`AdapterInfo::subgroup_max_size`]
+    /// (inclusive).
+    ///
+    /// This is the default, and the only value honored on backends that do not
+    /// advertise [`Features::SUBGROUP_SIZE_CONTROL`]. Concretely:
+    /// - On Vulkan, individual subgroups within a single dispatch may use
+    ///   different sizes (`VK_PIPELINE_SHADER_STAGE_CREATE_ALLOW_VARYING_SUBGROUP_SIZE_BIT`).
+    /// - On Metal, D3D12, and GL, the subgroup size is determined by the
+    ///   hardware/driver and is not user-controllable.
+    ///
+    /// [`AdapterInfo::subgroup_min_size`]: crate::AdapterInfo::subgroup_min_size
+    /// [`AdapterInfo::subgroup_max_size`]: crate::AdapterInfo::subgroup_max_size
+    #[default]
+    Varying,
+    /// Require full subgroups for the stage.
+    ///
+    /// Guarantees that every subgroup launched is full (no partial subgroups
+    /// at the edges of a workgroup). The actual subgroup size may still vary
+    /// between [`AdapterInfo::subgroup_min_size`] and
+    /// [`AdapterInfo::subgroup_max_size`] — the runtime is free to pick a
+    /// size that divides `workgroup_size.x`. The WGSL `subgroup_size` builtin
+    /// reflects the size actually used at each invocation.
+    ///
+    /// The `x` dimension of the entry point's `@workgroup_size` must be at
+    /// least [`AdapterInfo::subgroup_min_size`]; otherwise no full subgroup
+    /// can fit and pipeline creation fails. (Vulkan forbids partial subgroups
+    /// when `REQUIRE_FULL_SUBGROUPS_BIT` is set.)
+    ///
+    /// For SPIR-V passthrough shaders this is valid on compute, task, and
+    /// mesh stages; setting it on a vertex or fragment stage is a
+    /// render-pipeline creation error. The eventual WGSL `@subgroup_size`
+    /// attribute will be compute-only, matching the WebGPU proposal.
+    ///
+    /// [`AdapterInfo::subgroup_min_size`]: crate::AdapterInfo::subgroup_min_size
+    /// [`AdapterInfo::subgroup_max_size`]: crate::AdapterInfo::subgroup_max_size
+    Full,
+    /// Require a specific subgroup size for the stage.
+    ///
+    /// Validation rules follow the WebGPU `subgroup-size-control` proposal's
+    /// `@subgroup_size` attribute:
+    ///
+    /// - The size must be a power of two (D3D12 requirement).
+    /// - The size must be between [`AdapterInfo::subgroup_min_size`] and
+    ///   [`AdapterInfo::subgroup_max_size`] (inclusive).
+    /// - For compute, task, and mesh stages, `workgroup_size.x` must be a
+    ///   multiple of the requested size (Vulkan requirement).
+    ///
+    /// For SPIR-V passthrough shaders, the set of stages that can carry a
+    /// fixed subgroup size is implementation-dependent (Vulkan's
+    /// `requiredSubgroupSizeStages`), so wgpu forwards the request and lets
+    /// the driver reject unsupported stages at pipeline creation. The
+    /// eventual WGSL `@subgroup_size` attribute will be compute-only,
+    /// matching the WebGPU proposal.
+    ///
+    /// (The proposal also constrains the total workgroup size against a
+    /// `maxComputeWorkgroupSubgroups` limit; wgpu does not yet expose that
+    /// limit, so the corresponding check is currently skipped.)
+    ///
+    /// [`AdapterInfo::subgroup_min_size`]: crate::AdapterInfo::subgroup_min_size
+    /// [`AdapterInfo::subgroup_max_size`]: crate::AdapterInfo::subgroup_max_size
+    Fixed(u32),
 }
 
 #[cfg(test)]

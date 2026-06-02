@@ -527,9 +527,16 @@ impl PhysicalDeviceFeatures {
             subgroup_size_control: if device_api_version >= vk::API_VERSION_1_3
                 || enabled_extensions.contains(&ext::subgroup_size_control::NAME)
             {
+                // `Features::SUBGROUP_SIZE_CONTROL` is only advertised when the
+                // device supports both `subgroupSizeControl` and
+                // `computeFullSubgroups`, so requesting it implies both must be
+                // enabled here.
+                let needs_full_subgroups =
+                    requested_features.contains(wgt::Features::SUBGROUP_SIZE_CONTROL);
                 Some(
                     vk::PhysicalDeviceSubgroupSizeControlFeatures::default()
-                        .subgroup_size_control(true),
+                        .subgroup_size_control(true)
+                        .compute_full_subgroups(needs_full_subgroups),
                 )
             } else {
                 None
@@ -900,6 +907,27 @@ impl PhysicalDeviceFeatures {
                 );
                 features.insert(F::SUBGROUP_BARRIER);
             }
+        }
+
+        // We require both `subgroupSizeControl` (needed for `Fixed` and the
+        // `ALLOW_VARYING`/`REQUIRE_FULL` flags) and `computeFullSubgroups`
+        // (needed specifically for `REQUIRE_FULL_SUBGROUPS_BIT`) so that all
+        // `SubgroupSize` variants are honorable once the feature is enabled.
+        // Splitting them into two wgpu features would let `SubgroupSize::Full`
+        // sneak through validation only to be rejected by Vulkan. Devices that
+        // expose `subgroupSizeControl` without `computeFullSubgroups` are rare
+        // in practice — Vulkan 1.3 mandates both, and extension-only devices
+        // almost always ship them together.
+        //
+        // `self.subgroup_size_control` is only populated when the device is
+        // Vulkan 1.3+ or supports `VK_EXT_subgroup_size_control`, so we don't
+        // need to re-check that here.
+        if self
+            .subgroup_size_control
+            .as_ref()
+            .is_some_and(|f| f.subgroup_size_control != 0 && f.compute_full_subgroups != 0)
+        {
+            features.insert(F::SUBGROUP_SIZE_CONTROL);
         }
 
         let supports_depth_format = |format| {
@@ -1276,7 +1304,9 @@ impl PhysicalDeviceProperties {
             }
 
             // Require `VK_EXT_subgroup_size_control` if the associated feature was requested
-            if requested_features.contains(wgt::Features::SUBGROUP) {
+            if requested_features
+                .intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_SIZE_CONTROL)
+            {
                 extensions.push(ext::subgroup_size_control::NAME);
             }
 
