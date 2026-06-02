@@ -853,6 +853,7 @@ impl crate::BufferBinding<'_, Buffer> {
 #[derive(Debug)]
 pub struct Texture {
     raw: Retained<ProtocolObject<dyn MTLTexture>>,
+    plane1: Option<Retained<ProtocolObject<dyn MTLTexture>>>,
     format: wgt::TextureFormat,
     raw_type: MTLTextureType,
     array_layers: u32,
@@ -867,6 +868,17 @@ pub struct Texture {
 impl Texture {
     pub fn raw_handle(&self) -> &ProtocolObject<dyn MTLTexture> {
         &self.raw
+    }
+
+    pub fn plane_texture(
+        &self,
+        aspect: crate::FormatAspects,
+    ) -> &Retained<ProtocolObject<dyn MTLTexture>> {
+        if aspect == crate::FormatAspects::PLANE_1 {
+            self.plane1.as_ref().expect("plane1 present")
+        } else {
+            &self.raw
+        }
     }
 }
 

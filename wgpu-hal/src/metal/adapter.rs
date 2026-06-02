@@ -340,8 +340,13 @@ impl crate::Adapter for super::Adapter {
                 }
                 flags
             }
-            Tf::NV12 => return Tfc::empty(),
-            Tf::P010 => return Tfc::empty(),
+            Tf::NV12 | Tf::P010 => {
+                return Tfc::COLOR_ATTACHMENT
+                    | Tfc::COLOR_ATTACHMENT_BLEND
+                    | Tfc::SAMPLED_LINEAR
+                    | Tfc::COPY_SRC
+                    | Tfc::COPY_DST
+            }
             Tf::Rgb9e5Ufloat => {
                 if pc.msaa_apple3 {
                     all_caps
@@ -1168,7 +1173,9 @@ impl super::CapabilitiesQuery {
             | F::DEPTH32FLOAT_STENCIL8
             | F::BGRA8UNORM_STORAGE
             | F::PASSTHROUGH_SHADERS
-            | F::EXTERNAL_TEXTURE;
+            | F::EXTERNAL_TEXTURE
+            | F::TEXTURE_FORMAT_NV12
+            | F::TEXTURE_FORMAT_P010;
 
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
         features.set(F::FLOAT32_BLENDABLE, true);
