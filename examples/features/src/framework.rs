@@ -554,16 +554,19 @@ impl<E: Example> ApplicationHandler<AppAction> for App<E> {
 
                     example.render(&view, &context.device, &context.queue);
 
-                    if let Some(window) = &self.window {
-                        window.pre_present_notify();
-                    }
-                    context.queue.present(frame);
-                }
-
                 if let Some(window) = &self.window {
-                    window.request_redraw();
+                    window.pre_present_notify();
                 }
+                context.queue.present(frame);
             }
+
+            // Request another redraw to keep the animation loop running.
+            // Examples that only render once (like hello_triangle) omit
+            // this call so the event loop can rest between frames.
+            if let Some(window) = &self.window {
+                window.request_redraw();
+            }
+        }
             WindowEvent::Occluded(is_occluded) => {
                 self.occluded = is_occluded;
                 // Resume rendering when un-occluded.
@@ -700,6 +703,8 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
                         width: params.width,
                         height: params.height,
                         desired_maximum_frame_latency: 2,
+                        // Fifo corresponds to traditional VSync. It's the
+                        // safest and most widely supported present mode.
                         present_mode: wgpu::PresentMode::Fifo,
                         alpha_mode: wgpu::CompositeAlphaMode::Auto,
                         view_formats: vec![format],
