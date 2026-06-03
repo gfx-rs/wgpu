@@ -470,13 +470,26 @@ impl super::CommandEncoder {
         Ok(pipelines.as_ref().unwrap().clone())
     }
 
+    fn supports_icb_multi_draw(&self) -> bool {
+        self.shared.private_caps.indirect_command_buffers_compute
+            && self.shared.private_caps.indirect_command_buffers_rendering
+    }
+
+    fn should_track_icb_render_state(&self) -> bool {
+        self.supports_icb_multi_draw()
+            && !self.state.render_bind_groups_active
+            && self.state.immediates.is_empty()
+            && self
+                .state
+                .render_pass
+                .as_ref()
+                .is_some_and(|pass| pass.can_resume_for_icb)
+    }
+
     fn can_use_icb_multi_draw(&self, indexed: bool, draw_count: u32) -> bool {
         if draw_count <= 1
-            || !self.shared.private_caps.indirect_command_buffers_compute
-            || !self.shared.private_caps.indirect_command_buffers_rendering
+            || !self.should_track_icb_render_state()
             || self.state.current_render_pipeline.is_none()
-            || self.state.render_bind_groups_active
-            || !self.state.immediates.is_empty()
         {
             return false;
         }
@@ -485,10 +498,7 @@ impl super::CommandEncoder {
             return false;
         }
 
-        self.state
-            .render_pass
-            .as_ref()
-            .is_some_and(|pass| pass.can_resume_for_icb)
+        true
     }
 
     fn mark_render_pass_store_actions_for_icb_resume(descriptor: &MTLRenderPassDescriptor) {
@@ -1705,7 +1715,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let render_encoder = self.state.render.clone();
         let compute_encoder = self.state.compute.clone();
         if let Some(encoder) = render_encoder {
-            self.state.render_bind_groups_active = true;
+            if self.should_track_icb_render_state() {
+                self.state.render_bind_groups_active = true;
+            }
             self.update_bind_group_state(
                 Encoder::Vertex(&encoder),
                 // All zeros, as vs comes first
@@ -1882,14 +1894,18 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         self.state.raw_primitive_type = pipeline.raw_primitive_type;
-        self.state.current_render_pipeline = Some(super::RenderPipelineState {
-            raw: pipeline.raw.clone(),
-            raw_triangle_fill_mode: pipeline.raw_triangle_fill_mode,
-            raw_front_winding: pipeline.raw_front_winding,
-            raw_cull_mode: pipeline.raw_cull_mode,
-            raw_depth_clip_mode: pipeline.raw_depth_clip_mode,
-            depth_stencil: pipeline.depth_stencil.clone(),
-        });
+        if self.should_track_icb_render_state() {
+            self.state.current_render_pipeline = Some(super::RenderPipelineState {
+                raw: pipeline.raw.clone(),
+                raw_triangle_fill_mode: pipeline.raw_triangle_fill_mode,
+                raw_front_winding: pipeline.raw_front_winding,
+                raw_cull_mode: pipeline.raw_cull_mode,
+                raw_depth_clip_mode: pipeline.raw_depth_clip_mode,
+                depth_stencil: pipeline.depth_stencil.clone(),
+            });
+        } else {
+            self.state.current_render_pipeline = None;
+        }
         match pipeline.vs_info {
             Some(ref info) => self.state.stage_infos.vs.assign_from(info),
             None => self.state.stage_infos.vs.clear(),
@@ -2036,15 +2052,20 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 buffer_index as usize,
             )
         };
-        if self.state.bound_vertex_buffers.len() <= buffer_index as usize {
-            self.state
-                .bound_vertex_buffers
-                .resize_with(buffer_index as usize + 1, || None);
+        if self.should_track_icb_render_state() {
+            if self.state.bound_vertex_buffers.len() <= buffer_index as usize {
+                self.state
+                    .bound_vertex_buffers
+                    .resize_with(buffer_index as usize + 1, || None);
+            }
+            self.state.bound_vertex_buffers[buffer_index as usize] =
+                Some(super::VertexBufferState {
+                    buffer: binding.buffer.raw.clone(),
+                    offset: binding.offset as usize,
+                });
+        } else if !self.state.bound_vertex_buffers.is_empty() {
+            self.state.bound_vertex_buffers.clear();
         }
-        self.state.bound_vertex_buffers[buffer_index as usize] = Some(super::VertexBufferState {
-            buffer: binding.buffer.raw.clone(),
-            offset: binding.offset as usize,
-        });
 
         let buffer_size = binding.resolve_size();
         if buffer_size > 0 {
@@ -2086,7 +2107,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             zfar: zfar as _,
         };
         encoder.setViewport(viewport);
-        self.state.current_viewport = Some(viewport);
+        if self.should_track_icb_render_state() {
+            self.state.current_viewport = Some(viewport);
+        }
     }
     unsafe fn set_scissor_rect(&mut self, rect: &crate::Rect<u32>) {
         //TODO: support empty scissors by modifying the viewport
@@ -2098,17 +2121,23 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
         let encoder = self.state.render.as_ref().unwrap();
         encoder.setScissorRect(scissor);
-        self.state.current_scissor = Some(scissor);
+        if self.should_track_icb_render_state() {
+            self.state.current_scissor = Some(scissor);
+        }
     }
     unsafe fn set_stencil_reference(&mut self, value: u32) {
         let encoder = self.state.render.as_ref().unwrap();
         encoder.setStencilFrontReferenceValue_backReferenceValue(value, value);
-        self.state.current_stencil_reference = Some(value);
+        if self.should_track_icb_render_state() {
+            self.state.current_stencil_reference = Some(value);
+        }
     }
     unsafe fn set_blend_constants(&mut self, color: &[f32; 4]) {
         let encoder = self.state.render.as_ref().unwrap();
         encoder.setBlendColorRed_green_blue_alpha(color[0], color[1], color[2], color[3]);
-        self.state.current_blend_color = Some(*color);
+        if self.should_track_icb_render_state() {
+            self.state.current_blend_color = Some(*color);
+        }
     }
 
     unsafe fn draw(
