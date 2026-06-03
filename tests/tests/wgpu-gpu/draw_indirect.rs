@@ -33,6 +33,13 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         MULTI_DRAW_INDIRECT,
         MULTI_DRAW_INDIRECT_GPU_GENERATED_ARGS,
         MULTI_DRAW_INDEXED_INDIRECT_GPU_GENERATED_ARGS,
+        MULTI_DRAW_INDIRECT_OVER_ICB_WORKGROUP,
+        MULTI_DRAW_INDIRECT_FIRST_VERTEX_AND_INSTANCE,
+        MULTI_DRAW_INDIRECT_MIXED_SEQUENCE,
+        MULTI_DRAW_INDIRECT_BIND_GROUP_FALLBACK,
+        MULTI_DRAW_INDEXED_INDIRECT_U16,
+        MULTI_DRAW_INDEXED_INDIRECT_POSITIVE_BASE_VERTEX,
+        MULTI_DRAW_INDEXED_INDIRECT_NEGATIVE_BASE_VERTEX,
     ]);
 }
 
@@ -506,6 +513,706 @@ fn create_indirect_render_pipeline(
 
     (pipeline, vertex_buffer, index_buffer)
 }
+
+fn create_rgba8_render_target(
+    ctx: &TestingContext,
+    width: u32,
+    height: u32,
+) -> (wgpu::Texture, wgpu::TextureView) {
+    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    (texture, view)
+}
+
+async fn submit_and_read_rgba8_texture(
+    ctx: &TestingContext,
+    mut encoder: wgpu::CommandEncoder,
+    texture: &wgpu::Texture,
+    width: u32,
+    height: u32,
+) -> Vec<u8> {
+    let bytes_per_row = width * 4;
+    assert_eq!(bytes_per_row % wgpu::COPY_BYTES_PER_ROW_ALIGNMENT, 0);
+    let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: u64::from(bytes_per_row * height),
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback_buffer,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(bytes_per_row),
+                rows_per_image: None,
+            },
+        },
+        wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+    );
+
+    ctx.queue.submit([encoder.finish()]);
+
+    let slice = readback_buffer.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |_| ());
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
+
+    let mapped = slice.get_mapped_range().unwrap();
+    let data = mapped.to_vec();
+    drop(mapped);
+    readback_buffer.unmap();
+    data
+}
+
+fn assert_all_pixels_rgba8(data: &[u8], expected: [u8; 4]) {
+    let first_bad_pixel = data.chunks_exact(4).position(|rgba| rgba != expected);
+    if let Some(first_bad_pixel) = first_bad_pixel {
+        eprintln!(
+            "first_bad_pixel={first_bad_pixel} rgba={:?}",
+            &data[first_bad_pixel * 4..first_bad_pixel * 4 + 4]
+        );
+    }
+    assert_eq!(first_bad_pixel, None);
+}
+
+fn draw_indirect_bytes(args: &[wgpu::util::DrawIndirectArgs]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(size_of_val(args));
+    for arg in args {
+        bytes.extend_from_slice(arg.as_bytes());
+    }
+    bytes
+}
+
+fn draw_indexed_indirect_bytes(args: &[wgpu::util::DrawIndexedIndirectArgs]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(size_of_val(args));
+    for arg in args {
+        bytes.extend_from_slice(arg.as_bytes());
+    }
+    bytes
+}
+
+fn create_draw_indirect_buffer(
+    ctx: &TestingContext,
+    args: &[wgpu::util::DrawIndirectArgs],
+) -> wgpu::Buffer {
+    ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: &draw_indirect_bytes(args),
+        usage: wgpu::BufferUsages::INDIRECT,
+    })
+}
+
+fn create_draw_indexed_indirect_buffer(
+    ctx: &TestingContext,
+    args: &[wgpu::util::DrawIndexedIndirectArgs],
+) -> wgpu::Buffer {
+    ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: &draw_indexed_indirect_bytes(args),
+        usage: wgpu::BufferUsages::INDIRECT,
+    })
+}
+
+async fn run_multi_draw_indirect_over_icb_workgroup(ctx: TestingContext) {
+    let (pipeline, vertex_buffer, _) = create_indirect_render_pipeline(&ctx, false);
+    let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 256, 256);
+
+    let mut args = vec![
+        wgpu::util::DrawIndirectArgs {
+            vertex_count: 0,
+            instance_count: 1,
+            first_vertex: 0,
+            first_instance: 0,
+        };
+        64
+    ];
+    args.push(wgpu::util::DrawIndirectArgs {
+        vertex_count: 6,
+        instance_count: 1,
+        first_vertex: 0,
+        first_instance: 0,
+    });
+    let indirect_buffer = create_draw_indirect_buffer(&ctx, &args);
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+                resolve_target: None,
+                view: &out_texture_view,
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        rpass.set_pipeline(&pipeline);
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        rpass.multi_draw_indirect(&indirect_buffer, 0, args.len() as u32);
+    }
+
+    let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
+    assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
+}
+
+async fn run_multi_draw_indirect_first_vertex_and_instance(ctx: TestingContext) {
+    let shader = ctx
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(
+                "
+                    @vertex
+                    fn vs_main(
+                        @location(0) position: vec2f,
+                        @location(1) position_offset: vec2f,
+                    ) -> @builtin(position) vec4f {
+                        return vec4f(position + position_offset, 0.0, 1.0);
+                    }
+
+                    @fragment
+                    fn fs_main() -> @location(0) vec4f {
+                        return vec4f(1.0);
+                    }
+                "
+                .into(),
+            ),
+        });
+    let pipeline = ctx
+        .device
+        .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: None,
+            vertex: wgpu::VertexState {
+                buffers: &[
+                    Some(wgpu::VertexBufferLayout {
+                        array_stride: 8,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &vertex_attr_array![0 => Float32x2],
+                    }),
+                    Some(wgpu::VertexBufferLayout {
+                        array_stride: 8,
+                        step_mode: wgpu::VertexStepMode::Instance,
+                        attributes: &vertex_attr_array![1 => Float32x2],
+                    }),
+                ],
+                module: &shader,
+                entry_point: Some("vs_main"),
+                compilation_options: Default::default(),
+            },
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: wgpu::TextureFormat::Rgba8Unorm,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
+
+    let vertex_buffer_content = [
+        10.0f32, 10.0, // first_vertex must skip this sentinel
+        -0.5, -0.5, // Triangle 1
+        0.5, 0.5, -0.5, 0.5, -0.5, -0.5, // Triangle 2
+        0.5, -0.5, 0.5, 0.5,
+    ];
+    let instance_buffer_content = [
+        10.0f32, 10.0, // first_instance must skip this sentinel
+        -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5,
+    ];
+    let vertex_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(&vertex_buffer_content),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let instance_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(&instance_buffer_content),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let indirect_buffer = create_draw_indirect_buffer(
+        &ctx,
+        &[
+            wgpu::util::DrawIndirectArgs {
+                vertex_count: 6,
+                instance_count: 4,
+                first_vertex: 1,
+                first_instance: 1,
+            },
+            wgpu::util::DrawIndirectArgs {
+                vertex_count: 6,
+                instance_count: 4,
+                first_vertex: 1,
+                first_instance: 1,
+            },
+        ],
+    );
+    let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 256, 256);
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+                resolve_target: None,
+                view: &out_texture_view,
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        rpass.set_pipeline(&pipeline);
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        rpass.set_vertex_buffer(1, instance_buffer.slice(..));
+        rpass.multi_draw_indirect(&indirect_buffer, 0, 2);
+    }
+
+    let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
+    assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
+}
+
+async fn run_multi_draw_indirect_mixed_sequence(ctx: TestingContext) {
+    let (pipeline, vertex_buffer, _) = create_indirect_render_pipeline(&ctx, false);
+    let indirect_buffer = create_draw_indirect_buffer(
+        &ctx,
+        &[
+            wgpu::util::DrawIndirectArgs {
+                vertex_count: 3,
+                instance_count: 1,
+                first_vertex: 0,
+                first_instance: 0,
+            },
+            wgpu::util::DrawIndirectArgs {
+                vertex_count: 0,
+                instance_count: 1,
+                first_vertex: 0,
+                first_instance: 0,
+            },
+            wgpu::util::DrawIndirectArgs {
+                vertex_count: 3,
+                instance_count: 1,
+                first_vertex: 3,
+                first_instance: 0,
+            },
+        ],
+    );
+    let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 256, 256);
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+                resolve_target: None,
+                view: &out_texture_view,
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        rpass.set_pipeline(&pipeline);
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        rpass.multi_draw_indirect(&indirect_buffer, 0, 2);
+        rpass.draw_indirect(
+            &indirect_buffer,
+            (2 * size_of::<wgpu::util::DrawIndirectArgs>()) as u64,
+        );
+    }
+
+    let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
+    assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
+}
+
+async fn run_multi_draw_indirect_bind_group_fallback(ctx: TestingContext) {
+    let shader = ctx
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(
+                "
+                    struct Offset {
+                        xy: vec2f,
+                        _pad: vec2f,
+                    };
+
+                    @group(0) @binding(0) var<uniform> offset: Offset;
+
+                    @vertex
+                    fn vs_main(@location(0) position: vec2f) -> @builtin(position) vec4f {
+                        return vec4f(position + offset.xy, 0.0, 1.0);
+                    }
+
+                    @fragment
+                    fn fs_main() -> @location(0) vec4f {
+                        return vec4f(1.0);
+                    }
+                "
+                .into(),
+            ),
+        });
+    let pipeline = ctx
+        .device
+        .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: None,
+            vertex: wgpu::VertexState {
+                buffers: &[Some(wgpu::VertexBufferLayout {
+                    array_stride: 8,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &vertex_attr_array![0 => Float32x2],
+                })],
+                module: &shader,
+                entry_point: Some("vs_main"),
+                compilation_options: Default::default(),
+            },
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: wgpu::TextureFormat::Rgba8Unorm,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
+    let shifted_vertex_buffer_content = [
+        -11.0f32, -1.0, -9.0, 1.0, -11.0, 1.0, -11.0, -1.0, -9.0, -1.0, -9.0, 1.0,
+    ];
+    let vertex_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(&shifted_vertex_buffer_content),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let uniform_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(&[10.0f32, 0.0, 0.0, 0.0]),
+        usage: wgpu::BufferUsages::UNIFORM,
+    });
+    let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &pipeline.get_bind_group_layout(0),
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: uniform_buffer.as_entire_binding(),
+        }],
+    });
+    let indirect_buffer = create_draw_indirect_buffer(
+        &ctx,
+        &[
+            wgpu::util::DrawIndirectArgs {
+                vertex_count: 3,
+                instance_count: 1,
+                first_vertex: 0,
+                first_instance: 0,
+            },
+            wgpu::util::DrawIndirectArgs {
+                vertex_count: 3,
+                instance_count: 1,
+                first_vertex: 3,
+                first_instance: 0,
+            },
+        ],
+    );
+    let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 256, 256);
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+                resolve_target: None,
+                view: &out_texture_view,
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        rpass.set_pipeline(&pipeline);
+        rpass.set_bind_group(0, &bind_group, &[]);
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        rpass.multi_draw_indirect(&indirect_buffer, 0, 2);
+    }
+
+    let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
+    assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
+}
+
+fn create_custom_vertex_buffer(ctx: &TestingContext, vertices: &[f32]) -> wgpu::Buffer {
+    ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(vertices),
+        usage: wgpu::BufferUsages::VERTEX,
+    })
+}
+
+async fn run_multi_draw_indexed_indirect_u16(ctx: TestingContext) {
+    let (pipeline, vertex_buffer, _) = create_indirect_render_pipeline(&ctx, true);
+    let index_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(&[0u16, 1, 2, 0, 3, 1]),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+    let indirect_buffer = create_draw_indexed_indirect_buffer(
+        &ctx,
+        &[
+            wgpu::util::DrawIndexedIndirectArgs {
+                index_count: 3,
+                instance_count: 1,
+                first_index: 0,
+                base_vertex: 0,
+                first_instance: 0,
+            },
+            wgpu::util::DrawIndexedIndirectArgs {
+                index_count: 3,
+                instance_count: 1,
+                first_index: 3,
+                base_vertex: 0,
+                first_instance: 0,
+            },
+        ],
+    );
+    let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 256, 256);
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+                resolve_target: None,
+                view: &out_texture_view,
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        rpass.set_pipeline(&pipeline);
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        rpass.multi_draw_indexed_indirect(&indirect_buffer, 0, 2);
+    }
+
+    let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
+    assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
+}
+
+async fn run_multi_draw_indexed_indirect_base_vertex(ctx: TestingContext, base_vertex: i32) {
+    let (pipeline, _, _) = create_indirect_render_pipeline(&ctx, true);
+    let (vertices, indices): (&[f32], &[u32]) = if base_vertex >= 0 {
+        (
+            &[
+                10.0, 10.0, // Sentinels that should be skipped by base_vertex.
+                11.0, 11.0, 10.0, 11.0, 11.0, 10.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0,
+            ],
+            &[0, 1, 2, 0, 3, 1],
+        )
+    } else {
+        (
+            &[-1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0],
+            &[4, 5, 6, 4, 7, 5],
+        )
+    };
+    let vertex_buffer = create_custom_vertex_buffer(&ctx, vertices);
+    let index_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(indices),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+    let indirect_buffer = create_draw_indexed_indirect_buffer(
+        &ctx,
+        &[
+            wgpu::util::DrawIndexedIndirectArgs {
+                index_count: 3,
+                instance_count: 1,
+                first_index: 0,
+                base_vertex,
+                first_instance: 0,
+            },
+            wgpu::util::DrawIndexedIndirectArgs {
+                index_count: 3,
+                instance_count: 1,
+                first_index: 3,
+                base_vertex,
+                first_instance: 0,
+            },
+        ],
+    );
+    let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 256, 256);
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+                resolve_target: None,
+                view: &out_texture_view,
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        rpass.set_pipeline(&pipeline);
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        rpass.multi_draw_indexed_indirect(&indirect_buffer, 0, 2);
+    }
+
+    let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
+    assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
+}
+
+#[gpu_test]
+static MULTI_DRAW_INDIRECT_OVER_ICB_WORKGROUP: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(run_multi_draw_indirect_over_icb_workgroup);
+
+#[gpu_test]
+static MULTI_DRAW_INDIRECT_FIRST_VERTEX_AND_INSTANCE: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+                .features(wgpu::Features::INDIRECT_FIRST_INSTANCE)
+                .limits(wgpu::Limits::downlevel_defaults()),
+        )
+        .run_async(run_multi_draw_indirect_first_vertex_and_instance);
+
+#[gpu_test]
+static MULTI_DRAW_INDIRECT_MIXED_SEQUENCE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(run_multi_draw_indirect_mixed_sequence);
+
+#[gpu_test]
+static MULTI_DRAW_INDIRECT_BIND_GROUP_FALLBACK: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(run_multi_draw_indirect_bind_group_fallback);
+
+#[gpu_test]
+static MULTI_DRAW_INDEXED_INDIRECT_U16: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(run_multi_draw_indexed_indirect_u16);
+
+#[gpu_test]
+static MULTI_DRAW_INDEXED_INDIRECT_POSITIVE_BASE_VERTEX: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+                .limits(wgpu::Limits::downlevel_defaults()),
+        )
+        .run_async(|ctx| run_multi_draw_indexed_indirect_base_vertex(ctx, 4));
+
+#[gpu_test]
+static MULTI_DRAW_INDEXED_INDIRECT_NEGATIVE_BASE_VERTEX: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+                .limits(wgpu::Limits::downlevel_defaults()),
+        )
+        .run_async(|ctx| run_multi_draw_indexed_indirect_base_vertex(ctx, -4));
 
 async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
     let indirect_stride = if indexed {
