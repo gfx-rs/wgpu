@@ -1505,8 +1505,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         autoreleasepool(|_| {
             let descriptor = MTLRenderPassDescriptor::new();
-            let mut can_resume_for_icb =
-                desc.timestamp_writes.is_none() && desc.occlusion_query_set.is_none();
+            let mut can_resume_for_icb = self.state.pending_timer_queries.is_empty()
+                && desc.timestamp_writes.is_none()
+                && desc.occlusion_query_set.is_none();
 
             for (i, at) in desc.color_attachments.iter().enumerate() {
                 if let Some(at) = at.as_ref() {
