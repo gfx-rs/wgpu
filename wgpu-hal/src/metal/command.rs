@@ -32,6 +32,7 @@ use smallvec::SmallVec;
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
 const ICB_WORKGROUP_WIDTH: usize = 64;
+const ICB_MIN_DRAW_COUNT: u32 = 8;
 
 const ICB_GENERATION_SHADER: &str = r#"
 #include <metal_stdlib>
@@ -136,6 +137,46 @@ pub(super) struct IcbCommandPipelines {
 struct IcbCommandPipeline {
     function: Retained<ProtocolObject<dyn MTLFunction>>,
     pipeline: Retained<ProtocolObject<dyn MTLComputePipelineState>>,
+}
+
+struct IcbArgumentEncoderState {
+    encoder: Retained<ProtocolObject<dyn MTLArgumentEncoder>>,
+    encoded_length: usize,
+}
+
+impl IcbArgumentEncoderState {
+    fn new(pipeline: &IcbCommandPipeline) -> Self {
+        let encoder = unsafe { pipeline.function.newArgumentEncoderWithBufferIndex(0) };
+        let encoded_length = encoder.encodedLength();
+        Self {
+            encoder,
+            encoded_length,
+        }
+    }
+}
+
+#[derive(Default)]
+pub(super) struct IcbArgumentEncoderCache {
+    draw: Option<IcbArgumentEncoderState>,
+    indexed_u16: Option<IcbArgumentEncoderState>,
+    indexed_u32: Option<IcbArgumentEncoderState>,
+}
+
+impl IcbArgumentEncoderCache {
+    fn draw(&mut self, pipeline: &IcbCommandPipeline) -> &IcbArgumentEncoderState {
+        self.draw
+            .get_or_insert_with(|| IcbArgumentEncoderState::new(pipeline))
+    }
+
+    fn indexed_u16(&mut self, pipeline: &IcbCommandPipeline) -> &IcbArgumentEncoderState {
+        self.indexed_u16
+            .get_or_insert_with(|| IcbArgumentEncoderState::new(pipeline))
+    }
+
+    fn indexed_u32(&mut self, pipeline: &IcbCommandPipeline) -> &IcbArgumentEncoderState {
+        self.indexed_u32
+            .get_or_insert_with(|| IcbArgumentEncoderState::new(pipeline))
+    }
 }
 
 impl IcbCommandPipelines {
@@ -486,8 +527,39 @@ impl super::CommandEncoder {
                 .is_some_and(|pass| pass.can_resume_for_icb)
     }
 
+    fn clear_icb_render_state(&mut self) {
+        if self.state.current_render_pipeline.is_some() {
+            self.state.current_render_pipeline = None;
+        }
+        if !self.state.bound_vertex_buffers.is_empty() {
+            self.state.bound_vertex_buffers.clear();
+        }
+        if self.state.current_viewport.is_some() {
+            self.state.current_viewport = None;
+        }
+        if self.state.current_scissor.is_some() {
+            self.state.current_scissor = None;
+        }
+        if self.state.current_stencil_reference.is_some() {
+            self.state.current_stencil_reference = None;
+        }
+        if self.state.current_blend_color.is_some() {
+            self.state.current_blend_color = None;
+        }
+    }
+
+    fn mark_render_bind_groups_active_for_icb(&mut self) {
+        if self.supports_icb_multi_draw() && !self.state.render_bind_groups_active {
+            self.state.render_bind_groups_active = true;
+            self.clear_icb_render_state();
+        }
+    }
+
     fn can_use_icb_multi_draw(&self, indexed: bool, draw_count: u32) -> bool {
-        if draw_count <= 1
+        // The Metal ICB path pays a render-pass split plus blit/compute setup.
+        // Keep it to larger static/baked-geometry batches with no bind groups or
+        // immediates; texture/uniform-heavy material passes use the CPU loop.
+        if draw_count < ICB_MIN_DRAW_COUNT
             || !self.should_track_icb_render_state()
             || self.state.current_render_pipeline.is_none()
         {
@@ -695,19 +767,22 @@ impl super::CommandEncoder {
         }
         self.leave_blit();
 
-        let argument_encoder =
-            unsafe { pipelines.draw.function.newArgumentEncoderWithBufferIndex(0) };
+        let argument_encoder = self.temp.icb_argument_encoders.draw(&pipelines.draw);
         let argument_buffer = self
             .shared
             .device
             .newBufferWithLength_options(
-                argument_encoder.encodedLength(),
+                argument_encoder.encoded_length,
                 MTLResourceOptions::StorageModeShared,
             )
             .ok_or(crate::DeviceError::Unexpected)?;
         unsafe {
-            argument_encoder.setArgumentBuffer_offset(Some(&argument_buffer), 0);
-            argument_encoder.setIndirectCommandBuffer_atIndex(Some(&icb), 0);
+            argument_encoder
+                .encoder
+                .setArgumentBuffer_offset(Some(&argument_buffer), 0);
+            argument_encoder
+                .encoder
+                .setIndirectCommandBuffer_atIndex(Some(&icb), 0);
         }
 
         let raw = self.raw_cmd_buf.as_ref().unwrap();
@@ -793,18 +868,26 @@ impl super::CommandEncoder {
         }
         self.leave_blit();
 
-        let argument_encoder = unsafe { pipeline.function.newArgumentEncoderWithBufferIndex(0) };
+        let argument_encoder = match raw_index_type {
+            MTLIndexType::UInt16 => self.temp.icb_argument_encoders.indexed_u16(pipeline),
+            MTLIndexType::UInt32 => self.temp.icb_argument_encoders.indexed_u32(pipeline),
+            _ => return Err(crate::DeviceError::Unexpected),
+        };
         let argument_buffer = self
             .shared
             .device
             .newBufferWithLength_options(
-                argument_encoder.encodedLength(),
+                argument_encoder.encoded_length,
                 MTLResourceOptions::StorageModeShared,
             )
             .ok_or(crate::DeviceError::Unexpected)?;
         unsafe {
-            argument_encoder.setArgumentBuffer_offset(Some(&argument_buffer), 0);
-            argument_encoder.setIndirectCommandBuffer_atIndex(Some(&icb), 0);
+            argument_encoder
+                .encoder
+                .setArgumentBuffer_offset(Some(&argument_buffer), 0);
+            argument_encoder
+                .encoder
+                .setIndirectCommandBuffer_atIndex(Some(&icb), 0);
         }
 
         let raw = self.raw_cmd_buf.as_ref().unwrap();
@@ -1715,9 +1798,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let render_encoder = self.state.render.clone();
         let compute_encoder = self.state.compute.clone();
         if let Some(encoder) = render_encoder {
-            if self.should_track_icb_render_state() {
-                self.state.render_bind_groups_active = true;
-            }
+            self.mark_render_bind_groups_active_for_icb();
             self.update_bind_group_state(
                 Encoder::Vertex(&encoder),
                 // All zeros, as vs comes first
@@ -1869,6 +1950,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     }
                 }
             }
+            if self.supports_icb_multi_draw() {
+                self.clear_icb_render_state();
+            }
         }
     }
 
@@ -1903,7 +1987,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 raw_depth_clip_mode: pipeline.raw_depth_clip_mode,
                 depth_stencil: pipeline.depth_stencil.clone(),
             });
-        } else {
+        } else if self.state.current_render_pipeline.is_some() {
             self.state.current_render_pipeline = None;
         }
         match pipeline.vs_info {

@@ -1115,6 +1115,7 @@ struct IndexState {
 #[derive(Default)]
 struct Temp {
     binding_sizes: Vec<u32>,
+    icb_argument_encoders: command::IcbArgumentEncoderCache,
 }
 
 struct CommandState {

@@ -639,6 +639,8 @@ fn create_draw_indexed_indirect_buffer(
     })
 }
 
+const ICB_MULTI_DRAW_TEST_COUNT: usize = 8;
+
 async fn run_multi_draw_indirect_over_icb_workgroup(ctx: TestingContext) {
     let (pipeline, vertex_buffer, _) = create_indirect_render_pipeline(&ctx, false);
     let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 256, 256);
@@ -771,23 +773,16 @@ async fn run_multi_draw_indirect_first_vertex_and_instance(ctx: TestingContext) 
         contents: bytemuck::cast_slice(&instance_buffer_content),
         usage: wgpu::BufferUsages::VERTEX,
     });
-    let indirect_buffer = create_draw_indirect_buffer(
-        &ctx,
-        &[
-            wgpu::util::DrawIndirectArgs {
-                vertex_count: 6,
-                instance_count: 4,
-                first_vertex: 1,
-                first_instance: 1,
-            },
-            wgpu::util::DrawIndirectArgs {
-                vertex_count: 6,
-                instance_count: 4,
-                first_vertex: 1,
-                first_instance: 1,
-            },
-        ],
-    );
+    let args = vec![
+        wgpu::util::DrawIndirectArgs {
+            vertex_count: 6,
+            instance_count: 4,
+            first_vertex: 1,
+            first_instance: 1,
+        };
+        ICB_MULTI_DRAW_TEST_COUNT
+    ];
+    let indirect_buffer = create_draw_indirect_buffer(&ctx, &args);
     let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 256, 256);
 
     let mut encoder = ctx
@@ -813,7 +808,7 @@ async fn run_multi_draw_indirect_first_vertex_and_instance(ctx: TestingContext) 
         rpass.set_pipeline(&pipeline);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
         rpass.set_vertex_buffer(1, instance_buffer.slice(..));
-        rpass.multi_draw_indirect(&indirect_buffer, 0, 2);
+        rpass.multi_draw_indirect(&indirect_buffer, 0, ICB_MULTI_DRAW_TEST_COUNT as u32);
     }
 
     let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
@@ -822,29 +817,28 @@ async fn run_multi_draw_indirect_first_vertex_and_instance(ctx: TestingContext) 
 
 async fn run_multi_draw_indirect_mixed_sequence(ctx: TestingContext) {
     let (pipeline, vertex_buffer, _) = create_indirect_render_pipeline(&ctx, false);
-    let indirect_buffer = create_draw_indirect_buffer(
-        &ctx,
-        &[
-            wgpu::util::DrawIndirectArgs {
-                vertex_count: 3,
-                instance_count: 1,
-                first_vertex: 0,
-                first_instance: 0,
-            },
-            wgpu::util::DrawIndirectArgs {
-                vertex_count: 0,
-                instance_count: 1,
-                first_vertex: 0,
-                first_instance: 0,
-            },
-            wgpu::util::DrawIndirectArgs {
-                vertex_count: 3,
-                instance_count: 1,
-                first_vertex: 3,
-                first_instance: 0,
-            },
-        ],
-    );
+    let mut args = vec![
+        wgpu::util::DrawIndirectArgs {
+            vertex_count: 0,
+            instance_count: 1,
+            first_vertex: 0,
+            first_instance: 0,
+        };
+        ICB_MULTI_DRAW_TEST_COUNT + 1
+    ];
+    args[0] = wgpu::util::DrawIndirectArgs {
+        vertex_count: 3,
+        instance_count: 1,
+        first_vertex: 0,
+        first_instance: 0,
+    };
+    args[ICB_MULTI_DRAW_TEST_COUNT] = wgpu::util::DrawIndirectArgs {
+        vertex_count: 3,
+        instance_count: 1,
+        first_vertex: 3,
+        first_instance: 0,
+    };
+    let indirect_buffer = create_draw_indirect_buffer(&ctx, &args);
     let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 256, 256);
 
     let mut encoder = ctx
@@ -869,10 +863,10 @@ async fn run_multi_draw_indirect_mixed_sequence(ctx: TestingContext) {
         });
         rpass.set_pipeline(&pipeline);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        rpass.multi_draw_indirect(&indirect_buffer, 0, 2);
+        rpass.multi_draw_indirect(&indirect_buffer, 0, ICB_MULTI_DRAW_TEST_COUNT as u32);
         rpass.draw_indirect(
             &indirect_buffer,
-            (2 * size_of::<wgpu::util::DrawIndirectArgs>()) as u64,
+            (ICB_MULTI_DRAW_TEST_COUNT * size_of::<wgpu::util::DrawIndirectArgs>()) as u64,
         );
     }
 
@@ -959,23 +953,28 @@ async fn run_multi_draw_indirect_bind_group_fallback(ctx: TestingContext) {
             resource: uniform_buffer.as_entire_binding(),
         }],
     });
-    let indirect_buffer = create_draw_indirect_buffer(
-        &ctx,
-        &[
-            wgpu::util::DrawIndirectArgs {
-                vertex_count: 3,
-                instance_count: 1,
-                first_vertex: 0,
-                first_instance: 0,
-            },
-            wgpu::util::DrawIndirectArgs {
-                vertex_count: 3,
-                instance_count: 1,
-                first_vertex: 3,
-                first_instance: 0,
-            },
-        ],
-    );
+    let mut args = vec![
+        wgpu::util::DrawIndirectArgs {
+            vertex_count: 0,
+            instance_count: 1,
+            first_vertex: 0,
+            first_instance: 0,
+        };
+        ICB_MULTI_DRAW_TEST_COUNT
+    ];
+    args[0] = wgpu::util::DrawIndirectArgs {
+        vertex_count: 3,
+        instance_count: 1,
+        first_vertex: 0,
+        first_instance: 0,
+    };
+    args[1] = wgpu::util::DrawIndirectArgs {
+        vertex_count: 3,
+        instance_count: 1,
+        first_vertex: 3,
+        first_instance: 0,
+    };
+    let indirect_buffer = create_draw_indirect_buffer(&ctx, &args);
     let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 256, 256);
 
     let mut encoder = ctx
@@ -1001,7 +1000,7 @@ async fn run_multi_draw_indirect_bind_group_fallback(ctx: TestingContext) {
         rpass.set_pipeline(&pipeline);
         rpass.set_bind_group(0, &bind_group, &[]);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        rpass.multi_draw_indirect(&indirect_buffer, 0, 2);
+        rpass.multi_draw_indirect(&indirect_buffer, 0, ICB_MULTI_DRAW_TEST_COUNT as u32);
     }
 
     let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
@@ -1023,25 +1022,31 @@ async fn run_multi_draw_indexed_indirect_u16(ctx: TestingContext) {
         contents: bytemuck::cast_slice(&[0u16, 1, 2, 0, 3, 1]),
         usage: wgpu::BufferUsages::INDEX,
     });
-    let indirect_buffer = create_draw_indexed_indirect_buffer(
-        &ctx,
-        &[
-            wgpu::util::DrawIndexedIndirectArgs {
-                index_count: 3,
-                instance_count: 1,
-                first_index: 0,
-                base_vertex: 0,
-                first_instance: 0,
-            },
-            wgpu::util::DrawIndexedIndirectArgs {
-                index_count: 3,
-                instance_count: 1,
-                first_index: 3,
-                base_vertex: 0,
-                first_instance: 0,
-            },
-        ],
-    );
+    let mut args = vec![
+        wgpu::util::DrawIndexedIndirectArgs {
+            index_count: 0,
+            instance_count: 1,
+            first_index: 0,
+            base_vertex: 0,
+            first_instance: 0,
+        };
+        ICB_MULTI_DRAW_TEST_COUNT
+    ];
+    args[0] = wgpu::util::DrawIndexedIndirectArgs {
+        index_count: 3,
+        instance_count: 1,
+        first_index: 0,
+        base_vertex: 0,
+        first_instance: 0,
+    };
+    args[1] = wgpu::util::DrawIndexedIndirectArgs {
+        index_count: 3,
+        instance_count: 1,
+        first_index: 3,
+        base_vertex: 0,
+        first_instance: 0,
+    };
+    let indirect_buffer = create_draw_indexed_indirect_buffer(&ctx, &args);
     let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 256, 256);
 
     let mut encoder = ctx
@@ -1067,7 +1072,7 @@ async fn run_multi_draw_indexed_indirect_u16(ctx: TestingContext) {
         rpass.set_pipeline(&pipeline);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
         rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        rpass.multi_draw_indexed_indirect(&indirect_buffer, 0, 2);
+        rpass.multi_draw_indexed_indirect(&indirect_buffer, 0, ICB_MULTI_DRAW_TEST_COUNT as u32);
     }
 
     let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
@@ -1096,25 +1101,31 @@ async fn run_multi_draw_indexed_indirect_base_vertex(ctx: TestingContext, base_v
         contents: bytemuck::cast_slice(indices),
         usage: wgpu::BufferUsages::INDEX,
     });
-    let indirect_buffer = create_draw_indexed_indirect_buffer(
-        &ctx,
-        &[
-            wgpu::util::DrawIndexedIndirectArgs {
-                index_count: 3,
-                instance_count: 1,
-                first_index: 0,
-                base_vertex,
-                first_instance: 0,
-            },
-            wgpu::util::DrawIndexedIndirectArgs {
-                index_count: 3,
-                instance_count: 1,
-                first_index: 3,
-                base_vertex,
-                first_instance: 0,
-            },
-        ],
-    );
+    let mut args = vec![
+        wgpu::util::DrawIndexedIndirectArgs {
+            index_count: 0,
+            instance_count: 1,
+            first_index: 0,
+            base_vertex,
+            first_instance: 0,
+        };
+        ICB_MULTI_DRAW_TEST_COUNT
+    ];
+    args[0] = wgpu::util::DrawIndexedIndirectArgs {
+        index_count: 3,
+        instance_count: 1,
+        first_index: 0,
+        base_vertex,
+        first_instance: 0,
+    };
+    args[1] = wgpu::util::DrawIndexedIndirectArgs {
+        index_count: 3,
+        instance_count: 1,
+        first_index: 3,
+        base_vertex,
+        first_instance: 0,
+    };
+    let indirect_buffer = create_draw_indexed_indirect_buffer(&ctx, &args);
     let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 256, 256);
 
     let mut encoder = ctx
@@ -1140,7 +1151,7 @@ async fn run_multi_draw_indexed_indirect_base_vertex(ctx: TestingContext, base_v
         rpass.set_pipeline(&pipeline);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
         rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        rpass.multi_draw_indexed_indirect(&indirect_buffer, 0, 2);
+        rpass.multi_draw_indexed_indirect(&indirect_buffer, 0, ICB_MULTI_DRAW_TEST_COUNT as u32);
     }
 
     let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
@@ -1215,6 +1226,7 @@ static MULTI_DRAW_INDEXED_INDIRECT_NEGATIVE_BASE_VERTEX: GpuTestConfiguration =
         .run_async(|ctx| run_multi_draw_indexed_indirect_base_vertex(ctx, -4));
 
 async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
+    let draw_count = ICB_MULTI_DRAW_TEST_COUNT as u32;
     let indirect_stride = if indexed {
         size_of::<wgpu::util::DrawIndexedIndirectArgs>() as u64
     } else {
@@ -1222,7 +1234,7 @@ async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
     };
     let indirect_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: 2 * indirect_stride,
+        size: u64::from(draw_count) * indirect_stride,
         usage: wgpu::BufferUsages::INDIRECT
             | wgpu::BufferUsages::COPY_DST
             | wgpu::BufferUsages::COPY_SRC,
@@ -1230,12 +1242,12 @@ async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
     });
     let args_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
         label: None,
-        contents: &vec![0; (2 * indirect_stride) as usize],
+        contents: &vec![0; (u64::from(draw_count) * indirect_stride) as usize],
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
     });
 
     let draw_shader_src = "
-        @group(0) @binding(0) var<storage, read_write> args: array<u32, 8>;
+        @group(0) @binding(0) var<storage, read_write> args: array<u32, 32>;
 
         @compute @workgroup_size(1)
         fn cs_main(@builtin(global_invocation_id) id: vec3u) {
@@ -1253,7 +1265,7 @@ async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
         }
     ";
     let indexed_draw_shader_src = "
-        @group(0) @binding(0) var<storage, read_write> args: array<u32, 10>;
+        @group(0) @binding(0) var<storage, read_write> args: array<u32, 40>;
 
         @compute @workgroup_size(1)
         fn cs_main(@builtin(global_invocation_id) id: vec3u) {
@@ -1280,7 +1292,7 @@ async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
             draw_shader_src
         },
         &args_buffer,
-        2 * indirect_stride,
+        u64::from(draw_count) * indirect_stride,
     );
     let (render_pipeline, vertex_buffer, index_buffer) =
         create_indirect_render_pipeline(&ctx, indexed);
@@ -1309,15 +1321,16 @@ async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
     });
     let indirect_readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: 2 * indirect_stride,
+        size: u64::from(draw_count) * indirect_stride,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
-    let expected_draw_args: &[u32] = if indexed {
-        &[3, 1, 0, 0, 0, 3, 1, 3, 0, 0]
+    let mut expected_draw_args = vec![0; (u64::from(draw_count) * indirect_stride / 4) as usize];
+    if indexed {
+        expected_draw_args[..10].copy_from_slice(&[3, 1, 0, 0, 0, 3, 1, 3, 0, 0]);
     } else {
-        &[3, 1, 0, 0, 3, 1, 3, 0]
-    };
+        expected_draw_args[..8].copy_from_slice(&[3, 1, 0, 0, 3, 1, 3, 0]);
+    }
 
     let mut encoder = ctx
         .device
@@ -1331,7 +1344,13 @@ async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
         cpass.set_bind_group(0, &bind_group, &[]);
         cpass.dispatch_workgroups(1, 1, 1);
     }
-    encoder.copy_buffer_to_buffer(&args_buffer, 0, &indirect_buffer, 0, 2 * indirect_stride);
+    encoder.copy_buffer_to_buffer(
+        &args_buffer,
+        0,
+        &indirect_buffer,
+        0,
+        u64::from(draw_count) * indirect_stride,
+    );
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -1354,9 +1373,9 @@ async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
         if let Some(index_buffer) = index_buffer.as_ref() {
             rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-            rpass.multi_draw_indexed_indirect(&indirect_buffer, 0, 2);
+            rpass.multi_draw_indexed_indirect(&indirect_buffer, 0, draw_count);
         } else {
-            rpass.multi_draw_indirect(&indirect_buffer, 0, 2);
+            rpass.multi_draw_indirect(&indirect_buffer, 0, draw_count);
         }
     }
 
@@ -1365,7 +1384,7 @@ async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
         0,
         &indirect_readback_buffer,
         0,
-        2 * indirect_stride,
+        u64::from(draw_count) * indirect_stride,
     );
 
     encoder.copy_texture_to_buffer(
@@ -1404,7 +1423,7 @@ async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
     let indirect_data = indirect_slice.get_mapped_range().unwrap();
     assert_eq!(
         bytemuck::cast_slice::<u8, u32>(&indirect_data),
-        expected_draw_args
+        expected_draw_args.as_slice()
     );
 
     let data = slice.get_mapped_range().unwrap();
