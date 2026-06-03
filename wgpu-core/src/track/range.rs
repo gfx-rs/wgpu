@@ -103,10 +103,9 @@ impl<I: Copy + Ord, T: Copy + PartialEq> RangedStates<I, T> {
         // doing this before any mutation lets us reserve exactly once and avoid
         // repeated O(n) shifts from incremental SmallVec::insert calls.
         let mut extra = 0usize;
-        let mut end_pos = start_pos;
         let mut has_prefix_split = false;
         let mut has_suffix_split = false;
-        {
+        let end_pos = {
             let mut scan_cursor = index.start;
             let mut i = start_pos;
             loop {
@@ -114,8 +113,7 @@ impl<I: Copy + Ord, T: Copy + PartialEq> RangedStates<I, T> {
                     if scan_cursor < index.end {
                         extra += 1;
                     }
-                    end_pos = i.min(self.ranges.len());
-                    break;
+                    break i.min(self.ranges.len());
                 }
                 let (ref range, _) = self.ranges[i];
                 if i == start_pos && range.start < index.start {
@@ -129,13 +127,12 @@ impl<I: Copy + Ord, T: Copy + PartialEq> RangedStates<I, T> {
                         extra += 1;
                         has_suffix_split = true;
                     }
-                    end_pos = i + 1;
-                    break;
+                    break i + 1;
                 }
                 scan_cursor = range.end;
                 i += 1;
             }
-        }
+        };
 
         if extra == 0 {
             return &mut self.ranges[start_pos..end_pos];
@@ -174,7 +171,6 @@ impl<I: Copy + Ord, T: Copy + PartialEq> RangedStates<I, T> {
             if effective_end < fill_cursor_end {
                 self.ranges[write_pos as usize] = (effective_end..fill_cursor_end, default);
                 write_pos -= 1;
-                fill_cursor_end = effective_end;
             }
 
             if has_prefix_split && read_index == start_pos {
