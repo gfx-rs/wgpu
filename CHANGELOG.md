@@ -134,6 +134,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
 #### Metal
 
+- Add Metal indirect-command-buffer lowering for fixed-count multi-draw indirect when render state can be safely resumed. By @matthargett in [#3](https://github.com/rebeckerspecialties/wgpu/pull/3).
 - Unconditionally enable `Features::CLIP_DISTANCES`. By @ErichDonGubler in [#9270](https://github.com/gfx-rs/wgpu/pull/9270).
 - Added full support for mesh shaders, including in WGSL shaders. By @inner-daemons in [#8739](https://github.com/gfx-rs/wgpu/pull/8739).
 
