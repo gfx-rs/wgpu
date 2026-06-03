@@ -545,12 +545,16 @@ const INDIRECT_DRAW_DISPATCH_SUPPORT: &[MTLFeatureSet] = &[
 
 /// "Indirect command buffers (rendering)" in the Metal feature set tables.
 ///
-/// The iOS/tvOS GPUFamily3 feature-set entry is intentionally not used here:
-/// A10X/iPadOS 17.7 advertises that legacy feature set but throws a foreign
-/// exception when this backend suspends a render pass for compute-generated
-/// render ICBs. Keep the fast path to validated Apple5+ and Mac-family devices.
-const INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT: &[MTLFeatureSet] =
-    &[MTLFeatureSet::macOS_GPUFamily2_v1];
+/// A10X/iPadOS 17.7 advertises the iOS GPUFamily3 feature set but throws a
+/// foreign exception when this backend suspends a render pass for
+/// compute-generated render ICBs. Treat these legacy feature sets as a hardware
+/// prerequisite only; mobile/watch/vision targets still need the modern OS
+/// runtime gate checked below.
+const INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily3_v4,
+    MTLFeatureSet::tvOS_GPUFamily2_v1,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
+];
 
 /// "Indirect command buffers (compute)" in the Metal feature set tables.
 const INDIRECT_COMMAND_BUFFERS_COMPUTE_SUPPORT: &[MTLFeatureSet] =
@@ -688,11 +692,28 @@ impl super::CapabilitiesQuery {
             .then(|| device.argumentBuffersSupport());
 
         let is_virtual = device.name().to_string().to_lowercase().contains("virtual");
+        // The GPU feature tables expose the hardware side of ICB support, but
+        // the MSL/runtime side is only validated on the current OS generation.
+        // This keeps A10X/iPadOS 17 on the CPU fallback while allowing the same
+        // Apple3-class hardware on tvOS 18+ to use the ICB path if the runtime
+        // reports the matching feature set/family.
+        let icb_modern_mobile_os =
+            available!(ios = 18.0, tvos = 18.0, visionos = 2.0, watchos = 11.0);
+        let icb_render_feature_set_support =
+            Self::supports_any(device, INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT)
+                && (os_type == super::OsType::Macos || icb_modern_mobile_os);
+        let icb_compute_feature_set_support =
+            Self::supports_any(device, INDIRECT_COMMAND_BUFFERS_COMPUTE_SUPPORT)
+                && (os_type == super::OsType::Macos || icb_modern_mobile_os);
         let icb_family_support = icb_family_check
-            && (device.supportsFamily(MTLGPUFamily::Apple5)
-                || (os_type == super::OsType::Macos
-                    && (device.supportsFamily(MTLGPUFamily::Mac2)
-                        || device.supportsFamily(MTLGPUFamily::Metal3))));
+            && if os_type == super::OsType::Macos {
+                device.supportsFamily(MTLGPUFamily::Mac2)
+                    || device.supportsFamily(MTLGPUFamily::Metal3)
+            } else {
+                icb_modern_mobile_os
+                    && (device.supportsFamily(MTLGPUFamily::Apple3)
+                        || device.supportsFamily(MTLGPUFamily::Metal3))
+            };
 
         let mesh_shaders = family_check
                 && (device.supportsFamily(MTLGPUFamily::Metal3)
@@ -749,11 +770,9 @@ impl super::CapabilitiesQuery {
             // ICB enablement to real Metal devices until the virtual driver is
             // validated separately.
             indirect_command_buffers_rendering: !is_virtual
-                && (Self::supports_any(device, INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT)
-                    || icb_family_support),
+                && (icb_render_feature_set_support || icb_family_support),
             indirect_command_buffers_compute: !is_virtual
-                && (Self::supports_any(device, INDIRECT_COMMAND_BUFFERS_COMPUTE_SUPPORT)
-                    || icb_family_support),
+                && (icb_compute_feature_set_support || icb_family_support),
             base_vertex_first_instance_drawing: Self::supports_any(
                 device,
                 BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
