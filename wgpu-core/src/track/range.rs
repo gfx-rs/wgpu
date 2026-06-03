@@ -90,11 +90,7 @@ impl<I: Copy + Ord, T: Copy + PartialEq> RangedStates<I, T> {
     ///
     /// Gaps in the ranges are filled with `default` value.
     pub fn isolate(&mut self, index: &Range<I>, default: T) -> &mut [(Range<I>, T)] {
-        //TODO: implement this in 2 passes:
-        // 1. scan the ranges to figure out how many extra ones need to be inserted
-        // 2. go through the ranges by moving them them to the right and inserting the missing ones
-
-        let mut start_pos = match self.ranges.iter().position(|pair| pair.0.end > index.start) {
+        let start_pos = match self.ranges.iter().position(|pair| pair.0.end > index.start) {
             Some(pos) => pos,
             None => {
                 let pos = self.ranges.len();
@@ -103,47 +99,106 @@ impl<I: Copy + Ord, T: Copy + PartialEq> RangedStates<I, T> {
             }
         };
 
+        // pass 1: count how many extra slots are needed and find end_pos.
+        // doing this before any mutation lets us reserve exactly once and avoid
+        // repeated O(n) shifts from incremental SmallVec::insert calls.
+        let mut extra = 0usize;
+        let mut end_pos = start_pos;
+        let mut has_prefix_split = false;
+        let mut has_suffix_split = false;
         {
-            let (range, value) = self.ranges[start_pos].clone();
-            if range.start < index.start {
-                self.ranges[start_pos].0.start = index.start;
-                self.ranges
-                    .insert(start_pos, (range.start..index.start, value));
-                start_pos += 1;
-            }
-        }
-        let mut pos = start_pos;
-        let mut range_pos = index.start;
-        loop {
-            let (range, value) = self.ranges[pos].clone();
-            if range.start >= index.end {
-                self.ranges.insert(pos, (range_pos..index.end, default));
-                pos += 1;
-                break;
-            }
-            if range.start > range_pos {
-                self.ranges.insert(pos, (range_pos..range.start, default));
-                pos += 1;
-                range_pos = range.start;
-            }
-            if range.end >= index.end {
-                if range.end != index.end {
-                    self.ranges[pos].0.start = index.end;
-                    self.ranges.insert(pos, (range_pos..index.end, value));
+            let mut scan_cursor = index.start;
+            let mut i = start_pos;
+            loop {
+                if i >= self.ranges.len() || self.ranges[i].0.start >= index.end {
+                    if scan_cursor < index.end {
+                        extra += 1;
+                    }
+                    end_pos = i.min(self.ranges.len());
+                    break;
                 }
-                pos += 1;
-                break;
-            }
-            pos += 1;
-            range_pos = range.end;
-            if pos == self.ranges.len() {
-                self.ranges.push((range_pos..index.end, default));
-                pos += 1;
-                break;
+                let (ref range, _) = self.ranges[i];
+                if i == start_pos && range.start < index.start {
+                    extra += 1;
+                    has_prefix_split = true;
+                } else if range.start > scan_cursor {
+                    extra += 1;
+                }
+                if range.end >= index.end {
+                    if range.end > index.end {
+                        extra += 1;
+                        has_suffix_split = true;
+                    }
+                    end_pos = i + 1;
+                    break;
+                }
+                scan_cursor = range.end;
+                i += 1;
             }
         }
 
-        &mut self.ranges[start_pos..pos]
+        if extra == 0 {
+            return &mut self.ranges[start_pos..end_pos];
+        }
+
+        // pass 2: extend once, shift the tail right by `extra`, then fill the
+        // affected window backwards. write_pos always leads read_pos, so reads
+        // are never clobbered before use.
+        let original_length = self.ranges.len();
+        let filler = self.ranges[start_pos].clone();
+        for _ in 0..extra {
+            self.ranges.push(filler.clone());
+        }
+        for i in (end_pos..original_length).rev() {
+            let val = self.ranges[i].clone();
+            self.ranges[i + extra] = val;
+        }
+
+        let mut write_pos = (end_pos + extra) as isize - 1;
+        let mut fill_cursor_end = index.end;
+
+        let mut read_pos = end_pos as isize - 1;
+        while read_pos >= start_pos as isize {
+            let read_index = read_pos as usize;
+            let (range, value) = self.ranges[read_index].clone();
+            let range_start = range.start;
+            let range_end = range.end;
+
+            if has_suffix_split && read_index == end_pos - 1 {
+                self.ranges[write_pos as usize] = (index.end..range_end, value);
+                write_pos -= 1;
+                fill_cursor_end = index.end;
+            }
+
+            let effective_end = range_end.min(index.end);
+            if effective_end < fill_cursor_end {
+                self.ranges[write_pos as usize] = (effective_end..fill_cursor_end, default);
+                write_pos -= 1;
+                fill_cursor_end = effective_end;
+            }
+
+            if has_prefix_split && read_index == start_pos {
+                self.ranges[write_pos as usize] = (index.start..effective_end, value);
+                write_pos -= 1;
+                fill_cursor_end = index.start;
+                self.ranges[write_pos as usize] = (range_start..index.start, value);
+                write_pos -= 1;
+            } else {
+                self.ranges[write_pos as usize] = (range_start..effective_end, value);
+                write_pos -= 1;
+                fill_cursor_end = range_start;
+            }
+
+            read_pos -= 1;
+        }
+
+        if fill_cursor_end > index.start {
+            self.ranges[write_pos as usize] = (index.start..fill_cursor_end, default);
+        }
+
+        let out_start = start_pos + has_prefix_split as usize;
+        let out_end = end_pos + extra - has_suffix_split as usize;
+        &mut self.ranges[out_start..out_end]
     }
 
     /// Helper method for isolation that checks the sanity of the results.
