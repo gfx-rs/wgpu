@@ -574,6 +574,15 @@ impl super::Adapter {
             );
         }
 
+        downlevel_flags.set(
+            wgt::DownlevelFlags::TEXTURE_COMPRESSION,
+            features.contains(wgt::Features::TEXTURE_COMPRESSION_BC)
+                || features.contains(
+                    wgt::Features::TEXTURE_COMPRESSION_ETC2
+                        | wgt::Features::TEXTURE_COMPRESSION_ASTC,
+                ),
+        );
+
         features.set(
             wgt::Features::FLOAT32_FILTERABLE,
             extensions.contains("GL_ARB_color_buffer_float")

@@ -105,10 +105,12 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
 }
 
 /// Initialize a wgpu adapter, using the given adapter report to match the adapter.
+///
+/// Returns `None` if the adapter from the report is not returned by `enumerate_adapters` due to `InstanceFlags::STRICT_WEBGPU_COMPLIANCE` being set.
 pub async fn initialize_adapter(
     adapter_report: Option<&AdapterReport>,
     params: &TestParameters,
-) -> (Instance, Adapter, Option<SurfaceGuard>) {
+) -> Option<(Instance, Adapter, Option<SurfaceGuard>)> {
     let backends = adapter_report
         .map(|report| Backends::from(report.info.backend))
         .unwrap_or_default();
@@ -157,24 +159,36 @@ pub async fn initialize_adapter(
                 } else {
                     true
                 });
-            let Some(adapter) = adapter else {
-                panic!(
-                    "Could not find adapter with info {:#?} in {:#?}",
-                    adapter_report.map(|r| &r.info),
-                    instance.enumerate_adapters(backends).await.into_iter().map(|a| a.get_info()).collect::<Vec<_>>(),
-                );
-            };
         } else {
             let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
                 compatible_surface: surface.as_ref(),
                 ..Default::default()
-            }).await.unwrap();
+            }).await.ok();
         }
     }
 
-    log::info!("Testing using adapter: {:#?}", adapter.get_info());
+    let Some(adapter) = adapter else {
+        if params
+            .required_instance_flags
+            .contains(wgpu::InstanceFlags::STRICT_WEBGPU_COMPLIANCE)
+        {
+            return None;
+        } else {
+            panic!(
+                "Could not find adapter with info {:#?} in {:#?}",
+                adapter_report.map(|r| &r.info),
+                instance
+                    .enumerate_adapters(backends)
+                    .await
+                    .into_iter()
+                    .map(|a| a.get_info())
+                    .collect::<Vec<_>>(),
+            );
+        }
+    };
 
-    (instance, adapter, surface_guard)
+    log::info!("Testing using adapter: {:#?}", adapter.get_info());
+    Some((instance, adapter, surface_guard))
 }
 
 /// Initialize a wgpu device from a given adapter.

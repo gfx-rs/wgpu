@@ -477,6 +477,7 @@ impl super::Device {
                 suballocation::AllocationType::Texture,
                 format.theoretical_memory_footprint(size),
             ),
+            plane_slice_override: None,
         }
     }
 
@@ -598,6 +599,7 @@ impl crate::Device for super::Device {
             mip_level_count: desc.mip_level_count,
             sample_count: desc.sample_count,
             allocation,
+            plane_slice_override: None,
         })
     }
 
@@ -629,7 +631,7 @@ impl crate::Device for super::Device {
             subresource_index: texture.calc_subresource(
                 desc.range.base_mip_level,
                 desc.range.base_array_layer,
-                0,
+                view_desc.plane_slice(),
             ),
             mip_slice: desc.range.base_mip_level,
             handle_srv: if desc.usage.intersects(wgt::TextureUses::RESOURCE) {
@@ -1402,28 +1404,6 @@ impl crate::Device for super::Device {
                 };
                 let special_constant_buffer_args_len = size_of::<super::SpecialConstants>();
 
-                let draw_mesh = if self
-                    .features
-                    .features_wgpu
-                    .contains(wgt::FeaturesWGPU::EXPERIMENTAL_MESH_SHADER)
-                {
-                    Some(Self::create_command_signature(
-                        &self.raw,
-                        Some(&raw),
-                        special_constant_buffer_args_len + size_of::<wgt::DispatchIndirectArgs>(),
-                        &[
-                            constant_indirect_argument_desc,
-                            Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
-                                Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH,
-                                ..Default::default()
-                            },
-                        ],
-                        0,
-                    )?)
-                } else {
-                    None
-                };
-
                 Some(super::CommandSignatures {
                     draw: Self::create_command_signature(
                         &self.raw,
@@ -1452,7 +1432,8 @@ impl crate::Device for super::Device {
                         ],
                         0,
                     )?,
-                    draw_mesh,
+                    // Mesh pipelines don't support updating special constants.
+                    draw_mesh: None,
                     dispatch: Self::create_command_signature(
                         &self.raw,
                         Some(&raw),

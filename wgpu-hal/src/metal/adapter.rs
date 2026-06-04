@@ -1314,6 +1314,10 @@ impl super::CapabilitiesQuery {
             wgt::DownlevelFlags::MSL2_1,
             self.msl_version >= MTLLanguageVersion::Version2_1,
         );
+        downlevel.flags.set(
+            wgt::DownlevelFlags::TEXTURE_COMPRESSION,
+            self.format_bc || (self.format_eac_etc && self.format_astc),
+        );
 
         let limits = crate::auxil::adjust_raw_limits(wgt::Limits {
             //

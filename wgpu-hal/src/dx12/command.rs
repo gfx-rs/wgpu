@@ -1454,30 +1454,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        if self
-            .pass
-            .layout
-            .special_constants
-            .as_ref()
-            .and_then(|sc| sc.indirect_cmd_signatures.as_ref())
-            .is_some()
-        {
-            self.update_root_elements();
-        } else {
-            self.prepare_dispatch([0; 3]);
-        }
-
+        self.prepare_dispatch([0; 3]);
         let cmd_list6: Direct3D12::ID3D12GraphicsCommandList6 =
             self.list.as_ref().unwrap().cast().unwrap();
-        let Some(cmd_signature) = &self
-            .pass
-            .layout
-            .special_constants
-            .as_ref()
-            .and_then(|sc| sc.indirect_cmd_signatures.as_ref())
-            .unwrap_or_else(|| &self.shared.cmd_signatures)
-            .draw_mesh
-        else {
+        let Some(cmd_signature) = &self.shared.cmd_signatures.draw_mesh else {
             panic!("Feature `MESH_SHADING` not enabled");
         };
         unsafe {
