@@ -545,14 +545,13 @@ const INDIRECT_DRAW_DISPATCH_SUPPORT: &[MTLFeatureSet] = &[
 
 /// "Indirect command buffers (rendering)" in the Metal feature set tables.
 ///
-/// A10X/iPadOS 17.7 advertises the iOS GPUFamily3 feature set but throws a
-/// foreign exception when this backend suspends a render pass for
-/// compute-generated render ICBs. Treat these legacy feature sets as a hardware
-/// prerequisite only; mobile/watch/vision targets still need the modern OS
-/// runtime gate checked below.
+/// A10X/iPadOS 17.7 advertises the older Apple3/iOS GPUFamily3 support but
+/// throws a foreign exception when this backend suspends a render pass for
+/// compute-generated render ICBs, and it lacks other sizing behavior used by
+/// this path. Keep mobile/watch/vision render ICBs to A12/Apple5+ until
+/// Apple3-class hardware is validated on a newer runtime.
 const INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily3_v4,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
@@ -694,9 +693,9 @@ impl super::CapabilitiesQuery {
         let is_virtual = device.name().to_string().to_lowercase().contains("virtual");
         // The GPU feature tables expose the hardware side of ICB support, but
         // the MSL/runtime side is only validated on the current OS generation.
-        // This keeps A10X/iPadOS 17 on the CPU fallback while allowing the same
-        // Apple3-class hardware on tvOS 18+ to use the ICB path if the runtime
-        // reports the matching feature set/family.
+        // Apple3/A10X remains on the CPU fallback even on later OS releases;
+        // revisit that only after first-generation Apple TV 4K-class hardware
+        // has direct test coverage for this render-ICB path.
         let icb_modern_mobile_os =
             available!(ios = 18.0, tvos = 18.0, visionos = 2.0, watchos = 11.0);
         let icb_render_feature_set_support =
@@ -711,7 +710,7 @@ impl super::CapabilitiesQuery {
                     || device.supportsFamily(MTLGPUFamily::Metal3)
             } else {
                 icb_modern_mobile_os
-                    && (device.supportsFamily(MTLGPUFamily::Apple3)
+                    && (device.supportsFamily(MTLGPUFamily::Apple5)
                         || device.supportsFamily(MTLGPUFamily::Metal3))
             };
 

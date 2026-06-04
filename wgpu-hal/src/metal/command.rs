@@ -31,8 +31,12 @@ use smallvec::SmallVec;
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
-const ICB_WORKGROUP_WIDTH: usize = 64;
 const ICB_MIN_DRAW_COUNT: u32 = 8;
+const ICB_PRIMITIVE_POINT: u32 = 0;
+const ICB_PRIMITIVE_LINE: u32 = 1;
+const ICB_PRIMITIVE_LINE_STRIP: u32 = 2;
+const ICB_PRIMITIVE_TRIANGLE: u32 = 3;
+const ICB_PRIMITIVE_TRIANGLE_STRIP: u32 = 4;
 
 const ICB_GENERATION_SHADER: &str = r#"
 #include <metal_stdlib>
@@ -58,6 +62,31 @@ struct WgpuDrawIndexedIndirectArgs {
     uint first_instance;
 };
 
+enum WgpuIcbPrimitiveType : uint {
+    WGPU_ICB_PRIMITIVE_POINT = 0,
+    WGPU_ICB_PRIMITIVE_LINE = 1,
+    WGPU_ICB_PRIMITIVE_LINE_STRIP = 2,
+    WGPU_ICB_PRIMITIVE_TRIANGLE = 3,
+    WGPU_ICB_PRIMITIVE_TRIANGLE_STRIP = 4,
+};
+
+static primitive_type wgpu_icb_primitive_type(uint value) {
+    switch (value) {
+        case WGPU_ICB_PRIMITIVE_POINT:
+            return primitive_type::point;
+        case WGPU_ICB_PRIMITIVE_LINE:
+            return primitive_type::line;
+        case WGPU_ICB_PRIMITIVE_LINE_STRIP:
+            return primitive_type::line_strip;
+        case WGPU_ICB_PRIMITIVE_TRIANGLE:
+            return primitive_type::triangle;
+        case WGPU_ICB_PRIMITIVE_TRIANGLE_STRIP:
+            return primitive_type::triangle_strip;
+        default:
+            return primitive_type::triangle;
+    }
+}
+
 kernel void wgpu_generate_mdi_icb(
     device WgpuIcbArguments& icb_args [[buffer(0)]],
     const device WgpuDrawIndirectArgs* draw_args [[buffer(1)]],
@@ -70,7 +99,7 @@ kernel void wgpu_generate_mdi_icb(
         cmd.reset();
         return;
     }
-    const primitive_type primitive = static_cast<primitive_type>(primitive_type_value);
+    const primitive_type primitive = wgpu_icb_primitive_type(primitive_type_value);
     cmd.draw_primitives(
         primitive,
         args.first_vertex,
@@ -92,7 +121,7 @@ kernel void wgpu_generate_indexed_mdi_icb_u16(
         cmd.reset();
         return;
     }
-    const primitive_type primitive = static_cast<primitive_type>(primitive_type_value);
+    const primitive_type primitive = wgpu_icb_primitive_type(primitive_type_value);
     cmd.draw_indexed_primitives(
         primitive,
         args.index_count,
@@ -115,7 +144,7 @@ kernel void wgpu_generate_indexed_mdi_icb_u32(
         cmd.reset();
         return;
     }
-    const primitive_type primitive = static_cast<primitive_type>(primitive_type_value);
+    const primitive_type primitive = wgpu_icb_primitive_type(primitive_type_value);
     cmd.draw_indexed_primitives(
         primitive,
         args.index_count,
@@ -163,6 +192,9 @@ pub(super) struct IcbArgumentEncoderCache {
 }
 
 impl IcbArgumentEncoderCache {
+    // MTLArgumentEncoder mutates its bound argument buffer state. Cache it per
+    // command encoder to avoid per multi-draw allocation without sharing that
+    // mutable state between command encoders.
     fn draw(&mut self, pipeline: &IcbCommandPipeline) -> &IcbArgumentEncoderState {
         self.draw
             .get_or_insert_with(|| IcbArgumentEncoderState::new(pipeline))
@@ -355,6 +387,19 @@ impl Encoder<'_> {
 impl super::CommandEncoder {
     pub fn raw_command_buffer(&self) -> Option<&ProtocolObject<dyn MTLCommandBuffer>> {
         self.raw_cmd_buf.as_deref()
+    }
+
+    fn icb_primitive_type_value(
+        raw_primitive_type: MTLPrimitiveType,
+    ) -> Result<u32, crate::DeviceError> {
+        match raw_primitive_type {
+            MTLPrimitiveType::Point => Ok(ICB_PRIMITIVE_POINT),
+            MTLPrimitiveType::Line => Ok(ICB_PRIMITIVE_LINE),
+            MTLPrimitiveType::LineStrip => Ok(ICB_PRIMITIVE_LINE_STRIP),
+            MTLPrimitiveType::Triangle => Ok(ICB_PRIMITIVE_TRIANGLE),
+            MTLPrimitiveType::TriangleStrip => Ok(ICB_PRIMITIVE_TRIANGLE_STRIP),
+            _ => Err(crate::DeviceError::Unexpected),
+        }
     }
 
     fn enter_blit(&mut self) -> Retained<ProtocolObject<dyn MTLBlitCommandEncoder>> {
@@ -791,10 +836,11 @@ impl super::CommandEncoder {
         unsafe {
             compute.setBuffer_offset_atIndex(Some(&argument_buffer), 0, 0);
             compute.setBuffer_offset_atIndex(Some(&buffer.raw), offset as usize, 1);
-            let primitive_type_value = self.state.raw_primitive_type.0;
+            let primitive_type_value =
+                Self::icb_primitive_type_value(self.state.raw_primitive_type)?;
             compute.setBytes_length_atIndex(
                 NonNull::from(&primitive_type_value).cast(),
-                size_of::<NSUInteger>(),
+                size_of::<u32>(),
                 2,
             );
             compute.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Write);
@@ -806,7 +852,11 @@ impl super::CommandEncoder {
                 depth: 1,
             },
             MTLSize {
-                width: ICB_WORKGROUP_WIDTH.min(draw_count as usize),
+                width: pipelines
+                    .draw
+                    .pipeline
+                    .threadExecutionWidth()
+                    .min(draw_count as usize),
                 height: 1,
                 depth: 1,
             },
@@ -897,10 +947,11 @@ impl super::CommandEncoder {
             compute.setBuffer_offset_atIndex(Some(&argument_buffer), 0, 0);
             compute.setBuffer_offset_atIndex(Some(&buffer.raw), offset as usize, 1);
             compute.setBuffer_offset_atIndex(Some(index_buffer.as_ref()), index_offset as usize, 2);
-            let primitive_type_value = self.state.raw_primitive_type.0;
+            let primitive_type_value =
+                Self::icb_primitive_type_value(self.state.raw_primitive_type)?;
             compute.setBytes_length_atIndex(
                 NonNull::from(&primitive_type_value).cast(),
-                size_of::<NSUInteger>(),
+                size_of::<u32>(),
                 3,
             );
             compute.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Write);
@@ -912,7 +963,10 @@ impl super::CommandEncoder {
                 depth: 1,
             },
             MTLSize {
-                width: ICB_WORKGROUP_WIDTH.min(draw_count as usize),
+                width: pipeline
+                    .pipeline
+                    .threadExecutionWidth()
+                    .min(draw_count as usize),
                 height: 1,
                 depth: 1,
             },
