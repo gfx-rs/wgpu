@@ -244,6 +244,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Fix crash on fence creation when running in a MacOS Seatbelt sandbox. By @wumpf in [#9415](https://github.com/gfx-rs/wgpu/pull/9415)
 - Fixed structure field names incorrectly ignoring reserved keywords in the Metal (MSL) backend. By @39ali [#9379](https://github.com/gfx-rs/wgpu/pull/9379).
 - Restore the `Queue::as_raw` method, which was removed without good reason in v29. It now returns `&ProtocolObject<dyn MTLCommandQueue>`. By @andyleiserson in [#9560](https://github.com/gfx-rs/wgpu/pull/9560).
+- Fixed missing synchronization between acceleration structure builds, which could cause TLAS builds to consume BLASes that were still building, producing incorrect intersection results or GPU hangs. By @jtbirdsell in [#9645](https://github.com/gfx-rs/wgpu/pull/9645).
 
 ### Dependency Updates
 

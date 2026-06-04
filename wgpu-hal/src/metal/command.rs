@@ -34,6 +34,9 @@ impl Default for super::CommandState {
         Self {
             blit: None,
             acceleration_structure_builder: None,
+            acceleration_structure_fence: None,
+            pending_acceleration_structure_fence_wait: false,
+            acceleration_structure_builder_has_builds: false,
             render: None,
             compute: None,
             raw_primitive_type: MTLPrimitiveType::Point,
@@ -273,6 +276,14 @@ impl super::CommandEncoder {
                 self.state.acceleration_structure_builder =
                     cmd_buf.accelerationStructureCommandEncoder().to_owned();
             });
+            if self.state.pending_acceleration_structure_fence_wait {
+                self.state.pending_acceleration_structure_fence_wait = false;
+                self.state
+                    .acceleration_structure_builder
+                    .as_ref()
+                    .unwrap()
+                    .waitForFence(self.state.acceleration_structure_fence.as_ref().unwrap());
+            }
         }
         self.state.acceleration_structure_builder.clone().unwrap()
     }
@@ -280,6 +291,27 @@ impl super::CommandEncoder {
     pub(super) fn leave_acceleration_structure_builder(&mut self) {
         if let Some(encoder) = self.state.acceleration_structure_builder.take() {
             encoder.endEncoding();
+            self.state.acceleration_structure_builder_has_builds = false;
+        }
+    }
+
+    /// Ends the current acceleration structure encoder, if any, after
+    /// updating [`super::CommandState::acceleration_structure_fence`], which
+    /// the next acceleration structure encoder then waits on (see
+    /// [`Self::enter_acceleration_structure_builder`]). Metal does not order
+    /// acceleration structure commands encoded on the same encoder, and
+    /// fences are only defined across encoder boundaries, so this is how
+    /// commands later in the command buffer are ordered after prior builds.
+    fn split_acceleration_structure_builder(&mut self) {
+        if let Some(encoder) = self.state.acceleration_structure_builder.take() {
+            let fence = self
+                .state
+                .acceleration_structure_fence
+                .get_or_insert_with(|| self.shared.device.newFence().unwrap());
+            encoder.updateFence(fence);
+            encoder.endEncoding();
+            self.state.pending_acceleration_structure_fence_wait = true;
+            self.state.acceleration_structure_builder_has_builds = false;
         }
     }
 
@@ -498,6 +530,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn discard_encoding(&mut self) {
         self.leave_blit();
         self.leave_acceleration_structure_builder();
+        self.state.pending_acceleration_structure_fence_wait = false;
         // when discarding, we don't have a guarantee that
         // everything is in a good state, so check carefully
         if let Some(encoder) = self.state.render.take() {
@@ -526,6 +559,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         self.leave_blit();
         self.leave_acceleration_structure_builder();
+        self.state.pending_acceleration_structure_fence_wait = false;
         debug_assert!(self.state.render.is_none());
         debug_assert!(self.state.compute.is_none());
         debug_assert!(self.state.pending_timer_queries.is_empty());
@@ -1816,6 +1850,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         >,
     {
         let command_encoder = self.enter_acceleration_structure_builder();
+        self.state.acceleration_structure_builder_has_builds = true;
         for descriptor in descriptors {
             let acceleration_structure_descriptor =
                 conv::map_acceleration_structure_descriptor(descriptor.entries, descriptor.flags);
@@ -1844,8 +1879,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn place_acceleration_structure_barrier(
         &mut self,
-        _barriers: crate::AccelerationStructureBarrier,
+        _barrier: crate::AccelerationStructureBarrier,
     ) {
+        // wgpu-core emits an acceleration structure barrier at every point
+        // where ordering between acceleration structure commands is required,
+        // so rather than interpret the usage flags, split any open encoder
+        // unconditionally. An encoder is only open here if it encoded prior
+        // acceleration structure commands, so this never splits needlessly,
+        // and not relying on the flags keeps this correct if wgpu-core's
+        // barrier emission changes.
+        self.split_acceleration_structure_builder();
     }
 
     unsafe fn read_acceleration_structure_compact_size(
@@ -1853,6 +1896,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
         acceleration_structure: &super::AccelerationStructure,
         buffer: &super::Buffer,
     ) {
+        // wgpu-core encodes this with no barrier after the build of the
+        // acceleration structure being queried, so if the current encoder
+        // contains builds, split it; otherwise the size could be read from a
+        // still-building acceleration structure.
+        if self.state.acceleration_structure_builder_has_builds {
+            self.split_acceleration_structure_builder();
+        }
         let command_encoder = self.enter_acceleration_structure_builder();
         command_encoder.writeCompactedAccelerationStructureSize_toBuffer_offset(
             &acceleration_structure.raw,

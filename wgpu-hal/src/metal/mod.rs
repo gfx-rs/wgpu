@@ -48,7 +48,7 @@ use objc2_metal::{
     MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLArgumentBuffersTier,
     MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandQueue,
     MTLComputeCommandEncoder, MTLComputePipelineState, MTLCounterSampleBuffer, MTLCullMode,
-    MTLDepthClipMode, MTLDepthStencilState, MTLDevice, MTLDrawable, MTLIndexType,
+    MTLDepthClipMode, MTLDepthStencilState, MTLDevice, MTLDrawable, MTLFence, MTLIndexType,
     MTLLanguageVersion, MTLLibrary, MTLPrimitiveType, MTLReadWriteTextureTier,
     MTLRenderCommandEncoder, MTLRenderPipelineState, MTLRenderStages, MTLResource,
     MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize, MTLTexture, MTLTextureType,
@@ -1084,6 +1084,20 @@ struct CommandState {
     blit: Option<Retained<ProtocolObject<dyn MTLBlitCommandEncoder>>>,
     acceleration_structure_builder:
         Option<Retained<ProtocolObject<dyn MTLAccelerationStructureCommandEncoder>>>,
+    /// Fence used to order acceleration structure encoders split by
+    /// `CommandEncoder::split_acceleration_structure_builder`. Created lazily
+    /// and kept alive for the lifetime of the encoder. Command buffers
+    /// created with unretained references do not retain this fence, so the
+    /// encoder (which owns it) must be kept alive until its submitted
+    /// command buffers have finished executing.
+    acceleration_structure_fence: Option<Retained<ProtocolObject<dyn MTLFence>>>,
+    /// Whether the next acceleration structure encoder must wait on
+    /// [`Self::acceleration_structure_fence`] before encoding any commands.
+    pending_acceleration_structure_fence_wait: bool,
+    /// Whether the current acceleration structure encoder has encoded any
+    /// builds, i.e. whether commands consuming their results must split the
+    /// encoder first.
+    acceleration_structure_builder_has_builds: bool,
     render: Option<Retained<ProtocolObject<dyn MTLRenderCommandEncoder>>>,
     compute: Option<Retained<ProtocolObject<dyn MTLComputeCommandEncoder>>>,
     raw_primitive_type: MTLPrimitiveType,

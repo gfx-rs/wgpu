@@ -238,6 +238,7 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "MTLDevice",
     "MTLDrawable",
     "MTLEvent",
+    "MTLFence",
     "MTLLibrary",
     "MTLPipeline",
     "MTLPixelFormat",
