@@ -38,7 +38,18 @@ The first argument must be a string literal. String literals are currently only 
 
 Remaining arguments must currently be scalar values. Vector and matrix arguments may be supported in the future, but for now vector components should be passed individually.
 
-Format string interpretation follows the active backend's shader logging implementation. The supported format syntax is therefore intentionally limited to the common C-style debug printf forms accepted by Metal shader logging and Vulkan shader debug printf.
+Format string interpretation follows the active backend's shader logging implementation. The supported format syntax is therefore intentionally limited to the common C-style debug printf forms accepted by both Metal shader logging and Vulkan shader debug printf.
+
+The currently supported specifiers are:
+
+| specifiers             |  WGSL scalar type |
+| ---------------------- | ----------------- |
+| %d, %i                 | i32 (and u32)     |
+| %o, %u, %x, %X         | u32 (and i32)     |
+| %e, %E, %f, %F, %g, %G | f32               |
+| %lu, %lx               | u64 (and i64)     |
+
+The number of specifiers must match the number of provided arguments.
 
 ## Backend Notes
 
