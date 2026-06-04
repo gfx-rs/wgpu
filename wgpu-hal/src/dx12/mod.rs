@@ -1054,11 +1054,56 @@ pub struct Texture {
     mip_level_count: u32,
     sample_count: u32,
     allocation: suballocation::Allocation,
+    /// Pins `PlaneSlice` for every view and copy derived from this texture,
+    /// overriding the default aspect-based derivation. Used by cross-API
+    /// importers wrapping one plane of a multi-plane DXGI resource as a
+    /// single-plane wgpu texture.
+    plane_slice_override: Option<u32>,
 }
 
 impl Texture {
     pub unsafe fn raw_resource(&self) -> &Direct3D12::ID3D12Resource {
         &self.resource
+    }
+
+    /// Pin the D3D12 plane slice for every view and copy derived from
+    /// this texture. Pass `0` for the luma plane, `1` for chroma. The
+    /// declared `TextureFormat` must be single-plane (e.g. `R8Unorm`,
+    /// `Rg8Unorm`) and match the plane's texel layout.
+    ///
+    /// # Safety / aliasing
+    ///
+    /// The intended use is to wrap one plane of a multi-plane DXGI
+    /// resource (e.g. NV12) as a single-plane wgpu texture, typically
+    /// by calling [`Device::texture_from_raw`](Device::texture_from_raw)
+    /// twice with two clones of the same `ID3D12Resource` and a
+    /// different `plane_slice` on each. wgpu's state tracker treats
+    /// these wrappers as independent textures: per-subresource state,
+    /// hazard tracking, and resource-state barriers all assume
+    /// non-aliased ownership and have no way to know the two wrappers
+    /// alias the same underlying resource.
+    ///
+    /// The caller is responsible for ensuring that the underlying
+    /// resource is not concurrently used by another wgpu texture
+    /// wrapping a different plane in a way that would race or
+    /// invalidate state tracking — in particular, do not submit work
+    /// touching both wrappers in the same submission unless every
+    /// access goes through `COPY_SRC` / `COPY_DST` on the wrapper that
+    /// owns that plane's subresource, and do not destroy the wrappers
+    /// concurrently with in-flight work that uses either of them.
+    pub fn with_plane_slice(mut self, plane_slice: u32) -> Self {
+        debug_assert!(
+            !self.format.is_multi_planar_format(),
+            "`with_plane_slice` expects a single-plane format wrapping a \
+             multi-plane DXGI resource; got planar format `{:?}`",
+            self.format,
+        );
+        self.plane_slice_override = Some(plane_slice);
+        self
+    }
+
+    pub(super) fn plane_slice_override(&self) -> Option<u32> {
+        self.plane_slice_override
     }
 }
 
@@ -1088,14 +1133,18 @@ impl Texture {
     }
 
     fn calc_subresource_for_copy(&self, base: &crate::TextureCopyBase) -> u32 {
-        let plane = match base.aspect {
-            crate::FormatAspects::COLOR
-            | crate::FormatAspects::DEPTH
-            | crate::FormatAspects::PLANE_0 => 0,
-            crate::FormatAspects::STENCIL | crate::FormatAspects::PLANE_1 => 1,
-            crate::FormatAspects::PLANE_2 => 2,
-            _ => unreachable!(),
-        };
+        // Single-plane wrappers around a multi-plane resource report
+        // `COLOR` aspect, which would otherwise resolve to plane 0.
+        let plane = self
+            .plane_slice_override
+            .unwrap_or_else(|| match base.aspect {
+                crate::FormatAspects::COLOR
+                | crate::FormatAspects::DEPTH
+                | crate::FormatAspects::PLANE_0 => 0,
+                crate::FormatAspects::STENCIL | crate::FormatAspects::PLANE_1 => 1,
+                crate::FormatAspects::PLANE_2 => 2,
+                _ => unreachable!(),
+            });
         self.calc_subresource(base.mip_level, base.array_layer, plane)
     }
 }
@@ -1650,6 +1699,7 @@ impl crate::Surface for Surface {
                 suballocation::AllocationType::Texture,
                 sc.format.theoretical_memory_footprint(sc.size),
             ),
+            plane_slice_override: None,
         };
         Ok(crate::AcquiredSurfaceTexture {
             texture,
