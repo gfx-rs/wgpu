@@ -91,8 +91,12 @@ kernel void wgpu_generate_mdi_icb(
     device WgpuIcbArguments& icb_args [[buffer(0)]],
     const device WgpuDrawIndirectArgs* draw_args [[buffer(1)]],
     constant uint& primitive_type_value [[buffer(2)]],
+    constant uint& draw_count [[buffer(3)]],
     uint tid [[thread_position_in_grid]])
 {
+    if (tid >= draw_count) {
+        return;
+    }
     const WgpuDrawIndirectArgs args = draw_args[tid];
     render_command cmd(icb_args.icb, tid);
     if (args.vertex_count == 0 || args.instance_count == 0) {
@@ -113,8 +117,12 @@ kernel void wgpu_generate_indexed_mdi_icb_u16(
     const device WgpuDrawIndexedIndirectArgs* draw_args [[buffer(1)]],
     const device ushort* index_buffer [[buffer(2)]],
     constant uint& primitive_type_value [[buffer(3)]],
+    constant uint& draw_count [[buffer(4)]],
     uint tid [[thread_position_in_grid]])
 {
+    if (tid >= draw_count) {
+        return;
+    }
     const WgpuDrawIndexedIndirectArgs args = draw_args[tid];
     render_command cmd(icb_args.icb, tid);
     if (args.index_count == 0 || args.instance_count == 0) {
@@ -136,8 +144,12 @@ kernel void wgpu_generate_indexed_mdi_icb_u32(
     const device WgpuDrawIndexedIndirectArgs* draw_args [[buffer(1)]],
     const device uint* index_buffer [[buffer(2)]],
     constant uint& primitive_type_value [[buffer(3)]],
+    constant uint& draw_count [[buffer(4)]],
     uint tid [[thread_position_in_grid]])
 {
+    if (tid >= draw_count) {
+        return;
+    }
     const WgpuDrawIndexedIndirectArgs args = draw_args[tid];
     render_command cmd(icb_args.icb, tid);
     if (args.index_count == 0 || args.instance_count == 0) {
@@ -400,6 +412,26 @@ impl super::CommandEncoder {
             MTLPrimitiveType::TriangleStrip => Ok(ICB_PRIMITIVE_TRIANGLE_STRIP),
             _ => Err(crate::DeviceError::Unexpected),
         }
+    }
+
+    fn icb_generation_threadgroups(
+        pipeline: &ProtocolObject<dyn MTLComputePipelineState>,
+        draw_count: u32,
+    ) -> (MTLSize, MTLSize) {
+        let threads_per_threadgroup = pipeline.threadExecutionWidth().max(1);
+        let threadgroup_count = (draw_count as usize).div_ceil(threads_per_threadgroup);
+        (
+            MTLSize {
+                width: threadgroup_count,
+                height: 1,
+                depth: 1,
+            },
+            MTLSize {
+                width: threads_per_threadgroup,
+                height: 1,
+                depth: 1,
+            },
+        )
     }
 
     fn enter_blit(&mut self) -> Retained<ProtocolObject<dyn MTLBlitCommandEncoder>> {
@@ -843,24 +875,12 @@ impl super::CommandEncoder {
                 size_of::<u32>(),
                 2,
             );
+            compute.setBytes_length_atIndex(NonNull::from(&draw_count).cast(), size_of::<u32>(), 3);
             compute.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Write);
         }
-        compute.dispatchThreads_threadsPerThreadgroup(
-            MTLSize {
-                width: draw_count as usize,
-                height: 1,
-                depth: 1,
-            },
-            MTLSize {
-                width: pipelines
-                    .draw
-                    .pipeline
-                    .threadExecutionWidth()
-                    .min(draw_count as usize),
-                height: 1,
-                depth: 1,
-            },
-        );
+        let (threadgroups, threads_per_threadgroup) =
+            Self::icb_generation_threadgroups(&pipelines.draw.pipeline, draw_count);
+        compute.dispatchThreadgroups_threadsPerThreadgroup(threadgroups, threads_per_threadgroup);
         compute.endEncoding();
 
         unsafe {
@@ -954,23 +974,12 @@ impl super::CommandEncoder {
                 size_of::<u32>(),
                 3,
             );
+            compute.setBytes_length_atIndex(NonNull::from(&draw_count).cast(), size_of::<u32>(), 4);
             compute.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Write);
         }
-        compute.dispatchThreads_threadsPerThreadgroup(
-            MTLSize {
-                width: draw_count as usize,
-                height: 1,
-                depth: 1,
-            },
-            MTLSize {
-                width: pipeline
-                    .pipeline
-                    .threadExecutionWidth()
-                    .min(draw_count as usize),
-                height: 1,
-                depth: 1,
-            },
-        );
+        let (threadgroups, threads_per_threadgroup) =
+            Self::icb_generation_threadgroups(&pipeline.pipeline, draw_count);
+        compute.dispatchThreadgroups_threadsPerThreadgroup(threadgroups, threads_per_threadgroup);
         compute.endEncoding();
 
         unsafe {
