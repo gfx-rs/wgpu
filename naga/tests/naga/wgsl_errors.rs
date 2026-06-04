@@ -5439,11 +5439,33 @@ fn main() {
 }
 "#: Err(naga::valid::ValidationError::EntryPoint {
             source: naga::valid::EntryPointError::Function(
-                naga::valid::FunctionError::InvalidDebugPrintfArgument(_)
+                naga::valid::FunctionError::InvalidDebugPrintfSpecifier(_)
             ),
             ..
         }),
         Capabilities::DEBUG_PRINTF
+    }
+}
+
+#[test]
+fn debug_printf_rejects_wrong_specifier_type() {
+    for (specifier, value) in [("%f", "1u"), ("%g", "1u"), ("%d", "2.4f"), ("%lu", "1u")] {
+        check_one_validation!(
+            &format!(
+                "enable wgpu_debug_printf;
+@compute @workgroup_size(1)
+fn main() {{
+    debugPrintf(\"{specifier}\", {value});
+}}"
+            ),
+            Err(naga::valid::ValidationError::EntryPoint {
+                source: naga::valid::EntryPointError::Function(
+                    naga::valid::FunctionError::InvalidDebugPrintfArgument(_)
+                ),
+                ..
+            }),
+            Capabilities::DEBUG_PRINTF
+        );
     }
 }
 
