@@ -132,6 +132,8 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
   ```
   By @AdrianEddy in [#9496](https://github.com/gfx-rs/wgpu/pull/9496).
 - Add `as_custom` to many new API types, which increases the capabilities of custom backends. Also fixed render bundles on custom backends. By @inner-daemons in [#9605](https://github.com/gfx-rs/wgpu/pull/9605).
+- Extend `copy_texture_to_texture` to allow copying a single plane of a multi-planar source (NV12, P010) into a single-plane destination of the matching format (e.g. NV12 `Plane0` → `R8Unorm`, NV12 `Plane1` → `Rg8Unorm`). `copy_size` is interpreted in plane texels, not luma texels. By @AdrianEddy in [#9551](https://github.com/gfx-rs/wgpu/pull/9551).
+- Added `InstanceFlags::STRICT_WEBGPU_COMPLIANCE` flag, which restricts the available feature set to the one defined by the WebGPU specification. By @teoxoy in [#9586](https://github.com/gfx-rs/wgpu/pull/9586).
 
 #### Metal
 
@@ -147,6 +149,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
 - Added support for mesh shaders in naga's HLSL writer, completing DX12 support for mesh shaders. By @inner-daemons in [#8752](https://github.com/gfx-rs/wgpu/pull/8752).
 - Added `dx12::Queue::add_wait_fence` / `add_signal_fence` (and matching `remove_*` companions). They stage `ID3D12CommandQueue::Wait` / `Signal` calls on the next `Queue::submit`. The wait calls are issued before the submit's `ExecuteCommandLists`, the signal calls after wgpu's own `Signal(signal_fence, signal_value)`. Cross-API interop crates use this to GPU-side gate / publish wgpu submits against foreign-API fences. By @AdrianEddy in [#9463](https://github.com/gfx-rs/wgpu/pull/9463).
+- Added `dx12::Texture::with_plane_slice` so cross-API importers can wrap one plane of a multi-plane DXGI resource (e.g. `DXGI_FORMAT_NV12`) as a single-plane wgpu texture. By @AdrianEddy in [#9551](https://github.com/gfx-rs/wgpu/pull/9551).
 
 #### Vulkan
 
@@ -207,6 +210,8 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Fix incorrect checks for dynamic binding bounds when calling an encoder's `set_bind_group` in passes and bundles. By @ErichDonGubler in [#9308](https://github.com/gfx-rs/wgpu/pull/9308).
 - Writes from `Queue::write_buffer` are now flushed by calls to `Buffer::map_async` for that same buffer, to prevent reading stale data. `on_submitted_work_done` also now flushes pending writes. By @andyleiserson in [#9307](https://github.com/gfx-rs/wgpu/pull/9307).
 - Fix missing dependency feature activations when building wgpu-hal with gles/dx12 in isolation. By @wumpf in [#9325](https://github.com/gfx-rs/wgpu/pull/9325)
+- Stencil clear and reference values are now truncated to 8 bits. By @beicause in [#9607](https://github.com/gfx-rs/wgpu/pull/9607).
+- Fixed missing initialization of other aspects when writing to a single aspect of a multi-aspect texture. By @andyleiserson in [#9626](https://github.com/gfx-rs/wgpu/pull/9626).
 
 #### naga
 
@@ -233,10 +238,14 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Fixed a `debug_assert` during stride validation for indirect multi draw. By @kristoff3r in [#9332](https://github.com/gfx-rs/wgpu/pull/9332)
 - Fixed stencil values read with `textureLoad` appearing in G instead of R. By @andyleiserson in [#9520](https://github.com/gfx-rs/wgpu/pull/9520).
 - Fixed some cases where the `textureNum{Layers,Levels,Samples}` functions returned incorrect results. By @andyleiserson in [#9542](https://github.com/gfx-rs/wgpu/pull/9542).
+- Fixed `map_texture_format_for_copy` panicking on `(planar_format, single_plane_aspect)` during buffer<->texture transfers, and `TextureView::subresource_index` previously being hard-coded to plane 0. By @AdrianEddy in [#9551](https://github.com/gfx-rs/wgpu/pull/9551).
 
 #### Metal
 
 - Fix crash on fence creation when running in a MacOS Seatbelt sandbox. By @wumpf in [#9415](https://github.com/gfx-rs/wgpu/pull/9415)
+- Improved command buffer completion handling. By @39ali in [#9328](https://github.com/gfx-rs/wgpu/pull/9328).
+  - Wait using a condition variable, instead of polling.
+  - Fixed a hang in `Device::poll(PollType::wait_indefinitely())` when a Metal command buffer exits with an error.
 - Fixed structure field names incorrectly ignoring reserved keywords in the Metal (MSL) backend. By @39ali [#9379](https://github.com/gfx-rs/wgpu/pull/9379).
 - Restore the `Queue::as_raw` method, which was removed without good reason in v29. It now returns `&ProtocolObject<dyn MTLCommandQueue>`. By @andyleiserson in [#9560](https://github.com/gfx-rs/wgpu/pull/9560).
 

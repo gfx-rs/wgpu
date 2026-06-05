@@ -43,7 +43,13 @@ impl IndirectValidation {
                 return Err(DeviceError::Lost);
             }
         };
-        let draw = match Draw::new(device, required_features, instance_flags, backend) {
+        let draw = match Draw::new(
+            device,
+            required_features,
+            instance_flags,
+            backend,
+            required_limits,
+        ) {
             Ok(draw) => draw,
             Err(e) => {
                 log::error!("indirect-draw-validation error: {e:?}");

@@ -177,6 +177,11 @@ bitflags::bitflags! {
         /// This mainly applies to a Vulkan driver's compliance version. If the major compliance version
         /// is `0`, then the driver is ignored. This flag allows that driver to be enabled for testing.
         ///
+        /// This flag controls whether adapters that don't meet the *native*
+        /// API's own compliance requirements are returned, while
+        /// [`Self::STRICT_WEBGPU_COMPLIANCE`] controls whether adapters that
+        /// can't fully satisfy the *WebGPU v1* spec are excluded.
+        ///
         /// When `Self::from_env()` is used takes value from `WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER` environment variable.
         const ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER = 1 << 3;
         /// Enable GPU-based validation. Implies [`Self::VALIDATION`]. Currently, this only changes
@@ -228,6 +233,11 @@ bitflags::bitflags! {
         ///
         #[doc = link_to_wgpu_docs!(["rqs"]: "struct.CommandEncoder.html#method.resolve_query_set")]
         const AUTOMATIC_TIMESTAMP_NORMALIZATION = 1 << 6;
+
+        /// Restrict the available feature set to the one defined by the WebGPU specification.
+        ///
+        /// When `Self::from_env()` is used takes value from `WGPU_STRICT_WEBGPU_COMPLIANCE` environment variable.
+        const STRICT_WEBGPU_COMPLIANCE = 1 << 7;
     }
 }
 
@@ -285,6 +295,7 @@ impl InstanceFlags {
     /// - `WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER`
     /// - `WGPU_GPU_BASED_VALIDATION`
     /// - `WGPU_VALIDATION_INDIRECT_CALL`
+    /// - `WGPU_STRICT_WEBGPU_COMPLIANCE`
     #[must_use]
     pub fn with_env(mut self) -> Self {
         fn env(key: &str) -> Option<bool> {
@@ -312,6 +323,9 @@ impl InstanceFlags {
         }
         if let Some(bit) = env("WGPU_VALIDATION_INDIRECT_CALL") {
             self.set(Self::VALIDATION_INDIRECT_CALL, bit);
+        }
+        if let Some(bit) = env("WGPU_STRICT_WEBGPU_COMPLIANCE") {
+            self.set(Self::STRICT_WEBGPU_COMPLIANCE, bit);
         }
 
         self
