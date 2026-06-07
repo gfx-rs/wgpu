@@ -554,19 +554,19 @@ impl<E: Example> ApplicationHandler<AppAction> for App<E> {
 
                     example.render(&view, &context.device, &context.queue);
 
-                if let Some(window) = &self.window {
-                    window.pre_present_notify();
+                    if let Some(window) = &self.window {
+                        window.pre_present_notify();
+                    }
+                    context.queue.present(frame);
                 }
-                context.queue.present(frame);
-            }
 
-            // Request another redraw to keep the animation loop running.
-            // Examples that only render once (like hello_triangle) omit
-            // this call so the event loop can rest between frames.
-            if let Some(window) = &self.window {
-                window.request_redraw();
+                // Request another redraw to keep the animation loop running.
+                // Examples that only render once (like hello_triangle) omit
+                // this call so the event loop can rest between frames.
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
             }
-        }
             WindowEvent::Occluded(is_occluded) => {
                 self.occluded = is_occluded;
                 // Resume rendering when un-occluded.
