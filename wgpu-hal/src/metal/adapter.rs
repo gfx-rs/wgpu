@@ -11,6 +11,8 @@ use wgt::{AstcBlock, AstcChannel};
 
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
 use core::sync::atomic;
+use parking_lot::Mutex;
+use std::sync::OnceLock;
 
 use crate::metal::QueueShared;
 
@@ -124,6 +126,9 @@ impl crate::Adapter for super::Adapter {
                     shared: Arc::new(QueueShared {
                         raw: queue,
                         command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
+                        pending_waits: Mutex::new(Vec::new()),
+                        pending_signals: Mutex::new(Vec::new()),
+                        relay: OnceLock::new(),
                     }),
                     timestamp_period,
                 },
