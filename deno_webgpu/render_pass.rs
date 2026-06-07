@@ -445,6 +445,80 @@ impl GPURenderPassEncoder {
       .err();
     self.error_handler.push_error(err);
   }
+
+  #[required(3)]
+  #[undefined]
+  fn multi_draw_indirect(
+    &self,
+    #[webidl] indirect_buffer: Ptr<GPUBuffer>,
+    #[webidl(options(enforce_range = true))] indirect_offset: u64,
+    #[webidl(options(enforce_range = true))] max_draw_count: u32,
+    #[webidl] draw_count_buffer: Option<Ptr<GPUBuffer>>,
+    #[webidl(default = 0, options(enforce_range = true))]
+    draw_count_buffer_offset: u64,
+  ) {
+    let err = if let Some(draw_count_buffer) = draw_count_buffer {
+      self
+        .instance
+        .render_pass_multi_draw_indirect_count(
+          &mut self.render_pass.borrow_mut(),
+          indirect_buffer.id,
+          indirect_offset,
+          draw_count_buffer.id,
+          draw_count_buffer_offset,
+          max_draw_count,
+        )
+        .err()
+    } else {
+      self
+        .instance
+        .render_pass_multi_draw_indirect(
+          &mut self.render_pass.borrow_mut(),
+          indirect_buffer.id,
+          indirect_offset,
+          max_draw_count,
+        )
+        .err()
+    };
+    self.error_handler.push_error(err);
+  }
+
+  #[required(3)]
+  #[undefined]
+  fn multi_draw_indexed_indirect(
+    &self,
+    #[webidl] indirect_buffer: Ptr<GPUBuffer>,
+    #[webidl(options(enforce_range = true))] indirect_offset: u64,
+    #[webidl(options(enforce_range = true))] max_draw_count: u32,
+    #[webidl] draw_count_buffer: Option<Ptr<GPUBuffer>>,
+    #[webidl(default = 0, options(enforce_range = true))]
+    draw_count_buffer_offset: u64,
+  ) {
+    let err = if let Some(draw_count_buffer) = draw_count_buffer {
+      self
+        .instance
+        .render_pass_multi_draw_indexed_indirect_count(
+          &mut self.render_pass.borrow_mut(),
+          indirect_buffer.id,
+          indirect_offset,
+          draw_count_buffer.id,
+          draw_count_buffer_offset,
+          max_draw_count,
+        )
+        .err()
+    } else {
+      self
+        .instance
+        .render_pass_multi_draw_indexed_indirect(
+          &mut self.render_pass.borrow_mut(),
+          indirect_buffer.id,
+          indirect_offset,
+          max_draw_count,
+        )
+        .err()
+    };
+    self.error_handler.push_error(err);
+  }
 }
 
 #[derive(WebIDL)]

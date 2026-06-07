@@ -924,6 +924,8 @@ pub enum RenderPassErrorInner {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("Indirect buffer offset {0:?} is not a multiple of 4")]
     UnalignedIndirectBufferOffset(BufferAddress),
+    #[error("Indirect draw count buffer offset {0:?} is not a multiple of 4")]
+    UnalignedIndirectCountBufferOffset(BufferAddress),
     #[error("Indirect draw arguments of {args_size} bytes (count = {count}) starting at {offset} would overrun buffer size of {buffer_size}")]
     IndirectBufferOverrun {
         count: u32,
@@ -1067,6 +1069,7 @@ impl WebGpuError for RenderPassError {
             | RenderPassErrorInner::InvalidDepthOps
             | RenderPassErrorInner::InvalidStencilOps
             | RenderPassErrorInner::UnalignedIndirectBufferOffset(..)
+            | RenderPassErrorInner::UnalignedIndirectCountBufferOffset(..)
             | RenderPassErrorInner::IndirectBufferOverrun { .. }
             | RenderPassErrorInner::IndirectCountBufferOverrun { .. }
             | RenderPassErrorInner::ResourceUsageCompatibility(..)
@@ -3242,6 +3245,11 @@ fn multi_draw_indirect_count(
 
     if !offset.is_multiple_of(4) {
         return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
+    }
+    if !count_buffer_offset.is_multiple_of(4) {
+        return Err(RenderPassErrorInner::UnalignedIndirectCountBufferOffset(
+            count_buffer_offset,
+        ));
     }
 
     let args_size = match stride.checked_mul(u64::from(max_count)) {

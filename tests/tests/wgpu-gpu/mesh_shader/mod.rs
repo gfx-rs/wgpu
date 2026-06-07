@@ -14,6 +14,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
         MESH_DRAW_DIVERGENT,
         MESH_DRAW_INDIRECT,
         MESH_MULTI_DRAW_INDIRECT,
+        MESH_MULTI_DRAW_INDIRECT_COLOR_READBACK,
         MESH_MULTI_DRAW_INDIRECT_COUNT,
         MESH_PIPELINE_BASIC_MESH_NO_DRAW,
         MESH_PIPELINE_BASIC_TASK_MESH_FRAG_NO_DRAW,
@@ -242,6 +243,134 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestIn
         .unwrap();
 }
 
+async fn mesh_multi_draw_indirect_color_readback(ctx: TestingContext) {
+    let device = &ctx.device;
+    let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None,
+        bind_group_layouts: &[],
+        immediate_size: 0,
+    });
+    let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
+        label: None,
+        layout: Some(&layout),
+        task: Some(wgpu::TaskState {
+            module: &shader,
+            entry_point: Some("ts_main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        }),
+        mesh: wgpu::MeshState {
+            module: &shader,
+            entry_point: Some("ms_main"),
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            cull_mode: Some(wgpu::Face::Back),
+            ..Default::default()
+        },
+        depth_stencil: None,
+        multisample: Default::default(),
+        multiview: None,
+        cache: None,
+    });
+
+    let indirect_args = [wgpu::util::DispatchIndirectArgs { x: 1, y: 1, z: 1 }; 8];
+    let indirect_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: None,
+        usage: wgpu::BufferUsages::INDIRECT,
+        contents: bytemuck::cast_slice(&indirect_args),
+    });
+
+    let texture_size = wgpu::Extent3d {
+        width: 64,
+        height: 64,
+        depth_or_array_layers: 1,
+    };
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: texture_size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: u64::from(texture_size.width * texture_size.height * 4),
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &texture_view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        pass.set_pipeline(&pipeline);
+        pass.multi_draw_mesh_tasks_indirect(&indirect_buffer, 0, indirect_args.len() as u32);
+    }
+
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(texture_size.width * 4),
+                rows_per_image: None,
+            },
+        },
+        texture_size,
+    );
+    ctx.queue.submit([encoder.finish()]);
+
+    let slice = readback.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |_| ());
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
+    let data = slice.get_mapped_range().unwrap();
+    let non_black_pixels = data
+        .chunks_exact(4)
+        .filter(|pixel| pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0 || pixel[3] != 0)
+        .count();
+    assert!(
+        non_black_pixels > 0,
+        "multi_draw_mesh_tasks_indirect should render non-black pixels"
+    );
+}
+
 fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
     GpuTestConfiguration::new().parameters(
         TestParameters::default()
@@ -419,6 +548,10 @@ pub static MESH_MULTI_DRAW_INDIRECT: GpuTestConfiguration =
             },
         );
     });
+#[gpu_test]
+pub static MESH_MULTI_DRAW_INDIRECT_COLOR_READBACK: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::MultiIndirect)
+        .run_async(mesh_multi_draw_indirect_color_readback);
 #[gpu_test]
 pub static MESH_MULTI_DRAW_INDIRECT_COUNT: GpuTestConfiguration =
     default_gpu_test_config(DrawType::MultiIndirectCount).run_sync(|ctx| {

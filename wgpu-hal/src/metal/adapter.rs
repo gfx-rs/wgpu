@@ -691,6 +691,10 @@ impl super::CapabilitiesQuery {
             .then(|| device.argumentBuffersSupport());
 
         let is_virtual = device.name().to_string().to_lowercase().contains("virtual");
+        let force_icb_mdi_on_macos = std::env::var("WGPU_METAL_FORCE_ICB_MDI")
+            .is_ok_and(|value| value == "1")
+            && os_type == super::OsType::Macos
+            && !is_virtual;
         // The GPU feature tables expose the hardware side of ICB support, but
         // the MSL/runtime side is only validated on the current OS generation.
         // Apple3/A10X remains on the CPU fallback even on later OS releases;
@@ -769,9 +773,11 @@ impl super::CapabilitiesQuery {
             // ICB enablement to real Metal devices until the virtual driver is
             // validated separately.
             indirect_command_buffers_rendering: !is_virtual
-                && (icb_render_feature_set_support || icb_family_support),
+                && (icb_render_feature_set_support || icb_family_support || force_icb_mdi_on_macos),
             indirect_command_buffers_compute: !is_virtual
-                && (icb_compute_feature_set_support || icb_family_support),
+                && (icb_compute_feature_set_support
+                    || icb_family_support
+                    || force_icb_mdi_on_macos),
             base_vertex_first_instance_drawing: Self::supports_any(
                 device,
                 BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
@@ -1320,6 +1326,12 @@ impl super::CapabilitiesQuery {
         features.set(
             F::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
             self.supported_vertex_amplification_factor > 1 && self.mesh_shaders,
+        );
+        features.set(
+            F::MULTI_DRAW_INDIRECT_COUNT,
+            std::env::var("WGPU_METAL_ENABLE_ICB_MDI_COUNT").is_ok_and(|value| value == "1")
+                && self.indirect_command_buffers_rendering
+                && self.indirect_command_buffers_compute,
         );
 
         // Cooperative matrix (simdgroup matrix) requires MSL 2.3+
