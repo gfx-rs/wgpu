@@ -2241,7 +2241,7 @@ impl crate::Device for super::Device {
                 .closest_hit_shader(vk::SHADER_UNUSED_KHR)
                 .any_hit_shader(vk::SHADER_UNUSED_KHR)
                 .intersection_shader(vk::SHADER_UNUSED_KHR)
-                .general_shader(1)  // stages always has one element so next index is 1.
+                .general_shader(1) // stages always has one element so next index is 1.
                 .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL),
         );
 
