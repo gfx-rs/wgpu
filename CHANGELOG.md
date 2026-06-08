@@ -241,7 +241,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Fixed stencil values read with `textureLoad` appearing in G instead of R. By @andyleiserson in [#9520](https://github.com/gfx-rs/wgpu/pull/9520).
 - Fixed some cases where the `textureNum{Layers,Levels,Samples}` functions returned incorrect results. By @andyleiserson in [#9542](https://github.com/gfx-rs/wgpu/pull/9542).
 - Fixed `map_texture_format_for_copy` panicking on `(planar_format, single_plane_aspect)` during buffer<->texture transfers, and `TextureView::subresource_index` previously being hard-coded to plane 0. By @AdrianEddy in [#9551](https://github.com/gfx-rs/wgpu/pull/9551).
-- Fixed partially-bound texture and storage-texture binding arrays (`PARTIALLY_BOUND_BINDING_ARRAY`) reading garbage in `create_bind_group`. By @holg in [#NNNN](https://github.com/gfx-rs/wgpu/pull/NNNN).
+- Fixed partially-bound texture and storage-texture binding arrays (`PARTIALLY_BOUND_BINDING_ARRAY`) reading garbage in `create_bind_group`. By @holg in [#9653](https://github.com/gfx-rs/wgpu/pull/9653).
 
 #### Metal
 
