@@ -54,6 +54,11 @@ trait_alias!(RequestDeviceFuture: Future<Output = Result<(DispatchDevice, Dispat
 trait_alias!(PopErrorScopeFuture: Future<Output = Option<crate::Error>> + WasmNotSend + 'static);
 trait_alias!(ShaderCompilationInfoFuture: Future<Output = crate::CompilationInfo> + WasmNotSend + 'static);
 trait_alias!(EnumerateAdapterFuture: Future<Output = Vec<DispatchAdapter>> + WasmNotSend + 'static);
+// Async pipeline creation (gfx-rs/wgpu#3794). On web these resolve via the browser's
+// `createPipelineAsync`; on native (Phase 1) they resolve immediately around the sync create.
+// Error model is provisional pending the upstream decision — see issue #3794.
+trait_alias!(CreateComputePipelineAsyncFuture: Future<Output = Result<DispatchComputePipeline, crate::Error>> + WasmNotSend + 'static);
+trait_alias!(CreateRenderPipelineAsyncFuture: Future<Output = Result<DispatchRenderPipeline, crate::Error>> + WasmNotSend + 'static);
 
 // We can't use trait aliases here, as you can't convert from a dyn Trait to dyn Supertrait _yet_.
 #[cfg(send_sync)]
@@ -176,6 +181,14 @@ pub trait DeviceInterface: CommonTraits {
         &self,
         desc: &crate::ComputePipelineDescriptor<'_>,
     ) -> DispatchComputePipeline;
+    fn create_render_pipeline_async(
+        &self,
+        desc: &crate::RenderPipelineDescriptor<'_>,
+    ) -> Pin<Box<dyn CreateRenderPipelineAsyncFuture>>;
+    fn create_compute_pipeline_async(
+        &self,
+        desc: &crate::ComputePipelineDescriptor<'_>,
+    ) -> Pin<Box<dyn CreateComputePipelineAsyncFuture>>;
     unsafe fn create_pipeline_cache(
         &self,
         desc: &crate::PipelineCacheDescriptor<'_>,

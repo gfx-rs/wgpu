@@ -191,6 +191,21 @@ impl DeviceInterface for CustomDevice {
         wgpu::custom::DispatchComputePipeline::custom(CustomComputePipeline(module.0.clone()))
     }
 
+    fn create_render_pipeline_async(
+        &self,
+        _desc: &wgpu::RenderPipelineDescriptor<'_>,
+    ) -> Pin<Box<dyn wgpu::custom::CreateRenderPipelineAsyncFuture>> {
+        unimplemented!()
+    }
+
+    fn create_compute_pipeline_async(
+        &self,
+        desc: &wgpu::ComputePipelineDescriptor<'_>,
+    ) -> Pin<Box<dyn wgpu::custom::CreateComputePipelineAsyncFuture>> {
+        // This custom backend compiles synchronously; resolve immediately around the sync create.
+        Box::pin(std::future::ready(Ok(self.create_compute_pipeline(desc))))
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         _desc: &wgpu::PipelineCacheDescriptor<'_>,

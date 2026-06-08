@@ -1577,6 +1577,24 @@ impl dispatch::DeviceInterface for CoreDevice {
         .into()
     }
 
+    // Phase-1 baseline for gfx-rs/wgpu#3794: run the existing sync create and hand back an
+    // already-ready future. Native pipeline creation stays infallible (errors flow through the
+    // error scope), so the async result is always `Ok`. A real `task_executor`-dispatched
+    // off-thread compile (and per-backend native async) is the Phase-2 follow-up.
+    fn create_render_pipeline_async(
+        &self,
+        desc: &crate::RenderPipelineDescriptor<'_>,
+    ) -> Pin<Box<dyn dispatch::CreateRenderPipelineAsyncFuture>> {
+        Box::pin(ready(Ok(self.create_render_pipeline(desc))))
+    }
+
+    fn create_compute_pipeline_async(
+        &self,
+        desc: &crate::ComputePipelineDescriptor<'_>,
+    ) -> Pin<Box<dyn dispatch::CreateComputePipelineAsyncFuture>> {
+        Box::pin(ready(Ok(self.create_compute_pipeline(desc))))
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         desc: &crate::PipelineCacheDescriptor<'_>,

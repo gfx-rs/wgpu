@@ -272,6 +272,38 @@ impl Device {
         ComputePipeline { inner: pipeline }
     }
 
+    /// Creates a [`RenderPipeline`] asynchronously (gfx-rs/wgpu#3794).
+    ///
+    /// On the WebGPU backend this maps to `GPUDevice.createRenderPipelineAsync`, letting the
+    /// browser compile the pipeline off the main thread (the only route to non-blocking
+    /// pipeline creation on the web). On native backends this currently resolves immediately
+    /// around the synchronous create; off-thread / per-backend native async is a follow-up.
+    ///
+    /// The error model is provisional pending the upstream decision on #3794.
+    pub fn create_render_pipeline_async(
+        &self,
+        desc: &RenderPipelineDescriptor<'_>,
+    ) -> impl Future<Output = Result<RenderPipeline, Error>> + WasmNotSend {
+        let pipeline = self.inner.create_render_pipeline_async(desc);
+        async move { pipeline.await.map(|inner| RenderPipeline { inner }) }
+    }
+
+    /// Creates a [`ComputePipeline`] asynchronously (gfx-rs/wgpu#3794).
+    ///
+    /// On the WebGPU backend this maps to `GPUDevice.createComputePipelineAsync`, letting the
+    /// browser compile the pipeline off the main thread (the only route to non-blocking
+    /// pipeline creation on the web). On native backends this currently resolves immediately
+    /// around the synchronous create; off-thread / per-backend native async is a follow-up.
+    ///
+    /// The error model is provisional pending the upstream decision on #3794.
+    pub fn create_compute_pipeline_async(
+        &self,
+        desc: &ComputePipelineDescriptor<'_>,
+    ) -> impl Future<Output = Result<ComputePipeline, Error>> + WasmNotSend {
+        let pipeline = self.inner.create_compute_pipeline_async(desc);
+        async move { pipeline.await.map(|inner| ComputePipeline { inner }) }
+    }
+
     /// Creates a [`Buffer`].
     #[must_use]
     pub fn create_buffer(&self, desc: &BufferDescriptor<'_>) -> Buffer {
