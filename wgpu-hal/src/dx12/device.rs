@@ -1687,12 +1687,8 @@ impl crate::Device for super::Device {
                             },
                         };
                         unsafe {
-                            self.raw.CreateUnorderedAccessView(
-                                None,
-                                None,
-                                Some(&raw_desc),
-                                handle,
-                            )
+                            self.raw
+                                .CreateUnorderedAccessView(None, None, Some(&raw_desc), handle)
                         };
                         inner.stage.push(handle);
                     }
