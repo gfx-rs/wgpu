@@ -1082,6 +1082,12 @@ bitflags::bitflags! {
 
         /// Supports features introduced in MSL 2.1.
         const MSL2_1 = 1 << 24;
+
+        /// The adapter supports the WebGPU texture compression requirement:
+        /// BC || (ETC2 && ASTC).
+        ///
+        /// See <https://www.w3.org/TR/webgpu/#adapter-capability-guarantees>.
+        const TEXTURE_COMPRESSION = 1 << 25;
     }
 }
 
