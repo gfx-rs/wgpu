@@ -82,10 +82,11 @@ void main() {
     trivial_numeric_casts,
     unused_extern_crates,
     unused_qualifications,
+    clippy::large_stack_frames,
     clippy::match_wildcard_for_single_variants,
     clippy::missing_const_for_fn,
     clippy::pattern_type_mismatch,
-    clippy::rest_pat_in_fully_bound_structs,
+    clippy::rest_pat_in_fully_bound_structs
 )]
 #![deny(clippy::exit)]
 #![cfg_attr(
