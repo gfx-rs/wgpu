@@ -84,6 +84,7 @@ fs = []
 [dependencies]
 arbitrary = { workspace = true, features = ["derive"], optional = true }
 arrayvec.workspace = true
+smallvec = { workspace = true, features = ["union"] }
 bitflags.workspace = true
 bit-set.workspace = true
 cfg-if.workspace = true
