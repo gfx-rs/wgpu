@@ -82,10 +82,10 @@ void main() {
     trivial_numeric_casts,
     unused_extern_crates,
     unused_qualifications,
-    clippy::pattern_type_mismatch,
+    clippy::match_wildcard_for_single_variants,
     clippy::missing_const_for_fn,
+    clippy::pattern_type_mismatch,
     clippy::rest_pat_in_fully_bound_structs,
-    clippy::match_wildcard_for_single_variants
 )]
 #![deny(clippy::exit)]
 #![cfg_attr(
