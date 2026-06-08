@@ -10,7 +10,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.extend([
         BINDING_ARRAY_SAMPLED_TEXTURES,
         PARTIAL_BINDING_ARRAY_SAMPLED_TEXTURES,
-        PARTIAL_BINDING_ARRAY_FOLLOWED_BY_UNIFORM,
+        PARTIAL_BINDING_ARRAY_FOLLOWED_BY_STORAGE_BUFFER,
     ]);
 }
 
@@ -260,7 +260,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
 }
 
 #[gpu_test]
-static PARTIAL_BINDING_ARRAY_FOLLOWED_BY_UNIFORM: GpuTestConfiguration =
+static PARTIAL_BINDING_ARRAY_FOLLOWED_BY_STORAGE_BUFFER: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
             TestParameters::default()
@@ -275,17 +275,19 @@ static PARTIAL_BINDING_ARRAY_FOLLOWED_BY_UNIFORM: GpuTestConfiguration =
                     ..Limits::default()
                 }),
         )
-        .run_async(|ctx| async move { partial_binding_array_followed_by_uniform(ctx).await });
+        .run_async(
+            |ctx| async move { partial_binding_array_followed_by_storage_buffer(ctx).await },
+        );
 
 /// Regression test for a DX12 descriptor-table bug. A *partially-bound* binding
-/// array (binding 0) is followed by another binding (binding 1, a uniform) in the
-/// same bind group. On DX12 the root-signature range reserves the array's full
-/// declared size and naga assigns binding 1's shader register *after* the whole
-/// array, but the backend used to stage only the bound array views — shifting
-/// binding 1's descriptor so the uniform was read from the wrong heap slot
-/// (garbage). The shader output here depends only on the trailing uniform, so a
+/// array (binding 0) is followed by another binding (binding 1, a storage buffer)
+/// in the same bind group. On DX12 the root-signature range reserves the array's
+/// full declared size and naga assigns binding 1's shader register *after* the
+/// whole array, but the backend used to stage only the bound array views —
+/// shifting binding 1's descriptor so the buffer was read from the wrong heap slot
+/// (garbage). The shader output here depends only on the trailing buffer, so a
 /// misaligned descriptor makes the readback differ from the marker color.
-async fn partial_binding_array_followed_by_uniform(ctx: TestingContext) {
+async fn partial_binding_array_followed_by_storage_buffer(ctx: TestingContext) {
     let shader = r#"
         enable wgpu_binding_array;
         @group(0) @binding(0)
@@ -306,7 +308,7 @@ async fn partial_binding_array_followed_by_uniform(ctx: TestingContext) {
         @fragment
         fn fragMain(@builtin(position) pos: vec4f) -> @location(0) vec4f {
             // Keep the binding array live (so it stays in the layout before the
-            // uniform), but make the output depend only on the trailing uniform.
+            // buffer), but make the output depend only on the trailing buffer.
             let keep = textureLoad(textures[0], vec2u(0), 0).x * 0.0;
             return marker + vec4f(keep);
         }
@@ -315,7 +317,7 @@ async fn partial_binding_array_followed_by_uniform(ctx: TestingContext) {
     let module = ctx
         .device
         .create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Partial Array + Uniform"),
+            label: Some("Partial Array + Storage Buffer"),
             source: wgpu::ShaderSource::Wgsl(shader.into()),
         });
 
@@ -336,7 +338,7 @@ async fn partial_binding_array_followed_by_uniform(ctx: TestingContext) {
     });
     let input_view = input_texture.create_view(&TextureViewDescriptor::default());
 
-    // The uniform the shader must echo. [0, 1, 0, 1] -> Rgba8Unorm [0, 255, 0, 255].
+    // The marker the shader must echo. [0, 1, 0, 1] -> Rgba8Unorm [0, 255, 0, 255].
     let marker = [0.0f32, 1.0, 0.0, 1.0];
     let marker_bytes: Vec<u8> = marker.iter().flat_map(|f| f.to_le_bytes()).collect();
     let marker_buffer = ctx.device.create_buffer(&BufferDescriptor {
@@ -363,35 +365,35 @@ async fn partial_binding_array_followed_by_uniform(ctx: TestingContext) {
     });
     let output_view = output_texture.create_view(&TextureViewDescriptor::default());
 
-    let bind_group_layout =
-        ctx.device
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("Bind Group Layout"),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Texture {
-                            sample_type: TextureSampleType::Float { filterable: false },
-                            view_dimension: TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: Some(NonZeroU32::new(32).unwrap()),
+    let bind_group_layout = ctx
+        .device
+        .create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("Bind Group Layout"),
+            entries: &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: false },
+                        view_dimension: TextureViewDimension::D2,
+                        multisampled: false,
                     },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+                    count: Some(NonZeroU32::new(32).unwrap()),
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
-                ],
-            });
+                    count: None,
+                },
+            ],
+        });
 
-    // Bind only 1 view into the 32-slot array (partial), plus the uniform after it.
+    // Bind only 1 view into the 32-slot array (partial), plus the buffer after it.
     let views = [&input_view];
     let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
         label: Some("Bind Group"),
@@ -473,8 +475,8 @@ async fn partial_binding_array_followed_by_uniform(ctx: TestingContext) {
     readback_buffers.copy_from(&ctx.device, &mut encoder, &output_texture);
     ctx.queue.submit(Some(encoder.finish()));
 
-    // The output must equal the uniform marker. Before the fix, the uniform's
-    // descriptor was misaligned on DX12 and this read garbage.
+    // The output must equal the marker. Before the fix, the buffer's descriptor
+    // was misaligned on DX12 and this read garbage.
     let expected: [u8; 4] = [0, 255, 0, 255];
     readback_buffers
         .assert_buffer_contents(&ctx, &expected)
