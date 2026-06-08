@@ -80,6 +80,33 @@ fn texture_call_on_shadow_sampler_uniform_is_unsupported() {
     );
 }
 
+/// `texture(param, uv)` where `param` is a `sampler2D` function parameter is now
+/// supported.  Previously naga emitted "Bad call" because no companion sampler was
+/// synthesised for function parameters declared with combined image-sampler types.
+///
+/// The snapshot for this and related cases lives in
+/// `tests/in/glsl/sampler-combined-param.frag`.
+#[test]
+fn texture_call_through_combined_sampler_param_compiles() {
+    let src = r#"
+        #version 450
+        layout(set = 0, binding = 0) uniform sampler2D u_lightmap;
+        layout(location = 0) in vec2 v_uv;
+        layout(location = 0) out vec4 o_color;
+        vec4 sample_lightmap(sampler2D lightMap, vec2 uv) {
+            return texture(lightMap, uv);
+        }
+        void main() {
+            o_color = sample_lightmap(u_lightmap, v_uv);
+        }
+    "#;
+
+    assert!(
+        parse_frag(src).is_ok(),
+        "expected texture(sampler2D_param, uv) to compile successfully"
+    );
+}
+
 /// imageLoad and imageStore in a compute shader work correctly.
 /// This is a compile-only smoke test; the full snapshot lives in
 /// `tests/in/glsl/image-compute.comp`.
