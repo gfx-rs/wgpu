@@ -1,5 +1,6 @@
 use alloc::{borrow::Cow, string::String, vec::Vec};
 use core::fmt;
+use smallvec::SmallVec;
 
 use super::{builtins::MacroCall, Span};
 use crate::{
@@ -53,6 +54,11 @@ pub struct Overload {
     /// Normalized function parameters, modifiers are not applied
     pub parameters: Vec<Handle<Type>>,
     pub parameters_info: Vec<ParameterInfo>,
+    /// Parallel to `parameters`. `true` when the parameter was declared with a
+    /// combined image-sampler type (`sampler2D`, `samplerXX`, …). The naga IR
+    /// function has a hidden sampler argument immediately after each such image
+    /// argument; the call site must supply both via `ctx.samplers`.
+    pub combined_sampler_params: SmallVec<[bool; 8]>,
     /// How the function is implemented
     pub kind: FunctionKind,
     /// Whether this function was already defined or is just a prototype

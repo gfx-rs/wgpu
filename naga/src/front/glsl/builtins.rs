@@ -1,4 +1,5 @@
 use alloc::{vec, vec::Vec};
+use smallvec::SmallVec;
 
 use super::{
     ast::{
@@ -47,6 +48,7 @@ impl Module {
         Overload {
             parameters,
             parameters_info,
+            combined_sampler_params: SmallVec::new(),
             kind: FunctionKind::Macro(builtin),
             defined: false,
             internal: true,

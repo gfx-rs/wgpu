@@ -792,6 +792,7 @@ impl Frontend {
         })?;
 
         let parameters_info = overload.parameters_info.clone();
+        let combined_sampler_params = overload.combined_sampler_params.clone();
         let parameters = overload.parameters.clone();
         let is_void = overload.void;
         let kind = overload.kind;
@@ -800,11 +801,12 @@ impl Frontend {
         let mut proxy_writes = Vec::new();
 
         // Iterate through the function call arguments applying transformations as needed
-        for (((parameter_info, call_argument), expr), parameter) in parameters_info
+        for (i, (((parameter_info, call_argument), expr), parameter)) in parameters_info
             .iter()
             .zip(&args)
             .zip(raw_args)
             .zip(&parameters)
+            .enumerate()
         {
             if parameter_info.qualifier.is_lhs() {
                 // Reprocess argument in LHS position
@@ -833,7 +835,29 @@ impl Frontend {
                 ctx.implicit_conversion(&mut handle, meta, scalar)?;
             }
 
-            arguments.push(handle)
+            arguments.push(handle);
+
+            // For combined image-sampler parameters, the IR function expects a
+            // hidden companion sampler argument immediately after the image.
+            // Look it up from ctx.samplers using the image expression.
+            if combined_sampler_params.get(i).copied().unwrap_or(false) {
+                match ctx.samplers.get(&handle).copied() {
+                    Some(sampler) => arguments.push(sampler),
+                    None => {
+                        return Err(Error {
+                            kind: ErrorKind::SemanticError(
+                                format!(
+                                    "argument {i} passed to combined-sampler parameter has no \
+                                     associated sampler; declare it as `sampler2D` (or the \
+                                     appropriate combined type), not as a bare texture"
+                                )
+                                .into(),
+                            ),
+                            meta,
+                        })
+                    }
+                }
+            }
         }
 
         match kind {
@@ -1076,6 +1100,7 @@ impl Frontend {
             arguments,
             parameters,
             parameters_info,
+            combined_sampler_params,
             body,
             module,
             ..
@@ -1115,6 +1140,7 @@ impl Frontend {
 
             decl.defined = true;
             decl.parameters_info = parameters_info;
+            decl.combined_sampler_params = combined_sampler_params;
             match decl.kind {
                 FunctionKind::Call(handle) => *module.functions.get_mut(handle) = function,
                 FunctionKind::Macro(_) => {
@@ -1129,6 +1155,7 @@ impl Frontend {
         declaration.overloads.push(Overload {
             parameters,
             parameters_info,
+            combined_sampler_params,
             kind: FunctionKind::Call(handle),
             defined: true,
             internal: false,
@@ -1163,6 +1190,7 @@ impl Frontend {
             arguments,
             parameters,
             parameters_info,
+            combined_sampler_params,
             module,
             ..
         } = ctx;
@@ -1198,6 +1226,7 @@ impl Frontend {
         declaration.overloads.push(Overload {
             parameters,
             parameters_info,
+            combined_sampler_params,
             kind: FunctionKind::Call(handle),
             defined: false,
             internal: false,

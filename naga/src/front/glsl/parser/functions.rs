@@ -630,19 +630,32 @@ impl ParsingContext<'_> {
         loop {
             if self.peek_type_name(frontend) || self.peek_parameter_qualifier(frontend) {
                 let qualifier = self.parse_parameter_qualifier(frontend);
-                let mut ty = self.parse_type_non_void(frontend, ctx)?.0;
+                // Peek before consuming the type token so we can detect combined
+                // image-sampler type names (`sampler2D`, `isampler3D`, …) — the
+                // distinction is lost once the token is consumed by `parse_type`.
+                let is_combined_sampler = self
+                    .peek(frontend)
+                    .is_some_and(|t| matches!(t.value, TokenValue::CombinedSamplerTypeName(_)));
+                let (mut ty, ty_meta) = self.parse_type_non_void(frontend, ctx)?;
 
                 match self.expect_peek(frontend)?.value {
                     TokenValue::Comma => {
                         self.bump(frontend)?;
-                        ctx.add_function_arg(None, ty, qualifier)?;
+                        ctx.add_function_arg(None, ty, qualifier, ty_meta, is_combined_sampler)?;
                         continue;
                     }
                     TokenValue::Identifier(_) => {
                         let mut name = self.expect_ident(frontend)?;
                         self.parse_array_specifier(frontend, ctx, &mut name.1, &mut ty)?;
 
-                        ctx.add_function_arg(Some(name), ty, qualifier)?;
+                        let name_meta = name.1;
+                        ctx.add_function_arg(
+                            Some(name),
+                            ty,
+                            qualifier,
+                            name_meta,
+                            is_combined_sampler,
+                        )?;
 
                         if self.bump_if(frontend, TokenValue::Comma).is_some() {
                             continue;
