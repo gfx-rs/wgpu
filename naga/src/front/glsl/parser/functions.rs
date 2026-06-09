@@ -648,12 +648,11 @@ impl ParsingContext<'_> {
                         let mut name = self.expect_ident(frontend)?;
                         self.parse_array_specifier(frontend, ctx, &mut name.1, &mut ty)?;
 
-                        let name_meta = name.1;
                         ctx.add_function_arg(
                             Some(name),
                             ty,
                             qualifier,
-                            name_meta,
+                            ty_meta,
                             is_combined_sampler,
                         )?;
 
