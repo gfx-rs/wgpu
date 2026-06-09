@@ -7,6 +7,7 @@
 
 layout(set = 0, binding = 0) uniform sampler2D u_lightmap;
 layout(set = 0, binding = 1) uniform sampler2DShadow u_shadow;
+layout(set = 0, binding = 2) uniform sampler2D u_overlay;
 
 layout(location = 0) in vec2 v_uv;
 layout(location = 1) in vec3 v_shadow_coord;
@@ -32,8 +33,21 @@ vec4 outer(sampler2D tex, vec2 uv) {
     return inner(tex, uv);
 }
 
+// Multiple combined-sampler parameters in one function
+vec4 blend(sampler2D a, sampler2D b, vec2 uv) {
+    return mix(texture(a, uv), texture(b, uv), 0.5);
+}
+
+// Prototype-before-definition with a combined-sampler parameter
+vec4 sample_proto(sampler2D tex, vec2 uv);
+vec4 sample_proto(sampler2D tex, vec2 uv) {
+    return texture(tex, uv);
+}
+
 void main() {
     o_color = sample_tex(u_lightmap, v_uv);
     o_shadow = sample_shadow(u_shadow, v_shadow_coord);
     o_color += outer(u_lightmap, v_uv);
+    o_color += blend(u_lightmap, u_overlay, v_uv);
+    o_color += sample_proto(u_lightmap, v_uv);
 }

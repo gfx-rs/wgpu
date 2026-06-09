@@ -5,12 +5,16 @@ struct FragmentOutput {
 
 @group(0) @binding(0) 
 var u_lightmap: texture_2d<f32>;
-@group(0) @binding(2) 
+@group(0) @binding(3) 
 var u_lightmap_sampler: sampler;
 @group(0) @binding(1) 
 var u_shadow: texture_depth_2d;
-@group(0) @binding(3) 
+@group(0) @binding(4) 
 var u_shadow_sampler: sampler_comparison;
+@group(0) @binding(2) 
+var u_overlay: texture_2d<f32>;
+@group(0) @binding(5) 
+var u_overlay_sampler: sampler;
 var<private> v_uv_1: vec2<f32>;
 var<private> v_shadow_coord_1: vec3<f32>;
 var<private> o_color: vec4<f32>;
@@ -52,17 +56,45 @@ fn outer(tex_2: texture_2d<f32>, param_3: sampler, uv_4: vec2<f32>) -> vec4<f32>
     return _e5;
 }
 
+fn blend(a: texture_2d<f32>, param_4: sampler, b: texture_2d<f32>, param_5: sampler, uv_6: vec2<f32>) -> vec4<f32> {
+    var uv_7: vec2<f32>;
+
+    uv_7 = uv_6;
+    let _e6 = uv_7;
+    let _e7 = textureSample(a, param_4, _e6);
+    let _e8 = uv_7;
+    let _e9 = textureSample(b, param_5, _e8);
+    return mix(_e7, _e9, vec4(0.5f));
+}
+
+fn sample_proto(tex_3: texture_2d<f32>, param_6: sampler, uv_8: vec2<f32>) -> vec4<f32> {
+    var uv_9: vec2<f32>;
+
+    uv_9 = uv_8;
+    let _e4 = uv_9;
+    let _e5 = textureSample(tex_3, param_6, _e4);
+    return _e5;
+}
+
 fn main_1() {
-    let _e8 = v_uv_1;
-    let _e9 = sample_tex(u_lightmap, u_lightmap_sampler, _e8);
-    o_color = _e9;
-    let _e10 = v_shadow_coord_1;
-    let _e11 = sample_shadow(u_shadow, u_shadow_sampler, _e10);
-    o_shadow = _e11;
-    let _e12 = o_color;
-    let _e13 = v_uv_1;
-    let _e14 = outer(u_lightmap, u_lightmap_sampler, _e13);
-    o_color = (_e12 + _e14);
+    let _e10 = v_uv_1;
+    let _e11 = sample_tex(u_lightmap, u_lightmap_sampler, _e10);
+    o_color = _e11;
+    let _e12 = v_shadow_coord_1;
+    let _e13 = sample_shadow(u_shadow, u_shadow_sampler, _e12);
+    o_shadow = _e13;
+    let _e14 = o_color;
+    let _e15 = v_uv_1;
+    let _e16 = outer(u_lightmap, u_lightmap_sampler, _e15);
+    o_color = (_e14 + _e16);
+    let _e18 = o_color;
+    let _e19 = v_uv_1;
+    let _e20 = blend(u_lightmap, u_lightmap_sampler, u_overlay, u_overlay_sampler, _e19);
+    o_color = (_e18 + _e20);
+    let _e22 = o_color;
+    let _e23 = v_uv_1;
+    let _e24 = sample_proto(u_lightmap, u_lightmap_sampler, _e23);
+    o_color = (_e22 + _e24);
     return;
 }
 
