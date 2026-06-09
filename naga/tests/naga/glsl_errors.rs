@@ -40,7 +40,7 @@ fn parse_comp(source: &str) -> Result<naga::Module, naga::front::glsl::ParseErro
 ///
 /// The snapshot for this shader lives in `tests/in/glsl/sampler-combined-texture.frag`.
 #[test]
-fn texture_call_on_combined_sampler_uniform_is_unsupported() {
+fn texture_call_on_combined_sampler_uniform_compiles() {
     let src = r#"
         #version 450
         layout(set = 0, binding = 0) uniform sampler2D u_tex;
@@ -63,7 +63,7 @@ fn texture_call_on_combined_sampler_uniform_is_unsupported() {
 /// comparison sampler at the same binding.  `texture(u_shadow, coord)` is then lowered
 /// to `textureSampleCompare(u_shadow, u_shadow_sampler, coord.xy, coord.z)`.
 #[test]
-fn texture_call_on_shadow_sampler_uniform_is_unsupported() {
+fn texture_call_on_shadow_sampler_uniform_compiles() {
     let src = r#"
         #version 450
         layout(set = 0, binding = 0) uniform sampler2DShadow u_shadow;
@@ -124,4 +124,46 @@ fn image_load_store_compute_compiles() {
     "#;
 
     parse_comp(src).expect("imageLoad/imageStore in compute should compile");
+}
+
+#[test]
+fn out_sampler2d_param_is_unsupported() {
+    let src = r#"
+        #version 450
+        layout(set = 0, binding = 0) uniform sampler2D u_tex;
+        layout(location = 0) in vec2 v_uv;
+        layout(location = 0) out vec4 o_color;
+        vec4 sample_tex(out sampler2D tex, vec2 uv) {
+            return texture(tex, uv);
+        }
+        void main() {
+            o_color = sample_tex(u_tex, v_uv);
+        }
+    "#;
+
+    assert!(
+        parse_frag(src).is_err(),
+        "expected `out sampler2D` function parameter to be rejected"
+    );
+}
+
+#[test]
+fn array_of_combined_sampler_param_is_unsupported() {
+    let src = r#"
+        #version 450
+        layout(set = 0, binding = 0) uniform sampler2D u_tex[4];
+        layout(location = 0) in vec2 v_uv;
+        layout(location = 0) out vec4 o_color;
+        vec4 sample_tex(sampler2D textures[4], vec2 uv) {
+            return texture(textures[0], uv);
+        }
+        void main() {
+            o_color = sample_tex(u_tex, v_uv);
+        }
+    "#;
+
+    assert!(
+        parse_frag(src).is_err(),
+        "expected array of `sampler2D` function parameters to be rejected"
+    );
 }
