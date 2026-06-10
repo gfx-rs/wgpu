@@ -1,6 +1,6 @@
 use alloc::{format, string::String, vec::Vec};
-use smallvec::SmallVec;
 use core::ops::Index;
+use smallvec::SmallVec;
 
 use super::{
     ast::{
@@ -448,10 +448,8 @@ impl<'a> Context<'a> {
             // `texture(param, …)` calls inside the function body work correctly.
             if is_combined_sampler {
                 let sampler_index = self.append_hidden_sampler_arg(ty, meta);
-                let sampler_expr = self.add_expression(
-                    Expression::FunctionArgument(sampler_index as u32),
-                    meta,
-                )?;
+                let sampler_expr =
+                    self.add_expression(Expression::FunctionArgument(sampler_index as u32), meta)?;
                 self.samplers.insert(expr, sampler_expr);
             }
         } else if is_combined_sampler {
