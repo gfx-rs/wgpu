@@ -1,4 +1,5 @@
 use alloc::{format, string::String, vec::Vec};
+use smallvec::SmallVec;
 use core::ops::Index;
 
 use super::{
@@ -68,6 +69,9 @@ pub(crate) struct Context<'a> {
     /// [`Vector`]: crate::TypeInner::Vector
     pub parameters: Vec<Handle<Type>>,
     pub parameters_info: Vec<ParameterInfo>,
+    /// Tracks which parameters are combined image-sampler types; see
+    /// `Overload::combined_sampler_params`.
+    pub combined_sampler_params: SmallVec<[bool; 8]>,
 
     pub symbol_table: crate::front::SymbolTable<String, VariableReference>,
     pub samplers: FastHashMap<Handle<Expression>, Handle<Expression>>,
@@ -100,6 +104,7 @@ impl<'a> Context<'a> {
 
             parameters: Vec::new(),
             parameters_info: Vec::new(),
+            combined_sampler_params: SmallVec::new(),
 
             symbol_table: crate::front::SymbolTable::default(),
             samplers: FastHashMap::default(),
@@ -341,12 +346,22 @@ impl<'a> Context<'a> {
         self.symbol_table.add(name, var)
     }
 
-    /// Add function argument to current scope
+    /// Add function argument to current scope.
+    ///
+    /// `meta` is the span of the parameter (used when synthesising a hidden
+    /// companion sampler for combined image-sampler types).
+    /// `is_combined_sampler` should be `true` when the GLSL source used a
+    /// combined image-sampler type name (`sampler2D`, `samplerXX`, …).  In that
+    /// case a hidden companion sampler argument is appended to `self.arguments`
+    /// and the image→sampler mapping is recorded in `self.samplers` so that
+    /// texture calls inside the function body resolve correctly.
     pub fn add_function_arg(
         &mut self,
         name_meta: Option<(String, Span)>,
         ty: Handle<Type>,
         qualifier: ParameterQualifier,
+        meta: Span,
+        is_combined_sampler: bool,
     ) -> Result<()> {
         let index = self.arguments.len();
         let mut arg = FunctionArgument {
@@ -355,6 +370,7 @@ impl<'a> Context<'a> {
             binding: None,
         };
         self.parameters.push(ty);
+        self.combined_sampler_params.push(is_combined_sampler);
 
         let opaque = match self.module.types[ty].inner {
             TypeInner::Image { .. } | TypeInner::Sampler { .. } => true,
@@ -426,9 +442,52 @@ impl<'a> Context<'a> {
             };
 
             self.symbol_table.add(name, var);
+
+            // For combined image-sampler parameters, append a hidden companion
+            // sampler argument and record the image→sampler mapping so that
+            // `texture(param, …)` calls inside the function body work correctly.
+            if is_combined_sampler {
+                let sampler_index = self.append_hidden_sampler_arg(ty, meta);
+                let sampler_expr = self.add_expression(
+                    Expression::FunctionArgument(sampler_index as u32),
+                    meta,
+                )?;
+                self.samplers.insert(expr, sampler_expr);
+            }
+        } else if is_combined_sampler {
+            // Anonymous combined-sampler parameter (e.g. in a prototype or
+            // unnamed argument): still add the hidden sampler slot so that the
+            // IR function signature matches the definition.
+            self.append_hidden_sampler_arg(ty, meta);
         }
 
         Ok(())
+    }
+
+    /// Append a hidden companion sampler [`FunctionArgument`] for a combined
+    /// image-sampler parameter. Returns the argument index of the new entry.
+    fn append_hidden_sampler_arg(&mut self, image_ty: Handle<Type>, meta: Span) -> usize {
+        let comparison = matches!(
+            self.module.types[image_ty].inner,
+            TypeInner::Image {
+                class: crate::ImageClass::Depth { .. },
+                ..
+            }
+        );
+        let sampler_ty = self.module.types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Sampler { comparison },
+            },
+            meta,
+        );
+        let sampler_index = self.arguments.len();
+        self.arguments.push(FunctionArgument {
+            name: None,
+            ty: sampler_ty,
+            binding: None,
+        });
+        sampler_index
     }
 
     /// Returns a [`StmtContext`] to be used in parsing and lowering
