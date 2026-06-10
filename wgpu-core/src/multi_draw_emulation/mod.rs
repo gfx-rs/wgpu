@@ -7,13 +7,7 @@ use crate::{
     resource::{Buffer, InvalidResourceError, Labeled, RawResourceAccess},
     snatch::SnatchGuard,
 };
-use alloc::{
-    borrow::Cow,
-    boxed::Box,
-    string::ToString,
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{borrow::Cow, boxed::Box, string::ToString, sync::Arc, vec::Vec};
 use core::num::NonZeroU64;
 use thiserror::Error;
 
@@ -81,9 +75,7 @@ impl MultiDrawEmulation {
                 return Err(DeviceError::Lost);
             }
         };
-        Ok(Self {
-            inner: Some(inner),
-        })
+        Ok(Self { inner: Some(inner) })
     }
 
     pub(crate) fn dispose(self, device: &dyn hal::DynDevice) {
@@ -215,11 +207,9 @@ impl MultiDrawEmulation {
 
             let aligned_count_offset = p.count_offset - p.count_offset % alignment;
             let count_remainder_u32 = ((p.count_offset - aligned_count_offset) / 4) as u32;
-            let count_binding_size =
-                NonZeroU64::new((count_remainder_u32 as u64 + 1) * 4).unwrap();
+            let count_binding_size = NonZeroU64::new((count_remainder_u32 as u64 + 1) * 4).unwrap();
 
-            let temp_size =
-                NonZeroU64::new(p.max_count as u64 * p.stride_u32 as u64 * 4).unwrap();
+            let temp_size = NonZeroU64::new(p.max_count as u64 * p.stride_u32 as u64 * 4).unwrap();
 
             let bg_desc = hal::BindGroupDescriptor {
                 label: hal_label(
@@ -263,9 +253,7 @@ impl MultiDrawEmulation {
                 .map_err(DeviceError::from_hal)
                 .map_err(RenderPassErrorInner::Device)?;
 
-            unsafe {
-                encoder.set_bind_group(inner.pipeline_layout.as_ref(), 0, bg.as_ref(), &[])
-            };
+            unsafe { encoder.set_bind_group(inner.pipeline_layout.as_ref(), 0, bg.as_ref(), &[]) };
             unsafe {
                 encoder.set_immediates(
                     inner.pipeline_layout.as_ref(),
