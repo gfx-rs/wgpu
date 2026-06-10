@@ -245,6 +245,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
 #### Metal
 
+- Detect BC texture support on newer iOS, tvOS, and visionOS devices. By @bmisiak in [#9656](https://github.com/gfx-rs/wgpu/pull/9656).
 - Fix crash on fence creation when running in a MacOS Seatbelt sandbox. By @wumpf in [#9415](https://github.com/gfx-rs/wgpu/pull/9415)
 - Improved command buffer completion handling. By @39ali in [#9328](https://github.com/gfx-rs/wgpu/pull/9328).
   - Wait using a condition variable, instead of polling.
