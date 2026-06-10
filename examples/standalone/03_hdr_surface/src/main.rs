@@ -245,7 +245,11 @@ struct State {
 
 impl State {
     async fn new(window: Arc<Window>) -> State {
-        let instance = wgpu::Instance::default();
+        // `from_env_or_default` honors `WGPU_BACKEND` (e.g. `vulkan`, `dx12`)
+        // so each backend's color-space path can be tested separately.
+        let instance = wgpu::Instance::new(
+            wgpu::InstanceDescriptor::new_without_display_handle_from_env(),
+        );
         let surface = instance.create_surface(window.clone()).unwrap();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
