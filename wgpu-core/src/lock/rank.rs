@@ -111,6 +111,7 @@ define_lock_ranks! {
         BUFFER_MAP_STATE,
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         BUFFER_POOL,
+        MULTI_DRAW_EMULATION_TEMP_POOL,
         DEVICE_TRACE,
         DEVICE_USAGE_SCOPES,
         REGISTRY_STORAGE,
@@ -126,6 +127,7 @@ define_lock_ranks! {
         BUFFER_BIND_GROUPS,
         BUFFER_INITIALIZATION_STATUS,
         BUFFER_POOL,
+        MULTI_DRAW_EMULATION_TEMP_POOL,
         DEVICE_TRACE,
         DEVICE_USAGE_SCOPES,
         REGISTRY_STORAGE,
@@ -162,6 +164,7 @@ define_lock_ranks! {
         BUFFER_MAP_STATE,
         BUFFER_INITIALIZATION_STATUS,
         BUFFER_POOL,
+        MULTI_DRAW_EMULATION_TEMP_POOL,
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         DEVICE_DEFERRED_DESTROY,
         DEVICE_TRACE,
@@ -183,6 +186,7 @@ define_lock_ranks! {
     rank DEVICE_DEFERRED_DESTROY "Device::deferred_destroy" followed by { }
     rank DEVICE_TRACE "Device::trace" followed by { }
     rank DEVICE_USAGE_SCOPES "Device::usage_scopes" followed by { }
+    rank MULTI_DRAW_EMULATION_TEMP_POOL "MultiDrawEmulation::temp_pool" followed by { }
     rank REGISTRY_STORAGE "Registry::storage" followed by { }
     rank SHARED_TRACKER_INDEX_ALLOCATOR_INNER "SharedTrackerIndexAllocator::inner" followed by { }
     rank TEXTURE_BIND_GROUPS "Texture::bind_groups" followed by { }

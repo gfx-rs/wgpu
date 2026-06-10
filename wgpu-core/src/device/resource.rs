@@ -273,6 +273,7 @@ pub struct Device {
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
     pub(crate) usage_scopes: UsageScopePool,
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
+    pub(crate) multi_draw_emulation: Option<crate::multi_draw_emulation::MultiDrawEmulation>,
     // Optional so that we can late-initialize this after the queue is created.
     pub(crate) timestamp_normalizer:
         OnceCellOrLock<crate::timestamp_normalization::TimestampNormalizer>,
@@ -319,6 +320,9 @@ impl Drop for Device {
         let fence = unsafe { ManuallyDrop::take(&mut self.fence) };
         if let Some(indirect_validation) = self.indirect_validation.take() {
             indirect_validation.dispose(self.raw.as_ref());
+        }
+        if let Some(multi_draw_emulation) = self.multi_draw_emulation.take() {
+            multi_draw_emulation.dispose(self.raw.as_ref());
         }
         if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
             timestamp_normalizer.dispose(self.raw.as_ref());
@@ -516,6 +520,19 @@ impl Device {
             None
         };
 
+        let multi_draw_emulation = if desc
+            .required_features
+            .contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT)
+            && adapter.backend() == wgt::Backend::Metal
+        {
+            Some(crate::multi_draw_emulation::MultiDrawEmulation::new(
+                raw_device.as_ref(),
+                instance_flags,
+            )?)
+        } else {
+            None
+        };
+
         Ok(Self {
             raw: raw_device,
             adapter: adapter.clone(),
@@ -559,6 +576,7 @@ impl Device {
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
             timestamp_normalizer: OnceCellOrLock::new(),
             indirect_validation,
+            multi_draw_emulation,
         })
     }
 

@@ -3485,7 +3485,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
                 &self.error_sink,
                 cause,
                 self.pass.label(),
-                "RenderPass::multi_draw_indirect",
+                "RenderPass::multi_draw_indirect_count",
             );
         }
     }

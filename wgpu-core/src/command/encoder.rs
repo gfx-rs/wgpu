@@ -42,6 +42,7 @@ pub(crate) struct EncodingState<'snatch_guard, 'cmd_enc, E: ?Sized = dyn hal::Dy
     pub(crate) temp_resources: &'cmd_enc mut Vec<TempResource>,
     pub(crate) indirect_draw_validation_resources:
         &'cmd_enc mut crate::indirect_validation::DrawResources,
+    pub(crate) multi_draw_resources: &'cmd_enc mut crate::multi_draw_emulation::MultiDrawResources,
 
     pub(crate) snatch_guard: &'snatch_guard SnatchGuard<'snatch_guard>,
 

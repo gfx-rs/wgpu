@@ -81,6 +81,7 @@ mod init_tracker;
 pub mod instance;
 pub mod limits;
 mod lock;
+mod multi_draw_emulation;
 pub mod pipeline;
 mod pipeline_cache;
 mod pool;

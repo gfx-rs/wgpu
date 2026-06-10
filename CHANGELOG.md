@@ -136,6 +136,8 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
 #### Metal
 
+- Implement `MULTI_DRAW_INDIRECT_COUNT` via compute shader emulation. By @bromles
+  in #[PR_NUMBER](https://github.com/gfx-rs/wgpu/pull/PR_NUMBER).
 - Add `metal::Queue::add_wait_event` / `add_signal_event` (with `remove_*` companions) to stage `MTLSharedEvent` waits/signals on the next `Queue::submit`, for GPU-side interop with foreign APIs. Waits run on an internal CB committed before user CBs. By @AdrianEddy in [#9483](https://github.com/gfx-rs/wgpu/pull/9483).
 - Unconditionally enable `Features::CLIP_DISTANCES`. By @ErichDonGubler in [#9270](https://github.com/gfx-rs/wgpu/pull/9270).
 - Added full support for mesh shaders, including in WGSL shaders. By @inner-daemons in [#8739](https://github.com/gfx-rs/wgpu/pull/8739).

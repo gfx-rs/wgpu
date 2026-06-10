@@ -4,7 +4,7 @@
 //! TODO: Methods that take resources that weren't tested here:
 //! * rpass.draw_indexed_indirect(indirect_buffer, indirect_offset)
 //! * rpass.execute_bundles(render_bundles)
-//! * rpass.multi_draw_indirect(indirect_buffer, indirect_offset, count)
+//! * rpass.multi_draw_indirect_count(indirect_buffer, indirect_offset, count)
 //! * rpass.multi_draw_indexed_indirect(indirect_buffer, indirect_offset, count)
 //! * rpass.multi_draw_indirect_count
 //! * rpass.multi_draw_indexed_indirect_count

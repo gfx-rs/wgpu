@@ -629,6 +629,7 @@ pub(super) fn encode_compute_pass(
                 as_actions: parent_state.as_actions,
                 temp_resources: parent_state.temp_resources,
                 indirect_draw_validation_resources: parent_state.indirect_draw_validation_resources,
+                multi_draw_resources: parent_state.multi_draw_resources,
                 snatch_guard: parent_state.snatch_guard,
                 debug_scope_depth: &mut debug_scope_depth,
             },
