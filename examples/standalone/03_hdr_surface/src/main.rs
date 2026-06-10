@@ -13,15 +13,16 @@
 //!   look oversaturated in HDR10 the gamut conversion is wrong).
 //! * Bottom row: logarithmic luminance gradient from 1 to 10000 nits.
 //!
-//! Set `HDR_MODE=hdr10|hlg|scrgb|srgb` to force a particular color space
-//! instead of auto-picking. Set `WGPU_BACKEND=vulkan` to force the backend.
+//! Set `HDR_MODE=hdr10|hlg|scrgb|srgb` (on the web: a `?mode=` query
+//! parameter) to force a particular color space instead of auto-picking.
+//! Set `WGPU_BACKEND=vulkan` to force the backend.
 
 use std::sync::Arc;
 
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     window::{Window, WindowId},
 };
 
@@ -152,6 +153,41 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 }
 "#;
 
+/// Print to stdout on native, the developer console on the web.
+fn report(msg: &str) {
+    #[cfg(not(target_arch = "wasm32"))]
+    println!("{msg}");
+    #[cfg(target_arch = "wasm32")]
+    web_sys::console::log_1(&msg.into());
+}
+
+/// The forced mode, from the `HDR_MODE` environment variable on native or
+/// the `?mode=` query parameter on the web.
+fn forced_mode() -> Option<String> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::env::var("HDR_MODE").ok()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let search = web_sys::window()?.location().search().ok()?;
+        search
+            .strip_prefix('?')?
+            .split('&')
+            .find_map(|pair| pair.strip_prefix("mode="))
+            .map(str::to_owned)
+    }
+}
+
+/// Run a future to completion: synchronously on native, in the browser's
+/// event loop on the web (where blocking is not allowed).
+fn spawn(future: impl core::future::Future<Output = ()> + 'static) {
+    #[cfg(not(target_arch = "wasm32"))]
+    pollster::block_on(future);
+    #[cfg(target_arch = "wasm32")]
+    wasm_bindgen_futures::spawn_local(future);
+}
+
 struct ModeChoice {
     format: wgpu::TextureFormat,
     color_space: wgpu::SurfaceColorSpace,
@@ -197,7 +233,7 @@ fn pick_mode(caps: &wgpu::SurfaceCapabilities, forced: Option<&str>) -> ModeChoi
         Some("hlg") => cs == Cs::Hlg,
         Some("scrgb") => cs == Cs::ExtendedSrgbLinear,
         Some("srgb") => false,
-        Some(other) => panic!("unknown HDR_MODE {other:?} (use hdr10|hlg|scrgb|srgb)"),
+        Some(other) => panic!("unknown mode {other:?} (use hdr10|hlg|scrgb|srgb)"),
     };
 
     for &(cs, flag, shader_mode, preferred_formats) in preferences {
@@ -263,20 +299,20 @@ impl State {
             .unwrap();
 
         let info = adapter.get_info();
-        println!("Adapter: {} ({:?})", info.name, info.backend);
+        report(&format!("Adapter: {} ({:?})", info.name, info.backend));
 
         let caps = surface.get_capabilities(&adapter);
-        println!("Surface formats and color spaces:");
+        report("Surface formats and color spaces:");
         for fc in &caps.format_capabilities {
-            println!("  {:?}: {:?}", fc.format, fc.color_spaces);
+            report(&format!("  {:?}: {:?}", fc.format, fc.color_spaces));
         }
 
-        let forced = std::env::var("HDR_MODE").ok();
+        let forced = forced_mode();
         let choice = pick_mode(&caps, forced.as_deref());
-        println!(
+        report(&format!(
             "Configuring surface with {:?} + {:?}",
             choice.format, choice.color_space
-        );
+        ));
         window.set_title(&format!(
             "wgpu HDR test — {:?} + {:?}",
             choice.format, choice.color_space
@@ -425,19 +461,52 @@ fn bytemuck_cast(params: &[u32; 2]) -> &[u8] {
     unsafe { core::slice::from_raw_parts(params.as_ptr().cast(), size_of_val(params)) }
 }
 
-#[derive(Default)]
 struct App {
+    /// Taken on the first `resumed` call so initialization happens once.
+    proxy: Option<EventLoopProxy<State>>,
     state: Option<State>,
 }
 
-impl ApplicationHandler for App {
+impl ApplicationHandler<State> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window = Arc::new(
-            event_loop
-                .create_window(Window::default_attributes().with_title("wgpu HDR test"))
-                .unwrap(),
-        );
-        self.state = Some(pollster::block_on(State::new(window)));
+        let Some(proxy) = self.proxy.take() else {
+            return;
+        };
+
+        #[cfg_attr(
+            not(target_arch = "wasm32"),
+            expect(unused_mut, reason = "wasm32 re-assigns to specify canvas")
+        )]
+        let mut attributes = Window::default_attributes().with_title("wgpu HDR test");
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            use winit::platform::web::WindowAttributesExtWebSys;
+            let canvas = web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .get_element_by_id("canvas")
+                .expect("the page must have a <canvas id=\"canvas\">")
+                .dyn_into::<web_sys::HtmlCanvasElement>()
+                .unwrap();
+            attributes = attributes.with_canvas(Some(canvas));
+        }
+
+        let window = Arc::new(event_loop.create_window(attributes).unwrap());
+
+        // On native this blocks and the state arrives before `resumed`
+        // returns; on the web it is delivered later via `user_event`.
+        spawn(async move {
+            let state = State::new(window).await;
+            let _ = proxy.send_event(state);
+        });
+    }
+
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, state: State) {
+        state.window.request_redraw();
+        self.state = Some(state);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -457,9 +526,26 @@ impl ApplicationHandler for App {
 }
 
 fn main() {
+    #[cfg(not(target_arch = "wasm32"))]
     env_logger::init();
-    let event_loop = EventLoop::new().unwrap();
+    #[cfg(target_arch = "wasm32")]
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+
+    let event_loop = EventLoop::<State>::with_user_event().build().unwrap();
     event_loop.set_control_flow(ControlFlow::Wait);
-    let mut app = App::default();
-    event_loop.run_app(&mut app).unwrap();
+    let app = App {
+        proxy: Some(event_loop.create_proxy()),
+        state: None,
+    };
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut app = app;
+        event_loop.run_app(&mut app).unwrap();
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        use winit::platform::web::EventLoopExtWebSys;
+        event_loop.spawn_app(app);
+    }
 }

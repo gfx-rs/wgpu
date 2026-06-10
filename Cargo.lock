@@ -4808,8 +4808,12 @@ dependencies = [
 name = "wgpu-example-03-hdr-surface"
 version = "0.0.0"
 dependencies = [
+ "console_error_panic_hook",
  "env_logger",
  "pollster",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
  "wgpu",
  "winit",
 ]

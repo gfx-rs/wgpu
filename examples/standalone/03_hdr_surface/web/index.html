@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>wgpu HDR surface test</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #111;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- The example looks the canvas up by this id. -->
+    <canvas id="canvas"></canvas>
+    <script type="module">
+      // Open the developer console to see the reported surface
+      // capabilities. Add ?mode=hdr10|hlg|scrgb|srgb to force a color
+      // space ("scrgb" is the only HDR mode browsers support).
+      import init from "./hdr_surface.js";
+      init();
+    </script>
+  </body>
+</html>
