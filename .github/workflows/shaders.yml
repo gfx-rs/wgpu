@@ -89,6 +89,11 @@ jobs:
           env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
+      # In theory this shouldn't be necessary, but sometimes it is
+      # not available. <https://github.com/gfx-rs/wgpu/issues/9514>
+      - name: Install Metal toolchain
+        run: sudo xcodebuild -downloadComponent MetalToolchain
+
       - run: |
           cd naga
           cargo xtask validate msl

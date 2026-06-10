@@ -4588,7 +4588,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 items.push(ImmediateItem {
                     access_path: name,
                     offset: *offset,
-                    ty,
+                    ty: self.module.types[ty].inner.clone(),
+                    size_bytes: layout.size,
                 });
                 *offset += layout.size;
             }
