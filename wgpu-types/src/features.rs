@@ -878,7 +878,7 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         ///
-        #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indirect_count`"]: "struct.RenderPass.html#method.multi_draw_indirect_count")]
+        #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indirect`"]: "struct.RenderPass.html#method.multi_draw_indirect")]
         #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indexed_indirect`"]: "struct.RenderPass.html#method.multi_draw_indexed_indirect")]
         #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indirect_count`"]: "struct.RenderPass.html#method.multi_draw_indirect_count")]
         #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indexed_indirect_count`"]: "struct.RenderPass.html#method.multi_draw_indexed_indirect_count")]
