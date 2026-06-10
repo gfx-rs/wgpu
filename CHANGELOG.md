@@ -141,7 +141,7 @@ For `wgpu-hal` users: `hal::SurfaceConfiguration` gained a `color_space` field (
 
 A new standalone example, `examples/standalone/03_hdr_surface`, prints a surface's (format, color space) capabilities and renders an HDR luminance test pattern through the most capable color space available.
 
-By @stuartparmenter in [#99999](https://github.com/gfx-rs/wgpu/pull/99999).
+By @stuartparmenter in [#9658](https://github.com/gfx-rs/wgpu/pull/9658).
 
 ### Added/New Features
 
