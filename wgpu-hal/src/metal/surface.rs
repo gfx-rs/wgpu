@@ -6,7 +6,8 @@ use objc2::{
     runtime::ProtocolObject,
     ClassType, Message,
 };
-use objc2_core_foundation::CGSize;
+use objc2_core_foundation::{CFString, CGSize};
+use objc2_core_graphics::CGColorSpace;
 use objc2_foundation::NSObjectProtocol;
 use objc2_metal::MTLTextureType;
 use objc2_quartz_core::{CAMetalDrawable, CAMetalLayer};
@@ -91,10 +92,43 @@ impl crate::Surface for super::Surface {
         render_layer.setFramebufferOnly(framebuffer_only);
         // opt-in to Metal EDR
         // EDR potentially more power used in display and more bandwidth, memory footprint.
-        let wants_edr = config.color_space == wgt::SurfaceColorSpace::ExtendedSrgbLinear;
+        let wants_edr = matches!(
+            config.color_space,
+            wgt::SurfaceColorSpace::ExtendedSrgbLinear
+                | wgt::SurfaceColorSpace::Hdr10
+                | wgt::SurfaceColorSpace::Hlg
+        );
         if wants_edr != render_layer.wantsExtendedDynamicRangeContent() {
             render_layer.setWantsExtendedDynamicRangeContent(wants_edr);
         }
+
+        let colorspace_name: Option<&'static CFString> = match config.color_space {
+            wgt::SurfaceColorSpace::Auto => {
+                unreachable!("wgpu-core resolves `Auto` before configuring the surface")
+            }
+            // Reset to the layer's default, which treats contents as sRGB.
+            wgt::SurfaceColorSpace::Srgb => None,
+            wgt::SurfaceColorSpace::ExtendedSrgbLinear => {
+                Some(unsafe { objc2_core_graphics::kCGColorSpaceExtendedLinearSRGB })
+            }
+            wgt::SurfaceColorSpace::DisplayP3 => {
+                Some(unsafe { objc2_core_graphics::kCGColorSpaceDisplayP3 })
+            }
+            wgt::SurfaceColorSpace::Hdr10 | wgt::SurfaceColorSpace::Hlg => {
+                // The ITUR_2100 color space constants require macOS 11.0/iOS 14.0;
+                // `surface_capabilities` only reports HDR10/HLG on those OS versions.
+                if !available!(macos = 11.0, ios = 14.0, tvos = 14.0, visionos = 1.0) {
+                    unreachable!("HDR10/HLG color spaces are only reported on macOS 11.0+/iOS 14.0+/tvOS 14.0+");
+                }
+                Some(if config.color_space == wgt::SurfaceColorSpace::Hdr10 {
+                    unsafe { objc2_core_graphics::kCGColorSpaceITUR_2100_PQ }
+                } else {
+                    unsafe { objc2_core_graphics::kCGColorSpaceITUR_2100_HLG }
+                })
+            }
+        };
+        let colorspace = colorspace_name.and_then(|name| CGColorSpace::with_name(Some(name)));
+        render_layer.setColorspace(colorspace.as_deref());
 
         // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
         render_layer.setMaximumDrawableCount(config.maximum_frame_latency as usize + 1);

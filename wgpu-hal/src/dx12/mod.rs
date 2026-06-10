@@ -1428,6 +1428,20 @@ impl SwapChain {
     }
 }
 
+fn map_surface_color_space(
+    color_space: wgt::SurfaceColorSpace,
+) -> Dxgi::Common::DXGI_COLOR_SPACE_TYPE {
+    use wgt::SurfaceColorSpace as Scs;
+    match color_space {
+        Scs::Srgb => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709,
+        Scs::ExtendedSrgbLinear => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709,
+        Scs::Hdr10 => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020,
+        Scs::Auto | Scs::DisplayP3 | Scs::Hlg => {
+            unreachable!("`{color_space:?}` is never reported in the DX12 surface capabilities")
+        }
+    }
+}
+
 impl crate::Surface for Surface {
     type A = Api;
 
@@ -1602,6 +1616,23 @@ impl crate::Surface for Surface {
                 })?
             }
         };
+
+        // Apply the color space unconditionally (even for sRGB) so that
+        // reconfiguring away from HDR10 resets the swapchain's state.
+        let color_space = map_surface_color_space(config.color_space);
+        let support = unsafe { swap_chain.CheckColorSpaceSupport(color_space) }.map_err(|err| {
+            log::error!("CheckColorSpaceSupport failed: {err}");
+            crate::SurfaceError::Other("IDXGISwapChain3::CheckColorSpaceSupport")
+        })?;
+        if support & Dxgi::DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT.0 as u32 == 0 {
+            return Err(crate::SurfaceError::Other(
+                "swapchain does not support the requested color space",
+            ));
+        }
+        unsafe { swap_chain.SetColorSpace1(color_space) }.map_err(|err| {
+            log::error!("SetColorSpace1 failed: {err}");
+            crate::SurfaceError::Other("IDXGISwapChain3::SetColorSpace1")
+        })?;
 
         match self.target {
             SurfaceTarget::WndHandle(wnd_handle) => {

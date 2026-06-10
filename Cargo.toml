@@ -211,6 +211,10 @@ objc2-core-foundation = { version = "0.3.2", default-features = false, features 
     "std",
     "CFCGTypes",
 ] }
+objc2-core-graphics = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "CGColorSpace",
+] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
     "NSError",
@@ -258,6 +262,8 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
     "std",
     "objc2-core-foundation",
+    # un-gates `CAMetalLayer::setColorspace`
+    "objc2-core-graphics",
     "CALayer",
     "CAMetalLayer",
     "objc2-metal",

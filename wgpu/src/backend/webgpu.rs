@@ -3906,6 +3906,16 @@ impl Drop for WebRenderBundle {
     }
 }
 
+/// Returns whether the current output device reports a high dynamic range.
+///
+/// Worker contexts have no [`web_sys::Window`] (and thus no `matchMedia`), so
+/// they conservatively report `false`.
+fn environment_supports_hdr() -> bool {
+    web_sys::window()
+        .and_then(|window| window.match_media("(dynamic-range: high)").ok().flatten())
+        .is_some_and(|query_list| query_list.matches())
+}
+
 impl dispatch::SurfaceInterface for WebSurface {
     fn get_capabilities(&self, _adapter: &dispatch::DispatchAdapter) -> wgt::SurfaceCapabilities {
         let mut formats = vec![
@@ -3926,13 +3936,24 @@ impl dispatch::SurfaceInterface for WebSurface {
         }
 
         wgt::SurfaceCapabilities {
-            // The canvas color space is not yet plumbed through to
-            // `GPUCanvasConfiguration`, so everything is presented as sRGB.
             format_capabilities: formats
                 .iter()
-                .map(|&format| wgt::SurfaceFormatCapabilities {
-                    format,
-                    color_spaces: wgt::SurfaceColorSpaces::SRGB,
+                .map(|&format| {
+                    // Every WebGPU implementation supports the "srgb" and
+                    // "display-p3" canvas color spaces.
+                    // https://gpuweb.github.io/gpuweb/#canvas-configuration
+                    let mut color_spaces =
+                        wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::DISPLAY_P3;
+                    // An fp16 canvas with "extended" tone mapping holds
+                    // extended-linear sRGB values, but only an HDR-capable
+                    // display can present values outside [0, 1].
+                    if format == wgt::TextureFormat::Rgba16Float && environment_supports_hdr() {
+                        color_spaces |= wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR;
+                    }
+                    wgt::SurfaceFormatCapabilities {
+                        format,
+                        color_spaces,
+                    }
                 })
                 .collect(),
             // https://gpuweb.github.io/gpuweb/#supported-context-formats
@@ -3967,10 +3988,6 @@ impl dispatch::SurfaceInterface for WebSurface {
         {
             panic!("Only Opaque/Auto or PreMultiplied alpha mode are supported on web");
         }
-        match config.color_space {
-            wgt::SurfaceColorSpace::Auto | wgt::SurfaceColorSpace::Srgb => {}
-            cs => panic!("Color space {cs:?} is not supported on web"),
-        }
         let alpha_mode = match config.alpha_mode {
             wgt::CompositeAlphaMode::PreMultiplied => webgpu_sys::GpuCanvasAlphaMode::Premultiplied,
             _ => webgpu_sys::GpuCanvasAlphaMode::Opaque,
@@ -3981,6 +3998,34 @@ impl dispatch::SurfaceInterface for WebSurface {
         );
         mapped.set_usage(config.usage.bits());
         mapped.set_alpha_mode(alpha_mode);
+        match config.color_space {
+            // `Auto` intentionally keeps the browser defaults (colorSpace
+            // "srgb", standard tone mapping) even for fp16 formats, matching
+            // wgpu's historical behavior on the web.
+            wgt::SurfaceColorSpace::Auto | wgt::SurfaceColorSpace::Srgb => {}
+            wgt::SurfaceColorSpace::DisplayP3 => {
+                // The vendored bindings have no `colorSpace` setter, so set
+                // the dictionary member by reflection.
+                js_sys::Reflect::set(
+                    &mapped,
+                    &JsValue::from_str("colorSpace"),
+                    &JsValue::from_str("display-p3"),
+                )
+                .expect("Setting the canvas configuration color space should never fail");
+            }
+            wgt::SurfaceColorSpace::ExtendedSrgbLinear => {
+                // The canvas keeps the default "srgb" color space; "extended"
+                // tone mapping disables clamping to [0, 1], so an fp16 canvas
+                // holds extended-linear sRGB values. This is the W3C
+                // HDR-canvas mechanism shipped in Chrome 129+.
+                let tone_mapping = webgpu_sys::GpuCanvasToneMapping::new();
+                tone_mapping.set_mode(webgpu_sys::GpuCanvasToneMappingMode::Extended);
+                mapped.set_tone_mapping(&tone_mapping);
+            }
+            cs @ (wgt::SurfaceColorSpace::Hdr10 | wgt::SurfaceColorSpace::Hlg) => {
+                panic!("Color space {cs:?} is not supported on web: browsers do not expose PQ/HLG canvas signaling")
+            }
+        }
         let mapped_view_formats = config
             .view_formats
             .iter()

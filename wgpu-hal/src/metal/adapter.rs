@@ -410,15 +410,31 @@ impl crate::Adapter for super::Adapter {
         &self,
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
-        // `Rgba16Float` enables Metal's extended dynamic range (scRGB);
-        // everything else is presented as sRGB.
-        let format_caps = |format: wgt::TextureFormat| wgt::SurfaceFormatCapabilities {
-            format,
-            color_spaces: if format == wgt::TextureFormat::Rgba16Float {
-                wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR
-            } else {
-                wgt::SurfaceColorSpaces::SRGB
-            },
+        // `CAMetalLayer` color-matches layer contents to whatever display the
+        // window is on, with the compositor tone-mapping where needed, so
+        // Display-P3 and HDR (PQ/HLG) color spaces work regardless of the
+        // physical display's gamut and are not gated on it here.
+        let format_caps = |format: wgt::TextureFormat| {
+            let mut color_spaces =
+                wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::DISPLAY_P3;
+            if format == wgt::TextureFormat::Rgba16Float {
+                // `Rgba16Float` enables Metal's extended dynamic range (scRGB).
+                color_spaces |= wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR;
+            }
+            // PQ/HLG only on the >=10-bit formats: 8-bit PQ is unusable
+            // banding. The ITUR_2100 color space constants require
+            // macOS 11.0/iOS 14.0.
+            if matches!(
+                format,
+                wgt::TextureFormat::Rgba16Float | wgt::TextureFormat::Rgb10a2Unorm
+            ) && available!(macos = 11.0, ios = 14.0, tvos = 14.0, visionos = 1.0)
+            {
+                color_spaces |= wgt::SurfaceColorSpaces::HDR10 | wgt::SurfaceColorSpaces::HLG;
+            }
+            wgt::SurfaceFormatCapabilities {
+                format,
+                color_spaces,
+            }
         };
         let mut formats = vec![
             format_caps(wgt::TextureFormat::Bgra8Unorm),

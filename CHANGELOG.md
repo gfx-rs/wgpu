@@ -127,7 +127,15 @@ The new `SurfaceColorSpace::Auto` default reproduces wgpu's historical behavior 
   };
 ```
 
-On Vulkan, surfaces now report and honor `SurfaceColorSpace::Hdr10` (BT.2020 + ST 2084 PQ), `SurfaceColorSpace::Hlg` (BT.2100 HLG), `SurfaceColorSpace::DisplayP3`, `SurfaceColorSpace::ExtendedSrgbLinear` (scRGB), and `SurfaceColorSpace::Srgb`, as exposed by the driver via `VK_EXT_swapchain_colorspace`. Other backends currently report only the color spaces matching their existing behavior; selecting anything else fails validation with `ConfigureSurfaceError::UnsupportedColorSpace` (on the browser WebGPU backend, which has no canvas color-space plumbing yet, a non-sRGB selection panics instead). Formats that a driver exposes exclusively in explicit-opt-in color spaces (e.g. HDR10-only) are listed in `format_capabilities` but excluded from the legacy `formats` list.
+Support by backend:
+
+- **Vulkan**: reports and honors `SurfaceColorSpace::Hdr10` (BT.2020 + ST 2084 PQ), `SurfaceColorSpace::Hlg` (BT.2100 HLG), `SurfaceColorSpace::DisplayP3`, `SurfaceColorSpace::ExtendedSrgbLinear` (scRGB), and `SurfaceColorSpace::Srgb`, as exposed by the driver via `VK_EXT_swapchain_colorspace`.
+- **DX12**: reports and honors `Hdr10` on `Rgb10a2Unorm` when the window's output has HDR enabled (detected via `IDXGIOutput6::GetDesc1`), applied with `IDXGISwapChain3::SetColorSpace1`; `Rgba16Float` keeps its scRGB interpretation.
+- **Metal**: reports and honors `DisplayP3` on every format, `ExtendedSrgbLinear` on `Rgba16Float`, and `Hdr10`/`Hlg` on `Rgba16Float`/`Rgb10a2Unorm` (macOS 11+/iOS 14+), by setting the `CAMetalLayer` color space.
+- **Browser WebGPU**: reports and honors `DisplayP3` (canvas `colorSpace`), and `ExtendedSrgbLinear` on `Rgba16Float` when the display reports `(dynamic-range: high)`, via the W3C HDR-canvas `toneMapping: { mode: "extended" }` (Chrome 129+). `Hdr10`/`Hlg` panic (browsers expose no PQ/HLG canvas signaling). `Auto` keeps the browser defaults even for fp16, matching historical behavior.
+- **GLES**: sRGB only.
+
+Selecting a color space a surface doesn't support fails validation with `ConfigureSurfaceError::UnsupportedColorSpace`. Formats that a driver exposes exclusively in explicit-opt-in color spaces (e.g. HDR10-only) are listed in `format_capabilities` but excluded from the legacy `formats` list.
 
 For `wgpu-hal` users: `hal::SurfaceConfiguration` gained a `color_space` field (never `Auto`), and `hal::SurfaceCapabilities::formats` is now `Vec<SurfaceFormatCapabilities>` instead of `Vec<TextureFormat>`.
 

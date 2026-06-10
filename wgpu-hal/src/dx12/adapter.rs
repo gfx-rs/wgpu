@@ -11,8 +11,8 @@ use windows::{
             SetupDiGetDeviceRegistryPropertyW, DIGCF_PRESENT, GUID_DEVCLASS_DISPLAY, HDEVINFO,
             SPDRP_ADDRESS, SPDRP_BUSNUMBER, SPDRP_HARDWAREID, SP_DEVINFO_DATA,
         },
-        Foundation::{GetLastError, ERROR_NO_MORE_ITEMS},
-        Graphics::{Direct3D, Direct3D12, Dxgi},
+        Foundation::{GetLastError, ERROR_NO_MORE_ITEMS, HWND},
+        Graphics::{Direct3D, Direct3D12, Dxgi, Gdi},
         UI::WindowsAndMessaging,
     },
 };
@@ -1041,6 +1041,59 @@ impl super::Adapter {
             },
         })
     }
+
+    /// Returns whether the output (monitor) that `wnd_handle` is currently on
+    /// has HDR enabled, i.e. its advanced color mode is HDR10 (PQ / BT.2020).
+    ///
+    /// Returns `false` if the output cannot be identified or queried.
+    fn is_hdr_output_for_window(&self, wnd_handle: HWND) -> bool {
+        let hmonitor = unsafe { Gdi::MonitorFromWindow(wnd_handle, Gdi::MONITOR_DEFAULTTONEAREST) };
+        if hmonitor.is_invalid() {
+            log::warn!("MonitorFromWindow failed; assuming the output is not HDR");
+            return false;
+        }
+        for i in 0.. {
+            let output = match unsafe { self.raw.EnumOutputs(i) } {
+                Ok(output) => output,
+                Err(e) if e.code() == Dxgi::DXGI_ERROR_NOT_FOUND => break,
+                Err(e) => {
+                    log::warn!("EnumOutputs failed: {e}; assuming the output is not HDR");
+                    return false;
+                }
+            };
+            let desc = match unsafe { output.GetDesc() } {
+                Ok(desc) => desc,
+                Err(e) => {
+                    log::warn!("IDXGIOutput::GetDesc failed: {e}; assuming the output is not HDR");
+                    return false;
+                }
+            };
+            if desc.Monitor != hmonitor {
+                continue;
+            }
+            let output6 = match output.cast::<Dxgi::IDXGIOutput6>() {
+                Ok(output6) => output6,
+                Err(e) => {
+                    log::warn!(
+                        "Casting to IDXGIOutput6 failed: {e}; assuming the output is not HDR"
+                    );
+                    return false;
+                }
+            };
+            let desc1 = match unsafe { output6.GetDesc1() } {
+                Ok(desc1) => desc1,
+                Err(e) => {
+                    log::warn!(
+                        "IDXGIOutput6::GetDesc1 failed: {e}; assuming the output is not HDR"
+                    );
+                    return false;
+                }
+            };
+            return desc1.ColorSpace == Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
+        }
+        log::warn!("No DXGI output matches the window's monitor; assuming the output is not HDR");
+        false
+    }
 }
 
 impl crate::Adapter for super::Adapter {
@@ -1309,11 +1362,26 @@ impl crate::Adapter for super::Adapter {
             present_modes.push(wgt::PresentMode::Immediate);
         }
 
+        let hdr_active = match surface.target {
+            SurfaceTarget::WndHandle(wnd_handle)
+            | SurfaceTarget::VisualFromWndHandle {
+                handle: wnd_handle, ..
+            } => self.is_hdr_output_for_window(wnd_handle),
+            // Composition targets have no monitor identity, so there is no
+            // output whose HDR state we could query.
+            SurfaceTarget::Visual(_)
+            | SurfaceTarget::SurfaceHandle(_)
+            | SurfaceTarget::SwapChainPanel(_) => false,
+        };
+
         Some(crate::SurfaceCapabilities {
-            // We never call `IDXGISwapChain3::SetColorSpace1`, so the
-            // swapchain gets DXGI's defaults: fp16 buffers are interpreted as
-            // scRGB (`DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709`), everything
-            // else as sRGB.
+            // `Surface::configure` applies the requested color space with
+            // `IDXGISwapChain3::SetColorSpace1`. fp16 buffers keep DXGI's
+            // scRGB interpretation (`DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709`)
+            // and `Rgb10a2Unorm` additionally supports HDR10 (PQ) when the
+            // window's output has HDR enabled. Display-P3 and HLG are never
+            // reported: DXGI has no RGB HLG swapchain color space, and P3
+            // isn't a DXGI swapchain color space.
             formats: [
                 wgt::TextureFormat::Bgra8UnormSrgb,
                 wgt::TextureFormat::Bgra8Unorm,
@@ -1324,10 +1392,14 @@ impl crate::Adapter for super::Adapter {
             ]
             .map(|format| wgt::SurfaceFormatCapabilities {
                 format,
-                color_spaces: if format == wgt::TextureFormat::Rgba16Float {
-                    wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR
-                } else {
-                    wgt::SurfaceColorSpaces::SRGB
+                color_spaces: match format {
+                    wgt::TextureFormat::Rgba16Float => {
+                        wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR
+                    }
+                    wgt::TextureFormat::Rgb10a2Unorm if hdr_active => {
+                        wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::HDR10
+                    }
+                    _ => wgt::SurfaceColorSpaces::SRGB,
                 },
             })
             .to_vec(),
