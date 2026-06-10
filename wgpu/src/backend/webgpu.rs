@@ -3926,6 +3926,15 @@ impl dispatch::SurfaceInterface for WebSurface {
         }
 
         wgt::SurfaceCapabilities {
+            // The canvas color space is not yet plumbed through to
+            // `GPUCanvasConfiguration`, so everything is presented as sRGB.
+            format_capabilities: formats
+                .iter()
+                .map(|&format| wgt::SurfaceFormatCapabilities {
+                    format,
+                    color_spaces: wgt::SurfaceColorSpaces::SRGB,
+                })
+                .collect(),
             // https://gpuweb.github.io/gpuweb/#supported-context-formats
             formats,
             // Doesn't really have meaning on the web.
@@ -3957,6 +3966,10 @@ impl dispatch::SurfaceInterface for WebSurface {
             config.alpha_mode
         {
             panic!("Only Opaque/Auto or PreMultiplied alpha mode are supported on web");
+        }
+        match config.color_space {
+            wgt::SurfaceColorSpace::Auto | wgt::SurfaceColorSpace::Srgb => {}
+            cs => panic!("Color space {cs:?} is not supported on web"),
         }
         let alpha_mode = match config.alpha_mode {
             wgt::CompositeAlphaMode::PreMultiplied => webgpu_sys::GpuCanvasAlphaMode::Premultiplied,

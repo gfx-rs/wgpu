@@ -53,12 +53,25 @@ impl Global {
         self.fetch_adapter_and_surface::<_, _>(surface_id, adapter_id, |adapter, surface| {
             let mut hal_caps = surface.get_capabilities(adapter)?;
 
-            hal_caps.formats.sort_by_key(|f| !f.is_srgb());
+            hal_caps.formats.sort_by_key(|fc| !fc.format.is_srgb());
 
             let usages = conv::map_texture_usage_from_hal(hal_caps.usage);
 
+            // The legacy `formats` list only contains formats that can be
+            // configured with the default `SurfaceColorSpace::Auto`, so that
+            // formats which a driver exposes exclusively in explicit-opt-in
+            // color spaces (e.g. HDR10-only) don't surprise existing
+            // applications that scan this list.
+            let auto_configurable =
+                wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR;
             Ok(wgt::SurfaceCapabilities {
-                formats: hal_caps.formats,
+                formats: hal_caps
+                    .formats
+                    .iter()
+                    .filter(|fc| fc.color_spaces.intersects(auto_configurable))
+                    .map(|fc| fc.format)
+                    .collect(),
+                format_capabilities: hal_caps.formats,
                 present_modes: hal_caps.present_modes,
                 alpha_modes: hal_caps.composite_alpha_modes,
                 usages,

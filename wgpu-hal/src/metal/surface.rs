@@ -91,7 +91,7 @@ impl crate::Surface for super::Surface {
         render_layer.setFramebufferOnly(framebuffer_only);
         // opt-in to Metal EDR
         // EDR potentially more power used in display and more bandwidth, memory footprint.
-        let wants_edr = config.format == wgt::TextureFormat::Rgba16Float;
+        let wants_edr = config.color_space == wgt::SurfaceColorSpace::ExtendedSrgbLinear;
         if wants_edr != render_layer.wantsExtendedDynamicRangeContent() {
             render_layer.setWantsExtendedDynamicRangeContent(wants_edr);
         }

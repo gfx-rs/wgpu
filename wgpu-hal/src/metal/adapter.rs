@@ -410,17 +410,27 @@ impl crate::Adapter for super::Adapter {
         &self,
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
+        // `Rgba16Float` enables Metal's extended dynamic range (scRGB);
+        // everything else is presented as sRGB.
+        let format_caps = |format: wgt::TextureFormat| wgt::SurfaceFormatCapabilities {
+            format,
+            color_spaces: if format == wgt::TextureFormat::Rgba16Float {
+                wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR
+            } else {
+                wgt::SurfaceColorSpaces::SRGB
+            },
+        };
         let mut formats = vec![
-            wgt::TextureFormat::Bgra8Unorm,
-            wgt::TextureFormat::Bgra8UnormSrgb,
-            wgt::TextureFormat::Rgba16Float,
+            format_caps(wgt::TextureFormat::Bgra8Unorm),
+            format_caps(wgt::TextureFormat::Bgra8UnormSrgb),
+            format_caps(wgt::TextureFormat::Rgba16Float),
         ];
         if self
             .shared
             .private_texture_format_caps
             .format_rgb10a2_unorm_all
         {
-            formats.push(wgt::TextureFormat::Rgb10a2Unorm);
+            formats.push(format_caps(wgt::TextureFormat::Rgb10a2Unorm));
         }
 
         Some(crate::SurfaceCapabilities {

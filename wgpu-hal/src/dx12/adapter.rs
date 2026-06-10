@@ -1310,14 +1310,27 @@ impl crate::Adapter for super::Adapter {
         }
 
         Some(crate::SurfaceCapabilities {
-            formats: vec![
+            // We never call `IDXGISwapChain3::SetColorSpace1`, so the
+            // swapchain gets DXGI's defaults: fp16 buffers are interpreted as
+            // scRGB (`DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709`), everything
+            // else as sRGB.
+            formats: [
                 wgt::TextureFormat::Bgra8UnormSrgb,
                 wgt::TextureFormat::Bgra8Unorm,
                 wgt::TextureFormat::Rgba8UnormSrgb,
                 wgt::TextureFormat::Rgba8Unorm,
                 wgt::TextureFormat::Rgb10a2Unorm,
                 wgt::TextureFormat::Rgba16Float,
-            ],
+            ]
+            .map(|format| wgt::SurfaceFormatCapabilities {
+                format,
+                color_spaces: if format == wgt::TextureFormat::Rgba16Float {
+                    wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR
+                } else {
+                    wgt::SurfaceColorSpaces::SRGB
+                },
+            })
+            .to_vec(),
             // See https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgidevice1-setmaximumframelatency
             maximum_frame_latency: 1..=16,
             current_extent,

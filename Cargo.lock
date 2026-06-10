@@ -4781,6 +4781,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-example-03-hdr-surface"
+version = "0.0.0"
+dependencies = [
+ "env_logger",
+ "pollster",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "wgpu-example-custom-backend"
 version = "0.0.0"
 dependencies = [

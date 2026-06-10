@@ -112,6 +112,29 @@ Zero-size buffer bindings are still not permitted. `BufferBinding` now implement
 
 By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
+#### Surface color space selection (HDR output)
+
+Surfaces can now be configured with an explicit color space, enabling HDR and wide-gamut output where the platform supports it (initially the Vulkan backend; see below). `SurfaceConfiguration` has a new `color_space` field, and `SurfaceCapabilities` reports the supported color spaces for every supported format in a new `format_capabilities` field ([#2920](https://github.com/gfx-rs/wgpu/issues/2920)).
+
+The new `SurfaceColorSpace::Auto` default reproduces wgpu's historical behavior (extended linear scRGB for `Rgba16Float` where supported, sRGB otherwise; never a wide-gamut or HDR color space), so to migrate, add the field:
+
+```diff
+  let config = wgpu::SurfaceConfiguration {
+      usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+      format: surface_format,
++     color_space: wgpu::SurfaceColorSpace::Auto,
+      ..
+  };
+```
+
+On Vulkan, surfaces now report and honor `SurfaceColorSpace::Hdr10` (BT.2020 + ST 2084 PQ), `SurfaceColorSpace::Hlg` (BT.2100 HLG), `SurfaceColorSpace::DisplayP3`, `SurfaceColorSpace::ExtendedSrgbLinear` (scRGB), and `SurfaceColorSpace::Srgb`, as exposed by the driver via `VK_EXT_swapchain_colorspace`. Other backends currently report only the color spaces matching their existing behavior; selecting anything else fails validation with `ConfigureSurfaceError::UnsupportedColorSpace` (on the browser WebGPU backend, which has no canvas color-space plumbing yet, a non-sRGB selection panics instead). Formats that a driver exposes exclusively in explicit-opt-in color spaces (e.g. HDR10-only) are listed in `format_capabilities` but excluded from the legacy `formats` list.
+
+For `wgpu-hal` users: `hal::SurfaceConfiguration` gained a `color_space` field (never `Auto`), and `hal::SurfaceCapabilities::formats` is now `Vec<SurfaceFormatCapabilities>` instead of `Vec<TextureFormat>`.
+
+A new standalone example, `examples/standalone/03_hdr_surface`, prints a surface's (format, color space) capabilities and renders an HDR luminance test pattern through the most capable color space available.
+
+By @stuartparmenter in [#99999](https://github.com/gfx-rs/wgpu/pull/99999).
+
 ### Added/New Features
 
 #### General

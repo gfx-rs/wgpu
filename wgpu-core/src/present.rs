@@ -98,6 +98,12 @@ pub enum ConfigureSurfaceError {
         requested: wgt::TextureFormat,
         available: Vec<wgt::TextureFormat>,
     },
+    #[error("Requested color space {requested:?} is not in the list of color spaces supported for format {format:?}: {available:?}")]
+    UnsupportedColorSpace {
+        requested: wgt::SurfaceColorSpace,
+        format: wgt::TextureFormat,
+        available: wgt::SurfaceColorSpaces,
+    },
     #[error("Requested present mode {requested:?} is not in the list of supported present modes: {available:?}")]
     UnsupportedPresentMode {
         requested: wgt::PresentMode,
@@ -138,6 +144,7 @@ impl WebGpuError for ConfigureSurfaceError {
             | Self::TooLarge { .. }
             | Self::UnsupportedQueueFamily
             | Self::UnsupportedFormat { .. }
+            | Self::UnsupportedColorSpace { .. }
             | Self::UnsupportedPresentMode { .. }
             | Self::UnsupportedAlphaMode { .. }
             | Self::UnsupportedUsage { .. } => ErrorType::Validation,
