@@ -831,12 +831,12 @@ pub enum AttachmentError {
         "Depth attachment with `TRANSIENT_ATTACHMENT` usage can only be used with \
         `LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and  `StoreOp::Discard`. Operations `{0:?}` were provided"
     )]
-    InvalidTransientDepthAttachmentOp((Option<LoadOp<Option<f32>>>, Option<StoreOp>)),
+    InvalidTransientDepthAttachmentOps((LoadOp<Option<f32>>, StoreOp)),
     #[error(
         "Stencil attachment with `TRANSIENT_ATTACHMENT` usage can only be used with \
         `LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and  `StoreOp::Discard`. Operations `{0:?}` were provided"
     )]
-    InvalidTransientStencilAttachmentOp((Option<LoadOp<Option<u32>>>, Option<StoreOp>)),
+    InvalidTransientStencilAttachmentOps((LoadOp<Option<u32>>, StoreOp)),
     #[error("LoadOp must be None for read-only attachments")]
     ReadOnlyWithLoad,
     #[error("StoreOp must be None for read-only attachments")]
@@ -1795,6 +1795,13 @@ impl RenderPassInfo {
     }
 }
 
+fn check_transient_attachment_ops<V>(load_op: LoadOp<V>, store_op: StoreOp) -> bool {
+    matches!(
+        (load_op, store_op),
+        (LoadOp::Clear(_) | LoadOp::DontCare(_), StoreOp::Discard)
+    )
+}
+
 impl Global {
     /// Creates a render pass.
     ///
@@ -1859,8 +1866,7 @@ impl Global {
                         .desc
                         .usage
                         .contains(TextureUsages::TRANSIENT_ATTACHMENT)
-                        && (!matches!(*load_op, LoadOp::Clear(_) | LoadOp::DontCare(_))
-                            || *store_op != StoreOp::Discard)
+                        && !check_transient_attachment_ops(*load_op, *store_op)
                     {
                         return Err(RenderPassErrorInner::ColorAttachment(
                             ColorAttachmentError::InvalidTransientAttachmentOp((
@@ -1892,18 +1898,6 @@ impl Global {
                 }
             }
 
-            fn check_transient_attachment_ops<V>(
-                load_op: Option<LoadOp<V>>,
-                store_op: Option<StoreOp>,
-            ) -> bool {
-                matches!(
-                    (load_op, store_op),
-                    (
-                        Some(LoadOp::Clear(_) | LoadOp::DontCare(_)),
-                        Some(StoreOp::Discard)
-                    )
-                )
-            }
             // https://gpuweb.github.io/gpuweb/#abstract-opdef-gpurenderpassdepthstencilattachment-gpurenderpassdepthstencilattachment-valid-usage
             arc_desc.depth_stencil_attachment = if let Some(depth_stencil_attachment) =
                 desc.depth_stencil_attachment
@@ -1923,32 +1917,44 @@ impl Global {
                     .usage
                     .contains(TextureUsages::TRANSIENT_ATTACHMENT)
                 {
-                    if format.has_depth_aspect()
-                        && !check_transient_attachment_ops(
-                            depth_stencil_attachment.depth.load_op,
-                            depth_stencil_attachment.depth.store_op,
-                        )
-                    {
-                        return Err(RenderPassErrorInner::InvalidAttachment(
-                            AttachmentError::InvalidTransientDepthAttachmentOp((
-                                depth_stencil_attachment.depth.load_op,
-                                depth_stencil_attachment.depth.store_op,
-                            )),
-                        ));
+                    if format.has_depth_aspect() {
+                        let Some(load_op) = depth_stencil_attachment.depth.load_op else {
+                            return Err(RenderPassErrorInner::InvalidAttachment(
+                                AttachmentError::NoLoad,
+                            ));
+                        };
+                        let Some(store_op) = depth_stencil_attachment.depth.store_op else {
+                            return Err(RenderPassErrorInner::InvalidAttachment(
+                                AttachmentError::NoStore,
+                            ));
+                        };
+                        if !check_transient_attachment_ops(load_op, store_op) {
+                            return Err(RenderPassErrorInner::InvalidAttachment(
+                                AttachmentError::InvalidTransientDepthAttachmentOps((
+                                    load_op, store_op,
+                                )),
+                            ));
+                        }
                     }
 
-                    if format.has_stencil_aspect()
-                        && check_transient_attachment_ops(
-                            depth_stencil_attachment.stencil.load_op,
-                            depth_stencil_attachment.stencil.store_op,
-                        )
-                    {
-                        return Err(RenderPassErrorInner::InvalidAttachment(
-                            AttachmentError::InvalidTransientStencilAttachmentOp((
-                                depth_stencil_attachment.stencil.load_op,
-                                depth_stencil_attachment.stencil.store_op,
-                            )),
-                        ));
+                    if format.has_stencil_aspect() {
+                        let Some(load_op) = depth_stencil_attachment.stencil.load_op else {
+                            return Err(RenderPassErrorInner::InvalidAttachment(
+                                AttachmentError::NoLoad,
+                            ));
+                        };
+                        let Some(store_op) = depth_stencil_attachment.stencil.store_op else {
+                            return Err(RenderPassErrorInner::InvalidAttachment(
+                                AttachmentError::NoStore,
+                            ));
+                        };
+                        if !check_transient_attachment_ops(load_op, store_op) {
+                            return Err(RenderPassErrorInner::InvalidAttachment(
+                                AttachmentError::InvalidTransientStencilAttachmentOps((
+                                    load_op, store_op,
+                                )),
+                            ));
+                        }
                     }
                 }
 
