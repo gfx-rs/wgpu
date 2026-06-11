@@ -1896,78 +1896,125 @@ impl Global {
                 }
             }
 
-            arc_desc.depth_stencil_attachment =
-                // https://gpuweb.github.io/gpuweb/#abstract-opdef-gpurenderpassdepthstencilattachment-gpurenderpassdepthstencilattachment-valid-usage
-                if let Some(depth_stencil_attachment) = desc.depth_stencil_attachment {
-                    let view = texture_views.get(depth_stencil_attachment.view).get()?;
-                    view.same_device(device)?;
+            // https://gpuweb.github.io/gpuweb/#abstract-opdef-gpurenderpassdepthstencilattachment-gpurenderpassdepthstencilattachment-valid-usage
+            arc_desc.depth_stencil_attachment = if let Some(depth_stencil_attachment) =
+                desc.depth_stencil_attachment
+            {
+                let view = texture_views.get(depth_stencil_attachment.view).get()?;
+                view.same_device(device)?;
 
-                    let format = view.desc.format;
-                    if !format.is_depth_stencil_format() {
-                        return Err(RenderPassErrorInner::InvalidAttachment(AttachmentError::InvalidDepthStencilAttachmentFormat(
-                            view.desc.format,
-                        )));
+                let format = view.desc.format;
+                if !format.is_depth_stencil_format() {
+                    return Err(RenderPassErrorInner::InvalidAttachment(
+                        AttachmentError::InvalidDepthStencilAttachmentFormat(view.desc.format),
+                    ));
+                }
+
+                if view
+                    .desc
+                    .usage
+                    .contains(TextureUsages::TRANSIENT_ATTACHMENT)
+                {
+                    if format.has_depth_aspect()
+                        && !matches!(
+                            (
+                                depth_stencil_attachment.depth.load_op,
+                                depth_stencil_attachment.depth.store_op
+                            ),
+                            (Some(LoadOp::Clear(_)), Some(StoreOp::Discard))
+                                | (Some(LoadOp::DontCare(_)), Some(StoreOp::Discard))
+                        )
+                    {
+                        return Err(RenderPassErrorInner::InvalidAttachment(
+                            AttachmentError::InvalidTransientDepthAttachmentOp((
+                                depth_stencil_attachment.depth.load_op,
+                                depth_stencil_attachment.depth.store_op,
+                            )),
+                        ));
                     }
 
-                    if view.desc.usage.contains(TextureUsages::TRANSIENT_ATTACHMENT){
-                       if format.has_depth_aspect() && !matches!(
-                            (depth_stencil_attachment.depth.load_op, depth_stencil_attachment.depth.store_op),
-                            (Some(LoadOp::Clear(_)), Some(StoreOp::Discard)) | (Some(LoadOp::DontCare(_)), Some(StoreOp::Discard))
-                        ) {
-                            return Err(RenderPassErrorInner::InvalidAttachment(AttachmentError::InvalidTransientDepthAttachmentOp(
-                                (depth_stencil_attachment.depth.load_op, depth_stencil_attachment.depth.store_op),
-                            )));
-                       }
-
-                       if format.has_stencil_aspect() && !matches!(
-                            (depth_stencil_attachment.stencil.load_op, depth_stencil_attachment.stencil.store_op),
-                            (Some(LoadOp::Clear(_)), Some(StoreOp::Discard)) | (Some(LoadOp::DontCare(_)), Some(StoreOp::Discard))
-                        ) {
-                            return Err(RenderPassErrorInner::InvalidAttachment(AttachmentError::InvalidTransientStencilAttachmentOp(
-                                (depth_stencil_attachment.stencil.load_op, depth_stencil_attachment.stencil.store_op),
-                            )));
-                        }
+                    if format.has_stencil_aspect()
+                        && !matches!(
+                            (
+                                depth_stencil_attachment.stencil.load_op,
+                                depth_stencil_attachment.stencil.store_op
+                            ),
+                            (Some(LoadOp::Clear(_)), Some(StoreOp::Discard))
+                                | (Some(LoadOp::DontCare(_)), Some(StoreOp::Discard))
+                        )
+                    {
+                        return Err(RenderPassErrorInner::InvalidAttachment(
+                            AttachmentError::InvalidTransientStencilAttachmentOp((
+                                depth_stencil_attachment.stencil.load_op,
+                                depth_stencil_attachment.stencil.store_op,
+                            )),
+                        ));
                     }
+                }
 
-                    Some(ResolvedRenderPassDepthStencilAttachment {
-                        view,
-                        depth: if format.has_depth_aspect() {
-                            depth_stencil_attachment.depth.resolve(device.instance_flags, |clear| if let Some(clear) = clear {
-                                // If this.depthLoadOp is "clear", this.depthClearValue must be provided and must be between 0.0 and 1.0, inclusive.
-                                if !(0.0..=1.0).contains(&clear) {
-                                    Err(AttachmentError::ClearValueOutOfRange(clear))
+                Some(ResolvedRenderPassDepthStencilAttachment {
+                    view,
+                    depth: if format.has_depth_aspect() {
+                        depth_stencil_attachment
+                            .depth
+                            .resolve(device.instance_flags, |clear| {
+                                if let Some(clear) = clear {
+                                    // If this.depthLoadOp is "clear", this.depthClearValue must be provided and must be between 0.0 and 1.0, inclusive.
+                                    if !(0.0..=1.0).contains(&clear) {
+                                        Err(AttachmentError::ClearValueOutOfRange(clear))
+                                    } else {
+                                        Ok(clear)
+                                    }
                                 } else {
-                                    Ok(clear)
+                                    Err(AttachmentError::NoClearValue)
                                 }
-                            } else {
-                                Err(AttachmentError::NoClearValue)
                             })?
-                        } else {
-                            if depth_stencil_attachment.depth.load_op.is_some() || depth_stencil_attachment.depth.store_op.is_some() {
-                                return Err(RenderPassErrorInner::InvalidAttachment(AttachmentError::DepthOpsWithoutAspect {
+                    } else {
+                        if depth_stencil_attachment.depth.load_op.is_some()
+                            || depth_stencil_attachment.depth.store_op.is_some()
+                        {
+                            return Err(RenderPassErrorInner::InvalidAttachment(
+                                AttachmentError::DepthOpsWithoutAspect {
                                     format,
-                                    ops: (depth_stencil_attachment.depth.load_op, depth_stencil_attachment.depth.store_op)
-                                }));
-                            }
-                            ResolvedPassChannel::ReadOnly
-                        },
-                        stencil: if format.has_stencil_aspect() {
-                            depth_stencil_attachment.stencil.resolve(device.instance_flags, |clear| {
-                                Ok(convert_stencil_value(clear.unwrap_or_default(), Some(format)))
-                            })?
-                        } else {
-                            if depth_stencil_attachment.stencil.load_op.is_some() || depth_stencil_attachment.stencil.store_op.is_some() {
-                                return Err(RenderPassErrorInner::InvalidAttachment(AttachmentError::StencilOpsWithoutAspect {
+                                    ops: (
+                                        depth_stencil_attachment.depth.load_op,
+                                        depth_stencil_attachment.depth.store_op,
+                                    ),
+                                },
+                            ));
+                        }
+                        ResolvedPassChannel::ReadOnly
+                    },
+                    stencil: if format.has_stencil_aspect() {
+                        depth_stencil_attachment.stencil.resolve(
+                            device.instance_flags,
+                            |clear| {
+                                Ok(convert_stencil_value(
+                                    clear.unwrap_or_default(),
+                                    Some(format),
+                                ))
+                            },
+                        )?
+                    } else {
+                        if depth_stencil_attachment.stencil.load_op.is_some()
+                            || depth_stencil_attachment.stencil.store_op.is_some()
+                        {
+                            return Err(RenderPassErrorInner::InvalidAttachment(
+                                AttachmentError::StencilOpsWithoutAspect {
                                     format,
-                                    ops: (depth_stencil_attachment.stencil.load_op, depth_stencil_attachment.stencil.store_op)
-                                }));
-                            }
-                            ResolvedPassChannel::ReadOnly
-                        },
-                    })
-                } else {
-                    None
-                };
+                                    ops: (
+                                        depth_stencil_attachment.stencil.load_op,
+                                        depth_stencil_attachment.stencil.store_op,
+                                    ),
+                                },
+                            ));
+                        }
+                        ResolvedPassChannel::ReadOnly
+                    },
+                })
+            } else {
+                None
+            };
 
             arc_desc.timestamp_writes = desc
                 .timestamp_writes
