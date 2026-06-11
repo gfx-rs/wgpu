@@ -196,7 +196,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Add clip distances validation for `maxInterStageShaderVariables`. By @ErichDonGubler in [#8762](https://github.com/gfx-rs/wgpu/pull/8762). This may break some existing programs, but it compiles with the WebGPU spec.
 - Bring immediates in line with webgpu spec. By @atlv24 in [#9280](https://github.com/gfx-rs/wgpu/pull/9280).
 - Validate `LoadOp` and `StoreOp` are `None` for attachments without corresponding depth or stencil aspect. By @beicause in [#9567](https://github.com/gfx-rs/wgpu/pull/9567).
-- BREAKING: `TextureUsages::TRANSIENT` is renamed to `TextureUsages::TRANSIENT_ATTACHMENT` and brought in line with WebGPU spec. By @beicause in [#9568](https://github.com/gfx-rs/wgpu/pull/9568).
+- BREAKING: `TextureUsages::TRANSIENT` is renamed to `TextureUsages::TRANSIENT_ATTACHMENT` and brought in line with WebGPU spec. Transient textures may now only be used with `LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and `StoreOp::Discard`. By @beicause in [#9568](https://github.com/gfx-rs/wgpu/pull/9568).
 
 #### DX12
 

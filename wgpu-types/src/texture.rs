@@ -196,7 +196,7 @@ bitflags::bitflags! {
         ///
         /// Incompatible with ALL other usages except [`TextureUsages::RENDER_ATTACHMENT`] and requires it.
         ///
-        /// Requires [`LoadOp::Clear`]/[`LoadOp::DontCare`] and [`StoreOp::Discard`].
+        /// Requires [`LoadOp::Clear`] or [`LoadOp::DontCare`] (if it is available) and [`StoreOp::Discard`].
         const TRANSIENT_ATTACHMENT = 1 << 5;
 
         //

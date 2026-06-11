@@ -138,8 +138,8 @@ webgpu:api,validation,createTexture:sample_count,*
 webgpu:api,validation,createTexture:sampleCount,*
 webgpu:api,validation,createTexture:texture_size,*
 webgpu:api,validation,createTexture:texture_usage,*
-//FAIL: webgpu:api,validation,createTexture:usage:*
-// See the comments about `GPUTextureUsage` in `deno_webgpu/01_webgpu.js`
+webgpu:api,validation,createTexture:transient_viewFormats:*
+webgpu:api,validation,createTexture:usage:*
 webgpu:api,validation,createTexture:viewFormats:*
 webgpu:api,validation,createTexture:zero_size_and_usage:*
 webgpu:api,validation,createView:array_layers:*

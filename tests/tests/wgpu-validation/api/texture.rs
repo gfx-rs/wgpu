@@ -683,6 +683,6 @@ fn transient_invalid_storeop() {
 
             encoder.finish()
         },
-      Some("Color attachment with `TRANSIENT_ATTACHMENT` usage can only be used with (`LoadOp::Clear`/`LoadOp::DontCare`, `StoreOp::Discard`), but `(Clear(Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }), Store)` was provided")
+      Some("Color attachment with `TRANSIENT_ATTACHMENT` usage can only be used with `LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and  `StoreOp::Discard`. Operations `(Clear(Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }), Store)` were provided")
     );
 }

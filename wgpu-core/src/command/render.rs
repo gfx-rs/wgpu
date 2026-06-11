@@ -809,7 +809,7 @@ pub enum ColorAttachmentError {
     },
     #[error(
         "Color attachment with `TRANSIENT_ATTACHMENT` usage can only be used with \
-        (`LoadOp::Clear`/`LoadOp::DontCare`, `StoreOp::Discard`), but `{0:?}` was provided"
+        `LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and  `StoreOp::Discard`. Operations `{0:?}` were provided"
     )]
     InvalidTransientAttachmentOp((LoadOp<Color>, StoreOp)),
     #[error("Color attachment's load op is `LoadOp::DontCare` but `InstanceFlags::STRICT_WEBGPU_COMPLIANCE` is set")]
@@ -829,12 +829,12 @@ pub enum AttachmentError {
     InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
     #[error(
         "Depth attachment with `TRANSIENT_ATTACHMENT` usage can only be used with \
-        (`LoadOp::Clear`/`LoadOp::DontCare`, `StoreOp::Discard`), but `{0:?}` was provided"
+        `LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and  `StoreOp::Discard`. Operations `{0:?}` were provided"
     )]
     InvalidTransientDepthAttachmentOp((Option<LoadOp<Option<f32>>>, Option<StoreOp>)),
     #[error(
         "Stencil attachment with `TRANSIENT_ATTACHMENT` usage can only be used with \
-        (`LoadOp::Clear`/`LoadOp::DontCare`, `StoreOp::Discard`), but `{0:?}` was provided"
+        `LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and  `StoreOp::Discard`. Operations `{0:?}` were provided"
     )]
     InvalidTransientStencilAttachmentOp((Option<LoadOp<Option<u32>>>, Option<StoreOp>)),
     #[error("LoadOp must be None for read-only attachments")]
@@ -889,11 +889,8 @@ pub enum RenderPassErrorInner {
         location: AttachmentErrorLocation,
         format: wgt::TextureFormat,
     },
-    #[error("The usage of the {location} (`{usage:?}`) is not resolvable")]
-    UnsupportedResolveTargetUsage {
-        location: AttachmentErrorLocation,
-        usage: TextureUsages,
-    },
+    #[error("The {location} is not valid, because the texture has `TRANSIENT_ATTACHMENT` usage")]
+    InvalidTransientResolveTarget { location: AttachmentErrorLocation },
     #[error("No color attachments or depth attachments were provided, at least one attachment of any kind must be provided")]
     MissingAttachments,
     #[error("The {location} is not renderable:")]
@@ -1076,7 +1073,7 @@ impl WebGpuError for RenderPassError {
 
             RenderPassErrorInner::InvalidParentEncoder
             | RenderPassErrorInner::UnsupportedResolveTargetFormat { .. }
-            | RenderPassErrorInner::UnsupportedResolveTargetUsage { .. }
+            | RenderPassErrorInner::InvalidTransientResolveTarget { .. }
             | RenderPassErrorInner::MissingAttachments
             | RenderPassErrorInner::TextureViewIsNotRenderable { .. }
             | RenderPassErrorInner::AttachmentsDimensionMismatch { .. }
@@ -1576,9 +1573,8 @@ impl RenderPassInfo {
                     .usage
                     .contains(TextureUsages::TRANSIENT_ATTACHMENT)
                 {
-                    return Err(RenderPassErrorInner::UnsupportedResolveTargetUsage {
+                    return Err(RenderPassErrorInner::InvalidTransientResolveTarget {
                         location: resolve_location,
-                        usage: resolve_view.desc.usage,
                     });
                 }
 
@@ -1896,6 +1892,18 @@ impl Global {
                 }
             }
 
+            fn check_transient_attachment_ops<V>(
+                load_op: Option<LoadOp<V>>,
+                store_op: Option<StoreOp>,
+            ) -> bool {
+                matches!(
+                    (load_op, store_op),
+                    (
+                        Some(LoadOp::Clear(_) | LoadOp::DontCare(_)),
+                        Some(StoreOp::Discard)
+                    )
+                )
+            }
             // https://gpuweb.github.io/gpuweb/#abstract-opdef-gpurenderpassdepthstencilattachment-gpurenderpassdepthstencilattachment-valid-usage
             arc_desc.depth_stencil_attachment = if let Some(depth_stencil_attachment) =
                 desc.depth_stencil_attachment
@@ -1916,13 +1924,9 @@ impl Global {
                     .contains(TextureUsages::TRANSIENT_ATTACHMENT)
                 {
                     if format.has_depth_aspect()
-                        && !matches!(
-                            (
-                                depth_stencil_attachment.depth.load_op,
-                                depth_stencil_attachment.depth.store_op
-                            ),
-                            (Some(LoadOp::Clear(_)), Some(StoreOp::Discard))
-                                | (Some(LoadOp::DontCare(_)), Some(StoreOp::Discard))
+                        && !check_transient_attachment_ops(
+                            depth_stencil_attachment.depth.load_op,
+                            depth_stencil_attachment.depth.store_op,
                         )
                     {
                         return Err(RenderPassErrorInner::InvalidAttachment(
@@ -1934,13 +1938,9 @@ impl Global {
                     }
 
                     if format.has_stencil_aspect()
-                        && !matches!(
-                            (
-                                depth_stencil_attachment.stencil.load_op,
-                                depth_stencil_attachment.stencil.store_op
-                            ),
-                            (Some(LoadOp::Clear(_)), Some(StoreOp::Discard))
-                                | (Some(LoadOp::DontCare(_)), Some(StoreOp::Discard))
+                        && check_transient_attachment_ops(
+                            depth_stencil_attachment.stencil.load_op,
+                            depth_stencil_attachment.stencil.store_op,
                         )
                     {
                         return Err(RenderPassErrorInner::InvalidAttachment(
