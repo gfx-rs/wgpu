@@ -11,6 +11,8 @@ use wgt::{AstcBlock, AstcChannel};
 
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
 use core::sync::atomic;
+use parking_lot::Mutex;
+use std::sync::OnceLock;
 
 use crate::metal::QueueShared;
 
@@ -61,9 +63,6 @@ const MAX_VERTEX_BUFFERS: u32 = 8;
 const MAX_ACCELERATION_STRUCTURES_PER_SHADER_STAGE: u32 = 1;
 // Use the end of the range for vertex buffers.
 pub const VERTEX_BUFFER_SLOT_START: u32 = 31 - 8;
-
-unsafe impl Send for super::Adapter {}
-unsafe impl Sync for super::Adapter {}
 
 impl super::Adapter {
     pub(super) fn new(shared: Arc<super::AdapterShared>) -> Self {
@@ -127,6 +126,9 @@ impl crate::Adapter for super::Adapter {
                     shared: Arc::new(QueueShared {
                         raw: queue,
                         command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
+                        pending_waits: Mutex::new(Vec::new()),
+                        pending_signals: Mutex::new(Vec::new()),
+                        relay: OnceLock::new(),
                     }),
                     timestamp_period,
                 },
@@ -1316,6 +1318,10 @@ impl super::CapabilitiesQuery {
         downlevel.flags.set(
             wgt::DownlevelFlags::MSL2_1,
             self.msl_version >= MTLLanguageVersion::Version2_1,
+        );
+        downlevel.flags.set(
+            wgt::DownlevelFlags::TEXTURE_COMPRESSION,
+            self.format_bc || (self.format_eac_etc && self.format_astc),
         );
 
         let limits = crate::auxil::adjust_raw_limits(wgt::Limits {

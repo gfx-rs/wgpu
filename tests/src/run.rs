@@ -43,8 +43,11 @@ pub async fn execute_test(
 
     let _test_guard = isolation::OneTestPerProcessGuard::new();
 
-    let (instance, adapter, _surface_guard) =
-        initialize_adapter(adapter_report, &config.params).await;
+    let Some((instance, adapter, _surface_guard)) =
+        initialize_adapter(adapter_report, &config.params).await
+    else {
+        return;
+    };
 
     let adapter_info = adapter.get_info();
     let adapter_downlevel_capabilities = adapter.get_downlevel_capabilities();
