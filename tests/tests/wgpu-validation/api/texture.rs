@@ -598,6 +598,9 @@ fn transient_invalid_usage() {
         - wgpu::TextureUsages::TRANSIENT_ATTACHMENT;
 
     for usage in invalid_usages {
+        let usage = wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::TRANSIENT_ATTACHMENT
+            | usage;
         let invalid_texture_descriptor = wgpu::TextureDescriptor {
             label: None,
             size,
@@ -605,15 +608,13 @@ fn transient_invalid_usage() {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                | wgpu::TextureUsages::TRANSIENT_ATTACHMENT
-                | usage,
+            usage,
             view_formats: &[],
         };
         fail(
             &device,
             || device.create_texture(&invalid_texture_descriptor),
-            Some(&format!("Texture usage TextureUsages(TRANSIENT_ATTACHMENT) is not compatible with texture usage {usage:?}")),
+            Some(&format!("Transient texture usage must be equal to `TRANSIENT_ATTACHMENT | RENDER_ATTACHMENT`, but got `{usage:?}`")),
         );
     }
 
@@ -630,7 +631,7 @@ fn transient_invalid_usage() {
     fail(
         &device,
         || device.create_texture(&invalid_texture_descriptor),
-        Some("Invalid usage flags TextureUsages(TRANSIENT_ATTACHMENT)"),
+        Some("Transient texture usage must be equal to `TRANSIENT_ATTACHMENT | RENDER_ATTACHMENT`, but got `TextureUsages(TRANSIENT_ATTACHMENT)`"),
     );
 }
 

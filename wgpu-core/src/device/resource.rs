@@ -1517,19 +1517,11 @@ impl Device {
             .usage
             .contains(wgt::TextureUsages::TRANSIENT_ATTACHMENT)
         {
-            if !desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
-                return Err(CreateTextureError::InvalidUsage(
-                    wgt::TextureUsages::TRANSIENT_ATTACHMENT,
-                ));
-            }
-            let extra_usage = desc.usage
-                - wgt::TextureUsages::TRANSIENT_ATTACHMENT
-                - wgt::TextureUsages::RENDER_ATTACHMENT;
-            if !extra_usage.is_empty() {
-                return Err(CreateTextureError::IncompatibleUsage(
-                    wgt::TextureUsages::TRANSIENT_ATTACHMENT,
-                    extra_usage,
-                ));
+            if desc.usage
+                != (wgt::TextureUsages::TRANSIENT_ATTACHMENT
+                    | wgt::TextureUsages::RENDER_ATTACHMENT)
+            {
+                return Err(CreateTextureError::InvalidTransientTextureUsage(desc.usage));
             }
 
             if desc.mip_level_count != 1 {
