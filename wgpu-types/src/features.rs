@@ -641,6 +641,9 @@ bitflags_array! {
         /// - Vulkan
         /// - DX12
         /// - Metal
+        /// - OpenGL (desktop GL 3.3+ for UNORM; GLES / WebGL2 needs
+        ///   `EXT_texture_norm16`. SNORM color-attachment usage
+        ///   additionally requires `EXT_render_snorm` on both paths.)
         ///
         /// This is a native only feature.
         #[name("wgpu-texture-format-16-bit-norm", "texture-format-16-bit-norm")]
