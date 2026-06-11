@@ -552,11 +552,12 @@ const INDIRECT_DRAW_DISPATCH_SUPPORT: &[MTLFeatureSet] = &[
 ///
 /// A10X/iPadOS 17.7 advertises the older Apple3/iOS GPUFamily3 support but
 /// throws a foreign exception when this backend suspends a render pass for
-/// compute-generated render ICBs, and it lacks other sizing behavior used by
-/// this path. Keep mobile/watch/vision render ICBs to A12/Apple5+ until
-/// Apple3-class hardware is validated on a newer runtime.
+/// compute-generated render ICBs. A10X Apple TV 4K on tvOS 18.3 has been
+/// directly validated with GPU-generated indexed and non-indexed MDI through
+/// render ICBs, so the Apple3 expansion stays tvOS 18+ only.
 const INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily5_v1,
+    MTLFeatureSet::tvOS_GPUFamily1_v2,
     MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
@@ -702,11 +703,12 @@ impl super::CapabilitiesQuery {
             && !is_virtual;
         // The GPU feature tables expose the hardware side of ICB support, but
         // the MSL/runtime side is only validated on the current OS generation.
-        // Apple3/A10X remains on the CPU fallback even on later OS releases;
-        // revisit that only after first-generation Apple TV 4K-class hardware
-        // has direct test coverage for this render-ICB path.
+        // Apple3 remains excluded on iOS/iPadOS after A10X/iPadOS 17.7 threw
+        // from the render-ICB splice. Apple3 is allowed on tvOS 18+ only
+        // because first-generation Apple TV 4K hardware passed this path.
         let icb_modern_mobile_os =
             available!(ios = 18.0, tvos = 18.0, visionos = 2.0, watchos = 11.0);
+        let icb_tvos_apple3_support = os_type == super::OsType::Tvos && available!(tvos = 18.0);
         let icb_render_feature_set_support =
             Self::supports_any(device, INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT)
                 && (os_type == super::OsType::Macos || icb_modern_mobile_os);
@@ -720,6 +722,7 @@ impl super::CapabilitiesQuery {
             } else {
                 icb_modern_mobile_os
                     && (device.supportsFamily(MTLGPUFamily::Apple5)
+                        || (icb_tvos_apple3_support && device.supportsFamily(MTLGPUFamily::Apple3))
                         || device.supportsFamily(MTLGPUFamily::Metal3))
             };
 
