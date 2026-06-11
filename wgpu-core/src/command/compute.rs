@@ -17,7 +17,10 @@ use crate::{
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
         pass::{self, flush_bindings_helper},
         pass_base, pass_try,
-        query::{end_pipeline_statistics_query, validate_and_begin_pipeline_statistics_query},
+        query::{
+            end_pipeline_statistics_query, record_pass_timestamp_writes,
+            validate_and_begin_pipeline_statistics_query,
+        },
         ArcCommand, ArcPassTimestampWrites, BasePass, BindGroupStateChange, CommandEncoder,
         CommandEncoderError, DebugGroupError, EncoderStateError, InnerCommandEncoder, MapPassErr,
         PassErrorScope, PassStateError, PassTimestampWrites, QueryUseError, StateChange,
@@ -632,6 +635,8 @@ pub(super) fn encode_compute_pass(
                 indirect_draw_validation_resources: parent_state.indirect_draw_validation_resources,
                 snatch_guard: parent_state.snatch_guard,
                 debug_scope_depth: &mut debug_scope_depth,
+                query_set_writes: parent_state.query_set_writes,
+                deferred_query_set_resolves: parent_state.deferred_query_set_resolves,
             },
             binder: Binder::new(),
             temp_offsets: Vec::new(),
@@ -669,6 +674,8 @@ pub(super) fn encode_compute_pass(
     let timestamp_writes: Option<hal::PassTimestampWrites<'_, dyn hal::DynQuerySet>> =
         if let Some(tw) = timestamp_writes.take() {
             tw.query_set.same_device(device).map_pass_err(pass_scope)?;
+
+            record_pass_timestamp_writes(&tw, state.pass.base.query_set_writes);
 
             let query_set = state
                 .pass
@@ -825,6 +832,7 @@ pub(super) fn encode_compute_pass(
                     state.pass.base.raw_encoder,
                     &mut state.active_query,
                     state.pass.base.snatch_guard,
+                    state.pass.base.query_set_writes,
                 )
                 .map_pass_err(scope)?;
             }

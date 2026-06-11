@@ -1,8 +1,9 @@
 use alloc::{sync::Arc, vec, vec::Vec};
+use bit_vec::BitVec;
 use core::{iter, mem};
 
 use crate::{
-    command::{encoder::EncodingState, ArcCommand, EncoderStateError},
+    command::{encoder::EncodingState, ArcCommand, EncoderStateError, InnerCommandEncoder},
     device::{Device, DeviceError, MissingFeatures},
     global::Global,
     id,
@@ -20,6 +21,48 @@ use wgt::{
     error::{ErrorType, WebGpuError},
     BufferAddress,
 };
+
+pub(crate) struct DeferredQuerySetResolve {
+    pub(crate) query_set: Arc<QuerySet>,
+    pub(crate) query_set_writes: Option<BitVec>,
+    pub(crate) start_query: u32,
+    pub(crate) end_query: u32,
+    pub(crate) dst_buffer: Arc<Buffer>,
+    pub(crate) destination_offset: BufferAddress,
+    /// Bytes per query slot in the destination buffer
+    /// (accounts for pipeline-statistics element count * `QUERY_SIZE`).
+    pub(crate) stride: u64,
+    /// Index into [`InnerCommandEncoder::list`] at which a new command buffer
+    /// for the resolve operation must be inserted at submit time so that it
+    /// executes at exactly the position it was recorded.
+    pub(crate) insertion_point: usize,
+}
+
+pub(crate) type QuerySetWrites = FastHashMap<TrackerIndex, BitVec>;
+
+pub(super) fn record_pass_timestamp_writes(
+    tw: &crate::command::ArcPassTimestampWrites,
+    query_set_writes: &mut QuerySetWrites,
+) {
+    for index in tw
+        .beginning_of_pass_write_index
+        .into_iter()
+        .chain(tw.end_of_pass_write_index)
+    {
+        record_query_write(query_set_writes, &tw.query_set, index);
+    }
+}
+
+pub(crate) fn record_query_write(
+    query_set_writes: &mut QuerySetWrites,
+    query_set: &Arc<QuerySet>,
+    slot_index: u32,
+) {
+    query_set_writes
+        .entry(query_set.tracker_index())
+        .or_insert_with(|| BitVec::from_elem(query_set.desc.count as usize, false))
+        .set(slot_index as usize, true);
+}
 
 #[derive(Debug)]
 pub(crate) struct QueryResetMap {
@@ -256,6 +299,7 @@ impl QuerySet {
         query_index: u32,
         reset_state: Option<&mut QueryResetMap>,
         snatch_guard: &SnatchGuard<'_>,
+        query_set_writes: &mut QuerySetWrites,
     ) -> Result<(), QueryUseError> {
         let needs_reset = reset_state.is_none();
         self.validate_query(SimplifiedQueryType::Timestamp, query_index, reset_state)?;
@@ -269,6 +313,7 @@ impl QuerySet {
             raw_encoder.write_timestamp(self.try_raw(snatch_guard)?, query_index);
         }
 
+        record_query_write(query_set_writes, self, query_index);
         Ok(())
     }
 }
@@ -313,9 +358,11 @@ pub(super) fn end_occlusion_query(
     raw_encoder: &mut dyn hal::DynCommandEncoder,
     active_query: &mut Option<(Arc<QuerySet>, u32)>,
     snatch_guard: &SnatchGuard<'_>,
+    query_set_writes: &mut QuerySetWrites,
 ) -> Result<(), QueryUseError> {
     if let Some((query_set, query_index)) = active_query.take() {
         unsafe { raw_encoder.end_query(query_set.try_raw(snatch_guard)?, query_index) };
+        record_query_write(query_set_writes, &query_set, query_index);
         Ok(())
     } else {
         Err(QueryUseError::AlreadyStopped)
@@ -369,9 +416,11 @@ pub(super) fn end_pipeline_statistics_query(
     raw_encoder: &mut dyn hal::DynCommandEncoder,
     active_query: &mut Option<(Arc<QuerySet>, u32)>,
     snatch_guard: &SnatchGuard<'_>,
+    query_set_writes: &mut QuerySetWrites,
 ) -> Result<(), QueryUseError> {
     if let Some((query_set, query_index)) = active_query.take() {
         unsafe { raw_encoder.end_query(query_set.try_raw(snatch_guard)?, query_index) };
+        record_query_write(query_set_writes, &query_set, query_index);
         Ok(())
     } else {
         Err(QueryUseError::AlreadyStopped)
@@ -440,6 +489,7 @@ pub(super) fn write_timestamp(
         query_index,
         None,
         state.snatch_guard,
+        state.query_set_writes,
     )?;
 
     state.tracker.query_sets.insert_single(query_set);
@@ -448,7 +498,7 @@ pub(super) fn write_timestamp(
 }
 
 pub(super) fn resolve_query_set(
-    state: &mut EncodingState,
+    state: &mut EncodingState<'_, '_, InnerCommandEncoder>,
     query_set: Arc<QuerySet>,
     start_query: u32,
     query_count: u32,
@@ -511,7 +561,8 @@ pub(super) fn resolve_query_set(
             bytes_used,
         })?;
 
-    // TODO(https://github.com/gfx-rs/wgpu/issues/3993): Need to track initialization state.
+    let query_set = state.tracker.query_sets.insert_single(query_set);
+
     state
         .buffer_memory_init_actions
         .extend(dst_buffer.initialization_status.read().create_action(
@@ -520,23 +571,55 @@ pub(super) fn resolve_query_set(
             MemoryInitKind::ImplicitlyInitialized,
         ));
 
+    let raw_encoder = state.raw_encoder.open_if_closed()?;
     let raw_dst_buffer = dst_buffer.try_raw(state.snatch_guard)?;
     unsafe {
-        state.raw_encoder.transition_buffers(dst_barrier.as_slice());
-        state.raw_encoder.copy_query_results(
-            query_set.try_raw(state.snatch_guard)?,
-            start_query..end_query,
-            raw_dst_buffer,
-            destination_offset,
-            wgt::BufferSize::new_unchecked(stride as u64),
-        );
+        raw_encoder.transition_buffers(dst_barrier.as_slice());
+    }
+
+    // Check if all slots in the range have been written within this encoder.
+    // If so we can emit `copy_query_results` directly.
+    // Otherwise defer to submit time where we have knowledge of
+    // the query set initialization state.
+    let query_set_writes = state.query_set_writes.get(&query_set.tracker_index());
+    let all_written =
+        query_set_writes.is_some_and(|slots| (start_query..end_query).all(|i| slots[i as usize]));
+
+    if all_written {
+        unsafe {
+            raw_encoder.copy_query_results(
+                query_set.try_raw(state.snatch_guard)?,
+                start_query..end_query,
+                raw_dst_buffer,
+                destination_offset,
+                wgt::BufferSize::new_unchecked(stride as u64),
+            );
+        }
+    } else {
+        state.raw_encoder.close_if_open()?;
+        let insertion_point = state.raw_encoder.list.len();
+
+        state
+            .deferred_query_set_resolves
+            .push(DeferredQuerySetResolve {
+                query_set: query_set.clone(),
+                query_set_writes: query_set_writes.cloned(),
+                start_query,
+                end_query,
+                dst_buffer: dst_buffer.clone(),
+                destination_offset,
+                stride: stride as u64,
+                insertion_point,
+            });
     }
 
     if matches!(query_set.desc.ty, wgt::QueryType::Timestamp) {
+        let raw_encoder = state.raw_encoder.open_if_closed()?;
+
         // Timestamp normalization is only needed for timestamps.
         state.device.timestamp_normalizer.get().unwrap().normalize(
             state.snatch_guard,
-            state.raw_encoder,
+            raw_encoder,
             &mut state.tracker.buffers,
             dst_buffer
                 .timestamp_normalization_bind_group
@@ -547,8 +630,6 @@ pub(super) fn resolve_query_set(
             query_count,
         );
     }
-
-    state.tracker.query_sets.insert_single(query_set);
 
     Ok(())
 }

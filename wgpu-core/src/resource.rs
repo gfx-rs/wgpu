@@ -2246,6 +2246,7 @@ pub struct QuerySet {
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) desc: wgt::QuerySetDescriptor<()>,
+    pub(crate) initialized_slots: Mutex<bit_vec::BitVec>,
 }
 
 impl RawResourceAccess for QuerySet {
