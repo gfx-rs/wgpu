@@ -2080,7 +2080,7 @@ fn main(@builtin(position) p : vec4f) -> @location(0) vec4f {
 …but we can now silence it with the `off` severity level, like so:
 
 ```wgsl
-// Disable the diagnosic with this…
+// Disable the diagnostic with this…
 diagnostic(off, derivative_uniformity);
 
 @group(0) @binding(0) var s : sampler;
