@@ -148,8 +148,7 @@ webgpu:api,validation,createView:cube_faces_square:*
 webgpu:api,validation,createView:dimension:*
 webgpu:api,validation,createView:format:*
 webgpu:api,validation,createView:mip_levels:*
-//FAIL: webgpu:api,validation,createView:texture_state:*
-//FAIL: webgpu:api,validation,createView:texture_view_usage_of_multiple_usages:*
+webgpu:api,validation,createView:texture_view_usage_of_multiple_usages:*
 webgpu:api,validation,createView:texture_view_usage_with_view_format:*
 webgpu:api,validation,createView:texture_view_usage:*
 webgpu:api,validation,debugMarker:*
