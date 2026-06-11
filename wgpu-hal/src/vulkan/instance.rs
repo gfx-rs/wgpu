@@ -566,7 +566,13 @@ impl super::Instance {
 
         let entry = unsafe {
             profiling::scope!("Load vk library");
-            ash::Entry::load()
+            // ohos support is already fixed on ash main, but it's unclear when
+            // a new release can happen.
+            #[cfg(target_env = "ohos")]
+            let loaded = ash::Entry::load_from("libvulkan.so");
+            #[cfg(not(target_env = "ohos"))]
+            let loaded = ash::Entry::load();
+            loaded
         }
         .map_err(|err| {
             crate::InstanceError::with_source(String::from("missing Vulkan entry points"), err)

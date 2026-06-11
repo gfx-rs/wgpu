@@ -6,8 +6,8 @@ use arrayvec::ArrayVec;
 use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
-    BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, TextureSelector,
-    TextureUsages, TextureViewDimension, VertexStepMode,
+    BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, InstanceFlags,
+    TextureSelector, TextureUsages, TextureViewDimension, VertexStepMode,
 };
 
 use crate::{
@@ -70,6 +70,20 @@ fn store_hal_ops(store: StoreOp) -> hal::AttachmentOps {
     }
 }
 
+// Stencil clear and reference value should take the LSBs.
+fn convert_stencil_value(value: u32, format: Option<wgt::TextureFormat>) -> u32 {
+    let Some(format) = format else {
+        return value;
+    };
+    let Some(stencil_format) = format.aspect_specific_format(wgt::TextureAspect::StencilOnly)
+    else {
+        return value;
+    };
+    // Currently only 8-bit stencil formats are supported
+    assert_eq!(stencil_format, wgt::TextureFormat::Stencil8);
+    value & 255
+}
+
 /// Describes an individual channel within a render pass, such as color, depth, or stencil.
 ///
 /// A channel must either be read-only, or it must specify both load and store
@@ -95,6 +109,7 @@ pub struct PassChannel<V> {
 impl<V: Copy + Default> PassChannel<Option<V>> {
     fn resolve(
         &self,
+        instance_flags: InstanceFlags,
         handle_clear: impl Fn(Option<V>) -> Result<V, AttachmentError>,
     ) -> Result<ResolvedPassChannel<V>, AttachmentError> {
         if self.read_only {
@@ -109,7 +124,12 @@ impl<V: Copy + Default> PassChannel<Option<V>> {
             Ok(ResolvedPassChannel::Operational(wgt::Operations {
                 load: match self.load_op.ok_or(AttachmentError::NoLoad)? {
                     LoadOp::Clear(clear_value) => LoadOp::Clear(handle_clear(clear_value)?),
-                    LoadOp::DontCare(token) => LoadOp::DontCare(token),
+                    LoadOp::DontCare(token) => {
+                        if instance_flags.contains(InstanceFlags::STRICT_WEBGPU_COMPLIANCE) {
+                            return Err(AttachmentError::LoadOpDontCareUnderStrictWebgpuCompliance);
+                        }
+                        LoadOp::DontCare(token)
+                    }
                     LoadOp::Load => LoadOp::Load,
                 },
                 store: self.store_op.ok_or(AttachmentError::NoStore)?,
@@ -792,6 +812,8 @@ pub enum ColorAttachmentError {
         (`LoadOp::Clear`/`LoadOp::DontCare`, `StoreOp::Discard`), but `{0:?}` was provided"
     )]
     InvalidTransientAttachmentOp((LoadOp<Color>, StoreOp)),
+    #[error("Color attachment's load op is `LoadOp::DontCare` but `InstanceFlags::STRICT_WEBGPU_COMPLIANCE` is set")]
+    LoadOpDontCareUnderStrictWebgpuCompliance,
 }
 
 impl WebGpuError for ColorAttachmentError {
@@ -837,6 +859,8 @@ pub enum AttachmentError {
     NoClearValue,
     #[error("Clear value ({0}) must be between 0.0 and 1.0, inclusive")]
     ClearValueOutOfRange(f32),
+    #[error("Load op is `DontCare` but `InstanceFlags::STRICT_WEBGPU_COMPLIANCE` is set")]
+    LoadOpDontCareUnderStrictWebgpuCompliance,
 }
 
 impl WebGpuError for AttachmentError {
@@ -1703,7 +1727,7 @@ impl RenderPassInfo {
         raw: &mut dyn hal::DynCommandEncoder,
         snatch_guard: &SnatchGuard,
         scope: &mut UsageScope<'_>,
-        instance_flags: wgt::InstanceFlags,
+        instance_flags: InstanceFlags,
     ) -> Result<(), RenderPassErrorInner> {
         profiling::scope!("RenderPassInfo::finish");
         unsafe {
@@ -1825,6 +1849,15 @@ impl Global {
                 {
                     let view = texture_views.get(*view_id).get()?;
                     view.same_device(device)?;
+                    if matches!(*load_op, LoadOp::DontCare(..))
+                        && device
+                            .instance_flags
+                            .contains(InstanceFlags::STRICT_WEBGPU_COMPLIANCE)
+                    {
+                        return Err(RenderPassErrorInner::ColorAttachment(
+                            ColorAttachmentError::LoadOpDontCareUnderStrictWebgpuCompliance,
+                        ));
+                    }
 
                     if view
                         .desc
@@ -1864,7 +1897,7 @@ impl Global {
             }
 
             arc_desc.depth_stencil_attachment =
-            // https://gpuweb.github.io/gpuweb/#abstract-opdef-gpurenderpassdepthstencilattachment-gpurenderpassdepthstencilattachment-valid-usage
+                // https://gpuweb.github.io/gpuweb/#abstract-opdef-gpurenderpassdepthstencilattachment-gpurenderpassdepthstencilattachment-valid-usage
                 if let Some(depth_stencil_attachment) = desc.depth_stencil_attachment {
                     let view = texture_views.get(depth_stencil_attachment.view).get()?;
                     view.same_device(device)?;
@@ -1899,7 +1932,7 @@ impl Global {
                     Some(ResolvedRenderPassDepthStencilAttachment {
                         view,
                         depth: if format.has_depth_aspect() {
-                            depth_stencil_attachment.depth.resolve(|clear| if let Some(clear) = clear {
+                            depth_stencil_attachment.depth.resolve(device.instance_flags, |clear| if let Some(clear) = clear {
                                 // If this.depthLoadOp is "clear", this.depthClearValue must be provided and must be between 0.0 and 1.0, inclusive.
                                 if !(0.0..=1.0).contains(&clear) {
                                     Err(AttachmentError::ClearValueOutOfRange(clear))
@@ -1919,7 +1952,9 @@ impl Global {
                             ResolvedPassChannel::ReadOnly
                         },
                         stencil: if format.has_stencil_aspect() {
-                            depth_stencil_attachment.stencil.resolve(|clear| Ok(clear.unwrap_or_default()))?
+                            depth_stencil_attachment.stencil.resolve(device.instance_flags, |clear| {
+                                Ok(convert_stencil_value(clear.unwrap_or_default(), Some(format)))
+                            })?
                         } else {
                             if depth_stencil_attachment.stencil.load_op.is_some() || depth_stencil_attachment.stencil.store_op.is_some() {
                                 return Err(RenderPassErrorInner::InvalidAttachment(AttachmentError::StencilOpsWithoutAspect {
@@ -3081,7 +3116,9 @@ fn multi_draw_indirect(
         }
     }
 
-    if state.pass.base.device.indirect_validation.is_some() {
+    if state.pass.base.device.indirect_validation.is_some()
+        && family != DrawCommandFamily::DrawMeshTasks
+    {
         state
             .pass
             .scope
@@ -3553,7 +3590,12 @@ impl Global {
     ) -> Result<(), PassStateError> {
         let scope = PassErrorScope::SetStencilReference;
         let base = pass_base!(pass, scope);
-
+        let value = convert_stencil_value(
+            value,
+            pass.depth_stencil_attachment
+                .as_ref()
+                .map(|at| at.view.desc.format),
+        );
         base.commands
             .push(ArcRenderCommand::SetStencilReference(value));
 

@@ -1,4 +1,5 @@
 use alloc::{borrow::ToOwned as _, boxed::Box, string::String, sync::Arc, vec, vec::Vec};
+use core::fmt;
 
 use hashbrown::HashMap;
 use thiserror::Error;
@@ -17,7 +18,7 @@ use crate::{
     DOWNLEVEL_WARNING_MESSAGE,
 };
 
-use wgt::{Backend, Backends, PowerPreference};
+use wgt::{Backend, Backends, InstanceFlags, PowerPreference};
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
 
@@ -51,7 +52,7 @@ pub struct Instance {
     /// `instance_per_backend` instead.
     supported_backends: Backends,
 
-    pub flags: wgt::InstanceFlags,
+    pub flags: InstanceFlags,
 
     /// Non-lifetimed [`raw_window_handle::DisplayHandle`], for keepalive and validation purposes in
     /// [`Self::create_surface()`].
@@ -153,7 +154,7 @@ impl Instance {
             instance_per_backend: vec![(A::VARIANT, Box::new(hal_instance))],
             requested_backends: A::VARIANT.into(),
             supported_backends: A::VARIANT.into(),
-            flags: wgt::InstanceFlags::default(),
+            flags: InstanceFlags::default(),
             display: None, // TODO: Extract display from HAL instance if available?
         }
     }
@@ -414,6 +415,15 @@ impl Instance {
         })
     }
 
+    fn adapter_allowed(&self, raw: &hal::DynExposedAdapter) -> bool {
+        adapter_allowed(
+            self.flags,
+            &raw.info,
+            &raw.capabilities.limits,
+            &raw.capabilities.downlevel,
+        )
+    }
+
     pub fn enumerate_adapters(
         &self,
         backends: Backends,
@@ -437,6 +447,11 @@ impl Instance {
             adapters.extend(
                 hal_adapters
                     .into_iter()
+                    .map(|mut raw| {
+                        self.adjust_limits_for_indirect_validation(&mut raw.capabilities.limits);
+                        raw
+                    })
+                    .filter(|raw| self.adapter_allowed(raw))
                     .filter_map(|raw| {
                         if apply_limit_buckets {
                             limits::apply_limit_buckets(raw)
@@ -522,14 +537,18 @@ impl Instance {
                 }
             }
 
+            let backend_adapters = backend_adapters
+                .into_iter()
+                .map(|mut raw| {
+                    self.adjust_limits_for_indirect_validation(&mut raw.capabilities.limits);
+                    raw
+                })
+                .filter(|raw| self.adapter_allowed(raw));
+
             if desc.apply_limit_buckets {
-                adapters.extend(
-                    backend_adapters
-                        .into_iter()
-                        .filter_map(limits::apply_limit_buckets),
-                );
+                adapters.extend(backend_adapters.filter_map(limits::apply_limit_buckets));
             } else {
-                adapters.append(&mut backend_adapters);
+                adapters.extend(backend_adapters);
             }
         }
 
@@ -594,6 +613,20 @@ impl Instance {
                 no_adapter_backends,
                 incompatible_surface_backends,
             })
+        }
+    }
+
+    /// This is similar to wgpu-hal's `adjust_raw_limits` but tailored to
+    /// wgpu-core's constraints.
+    fn adjust_limits_for_indirect_validation(&self, limits: &mut wgt::Limits) {
+        // Indirect draw validation can't support u64 offsets,
+        // lower max buffer and binding size to fit in an u32.
+        if self.flags.contains(InstanceFlags::VALIDATION_INDIRECT_CALL) {
+            limits.max_buffer_size = limits.max_buffer_size.min(u32::MAX as u64);
+            limits.max_uniform_buffer_binding_size =
+                limits.max_uniform_buffer_binding_size.min(u32::MAX as u64);
+            limits.max_storage_buffer_binding_size =
+                limits.max_storage_buffer_binding_size.min(u32::MAX as u64);
         }
     }
 
@@ -798,7 +831,7 @@ impl Adapter {
         self: &Arc<Self>,
         hal_device: hal::DynOpenDevice,
         desc: &DeviceDescriptor,
-        instance_flags: wgt::InstanceFlags,
+        instance_flags: InstanceFlags,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
@@ -817,7 +850,7 @@ impl Adapter {
     pub fn create_device_and_queue(
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
-        instance_flags: wgt::InstanceFlags,
+        instance_flags: InstanceFlags,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         // Verify all features were exposed by the adapter
         if !self.raw.features.contains(desc.required_features) {
@@ -1230,5 +1263,172 @@ impl Global {
         resource_log!("Created Queue {:?}", queue_id);
 
         Ok((device_id, queue_id))
+    }
+}
+
+/// This function checks that the adapter obeys WebGPU's adapter capability
+/// guarantees. Most of the limits are adjusted in wgpu-hal's
+/// `adjust_raw_limits` fn. So we only check the remaining properties here.
+/// See <https://gpuweb.github.io/gpuweb/#adapter-capability-guarantees>.
+fn adapter_allowed(
+    flags: InstanceFlags,
+    info: &impl fmt::Debug,
+    limits: &wgt::Limits,
+    downlevel: &wgt::DownlevelCapabilities,
+) -> bool {
+    // Check "All alignment-class limits must be powers of 2."
+    //
+    // Even if the application has not requested strict WebGPU compliance,
+    // non-power-of-two alignment limits are nonsensical, so don't attempt
+    // to use such a device.
+    let min_uniform_buffer_offset_alignment = limits.min_uniform_buffer_offset_alignment;
+    if !min_uniform_buffer_offset_alignment.is_power_of_two() {
+        log::error!(
+            "Adapter {:?} min_uniform_buffer_offset_alignment limit is not a power of 2: {:?}",
+            info,
+            min_uniform_buffer_offset_alignment
+        );
+        return false;
+    }
+    let min_storage_buffer_offset_alignment = limits.min_storage_buffer_offset_alignment;
+    if !min_storage_buffer_offset_alignment.is_power_of_two() {
+        log::error!(
+            "Adapter {:?} min_storage_buffer_offset_alignment limit is not a power of 2: {:?}",
+            info,
+            min_storage_buffer_offset_alignment
+        );
+        return false;
+    }
+
+    // Following checks are only enabled if `STRICT_WEBGPU_COMPLIANCE` is set.
+    if !flags.contains(InstanceFlags::STRICT_WEBGPU_COMPLIANCE) {
+        return true;
+    }
+
+    // Check "All supported limits must be either the default value or better."
+    let failed_limits = check_limits(&wgt::Limits::defaults(), limits);
+    if !failed_limits.is_empty() {
+        log::debug!(
+            "Adapter {:?} is not WebGPU compliant due to limits: {:?}",
+            info,
+            failed_limits
+        );
+        return false;
+    }
+
+    if !downlevel.is_webgpu_compliant() {
+        let missing_flags = wgt::DownlevelFlags::compliant() - downlevel.flags;
+        log::debug!(
+            "Adapter {:?} is not WebGPU compliant due to missing downlevel flags: {:?}",
+            info,
+            missing_flags
+        );
+        return false;
+    }
+
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn compliant_downlevel() -> wgt::DownlevelCapabilities {
+        wgt::DownlevelCapabilities {
+            flags: wgt::DownlevelFlags::compliant(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn non_power_of_two_uniform_alignment_always_rejected() {
+        let limits = wgt::Limits {
+            min_uniform_buffer_offset_alignment: 3,
+            ..wgt::Limits::defaults()
+        };
+        assert!(!adapter_allowed(
+            InstanceFlags::empty(),
+            &"",
+            &limits,
+            &compliant_downlevel()
+        ));
+        assert!(!adapter_allowed(
+            InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
+            &"",
+            &limits,
+            &compliant_downlevel()
+        ));
+    }
+
+    #[test]
+    fn non_power_of_two_storage_alignment_always_rejected() {
+        let limits = wgt::Limits {
+            min_storage_buffer_offset_alignment: 96,
+            ..wgt::Limits::defaults()
+        };
+        assert!(!adapter_allowed(
+            InstanceFlags::empty(),
+            &"",
+            &limits,
+            &compliant_downlevel()
+        ));
+        assert!(!adapter_allowed(
+            InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
+            &"",
+            &limits,
+            &compliant_downlevel()
+        ));
+    }
+
+    #[test]
+    fn low_limits_allowed_without_strict_compliance() {
+        let limits = wgt::Limits {
+            max_texture_dimension_1d: 1,
+            ..wgt::Limits::defaults()
+        };
+        assert!(adapter_allowed(
+            InstanceFlags::empty(),
+            &"",
+            &limits,
+            &wgt::DownlevelCapabilities::default()
+        ));
+    }
+
+    #[test]
+    fn low_limits_rejected_with_strict_compliance() {
+        let limits = wgt::Limits {
+            max_texture_dimension_1d: 1,
+            ..wgt::Limits::defaults()
+        };
+        assert!(!adapter_allowed(
+            InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
+            &"",
+            &limits,
+            &compliant_downlevel()
+        ));
+    }
+
+    #[test]
+    fn missing_downlevel_flags_rejected_with_strict_compliance() {
+        let downlevel = wgt::DownlevelCapabilities {
+            flags: wgt::DownlevelFlags::empty(),
+            ..Default::default()
+        };
+        assert!(!adapter_allowed(
+            InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
+            &"",
+            &wgt::Limits::defaults(),
+            &downlevel
+        ));
+    }
+
+    #[test]
+    fn fully_compliant_adapter_always_allowed() {
+        assert!(adapter_allowed(
+            InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
+            &"",
+            &wgt::Limits::defaults(),
+            &compliant_downlevel()
+        ));
     }
 }
