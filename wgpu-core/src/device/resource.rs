@@ -5030,6 +5030,10 @@ impl Device {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.query_sets.clone()),
             desc: desc.map_label(|_| ()),
+            initialized_slots: Mutex::new(
+                rank::QUERY_SET_INITIALIZED_SLOTS,
+                bit_vec::BitVec::from_elem(desc.count as usize, false),
+            ),
         };
 
         let query_set = Arc::new(query_set);

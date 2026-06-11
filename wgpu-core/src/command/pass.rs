@@ -306,6 +306,7 @@ where
         state.base.raw_encoder,
         query_index,
         pending_query_resets,
+        state.base.query_set_writes,
     )?;
     Ok(())
 }
