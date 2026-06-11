@@ -397,17 +397,27 @@ fn get_data_slice<'a>(
     ));
   };
 
-  let data_offset_bytes = data_offset * bytes_per_element as u64;
+  let data_offset_bytes = data_offset
+    .checked_mul(bytes_per_element as u64)
+    .ok_or(operation_error("data offset in bytes overflows a `u64`"))?;
+
   let content_size_bytes = if let Some(data_size) = data_size {
-    data_size * bytes_per_element as u64
+    let data_size_bytes = data_size
+      .checked_mul(bytes_per_element as u64)
+      .ok_or(operation_error("data size in bytes overflows a `u64`"))?;
+    if data_offset_bytes
+      .checked_add(data_size_bytes)
+      .ok_or(operation_error("data size + offset overflows a `u64`"))?
+      > buf.len() as u64
+    {
+      return Err(operation_error("data size + offset is out of bounds"));
+    }
+    data_size_bytes
   } else {
     (buf.len() as u64)
       .checked_sub(data_offset_bytes)
       .ok_or(operation_error("data offset is out of bounds"))?
   };
-  if data_offset_bytes + content_size_bytes > buf.len() as u64 {
-    return Err(operation_error("The end index of data is out of bounds"));
-  }
 
   // Both `Queue::write_buffer` and `set_immediates` require content size to be a multiple of 4
   const {
@@ -415,7 +425,9 @@ fn get_data_slice<'a>(
     assert!(wgpu_types::IMMEDIATE_DATA_ALIGNMENT == 4);
   }
   if !content_size_bytes.is_multiple_of(4) {
-    return Err(operation_error("content size is not a multiple of 4"));
+    return Err(operation_error(
+      "content size in bytes is not a multiple of 4",
+    ));
   }
 
   // We have validated data offset and content size are within the bounds.
