@@ -1689,6 +1689,8 @@ pub enum CreateTextureError {
     CreateTextureView(#[from] CreateTextureViewError),
     #[error("Invalid usage flags {0:?}")]
     InvalidUsage(wgt::TextureUsages),
+    #[error("Missing texture usage {0:?}, which is required by texture usage {1:?}")]
+    MissingRequiredUsage(wgt::TextureUsages, wgt::TextureUsages),
     #[error("Texture usage {0:?} is not compatible with texture usage {1:?}")]
     IncompatibleUsage(wgt::TextureUsages, wgt::TextureUsages),
     #[error(transparent)]
@@ -1746,6 +1748,7 @@ impl WebGpuError for CreateTextureError {
             Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
 
             Self::InvalidUsage(_)
+            | Self::MissingRequiredUsage(_, _)
             | Self::IncompatibleUsage(_, _)
             | Self::InvalidDepthDimension(_, _)
             | Self::InvalidCompressedDimension(_, _)

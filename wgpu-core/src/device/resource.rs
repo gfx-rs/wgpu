@@ -1505,7 +1505,8 @@ impl Device {
 
         if desc.usage.contains(wgt::TextureUsages::TRANSIENT) {
             if !desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
-                return Err(CreateTextureError::InvalidUsage(
+                return Err(CreateTextureError::MissingRequiredUsage(
+                    wgt::TextureUsages::RENDER_ATTACHMENT,
                     wgt::TextureUsages::TRANSIENT,
                 ));
             }
