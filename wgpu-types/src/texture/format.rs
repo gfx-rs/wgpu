@@ -285,7 +285,8 @@ pub enum TextureFormat {
     ///
     /// Width and height must be even.
     ///
-    /// [`Features::TEXTURE_FORMAT_P010`] must be enabled to use this texture format.
+    /// [`Features::TEXTURE_FORMAT_P010`] and [`Features::TEXTURE_FORMAT_16BIT_NORM`]
+    /// must be enabled to use this texture format.
     P010,
 
     // Compressed textures usable with `TEXTURE_COMPRESSION_BC` feature. `TEXTURE_COMPRESSION_SLICED_3D` is required to use with 3D textures.
@@ -878,7 +879,8 @@ impl TextureFormat {
             Self::Depth32FloatStencil8 => Features::DEPTH32FLOAT_STENCIL8,
 
             Self::NV12 => Features::TEXTURE_FORMAT_NV12,
-            Self::P010 => Features::TEXTURE_FORMAT_P010,
+            // The plane formats require `TEXTURE_FORMAT_16BIT_NORM`.
+            Self::P010 => Features::TEXTURE_FORMAT_P010 | Features::TEXTURE_FORMAT_16BIT_NORM,
 
             Self::R16Unorm
             | Self::R16Snorm
