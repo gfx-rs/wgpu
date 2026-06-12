@@ -554,7 +554,7 @@ make_format_feature_functions!(
         ),
         (
             p010,
-            wgpu::Features::TEXTURE_FORMAT_P010,
+            wgpu::Features::TEXTURE_FORMAT_P010 | wgpu::Features::TEXTURE_FORMAT_16BIT_NORM,
             Box::new(std::iter::once(wgpu::TextureFormat::P010)),
         ),
         (
