@@ -822,14 +822,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
     }
 
-    unsafe fn reset_queries(&mut self, set: &super::QuerySet, range: Range<u32>) {
-        let encoder = self.enter_blit();
-        let raw_range = NSRange {
-            location: range.start as usize * crate::QUERY_SIZE as usize,
-            length: (range.end - range.start) as usize * crate::QUERY_SIZE as usize,
-        };
-        encoder.fillBuffer_range_value(&set.raw_buffer, raw_range, 0);
-    }
+    unsafe fn reset_queries(&mut self, _set: &super::QuerySet, _range: Range<u32>) {}
 
     unsafe fn copy_query_results(
         &mut self,
