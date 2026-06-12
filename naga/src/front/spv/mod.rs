@@ -1816,7 +1816,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             let mut nodes = petgraph::algo::toposort(&self.function_call_graph, None)
                 .map_err(|cycle| Error::FunctionCallCycle(cycle.node_id()))?;
             nodes.reverse(); // we need dominated first
-            let mut functions = mem::take(&mut module.functions);
+            let mut functions = module.functions.take();
             for fun_id in nodes {
                 if fun_id > !(functions.len() as u32) {
                     // skip all the fake IDs registered for the entry points
