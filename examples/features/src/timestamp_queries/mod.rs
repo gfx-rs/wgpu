@@ -430,7 +430,7 @@ pub fn main() {
 
 #[cfg(test)]
 pub mod tests {
-    use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration};
+    use wgpu_test::{gpu_test, GpuTestConfiguration};
 
     use super::{submit_render_and_compute_pass_with_queries, QueryResults};
 
@@ -451,9 +451,7 @@ pub mod tests {
                 .features(
                     wgpu::Features::TIMESTAMP_QUERY
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
-                )
-                // see https://github.com/gfx-rs/wgpu/issues/2521
-                .expect_fail(FailureCase::always().panic("unexpected timestamp").flaky()),
+                ),
         )
         .run_sync(|ctx| test_timestamps(ctx, true, false));
 
@@ -466,9 +464,7 @@ pub mod tests {
                     wgpu::Features::TIMESTAMP_QUERY
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
-                )
-                // see https://github.com/gfx-rs/wgpu/issues/2521
-                .expect_fail(FailureCase::always().panic("unexpected timestamp").flaky()),
+                ),
         )
         .run_sync(|ctx| test_timestamps(ctx, true, true));
 
@@ -496,31 +492,16 @@ pub mod tests {
         let encoder_delta = encoder_timestamps[1].wrapping_sub(encoder_timestamps[0]);
 
         if timestamps_on_encoder {
-            assert!(encoder_delta > 0, "unexpected timestamp");
-            assert!(
-                encoder_delta >= render_delta + compute_delta,
-                "unexpected timestamp"
-            );
+            assert!(encoder_delta > 0);
+            assert!(encoder_delta >= render_delta + compute_delta);
         }
         if let Some(render_inside_timestamp) = render_inside_timestamp {
-            assert!(
-                render_inside_timestamp >= render_start_end_timestamps[0],
-                "unexpected timestamp"
-            );
-            assert!(
-                render_inside_timestamp <= render_start_end_timestamps[1],
-                "unexpected timestamp"
-            );
+            assert!(render_inside_timestamp >= render_start_end_timestamps[0]);
+            assert!(render_inside_timestamp <= render_start_end_timestamps[1]);
         }
         if let Some(compute_inside_timestamp) = compute_inside_timestamp {
-            assert!(
-                compute_inside_timestamp >= compute_start_end_timestamps[0],
-                "unexpected timestamp"
-            );
-            assert!(
-                compute_inside_timestamp <= compute_start_end_timestamps[1],
-                "unexpected timestamp"
-            );
+            assert!(compute_inside_timestamp >= compute_start_end_timestamps[0]);
+            assert!(compute_inside_timestamp <= compute_start_end_timestamps[1]);
         }
     }
 }
