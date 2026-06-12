@@ -760,12 +760,33 @@ impl PhysicalDeviceFeatures {
         }
 
         if let Some(ref shader_image_atomic_int64) = self.shader_image_atomic_int64 {
+            // Some drivers (e.g. lavapipe) advertise shaderImageInt64Atomics
+            // while vkCreateImage rejects an R64_UINT image with
+            // VK_ERROR_FORMAT_NOT_SUPPORTED. `guaranteed_format_features`
+            // reports R64Uint as usable for sampling, storage and copies once
+            // TEXTURE_INT64_ATOMIC is enabled, so the feature must only be
+            // exposed when an image with that full usage set is creatable.
+            let r64_storage_creatable = unsafe {
+                instance.get_physical_device_image_format_properties(
+                    phd,
+                    vk::Format::R64_UINT,
+                    vk::ImageType::TYPE_2D,
+                    vk::ImageTiling::OPTIMAL,
+                    vk::ImageUsageFlags::SAMPLED
+                        | vk::ImageUsageFlags::STORAGE
+                        | vk::ImageUsageFlags::TRANSFER_SRC
+                        | vk::ImageUsageFlags::TRANSFER_DST,
+                    vk::ImageCreateFlags::empty(),
+                )
+            }
+            .is_ok();
             features.set(
                 F::TEXTURE_INT64_ATOMIC,
                 shader_image_atomic_int64
                     .shader_image_int64_atomics(true)
                     .shader_image_int64_atomics
-                    != 0,
+                    != 0
+                    && r64_storage_creatable,
             );
         }
 
@@ -2974,6 +2995,26 @@ impl crate::Adapter for super::Adapter {
         };
         let features = properties.optimal_tiling_features;
 
+        // A format can advertise `STORAGE_IMAGE` in its format features yet
+        // still fail image creation with that usage (e.g. `R64_UINT` on many
+        // drivers, where `vkGetPhysicalDeviceImageFormatProperties2` returns
+        // `VK_ERROR_FORMAT_NOT_SUPPORTED`). Confirm a storage image is actually
+        // creatable before reporting any storage capability.
+        let storage_image_creatable = features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE)
+            && unsafe {
+                self.instance
+                    .raw
+                    .get_physical_device_image_format_properties(
+                        self.raw,
+                        vk_format,
+                        vk::ImageType::TYPE_2D,
+                        vk::ImageTiling::OPTIMAL,
+                        vk::ImageUsageFlags::STORAGE,
+                        vk::ImageCreateFlags::empty(),
+                    )
+            }
+            .is_ok();
+
         let mut flags = Tfc::empty();
         flags.set(
             Tfc::SAMPLED,
@@ -2988,15 +3029,13 @@ impl crate::Adapter for super::Adapter {
         //     features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_MINMAX),
         // );
         flags.set(
-            Tfc::STORAGE_READ_WRITE
-                | Tfc::STORAGE_WRITE_ONLY
-                | Tfc::STORAGE_READ_ONLY
-                | Tfc::STORAGE_ATOMIC,
-            features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE),
+            Tfc::STORAGE_READ_WRITE | Tfc::STORAGE_WRITE_ONLY | Tfc::STORAGE_READ_ONLY,
+            storage_image_creatable,
         );
         flags.set(
             Tfc::STORAGE_ATOMIC,
-            features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC),
+            storage_image_creatable
+                && features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC),
         );
         flags.set(
             Tfc::COLOR_ATTACHMENT,
@@ -3017,10 +3056,6 @@ impl crate::Adapter for super::Adapter {
         flags.set(
             Tfc::COPY_DST,
             features.intersects(vk::FormatFeatureFlags::TRANSFER_DST),
-        );
-        flags.set(
-            Tfc::STORAGE_ATOMIC,
-            features.intersects(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC),
         );
         // Only set MSAA flags if the format can be used as a render attachment.
         // A format that supports sampling but not render attachment cannot be
