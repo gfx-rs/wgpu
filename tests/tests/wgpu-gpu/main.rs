@@ -1,3 +1,7 @@
+// NOTE: Deeply nested types in `./texture_format/mod.rs` via [`wgpu_types::AllEnumValues`] require
+// this.
+#![recursion_limit = "256"]
+
 mod regression {
     pub mod issue_3349;
     pub mod issue_3457;
@@ -72,6 +76,7 @@ mod subgroup_operations;
 mod texture_binding;
 mod texture_blit;
 mod texture_bounds;
+mod texture_format;
 mod texture_view_creation;
 mod timestamp_normalization;
 mod timestamp_query;
@@ -154,6 +159,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     texture_binding::all_tests(&mut tests);
     texture_blit::all_tests(&mut tests);
     texture_bounds::all_tests(&mut tests);
+    texture_format::all_tests(&mut tests);
     texture_view_creation::all_tests(&mut tests);
     timestamp_normalization::all_tests(&mut tests);
     timestamp_query::all_tests(&mut tests);
