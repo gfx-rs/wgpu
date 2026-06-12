@@ -484,6 +484,11 @@ impl Texture {
             wgt::TextureDimension::D2 => {
                 // HACK: detect a cube map; forces cube compatible textures to be cube textures
                 match (desc.is_cube_compatible(), desc.size.depth_or_array_layers) {
+                    // A multisampled, non-array texture must use the dedicated
+                    // multisample target, otherwise `glTexStorage2DMultisample`
+                    // raises `GL_INVALID_ENUM`. (Multisampled arrays/cubes are
+                    // not exposed on this backend.)
+                    (false, 1) if desc.sample_count > 1 => glow::TEXTURE_2D_MULTISAMPLE,
                     (false, 1) => glow::TEXTURE_2D,
                     (false, _) => glow::TEXTURE_2D_ARRAY,
                     (true, 6) => glow::TEXTURE_CUBE_MAP,

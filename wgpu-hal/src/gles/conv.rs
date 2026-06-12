@@ -423,7 +423,7 @@ pub(super) fn map_storage_access(access: wgt::StorageTextureAccess) -> u32 {
 
 pub(super) fn is_layered_target(target: u32) -> bool {
     match target {
-        glow::TEXTURE_2D | glow::TEXTURE_CUBE_MAP => false,
+        glow::TEXTURE_2D | glow::TEXTURE_2D_MULTISAMPLE | glow::TEXTURE_CUBE_MAP => false,
         glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY | glow::TEXTURE_3D => true,
         _ => unreachable!(),
     }

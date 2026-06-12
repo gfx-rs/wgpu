@@ -926,12 +926,15 @@ impl crate::Device for super::Device {
 
             unsafe { gl.bind_texture(target, Some(raw)) };
             //Note: this has to be done before defining the storage!
+            // Multisample textures (GL_TEXTURE_2D_MULTISAMPLE) have no sampler
+            // state; calling glTexParameter on them raises GL_INVALID_ENUM.
+            let sampleable = target != glow::TEXTURE_2D_MULTISAMPLE;
             match desc.format.sample_type(None, Some(self.shared.features)) {
                 Some(
                     wgt::TextureSampleType::Float { filterable: false }
                     | wgt::TextureSampleType::Uint
                     | wgt::TextureSampleType::Sint,
-                ) => {
+                ) if sampleable => {
                     // reset default filtering mode
                     unsafe {
                         gl.tex_parameter_i32(target, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32)
