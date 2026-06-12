@@ -1,18 +1,20 @@
 use std::{num::NonZeroU64, time::Duration};
 
 use wgpu::{
-    BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
+    Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
     BindingResource, BindingType, BufferBindingType, BufferDescriptor, BufferUsages, CommandBuffer,
-    CommandEncoderDescriptor, ComputePassDescriptor, PollType, ShaderStages,
+    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    PipelineLayoutDescriptor, PollType, ShaderModuleDescriptor, ShaderSource, ShaderStages,
 };
 
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
         WAIT,
+        WAIT_INDEFINITELY_LONG_RUNNING,
         WAIT_WITH_TIMEOUT,
         WAIT_WITH_TIMEOUT_MAX,
         DOUBLE_WAIT,
@@ -83,6 +85,110 @@ static WAIT: GpuTestConfiguration = GpuTestConfiguration::new()
         })
         .await
         .unwrap();
+    });
+
+/// Regression test for <https://github.com/gfx-rs/wgpu/issues/9531>. In common
+/// configurations, Metal will terminate this command buffer due to "impacting
+/// interactivity". Depending on which wait-for-completion code path was used, `wgpu` could
+/// previously hang waiting for `MTLCommandBufferStatus::Completed`, when the actual status
+/// was the terminal `MTLCommandBufferStatus::Error`.
+///
+/// At present this test expects no hang. <https://github.com/gfx-rs/wgpu/issues/9545>
+/// proposes propagating the failure by losing the device. If that is implemented, this test
+/// should be updated accordingly. Care may be needed to avoid flakiness in cases where no
+/// termination occurs.
+#[gpu_test]
+static WAIT_INDEFINITELY_LONG_RUNNING: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .skip(FailureCase::backend(!Backends::METAL)),
+    )
+    .run_async(|ctx| async move {
+        const SHADER: &str = r#"
+@group(0) @binding(0) var<storage, read_write> buf: array<u32>;
+
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    var x: u32 = gid.x ^ 0xDEADBEEFu;
+    for (var i: u32 = 0u; i < 5000000u; i++) {
+        x ^= x << 13u;
+        x ^= x >> 17u;
+        x ^= x << 5u;
+    }
+    buf[gid.x] = x;
+}
+"#;
+
+        const N_THREADS: u32 = 1024 * 64;
+
+        let module = ctx.device.create_shader_module(ShaderModuleDescriptor {
+            label: None,
+            source: ShaderSource::Wgsl(SHADER.into()),
+        });
+        let buffer = ctx.device.create_buffer(&BufferDescriptor {
+            label: None,
+            size: (N_THREADS as u64) * 4,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+        let bind_group_layout = ctx
+            .device
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+        let pipeline_layout = ctx
+            .device
+            .create_pipeline_layout(&PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[Some(&bind_group_layout)],
+                immediate_size: 0,
+            });
+        let pipeline = ctx
+            .device
+            .create_compute_pipeline(&ComputePipelineDescriptor {
+                label: None,
+                layout: Some(&pipeline_layout),
+                module: &module,
+                entry_point: Some("main"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
+        let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        });
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor::default());
+        {
+            let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
+            cpass.set_pipeline(&pipeline);
+            cpass.set_bind_group(0, &bind_group, &[]);
+            cpass.dispatch_workgroups(N_THREADS / 64, 1, 1);
+        }
+        ctx.queue.submit(Some(encoder.finish()));
+
+        // TODO(https://github.com/gfx-rs/wgpu/issues/9545): `wgpu` should raise an error
+        // for the terminated command buffer (e.g. lose the device), and this test should
+        // check for the expected error. Care may be needed to avoid flakiness in cases
+        // where no termination occurs.
+
+        ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
     });
 
 #[gpu_test]

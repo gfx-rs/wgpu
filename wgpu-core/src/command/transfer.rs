@@ -725,15 +725,12 @@ fn handle_dst_texture_init(
     // clear first since we don't track subrects. This means that in rare cases
     // even a *destination* texture of a transfer may need an immediate texture
     // init.
-    let dst_init_kind = if has_copy_partial_init_tracker_coverage(
-        copy_size,
-        destination.mip_level,
-        &texture.desc,
-    ) {
-        MemoryInitKind::NeedsInitializedMemory
-    } else {
-        MemoryInitKind::ImplicitlyInitialized
-    };
+    let dst_init_kind =
+        if has_copy_partial_init_tracker_coverage(copy_size, destination, &texture.desc) {
+            MemoryInitKind::NeedsInitializedMemory
+        } else {
+            MemoryInitKind::ImplicitlyInitialized
+        };
 
     handle_texture_init(state, dst_init_kind, destination, copy_size, texture)?;
     Ok(())
@@ -1373,9 +1370,23 @@ pub(super) fn copy_texture_to_texture(
     dst_texture.same_device(state.device)?;
 
     // src and dst texture format must be copy-compatible
-    // https://gpuweb.github.io/gpuweb/#copy-compatible
-    if src_texture.desc.format.remove_srgb_suffix() != dst_texture.desc.format.remove_srgb_suffix()
-    {
+    // (https://gpuweb.github.io/gpuweb/#copy-compatible), with an
+    // extension allowing one plane of a planar source to be copied
+    // into a single-plane destination of the matching format
+    // (e.g. NV12 Plane0 -> R8Unorm, NV12 Plane1 -> Rg8Unorm).
+    //
+    // When taking this path, `copy_size` and `source.origin` are
+    // interpreted in *plane* texels, not luma texels: copying NV12
+    // Plane1 into an Rg8Unorm of size (W/2, H/2) requires
+    // `copy_size = (W/2, H/2)`. The plane-extent check further down
+    // enforces this against the subsampled plane extent, so a caller
+    // passing luma-sized values gets a source-side error pointing at
+    // the actual mistake rather than an opaque destination overrun.
+    let src_fmt_no_srgb = src_texture.desc.format.remove_srgb_suffix();
+    let dst_fmt_no_srgb = dst_texture.desc.format.remove_srgb_suffix();
+    let planar_split_ok = src_fmt_no_srgb.is_multi_planar_format()
+        && src_fmt_no_srgb.aspect_specific_format(source.aspect) == Some(dst_fmt_no_srgb);
+    if src_fmt_no_srgb != dst_fmt_no_srgb && !planar_split_ok {
         return Err(TransferError::TextureFormatsNotCopyCompatible {
             src_format: src_texture.desc.format,
             dst_format: dst_texture.desc.format,
@@ -1392,6 +1403,45 @@ pub(super) fn copy_texture_to_texture(
         copy_size,
     )?;
 
+    // For planar -> single-plane copies, re-check the source extent
+    // in plane coordinates. `validate_texture_copy_range` above used
+    // the full luma extent of the planar source, so it does not
+    // catch a caller treating `copy_size` / `origin` as luma-sized
+    // when targeting a subsampled plane (NV12/P010 plane 1).
+    if planar_split_ok {
+        // `planar_split_ok` implies `aspect_specific_format(source.aspect)`
+        // returned `Some`, which is only true for `Plane{0,1,2}`.
+        let plane = source.aspect.to_plane().expect("planar_split_ok aspect");
+        let plane_extent = src_texture
+            .desc
+            .compute_render_extent(source.mip_level, Some(plane));
+        let check = |dimension, start: u32, size: u32, plane_size: u32| {
+            if start > plane_size || plane_size - start < size {
+                Err(TransferError::TextureOverrun {
+                    start_offset: start,
+                    end_offset: start.wrapping_add(size),
+                    texture_size: plane_size,
+                    dimension,
+                    side: CopySide::Source,
+                })
+            } else {
+                Ok(())
+            }
+        };
+        check(
+            TextureErrorDimension::X,
+            source.origin.x,
+            copy_size.width,
+            plane_extent.width,
+        )?;
+        check(
+            TextureErrorDimension::Y,
+            source.origin.y,
+            copy_size.height,
+            plane_extent.height,
+        )?;
+    }
+
     if Arc::as_ptr(src_texture) == Arc::as_ptr(dst_texture) {
         validate_copy_within_same_texture(
             source,
@@ -1405,7 +1455,8 @@ pub(super) fn copy_texture_to_texture(
     let (dst_range, dst_tex_base) = extract_texture_selector(destination, copy_size, dst_texture)?;
     let src_texture_aspects = hal::FormatAspects::from(src_texture.desc.format);
     let dst_texture_aspects = hal::FormatAspects::from(dst_texture.desc.format);
-    if src_tex_base.aspect != src_texture_aspects {
+    // `planar_split_ok` already constrains `source.aspect` to a single plane.
+    if src_tex_base.aspect != src_texture_aspects && !planar_split_ok {
         return Err(TransferError::CopySrcMissingAspects.into());
     }
     if dst_tex_base.aspect != dst_texture_aspects {

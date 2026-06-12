@@ -83,7 +83,6 @@ wgpu = { version = "29.0.0", path = "./wgpu", default-features = false, features
     "vulkan-portability",
     "angle",
     "static-dxc",
-    "noop",               # This should be removed if we ever have non-test crates that depend on wgpu
 ] }
 wgpu-core = { version = "29.0.0", path = "./wgpu-core" }
 wgpu-hal = { version = "29.0.0", path = "./wgpu-hal" }
@@ -127,7 +126,7 @@ exhaust = "0.2"
 fern = "0.7"
 flume = "0.12"
 futures-lite = "2"
-glam = "0.32.0"
+glam = "0.33.0"
 glob = "0.3"
 half = { version = "2.5", default-features = false } # We require 2.5 to have `Arbitrary` support.
 hashbrown = { version = "0.16", default-features = false, features = [

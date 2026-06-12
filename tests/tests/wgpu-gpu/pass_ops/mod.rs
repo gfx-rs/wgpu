@@ -1,18 +1,23 @@
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer, TestParameters,
-    TestingContext,
+    fail, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
+    TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
-    vec.push(DONT_CARE);
+    vec.extend([
+        DONT_CARE,
+        DONT_CARE_COLOR_STRICT_WEBGPU_COMPLIANCE,
+        DONT_CARE_DEPTH_STRICT_WEBGPU_COMPLIANCE,
+        DONT_CARE_STENCIL_STRICT_WEBGPU_COMPLIANCE,
+    ]);
 }
 
 #[gpu_test]
 static DONT_CARE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
-    .run_async(run_test);
+    .run_async(dont_care);
 
-async fn run_test(ctx: TestingContext) {
+async fn dont_care(ctx: TestingContext) {
     let shader_src = "
         const triangles = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
 
@@ -109,3 +114,137 @@ async fn run_test(ctx: TestingContext) {
         .assert_buffer_contents(&ctx, &[127, 127, 127, 127])
         .await;
 }
+
+#[gpu_test]
+static DONT_CARE_COLOR_STRICT_WEBGPU_COMPLIANCE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .instance_flags(wgpu::InstanceFlags::STRICT_WEBGPU_COMPLIANCE)
+            .enable_noop(),
+    )
+    .run_sync(|ctx| {
+        let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::DontCare(unsafe { wgpu::LoadOpDontCare::enabled() }),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            ..Default::default()
+        });
+        fail(
+            &ctx.device,
+            || encoder.finish(),
+            Some("STRICT_WEBGPU_COMPLIANCE"),
+        );
+    });
+
+#[gpu_test]
+static DONT_CARE_DEPTH_STRICT_WEBGPU_COMPLIANCE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .instance_flags(wgpu::InstanceFlags::STRICT_WEBGPU_COMPLIANCE)
+            .enable_noop(),
+    )
+    .run_sync(|ctx| {
+        let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth16Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::DontCare(unsafe { wgpu::LoadOpDontCare::enabled() }),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            ..Default::default()
+        });
+        fail(
+            &ctx.device,
+            || encoder.finish(),
+            Some("STRICT_WEBGPU_COMPLIANCE"),
+        );
+    });
+
+#[gpu_test]
+static DONT_CARE_STENCIL_STRICT_WEBGPU_COMPLIANCE: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .instance_flags(wgpu::InstanceFlags::STRICT_WEBGPU_COMPLIANCE)
+                .enable_noop(),
+        )
+        .run_sync(|ctx| {
+            let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size: wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Stencil8,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            });
+            let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+            let mut encoder = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &view,
+                    depth_ops: None,
+                    stencil_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::DontCare(unsafe { wgpu::LoadOpDontCare::enabled() }),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                }),
+                ..Default::default()
+            });
+            fail(
+                &ctx.device,
+                || encoder.finish(),
+                Some("STRICT_WEBGPU_COMPLIANCE"),
+            );
+        });

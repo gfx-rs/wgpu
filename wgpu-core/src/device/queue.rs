@@ -920,7 +920,7 @@ impl Queue {
             .check(init_layer_range.clone())
             .is_some()
         {
-            if has_copy_partial_init_tracker_coverage(size, destination.mip_level, &dst.desc) {
+            if has_copy_partial_init_tracker_coverage(size, &destination, &dst.desc) {
                 for layer_range in dst_initialization_status.mips[destination.mip_level as usize]
                     .drain(init_layer_range)
                     .collect::<Vec<core::ops::Range<u32>>>()
@@ -1182,7 +1182,7 @@ impl Queue {
             .check(init_layer_range.clone())
             .is_some()
         {
-            if has_copy_partial_init_tracker_coverage(&size, destination.mip_level, &dst.desc) {
+            if has_copy_partial_init_tracker_coverage(&size, &destination, &dst.desc) {
                 for layer_range in dst_initialization_status.mips[destination.mip_level as usize]
                     .drain(init_layer_range)
                     .collect::<Vec<core::ops::Range<u32>>>()
