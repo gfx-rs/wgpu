@@ -721,8 +721,153 @@ impl super::Queue {
                 src_target,
                 dst,
                 dst_target,
+                format,
                 ref copy,
             } => {
+                let aspects = crate::FormatAspects::from(format);
+                if self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::COPY_IMAGE)
+                {
+                    // Unlike the framebuffer paths below, this also handles
+                    // compressed and multisampled textures.
+                    let src_z = if src_target == glow::TEXTURE_3D {
+                        copy.src_base.origin.z
+                    } else {
+                        copy.src_base.array_layer
+                    };
+                    let dst_z = if dst_target == glow::TEXTURE_3D {
+                        copy.dst_base.origin.z
+                    } else {
+                        copy.dst_base.array_layer
+                    };
+                    unsafe {
+                        gl.copy_image_sub_data(
+                            src,
+                            src_target,
+                            copy.src_base.mip_level as i32,
+                            copy.src_base.origin.x as i32,
+                            copy.src_base.origin.y as i32,
+                            src_z as i32,
+                            dst,
+                            dst_target,
+                            copy.dst_base.mip_level as i32,
+                            copy.dst_base.origin.x as i32,
+                            copy.dst_base.origin.y as i32,
+                            dst_z as i32,
+                            copy.size.width as i32,
+                            copy.size.height as i32,
+                            copy.size.depth as i32,
+                        )
+                    };
+                    return;
+                }
+                if aspects.intersects(crate::FormatAspects::DEPTH | crate::FormatAspects::STENCIL) {
+                    // `glCopyTexSubImage` only reads color, so blit depth/stencil.
+                    let attachment = if aspects
+                        .contains(crate::FormatAspects::DEPTH | crate::FormatAspects::STENCIL)
+                    {
+                        glow::DEPTH_STENCIL_ATTACHMENT
+                    } else if aspects.contains(crate::FormatAspects::DEPTH) {
+                        glow::DEPTH_ATTACHMENT
+                    } else {
+                        glow::STENCIL_ATTACHMENT
+                    };
+                    let mut blit_mask = 0;
+                    if aspects.contains(crate::FormatAspects::DEPTH) {
+                        blit_mask |= glow::DEPTH_BUFFER_BIT;
+                    }
+                    if aspects.contains(crate::FormatAspects::STENCIL) {
+                        blit_mask |= glow::STENCIL_BUFFER_BIT;
+                    }
+
+                    let attach = |fbo_target: u32, tex, tex_target, mip_level: u32, layer: u32| unsafe {
+                        if is_layered_target(tex_target) {
+                            gl.framebuffer_texture_layer(
+                                fbo_target,
+                                attachment,
+                                tex,
+                                mip_level as i32,
+                                layer as i32,
+                            )
+                        } else {
+                            gl.framebuffer_texture_2d(
+                                fbo_target,
+                                attachment,
+                                get_2d_target(tex_target, layer),
+                                tex,
+                                mip_level as i32,
+                            )
+                        }
+                    };
+                    // Leftover attachments from earlier passes and copies affect
+                    // framebuffer completeness and size.
+                    let detach_all = |fbo_target: u32| unsafe {
+                        gl.framebuffer_texture_2d(
+                            fbo_target,
+                            glow::DEPTH_STENCIL_ATTACHMENT,
+                            glow::TEXTURE_2D,
+                            None,
+                            0,
+                        );
+                        for i in 0..self.shared.limits.max_color_attachments {
+                            gl.framebuffer_texture_2d(
+                                fbo_target,
+                                glow::COLOR_ATTACHMENT0 + i,
+                                glow::TEXTURE_2D,
+                                None,
+                                0,
+                            );
+                        }
+                    };
+
+                    unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo)) };
+                    unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw_fbo)) };
+                    detach_all(glow::READ_FRAMEBUFFER);
+                    detach_all(glow::DRAW_FRAMEBUFFER);
+
+                    let src_x0 = copy.src_base.origin.x as i32;
+                    let src_y0 = copy.src_base.origin.y as i32;
+                    let dst_x0 = copy.dst_base.origin.x as i32;
+                    let dst_y0 = copy.dst_base.origin.y as i32;
+                    for z in 0..copy.size.depth {
+                        attach(
+                            glow::READ_FRAMEBUFFER,
+                            Some(src),
+                            src_target,
+                            copy.src_base.mip_level,
+                            copy.src_base.array_layer + z,
+                        );
+                        attach(
+                            glow::DRAW_FRAMEBUFFER,
+                            Some(dst),
+                            dst_target,
+                            copy.dst_base.mip_level,
+                            copy.dst_base.array_layer + z,
+                        );
+                        unsafe {
+                            gl.blit_framebuffer(
+                                src_x0,
+                                src_y0,
+                                src_x0 + copy.size.width as i32,
+                                src_y0 + copy.size.height as i32,
+                                dst_x0,
+                                dst_y0,
+                                dst_x0 + copy.size.width as i32,
+                                dst_y0 + copy.size.height as i32,
+                                blit_mask,
+                                glow::NEAREST,
+                            )
+                        };
+                    }
+
+                    detach_all(glow::READ_FRAMEBUFFER);
+                    detach_all(glow::DRAW_FRAMEBUFFER);
+                    unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None) };
+                    unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw_fbo)) };
+                    return;
+                }
                 unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo)) };
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
 
