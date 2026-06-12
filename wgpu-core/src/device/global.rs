@@ -80,7 +80,11 @@ fn host_zero_init_layers(
     let bytes_per_row = mip_size.width / block_width * block_size;
     let rows = mip_size.height / block_height;
     let is_3d = texture.desc.dimension == wgt::TextureDimension::D3;
-    let depth = if is_3d { mip_size.depth_or_array_layers } else { 1 };
+    let depth = if is_3d {
+        mip_size.depth_or_array_layers
+    } else {
+        1
+    };
 
     let zero = alloc::vec![0u8; (bytes_per_row as u64 * rows as u64 * depth as u64) as usize];
     let host_layout = wgt::TexelCopyBufferLayout {

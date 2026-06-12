@@ -395,7 +395,9 @@ async fn host_image_partial_write(ctx: TestingContext) {
     let sub_w = 2u32;
     let sub_h = 2u32;
     let sub_bytes_per_row = bytes_per_pixel * sub_w;
-    let sub_data: Vec<u8> = (0..(sub_bytes_per_row * sub_h)).map(|i| i as u8 | 0x80).collect();
+    let sub_data: Vec<u8> = (0..(sub_bytes_per_row * sub_h))
+        .map(|i| i as u8 | 0x80)
+        .collect();
     mapped.copy_from_memory(
         wgpu::TexelCopyTextureInfoBase {
             texture: (),
