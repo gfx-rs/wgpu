@@ -565,10 +565,8 @@ impl super::Adapter {
             wgt::Features::TEXTURE_COMPRESSION_BC,
             bcn_exts.iter().all(|&ext| extensions.contains(ext)),
         );
-        features.set(
-            wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D,
-            bcn_exts.iter().all(|&ext| extensions.contains(ext)), // BC guaranteed Sliced 3D
-        );
+        // `TEXTURE_COMPRESSION_BC_SLICED_3D` is not exposed: the BC extensions
+        // don't allow `GL_TEXTURE_3D` targets.
         let has_etc = if cfg!(any(webgl, Emscripten)) {
             extensions.contains("WEBGL_compressed_texture_etc")
         } else {
