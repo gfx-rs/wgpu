@@ -4,13 +4,12 @@ use alloc::sync::Arc;
 use hal::DynResource;
 
 use crate::{
-    device::Device,
     global::Global,
     id::{
         AdapterId, BlasId, BufferId, CommandEncoderId, DeviceId, QueueId, SurfaceId, TextureId,
         TextureViewId, TlasId,
     },
-    lock::{RankData, RwLockReadGuard},
+    lock::RankData,
     resource::RawResourceAccess,
     snatch::SnatchGuard,
 };
@@ -154,73 +153,6 @@ where
 {
 }
 
-/// A guard which holds alive a device and the device's fence lock, dereferencing to the Hal type.
-struct FenceGuard<Fence> {
-    device: Arc<Device>,
-    fence_lock_rank_data: ManuallyDrop<RankData>,
-    ptr: *const Fence,
-}
-
-impl<Fence> FenceGuard<Fence>
-where
-    Fence: 'static,
-{
-    /// Creates a new guard over a device's fence.
-    ///
-    /// Returns `None` if:
-    /// - The device's fence is not of the expected Hal type.
-    pub fn new(device: Arc<Device>) -> Option<Self> {
-        // Grab the fence lock.
-        let fence_guard = device.fence.read();
-
-        // Get the raw fence and downcast it to the expected Hal type, coercing it to a pointer
-        // to get rid of the lifetime connecting us to the fence guard.
-        let ptr: *const Fence = fence_guard.as_any().downcast_ref::<Fence>()?;
-
-        // SAFETY: At this point all panicking or divergance has already happened,
-        // so we can safely forget the fence guard without causing the lock to be left open.
-        let fence_lock_rank_data = RwLockReadGuard::forget(fence_guard);
-
-        // SAFETY: We only construct this guard while the fence lock is held,
-        // as the `drop` implementation of this guard will unsafely release the lock.
-        Some(Self {
-            device,
-            fence_lock_rank_data: ManuallyDrop::new(fence_lock_rank_data),
-            ptr,
-        })
-    }
-}
-
-impl<Fence> Deref for FenceGuard<Fence> {
-    type Target = Fence;
-
-    fn deref(&self) -> &Self::Target {
-        // SAFETY: The pointer is guaranteed to be valid as the original device's fence
-        // is still alive and the fence lock is still being held due to the forgotten
-        // fence guard.
-        unsafe { &*self.ptr }
-    }
-}
-
-impl<Fence> Drop for FenceGuard<Fence> {
-    fn drop(&mut self) {
-        // SAFETY:
-        // - We are not going to access the rank data anymore.
-        let data = unsafe { ManuallyDrop::take(&mut self.fence_lock_rank_data) };
-
-        // SAFETY:
-        // - The pointer is no longer going to be accessed.
-        // - The fence lock is being held because this type was not created
-        //   until after the fence lock was forgotten.
-        unsafe {
-            self.device.fence.force_unlock_read(data);
-        };
-    }
-}
-
-unsafe impl<Fence> Send for FenceGuard<Fence> where Fence: Send {}
-unsafe impl<Fence> Sync for FenceGuard<Fence> where Fence: Sync {}
-
 impl Global {
     /// # Safety
     ///
@@ -312,7 +244,7 @@ impl Global {
 
         let device = self.hub.devices.get(id);
 
-        FenceGuard::new(device)
+        SimpleResourceGuard::new(device, move |device| device.fence.as_any().downcast_ref())
     }
 
     /// # Safety

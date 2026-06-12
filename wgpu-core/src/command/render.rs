@@ -806,6 +806,16 @@ pub enum AttachmentError {
     ReadOnlyWithLoad,
     #[error("StoreOp must be None for read-only attachments")]
     ReadOnlyWithStore,
+    #[error("Depth `LoadOp` and `StoreOp` (`{ops:?}`) must be `None` for attachments (`{format:?}`) without depth aspect")]
+    DepthOpsWithoutAspect {
+        format: wgt::TextureFormat,
+        ops: (Option<LoadOp<Option<f32>>>, Option<StoreOp>),
+    },
+    #[error("Stencil `LoadOp` and `StoreOp` (`{ops:?}`) must be `None` for attachments (`{format:?}`) without stencil aspect")]
+    StencilOpsWithoutAspect {
+        format: wgt::TextureFormat,
+        ops: (Option<LoadOp<Option<u32>>>, Option<StoreOp>),
+    },
     #[error("Attachment without load")]
     NoLoad,
     #[error("Attachment without store")]
@@ -1849,11 +1859,23 @@ impl Global {
                                 Err(AttachmentError::NoClearValue)
                             })?
                         } else {
+                            if depth_stencil_attachment.depth.load_op.is_some() || depth_stencil_attachment.depth.store_op.is_some() {
+                                return Err(RenderPassErrorInner::InvalidAttachment(AttachmentError::DepthOpsWithoutAspect {
+                                    format,
+                                    ops: (depth_stencil_attachment.depth.load_op, depth_stencil_attachment.depth.store_op)
+                                }));
+                            }
                             ResolvedPassChannel::ReadOnly
                         },
                         stencil: if format.has_stencil_aspect() {
                             depth_stencil_attachment.stencil.resolve(|clear| Ok(clear.unwrap_or_default()))?
                         } else {
+                            if depth_stencil_attachment.stencil.load_op.is_some() || depth_stencil_attachment.stencil.store_op.is_some() {
+                                return Err(RenderPassErrorInner::InvalidAttachment(AttachmentError::StencilOpsWithoutAspect {
+                                    format,
+                                    ops: (depth_stencil_attachment.stencil.load_op, depth_stencil_attachment.stencil.store_op)
+                                }));
+                            }
                             ResolvedPassChannel::ReadOnly
                         },
                     })

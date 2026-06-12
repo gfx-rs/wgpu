@@ -538,7 +538,7 @@ impl crate::Queue for Queue {
         &self,
         command_buffers: &[&CommandBuffer],
         _surface_textures: &[&SurfaceTexture],
-        (signal_fence, signal_value): (&mut Fence, crate::FenceValue),
+        (signal_fence, signal_value): (&Fence, crate::FenceValue),
     ) -> Result<(), crate::DeviceError> {
         autoreleasepool(|_| {
             let extra_command_buffer = {
@@ -564,6 +564,7 @@ impl crate::Queue for Queue {
                 signal_fence.maintain();
                 signal_fence
                     .pending_command_buffers
+                    .write()
                     .push((signal_value, raw.clone()));
 
                 if let Some(shared_event) = &signal_fence.shared_event {
@@ -1029,12 +1030,14 @@ unsafe impl Sync for QuerySet {}
 pub struct Fence {
     completed_value: Arc<atomic::AtomicU64>,
     /// The pending fence values have to be ascending.
-    pending_command_buffers: Vec<(
-        crate::FenceValue,
-        Retained<ProtocolObject<dyn MTLCommandBuffer>>,
-    )>,
+    pending_command_buffers: RwLock<Vec<PendingCommandBuffer>>,
     shared_event: Option<Retained<ProtocolObject<dyn MTLSharedEvent>>>,
 }
+
+type PendingCommandBuffer = (
+    crate::FenceValue,
+    Retained<ProtocolObject<dyn MTLCommandBuffer>>,
+);
 
 impl crate::DynFence for Fence {}
 
@@ -1044,7 +1047,8 @@ unsafe impl Sync for Fence {}
 impl Fence {
     fn get_latest(&self) -> crate::FenceValue {
         let mut max_value = self.completed_value.load(atomic::Ordering::Acquire);
-        for &(value, ref cmd_buf) in self.pending_command_buffers.iter() {
+        let pending_command_buffers = self.pending_command_buffers.read();
+        for &(value, ref cmd_buf) in pending_command_buffers.iter() {
             if cmd_buf.status() == MTLCommandBufferStatus::Completed {
                 max_value = value;
             }
@@ -1052,9 +1056,10 @@ impl Fence {
         max_value
     }
 
-    fn maintain(&mut self) {
+    fn maintain(&self) {
         let latest = self.get_latest();
         self.pending_command_buffers
+            .write()
             .retain(|&(value, _)| value > latest);
     }
 

@@ -1,5 +1,6 @@
 use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
 use core::{ptr::NonNull, sync::atomic};
+use parking_lot::RwLock;
 use std::{thread, time};
 
 use bytemuck::TransparentWrapper;
@@ -1886,7 +1887,7 @@ impl crate::Device for super::Device {
         };
         Ok(super::Fence {
             completed_value: Arc::new(atomic::AtomicU64::new(0)),
-            pending_command_buffers: Vec::new(),
+            pending_command_buffers: RwLock::new(Vec::new()),
             shared_event,
         })
     }
@@ -1897,7 +1898,8 @@ impl crate::Device for super::Device {
 
     unsafe fn get_fence_value(&self, fence: &super::Fence) -> DeviceResult<crate::FenceValue> {
         let mut max_value = fence.completed_value.load(atomic::Ordering::Acquire);
-        for &(value, ref cmd_buf) in fence.pending_command_buffers.iter() {
+        let pending_command_buffers = fence.pending_command_buffers.read();
+        for &(value, ref cmd_buf) in pending_command_buffers.iter() {
             if cmd_buf.status() == MTLCommandBufferStatus::Completed {
                 max_value = value;
             }
@@ -1914,17 +1916,21 @@ impl crate::Device for super::Device {
             return Ok(true);
         }
 
-        let cmd_buf = match fence
-            .pending_command_buffers
+        let pending_command_buffers = fence.pending_command_buffers.read();
+
+        let cmd_buf = match pending_command_buffers
             .iter()
             .find(|&&(value, _)| value >= wait_value)
         {
-            Some((_, cmd_buf)) => cmd_buf,
+            Some((_, cmd_buf)) => cmd_buf.clone(),
             None => {
                 log::error!("No active command buffers for fence value {wait_value}");
                 return Err(crate::DeviceError::Lost);
             }
         };
+
+        // Make sure that nothing is blocked during the actual wait.
+        drop(pending_command_buffers);
 
         let start = time::Instant::now();
         loop {
