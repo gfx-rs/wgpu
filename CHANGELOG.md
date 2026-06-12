@@ -235,6 +235,8 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Fixed limits on Mesa's Honeykrisp / Asahi Linux. By @im-0 in [#9393](https://github.com/gfx-rs/wgpu/pull/9393).
 - Fixed alignment and `MatrixStride` for mat2x2 in SPIR-V uniform blocks. By @39ali [#9369](https://github.com/gfx-rs/wgpu/pull/9369).
 - Fixed loading of `libvulkan.so` on OpenHarmony (`target_env = "ohos"`). By @jschwe in [#9649](https://github.com/gfx-rs/wgpu/pull/9649).
+- Stopped reporting storage capabilities for formats whose `STORAGE_IMAGE` feature flag is set but for which a storage image can't actually be created (e.g. `R64Uint` on many drivers). By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
+- Fixed an invalid `aspectMask` (`PLANE_0 | PLANE_1`) when creating a view over an entire multi-planar image such as `NV12`; such views now use the `COLOR` aspect. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
 
 #### DX12
 
