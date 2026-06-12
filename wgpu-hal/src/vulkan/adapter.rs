@@ -3430,59 +3430,67 @@ impl crate::Adapter for super::Adapter {
                     & Tfc::VALID_FOR_MULTI_PLANAR);
         }
 
-        // Vulkan is very permissive about MSAA
-        flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.is_compressed());
+        // Multisampling is only meaningful for render attachments.
+        let supports_attachment =
+            flags.intersects(Tfc::COLOR_ATTACHMENT | Tfc::DEPTH_STENCIL_ATTACHMENT);
 
-        // get the supported sample counts
-        let format_aspect = crate::FormatAspects::from(format);
-        let limits = self.phd_capabilities.properties.limits;
+        flags.set(
+            Tfc::MULTISAMPLE_RESOLVE,
+            !format.is_compressed() && supports_attachment,
+        );
 
-        let sample_flags = if format_aspect.contains(crate::FormatAspects::DEPTH) {
-            limits
-                .framebuffer_depth_sample_counts
-                .min(limits.sampled_image_depth_sample_counts)
-        } else if format_aspect.contains(crate::FormatAspects::STENCIL) {
-            limits
-                .framebuffer_stencil_sample_counts
-                .min(limits.sampled_image_stencil_sample_counts)
-        } else {
-            let first_aspect = format_aspect
-                .iter()
-                .next()
-                .expect("All texture should at least one aspect")
-                .map();
+        if supports_attachment {
+            // get the supported sample counts
+            let format_aspect = crate::FormatAspects::from(format);
+            let limits = self.phd_capabilities.properties.limits;
 
-            // We should never get depth or stencil out of this, due to the above.
-            assert_ne!(first_aspect, wgt::TextureAspect::DepthOnly);
-            assert_ne!(first_aspect, wgt::TextureAspect::StencilOnly);
+            let sample_flags = if format_aspect.contains(crate::FormatAspects::DEPTH) {
+                limits
+                    .framebuffer_depth_sample_counts
+                    .min(limits.sampled_image_depth_sample_counts)
+            } else if format_aspect.contains(crate::FormatAspects::STENCIL) {
+                limits
+                    .framebuffer_stencil_sample_counts
+                    .min(limits.sampled_image_stencil_sample_counts)
+            } else {
+                let first_aspect = format_aspect
+                    .iter()
+                    .next()
+                    .expect("All texture should at least one aspect")
+                    .map();
 
-            match format.sample_type(Some(first_aspect), None).unwrap() {
-                wgt::TextureSampleType::Float { .. } => limits
-                    .framebuffer_color_sample_counts
-                    .min(limits.sampled_image_color_sample_counts),
-                wgt::TextureSampleType::Sint | wgt::TextureSampleType::Uint => {
-                    limits.sampled_image_integer_sample_counts
+                // We should never get depth or stencil out of this, due to the above.
+                assert_ne!(first_aspect, wgt::TextureAspect::DepthOnly);
+                assert_ne!(first_aspect, wgt::TextureAspect::StencilOnly);
+
+                match format.sample_type(Some(first_aspect), None).unwrap() {
+                    wgt::TextureSampleType::Float { .. } => limits
+                        .framebuffer_color_sample_counts
+                        .min(limits.sampled_image_color_sample_counts),
+                    wgt::TextureSampleType::Sint | wgt::TextureSampleType::Uint => {
+                        limits.sampled_image_integer_sample_counts
+                    }
+                    _ => unreachable!(),
                 }
-                _ => unreachable!(),
-            }
-        };
+            };
 
-        flags.set(
-            Tfc::MULTISAMPLE_X2,
-            sample_flags.contains(vk::SampleCountFlags::TYPE_2),
-        );
-        flags.set(
-            Tfc::MULTISAMPLE_X4,
-            sample_flags.contains(vk::SampleCountFlags::TYPE_4),
-        );
-        flags.set(
-            Tfc::MULTISAMPLE_X8,
-            sample_flags.contains(vk::SampleCountFlags::TYPE_8),
-        );
-        flags.set(
-            Tfc::MULTISAMPLE_X16,
-            sample_flags.contains(vk::SampleCountFlags::TYPE_16),
-        );
+            flags.set(
+                Tfc::MULTISAMPLE_X2,
+                sample_flags.contains(vk::SampleCountFlags::TYPE_2),
+            );
+            flags.set(
+                Tfc::MULTISAMPLE_X4,
+                sample_flags.contains(vk::SampleCountFlags::TYPE_4),
+            );
+            flags.set(
+                Tfc::MULTISAMPLE_X8,
+                sample_flags.contains(vk::SampleCountFlags::TYPE_8),
+            );
+            flags.set(
+                Tfc::MULTISAMPLE_X16,
+                sample_flags.contains(vk::SampleCountFlags::TYPE_16),
+            );
+        }
 
         flags
     }
