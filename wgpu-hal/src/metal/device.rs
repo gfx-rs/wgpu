@@ -396,7 +396,6 @@ impl super::Device {
             array_layers,
             mip_levels,
             copy_size,
-            host_copy: false,
         }
     }
 
@@ -568,7 +567,6 @@ impl crate::Device for super::Device {
                 mip_levels: desc.mip_level_count,
                 array_layers: desc.array_layer_count(),
                 copy_size: desc.copy_extent(),
-                host_copy: desc.usage.contains(wgt::TextureUses::HOST_COPY),
             })
         })
     }

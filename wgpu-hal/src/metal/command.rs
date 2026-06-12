@@ -557,25 +557,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
     {
     }
 
-    unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
+    unsafe fn transition_textures<'a, T>(&mut self, _barriers: T)
     where
         T: Iterator<Item = crate::TextureBarrier<'a, super::Texture>>,
     {
-        // HOST_COPY textures on macOS use MTLStorageMode::Managed. Before the GPU
-        // reads CPU-written data, synchronizeResource must be called to flush the
-        // CPU writes into GPU-visible memory.
-        #[cfg(target_os = "macos")]
-        for barrier in barriers {
-            if barrier.texture.host_copy && !barrier.usage.to.contains(wgt::TextureUses::HOST_COPY)
-            {
-                let encoder = self.enter_blit();
-                encoder.synchronizeResource(ProtocolObject::from_ref(&*barrier.texture.raw));
-            }
-        }
-        // On non-macOS Apple targets (iOS/tvOS), HOST_IMAGE_COPY uses
-        // MTLStorageMode::Shared so no explicit synchronization is needed.
-        #[cfg(not(target_os = "macos"))]
-        let _ = barriers;
+        // HOST_COPY textures use `MTLStorageMode::Shared`, which is CPU/GPU
+        // coherent on the unified-memory devices this feature is gated to, so no
+        // explicit synchronization is needed. (`synchronizeResource` only applies
+        // to `Managed` resources and aborts under the Metal validation layer.)
     }
 
     unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {
@@ -700,12 +689,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
-        #[cfg(target_os = "macos")]
-        if src.host_copy {
-            let encoder = self.enter_blit();
-            encoder.synchronizeResource(ProtocolObject::from_ref(&*src.raw));
-        }
-
         let encoder = self.enter_blit();
         for copy in regions {
             let src_origin = conv::map_origin(&copy.texture_base.origin);

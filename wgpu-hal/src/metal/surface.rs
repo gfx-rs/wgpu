@@ -181,7 +181,6 @@ impl crate::Surface for super::Surface {
                     height: extent.height,
                     depth: 1,
                 },
-                host_copy: false,
             },
             drawable: ProtocolObject::from_retained(drawable),
             present_with_transaction: render_layer.presentsWithTransaction(),

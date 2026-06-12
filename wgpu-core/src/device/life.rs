@@ -455,7 +455,7 @@ impl LifetimeTracker {
     #[must_use]
     pub(crate) fn drain_pending_texture_maps(&mut self) -> Vec<TextureMapPendingClosure> {
         let mut closures = Vec::new();
-        let mut abort = |texture: &Arc<Texture>, closures: &mut Vec<TextureMapPendingClosure>| {
+        let abort = |texture: &Arc<Texture>, closures: &mut Vec<TextureMapPendingClosure>| {
             let mut map_state = texture.map_state.lock();
             if let TextureMapState::MappingQueued(cb) = &mut *map_state {
                 if let Some(cb) = cb.take() {
