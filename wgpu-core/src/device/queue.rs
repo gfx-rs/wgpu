@@ -294,7 +294,7 @@ impl Drop for Queue {
             submission_closures,
             mapping_closures,
             blas_compact_ready_closures,
-            texture_map_closures,
+            mut texture_map_closures,
             queue_empty,
         ) = self.maintain(last_successful_submission_index, &snatch_guard);
         drop(snatch_guard);
@@ -302,9 +302,10 @@ impl Drop for Queue {
         if self.device.is_valid() {
             assert!(queue_empty);
         } else {
-            // Device was lost; in-flight submissions will never complete.
-            // Drain any textures stuck in MappingQueued so they return to Unmapped.
-            self.lock_life().drain_pending_texture_maps();
+            // Device was lost; in-flight submissions will never complete. Drain
+            // any textures stuck in MappingQueued back to Unmapped and fire their
+            // callbacks with `Err` so awaiting callers don't hang.
+            texture_map_closures.extend(self.lock_life().drain_pending_texture_maps());
         }
 
         let closures = crate::device::UserClosures {
@@ -328,7 +329,7 @@ pub(crate) type MaintainResult = (
     SmallVec<[SubmittedWorkDoneClosure; 1]>,
     Vec<super::BufferMapPendingClosure>,
     Vec<BlasCompactReadyPendingClosure>,
-    Vec<super::TextureMapClosure>,
+    Vec<super::TextureMapPendingClosure>,
     bool,
 );
 

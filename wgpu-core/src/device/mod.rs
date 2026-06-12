@@ -158,15 +158,22 @@ impl RenderPassContext {
 pub type BufferMapPendingClosure = (BufferMapOperation, BufferAccessResult);
 
 #[cfg(send_sync)]
-pub type TextureMapClosure = Box<dyn FnOnce() + Send + 'static>;
+pub type TextureMapClosure = Box<dyn FnOnce(Result<(), DeviceError>) + Send + 'static>;
 #[cfg(not(send_sync))]
-pub type TextureMapClosure = Box<dyn FnOnce() + 'static>;
+pub type TextureMapClosure = Box<dyn FnOnce(Result<(), DeviceError>) + 'static>;
+
+/// A texture-map callback paired with the result it should be fired with.
+///
+/// Mirrors [`BufferMapPendingClosure`]: the callback is *always* invoked once
+/// the mapping attempt resolves — with `Ok` when the submission completes, or
+/// `Err` if the device is lost before then — so callers awaiting it never hang.
+pub type TextureMapPendingClosure = (TextureMapClosure, Result<(), DeviceError>);
 
 #[derive(Default)]
 pub struct UserClosures {
     pub mappings: Vec<BufferMapPendingClosure>,
     pub blas_compact_ready: Vec<BlasCompactReadyPendingClosure>,
-    pub texture_map_closures: Vec<TextureMapClosure>,
+    pub texture_map_closures: Vec<TextureMapPendingClosure>,
     pub submissions: SmallVec<[queue::SubmittedWorkDoneClosure; 1]>,
     pub device_lost_invocations: SmallVec<[DeviceLostInvocation; 1]>,
 }
@@ -197,8 +204,8 @@ impl UserClosures {
                 callback(status);
             }
         }
-        for closure in self.texture_map_closures {
-            closure();
+        for (closure, status) in self.texture_map_closures {
+            closure(status);
         }
         for closure in self.submissions {
             closure();

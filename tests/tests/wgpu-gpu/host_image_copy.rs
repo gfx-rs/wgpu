@@ -6,6 +6,8 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(HOST_IMAGE_UPLOAD);
     vec.push(HOST_IMAGE_UPLOAD_MAPPED_AT_CREATION);
     vec.push(HOST_IMAGE_DOWNLOAD);
+    vec.push(HOST_IMAGE_READ_UNINITIALIZED);
+    vec.push(HOST_IMAGE_PARTIAL_WRITE);
 }
 
 /// Upload pixel data into a HOST_VISIBLE texture via the encoder-mapped path
@@ -52,7 +54,7 @@ async fn host_image_upload(ctx: TestingContext, start_mapped: bool) {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("map encoder"),
             });
-        map_encoder.map_texture_on_completion(&texture, Box::new(|| {}));
+        map_encoder.map_texture_on_completion(&texture, Box::new(|_| {}));
         ctx.queue.submit(Some(map_encoder.finish()));
 
         // Wait until the submission is done — texture is now CPU-accessible.
@@ -252,7 +254,7 @@ async fn host_image_download(ctx: TestingContext) {
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("map encoder"),
         });
-    map_encoder.map_texture_on_completion(&texture, Box::new(|| {}));
+    map_encoder.map_texture_on_completion(&texture, Box::new(|_| {}));
     ctx.queue.submit(Some(map_encoder.finish()));
 
     ctx.async_poll(wgpu::PollType::wait_indefinitely())
@@ -293,4 +295,176 @@ static HOST_IMAGE_DOWNLOAD: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
         host_image_download(ctx).await;
+    });
+
+/// A HOST_VISIBLE texture that has never been written must read back as zeros
+/// on the host (lazy zero-init), not as uninitialized driver memory.
+async fn host_image_read_uninitialized(ctx: TestingContext) {
+    let width = 4u32;
+    let height = 4u32;
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let bytes_per_pixel = 4u32;
+    let host_bytes_per_row = bytes_per_pixel * width;
+    let host_data_size = (host_bytes_per_row * height) as usize;
+
+    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("uninitialized host texture"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::HOST_VISIBLE,
+        view_formats: &[],
+        mapped_at_creation: true,
+    });
+
+    let mapped = texture.get_mapped().expect("texture should be mapped");
+
+    // Pre-fill with a sentinel so a no-op read would be visibly wrong.
+    let mut readback = vec![0xABu8; host_data_size];
+    mapped.copy_to_memory(
+        wgpu::TexelCopyTextureInfoBase {
+            texture: (),
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &mut readback,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(host_bytes_per_row),
+            rows_per_image: Some(height),
+        },
+        wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+    );
+    drop(mapped);
+    texture.unmap();
+
+    assert!(
+        readback.iter().all(|&b| b == 0),
+        "never-written HOST_VISIBLE texture must read back as zeros, got {readback:?}",
+    );
+}
+
+#[gpu_test]
+static HOST_IMAGE_READ_UNINITIALIZED: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
+    .run_async(|ctx| async move {
+        host_image_read_uninitialized(ctx).await;
+    });
+
+/// A partial host write must not leave the uncovered part of the layer as
+/// uninitialized memory: the untouched region must read back as zero while the
+/// written sub-rect keeps its data.
+async fn host_image_partial_write(ctx: TestingContext) {
+    let width = 4u32;
+    let height = 4u32;
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let bytes_per_pixel = 4u32;
+    let host_bytes_per_row = bytes_per_pixel * width;
+    let host_data_size = (host_bytes_per_row * height) as usize;
+
+    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("partial-write host texture"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::HOST_VISIBLE,
+        view_formats: &[],
+        mapped_at_creation: true,
+    });
+
+    let mapped = texture.get_mapped().expect("texture should be mapped");
+
+    // Write only the top-left 2x2 sub-rect, with a non-zero pattern.
+    let sub_w = 2u32;
+    let sub_h = 2u32;
+    let sub_bytes_per_row = bytes_per_pixel * sub_w;
+    let sub_data: Vec<u8> = (0..(sub_bytes_per_row * sub_h)).map(|i| i as u8 | 0x80).collect();
+    mapped.copy_from_memory(
+        wgpu::TexelCopyTextureInfoBase {
+            texture: (),
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &sub_data,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(sub_bytes_per_row),
+            rows_per_image: Some(sub_h),
+        },
+        wgpu::Extent3d {
+            width: sub_w,
+            height: sub_h,
+            depth_or_array_layers: 1,
+        },
+    );
+
+    // Read back the whole texture.
+    let mut full = vec![0u8; host_data_size];
+    mapped.copy_to_memory(
+        wgpu::TexelCopyTextureInfoBase {
+            texture: (),
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &mut full,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(host_bytes_per_row),
+            rows_per_image: Some(height),
+        },
+        wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+    );
+    drop(mapped);
+    texture.unmap();
+
+    for y in 0..height {
+        for x in 0..width {
+            let off = (y * host_bytes_per_row + x * bytes_per_pixel) as usize;
+            let pixel = &full[off..off + bytes_per_pixel as usize];
+            if x < sub_w && y < sub_h {
+                let soff = (y * sub_bytes_per_row + x * bytes_per_pixel) as usize;
+                assert_eq!(
+                    pixel,
+                    &sub_data[soff..soff + bytes_per_pixel as usize],
+                    "covered pixel ({x},{y}) lost its data",
+                );
+            } else {
+                assert_eq!(
+                    pixel,
+                    &[0, 0, 0, 0],
+                    "uncovered pixel ({x},{y}) must be zero-initialized",
+                );
+            }
+        }
+    }
+}
+
+#[gpu_test]
+static HOST_IMAGE_PARTIAL_WRITE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
+    .run_async(|ctx| async move {
+        host_image_partial_write(ctx).await;
     });

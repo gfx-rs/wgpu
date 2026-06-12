@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::{
     device::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
-        DeviceError, TextureMapClosure,
+        DeviceError, TextureMapPendingClosure,
     },
     ray_tracing::BlasCompactReadyPendingClosure,
     resource::{Blas, Buffer, Texture, TextureMapState, Trackable},
@@ -421,15 +421,15 @@ impl LifetimeTracker {
     }
 
     /// Transition textures in `self.ready_to_map_textures` to
-    /// `TextureMapState::Mapped` and collect their callbacks.
+    /// `TextureMapState::Mapped` and collect their (successful) callbacks.
     #[must_use]
-    pub(crate) fn handle_texture_mapping(&mut self) -> Vec<TextureMapClosure> {
+    pub(crate) fn handle_texture_mapping(&mut self) -> Vec<TextureMapPendingClosure> {
         let mut closures = Vec::new();
         for texture in self.ready_to_map_textures.drain(..) {
             let mut map_state = texture.map_state.lock();
             if let TextureMapState::MappingQueued(cb) = &mut *map_state {
                 if let Some(cb) = cb.take() {
-                    closures.push(cb);
+                    closures.push((cb, Ok(())));
                 }
                 *map_state = TextureMapState::Mapped(Arc::new(()));
             }
@@ -445,25 +445,33 @@ impl LifetimeTracker {
         }
     }
 
-    /// Drain all pending texture-map callbacks without firing them.
+    /// Drain all pending texture-map callbacks for a lost device.
     ///
-    /// Called on device loss / queue drop when in-flight submissions will
-    /// never complete.  Transitions `MappingQueued` textures back to
-    /// `Unmapped` so that the mutex guard can be released cleanly.
-    pub(crate) fn drain_pending_texture_maps(&mut self) {
+    /// Called on device loss / queue drop when in-flight submissions will never
+    /// complete. Transitions `MappingQueued` textures back to `Unmapped` and
+    /// returns their callbacks paired with `Err`, so they are fired (rather than
+    /// silently dropped) and callers awaiting the mapping observe the failure
+    /// instead of hanging forever.
+    #[must_use]
+    pub(crate) fn drain_pending_texture_maps(&mut self) -> Vec<TextureMapPendingClosure> {
+        let mut closures = Vec::new();
+        let mut abort = |texture: &Arc<Texture>, closures: &mut Vec<TextureMapPendingClosure>| {
+            let mut map_state = texture.map_state.lock();
+            if let TextureMapState::MappingQueued(cb) = &mut *map_state {
+                if let Some(cb) = cb.take() {
+                    closures.push((cb, Err(DeviceError::Lost)));
+                }
+                *map_state = TextureMapState::Unmapped;
+            }
+        };
         for a in &mut self.active {
             for texture in a.textures_to_map.drain(..) {
-                let mut map_state = texture.map_state.lock();
-                if matches!(*map_state, TextureMapState::MappingQueued(_)) {
-                    *map_state = TextureMapState::Unmapped;
-                }
+                abort(&texture, &mut closures);
             }
         }
         for texture in self.ready_to_map_textures.drain(..) {
-            let mut map_state = texture.map_state.lock();
-            if matches!(*map_state, TextureMapState::MappingQueued(_)) {
-                *map_state = TextureMapState::Unmapped;
-            }
+            abort(&texture, &mut closures);
         }
+        closures
     }
 }

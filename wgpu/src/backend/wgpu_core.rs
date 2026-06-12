@@ -2333,10 +2333,6 @@ impl dispatch::TextureInterface for CoreTexture {
         self.context.0.texture_destroy(self.id);
     }
 
-    fn is_mapped(&self) -> bool {
-        self.context.0.texture_is_mapped(self.id)
-    }
-
     fn get_map_token(&self) -> Option<alloc::sync::Arc<()>> {
         self.context.0.texture_get_map_token(self.id)
     }
@@ -2992,7 +2988,8 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         texture: &dispatch::DispatchTexture,
         callback: dispatch::TextureMapCallback,
     ) {
-        let core_callback: wgpu_core::device::TextureMapClosure = callback;
+        let core_callback: wgpu_core::device::TextureMapClosure =
+            Box::new(move |status| callback(status.map_err(|_| crate::TextureAsyncError)));
         if let Err(cause) = self.context.0.command_encoder_map_texture_on_completion(
             self.id,
             texture.as_core().id,

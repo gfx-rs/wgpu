@@ -69,9 +69,10 @@ pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>)
 #[cfg(not(send_sync))]
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + 'static>;
 #[cfg(send_sync)]
-pub type TextureMapCallback = Box<dyn FnOnce() + Send + 'static>;
+pub type TextureMapCallback =
+    Box<dyn FnOnce(Result<(), crate::TextureAsyncError>) + Send + 'static>;
 #[cfg(not(send_sync))]
-pub type TextureMapCallback = Box<dyn FnOnce() + 'static>;
+pub type TextureMapCallback = Box<dyn FnOnce(Result<(), crate::TextureAsyncError>) + 'static>;
 
 #[cfg(send_sync)]
 pub type BlasCompactCallback = Box<dyn FnOnce(Result<(), crate::BlasAsyncError>) + Send + 'static>;
@@ -296,8 +297,6 @@ pub trait TextureInterface: CommonTraits {
     fn create_view(&self, desc: &crate::TextureViewDescriptor<'_>) -> DispatchTextureView;
 
     fn destroy(&self);
-
-    fn is_mapped(&self) -> bool;
 
     fn get_map_token(&self) -> Option<alloc::sync::Arc<()>>;
 

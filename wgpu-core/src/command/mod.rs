@@ -840,8 +840,8 @@ pub struct CommandBufferMutable {
 
     pub(crate) commands: Vec<Command<ArcReferences>>,
 
-    /// Textures to transition to HOST_COPY state and call `pre_texture_map` on
-    /// at the very end of encoding, after all other commands.
+    /// Textures to transition to HOST_COPY state at the very end of encoding,
+    /// after all other commands (see `encode_map_texture_on_completion`).
     pub(crate) textures_to_map_on_completion: Vec<Arc<crate::resource::Texture>>,
     /// Textures for which `encode_map_texture_on_completion` has already been
     /// called.  Populated by `finish_recording`; used by queue submit to

@@ -2926,10 +2926,6 @@ impl dispatch::TextureInterface for WebTexture {
         self.inner.destroy();
     }
 
-    fn is_mapped(&self) -> bool {
-        false
-    }
-
     fn get_map_token(&self) -> Option<alloc::sync::Arc<()>> {
         None
     }

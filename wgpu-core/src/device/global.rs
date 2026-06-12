@@ -35,6 +35,110 @@ use wgt::{BufferAddress, TextureFormat};
 
 use super::UserClosures;
 
+/// Host-side lazy zero-initialization for the host-copy path.
+///
+/// The GPU copy paths zero uninitialized subresources through `clear_texture`,
+/// which needs a command encoder. The host-copy entry points have none, so we
+/// zero any uninitialized layers of `mip_level` directly through
+/// `copy_memory_to_texture` and mark them initialized. This gives host reads
+/// and partial host writes the same guarantee as the GPU paths: uninitialized
+/// texture memory is never observed.
+fn host_zero_init_layers(
+    texture: &resource::Texture,
+    raw_texture: &dyn hal::DynTexture,
+    raw_device: &dyn hal::DynDevice,
+    mip_level: u32,
+    layer_range: core::ops::Range<u32>,
+) -> Result<(), HostTextureCopyError> {
+    // Depth/stencil and multi-planar formats can't be zeroed through a plain
+    // color host copy; the GPU clear path skips them too. Leave them be.
+    if texture.desc.format.is_depth_stencil_format() || texture.desc.format.planes().is_some() {
+        return Ok(());
+    }
+
+    // Which layers in the range are still uninitialized? (Don't mark yet — only
+    // after the zeroing copy has actually succeeded.)
+    let uninit: Vec<core::ops::Range<u32>> = {
+        let mut init_status = texture.initialization_status.write();
+        let Some(mip_tracker) = init_status.mips.get_mut(mip_level as usize) else {
+            return Ok(());
+        };
+        mip_tracker.uninitialized(layer_range.clone()).collect()
+    };
+    if uninit.is_empty() {
+        return Ok(());
+    }
+
+    let format = texture.desc.format;
+    let (block_width, block_height) = format.block_dimensions();
+    let block_size = format.block_copy_size(None).unwrap();
+
+    let mut mip_size = texture.desc.mip_level_size(mip_level).unwrap();
+    mip_size.width = wgt::math::align_to(mip_size.width, block_width);
+    mip_size.height = wgt::math::align_to(mip_size.height, block_height);
+
+    let bytes_per_row = mip_size.width / block_width * block_size;
+    let rows = mip_size.height / block_height;
+    let is_3d = texture.desc.dimension == wgt::TextureDimension::D3;
+    let depth = if is_3d { mip_size.depth_or_array_layers } else { 1 };
+
+    let zero = alloc::vec![0u8; (bytes_per_row as u64 * rows as u64 * depth as u64) as usize];
+    let host_layout = wgt::TexelCopyBufferLayout {
+        offset: 0,
+        bytes_per_row: Some(bytes_per_row),
+        rows_per_image: Some(rows),
+    };
+    let size = hal::CopyExtent {
+        width: mip_size.width,
+        height: mip_size.height,
+        depth,
+    };
+
+    let mut regions = Vec::new();
+    if is_3d {
+        // A 3D texture has a single init-tracker "layer" covering the whole volume.
+        regions.push(hal::HostTextureCopy {
+            host_layout,
+            texture_base: hal::TextureCopyBase {
+                mip_level,
+                array_layer: 0,
+                origin: wgt::Origin3d::ZERO,
+                aspect: hal::FormatAspects::COLOR,
+            },
+            size,
+        });
+    } else {
+        for range in uninit {
+            for array_layer in range {
+                regions.push(hal::HostTextureCopy {
+                    host_layout,
+                    texture_base: hal::TextureCopyBase {
+                        mip_level,
+                        array_layer,
+                        origin: wgt::Origin3d::ZERO,
+                        aspect: hal::FormatAspects::COLOR,
+                    },
+                    size,
+                });
+            }
+        }
+    }
+
+    unsafe {
+        raw_device
+            .copy_memory_to_texture(&zero, raw_texture, &regions)
+            .map_err(|e| texture.device.handle_hal_error(e))?;
+    }
+
+    // Now that the layers hold defined (zero) data, mark them initialized.
+    let mut init_status = texture.initialization_status.write();
+    if let Some(mip_tracker) = init_status.mips.get_mut(mip_level as usize) {
+        mip_tracker.drain(layer_range);
+    }
+
+    Ok(())
+}
+
 impl Global {
     pub fn adapter_is_surface_supported(
         &self,
@@ -534,6 +638,16 @@ impl Global {
         let raw_texture = texture.try_raw(&snatch_guard)?;
         let raw_device = texture.device.raw();
 
+        // Reading a never-written subresource must not expose uninitialized
+        // memory to the host, so zero any uninitialized layers first.
+        host_zero_init_layers(
+            &texture,
+            raw_texture,
+            raw_device,
+            texture_base.mip_level,
+            texture_base.array_layer..texture_base.array_layer + array_layer_count,
+        )?;
+
         let regions: Vec<hal::HostTextureCopy> = (0..array_layer_count)
             .map(|rel| {
                 let mut base = texture_base.clone();
@@ -605,6 +719,24 @@ impl Global {
         let raw_texture = texture.try_raw(&snatch_guard)?;
         let raw_device = texture.device.raw();
 
+        // The init tracker is per (mip, layer) — sub-rects aren't tracked. If
+        // this write doesn't fully cover the layer, zero any uninitialized
+        // layers first so the untouched region isn't left as garbage once we
+        // mark the layer initialized below (mirrors `Queue::write_texture`).
+        if crate::init_tracker::has_copy_partial_init_tracker_coverage(
+            size,
+            destination,
+            &texture.desc,
+        ) {
+            host_zero_init_layers(
+                &texture,
+                raw_texture,
+                raw_device,
+                texture_base.mip_level,
+                texture_base.array_layer..texture_base.array_layer + array_layer_count,
+            )?;
+        }
+
         let regions: Vec<hal::HostTextureCopy> = (0..array_layer_count)
             .map(|rel| {
                 let mut base = texture_base.clone();
@@ -658,8 +790,8 @@ impl Global {
     }
 
     /// Returns the shared map token if the texture is currently mapped, `None`
-    /// otherwise. The check and token creation happen under the same lock so
-    /// there is no TOCTOU window between `is_mapped` and `get_map_token`.
+    /// otherwise. The mapped-state check and token creation happen under the
+    /// same lock so there is no TOCTOU window between them.
     pub fn texture_get_map_token(&self, texture_id: id::TextureId) -> Option<Arc<()>> {
         let Ok(texture) = self.hub.textures.get(texture_id).get() else {
             return None;
@@ -669,17 +801,6 @@ impl Global {
             return None;
         };
         Some(arc.clone())
-    }
-
-    pub fn texture_is_mapped(&self, texture_id: id::TextureId) -> bool {
-        let Ok(texture) = self.hub.textures.get(texture_id).get() else {
-            return false;
-        };
-        let mapped = matches!(
-            *texture.map_state.lock(),
-            resource::TextureMapState::Mapped(_)
-        );
-        mapped
     }
 
     pub fn texture_view_drop(&self, texture_view_id: id::TextureViewId) {

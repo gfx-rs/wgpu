@@ -1338,7 +1338,7 @@ impl TextureInner {
 }
 
 /// Tracks host-mapping state for a texture. Using one enum under one mutex
-/// prevents TOCTOU races between `is_mapped` checks and token creation.
+/// prevents TOCTOU races between mapped-state checks and token creation.
 pub(crate) enum TextureMapState {
     Unmapped,
     /// A `map_texture_on_completion` command has been recorded into an encoder
@@ -1392,9 +1392,7 @@ pub struct Texture {
     pub(crate) views: Mutex<WeakVec<TextureView>>,
     // Bind groups that reference this texture. May contain duplicates.
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
-    /// Tracks whether this texture is host-mapped and how many `MappedTexture`
-    /// handles are currently alive. A single mutex prevents TOCTOU races
-    /// between `is_mapped` checks and token creation.
+    /// Host-mapping state for this texture. See [`TextureMapState`].
     pub(crate) map_state: Mutex<TextureMapState>,
 }
 

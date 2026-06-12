@@ -861,6 +861,7 @@ pub struct Texture {
     /// True when this texture was created with `TextureUses::HOST_COPY`. On macOS
     /// these textures use `MTLStorageMode::Managed` and require an explicit
     /// `synchronizeResource` blit call before the GPU reads CPU-written data.
+    #[allow(dead_code)]
     host_copy: bool,
 }
 

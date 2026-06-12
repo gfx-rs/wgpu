@@ -102,6 +102,7 @@ use `Texture::get_mapped`. There is no synchronous mapping mechanism.
 Textures can also now be mapped at creation, through the `mapped_at_creation` on texture descriptors.
 
 Example:
+
 ```rust
 let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
     ...
