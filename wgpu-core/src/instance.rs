@@ -60,6 +60,12 @@ pub struct Instance {
     /// When used with `winit`, callers are expected to pass its `OwnedDisplayHandle` (created from
     /// the `EventLoop`) here.
     display: Option<Box<dyn wgt::WgpuHasDisplayHandle>>,
+
+    /// Optional executor for off-thread pipeline compilation (gfx-rs/wgpu#3794).
+    ///
+    /// When set, native async pipeline creation (`Device::create_*_pipeline_async` in the `wgpu`
+    /// crate) hands the compile to this executor; otherwise it runs inline on the calling thread.
+    pub task_executor: Option<wgt::TaskExecutor>,
 }
 
 impl Instance {
@@ -78,6 +84,7 @@ impl Instance {
             // try_add_hal(). Remove it from the mutable descriptor instead, while try_add_hal()
             // borrows the handle from `this.display` instead.
             display: instance_desc.display.take(),
+            task_executor: instance_desc.task_executor.take(),
         };
 
         #[cfg(all(vulkan, not(target_os = "netbsd")))]
@@ -156,6 +163,7 @@ impl Instance {
             supported_backends: A::VARIANT.into(),
             flags: InstanceFlags::default(),
             display: None, // TODO: Extract display from HAL instance if available?
+            task_executor: None,
         }
     }
 

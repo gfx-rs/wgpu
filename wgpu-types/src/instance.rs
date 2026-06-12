@@ -1,9 +1,72 @@
 //! Types for dealing with Instances.
 
+use alloc::{boxed::Box, sync::Arc};
+use core::fmt;
+
 use crate::{link_to_wgpu_docs, Backends};
 
 #[cfg(doc)]
 use crate::{Backend, DownlevelFlags};
+
+/// A unit of work handed to an [`InstanceDescriptor::task_executor`].
+///
+/// Running the task performs the deferred work — currently, compiling a pipeline requested via
+/// [`Device::create_compute_pipeline_async`] / [`Device::create_render_pipeline_async`]. The
+/// executor decides *where* the task runs (e.g. on a worker thread); calling [`Task::run`]
+/// performs it on the current thread.
+///
+/// [`Device::create_compute_pipeline_async`]: ../wgpu/struct.Device.html#method.create_compute_pipeline_async
+/// [`Device::create_render_pipeline_async`]: ../wgpu/struct.Device.html#method.create_render_pipeline_async
+pub struct Task(Box<dyn FnOnce() + Send + 'static>);
+
+impl Task {
+    /// Wraps a closure as a runnable task. Used internally by wgpu.
+    #[must_use]
+    pub fn new(work: impl FnOnce() + Send + 'static) -> Self {
+        Self(Box::new(work))
+    }
+
+    /// Runs the task to completion on the current thread.
+    pub fn run(self) {
+        (self.0)()
+    }
+}
+
+impl fmt::Debug for Task {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Task")
+    }
+}
+
+/// A callback that runs [`Task`]s on behalf of wgpu.
+///
+/// Supply one via [`InstanceDescriptor::task_executor`] to move pipeline compilation off the
+/// calling thread — for example by forwarding the task to `tokio::task::spawn_blocking`, a
+/// `rayon` thread pool, or any custom worker. When no executor is set, wgpu runs the task inline
+/// on the calling thread (so async pipeline creation still completes, just synchronously).
+///
+/// The callback may be invoked from any thread and must be cheap to clone and `Send + Sync`.
+#[derive(Clone)]
+pub struct TaskExecutor(Arc<dyn Fn(Task) + Send + Sync>);
+
+impl TaskExecutor {
+    /// Builds an executor from a callback that runs (or schedules) each [`Task`].
+    #[must_use]
+    pub fn new(execute: impl Fn(Task) + Send + Sync + 'static) -> Self {
+        Self(Arc::new(execute))
+    }
+
+    /// Hands a task to the executor's callback.
+    pub fn execute(&self, task: Task) {
+        (self.0)(task)
+    }
+}
+
+impl fmt::Debug for TaskExecutor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("TaskExecutor")
+    }
+}
 
 /// A [`raw_window_handle::HasDisplayHandle`] that can be shared across threads and has no borrows.
 ///
@@ -59,6 +122,17 @@ pub struct InstanceDescriptor {
     ///
     /// [`OwnedDisplayHandle`]: https://docs.rs/winit/latest/winit/event_loop/struct.OwnedDisplayHandle.html
     pub display: Option<alloc::boxed::Box<dyn WgpuHasDisplayHandle>>,
+    /// Optional executor used to run deferred work — currently, off-thread pipeline compilation
+    /// for [`create_compute_pipeline_async`] / [`create_render_pipeline_async`].
+    ///
+    /// If set, native async pipeline creation hands the (synchronous) compile to this executor as
+    /// a [`Task`] instead of running it on the calling thread. If [`None`], the compile runs
+    /// inline. The web backend ignores this field, deferring to the browser's
+    /// `createPipelineAsync`.
+    ///
+    /// [`create_compute_pipeline_async`]: ../wgpu/struct.Device.html#method.create_compute_pipeline_async
+    /// [`create_render_pipeline_async`]: ../wgpu/struct.Device.html#method.create_render_pipeline_async
+    pub task_executor: Option<TaskExecutor>,
 }
 
 impl InstanceDescriptor {
@@ -71,6 +145,7 @@ impl InstanceDescriptor {
             memory_budget_thresholds: Default::default(),
             backend_options: Default::default(),
             display: None,
+            task_executor: None,
         }
     }
 
@@ -113,6 +188,7 @@ impl InstanceDescriptor {
             memory_budget_thresholds: MemoryBudgetThresholds::default(),
             backend_options,
             display: self.display,
+            task_executor: self.task_executor,
         }
     }
 
@@ -121,6 +197,15 @@ impl InstanceDescriptor {
     pub fn with_display_handle(self, display: alloc::boxed::Box<dyn WgpuHasDisplayHandle>) -> Self {
         Self {
             display: Some(display),
+            ..self
+        }
+    }
+
+    /// Sets the [`TaskExecutor`] used for off-thread pipeline compilation (gfx-rs/wgpu#3794).
+    #[must_use]
+    pub fn with_task_executor(self, task_executor: TaskExecutor) -> Self {
+        Self {
+            task_executor: Some(task_executor),
             ..self
         }
     }
