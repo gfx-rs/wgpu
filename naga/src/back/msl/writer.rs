@@ -529,17 +529,17 @@ pub struct Writer<W> {
     pub(super) names: FastHashMap<NameKey, String>,
     pub(super) named_expressions: crate::NamedExpressions,
     /// Set of expressions that need to be baked to avoid unnecessary repetition in output
-    pub(super) need_bake_expressions: back::NeedBakeExpressions,
+    need_bake_expressions: back::NeedBakeExpressions,
     pub(super) namer: proc::Namer,
     pub(super) wrapped_functions: FastHashSet<WrappedFunction>,
     #[cfg(test)]
-    pub(super) put_expression_stack_pointers: FastHashSet<*const ()>,
+    put_expression_stack_pointers: FastHashSet<*const ()>,
     #[cfg(test)]
-    pub(super) put_block_stack_pointers: FastHashSet<*const ()>,
+    put_block_stack_pointers: FastHashSet<*const ()>,
     /// Set of (struct type, struct field index) denoting which fields require
     /// padding inserted **before** them (i.e. between fields at index - 1 and index)
-    pub(super) struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
-    pub(super) needs_object_memory_barriers: bool,
+    struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
+    needs_object_memory_barriers: bool,
 }
 
 impl crate::Scalar {
@@ -2931,7 +2931,13 @@ impl<W: Write> Writer<W> {
                 self.put_access_chain(data.pointer, context.policies.index, context)?;
                 write!(self.out, ", ")?;
                 self.put_expression(data.stride, context, true)?;
-                write!(self.out, ", {})", data.row_major)?;
+                // Metal's `simdgroup_load` treats its `transpose` flag as
+                // "memory is transposed from the simdgroup_matrix's canonical
+                // layout". On Apple GPUs that canonical layout is row-major,
+                // so `transpose=false` loads from row-major memory. WGSL's
+                // `coopLoadT` (row_major=true) = row-major memory, so it must
+                // map to `transpose=false`. Hence the negation.
+                write!(self.out, ", {})", !data.row_major)?;
             }
             crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
                 if context.lang_version < (2, 3) {
@@ -4270,7 +4276,11 @@ impl<W: Write> Writer<W> {
                     )?;
                     write!(self.out, ", ")?;
                     self.put_expression(data.stride, &context.expression, true)?;
-                    if data.row_major {
+                    // See the comment in `CooperativeLoad` above: WGSL's
+                    // row_major flag is negated when emitting Metal's
+                    // `transpose` flag, so a col-major store (row_major=false)
+                    // must use `transpose=true`.
+                    if !data.row_major {
                         let matrix_origin = "0";
                         let transpose = true;
                         write!(self.out, ", {matrix_origin}, {transpose}")?;

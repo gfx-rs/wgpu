@@ -110,11 +110,11 @@ impl LockState {
 ///
 /// This type serves two purposes:
 ///
-/// - Operations like `RwLockWriteGuard::downgrade` would like to be able to
-///   destructure lock guards and reassemble their pieces into new guards, but
-///   if the guard type itself implements `Drop`, we can't destructure it
-///   without unsafe code or pointless `Option`s whose state is almost always
-///   statically known.
+/// - Operations would like to be able to destructure lock guards and
+///   reassemble their pieces into new guards, but if the guard type
+///   itself implements `Drop`, we can't destructure it without unsafe
+///   code or pointless `Option`s whose state is almost always statically
+///   known.
 ///
 /// - We can just implement `Drop` for this type once, and then use it in lock
 ///   guards, rather than implementing `Drop` separately for each guard type.
@@ -296,15 +296,6 @@ impl<'a, T> RwLockReadGuard<'a, T> {
         core::mem::forget(this.inner);
 
         this.saved.0
-    }
-}
-
-impl<'a, T> RwLockWriteGuard<'a, T> {
-    pub fn downgrade(this: Self) -> RwLockReadGuard<'a, T> {
-        RwLockReadGuard {
-            inner: parking_lot::RwLockWriteGuard::downgrade(this.inner),
-            saved: this.saved,
-        }
     }
 }
 

@@ -15,16 +15,17 @@ pub(crate) struct TextureInitRange {
 // Returns true if a copy operation doesn't fully cover the texture init
 // tracking granularity. I.e. if this function returns true for a pending copy
 // operation, the target texture needs to be ensured to be initialized first!
-pub(crate) fn has_copy_partial_init_tracker_coverage(
+pub(crate) fn has_copy_partial_init_tracker_coverage<T>(
     copy_size: &wgt::Extent3d,
-    mip_level: u32,
+    copy_info: &wgt::TexelCopyTextureInfo<T>,
     desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
 ) -> bool {
-    let target_size = desc.mip_level_size(mip_level).unwrap();
+    let target_size = desc.mip_level_size(copy_info.mip_level).unwrap();
     copy_size.width != target_size.width
         || copy_size.height != target_size.height
         || (desc.dimension == wgt::TextureDimension::D3
             && copy_size.depth_or_array_layers != target_size.depth_or_array_layers)
+        || copy_info.aspect != wgt::TextureAspect::All
 }
 
 impl From<TextureSelector> for TextureInitRange {

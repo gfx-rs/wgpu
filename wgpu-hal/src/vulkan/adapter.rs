@@ -2299,6 +2299,15 @@ impl super::Instance {
             );
         }
 
+        downlevel_flags.set(
+            wgt::DownlevelFlags::TEXTURE_COMPRESSION,
+            available_features.contains(wgt::Features::TEXTURE_COMPRESSION_BC)
+                || available_features.contains(
+                    wgt::Features::TEXTURE_COMPRESSION_ETC2
+                        | wgt::Features::TEXTURE_COMPRESSION_ASTC,
+                ),
+        );
+
         let has_robust_buffer_access2 = phd_features
             .robustness2
             .as_ref()

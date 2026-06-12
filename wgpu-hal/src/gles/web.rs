@@ -107,9 +107,7 @@ impl Instance {
 }
 
 #[cfg(send_sync)]
-unsafe impl Sync for Instance {}
-#[cfg(send_sync)]
-unsafe impl Send for Instance {}
+static_assertions::assert_impl_all!(Instance: Send, Sync);
 
 impl crate::Instance for Instance {
     type A = super::Api;

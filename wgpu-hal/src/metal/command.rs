@@ -457,6 +457,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         let queue = &self.queue_shared.raw;
         let retain_references = self.shared.settings.retain_command_buffer_references;
+        let relay = self.queue_shared.relay.get();
 
         // Guard against exhausting Metal's command buffer budget. Use the hard
         // limit (`MAX_COMMAND_BUFFERS`) so we fail before Metal can hang inside
@@ -486,6 +487,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .unwrap();
             if let Some(label) = label {
                 cmd_buf_ref.setLabel(Some(&NSString::from_str(label)));
+            }
+            // If strict event sync is enabled on this queue, gate the
+            // CB on the relay event at the value the next submit will
+            // signal. The CB pauses at the start until the relay fires.
+            if let Some(relay) = relay {
+                let expected = relay.next_release_value.load(atomic::Ordering::Acquire);
+                cmd_buf_ref.encodeWaitForEvent_value(relay.event.as_ref(), expected);
             }
             cmd_buf_ref.to_owned()
         });

@@ -24,7 +24,7 @@ use crate::{
         CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
         TransferError,
     },
-    device::{DeviceError, FenceReadGuard, FenceWriteGuard, WaitIdleError},
+    device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
     global::Global,
     hal_label,
@@ -227,6 +227,13 @@ impl Queue {
         Ok(())
     }
 
+    /// Maintains the queue's list of finished command buffers.
+    ///
+    /// Command buffers submitted before `submission_index` was submitted
+    /// stop being tracked and callbacks which are waiting for them are
+    /// returned. Also returned is whether the queue is empty. This may
+    /// be stale unless new submissions are prevented by locking
+    /// [`Device::command_indices`]
     pub(crate) fn maintain(
         &self,
         submission_index: u64,
@@ -596,7 +603,6 @@ impl WebGpuError for QueueSubmitError {
 pub(crate) struct PendingSubmission<'a> {
     queue: &'a Queue,
     snatch_guard: SnatchGuard<'a>,
-    fence: FenceWriteGuard<'a>,
     command_index_guard: RwLockWriteGuard<'a, CommandIndices>,
     // Command buffers to be executed, along with trackers for the resources they use.
     pub executions: Vec<EncoderInFlight>,
@@ -608,7 +614,6 @@ pub(crate) struct PendingSubmission<'a> {
 }
 
 pub(crate) struct SubmissionResult<'a> {
-    pub fence: FenceReadGuard<'a>,
     pub snatch_guard: SnatchGuard<'a>,
 }
 
@@ -943,7 +948,7 @@ impl Queue {
             .check(init_layer_range.clone())
             .is_some()
         {
-            if has_copy_partial_init_tracker_coverage(size, destination.mip_level, &dst.desc) {
+            if has_copy_partial_init_tracker_coverage(size, &destination, &dst.desc) {
                 for layer_range in dst_initialization_status.mips[destination.mip_level as usize]
                     .drain(init_layer_range)
                     .collect::<Vec<core::ops::Range<u32>>>()
@@ -1205,7 +1210,7 @@ impl Queue {
             .check(init_layer_range.clone())
             .is_some()
         {
-            if has_copy_partial_init_tracker_coverage(&size, destination.mip_level, &dst.desc) {
+            if has_copy_partial_init_tracker_coverage(&size, &destination, &dst.desc) {
                 for layer_range in dst_initialization_status.mips[destination.mip_level as usize]
                     .drain(init_layer_range)
                     .collect::<Vec<core::ops::Range<u32>>>()
@@ -1524,10 +1529,8 @@ impl Queue {
 
             let pending_writes = self.pending_writes.lock();
 
-            let SubmissionResult {
-                fence,
-                snatch_guard,
-            } = match submission.submit(pending_writes, textures_to_map_on_completion) {
+            let SubmissionResult { snatch_guard } =
+                match submission.submit(pending_writes, textures_to_map_on_completion) {
                 Ok(result) => result,
                 Err(e) => break 'error Err(e.into()),
             };
@@ -1537,9 +1540,7 @@ impl Queue {
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
             // `device.maintain` consumes and will release the snatch guard.
-            let (closures, result) = self
-                .device
-                .maintain(fence, wgt::PollType::Poll, snatch_guard);
+            let (closures, result) = self.device.maintain(wgt::PollType::Poll, snatch_guard);
             match result {
                 Ok(status) => {
                     debug_assert!(matches!(
@@ -1598,10 +1599,6 @@ impl Queue {
         &'a self,
         snatch_guard: SnatchGuard<'a>,
     ) -> Result<PendingSubmission<'a>, (SubmissionIndex, DeviceError)> {
-        // Lock ordering requires that the fence lock be acquired after the snatch lock and
-        // before the command index lock.
-        let fence = self.device.fence.write();
-
         let mut command_index_guard = self.device.command_indices.write();
         command_index_guard.active_submission_index += 1;
         let index = command_index_guard.active_submission_index;
@@ -1613,7 +1610,6 @@ impl Queue {
         let submission = PendingSubmission {
             queue: self,
             snatch_guard,
-            fence,
             command_index_guard,
             executions: Vec::new(),
             surface_textures: FastHashMap::default(),
@@ -1637,8 +1633,7 @@ impl Queue {
     ///   [`PendingSubmission`].
     /// - Advances `last_successful_submission_index` and registers the
     ///   submission with the lifetime tracker.
-    /// - Returns a [`SubmissionResult`], which contains the snatch guard
-    ///   and a downgraded [`FenceReadGuard`].
+    /// - Returns a [`SubmissionResult`], which contains the snatch guard.
     fn submit_pending_submission<'a>(
         &self,
         mut pending_writes: MutexGuard<'_, PendingWrites>,
@@ -1648,7 +1643,6 @@ impl Queue {
         let PendingSubmission {
             queue: _,
             snatch_guard,
-            mut fence,
             command_index_guard,
             mut executions,
             mut surface_textures,
@@ -1719,7 +1713,7 @@ impl Queue {
                 self.raw().submit(
                     &hal_command_buffers,
                     &submit_surface_textures,
-                    (fence.as_mut(), submit_index),
+                    (self.device.fence.as_ref(), submit_index),
                 )
             }
             .map_err(|e| self.device.handle_hal_error(e))?;
@@ -1728,7 +1722,6 @@ impl Queue {
             // command index guard until we have submitted, to prevent another submission
             // from claiming the next index and reaching `submit` before we do.
             drop(pending_writes);
-            drop(command_index_guard);
 
             // Advance the successful submission index.
             self.device
@@ -1740,10 +1733,14 @@ impl Queue {
         life.track_submission(submit_index, executions);
         life.register_texture_maps(textures_to_map);
 
-        Ok(SubmissionResult {
-            fence: RwLockWriteGuard::downgrade(fence),
-            snatch_guard,
-        })
+        // `device.maintain` relies on being able to prevent new submissions by
+        // using `command_index_guard` while also checking whether there are
+        // no tracked submissions to guarantee no new submissions will happen
+        // after a device is lost. This requires `command_index_guard` to be
+        // held over `self.lock_life()`
+        drop(command_index_guard);
+
+        Ok(SubmissionResult { snatch_guard })
     }
 
     pub fn get_timestamp_period(&self) -> f32 {

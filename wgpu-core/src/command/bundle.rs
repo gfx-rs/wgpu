@@ -968,7 +968,9 @@ fn multi_draw_indirect(
     };
     let instance_limit = state.vertex.limits.instance_limit;
 
-    let buffer_uses = if state.device.indirect_validation.is_some() {
+    let buffer_uses = if state.device.indirect_validation.is_some()
+        && family != DrawCommandFamily::DrawMeshTasks
+    {
         wgt::BufferUses::STORAGE_READ_ONLY
     } else {
         wgt::BufferUses::INDIRECT
@@ -1227,7 +1229,9 @@ impl RenderBundle {
                     vertex_or_index_limit,
                     instance_limit,
                 } => {
-                    let (buffer, offset) = if self.device.indirect_validation.is_some() {
+                    let (buffer, offset) = if self.device.indirect_validation.is_some()
+                        && *family != DrawCommandFamily::DrawMeshTasks
+                    {
                         let (dst_resource_index, offset) = indirect_draw_validation_batcher.add(
                             indirect_draw_validation_resources,
                             &self.device,
@@ -1499,9 +1503,9 @@ impl State {
         self.commands
             .extend(entries.map(|(i, bind_group, dynamic_offsets)| {
                 self.buffer_memory_init_actions
-                    .extend_from_slice(&bind_group.used_buffer_ranges);
+                    .extend_from_slice(&bind_group.buffer_init_actions);
                 self.texture_memory_init_actions
-                    .extend_from_slice(&bind_group.used_texture_ranges);
+                    .extend_from_slice(&bind_group.texture_init_actions);
 
                 self.flat_dynamic_offsets.extend_from_slice(dynamic_offsets);
 
