@@ -254,6 +254,8 @@ bitflags::bitflags! {
         /// Supports explicit DRM format modifiers via `EGL_EXT_image_dma_buf_import_modifiers`.
         #[cfg(all(unix, native))]
         const EGL_IMAGE_DMA_BUF_IMPORT_MODIFIERS = 1 << 22;
+        /// Supports `glCopyImageSubData`.
+        const COPY_IMAGE = 1 << 23;
     }
 }
 
@@ -930,6 +932,7 @@ enum Command {
         src_target: BindTarget,
         dst: glow::Texture,
         dst_target: BindTarget,
+        format: wgt::TextureFormat,
         copy: crate::TextureCopy,
     },
     CopyBufferToTexture {
