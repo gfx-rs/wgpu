@@ -380,6 +380,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix a fence data race between submitting and polling on devices without timeline semaphores. By @JasperDeSutter in [#10960](https://github.com/gfx-rs/wgpu/pull/10960).
 - Fix pass timestamp queries on Vulkan sometimes reporting a duration of almost zero for a render or compute pass, when the GPU was busy with other work. By @kikijiki in [#10837](https://github.com/gfx-rs/wgpu/pull/10837).
 - Stop reporting multisample support for formats that can't be render attachments. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
+- Only report `STORAGE_ATOMIC` for `R32Uint`, `R32Sint` and `R64Uint` storage images, the formats shaders can use atomically. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
 
 #### Metal
 
