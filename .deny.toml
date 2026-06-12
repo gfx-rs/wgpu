@@ -60,6 +60,9 @@ skip = [
 
     # gpu-descriptor and petgraph use an old version
     { name = "hashbrown", version = "0.15.5" },
+
+    # Used by hashbrown 0.15.5
+    { name = "foldhash", version = "0.1.5" },
 ]
 wildcards = "deny"
 allow-wildcard-paths = true

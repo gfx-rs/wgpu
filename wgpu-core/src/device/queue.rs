@@ -24,7 +24,7 @@ use crate::{
         CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
         TransferError,
     },
-    device::{DeviceError, FenceReadGuard, FenceWriteGuard, WaitIdleError},
+    device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
     global::Global,
     hal_label,
@@ -126,7 +126,9 @@ impl Queue {
         texture: &Arc<Texture>,
     ) -> Result<(), DeviceError> {
         let snatch_guard = self.device.snatchable_lock.read();
-        let (mut submission, _index) = self.allocate_submission(snatch_guard);
+        let submission = self
+            .allocate_submission(snatch_guard)
+            .map_err(|(_index, e)| e)?;
         let device = &self.device;
 
         // If the texture is uninitialized it needs to be cleared before presenting
@@ -141,6 +143,8 @@ impl Queue {
         let mut pending_writes = self.pending_writes.lock();
 
         if needs_clear {
+            // After encoding the clear operation, we must not return without
+            // adding the texture to `pending_writes`.
             let encoder = pending_writes.activate();
             let mut trackers = device.trackers.lock();
             crate::command::clear_texture(
@@ -182,6 +186,12 @@ impl Queue {
         };
 
         if pending.is_empty() {
+            // This assert checks that we don't return here if we encoded a
+            // clear operation for the texture, which would be a problem since
+            // we haven't done anything yet to ensure it stays alive. If we
+            // cleared the texture, then we must have produced a barrier to put
+            // it in PRESENT state, so `pending` will not be empty.
+            debug_assert!(!needs_clear);
             return Ok(());
         }
 
@@ -198,26 +208,32 @@ impl Queue {
             let encoder = pending_writes.activate();
             // SAFETY:
             // - The encoder is in the recording state after `activate()`
-            // - The texture is kept alive by the Arc from `acquired_texture`
+            // - The texture is kept alive by adding it to `PendingWrites` below
             unsafe {
                 encoder.transition_textures(&barriers);
             }
         }
 
-        // Keep the texture alive in the submission so its clear_view isn't
-        // destroyed before the GPU finishes the submitted commands.
+        // Add the texture to `PendingWrites`. This will cause `submit()` to:
+        // - Flush any pending writes to the texture.
+        // - Include the texture in `surface_textures` for the submission.
+        // - Keep the texture alive so the texture and its clear_view aren't
+        //   destroyed before the GPU finishes the `clear_texture` operation
+        //   encoded above.
         pending_writes.insert_texture(texture);
-
-        // Flush pending writes through the standard submission path.
-        submission
-            .surface_textures
-            .insert(Arc::as_ptr(texture), texture.clone());
 
         submission.submit(pending_writes)?;
 
         Ok(())
     }
 
+    /// Maintains the queue's list of finished command buffers.
+    ///
+    /// Command buffers submitted before `submission_index` was submitted
+    /// stop being tracked and callbacks which are waiting for them are
+    /// returned. Also returned is whether the queue is empty. This may
+    /// be stale unless new submissions are prevented by locking
+    /// [`Device::command_indices`]
     pub(crate) fn maintain(
         &self,
         submission_index: u64,
@@ -566,19 +582,17 @@ impl WebGpuError for QueueSubmitError {
 pub(crate) struct PendingSubmission<'a> {
     queue: &'a Queue,
     snatch_guard: SnatchGuard<'a>,
-    fence: FenceWriteGuard<'a>,
     command_index_guard: RwLockWriteGuard<'a, CommandIndices>,
     // Command buffers to be executed, along with trackers for the resources they use.
     pub executions: Vec<EncoderInFlight>,
     // Surface textures referenced by command buffers in this submission. These need to be
     // passed to the HAL `submit` call. Deduplicated using a hashmap to avoid vulkan
     // deadlocking from the same surface texture being submitted multiple times.
-    pub surface_textures: FastHashMap<*const Texture, Arc<Texture>>,
+    surface_textures: FastHashMap<*const Texture, Arc<Texture>>,
     pub index: SubmissionIndex,
 }
 
 pub(crate) struct SubmissionResult<'a> {
-    pub fence: FenceReadGuard<'a>,
     pub snatch_guard: SnatchGuard<'a>,
 }
 
@@ -906,7 +920,7 @@ impl Queue {
             .check(init_layer_range.clone())
             .is_some()
         {
-            if has_copy_partial_init_tracker_coverage(size, destination.mip_level, &dst.desc) {
+            if has_copy_partial_init_tracker_coverage(size, &destination, &dst.desc) {
                 for layer_range in dst_initialization_status.mips[destination.mip_level as usize]
                     .drain(init_layer_range)
                     .collect::<Vec<core::ops::Range<u32>>>()
@@ -1168,7 +1182,7 @@ impl Queue {
             .check(init_layer_range.clone())
             .is_some()
         {
-            if has_copy_partial_init_tracker_coverage(&size, destination.mip_level, &dst.desc) {
+            if has_copy_partial_init_tracker_coverage(&size, &destination, &dst.desc) {
                 for layer_range in dst_initialization_status.mips[destination.mip_level as usize]
                     .drain(init_layer_range)
                     .collect::<Vec<core::ops::Range<u32>>>()
@@ -1253,7 +1267,9 @@ impl Queue {
         buffer: &Arc<Buffer>,
         snatch_guard: SnatchGuard,
     ) -> Result<(), BufferAccessError> {
-        let (submission, _index) = self.allocate_submission(snatch_guard);
+        let submission = self
+            .allocate_submission(snatch_guard)
+            .map_err(|(_index, e)| e)?;
 
         let pending_writes = self.pending_writes.lock();
         if !pending_writes.contains_buffer(buffer) {
@@ -1267,7 +1283,10 @@ impl Queue {
 
     fn flush_pending_writes(&self) -> Result<Option<SubmissionIndex>, DeviceError> {
         let snatch_guard = self.device.snatchable_lock.read();
-        let (submission, submit_index) = self.allocate_submission(snatch_guard);
+        let submission = self
+            .allocate_submission(snatch_guard)
+            .map_err(|(_index, e)| e)?;
+        let submit_index = submission.index;
         let pending_writes = self.pending_writes.lock();
         if pending_writes.is_recording {
             submission.submit(pending_writes)?;
@@ -1312,13 +1331,12 @@ impl Queue {
         api_log!("Queue::submit");
 
         let snatch_guard = self.device.snatchable_lock.read();
-        let (mut submission, submit_index) = self.allocate_submission(snatch_guard);
+        let mut submission = self
+            .allocate_submission(snatch_guard)
+            .map_err(|(index, e)| (index, e.into()))?;
+        let submit_index = submission.index;
 
         let res = 'error: {
-            if let Err(e) = self.device.check_is_valid() {
-                break 'error Err(e.into());
-            }
-
             let mut used_surface_textures = track::TextureUsageScope::default();
 
             {
@@ -1481,10 +1499,7 @@ impl Queue {
 
             let pending_writes = self.pending_writes.lock();
 
-            let SubmissionResult {
-                fence,
-                snatch_guard,
-            } = match submission.submit(pending_writes) {
+            let SubmissionResult { snatch_guard } = match submission.submit(pending_writes) {
                 Ok(result) => result,
                 Err(e) => break 'error Err(e.into()),
             };
@@ -1494,9 +1509,7 @@ impl Queue {
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
             // `device.maintain` consumes and will release the snatch guard.
-            let (closures, result) = self
-                .device
-                .maintain(fence, wgt::PollType::Poll, snatch_guard);
+            let (closures, result) = self.device.maintain(wgt::PollType::Poll, snatch_guard);
             match result {
                 Ok(status) => {
                     debug_assert!(matches!(
@@ -1539,8 +1552,8 @@ impl Queue {
     /// The caller passes in the already-acquired [`SnatchGuard`]. This function acquires
     /// the fence lock and the command index lock.
     ///
-    /// The caller should update the [`PendingSubmission`] members `executions` and
-    /// `surface_textures` with details of the submission.
+    /// The caller should update [`PendingSubmission::executions`] with details of the
+    /// submission.
     ///
     /// To finalize and submit the submission, call [`PendingSubmission::submit`] (which is
     /// a convenience wrapper around [`Queue::submit_pending_submission`]).
@@ -1554,26 +1567,25 @@ impl Queue {
     fn allocate_submission<'a>(
         &'a self,
         snatch_guard: SnatchGuard<'a>,
-    ) -> (PendingSubmission<'a>, SubmissionIndex) {
-        // Lock ordering requires that the fence lock be acquired after the snatch lock and
-        // before the command index lock.
-        let fence = self.device.fence.write();
-
+    ) -> Result<PendingSubmission<'a>, (SubmissionIndex, DeviceError)> {
         let mut command_index_guard = self.device.command_indices.write();
         command_index_guard.active_submission_index += 1;
         let index = command_index_guard.active_submission_index;
 
+        if let Err(e) = self.device.check_is_valid() {
+            return Err((index, e));
+        }
+
         let submission = PendingSubmission {
             queue: self,
             snatch_guard,
-            fence,
             command_index_guard,
             executions: Vec::new(),
             surface_textures: FastHashMap::default(),
             index,
         };
 
-        (submission, index)
+        Ok(submission)
     }
 
     /// Finalize and submit a [`PendingSubmission`] that was returned by
@@ -1590,8 +1602,7 @@ impl Queue {
     ///   [`PendingSubmission`].
     /// - Advances `last_successful_submission_index` and registers the
     ///   submission with the lifetime tracker.
-    /// - Returns a [`SubmissionResult`], which contains the snatch guard
-    ///   and a downgraded [`FenceReadGuard`].
+    /// - Returns a [`SubmissionResult`], which contains the snatch guard.
     fn submit_pending_submission<'a>(
         &self,
         mut pending_writes: MutexGuard<'_, PendingWrites>,
@@ -1600,7 +1611,6 @@ impl Queue {
         let PendingSubmission {
             queue: _,
             snatch_guard,
-            mut fence,
             command_index_guard,
             mut executions,
             mut surface_textures,
@@ -1671,7 +1681,7 @@ impl Queue {
                 self.raw().submit(
                     &hal_command_buffers,
                     &submit_surface_textures,
-                    (fence.as_mut(), submit_index),
+                    (self.device.fence.as_ref(), submit_index),
                 )
             }
             .map_err(|e| self.device.handle_hal_error(e))?;
@@ -1680,7 +1690,6 @@ impl Queue {
             // command index guard until we have submitted, to prevent another submission
             // from claiming the next index and reaching `submit` before we do.
             drop(pending_writes);
-            drop(command_index_guard);
 
             // Advance the successful submission index.
             self.device
@@ -1691,10 +1700,14 @@ impl Queue {
         // this will register the new submission to the life time tracker
         self.lock_life().track_submission(submit_index, executions);
 
-        Ok(SubmissionResult {
-            fence: RwLockWriteGuard::downgrade(fence),
-            snatch_guard,
-        })
+        // `device.maintain` relies on being able to prevent new submissions by
+        // using `command_index_guard` while also checking whether there are
+        // no tracked submissions to guarantee no new submissions will happen
+        // after a device is lost. This requires `command_index_guard` to be
+        // held over `self.lock_life()`
+        drop(command_index_guard);
+
+        Ok(SubmissionResult { snatch_guard })
     }
 
     pub fn get_timestamp_period(&self) -> f32 {

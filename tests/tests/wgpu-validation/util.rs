@@ -3,8 +3,7 @@
 use nanorand::Rng;
 
 /// Generate (deterministic) random staging belt operations to exercise its logic.
-#[test]
-fn staging_belt_random_test() {
+fn staging_belt_random_test(use_recall_on_submit: bool) {
     let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
     let mut rng = nanorand::WyRand::new_seed(0xDEAD_BEEF);
     let buffer_size = 1024;
@@ -35,10 +34,26 @@ fn staging_belt_random_test() {
             slice.slice(..1).copy_from_slice(&[1]);
         }
 
-        belt.finish();
-        queue.submit([encoder.finish()]);
-        belt.recall();
+        if use_recall_on_submit {
+            belt.finish_and_recall_on_submit(&encoder);
+            queue.submit([encoder.finish()]);
+            // No explicit recall() needed.
+        } else {
+            belt.finish();
+            queue.submit([encoder.finish()]);
+            belt.recall();
+        }
     }
+}
+
+#[test]
+fn staging_belt_manual_recall() {
+    staging_belt_random_test(false);
+}
+
+#[test]
+fn staging_belt_finish_and_recall_on_submit() {
+    staging_belt_random_test(true);
 }
 
 #[test]

@@ -48,7 +48,7 @@ impl DownloadBuffer {
         buffer: &super::BufferSlice<'_>,
         callback: impl FnOnce(Result<Self, super::BufferAsyncError>) + Send + 'static,
     ) {
-        let size = buffer.size.into();
+        let size = buffer.size;
 
         let download = device.create_buffer(&super::BufferDescriptor {
             size,

@@ -219,8 +219,6 @@
     clippy::single_match,
     // Push commands are more regular than macros.
     clippy::vec_init_then_push,
-    // We unsafe impl `Send` for a reason.
-    clippy::non_send_fields_in_send_ty,
     // TODO!
     clippy::missing_safety_doc,
     // It gets in the way a lot and does not prevent bugs in practice.
@@ -350,9 +348,13 @@ pub struct DropGuard {
 #[cfg(all(any(gles, vulkan), any(native, Emscripten)))]
 impl DropGuard {
     fn from_option(callback: Option<DropCallback>) -> Option<Self> {
-        callback.map(|callback| Self {
+        callback.map(Self::new)
+    }
+
+    fn new(callback: DropCallback) -> Self {
+        Self {
             callback: Some(callback),
-        })
+        }
     }
 }
 
@@ -632,6 +634,9 @@ pub trait Api: Clone + fmt::Debug + Sized + WasmNotSendSync + 'static {
     /// before a lower-valued operation, then waiting for the fence to reach the
     /// lower value could return before the lower-valued operation has actually
     /// finished.
+    ///
+    /// Fences are internally synchronised by the hal, and so should not need to be
+    /// contained in external synchronisation primitives.
     type Fence: DynFence;
 
     type BindGroupLayout: DynBindGroupLayout;
@@ -714,6 +719,8 @@ pub trait Surface: WasmNotSendSync {
     /// If you do not wish to display the texture, you must pass the
     /// [`SurfaceTexture`] to [`self.discard_texture`], so that it can be reused
     /// by future acquisitions.
+    ///
+    /// The fence is internally synchronised by the hal.
     ///
     /// # Portability
     ///
@@ -1091,12 +1098,12 @@ pub trait Device: WasmNotSendSync {
     /// [`FenceValue`] to store in it, so you can use this `wait` function
     /// to wait for a given queue submission to finish execution.
     ///
-    /// The `value` argument must be a value that some actual operation you have
-    /// already presented to the device is going to store in `fence`. You cannot
-    /// wait for values yet to be submitted. (This restriction accommodates
-    /// implementations like the `vulkan` backend's [`FencePool`] that must
-    /// allocate a distinct synchronization object for each fence value one is
-    /// able to wait for.)
+    /// The `value` argument must not exceed the highest value that an actual
+    /// operation you have already presented to the device is going to store in
+    /// `fence`. You cannot wait for values yet to be submitted. (This
+    /// restriction accommodates implementations like the `vulkan` backend's
+    /// [`FencePool`] that must allocate a distinct synchronization object for
+    /// each fence value one is able to wait for.)
     ///
     /// Calling `wait` with a lower [`FenceValue`] than `fence`'s current value
     /// returns immediately.
@@ -1243,7 +1250,7 @@ pub trait Queue: WasmNotSendSync {
         &self,
         command_buffers: &[&<Self::A as Api>::CommandBuffer],
         surface_textures: &[&<Self::A as Api>::SurfaceTexture],
-        signal_fence: (&mut <Self::A as Api>::Fence, FenceValue),
+        signal_fence: (&<Self::A as Api>::Fence, FenceValue),
     ) -> Result<(), DeviceError>;
     /// Present a surface texture to the screen.
     ///
@@ -1933,7 +1940,7 @@ pub struct InstanceDescriptor<'a> {
     pub memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     pub backend_options: wgt::BackendOptions,
     pub telemetry: Option<Telemetry>,
-    /// This is a borrow because the surrounding `core::Instance` keeps the the owned display handle
+    /// This is a borrow because the surrounding `core::Instance` keeps the owned display handle
     /// alive already.
     pub display: Option<DisplayHandle<'a>>,
 }

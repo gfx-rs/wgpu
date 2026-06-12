@@ -12,6 +12,7 @@ pub(super) struct ViewDescriptor {
     array_layer_count: u32,
     mip_level_base: u32,
     mip_level_count: u32,
+    plane_slice_override: Option<u32>,
 }
 
 impl crate::TextureViewDescriptor<'_> {
@@ -28,6 +29,7 @@ impl crate::TextureViewDescriptor<'_> {
             mip_level_count: self.range.mip_level_count.unwrap_or(!0),
             array_layer_base: self.range.base_array_layer,
             array_layer_count: self.range.array_layer_count.unwrap_or(!0),
+            plane_slice_override: texture.plane_slice_override(),
         }
     }
 }
@@ -42,11 +44,39 @@ fn aspects_to_plane(aspects: crate::FormatAspects) -> u32 {
 }
 
 impl ViewDescriptor {
+    pub(super) fn plane_slice(&self) -> u32 {
+        self.plane_slice_override
+            .unwrap_or_else(|| aspects_to_plane(self.aspects))
+    }
+}
+
+/// Shader component mapping for stencil views
+///
+/// Stencil views use `DXGI_FORMAT_X24_TYPELESS_G8_UINT` or
+/// `DXGI_FORMAT_X32_TYPELESS_G8X24_UINT`, which have the stencil value in
+/// the green component. WebGPU specifies that the stencil value be in the
+/// red component. It also specifies that the remaining components _should_
+/// be (0, 0, 1), but may have an unspecified value.
+const STENCIL_COMPONENT_MAPPING: Direct3D12::D3D12_SHADER_COMPONENT_MAPPING =
+    super::conv::make_shader_component_mapping(
+        Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1,
+        Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0,
+        Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0,
+        Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1,
+    );
+
+impl ViewDescriptor {
     pub(crate) unsafe fn to_srv(&self) -> Option<Direct3D12::D3D12_SHADER_RESOURCE_VIEW_DESC> {
+        let swizzle = if self.aspects == crate::FormatAspects::STENCIL {
+            STENCIL_COMPONENT_MAPPING.0 as u32
+        } else {
+            Direct3D12::D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING
+        };
+
         let mut desc = Direct3D12::D3D12_SHADER_RESOURCE_VIEW_DESC {
             Format: self.srv_uav_format?,
             ViewDimension: Direct3D12::D3D12_SRV_DIMENSION_UNKNOWN,
-            Shader4ComponentMapping: Direct3D12::D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+            Shader4ComponentMapping: swizzle,
             Anonymous: Default::default(),
         };
 
@@ -82,7 +112,7 @@ impl ViewDescriptor {
                 desc.Anonymous.Texture2D = Direct3D12::D3D12_TEX2D_SRV {
                     MostDetailedMip: self.mip_level_base,
                     MipLevels: self.mip_level_count,
-                    PlaneSlice: aspects_to_plane(self.aspects),
+                    PlaneSlice: self.plane_slice(),
                     ResourceMinLODClamp: 0.0,
                 }
             }
@@ -102,7 +132,7 @@ impl ViewDescriptor {
                     MipLevels: self.mip_level_count,
                     FirstArraySlice: self.array_layer_base,
                     ArraySize: self.array_layer_count,
-                    PlaneSlice: aspects_to_plane(self.aspects),
+                    PlaneSlice: self.plane_slice(),
                     ResourceMinLODClamp: 0.0,
                 }
             }
@@ -168,7 +198,7 @@ impl ViewDescriptor {
                 desc.ViewDimension = Direct3D12::D3D12_UAV_DIMENSION_TEXTURE2D;
                 desc.Anonymous.Texture2D = Direct3D12::D3D12_TEX2D_UAV {
                     MipSlice: self.mip_level_base,
-                    PlaneSlice: aspects_to_plane(self.aspects),
+                    PlaneSlice: self.plane_slice(),
                 }
             }
             wgt::TextureViewDimension::D2 | wgt::TextureViewDimension::D2Array => {
@@ -177,7 +207,7 @@ impl ViewDescriptor {
                     MipSlice: self.mip_level_base,
                     FirstArraySlice: self.array_layer_base,
                     ArraySize: self.array_layer_count,
-                    PlaneSlice: aspects_to_plane(self.aspects),
+                    PlaneSlice: self.plane_slice(),
                 }
             }
             wgt::TextureViewDimension::D3 => {
@@ -229,7 +259,7 @@ impl ViewDescriptor {
                 desc.ViewDimension = Direct3D12::D3D12_RTV_DIMENSION_TEXTURE2D;
                 desc.Anonymous.Texture2D = Direct3D12::D3D12_TEX2D_RTV {
                     MipSlice: self.mip_level_base,
-                    PlaneSlice: aspects_to_plane(self.aspects),
+                    PlaneSlice: self.plane_slice(),
                 }
             }
             wgt::TextureViewDimension::D2 | wgt::TextureViewDimension::D2Array
@@ -247,7 +277,7 @@ impl ViewDescriptor {
                     MipSlice: self.mip_level_base,
                     FirstArraySlice: self.array_layer_base,
                     ArraySize: self.array_layer_count,
-                    PlaneSlice: aspects_to_plane(self.aspects),
+                    PlaneSlice: self.plane_slice(),
                 }
             }
             wgt::TextureViewDimension::D3
