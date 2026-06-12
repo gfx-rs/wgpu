@@ -517,11 +517,9 @@ impl Global {
         }
 
         let (hal_copy_size, array_layer_count) =
-            validate_texture_copy_range(source, &texture.desc, CopySide::Source, size)
-                ?;
+            validate_texture_copy_range(source, &texture.desc, CopySide::Source, size)?;
 
-        let (_, texture_base) = extract_texture_selector(source, size, &texture)
-            ?;
+        let (_, texture_base) = extract_texture_selector(source, size, &texture)?;
 
         let (_, bytes_per_array_layer, _) = validate_linear_texture_data(
             &layout,
@@ -530,8 +528,7 @@ impl Global {
             destination.len() as BufferAddress,
             CopySide::Destination,
             size,
-        )
-        ?;
+        )?;
 
         let snatch_guard = texture.device.snatchable_lock.read();
         let raw_texture = texture.try_raw(&snatch_guard)?;
@@ -591,11 +588,9 @@ impl Global {
         }
 
         let (hal_copy_size, array_layer_count) =
-            validate_texture_copy_range(destination, &texture.desc, CopySide::Destination, size)
-                ?;
+            validate_texture_copy_range(destination, &texture.desc, CopySide::Destination, size)?;
 
-        let (_, texture_base) = extract_texture_selector(destination, size, &texture)
-            ?;
+        let (_, texture_base) = extract_texture_selector(destination, size, &texture)?;
 
         let (_, bytes_per_array_layer, _) = validate_linear_texture_data(
             &layout,
@@ -604,8 +599,7 @@ impl Global {
             source.len() as BufferAddress,
             CopySide::Source,
             size,
-        )
-        ?;
+        )?;
 
         let snatch_guard = texture.device.snatchable_lock.read();
         let raw_texture = texture.try_raw(&snatch_guard)?;

@@ -1320,7 +1320,11 @@ impl crate::Device for super::Device {
                         .format
                         .block_copy_size(Some(copy.texture_base.aspect.map()))
                         .unwrap();
-                    debug_assert_eq!(bpr % block_size, 0, "bytes_per_row must be a multiple of block size");
+                    debug_assert_eq!(
+                        bpr % block_size,
+                        0,
+                        "bytes_per_row must be a multiple of block size"
+                    );
                     block_width * (bpr / block_size)
                 }));
             vk_regions.push(region);
@@ -1375,7 +1379,11 @@ impl crate::Device for super::Device {
                         .format
                         .block_copy_size(Some(copy.texture_base.aspect.map()))
                         .unwrap();
-                    debug_assert_eq!(bpr % block_size, 0, "bytes_per_row must be a multiple of block size");
+                    debug_assert_eq!(
+                        bpr % block_size,
+                        0,
+                        "bytes_per_row must be a multiple of block size"
+                    );
                     block_width * (bpr / block_size)
                 }));
             vk_regions.push(region);

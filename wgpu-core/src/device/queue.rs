@@ -1531,9 +1531,9 @@ impl Queue {
 
             let SubmissionResult { snatch_guard } =
                 match submission.submit(pending_writes, textures_to_map_on_completion) {
-                Ok(result) => result,
-                Err(e) => break 'error Err(e.into()),
-            };
+                    Ok(result) => result,
+                    Err(e) => break 'error Err(e.into()),
+                };
 
             profiling::scope!("cleanup");
 
