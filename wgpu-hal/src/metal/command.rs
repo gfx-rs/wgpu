@@ -753,14 +753,17 @@ impl crate::CommandEncoder for super::CommandEncoder {
             _ => {}
         }
     }
-    unsafe fn end_query(&mut self, set: &super::QuerySet, _index: u32) {
+    unsafe fn end_query(&mut self, set: &super::QuerySet, index: u32) {
         match set.ty {
             wgt::QueryType::Occlusion => {
                 self.state
                     .render
                     .as_ref()
                     .unwrap()
-                    .setVisibilityResultMode_offset(MTLVisibilityResultMode::Disabled, 0);
+                    .setVisibilityResultMode_offset(
+                        MTLVisibilityResultMode::Disabled,
+                        index as usize * crate::QUERY_SIZE as usize,
+                    );
             }
             _ => {}
         }
