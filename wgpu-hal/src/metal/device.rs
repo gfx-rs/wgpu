@@ -1,6 +1,5 @@
 use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
-use core::{ptr::NonNull, sync::atomic};
-use std::{thread, time};
+use core::ptr::NonNull;
 
 use bytemuck::TransparentWrapper;
 use objc2::{
@@ -11,11 +10,11 @@ use objc2::{
 use objc2_foundation::{ns_string, NSError, NSRange, NSString, NSUInteger};
 use objc2_metal::{
     MTLAccelerationStructure, MTLAccelerationStructureInstanceOptions, MTLBuffer,
-    MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer, MTLCommandBufferStatus,
-    MTLCompileOptions, MTLComputePipelineDescriptor, MTLComputePipelineState,
-    MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode, MTLDepthStencilDescriptor,
-    MTLDevice, MTLFunction, MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion,
-    MTLLibrary, MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
+    MTLCaptureManager, MTLCaptureScope, MTLCompileOptions, MTLComputePipelineDescriptor,
+    MTLComputePipelineState, MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode,
+    MTLDepthStencilDescriptor, MTLDevice, MTLFunction,
+    MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion, MTLLibrary,
+    MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
     MTLPipelineBufferDescriptorArray, MTLPipelineOption, MTLPixelFormat, MTLPrimitiveTopologyClass,
     MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
     MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
@@ -23,6 +22,7 @@ use objc2_metal::{
     MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTriangleFillMode, MTLVertexDescriptor,
     MTLVertexStepFunction,
 };
+use parking_lot::{Condvar, Mutex, RwLock};
 
 use super::{adapter::VERTEX_BUFFER_SLOT_START, conv, PassthroughShader, ShaderModuleSource};
 use crate::{auxil::map_naga_stage, TlasInstance};
@@ -1885,8 +1885,8 @@ impl crate::Device for super::Device {
             None
         };
         Ok(super::Fence {
-            completed_value: Arc::new(atomic::AtomicU64::new(0)),
-            pending_command_buffers: Vec::new(),
+            sync: Arc::new((Mutex::new(0), Condvar::new())),
+            pending_command_buffers: RwLock::new(Vec::new()),
             shared_event,
         })
     }
@@ -1896,13 +1896,7 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn get_fence_value(&self, fence: &super::Fence) -> DeviceResult<crate::FenceValue> {
-        let mut max_value = fence.completed_value.load(atomic::Ordering::Acquire);
-        for &(value, ref cmd_buf) in fence.pending_command_buffers.iter() {
-            if cmd_buf.status() == MTLCommandBufferStatus::Completed {
-                max_value = value;
-            }
-        }
-        Ok(max_value)
+        Ok(fence.get_latest())
     }
     unsafe fn wait(
         &self,
@@ -1910,34 +1904,34 @@ impl crate::Device for super::Device {
         wait_value: crate::FenceValue,
         timeout: Option<core::time::Duration>,
     ) -> DeviceResult<bool> {
-        if wait_value <= fence.completed_value.load(atomic::Ordering::Acquire) {
+        let (ref mutex, ref condvar) = *fence.sync;
+        let mut lock = mutex.lock();
+
+        if wait_value <= *lock {
             return Ok(true);
         }
 
-        let cmd_buf = match fence
-            .pending_command_buffers
-            .iter()
-            .find(|&&(value, _)| value >= wait_value)
         {
-            Some((_, cmd_buf)) => cmd_buf,
-            None => {
+            let pending_command_buffers = fence.pending_command_buffers.read();
+            if !pending_command_buffers
+                .iter()
+                .any(|&(value, _)| value >= wait_value)
+            {
                 log::error!("No active command buffers for fence value {wait_value}");
                 return Err(crate::DeviceError::Lost);
             }
-        };
-
-        let start = time::Instant::now();
-        loop {
-            if let MTLCommandBufferStatus::Completed = cmd_buf.status() {
-                return Ok(true);
-            }
-            if let Some(timeout) = timeout {
-                if start.elapsed() >= timeout {
-                    return Ok(false);
-                }
-            }
-            thread::sleep(core::time::Duration::from_millis(1));
         }
+
+        if let Some(timeout) = timeout {
+            let result = condvar.wait_while_for(&mut lock, |value| *value < wait_value, timeout);
+            if result.timed_out() {
+                return Ok(*lock >= wait_value);
+            }
+        } else {
+            condvar.wait_while(&mut lock, |value| *value < wait_value);
+        }
+
+        Ok(true)
     }
 
     unsafe fn start_graphics_debugger_capture(&self) -> bool {

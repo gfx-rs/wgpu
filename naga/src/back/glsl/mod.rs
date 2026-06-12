@@ -298,11 +298,17 @@ pub struct ImmediateItem {
     ///
     pub access_path: String,
     /// Type of the uniform. This will only ever be a scalar, vector, or matrix.
+    ///
+    /// Stored as a [`GlslUniformType`] rather than a [`Handle<Type>`] because
+    /// `process_overrides` may compact the module, renumbering type handles.
+    /// Leaf types don't reference other types, so a `GlslUniformType` is self-contained.
+    ///
+    /// [`Handle<Type>`]: Handle
     pub ty: GlslUniformType,
     /// The offset in the immediate data memory block this uniform maps to.
-    ///
-    /// The size of the uniform can be derived from the type.
     pub offset: u32,
+    /// Size of this uniform in bytes.
+    pub size_bytes: u32,
 }
 
 /// Helper structure that generates a number
@@ -495,4 +501,5 @@ pub fn supported_capabilities() -> valid::Capabilities {
         | Caps::DRAW_INDEX
         | Caps::MEMORY_DECORATION_COHERENT
         | Caps::MEMORY_DECORATION_VOLATILE
+        | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
 }

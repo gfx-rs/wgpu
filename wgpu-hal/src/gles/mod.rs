@@ -115,7 +115,6 @@ pub use self::wgl::{Instance, Surface};
 
 use alloc::{boxed::Box, string::String, string::ToString as _, sync::Arc, vec::Vec};
 use core::{
-    cell::Cell,
     fmt,
     ops::Range,
     sync::atomic::{AtomicU32, AtomicU8},
@@ -235,6 +234,19 @@ bitflags::bitflags! {
         const FULLY_FEATURED_INSTANCING = 1 << 16;
         /// Supports direct multisampled rendering to a texture without needing a resolve texture.
         const MULTISAMPLED_RENDER_TO_TEXTURE = 1 << 17;
+        /// Supports norm16 sized internal formats as filterable sampled
+        /// textures, with UNORM variants also color-renderable. SNORM
+        /// renderability is gated on `TEXTURE_FORMAT_SNORM16_RENDERABLE`.
+        const TEXTURE_FORMAT_NORM16 = 1 << 18;
+        /// Supports SNORM 16-bit formats as color attachments. Requires
+        /// `GL_EXT_render_snorm` (in addition to `GL_EXT_texture_norm16`
+        /// on GLES) - desktop GL alone only "optionally" renders SNORM 16.
+        const TEXTURE_FORMAT_SNORM16_RENDERABLE = 1 << 19;
+        /// Supports norm16 sized internal formats as image-load/store targets.
+        /// Desktop GL >= 4.2 (core image-format list) or pre-4.2 with
+        /// `GL_ARB_shader_image_load_store`; GLES needs `GL_NV_image_formats`
+        /// (which itself depends on `GL_EXT_texture_norm16`).
+        const TEXTURE_FORMAT_NORM16_STORAGE = 1 << 20;
     }
 }
 
@@ -345,17 +357,29 @@ pub struct Buffer {
     size: wgt::BufferAddress,
     /// Flags to use within calls to [`Device::map_buffer`](crate::Device::map_buffer).
     map_flags: u32,
+    /// Buffer mapping state.
+    ///
+    /// If locked concurrently with the GL context, the GL context should be locked first.
+    map_state: Arc<MaybeMutex<BufferMapState>>,
+    /// Set when the buffer wraps an externally-owned GL name created via
+    /// [`Device::buffer_from_raw`](crate::gles::Device::buffer_from_raw).
+    ///
+    /// `Buffer` is `Clone`, so the guard is shared via `Arc`
+    /// and only fires its callback once every clone is dropped.
+    drop_guard: Option<Arc<crate::DropGuard>>,
+}
+
+#[derive(Clone, Debug)]
+struct BufferMapState {
     /// True if the GL buffer is actually mapped, i.e. not "fake-mapped" with
     /// an empty slice
-    mapped: Cell<bool>,
-    data: Option<Arc<MaybeMutex<Vec<u8>>>>,
-    offset_of_current_mapping: Arc<MaybeMutex<wgt::BufferAddress>>,
+    mapped: bool,
+    data: Option<Vec<u8>>,
+    offset_of_current_mapping: wgt::BufferAddress,
 }
 
 #[cfg(send_sync)]
-unsafe impl Sync for Buffer {}
-#[cfg(send_sync)]
-unsafe impl Send for Buffer {}
+static_assertions::assert_impl_all!(Buffer: Send, Sync);
 
 impl crate::DynBuffer for Buffer {}
 
@@ -687,6 +711,11 @@ struct PipelineInner {
     clip_distance_count: u32,
 }
 
+#[cfg(send_sync)]
+unsafe impl Sync for PipelineInner {}
+#[cfg(send_sync)]
+unsafe impl Send for PipelineInner {}
+
 #[derive(Clone, Debug)]
 struct DepthState {
     function: u32,
@@ -745,9 +774,7 @@ pub struct RenderPipeline {
 impl crate::DynRenderPipeline for RenderPipeline {}
 
 #[cfg(send_sync)]
-unsafe impl Sync for RenderPipeline {}
-#[cfg(send_sync)]
-unsafe impl Send for RenderPipeline {}
+static_assertions::assert_impl_all!(RenderPipeline: Send, Sync);
 
 #[derive(Debug)]
 pub struct ComputePipeline {
@@ -757,9 +784,7 @@ pub struct ComputePipeline {
 impl crate::DynComputePipeline for ComputePipeline {}
 
 #[cfg(send_sync)]
-unsafe impl Sync for ComputePipeline {}
-#[cfg(send_sync)]
-unsafe impl Send for ComputePipeline {}
+static_assertions::assert_impl_all!(ComputePipeline: Send, Sync);
 
 #[derive(Debug)]
 pub struct QuerySet {

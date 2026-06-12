@@ -4592,6 +4592,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     access_path: name,
                     offset: *offset,
                     ty: (&self.module.types[ty].inner).try_into().unwrap(),
+                    size_bytes: layout.size,
                 });
                 *offset += layout.size;
             }

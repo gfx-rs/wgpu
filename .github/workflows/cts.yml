@@ -17,7 +17,6 @@ env:
   REPO_MSRV: "1.93"
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
-  DENO_WEBGPU_DX12_COMPILER: dynamicdxc
   RUST_BACKTRACE: full
   RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
@@ -100,6 +99,7 @@ jobs:
         with:
           # The version number can be incremented for cache busting.
           prefix-key: v3-rust-${{ hashFiles('cts_runner/revision.txt') }}
+          env-vars: ImageVersion
           cache-directories: cts
           # Save the cache from the `other` job because it also runs the cts_runner
           # integration tests.
