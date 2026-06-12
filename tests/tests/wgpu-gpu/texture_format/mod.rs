@@ -462,7 +462,15 @@ macro_rules! make_format_feature_functions_internal {
                         TestParameters::default()
                             .test_features_limits()
                             .features($fmt_features | $feat_features)
-                            .enable_noop(),
+                            .enable_noop()
+                            // The exhaustive format/usage matrix allocates a lot
+                            // of (small) textures. The DX12 software adapter
+                            // (WARP) runs out of memory on it; real GPUs have
+                            // ample headroom.
+                            .skip(wgpu_test::FailureCase::backend_adapter(
+                                wgpu::Backends::DX12,
+                                "Microsoft Basic Render Driver",
+                            )),
                     )
                     .run_sync(|ctx| {
                         let iter = $iter;
