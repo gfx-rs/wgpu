@@ -687,6 +687,13 @@ impl super::Adapter {
             super::PrivateCapabilities::TEXTURE_STORAGE,
             supported((3, 0), (4, 2)),
         );
+        private_caps.set(
+            super::PrivateCapabilities::COPY_IMAGE,
+            supported((3, 2), (4, 3))
+                || extensions.contains("GL_ARB_copy_image")
+                || extensions.contains("GL_OES_copy_image")
+                || extensions.contains("GL_EXT_copy_image"),
+        );
         let is_mali = renderer.to_lowercase().contains("mali");
         let debug_fns_enabled = match backend_options.debug_fns {
             wgt::GlDebugFns::Auto => gl.supports_debug() && !is_mali,

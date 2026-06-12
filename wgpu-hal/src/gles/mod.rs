@@ -247,6 +247,11 @@ bitflags::bitflags! {
         /// `GL_ARB_shader_image_load_store`; GLES needs `GL_NV_image_formats`
         /// (which itself depends on `GL_EXT_texture_norm16`).
         const TEXTURE_FORMAT_NORM16_STORAGE = 1 << 20;
+        /// Supports `glCopyImageSubData` for direct texture-to-texture copies.
+        /// Desktop GL >= 4.3 / GLES >= 3.2, or the `copy_image` extensions.
+        /// Unlike the framebuffer-based copy path this also works for
+        /// compressed, multisampled, and depth/stencil formats.
+        const COPY_IMAGE = 1 << 21;
     }
 }
 
@@ -927,6 +932,7 @@ enum Command {
         src_target: BindTarget,
         dst: glow::Texture,
         dst_target: BindTarget,
+        format: wgt::TextureFormat,
         copy: crate::TextureCopy,
     },
     CopyBufferToTexture {
