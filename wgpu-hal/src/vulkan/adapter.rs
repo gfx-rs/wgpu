@@ -3370,6 +3370,8 @@ impl crate::Adapter for super::Adapter {
         };
         let features = properties.optimal_tiling_features;
 
+        let storage_image = features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE);
+
         let mut flags = Tfc::empty();
         flags.set(
             Tfc::SAMPLED,
@@ -3384,15 +3386,12 @@ impl crate::Adapter for super::Adapter {
         //     features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_MINMAX),
         // );
         flags.set(
-            Tfc::STORAGE_READ_WRITE
-                | Tfc::STORAGE_WRITE_ONLY
-                | Tfc::STORAGE_READ_ONLY
-                | Tfc::STORAGE_ATOMIC,
-            features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE),
+            Tfc::STORAGE_READ_WRITE | Tfc::STORAGE_WRITE_ONLY | Tfc::STORAGE_READ_ONLY,
+            storage_image,
         );
         flags.set(
             Tfc::STORAGE_ATOMIC,
-            features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC),
+            storage_image && features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC),
         );
         flags.set(
             Tfc::COLOR_ATTACHMENT,
@@ -3413,10 +3412,6 @@ impl crate::Adapter for super::Adapter {
         flags.set(
             Tfc::COPY_DST,
             features.intersects(vk::FormatFeatureFlags::TRANSFER_DST),
-        );
-        flags.set(
-            Tfc::STORAGE_ATOMIC,
-            features.intersects(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC),
         );
         // Multi-planar images are created with `EXTENDED_USAGE`, so views of
         // the planes are limited by the plane view formats, not by this format.
