@@ -228,11 +228,11 @@ pub enum VertexFormat {
     Unorm8x2 = 7,
     /// Four unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm8x4 = 8,
-    /// One signed byte (i8). [-127, 127] converted to float [-1, 1] `f32` in shaders.
+    /// One signed byte (i8). [&minus;127, 127] converted to float [&minus;1, 1] `f32` in shaders.
     Snorm8 = 9,
-    /// Two signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec2<f32>` in shaders.
+    /// Two signed bytes (i8). [&minus;127, 127] converted to float [&minus;1, 1] `vec2<f32>` in shaders.
     Snorm8x2 = 10,
-    /// Four signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec4<f32>` in shaders.
+    /// Four signed bytes (i8). [&minus;127, 127] converted to float [&minus;1, 1] `vec4<f32>` in shaders.
     Snorm8x4 = 11,
     /// One unsigned short (u16). `u32` in shaders.
     Uint16 = 12,
@@ -252,11 +252,11 @@ pub enum VertexFormat {
     Unorm16x2 = 19,
     /// Four unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm16x4 = 20,
-    /// One signed short (i16). [32767, 32767] converted to float [-1, 1] `f32` in shaders.
+    /// One signed short (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `f32` in shaders.
     Snorm16 = 21,
-    /// Two signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec2<f32>` in shaders.
+    /// Two signed shorts (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `vec2<f32>` in shaders.
     Snorm16x2 = 22,
-    /// Four signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec4<f32>` in shaders.
+    /// Four signed shorts (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `vec4<f32>` in shaders.
     Snorm16x4 = 23,
     /// One half-precision float (no Rust equiv). `f32` in shaders.
     Float16 = 24,
