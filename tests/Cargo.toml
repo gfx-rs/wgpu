@@ -62,7 +62,6 @@ arrayvec.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true
 cfg-if.workspace = true
-ctor.workspace = true
 futures-lite.workspace = true
 libtest-mimic.workspace = true
 log.workspace = true

@@ -40,7 +40,7 @@ static PER_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
             .expect_fail(
                 wgpu_test::FailureCase::molten_vk()
                     .validation_error("could not be compiled into pipeline")
-                    .panic("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
+                    .unexpected_error("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
             ),
     )
     .run_async(per_vertex);

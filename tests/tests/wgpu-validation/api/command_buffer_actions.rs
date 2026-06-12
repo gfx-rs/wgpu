@@ -41,19 +41,6 @@ fn encoder_map_buffer_on_submit_defers_until_submit() {
     assert!(fired.load(SeqCst));
 }
 
-/// Empty ranges panic immediately when registering the deferred map.
-#[test]
-#[should_panic = "buffer slices can not be empty"]
-fn encoder_map_buffer_on_submit_empty_range_panics_immediately() {
-    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
-    let buffer = make_read_buffer(&device, 16);
-
-    let encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-    // This panics inside map_buffer_on_submit (range_to_offset_size).
-    encoder.map_buffer_on_submit(&buffer, wgpu::MapMode::Read, 8..8, |_| {});
-}
-
 /// Out-of-bounds ranges panic during submit (when the deferred map executes).
 #[test]
 #[should_panic = "is out of range for buffer of size"]

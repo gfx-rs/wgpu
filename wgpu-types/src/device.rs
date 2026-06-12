@@ -37,7 +37,7 @@ pub struct DeviceDescriptor<L> {
 impl<L> DeviceDescriptor<L> {
     /// Takes a closure and maps the label of the device descriptor into another.
     #[must_use]
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> DeviceDescriptor<K> {
+    pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> DeviceDescriptor<K> {
         DeviceDescriptor {
             label: fun(&self.label),
             required_features: self.required_features,

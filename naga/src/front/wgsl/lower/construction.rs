@@ -527,15 +527,25 @@ impl<'source> Lowerer<'source, '_> {
 
                 let base = ctx.register_type(components[0])?;
 
+                ctx.layouter.update(ctx.module.to_ctx()).map_err(|err| {
+                    let crate::proc::LayoutErrorInner::TooLarge = err.inner else {
+                        unreachable!("unexpected layout error: {err:?}");
+                    };
+                    // This error could be for any type that was pending layout. Lots of
+                    // type definitions don't get spans, so the error message may not be
+                    // very useful.
+                    Box::new(Error::TypeTooLarge {
+                        span: ctx.module.types.get_span(err.ty),
+                    })
+                })?;
+                let stride = ctx.layouter[base].to_stride();
+
                 let inner = crate::TypeInner::Array {
                     base,
                     size: crate::ArraySize::Constant(
                         NonZeroU32::new(u32::try_from(components.len()).unwrap()).unwrap(),
                     ),
-                    stride: {
-                        ctx.layouter.update(ctx.module.to_ctx()).unwrap();
-                        ctx.layouter[base].to_stride()
-                    },
+                    stride,
                 };
                 let ty = ctx.ensure_type_exists(inner);
 

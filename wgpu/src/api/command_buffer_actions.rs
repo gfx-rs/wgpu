@@ -1,5 +1,4 @@
 use alloc::{sync::Arc, vec::Vec};
-use core::num::NonZeroU64;
 
 use crate::{util::Mutex, *};
 
@@ -8,8 +7,8 @@ use crate::{util::Mutex, *};
 pub(crate) struct DeferredBufferMapping {
     pub buffer: api::Buffer,
     pub mode: MapMode,
-    pub offset: u64,
-    pub size: NonZeroU64,
+    pub offset: BufferAddress,
+    pub size: BufferAddress,
     pub callback: dispatch::BufferMapCallback,
 }
 
@@ -33,7 +32,7 @@ impl DeferredCommandBufferActions {
         for mapping in self.buffer_mappings {
             mapping.buffer.map_async(
                 mapping.mode,
-                mapping.offset..mapping.offset + mapping.size.get(),
+                mapping.offset..mapping.offset + mapping.size,
                 mapping.callback,
             );
         }
@@ -85,7 +84,6 @@ macro_rules! impl_deferred_command_buffer_actions {
         /// # Panics
         ///
         /// - If `bounds` is outside the bounds of `buffer`.
-        /// - If `bounds` has a length less than 1.
         ///
         /// # Panics During Submit
         ///
@@ -93,7 +91,7 @@ macro_rules! impl_deferred_command_buffer_actions {
         /// - If the buffer’s [`BufferUsages`] do not allow the requested [`MapMode`].
         /// - If `bounds` is outside of the bounds of `buffer`.
         /// - If `bounds` does not start at a multiple of [`MAP_ALIGNMENT`].
-        /// - If `bounds` has a length that is not a multiple of 4 greater than 0.
+        /// - If `bounds` has a length that is not a multiple of 4.
         ///
         /// [q::s]: Queue::submit
         /// [i::p_a]: Instance::poll_all

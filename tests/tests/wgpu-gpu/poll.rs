@@ -1,18 +1,20 @@
 use std::{num::NonZeroU64, time::Duration};
 
 use wgpu::{
-    BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
+    Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
     BindingResource, BindingType, BufferBindingType, BufferDescriptor, BufferUsages, CommandBuffer,
-    CommandEncoderDescriptor, ComputePassDescriptor, PollType, ShaderStages,
+    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    PipelineLayoutDescriptor, PollType, ShaderModuleDescriptor, ShaderSource, ShaderStages,
 };
 
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
         WAIT,
+        WAIT_INDEFINITELY_LONG_RUNNING,
         WAIT_WITH_TIMEOUT,
         WAIT_WITH_TIMEOUT_MAX,
         DOUBLE_WAIT,
@@ -22,6 +24,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         DOUBLE_WAIT_ON_SUBMISSION,
         WAIT_OUT_OF_ORDER,
         WAIT_AFTER_BAD_SUBMISSION,
+        WAIT_ON_FAILED_SUBMISSION,
     ]);
 }
 
@@ -82,6 +85,110 @@ static WAIT: GpuTestConfiguration = GpuTestConfiguration::new()
         })
         .await
         .unwrap();
+    });
+
+/// Regression test for <https://github.com/gfx-rs/wgpu/issues/9531>. In common
+/// configurations, Metal will terminate this command buffer due to "impacting
+/// interactivity". Depending on which wait-for-completion code path was used, `wgpu` could
+/// previously hang waiting for `MTLCommandBufferStatus::Completed`, when the actual status
+/// was the terminal `MTLCommandBufferStatus::Error`.
+///
+/// At present this test expects no hang. <https://github.com/gfx-rs/wgpu/issues/9545>
+/// proposes propagating the failure by losing the device. If that is implemented, this test
+/// should be updated accordingly. Care may be needed to avoid flakiness in cases where no
+/// termination occurs.
+#[gpu_test]
+static WAIT_INDEFINITELY_LONG_RUNNING: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .skip(FailureCase::backend(!Backends::METAL)),
+    )
+    .run_async(|ctx| async move {
+        const SHADER: &str = r#"
+@group(0) @binding(0) var<storage, read_write> buf: array<u32>;
+
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    var x: u32 = gid.x ^ 0xDEADBEEFu;
+    for (var i: u32 = 0u; i < 5000000u; i++) {
+        x ^= x << 13u;
+        x ^= x >> 17u;
+        x ^= x << 5u;
+    }
+    buf[gid.x] = x;
+}
+"#;
+
+        const N_THREADS: u32 = 1024 * 64;
+
+        let module = ctx.device.create_shader_module(ShaderModuleDescriptor {
+            label: None,
+            source: ShaderSource::Wgsl(SHADER.into()),
+        });
+        let buffer = ctx.device.create_buffer(&BufferDescriptor {
+            label: None,
+            size: (N_THREADS as u64) * 4,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+        let bind_group_layout = ctx
+            .device
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+        let pipeline_layout = ctx
+            .device
+            .create_pipeline_layout(&PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[Some(&bind_group_layout)],
+                immediate_size: 0,
+            });
+        let pipeline = ctx
+            .device
+            .create_compute_pipeline(&ComputePipelineDescriptor {
+                label: None,
+                layout: Some(&pipeline_layout),
+                module: &module,
+                entry_point: Some("main"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
+        let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        });
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor::default());
+        {
+            let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
+            cpass.set_pipeline(&pipeline);
+            cpass.set_bind_group(0, &bind_group, &[]);
+            cpass.dispatch_workgroups(N_THREADS / 64, 1, 1);
+        }
+        ctx.queue.submit(Some(encoder.finish()));
+
+        // TODO(https://github.com/gfx-rs/wgpu/issues/9545): `wgpu` should raise an error
+        // for the terminated command buffer (e.g. lose the device), and this test should
+        // check for the expected error. Care may be needed to avoid flakiness in cases
+        // where no termination occurs.
+
+        ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
     });
 
 #[gpu_test]
@@ -260,4 +367,90 @@ async fn wait_after_bad_submission(ctx: TestingContext) {
     // be allocated that will not be signalled until further work is
     // successfully submitted, causing a greater fence value to be signalled.
     device2.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+}
+
+/// Wait on a submission index that corresponds to a *failed* submission,
+/// where a *later* submission succeeded — i.e. the failed index is a "hole"
+/// below `last_successful_submission_index`.
+///
+/// This bypasses the wgpu-core `maintain()` guard (which only rejects indices
+/// strictly greater than `last_successful_submission_index`) and exercises a
+/// corner case of the HAL `wait` precondition documented at
+/// `wgpu-hal/src/lib.rs`:
+///
+/// > The `value` argument must not exceed the highest value that an actual
+/// > operation you have already presented to the device is going to store in
+/// > `fence`.
+///
+/// Regression test for <https://github.com/gfx-rs/wgpu/issues/9498>.
+#[gpu_test]
+static WAIT_ON_FAILED_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(wgpu_test::TestParameters::default())
+    .run_async(wait_on_failed_submission);
+
+async fn wait_on_failed_submission(ctx: TestingContext) {
+    // Create an alternate device; we will produce a failed submission by
+    // submitting a command buffer to the wrong device.
+    let (device2, queue2) =
+        wgpu_test::initialize_device(&ctx.adapter, ctx.device_features, ctx.device_limits.clone())
+            .await;
+
+    // 1. Successful empty submit. Advances `last_successful_submission_index`.
+    let _idx_before = queue2.submit([]);
+
+    // 2. Failed submit (cross-device cmd buffer). Burns an index but does not
+    //    advance `last_successful_submission_index`. Capture the returned
+    //    index using an error scope so the validation error is not fatal.
+    let command_buffer_wrong_device = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default())
+        .finish();
+    let scope = device2.push_error_scope(wgpu::ErrorFilter::Validation);
+    let bad_index = queue2.submit([command_buffer_wrong_device]);
+    let scope_error = scope.pop().await;
+    assert!(
+        scope_error.is_some(),
+        "expected the cross-device submission to produce a validation error"
+    );
+
+    // 3. Another successful submit, this time with substantial work, so the
+    //    GPU is still busy when we issue the poll below.
+    //
+    //    Several backends' HAL `wait` implementations have a fast path "if
+    //    last_completed >= wait_value, return immediately". Per-submit
+    //    bookkeeping (e.g. GLES `Fence::get_latest`) probes pending fences
+    //    for completion and advances `last_completed`, so an empty submit
+    //    here would let the fast path apply and mask the code path we
+    //    want to exercise — the pending-fence search where the only
+    //    candidate fence has a value strictly greater than `wait_value`.
+    let big_size = 64 * 1024 * 1024;
+    let src = device2.create_buffer(&BufferDescriptor {
+        label: Some("src"),
+        size: big_size,
+        usage: BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let dst = device2.create_buffer(&BufferDescriptor {
+        label: Some("dst"),
+        size: big_size,
+        usage: BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let mut encoder = device2.create_command_encoder(&CommandEncoderDescriptor::default());
+    // Stack several copies to extend the GPU work duration.
+    for _ in 0..16 {
+        encoder.copy_buffer_to_buffer(&src, 0, &dst, 0, Some(big_size));
+    }
+    let _idx_after = queue2.submit([encoder.finish()]);
+
+    // 4. The interesting wait: pass the hole index to `poll(Wait)`. The
+    //    wgpu-core guard sees `bad_index <= last_successful_submission_index`
+    //    and lets it through to the HAL `wait`, which is being asked to wait
+    //    on a fence value no operation actually presented. Must not panic or
+    //    hang.
+    let result = device2.poll(wgpu::PollType::Wait {
+        submission_index: Some(bad_index),
+        timeout: Some(Duration::from_secs(5)),
+    });
+    let _ = result;
 }

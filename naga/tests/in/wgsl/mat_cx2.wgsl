@@ -100,14 +100,76 @@ fn access_sm() {
     s_sm.m[idx][idx] = l_u_e_vv;
 }
 
+@group(2) @binding(0)
+var<storage, read_write> s_am: array<Mat, 4>;
+
+@group(2) @binding(1)
+var<uniform> u_am: array<Mat, 4>;
+
+fn access_am() {
+    var idx = 1;
+    idx--;
+
+    // loads from storage
+    let l_s_a = s_am;
+    let l_s_m_c = s_am[0];
+    let l_s_m_v = s_am[idx];
+    let l_s_c_cc = s_am[0][0];
+    let l_s_c_cv = s_am[0][idx];
+    let l_s_c_vc = s_am[idx][0];
+    let l_s_c_vv = s_am[idx][idx];
+    let l_s_e_ccc = s_am[0][0][0];
+    let l_s_e_ccv = s_am[0][0][idx];
+    let l_s_e_cvc = s_am[0][idx][0];
+    let l_s_e_cvv = s_am[0][idx][idx];
+    let l_s_e_vcc = s_am[idx][0][0];
+    let l_s_e_vcv = s_am[idx][0][idx];
+    let l_s_e_vvc = s_am[idx][idx][0];
+    let l_s_e_vvv = s_am[idx][idx][idx];
+
+    // loads from uniform
+    let l_u_a = u_am;
+    let l_u_m_c = u_am[0];
+    let l_u_m_v = u_am[idx];
+    let l_u_c_cc = u_am[0][0];
+    let l_u_c_cv = u_am[0][idx];
+    let l_u_c_vc = u_am[idx][0];
+    let l_u_c_vv = u_am[idx][idx];
+    let l_u_e_ccc = u_am[0][0][0];
+    let l_u_e_ccv = u_am[0][0][idx];
+    let l_u_e_cvc = u_am[0][idx][0];
+    let l_u_e_cvv = u_am[0][idx][idx];
+    let l_u_e_vcc = u_am[idx][0][0];
+    let l_u_e_vcv = u_am[idx][0][idx];
+    let l_u_e_vvc = u_am[idx][idx][0];
+    let l_u_e_vvv = u_am[idx][idx][idx];
+
+    // stores to storage
+    s_am = l_u_a;
+    s_am[0] = l_u_m_c;
+    s_am[idx] = l_u_m_v;
+    s_am[0][0] = l_u_c_cc;
+    s_am[0][idx] = l_u_c_cv;
+    s_am[idx][0] = l_u_c_vc;
+    s_am[idx][idx] = l_u_c_vv;
+    s_am[0][0][0] = l_u_e_ccc;
+    s_am[0][0][idx] = l_u_e_ccv;
+    s_am[0][idx][0] = l_u_e_cvc;
+    s_am[0][idx][idx] = l_u_e_cvv;
+    s_am[idx][0][0] = l_u_e_vcc;
+    s_am[idx][0][idx] = l_u_e_vcv;
+    s_am[idx][idx][0] = l_u_e_vvc;
+    s_am[idx][idx][idx] = l_u_e_vvv;
+}
+
 struct StructWithArrayOfStructOfMat {
     a: array<StructWithMat, 4>,
 }
 
-@group(2) @binding(0)
+@group(3) @binding(0)
 var<storage, read_write> s_sasm: StructWithArrayOfStructOfMat;
 
-@group(2) @binding(1)
+@group(3) @binding(1)
 var<uniform> u_sasm: StructWithArrayOfStructOfMat;
 
 fn access_sasm() {
@@ -173,5 +235,6 @@ fn access_sasm() {
 fn main() {
     access_m();
     access_sm();
+    access_am();
     access_sasm();
 }
