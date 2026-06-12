@@ -1004,12 +1004,12 @@ impl TextureFormat {
             Self::NV12 =>                 (        none,    binding),
             Self::P010 =>                 (        none,    binding),
 
-            Self::R16Unorm =>             (        msaa | s_ro_wo,    storage),
-            Self::R16Snorm =>             (        msaa | s_ro_wo,    storage),
-            Self::Rg16Unorm =>            (        msaa | s_ro_wo,    storage),
-            Self::Rg16Snorm =>            (        msaa | s_ro_wo,    storage),
-            Self::Rgba16Unorm =>          (        msaa | s_ro_wo,    storage),
-            Self::Rgba16Snorm =>          (        msaa | s_ro_wo,    storage),
+            Self::R16Unorm =>             (             s_ro_wo,    storage),
+            Self::R16Snorm =>             (             s_ro_wo,    storage),
+            Self::Rg16Unorm =>            (             s_ro_wo,    storage),
+            Self::Rg16Snorm =>            (             s_ro_wo,    storage),
+            Self::Rgba16Unorm =>          (             s_ro_wo,    storage),
+            Self::Rgba16Snorm =>          (             s_ro_wo,    storage),
 
             Self::Rgb9e5Ufloat =>         (        none,      basic),
 
