@@ -163,6 +163,9 @@ impl super::CommandEncoder {
             debug_assert!(self.state.render.is_none() && self.state.compute.is_none());
             let cmd_buf = self.raw_cmd_buf.as_ref().unwrap();
 
+            // This code path is currently unused since the written timestamp is always 0.
+            // We should see if we can get it working again, if not remove the code.
+            //
             // Take care of pending timer queries.
             // If we can't use `sample_counters_in_buffer` we have to create a dummy blit encoder!
             //
