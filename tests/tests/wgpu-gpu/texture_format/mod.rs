@@ -347,14 +347,20 @@ fn get_caps(
         | FF::MULTISAMPLE_RESOLVE;
     let all_storage_flags = FF::STORAGE_READ_ONLY | FF::STORAGE_READ_WRITE | FF::STORAGE_WRITE_ONLY;
 
-    let actual_caps = if ctx
+    // Mirror `wgpu_core`'s `Device::describe_format_features`: the runtime uses
+    // the adapter's (backend) format features whenever we either opted into
+    // `TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` or are running on a downlevel
+    // adapter that doesn't guarantee WebGPU texture format support (e.g. GLES).
+    // Computing caps any other way makes the test claim usages that the runtime
+    // then rejects (see the R32Float `RENDER_ATTACHMENT` downlevel mismatch).
+    let using_device_features = ctx
         .device_features
-        .contains(wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
-        && ctx
-            .adapter_downlevel_capabilities
-            .flags
-            .contains(wgpu::DownlevelFlags::WEBGPU_TEXTURE_FORMAT_SUPPORT)
-    {
+        .contains(wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES);
+    let downlevel = !ctx
+        .adapter_downlevel_capabilities
+        .flags
+        .contains(wgpu::DownlevelFlags::WEBGPU_TEXTURE_FORMAT_SUPPORT);
+    let actual_caps = if using_device_features || downlevel {
         ctx.adapter.get_texture_format_features(format)
     } else {
         format.guaranteed_format_features(ctx.device_features)
