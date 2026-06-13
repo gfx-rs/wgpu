@@ -7,6 +7,14 @@ use hashbrown::hash_map::Entry;
 const ALLOCATION_GRANULARITY: u32 = 16;
 const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
 
+// The backend-agnostic queue family sentinels in `crate` must match the Vulkan
+// values they stand for, since they are passed straight through to ash.
+const _: () = {
+    assert!(crate::QUEUE_FAMILY_IGNORED == vk::QUEUE_FAMILY_IGNORED);
+    assert!(crate::QUEUE_FAMILY_EXTERNAL == vk::QUEUE_FAMILY_EXTERNAL);
+    assert!(crate::QUEUE_FAMILY_FOREIGN == vk::QUEUE_FAMILY_FOREIGN_EXT);
+};
+
 impl super::Texture {
     fn map_buffer_copies<T>(&self, regions: T) -> impl Iterator<Item = vk::BufferImageCopy>
     where
@@ -258,6 +266,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
             let dst_layout = conv::derive_image_layout(bar.usage.to, bar.texture.format);
             dst_stages |= dst_stage;
 
+            // Insert a queue family ownership transfer if the caller requested
+            // one (used for textures imported from external memory). When no
+            // transfer is requested, both indices are `QUEUE_FAMILY_IGNORED`,
+            // which the spec treats as "no transfer".
+            let (src_queue_family_index, dst_queue_family_index) =
+                match bar.queue_family_ownership_transfer {
+                    Some(transfer) => (transfer.src, transfer.dst),
+                    None => (vk::QUEUE_FAMILY_IGNORED, vk::QUEUE_FAMILY_IGNORED),
+                };
+
             vk_barriers.push(
                 vk::ImageMemoryBarrier::default()
                     .image(bar.texture.raw)
@@ -265,7 +283,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     .src_access_mask(src_access)
                     .dst_access_mask(dst_access)
                     .old_layout(src_layout)
-                    .new_layout(dst_layout),
+                    .new_layout(dst_layout)
+                    .src_queue_family_index(src_queue_family_index)
+                    .dst_queue_family_index(dst_queue_family_index),
             );
         }
 

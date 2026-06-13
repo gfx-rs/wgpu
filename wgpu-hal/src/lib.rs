@@ -2767,11 +2767,55 @@ pub struct BufferBarrier<'a, B: DynBuffer + ?Sized> {
     pub usage: StateTransition<wgt::BufferUses>,
 }
 
+/// A queue family ownership transfer to perform as part of a [`TextureBarrier`].
+///
+/// This is only honored by the Vulkan backend; every other backend ignores it.
+/// It exists so that textures imported from external memory (for example via
+/// `VK_KHR_external_memory`) can have their backing image transferred between
+/// wgpu's queue family and a sentinel queue family when the image is acquired
+/// for use and released afterwards.
+///
+/// `src` becomes `VkImageMemoryBarrier::srcQueueFamilyIndex` and `dst` becomes
+/// `VkImageMemoryBarrier::dstQueueFamilyIndex`. To acquire an externally owned
+/// image, set `src` to the sentinel family (such as [`QUEUE_FAMILY_EXTERNAL`]
+/// or [`QUEUE_FAMILY_FOREIGN`]) and `dst` to wgpu's own family, obtained from
+/// `vulkan::Device::queue_family_index`. To release it again, swap the two.
+///
+/// A queue family ownership transfer requires a matching barrier to be recorded
+/// on *both* queues; wgpu-hal only records the barrier on its own queue, so the
+/// owner of the other queue is responsible for recording the complementary one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QueueFamilyOwnershipTransfer {
+    /// The queue family that currently owns the image (`srcQueueFamilyIndex`).
+    pub src: u32,
+    /// The queue family that should own the image afterwards (`dstQueueFamilyIndex`).
+    pub dst: u32,
+}
+
+/// Special queue family value indicating that no ownership transfer should be
+/// performed (`VK_QUEUE_FAMILY_IGNORED`).
+pub const QUEUE_FAMILY_IGNORED: u32 = u32::MAX;
+
+/// Sentinel queue family for images shared with an external, non-Vulkan API
+/// (`VK_QUEUE_FAMILY_EXTERNAL`).
+pub const QUEUE_FAMILY_EXTERNAL: u32 = u32::MAX - 1;
+
+/// Sentinel queue family for images shared with an external, foreign instance
+/// of the same API (`VK_QUEUE_FAMILY_FOREIGN_EXT`).
+pub const QUEUE_FAMILY_FOREIGN: u32 = u32::MAX - 2;
+
 #[derive(Debug, Clone)]
 pub struct TextureBarrier<'a, T: DynTexture + ?Sized> {
     pub texture: &'a T,
     pub range: wgt::ImageSubresourceRange,
     pub usage: StateTransition<wgt::TextureUses>,
+    /// An optional Vulkan queue family ownership transfer to perform alongside
+    /// the layout/access transition described by `usage`.
+    ///
+    /// This is honored only by the Vulkan backend; all other backends ignore
+    /// it. Leave it as `None` for the common case where no ownership transfer
+    /// is required. See [`QueueFamilyOwnershipTransfer`] for details.
+    pub queue_family_ownership_transfer: Option<QueueFamilyOwnershipTransfer>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -3089,4 +3133,35 @@ pub struct PipelineGroupData<'a, B: DynBuffer + ?Sized> {
     pub offset: wgt::BufferAddress,
     pub stride: u64,
     pub count: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The backend-agnostic queue family sentinels must match the values of the
+    /// Vulkan constants they stand for (`VK_QUEUE_FAMILY_*`), since they are
+    /// passed straight through to the Vulkan backend. The Vulkan backend also
+    /// has a compile-time assertion against `ash`'s definitions; this test
+    /// pins the raw values so they cannot drift even when the `vulkan` feature
+    /// is disabled.
+    #[test]
+    fn queue_family_sentinels_match_vulkan() {
+        assert_eq!(QUEUE_FAMILY_IGNORED, 0xFFFF_FFFF); // ~0u32
+        assert_eq!(QUEUE_FAMILY_EXTERNAL, 0xFFFF_FFFE); // ~1u32
+        assert_eq!(QUEUE_FAMILY_FOREIGN, 0xFFFF_FFFD); // ~2u32
+    }
+
+    /// A `TextureBarrier` without an ownership transfer must leave the new
+    /// field unset, so existing callers keep their previous behavior.
+    #[test]
+    fn texture_barrier_defaults_to_no_ownership_transfer() {
+        let transfer = QueueFamilyOwnershipTransfer {
+            src: QUEUE_FAMILY_EXTERNAL,
+            dst: 0,
+        };
+        // `from`/`to` round-trip the raw indices unchanged.
+        assert_eq!(transfer.src, QUEUE_FAMILY_EXTERNAL);
+        assert_eq!(transfer.dst, 0);
+    }
 }

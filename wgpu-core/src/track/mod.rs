@@ -308,6 +308,7 @@ impl PendingTransition<wgt::TextureUses> {
                 array_layer_count: Some(layer_count),
             },
             usage: self.usage,
+            queue_family_ownership_transfer: None,
         }
     }
 }
