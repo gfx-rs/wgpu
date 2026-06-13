@@ -269,6 +269,57 @@ impl ContextWgpuCore {
     #[cold]
     #[track_caller]
     #[inline(never)]
+    /// Builds the public [`crate::Error`] for a context error without routing it anywhere.
+    ///
+    /// Returns `None` for [`ErrorType::DeviceLost`], which is surfaced via the device-lost
+    /// callback rather than as an error. Used both by [`Self::handle_error_inner`] (which then
+    /// pushes the error into the error scope) and by the async pipeline-creation path, which
+    /// instead *returns* the error to the caller — mirroring the WebGPU spec, where
+    /// `createPipelineAsync` rejects rather than raising an error in the current scope.
+    fn build_error(
+        &self,
+        error_type: ErrorType,
+        source: ContextErrorSource,
+        label: Label<'_>,
+        fn_ident: &'static str,
+    ) -> Option<crate::Error> {
+        let source: ErrorSource = Box::new(wgc::error::ContextError {
+            fn_ident,
+            source,
+            label: label.unwrap_or_default().to_string(),
+        });
+        let description = || self.format_error(&*source);
+        Some(match error_type {
+            ErrorType::Internal => {
+                let description = description();
+                crate::Error::Internal {
+                    source,
+                    description,
+                }
+            }
+            ErrorType::OutOfMemory => crate::Error::OutOfMemory { source },
+            ErrorType::Validation => {
+                let description = description();
+                crate::Error::Validation {
+                    source,
+                    description,
+                }
+            }
+            ErrorType::DeviceLost => return None, // will be surfaced via callback
+        })
+    }
+
+    /// Like [`Self::build_error`] but takes a [`WebGpuError`] source directly.
+    fn build_error_from(
+        &self,
+        source: impl WebGpuError + WasmNotSendSync + 'static,
+        label: Label<'_>,
+        fn_ident: &'static str,
+    ) -> Option<crate::Error> {
+        let error_type = source.webgpu_error_type();
+        self.build_error(error_type, Box::new(source), label, fn_ident)
+    }
+
     fn handle_error_inner(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
@@ -277,32 +328,11 @@ impl ContextWgpuCore {
         label: Label<'_>,
         fn_ident: &'static str,
     ) {
-        let source: ErrorSource = Box::new(wgc::error::ContextError {
-            fn_ident,
-            source,
-            label: label.unwrap_or_default().to_string(),
-        });
+        let Some(error) = self.build_error(error_type, source, label, fn_ident) else {
+            return;
+        };
         let final_error_handling = {
             let mut sink = sink_mutex.lock();
-            let description = || self.format_error(&*source);
-            let error = match error_type {
-                ErrorType::Internal => {
-                    let description = description();
-                    crate::Error::Internal {
-                        source,
-                        description,
-                    }
-                }
-                ErrorType::OutOfMemory => crate::Error::OutOfMemory { source },
-                ErrorType::Validation => {
-                    let description = description();
-                    crate::Error::Validation {
-                        source,
-                        description,
-                    }
-                }
-                ErrorType::DeviceLost => return, // will be surfaced via callback
-            };
             sink.handle_error_or_return_handler(error)
         };
 
@@ -1011,6 +1041,187 @@ impl Drop for CoreAdapter {
     }
 }
 
+/// A minimal single-producer / single-consumer oneshot used to deliver an async pipeline back to
+/// the caller once a [`wgt::TaskExecutor`] has run the compile (possibly on another thread).
+///
+/// wgpu has no `oneshot` dependency, and the existing async operations all resolve inline via
+/// [`ready`], so this is the smallest self-contained primitive that lets a future resolve from the
+/// executor's thread. Only used on the native (`send_sync`) executor path.
+#[cfg(send_sync)]
+mod pipeline_oneshot {
+    use alloc::sync::Arc;
+    use core::future::Future;
+    use core::pin::Pin;
+    use core::task::{Context, Poll, Waker};
+
+    use crate::util::Mutex;
+
+    struct Shared<T> {
+        value: Option<T>,
+        waker: Option<Waker>,
+    }
+
+    pub(super) struct Sender<T>(Arc<Mutex<Shared<T>>>);
+    pub(super) struct Receiver<T>(Arc<Mutex<Shared<T>>>);
+
+    pub(super) fn channel<T>() -> (Sender<T>, Receiver<T>) {
+        let shared = Arc::new(Mutex::new(Shared {
+            value: None,
+            waker: None,
+        }));
+        (Sender(shared.clone()), Receiver(shared))
+    }
+
+    impl<T> Sender<T> {
+        /// Delivers the result and wakes the receiver. The executor contract is that every task
+        /// runs exactly once, so this is always called.
+        pub(super) fn send(self, value: T) {
+            let mut shared = self.0.lock();
+            shared.value = Some(value);
+            if let Some(waker) = shared.waker.take() {
+                waker.wake();
+            }
+        }
+    }
+
+    impl<T> Future for Receiver<T> {
+        type Output = T;
+
+        fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<T> {
+            let mut shared = self.0.lock();
+            match shared.value.take() {
+                Some(value) => Poll::Ready(value),
+                None => {
+                    shared.waker = Some(cx.waker().clone());
+                    Poll::Pending
+                }
+            }
+        }
+    }
+}
+
+/// Builds an owned (`'static`) `wgpu-core` render-pipeline descriptor from the public descriptor.
+///
+/// This mirrors the borrowed mapping in [`CoreDevice::create_render_pipeline`], but produces an
+/// owned descriptor so it can be moved into a [`wgt::Task`] and compiled on an executor thread.
+/// Keep the two in sync; the only difference is `Borrowed` vs owned `Cow`/`Vec`.
+fn owned_render_pipeline_descriptor(
+    desc: &crate::RenderPipelineDescriptor<'_>,
+) -> wgc::pipeline::RenderPipelineDescriptor<'static> {
+    use wgc::pipeline as pipe;
+
+    let vertex_buffers: Vec<_> = desc
+        .vertex
+        .buffers
+        .iter()
+        .map(|vbuf| {
+            vbuf.as_ref().map(|vbuf| pipe::VertexBufferLayout {
+                array_stride: vbuf.array_stride,
+                step_mode: vbuf.step_mode,
+                attributes: Cow::Owned(vbuf.attributes.to_vec()),
+            })
+        })
+        .collect();
+
+    let vert_constants = desc
+        .vertex
+        .compilation_options
+        .constants
+        .iter()
+        .map(|&(key, value)| (String::from(key), value))
+        .collect();
+
+    pipe::RenderPipelineDescriptor {
+        label: desc.label.map(|l| Cow::Owned(l.to_string())),
+        layout: desc.layout.map(|layout| layout.inner.as_core().id),
+        vertex: pipe::VertexState {
+            stage: pipe::ProgrammableStageDescriptor {
+                module: desc.vertex.module.inner.as_core().id,
+                entry_point: desc.vertex.entry_point.map(|e| Cow::Owned(e.to_string())),
+                constants: vert_constants,
+                zero_initialize_workgroup_memory: desc
+                    .vertex
+                    .compilation_options
+                    .zero_initialize_workgroup_memory,
+            },
+            buffers: Cow::Owned(vertex_buffers),
+        },
+        primitive: desc.primitive,
+        depth_stencil: desc.depth_stencil.clone(),
+        multisample: desc.multisample,
+        fragment: desc.fragment.as_ref().map(|frag| {
+            let frag_constants = frag
+                .compilation_options
+                .constants
+                .iter()
+                .map(|&(key, value)| (String::from(key), value))
+                .collect();
+            pipe::FragmentState {
+                stage: pipe::ProgrammableStageDescriptor {
+                    module: frag.module.inner.as_core().id,
+                    entry_point: frag.entry_point.map(|e| Cow::Owned(e.to_string())),
+                    constants: frag_constants,
+                    zero_initialize_workgroup_memory: frag
+                        .compilation_options
+                        .zero_initialize_workgroup_memory,
+                },
+                targets: Cow::Owned(frag.targets.to_vec()),
+            }
+        }),
+        multiview_mask: desc.multiview_mask,
+        cache: desc.cache.map(|cache| cache.inner.as_core().id),
+    }
+}
+
+/// Owned (`'static`) `wgpu-core` compute-pipeline descriptor; see
+/// [`owned_render_pipeline_descriptor`]. Mirrors [`CoreDevice::create_compute_pipeline`].
+fn owned_compute_pipeline_descriptor(
+    desc: &crate::ComputePipelineDescriptor<'_>,
+) -> wgc::pipeline::ComputePipelineDescriptor<'static> {
+    use wgc::pipeline as pipe;
+
+    let constants = desc
+        .compilation_options
+        .constants
+        .iter()
+        .map(|&(key, value)| (String::from(key), value))
+        .collect();
+
+    pipe::ComputePipelineDescriptor {
+        label: desc.label.map(|l| Cow::Owned(l.to_string())),
+        layout: desc.layout.map(|pll| pll.inner.as_core().id),
+        stage: pipe::ProgrammableStageDescriptor {
+            module: desc.module.inner.as_core().id,
+            entry_point: desc.entry_point.map(|e| Cow::Owned(e.to_string())),
+            constants,
+            zero_initialize_workgroup_memory: desc
+                .compilation_options
+                .zero_initialize_workgroup_memory,
+        },
+        cache: desc.cache.map(|cache| cache.inner.as_core().id),
+    }
+}
+
+/// Logs an internal (shader-translation) render-pipeline error, as the sync path does.
+fn log_internal_render_pipeline_error(cause: &wgc::pipeline::CreateRenderPipelineError) {
+    if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, error } = cause {
+        log::error!("Shader translation error for stage {stage:?}: {error}");
+        log::error!("Please report it to https://github.com/gfx-rs/wgpu");
+    }
+}
+
+/// Logs an internal (shader-translation) compute-pipeline error, as the sync path does.
+fn log_internal_compute_pipeline_error(cause: &wgc::pipeline::CreateComputePipelineError) {
+    if let wgc::pipeline::CreateComputePipelineError::Internal(error) = cause {
+        log::error!(
+            "Shader translation error for stage {:?}: {}",
+            wgt::ShaderStages::COMPUTE,
+            error
+        );
+        log::error!("Please report it to https://github.com/gfx-rs/wgpu");
+    }
+}
+
 impl dispatch::DeviceInterface for CoreDevice {
     fn features(&self) -> crate::Features {
         self.context.0.device_features(self.id)
@@ -1577,22 +1788,99 @@ impl dispatch::DeviceInterface for CoreDevice {
         .into()
     }
 
-    // Phase-1 baseline for gfx-rs/wgpu#3794: run the existing sync create and hand back an
-    // already-ready future. Native pipeline creation stays infallible (errors flow through the
-    // error scope), so the async result is always `Ok`. A real `task_executor`-dispatched
-    // off-thread compile (and per-backend native async) is the Phase-2 follow-up.
+    /// Creates a render pipeline asynchronously (gfx-rs/wgpu#3794).
+    ///
+    /// If the instance was given a [`wgt::TaskExecutor`], the compile is handed to it as a
+    /// [`wgt::Task`] (e.g. to run on a worker thread); otherwise it runs inline on the calling
+    /// thread. Either way the returned future resolves to the pipeline — or, mirroring the WebGPU
+    /// spec's async path, *rejects* with the compile error rather than routing it through the
+    /// device error scope.
     fn create_render_pipeline_async(
         &self,
         desc: &crate::RenderPipelineDescriptor<'_>,
     ) -> Pin<Box<dyn dispatch::CreateRenderPipelineAsyncFuture>> {
-        Box::pin(ready(Ok(self.create_render_pipeline(desc))))
+        let descriptor = owned_render_pipeline_descriptor(desc);
+        let context = self.context.clone();
+        let device_id = self.id;
+        let error_sink = Arc::clone(&self.error_sink);
+        let label = desc.label.map(str::to_string);
+
+        let compile = move || -> Result<dispatch::DispatchRenderPipeline, crate::Error> {
+            let (id, error) = context
+                .0
+                .device_create_render_pipeline(device_id, &descriptor, None);
+            if let Some(cause) = error {
+                log_internal_render_pipeline_error(&cause);
+                if let Some(err) = context.build_error_from(
+                    cause,
+                    label.as_deref(),
+                    "Device::create_render_pipeline_async",
+                ) {
+                    return Err(err);
+                }
+            }
+            Ok(CoreRenderPipeline {
+                context: context.clone(),
+                id,
+                error_sink,
+            }
+            .into())
+        };
+
+        #[cfg(send_sync)]
+        if let Some(executor) = self.context.0.instance.task_executor.clone() {
+            let (tx, rx) = pipeline_oneshot::channel();
+            executor.execute(wgt::Task::new(move || tx.send(compile())));
+            return Box::pin(rx);
+        }
+
+        Box::pin(ready(compile()))
     }
 
+    /// Creates a compute pipeline asynchronously (gfx-rs/wgpu#3794).
+    ///
+    /// See [`Self::create_render_pipeline_async`] for the executor / error-model behavior.
     fn create_compute_pipeline_async(
         &self,
         desc: &crate::ComputePipelineDescriptor<'_>,
     ) -> Pin<Box<dyn dispatch::CreateComputePipelineAsyncFuture>> {
-        Box::pin(ready(Ok(self.create_compute_pipeline(desc))))
+        let descriptor = owned_compute_pipeline_descriptor(desc);
+        let context = self.context.clone();
+        let device_id = self.id;
+        let error_sink = Arc::clone(&self.error_sink);
+        let label = desc.label.map(str::to_string);
+
+        let compile = move || -> Result<dispatch::DispatchComputePipeline, crate::Error> {
+            let (id, error) =
+                context
+                    .0
+                    .device_create_compute_pipeline(device_id, &descriptor, None);
+            if let Some(cause) = error {
+                log_internal_compute_pipeline_error(&cause);
+                if let Some(err) = context.build_error_from(
+                    cause,
+                    label.as_deref(),
+                    "Device::create_compute_pipeline_async",
+                ) {
+                    return Err(err);
+                }
+            }
+            Ok(CoreComputePipeline {
+                context: context.clone(),
+                id,
+                error_sink,
+            }
+            .into())
+        };
+
+        #[cfg(send_sync)]
+        if let Some(executor) = self.context.0.instance.task_executor.clone() {
+            let (tx, rx) = pipeline_oneshot::channel();
+            executor.execute(wgt::Task::new(move || tx.send(compile())));
+            return Box::pin(rx);
+        }
+
+        Box::pin(ready(compile()))
     }
 
     unsafe fn create_pipeline_cache(

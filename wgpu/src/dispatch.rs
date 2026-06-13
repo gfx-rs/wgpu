@@ -55,8 +55,9 @@ trait_alias!(PopErrorScopeFuture: Future<Output = Option<crate::Error>> + WasmNo
 trait_alias!(ShaderCompilationInfoFuture: Future<Output = crate::CompilationInfo> + WasmNotSend + 'static);
 trait_alias!(EnumerateAdapterFuture: Future<Output = Vec<DispatchAdapter>> + WasmNotSend + 'static);
 // Async pipeline creation (gfx-rs/wgpu#3794). On web these resolve via the browser's
-// `createPipelineAsync`; on native (Phase 1) they resolve immediately around the sync create.
-// Error model is provisional pending the upstream decision — see issue #3794.
+// `createPipelineAsync`; on native they resolve via the instance's `TaskExecutor` if set, else
+// inline. The future *rejects* with the compile error (it is not routed through the error scope),
+// mirroring the WebGPU spec's async path — see issue #3794.
 trait_alias!(CreateComputePipelineAsyncFuture: Future<Output = Result<DispatchComputePipeline, crate::Error>> + WasmNotSend + 'static);
 trait_alias!(CreateRenderPipelineAsyncFuture: Future<Output = Result<DispatchRenderPipeline, crate::Error>> + WasmNotSend + 'static);
 

@@ -1025,8 +1025,10 @@ fn future_pop_error_scope(
 }
 
 // The async pipeline-creation promise (gfx-rs/wgpu#3794) rejects with a `GPUPipelineError`.
-// The final public error model is pending the upstream decision; provisionally we surface a
-// rejection as a validation error carrying the JS message.
+// Mirroring the WebGPU spec, the wgpu async future also rejects (returns `Err`) rather than
+// routing through the error scope; we surface the rejection as a validation error carrying the
+// JS message. (Distinguishing the `GPUPipelineError.reason` "internal" vs "validation" is a
+// possible refinement.)
 fn map_pipeline_error(error_value: wasm_bindgen::JsValue) -> crate::Error {
     let description = format!("{error_value:?}");
     crate::Error::Validation {

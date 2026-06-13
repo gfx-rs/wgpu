@@ -1,7 +1,6 @@
 //! Types for dealing with Instances.
 
-use alloc::{boxed::Box, sync::Arc};
-use core::fmt;
+use alloc::sync::Arc;
 
 use crate::{link_to_wgpu_docs, Backends};
 
@@ -17,13 +16,13 @@ use crate::{Backend, DownlevelFlags};
 ///
 /// [`Device::create_compute_pipeline_async`]: ../wgpu/struct.Device.html#method.create_compute_pipeline_async
 /// [`Device::create_render_pipeline_async`]: ../wgpu/struct.Device.html#method.create_render_pipeline_async
-pub struct Task(Box<dyn FnOnce() + Send + 'static>);
+pub struct Task(alloc::boxed::Box<dyn FnOnce() + Send + 'static>);
 
 impl Task {
     /// Wraps a closure as a runnable task. Used internally by wgpu.
     #[must_use]
     pub fn new(work: impl FnOnce() + Send + 'static) -> Self {
-        Self(Box::new(work))
+        Self(alloc::boxed::Box::new(work))
     }
 
     /// Runs the task to completion on the current thread.
@@ -32,8 +31,8 @@ impl Task {
     }
 }
 
-impl fmt::Debug for Task {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Debug for Task {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str("Task")
     }
 }
@@ -62,8 +61,8 @@ impl TaskExecutor {
     }
 }
 
-impl fmt::Debug for TaskExecutor {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Debug for TaskExecutor {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str("TaskExecutor")
     }
 }

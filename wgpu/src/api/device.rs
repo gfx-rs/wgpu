@@ -276,10 +276,15 @@ impl Device {
     ///
     /// On the WebGPU backend this maps to `GPUDevice.createRenderPipelineAsync`, letting the
     /// browser compile the pipeline off the main thread (the only route to non-blocking
-    /// pipeline creation on the web). On native backends this currently resolves immediately
-    /// around the synchronous create; off-thread / per-backend native async is a follow-up.
+    /// pipeline creation on the web). On native backends, if the instance was given a
+    /// [`TaskExecutor`](crate::TaskExecutor) the compile is handed to it (e.g. to run on a worker
+    /// thread); otherwise it runs inline on the calling thread. Per-backend native async (Metal
+    /// completion handlers, Vulkan `VK_KHR_deferred_host_operations`, DX12) is a follow-up.
     ///
-    /// The error model is provisional pending the upstream decision on #3794.
+    /// Unlike [`create_render_pipeline`](Self::create_render_pipeline), which is infallible and
+    /// reports errors via the [error scope](Self::push_error_scope), this *returns* the error —
+    /// mirroring the WebGPU spec, where `createPipelineAsync` rejects rather than raising in the
+    /// current scope.
     pub fn create_render_pipeline_async(
         &self,
         desc: &RenderPipelineDescriptor<'_>,
@@ -292,10 +297,15 @@ impl Device {
     ///
     /// On the WebGPU backend this maps to `GPUDevice.createComputePipelineAsync`, letting the
     /// browser compile the pipeline off the main thread (the only route to non-blocking
-    /// pipeline creation on the web). On native backends this currently resolves immediately
-    /// around the synchronous create; off-thread / per-backend native async is a follow-up.
+    /// pipeline creation on the web). On native backends, if the instance was given a
+    /// [`TaskExecutor`](crate::TaskExecutor) the compile is handed to it (e.g. to run on a worker
+    /// thread); otherwise it runs inline on the calling thread. Per-backend native async (Metal
+    /// completion handlers, Vulkan `VK_KHR_deferred_host_operations`, DX12) is a follow-up.
     ///
-    /// The error model is provisional pending the upstream decision on #3794.
+    /// Unlike [`create_compute_pipeline`](Self::create_compute_pipeline), which is infallible and
+    /// reports errors via the [error scope](Self::push_error_scope), this *returns* the error —
+    /// mirroring the WebGPU spec, where `createPipelineAsync` rejects rather than raising in the
+    /// current scope.
     pub fn create_compute_pipeline_async(
         &self,
         desc: &ComputePipelineDescriptor<'_>,
