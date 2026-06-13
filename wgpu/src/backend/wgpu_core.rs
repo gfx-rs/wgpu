@@ -1618,10 +1618,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             .0
             .device_create_render_pipeline(self.id, &descriptor, None);
         if let Some(cause) = error {
-            if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
-                log::error!("Shader translation error for stage {stage:?}: {error}");
-                log::error!("Please report it to https://github.com/gfx-rs/wgpu");
-            }
+            log_internal_render_pipeline_error(&cause);
             self.context.handle_error(
                 &self.error_sink,
                 cause,
@@ -1714,10 +1711,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             .0
             .device_create_mesh_pipeline(self.id, &descriptor, None);
         if let Some(cause) = error {
-            if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
-                log::error!("Shader translation error for stage {stage:?}: {error}");
-                log::error!("Please report it to https://github.com/gfx-rs/wgpu");
-            }
+            log_internal_render_pipeline_error(&cause);
             self.context.handle_error(
                 &self.error_sink,
                 cause,
@@ -1765,14 +1759,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             .0
             .device_create_compute_pipeline(self.id, &descriptor, None);
         if let Some(cause) = error {
-            if let wgc::pipeline::CreateComputePipelineError::Internal(ref error) = cause {
-                log::error!(
-                    "Shader translation error for stage {:?}: {}",
-                    wgt::ShaderStages::COMPUTE,
-                    error
-                );
-                log::error!("Please report it to https://github.com/gfx-rs/wgpu");
-            }
+            log_internal_compute_pipeline_error(&cause);
             self.context.handle_error(
                 &self.error_sink,
                 cause,
@@ -1820,7 +1807,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                 }
             }
             Ok(CoreRenderPipeline {
-                context: context.clone(),
+                context,
                 id,
                 error_sink,
             }
@@ -1828,7 +1815,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         };
 
         #[cfg(send_sync)]
-        if let Some(executor) = self.context.0.instance.task_executor.clone() {
+        if let Some(executor) = self.context.0.instance.task_executor.as_ref() {
             let (tx, rx) = pipeline_oneshot::channel();
             executor.execute(wgt::Task::new(move || tx.send(compile())));
             return Box::pin(rx);
@@ -1866,7 +1853,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                 }
             }
             Ok(CoreComputePipeline {
-                context: context.clone(),
+                context,
                 id,
                 error_sink,
             }
@@ -1874,7 +1861,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         };
 
         #[cfg(send_sync)]
-        if let Some(executor) = self.context.0.instance.task_executor.clone() {
+        if let Some(executor) = self.context.0.instance.task_executor.as_ref() {
             let (tx, rx) = pipeline_oneshot::channel();
             executor.execute(wgt::Task::new(move || tx.send(compile())));
             return Box::pin(rx);
