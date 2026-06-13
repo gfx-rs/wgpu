@@ -101,6 +101,7 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
             any(target_os = "emscripten", feature = "webgl")
         ))]
         display: Some(Box::new(WebDisplayHandle)),
+        task_executor: None,
     })
 }
 

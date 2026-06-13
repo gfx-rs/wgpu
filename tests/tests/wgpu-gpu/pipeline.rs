@@ -7,6 +7,8 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE,
         RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX,
         NO_TARGETLESS_RENDER,
+        ASYNC_COMPUTE_PIPELINE_SUCCEEDS,
+        ASYNC_RENDER_PIPELINE_SUCCEEDS,
     ]);
 }
 
@@ -183,6 +185,81 @@ static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
                 Some("Bind group layout index 4294967295 is greater than the device's configured `max_bind_groups` limit"),
             );
         });
+
+// gfx-rs/wgpu#3794: a valid async compute pipeline resolves to `Ok`. With no `task_executor` set
+// on the instance (the test harness doesn't set one), this exercises the inline path.
+#[gpu_test]
+static ASYNC_COMPUTE_PIPELINE_SUCCEEDS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .enable_noop(),
+    )
+    .run_async(|ctx| async move {
+        let module = ctx.device.create_shader_module(TRIVIAL_COMPUTE_SHADER_DESC);
+        let pipeline = ctx
+            .device
+            .create_compute_pipeline_async(&wgpu::ComputePipelineDescriptor {
+                label: Some("async compute pipeline"),
+                layout: None,
+                module: &module,
+                entry_point: Some("main"),
+                compilation_options: Default::default(),
+                cache: None,
+            })
+            .await;
+        assert!(
+            pipeline.is_ok(),
+            "valid async compute pipeline should compile: {pipeline:?}"
+        );
+    });
+
+// gfx-rs/wgpu#3794: a valid async render pipeline resolves to `Ok`.
+#[gpu_test]
+static ASYNC_RENDER_PIPELINE_SUCCEEDS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .enable_noop(),
+    )
+    .run_async(|ctx| async move {
+        let vs_module = ctx.device.create_shader_module(TRIVIAL_VERTEX_SHADER_DESC);
+        let fs_module = ctx
+            .device
+            .create_shader_module(TRIVIAL_FRAGMENT_SHADER_DESC);
+        let pipeline = ctx
+            .device
+            .create_render_pipeline_async(&wgpu::RenderPipelineDescriptor {
+                label: Some("async render pipeline"),
+                layout: None,
+                vertex: wgpu::VertexState {
+                    module: &vs_module,
+                    entry_point: Some("main"),
+                    compilation_options: Default::default(),
+                    buffers: &[],
+                },
+                primitive: Default::default(),
+                depth_stencil: None,
+                multisample: Default::default(),
+                fragment: Some(wgpu::FragmentState {
+                    module: &fs_module,
+                    entry_point: Some("main"),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: wgpu::TextureFormat::Rgba8Unorm,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                multiview_mask: None,
+                cache: None,
+            })
+            .await;
+        assert!(
+            pipeline.is_ok(),
+            "valid async render pipeline should compile: {pipeline:?}"
+        );
+    });
 
 #[gpu_test]
 static NO_TARGETLESS_RENDER: GpuTestConfiguration = GpuTestConfiguration::new()

@@ -116,6 +116,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
 #### General
 
+- Add `Device::create_compute_pipeline_async` / `Device::create_render_pipeline_async`. On the WebGPU backend these map to `GPUDevice.createPipelineAsync`; on native, an optional `InstanceDescriptor::task_executor` (a new `TaskExecutor` hook) lets you run the compile off the calling thread, otherwise it runs inline. Mirroring the WebGPU spec, the async variants _return_ an error rather than reporting it via the error scope. By @michaelnorman-au in [#3794](https://github.com/gfx-rs/wgpu/issues/3794).
 - Add `StagingBelt::finish_and_recall_on_submit`, a convenience that combines `finish` and `recall` by deferring the buffer re-map via `CommandEncoder::map_buffer_on_submit`, so no explicit `recall()` call is needed after submission. By @ruihe774.
 - Implement `i16`/`u16` 16-bit integer support in WGSL shaders, gated behind `Features::SHADER_I16` and `enable wgpu_int16;`. Supported on Vulkan, Metal, and DX12 (SM 6.2+). By @JMS55 in [#9412](https://github.com/gfx-rs/wgpu/pull/9412).
 - Add BLAS support for procedural AABB geometry (`BlasGeometrySizeDescriptors::AABBs`, `BlasAabbGeometry`, and related descriptors). By @dylanblokhuis in [#9290](https://github.com/gfx-rs/wgpu/pull/9290)

@@ -45,6 +45,21 @@ impl core::fmt::Debug for Task {
 /// on the calling thread (so async pipeline creation still completes, just synchronously).
 ///
 /// The callback may be invoked from any thread and must be cheap to clone and `Send + Sync`.
+///
+/// # Example
+///
+/// ```
+/// use wgpu_types::{InstanceDescriptor, TaskExecutor};
+///
+/// // Forward each compile task to a worker thread (in real code, prefer a thread pool or your
+/// // async runtime's blocking-task API, e.g. `tokio::task::spawn_blocking`).
+/// let executor = TaskExecutor::new(|task| {
+///     std::thread::spawn(move || task.run());
+/// });
+///
+/// let _descriptor =
+///     InstanceDescriptor::new_without_display_handle().with_task_executor(executor);
+/// ```
 #[derive(Clone)]
 pub struct TaskExecutor(Arc<dyn Fn(Task) + Send + Sync>);
 
