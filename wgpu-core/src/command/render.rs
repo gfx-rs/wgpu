@@ -1633,7 +1633,7 @@ impl RenderPassInfo {
             }
 
             Some(hal::PassTimestampWrites {
-                query_set: query_set.raw(),
+                query_set: query_set.try_raw(snatch_guard)?,
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                 end_of_pass_write_index: tw.end_of_pass_write_index,
             })
@@ -1643,7 +1643,7 @@ impl RenderPassInfo {
 
         let occlusion_query_set_hal = if let Some(query_set) = occlusion_query_set.as_ref() {
             query_set.same_device(device)?;
-            Some(query_set.raw())
+            Some(query_set.try_raw(snatch_guard)?)
         } else {
             None
         };
@@ -2389,6 +2389,7 @@ pub(super) fn encode_render_pass(
                         query_index,
                         Some(&mut pending_query_resets),
                         &mut state.active_occlusion_query,
+                        state.pass.base.snatch_guard,
                     )
                     .map_pass_err(scope)?;
                 }
@@ -2399,6 +2400,7 @@ pub(super) fn encode_render_pass(
                     end_occlusion_query(
                         state.pass.base.raw_encoder,
                         &mut state.active_occlusion_query,
+                        state.pass.base.snatch_guard,
                     )
                     .map_pass_err(scope)?;
                 }
@@ -2420,6 +2422,7 @@ pub(super) fn encode_render_pass(
                         query_index,
                         Some(&mut pending_query_resets),
                         &mut state.active_pipeline_statistics_query,
+                        state.pass.base.snatch_guard,
                     )
                     .map_pass_err(scope)?;
                 }
@@ -2430,6 +2433,7 @@ pub(super) fn encode_render_pass(
                     end_pipeline_statistics_query(
                         state.pass.base.raw_encoder,
                         &mut state.active_pipeline_statistics_query,
+                        state.pass.base.snatch_guard,
                     )
                     .map_pass_err(scope)?;
                 }
@@ -2503,7 +2507,9 @@ pub(super) fn encode_render_pass(
             parent_state.snatch_guard,
         );
 
-        pending_query_resets.reset_queries(transit);
+        pending_query_resets
+            .reset_queries(transit, parent_state.snatch_guard)
+            .map_pass_err(pass_scope)?;
 
         CommandEncoder::insert_barriers_from_scope(
             transit,

@@ -688,6 +688,9 @@ pub(super) fn encode_compute_pass(
                     .or(tw.end_of_pass_write_index)
                     .map(|i| i..i + 1)
             };
+            let raw_query_set = query_set
+                .try_raw(parent_state.snatch_guard)
+                .map_pass_err(pass_scope)?;
             // Range should always be Some, both values being None should lead to a validation error.
             // But no point in erroring over that nuance here!
             if let Some(range) = range {
@@ -696,12 +699,12 @@ pub(super) fn encode_compute_pass(
                         .pass
                         .base
                         .raw_encoder
-                        .reset_queries(query_set.raw(), range);
+                        .reset_queries(raw_query_set, range);
                 }
             }
 
             Some(hal::PassTimestampWrites {
-                query_set: query_set.raw(),
+                query_set: raw_query_set,
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                 end_of_pass_write_index: tw.end_of_pass_write_index,
             })
@@ -812,13 +815,18 @@ pub(super) fn encode_compute_pass(
                     query_index,
                     None,
                     &mut state.active_query,
+                    state.pass.base.snatch_guard,
                 )
                 .map_pass_err(scope)?;
             }
             ArcComputeCommand::EndPipelineStatisticsQuery => {
                 let scope = PassErrorScope::EndPipelineStatisticsQuery;
-                end_pipeline_statistics_query(state.pass.base.raw_encoder, &mut state.active_query)
-                    .map_pass_err(scope)?;
+                end_pipeline_statistics_query(
+                    state.pass.base.raw_encoder,
+                    &mut state.active_query,
+                    state.pass.base.snatch_guard,
+                )
+                .map_pass_err(scope)?;
             }
             ArcComputeCommand::TransitionResources {
                 buffer_transitions,
