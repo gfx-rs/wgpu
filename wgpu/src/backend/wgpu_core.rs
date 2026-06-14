@@ -2388,7 +2388,11 @@ impl Drop for CoreTlas {
     }
 }
 
-impl dispatch::QuerySetInterface for CoreQuerySet {}
+impl dispatch::QuerySetInterface for CoreQuerySet {
+    fn destroy(&self) {
+        self.context.0.query_set_destroy(self.id);
+    }
+}
 
 impl Drop for CoreQuerySet {
     fn drop(&mut self) {
