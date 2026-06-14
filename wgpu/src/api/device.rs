@@ -429,7 +429,11 @@ impl Device {
     #[must_use]
     pub fn create_query_set(&self, desc: &QuerySetDescriptor<'_>) -> QuerySet {
         let query_set = self.inner.create_query_set(desc);
-        QuerySet { inner: query_set }
+        QuerySet {
+            inner: query_set,
+            ty: desc.ty,
+            count: desc.count,
+        }
     }
 
     /// Set a callback which will be called for all errors that are not handled in error scopes.
