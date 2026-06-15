@@ -2637,9 +2637,9 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             self.id,
             &wgc::command::RenderPassDescriptor {
                 label: desc.label.map(Borrowed),
-                timestamp_writes: timestamp_writes.as_ref(),
+                timestamp_writes,
                 color_attachments: Borrowed(&colors),
-                depth_stencil_attachment: depth_stencil.as_ref(),
+                depth_stencil_attachment: depth_stencil,
                 occlusion_query_set: desc.occlusion_query_set.map(|qs| qs.inner.as_core().id),
                 multiview_mask: desc.multiview_mask,
             },

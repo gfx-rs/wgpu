@@ -255,14 +255,15 @@ pub struct ResolvedRenderPassDepthStencilAttachment<TV> {
 
 /// Describes the attachments of a render pass.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RenderPassDescriptor<'a> {
     pub label: Label<'a>,
     /// The color attachments of the render pass.
     pub color_attachments: Cow<'a, [Option<RenderPassColorAttachment>]>,
     /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<&'a RenderPassDepthStencilAttachment<id::TextureViewId>>,
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<id::TextureViewId>>,
     /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Option<&'a PassTimestampWrites>,
+    pub timestamp_writes: Option<PassTimestampWrites>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<id::QuerySetId>,
     /// The multiview array layers that will be used
@@ -1868,7 +1869,7 @@ impl Global {
 
             arc_desc.depth_stencil_attachment =
                 // https://gpuweb.github.io/gpuweb/#abstract-opdef-gpurenderpassdepthstencilattachment-gpurenderpassdepthstencilattachment-valid-usage
-                if let Some(depth_stencil_attachment) = desc.depth_stencil_attachment {
+                if let Some(depth_stencil_attachment) = desc.depth_stencil_attachment.as_ref() {
                     let view = texture_views.get(depth_stencil_attachment.view).get()?;
                     view.same_device(device)?;
 
@@ -1921,6 +1922,7 @@ impl Global {
 
             arc_desc.timestamp_writes = desc
                 .timestamp_writes
+                .as_ref()
                 .map(|tw| {
                     Global::validate_pass_timestamp_writes::<RenderPassErrorInner>(
                         device,
