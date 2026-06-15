@@ -403,9 +403,9 @@ impl Surface {
     }
 
     /// Like `discard`, drops the inner texture reference, but skips the
-    /// HAL `discard_texture` call. Safe to call during unwinding; best-effort, ignores errors.  
-    pub fn release_ref(&self) -> Result<(), SurfaceError> {
-        profiling::scope!("Surface::discard_on_panic");
+    /// HAL `discard_texture` call. Safe to call during unwinding
+    pub fn release(&self) -> Result<(), SurfaceError> {
+        profiling::scope!("Surface::release");
 
         let mut presentation = self.presentation.lock();
         let Some(present) = presentation.as_mut() else {
@@ -496,6 +496,6 @@ impl Global {
             }
         }
 
-        surface.release_ref()
+        surface.release()
     }
 }
