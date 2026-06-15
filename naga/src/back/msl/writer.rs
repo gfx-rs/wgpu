@@ -3445,7 +3445,7 @@ impl<W: Write> Writer<W> {
                 let result_ty = context.function.result.as_ref().unwrap().ty;
                 match context.module.types[result_ty].inner {
                     crate::TypeInner::Struct { ref members, .. } => {
-                        let tmp = "_tmp";
+                        let tmp = self.namer.call("_tmp");
                         write!(self.out, "{level}const auto {tmp} = ")?;
                         self.put_expression(expr_handle, context, true)?;
                         writeln!(self.out, ";")?;
