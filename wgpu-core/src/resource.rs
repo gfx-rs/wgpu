@@ -2240,7 +2240,7 @@ pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 
 #[derive(Debug)]
 pub struct QuerySet {
-    pub(crate) raw: Snatchable<ManuallyDrop<Box<dyn hal::DynQuerySet>>>,
+    pub(crate) raw: Snatchable<Box<dyn hal::DynQuerySet>>,
     pub(crate) device: Arc<Device>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -2260,7 +2260,7 @@ impl QuerySet {
     pub fn destroy(self: &Arc<Self>) {
         let mut snatch_guard = self.device.snatchable_lock.write();
 
-        let mut raw = match self.raw.snatch(&mut snatch_guard) {
+        let raw = match self.raw.snatch(&mut snatch_guard) {
             Some(raw) => raw,
             None => {
                 // Per spec, it is valid to call `destroy` multiple times.
@@ -2268,8 +2268,7 @@ impl QuerySet {
             }
         };
 
-        // SAFETY: We are in the destroy method and we don't use self.raw anymore after this point.
-        let raw = unsafe { ManuallyDrop::take(&mut raw) };
+        // SAFETY: We are in the destroy method and we don't use raw anymore after this point.
         unsafe {
             self.device.raw().destroy_query_set(raw);
         }
@@ -2279,9 +2278,8 @@ impl QuerySet {
 impl Drop for QuerySet {
     fn drop(&mut self) {
         resource_log!("Destroy raw {}", self.error_ident());
-        if let Some(mut raw) = self.raw.take() {
-            // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-            let raw = unsafe { ManuallyDrop::take(&mut raw) };
+        if let Some(raw) = self.raw.take() {
+            // SAFETY: We are in the Drop impl and we don't use raw anymore after this point.
             unsafe {
                 self.device.raw().destroy_query_set(raw);
             }
