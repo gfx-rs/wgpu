@@ -219,8 +219,6 @@
     clippy::single_match,
     // Push commands are more regular than macros.
     clippy::vec_init_then_push,
-    // We unsafe impl `Send` for a reason.
-    clippy::non_send_fields_in_send_ty,
     // TODO!
     clippy::missing_safety_doc,
     // It gets in the way a lot and does not prevent bugs in practice.
@@ -241,6 +239,8 @@
 )]
 
 extern crate alloc;
+#[allow(unused_extern_crates)]
+extern crate naga_types as nt;
 extern crate wgpu_types as wgt;
 // Each of these backends needs `std` in some fashion; usually `std::thread` functions.
 #[cfg(any(dx12, gles_with_std, metal, vulkan))]
@@ -636,6 +636,9 @@ pub trait Api: Clone + fmt::Debug + Sized + WasmNotSendSync + 'static {
     /// before a lower-valued operation, then waiting for the fence to reach the
     /// lower value could return before the lower-valued operation has actually
     /// finished.
+    ///
+    /// Fences are internally synchronised by the hal, and so should not need to be
+    /// contained in external synchronisation primitives.
     type Fence: DynFence;
 
     type BindGroupLayout: DynBindGroupLayout;
@@ -718,6 +721,8 @@ pub trait Surface: WasmNotSendSync {
     /// If you do not wish to display the texture, you must pass the
     /// [`SurfaceTexture`] to [`self.discard_texture`], so that it can be reused
     /// by future acquisitions.
+    ///
+    /// The fence is internally synchronised by the hal.
     ///
     /// # Portability
     ///
@@ -1247,7 +1252,7 @@ pub trait Queue: WasmNotSendSync {
         &self,
         command_buffers: &[&<Self::A as Api>::CommandBuffer],
         surface_textures: &[&<Self::A as Api>::SurfaceTexture],
-        signal_fence: (&mut <Self::A as Api>::Fence, FenceValue),
+        signal_fence: (&<Self::A as Api>::Fence, FenceValue),
     ) -> Result<(), DeviceError>;
     /// Present a surface texture to the screen.
     ///

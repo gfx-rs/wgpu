@@ -8,6 +8,7 @@ repository.workspace = true
 keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license.workspace = true
 exclude = ["bin/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
+readme = "README.md"
 
 # Override the workspace's `rust-version` key. Firefox uses `cargo vendor` to
 # copy the crates it actually uses out of the workspace, so it's meaningful for
@@ -40,21 +41,21 @@ serialize = [
     "bitflags/serde",
     "half/serde",
     "hashbrown/serde",
-    "indexmap/serde",
+    "naga-types/serialize",
 ]
 deserialize = [
     "dep:serde",
     "bitflags/serde",
     "half/serde",
     "hashbrown/serde",
-    "indexmap/serde",
+    "naga-types/deserialize",
 ]
 arbitrary = [
     "dep:arbitrary",
     "bitflags/arbitrary",
-    "indexmap/arbitrary",
     "half/arbitrary",
     "half/std",
+    "naga-types/arbitrary",
 ]
 spv-in = ["dep:petgraph", "petgraph/graphmap", "dep:spirv"]
 spv-out = ["dep:spirv"]
@@ -82,6 +83,8 @@ stderr = ["codespan-reporting/std"]
 fs = []
 
 [dependencies]
+naga-types = { workspace = true }
+
 arbitrary = { workspace = true, features = ["derive"], optional = true }
 arrayvec.workspace = true
 bitflags.workspace = true
@@ -90,8 +93,8 @@ cfg-if.workspace = true
 codespan-reporting = { workspace = true }
 hashbrown.workspace = true
 half = { workspace = true, features = ["num-traits"] }
-rustc-hash.workspace = true
 indexmap.workspace = true
+rustc-hash.workspace = true
 libm = { workspace = true, default-features = false }
 log.workspace = true
 num-traits.workspace = true

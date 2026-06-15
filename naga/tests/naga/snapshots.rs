@@ -389,7 +389,7 @@ fn write_output_hlsl(
             entry_point: name.clone(),
             target_profile: format!(
                 "{}_{}",
-                ep.stage.to_hlsl_str(),
+                naga::back::hlsl::shader_stage_to_hlsl_str(ep.stage),
                 options.shader_model.to_str()
             ),
         });

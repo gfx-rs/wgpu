@@ -165,18 +165,14 @@ impl Surface {
             return Err(SurfaceError::NotConfigured);
         };
 
-        let fence = device.fence.read();
-
         let suf = self.raw(device.backend()).unwrap();
         let (texture, status) = match unsafe {
             suf.acquire_texture(
                 Some(core::time::Duration::from_millis(FRAME_TIMEOUT_MS as u64)),
-                fence.as_ref(),
+                device.fence.as_ref(),
             )
         } {
             Ok(ast) => {
-                drop(fence);
-
                 let texture_desc = wgt::TextureDescriptor {
                     label: hal_label(
                         Some(alloc::borrow::Cow::Borrowed("<Surface Texture>")),
@@ -343,7 +339,10 @@ impl Queue {
             Some(resource::TextureInner::Surface { raw }) => {
                 let raw_surface = surface.raw(device.backend()).unwrap();
                 let raw_queue = self.raw();
-                let _fence_lock = device.fence.write();
+                // [`wgpu_hal::Queue::present`] requires the queue to be synchronized with submit calls and
+                // other present calls. Locking command indices prevents submits which must increment the
+                // submission index, and by `write`ing prevents other present calls.
+                let _command_indices = device.command_indices.write();
                 unsafe { raw_queue.present(raw_surface, raw) }
             }
             _ => unreachable!(),

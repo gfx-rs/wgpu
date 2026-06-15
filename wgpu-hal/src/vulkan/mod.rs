@@ -1162,14 +1162,29 @@ pub enum Fence {
     /// for each queue submission we might want to wait for, and remember which
     /// [`FenceValue`] each one represents.
     ///
+    /// One should keep the fence pool read while there are any references to the
+    /// fences inside of them. This ensures there are no race conditions when
+    /// resetting the fences
+    ///
     /// [fence]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#synchronization-fences
     /// [`FenceValue`]: crate::FenceValue
-    FencePool {
-        last_completed: crate::FenceValue,
-        /// The pending fence values have to be ascending.
-        active: Vec<(crate::FenceValue, vk::Fence)>,
-        free: Vec<vk::Fence>,
-    },
+    FencePool(RwLock<FencePool>),
+}
+
+/// A shared fence type. The arc is expect to have a ref-count of one once a function has finished being called
+///
+/// A fence should have access synchronised as fence resetting might happen at any point. Resetting checks the ref-count
+/// of the fence, so instead of copying the fence, it should have its `Arc` container cloned which shows not to reset
+/// this fence as it is being used.
+pub(super) type SynchronizedFence = Arc<vk::Fence>;
+
+#[derive(Debug)]
+pub struct FencePool {
+    last_completed: crate::FenceValue,
+    /// The pending fence values have to be ascending.
+    active: Vec<(crate::FenceValue, SynchronizedFence)>,
+    // Don't need extra synchronisation around the fences here, if they are used they should be put into active.
+    free: Vec<vk::Fence>,
 }
 
 impl crate::DynFence for Fence {}
@@ -1186,13 +1201,15 @@ impl Fence {
     fn check_active(
         device: &ash::Device,
         mut last_completed: crate::FenceValue,
-        active: &[(crate::FenceValue, vk::Fence)],
+        active: &[(crate::FenceValue, SynchronizedFence)],
     ) -> Result<crate::FenceValue, crate::DeviceError> {
-        for &(value, raw) in active.iter() {
+        for &(value, ref raw) in active.iter() {
             unsafe {
                 if value > last_completed
                     && device
-                        .get_fence_status(raw)
+                        // Don't need to clone as active should be from a read or
+                        // write lock which means this is already synchronised.
+                        .get_fence_status(**raw)
                         .map_err(map_host_device_oom_and_lost_err)?
                 {
                     last_completed = value;
@@ -1221,11 +1238,14 @@ impl Fence {
                         .map_err(map_host_device_oom_and_lost_err)?,
                 })
             },
-            Self::FencePool {
-                last_completed,
-                ref active,
-                free: _,
-            } => Self::check_active(device, last_completed, active),
+            Self::FencePool(ref pool) => {
+                let FencePool {
+                    last_completed,
+                    ref active,
+                    free: _,
+                } = *pool.read();
+                Self::check_active(device, last_completed, active)
+            }
         }
     }
 
@@ -1241,23 +1261,35 @@ impl Fence {
     ///
     /// [`FencePool`]: Fence::FencePool
     /// [`Queue::submit`]: crate::Queue::submit
-    fn maintain(&mut self, device: &ash::Device) -> Result<(), crate::DeviceError> {
+    fn maintain(&self, device: &ash::Device) -> Result<(), crate::DeviceError> {
         match *self {
             Self::TimelineSemaphore(_) => {}
-            Self::FencePool {
-                ref mut last_completed,
-                ref mut active,
-                ref mut free,
-            } => {
-                let latest = Self::check_active(device, *last_completed, active)?;
+            Self::FencePool(ref pool) => {
+                let FencePool {
+                    ref mut last_completed,
+                    ref mut active,
+                    ref mut free,
+                } = *pool.write();
+
                 let base_free = free.len();
-                for &(value, raw) in active.iter() {
-                    if value <= latest {
-                        free.push(raw);
+                let latest = Self::check_active(device, *last_completed, active)?;
+
+                active.retain_mut(|&mut (value, ref mut fence)| {
+                    if value > latest {
+                        true
+                    } else if let Some(fence) = Arc::get_mut(fence) {
+                        // No other references to these, so we have exclusive access. Add them to free and reset them later,
+                        // but drop them from active immediately
+                        free.push(*fence);
+                        false
+                    } else {
+                        // some other function is using it. Although this shouldn't be to long,
+                        // maintain shouldn't block, and it should be cleared up by the next time it happens
+                        true
                     }
-                }
+                });
+
                 if free.len() != base_free {
-                    active.retain(|&(value, _)| value > latest);
                     unsafe { device.reset_fences(&free[base_free..]) }
                         .map_err(map_device_oom_err)?
                 }
@@ -1275,7 +1307,7 @@ impl crate::Queue for Queue {
         &self,
         command_buffers: &[&CommandBuffer],
         surface_textures: &[&SurfaceTexture],
-        (signal_fence, signal_value): (&mut Fence, crate::FenceValue),
+        (signal_fence, signal_value): (&Fence, crate::FenceValue),
     ) -> Result<(), crate::DeviceError> {
         let mut fence_raw = vk::Fence::null();
 
@@ -1343,25 +1375,33 @@ impl crate::Queue for Queue {
 
         // We need to signal our wgpu::Fence if we have one, this adds it to the signal list.
         signal_fence.maintain(&self.device.raw)?;
+        // Keeping the Arc around is probably unneeded - the fence should never be signaled as it was reset,
+        // and newer submits should not happen until this submit is done. Therefore, it should be too high
+        // to be reset.
+        let shared_fence;
         match *signal_fence {
             Fence::TimelineSemaphore(raw) => {
                 signal_semaphores.push_signal(SemaphoreType::Timeline(raw, signal_value));
             }
-            Fence::FencePool {
-                ref mut active,
-                ref mut free,
-                ..
-            } => {
-                fence_raw = match free.pop() {
-                    Some(raw) => raw,
+            Fence::FencePool(ref pool) => {
+                let FencePool {
+                    ref mut active,
+                    ref mut free,
+                    ..
+                } = *pool.write();
+                shared_fence = match free.pop() {
+                    Some(raw) => Arc::new(raw),
                     None => unsafe {
-                        self.device
+                        let fence = self
+                            .device
                             .raw
                             .create_fence(&vk::FenceCreateInfo::default(), None)
-                            .map_err(map_host_device_oom_err)?
+                            .map_err(map_host_device_oom_err)?;
+                        Arc::new(fence)
                     },
                 };
-                active.push((signal_value, fence_raw));
+                fence_raw = *shared_fence;
+                active.push((signal_value, shared_fence.clone()));
             }
         }
 

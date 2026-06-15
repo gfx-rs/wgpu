@@ -118,7 +118,7 @@ define_lock_ranks! {
     }
     rank DEVICE_SNATCHABLE_LOCK "Device::snatchable_lock" followed by {
         BUFFER_MAP_STATE,
-        DEVICE_FENCE,
+        DEVICE_COMMAND_INDICES,
         QUEUE_PENDING_WRITES,
         TEXTURE_INITIALIZATION_STATUS,
         QUEUE_LIFE_TRACKER,
@@ -135,10 +135,6 @@ define_lock_ranks! {
         TEXTURE_VIEWS,
         // Uncomment this to see an interesting cycle.
         // COMMAND_BUFFER_DATA,
-    }
-    rank DEVICE_FENCE "Device::fence" followed by {
-        DEVICE_COMMAND_INDICES,
-        QUEUE_LIFE_TRACKER,
     }
     rank DEVICE_COMMAND_INDICES "Device::command_indices" followed by {
         BUFFER_POOL,

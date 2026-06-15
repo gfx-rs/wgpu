@@ -170,6 +170,7 @@ wgpu-core-deps-windows-linux-android = { workspace = true, optional = true }
 
 [dependencies]
 naga.workspace = true
+naga-types.workspace = true
 wgpu-naga-bridge.workspace = true
 wgpu-hal.workspace = true
 wgpu-types.workspace = true

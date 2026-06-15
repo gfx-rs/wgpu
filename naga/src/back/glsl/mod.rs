@@ -43,6 +43,8 @@ to output a [`Module`](crate::Module) into glsl
 // Additions that are relevant for the backend are the discard keyword, the introduction of
 // vector, matrices, samplers, image types and functions that provide common shader operations
 
+pub use nt::glsl::*;
+
 pub use features::Features;
 pub use writer::Writer;
 
@@ -54,7 +56,6 @@ use alloc::{
     vec::Vec,
 };
 use core::{
-    cmp::Ordering,
     fmt::{self, Error as FmtError, Write},
     mem,
 };
@@ -80,20 +81,12 @@ mod keywords;
 /// Contains the [`Writer`] type.
 mod writer;
 
-/// List of supported `core` GLSL versions.
-pub const SUPPORTED_CORE_VERSIONS: &[u16] = &[140, 150, 330, 400, 410, 420, 430, 440, 450, 460];
-/// List of supported `es` GLSL versions.
-pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
-
 /// The suffix of the variable that will hold the calculated clamped level
 /// of detail for bounds checking in `ImageLoad`
 const CLAMPED_LOD_SUFFIX: &str = "_clamped_lod";
 
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
-
-// Must match code in glsl_built_in
-pub const FIRST_INSTANCE_BINDING: &str = "naga_vs_first_instance";
 
 #[cfg(feature = "deserialize")]
 #[derive(serde::Deserialize)]
@@ -116,9 +109,6 @@ where
     }
     Ok(map)
 }
-
-/// Mapping between resources and bindings.
-pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, u8>;
 
 impl crate::AtomicFunction {
     const fn to_glsl(self) -> &'static str {
@@ -150,144 +140,6 @@ impl crate::AddressSpace {
             crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload => {
                 unreachable!()
             }
-        }
-    }
-}
-
-/// A GLSL version.
-#[derive(Debug, Copy, Clone, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub enum Version {
-    /// `core` GLSL.
-    Desktop(u16),
-    /// `es` GLSL.
-    Embedded { version: u16, is_webgl: bool },
-}
-
-impl Version {
-    /// Create a new gles version
-    pub const fn new_gles(version: u16) -> Self {
-        Self::Embedded {
-            version,
-            is_webgl: false,
-        }
-    }
-
-    /// Returns true if self is `Version::Embedded` (i.e. is a es version)
-    const fn is_es(&self) -> bool {
-        match *self {
-            Version::Desktop(_) => false,
-            Version::Embedded { .. } => true,
-        }
-    }
-
-    /// Returns true if targeting WebGL
-    const fn is_webgl(&self) -> bool {
-        match *self {
-            Version::Desktop(_) => false,
-            Version::Embedded { is_webgl, .. } => is_webgl,
-        }
-    }
-
-    /// Checks the list of currently supported versions and returns true if it contains the
-    /// specified version
-    ///
-    /// # Notes
-    /// As an invalid version number will never be added to the supported version list
-    /// so this also checks for version validity
-    fn is_supported(&self) -> bool {
-        match *self {
-            Version::Desktop(v) => SUPPORTED_CORE_VERSIONS.contains(&v),
-            Version::Embedded { version: v, .. } => SUPPORTED_ES_VERSIONS.contains(&v),
-        }
-    }
-
-    fn supports_io_locations(&self) -> bool {
-        *self >= Version::Desktop(330) || *self >= Version::new_gles(300)
-    }
-
-    /// Checks if the version supports all of the explicit layouts:
-    /// - `location=` qualifiers for bindings
-    /// - `binding=` qualifiers for resources
-    ///
-    /// Note: `location=` for vertex inputs and fragment outputs is supported
-    /// unconditionally for GLES 300.
-    fn supports_explicit_locations(&self) -> bool {
-        *self >= Version::Desktop(420) || *self >= Version::new_gles(310)
-    }
-
-    fn supports_early_depth_test(&self) -> bool {
-        *self >= Version::Desktop(130) || *self >= Version::new_gles(310)
-    }
-
-    fn supports_std140_layout(&self) -> bool {
-        *self >= Version::Desktop(140) || *self >= Version::new_gles(300)
-    }
-
-    fn supports_std430_layout(&self) -> bool {
-        // std430 is available from 400 via GL_ARB_shader_storage_buffer_object.
-        *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
-    }
-
-    fn supports_fma_function(&self) -> bool {
-        *self >= Version::Desktop(400) || *self >= Version::new_gles(320)
-    }
-
-    fn supports_integer_functions(&self) -> bool {
-        *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
-    }
-
-    fn supports_frexp_function(&self) -> bool {
-        *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
-    }
-
-    fn supports_derivative_control(&self) -> bool {
-        *self >= Version::Desktop(450)
-    }
-
-    // For supports_pack_unpack_4x8, supports_pack_unpack_snorm_2x16, supports_pack_unpack_unorm_2x16
-    // see:
-    // https://registry.khronos.org/OpenGL-Refpages/gl4/html/unpackUnorm.xhtml
-    // https://registry.khronos.org/OpenGL-Refpages/es3/html/unpackUnorm.xhtml
-    // https://registry.khronos.org/OpenGL-Refpages/gl4/html/packUnorm.xhtml
-    // https://registry.khronos.org/OpenGL-Refpages/es3/html/packUnorm.xhtml
-    fn supports_pack_unpack_4x8(&self) -> bool {
-        *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
-    }
-    fn supports_pack_unpack_snorm_2x16(&self) -> bool {
-        *self >= Version::Desktop(420) || *self >= Version::new_gles(300)
-    }
-    fn supports_pack_unpack_unorm_2x16(&self) -> bool {
-        *self >= Version::Desktop(400) || *self >= Version::new_gles(300)
-    }
-
-    // https://registry.khronos.org/OpenGL-Refpages/gl4/html/unpackHalf2x16.xhtml
-    // https://registry.khronos.org/OpenGL-Refpages/gl4/html/packHalf2x16.xhtml
-    // https://registry.khronos.org/OpenGL-Refpages/es3/html/unpackHalf2x16.xhtml
-    // https://registry.khronos.org/OpenGL-Refpages/es3/html/packHalf2x16.xhtml
-    fn supports_pack_unpack_half_2x16(&self) -> bool {
-        *self >= Version::Desktop(420) || *self >= Version::new_gles(300)
-    }
-}
-
-impl PartialOrd for Version {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match (*self, *other) {
-            (Version::Desktop(x), Version::Desktop(y)) => Some(x.cmp(&y)),
-            (Version::Embedded { version: x, .. }, Version::Embedded { version: y, .. }) => {
-                Some(x.cmp(&y))
-            }
-            _ => None,
-        }
-    }
-}
-
-impl fmt::Display for Version {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            Version::Desktop(v) => write!(f, "{v} core"),
-            Version::Embedded { version: v, .. } => write!(f, "{v} es"),
         }
     }
 }
@@ -447,13 +299,12 @@ pub struct ImmediateItem {
     pub access_path: String,
     /// Type of the uniform. This will only ever be a scalar, vector, or matrix.
     ///
-    /// Stored as a [`TypeInner`] rather than a [`Handle<Type>`] because
+    /// Stored as a [`GlslUniformType`] rather than a [`Handle<Type>`] because
     /// `process_overrides` may compact the module, renumbering type handles.
-    /// Leaf types don't reference other types, so a `TypeInner` is self-contained.
+    /// Leaf types don't reference other types, so a `GlslUniformType` is self-contained.
     ///
-    /// [`TypeInner`]: crate::TypeInner
     /// [`Handle<Type>`]: Handle
-    pub ty: TypeInner,
+    pub ty: GlslUniformType,
     /// The offset in the immediate data memory block this uniform maps to.
     pub offset: u32,
     /// Size of this uniform in bytes.
@@ -540,19 +391,17 @@ impl fmt::Display for VaryingName<'_> {
     }
 }
 
-impl ShaderStage {
-    const fn to_str(self) -> &'static str {
-        match self {
-            ShaderStage::Compute => "cs",
-            ShaderStage::Fragment => "fs",
-            ShaderStage::Vertex => "vs",
-            ShaderStage::Task
-            | ShaderStage::Mesh
-            | ShaderStage::RayGeneration
-            | ShaderStage::AnyHit
-            | ShaderStage::ClosestHit
-            | ShaderStage::Miss => unreachable!(),
-        }
+const fn shader_stage_to_str(st: ShaderStage) -> &'static str {
+    match st {
+        ShaderStage::Compute => "cs",
+        ShaderStage::Fragment => "fs",
+        ShaderStage::Vertex => "vs",
+        ShaderStage::Task
+        | ShaderStage::Mesh
+        | ShaderStage::RayGeneration
+        | ShaderStage::AnyHit
+        | ShaderStage::ClosestHit
+        | ShaderStage::Miss => unreachable!(),
     }
 }
 
@@ -652,4 +501,5 @@ pub fn supported_capabilities() -> valid::Capabilities {
         | Caps::DRAW_INDEX
         | Caps::MEMORY_DECORATION_COHERENT
         | Caps::MEMORY_DECORATION_VOLATILE
+        | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
 }
