@@ -234,6 +234,7 @@ webgpu:api,validation,image_copy,texture_related:*
 fails-if(dx12) webgpu:api,validation,layout_shader_compat:pipeline_layout_shader_exact_match:*
 webgpu:api,validation,query_set,destroy:*
 webgpu:api,validation,queue,buffer_mapped:*
+webgpu:api,validation,queue,destroyed,query_set:*
 webgpu:api,validation,queue,submit:command_buffer,*
 webgpu:api,validation,queue,writeBuffer:buffer_state:*
 webgpu:api,validation,queue,writeBuffer:buffer,device_mismatch:*
