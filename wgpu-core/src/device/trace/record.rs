@@ -905,6 +905,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         A::GetSurfaceTexture { id, parent } => A::GetSurfaceTexture { id, parent },
         A::Present(surface) => A::Present(surface),
         A::DiscardSurfaceTexture(surface) => A::DiscardSurfaceTexture(surface),
+        A::ReleaseSurfaceTexture(surface) => A::ReleaseSurfaceTexture(surface),
         A::DestroyBindGroupLayout(layout) => A::DestroyBindGroupLayout(layout),
         A::GetRenderPipelineBindGroupLayout {
             id,

@@ -4025,6 +4025,16 @@ impl dispatch::SurfaceOutputDetailInterface for CoreSurfaceOutputDetail {
             }
         }
     }
+
+    fn texture_release(&self) {
+        match self.context.0.surface_texture_release(self.surface_id) {
+            Ok(_status) => (),
+            Err(err) => {
+                self.context
+                    .handle_error_nolabel(&self.error_sink, err, "Surface::release_texture")
+            }
+        }
+    }
 }
 impl Drop for CoreSurfaceOutputDetail {
     fn drop(&mut self) {

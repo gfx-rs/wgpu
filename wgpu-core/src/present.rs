@@ -401,6 +401,28 @@ impl Surface {
 
         Ok(())
     }
+
+    /// Like `discard`, drops the inner texture reference, but skips the
+    /// HAL `discard_texture` call. Safe to call during unwinding; best-effort, ignores errors.  
+    pub fn release_ref(&self) -> Result<(), SurfaceError> {
+        profiling::scope!("Surface::discard_on_panic");
+
+        let mut presentation = self.presentation.lock();
+        let Some(present) = presentation.as_mut() else {
+            return Err(SurfaceError::NotConfigured);
+        };
+
+        // `texture` is dropped here, decrementing the refcount of
+        // Arc<SwapchainAcquireSemaphore>. If this was the last Arc, the Texture
+        // is freed, which drops NativeSurfaceTextureMetadata and
+        // its Arc<SwapchainAcquireSemaphore>.
+        _ = present
+            .acquired_texture
+            .take()
+            .ok_or(SurfaceError::NothingToPresent)?;
+
+        Ok(())
+    }
 }
 
 impl Global {
@@ -462,5 +484,21 @@ impl Global {
         }
 
         surface.discard()
+    }
+
+    pub fn surface_texture_release(
+        &self,
+        surface_id: id::SurfaceId,
+    ) -> Result<(), SurfaceError> {
+        let surface = self.surfaces.get(surface_id);
+
+        #[cfg(feature = "trace")]
+        if let Some(present) = surface.presentation.lock().as_ref() {
+            if let Some(ref mut trace) = *present.device.trace.lock() {
+                trace.add(Action::ReleaseSurfaceTexture(surface.to_trace()));
+            }
+        }
+
+        surface.release_ref()
     }
 }

@@ -154,6 +154,7 @@ pub enum Action<'a, R: ReferenceType> {
     },
     Present(R::Surface),
     DiscardSurfaceTexture(R::Surface),
+    ReleaseSurfaceTexture(R::Surface),
     CreateBindGroupLayout(
         PointerId<markers::BindGroupLayout>,
         crate::binding_model::BindGroupLayoutDescriptor<'a>,
