@@ -486,10 +486,7 @@ impl Global {
         surface.discard()
     }
 
-    pub fn surface_texture_release(
-        &self,
-        surface_id: id::SurfaceId,
-    ) -> Result<(), SurfaceError> {
+    pub fn surface_texture_release(&self, surface_id: id::SurfaceId) -> Result<(), SurfaceError> {
         let surface = self.surfaces.get(surface_id);
 
         #[cfg(feature = "trace")]
