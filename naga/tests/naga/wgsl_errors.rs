@@ -1014,7 +1014,8 @@ fn recursion_depth_template() {
 macro_rules! check_one_validation {
     ( $source:expr, $pattern:pat $( if $guard:expr )? ) => {
         let source = $source;
-        let error = validation_error($source, naga::valid::Capabilities::default()).map_err(|err| *err.inner);
+        let error = validation_error($source, naga::valid::Capabilities::default());
+        let error = error.as_ref().map_err(|err| err.as_ref());
         #[allow(clippy::redundant_pattern_matching)]
         if ! matches!(&error, $pattern $( if $guard )? ) {
             eprintln!("validation error does not match pattern:\n\
@@ -1034,7 +1035,8 @@ macro_rules! check_one_validation {
     };
     ( $source:expr, $pattern:pat $( if $guard:expr )?, $capabilities:expr ) => {
         let source = $source;
-        let error = validation_error($source, $capabilities).map_err(|err| *err.inner);
+        let error = validation_error($source, $capabilities);
+        let error = error.as_ref().map_err(|err| err.as_ref());
         #[allow(clippy::redundant_pattern_matching)]
         if ! matches!(&error, $pattern $( if $guard )? ) {
             eprintln!("validation error does not match pattern:\n\
@@ -1145,10 +1147,10 @@ macro_rules! check_extension_validation {
         // Don't check with explicitly allowed caps, as certain things (currently just
         // `acceleration_structure`s) can be enabled by multiple extensions
         let error = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), !(caps | other_caps))
-            .validate(&module)
-            .map_err(|e| *e.into_inner().inner); // TODO(https://github.com/gfx-rs/wgpu/issues/8153): Add tests for spans
+            .validate(&module).map_err(|e|e.into_inner());
+        let error = error.as_ref().map_err(|e| e.as_ref()); // TODO(https://github.com/gfx-rs/wgpu/issues/8153): Add tests for spans
         #[allow(clippy::redundant_pattern_matching)]
-        if !matches!(&error, $val_err_pat) {
+        if !matches!(error, $val_err_pat) {
             eprintln!(
                 concat!(
                     "validation error without {:?} does not match pattern:\n",
@@ -4638,7 +4640,7 @@ fn max_type_size_override_array() {
         panic!("expected a validation error, got {err:?}");
     };
     assert!(matches!(
-        err.into_inner().inner.as_ref(),
+        err.into_inner().as_ref(),
         naga::valid::ValidationErrorInner::Layouter(naga::proc::LayoutError {
             inner: naga::proc::LayoutErrorInner::TooLarge,
             ..

@@ -12,7 +12,7 @@ mod interface;
 mod r#type;
 
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
-use core::ops;
+use core::ops::{self, Deref, DerefMut};
 
 use bit_set::BitSet;
 
@@ -475,18 +475,28 @@ pub enum OverrideError {
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 #[error(transparent)]
-pub struct ValidationError {
-    pub inner: Box<ValidationErrorInner>,
-}
+pub struct ValidationError(Box<ValidationErrorInner>);
 
 impl<T> From<T> for ValidationError
 where
     T: Into<ValidationErrorInner>,
 {
     fn from(value: T) -> Self {
-        ValidationError {
-            inner: Box::new(value.into()),
-        }
+        ValidationError(Box::new(value.into()))
+    }
+}
+
+impl Deref for ValidationError {
+    type Target = Box<ValidationErrorInner>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ValidationError {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
