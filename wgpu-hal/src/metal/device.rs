@@ -1,6 +1,5 @@
 use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
-use core::{ptr::NonNull, sync::atomic};
-use std::{thread, time};
+use core::ptr::NonNull;
 
 use bytemuck::TransparentWrapper;
 use objc2::{
@@ -11,11 +10,11 @@ use objc2::{
 use objc2_foundation::{ns_string, NSError, NSRange, NSString, NSUInteger};
 use objc2_metal::{
     MTLAccelerationStructure, MTLAccelerationStructureInstanceOptions, MTLBuffer,
-    MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer, MTLCommandBufferStatus,
-    MTLCompileOptions, MTLComputePipelineDescriptor, MTLComputePipelineState,
-    MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode, MTLDepthStencilDescriptor,
-    MTLDevice, MTLFunction, MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion,
-    MTLLibrary, MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
+    MTLCaptureManager, MTLCaptureScope, MTLCompileOptions, MTLComputePipelineDescriptor,
+    MTLComputePipelineState, MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode,
+    MTLDepthStencilDescriptor, MTLDevice, MTLFunction,
+    MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion, MTLLibrary,
+    MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
     MTLPipelineBufferDescriptorArray, MTLPipelineOption, MTLPixelFormat, MTLPrimitiveTopologyClass,
     MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
     MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
@@ -23,6 +22,7 @@ use objc2_metal::{
     MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTextureUsage, MTLTriangleFillMode,
     MTLVertexDescriptor, MTLVertexStepFunction,
 };
+use parking_lot::{Condvar, Mutex, RwLock};
 
 use super::{
     adapter::VERTEX_BUFFER_SLOT_START, conv, AttachmentInfo, PassthroughShader, ShaderModuleSource,
@@ -91,49 +91,49 @@ fn create_depth_stencil_desc(
     desc
 }
 
-const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> naga::back::msl::VertexFormat {
+const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> nt::VertexFormat {
     match format {
-        wgt::VertexFormat::Uint8 => naga::back::msl::VertexFormat::Uint8,
-        wgt::VertexFormat::Uint8x2 => naga::back::msl::VertexFormat::Uint8x2,
-        wgt::VertexFormat::Uint8x4 => naga::back::msl::VertexFormat::Uint8x4,
-        wgt::VertexFormat::Sint8 => naga::back::msl::VertexFormat::Sint8,
-        wgt::VertexFormat::Sint8x2 => naga::back::msl::VertexFormat::Sint8x2,
-        wgt::VertexFormat::Sint8x4 => naga::back::msl::VertexFormat::Sint8x4,
-        wgt::VertexFormat::Unorm8 => naga::back::msl::VertexFormat::Unorm8,
-        wgt::VertexFormat::Unorm8x2 => naga::back::msl::VertexFormat::Unorm8x2,
-        wgt::VertexFormat::Unorm8x4 => naga::back::msl::VertexFormat::Unorm8x4,
-        wgt::VertexFormat::Snorm8 => naga::back::msl::VertexFormat::Snorm8,
-        wgt::VertexFormat::Snorm8x2 => naga::back::msl::VertexFormat::Snorm8x2,
-        wgt::VertexFormat::Snorm8x4 => naga::back::msl::VertexFormat::Snorm8x4,
-        wgt::VertexFormat::Uint16 => naga::back::msl::VertexFormat::Uint16,
-        wgt::VertexFormat::Uint16x2 => naga::back::msl::VertexFormat::Uint16x2,
-        wgt::VertexFormat::Uint16x4 => naga::back::msl::VertexFormat::Uint16x4,
-        wgt::VertexFormat::Sint16 => naga::back::msl::VertexFormat::Sint16,
-        wgt::VertexFormat::Sint16x2 => naga::back::msl::VertexFormat::Sint16x2,
-        wgt::VertexFormat::Sint16x4 => naga::back::msl::VertexFormat::Sint16x4,
-        wgt::VertexFormat::Unorm16 => naga::back::msl::VertexFormat::Unorm16,
-        wgt::VertexFormat::Unorm16x2 => naga::back::msl::VertexFormat::Unorm16x2,
-        wgt::VertexFormat::Unorm16x4 => naga::back::msl::VertexFormat::Unorm16x4,
-        wgt::VertexFormat::Snorm16 => naga::back::msl::VertexFormat::Snorm16,
-        wgt::VertexFormat::Snorm16x2 => naga::back::msl::VertexFormat::Snorm16x2,
-        wgt::VertexFormat::Snorm16x4 => naga::back::msl::VertexFormat::Snorm16x4,
-        wgt::VertexFormat::Float16 => naga::back::msl::VertexFormat::Float16,
-        wgt::VertexFormat::Float16x2 => naga::back::msl::VertexFormat::Float16x2,
-        wgt::VertexFormat::Float16x4 => naga::back::msl::VertexFormat::Float16x4,
-        wgt::VertexFormat::Float32 => naga::back::msl::VertexFormat::Float32,
-        wgt::VertexFormat::Float32x2 => naga::back::msl::VertexFormat::Float32x2,
-        wgt::VertexFormat::Float32x3 => naga::back::msl::VertexFormat::Float32x3,
-        wgt::VertexFormat::Float32x4 => naga::back::msl::VertexFormat::Float32x4,
-        wgt::VertexFormat::Uint32 => naga::back::msl::VertexFormat::Uint32,
-        wgt::VertexFormat::Uint32x2 => naga::back::msl::VertexFormat::Uint32x2,
-        wgt::VertexFormat::Uint32x3 => naga::back::msl::VertexFormat::Uint32x3,
-        wgt::VertexFormat::Uint32x4 => naga::back::msl::VertexFormat::Uint32x4,
-        wgt::VertexFormat::Sint32 => naga::back::msl::VertexFormat::Sint32,
-        wgt::VertexFormat::Sint32x2 => naga::back::msl::VertexFormat::Sint32x2,
-        wgt::VertexFormat::Sint32x3 => naga::back::msl::VertexFormat::Sint32x3,
-        wgt::VertexFormat::Sint32x4 => naga::back::msl::VertexFormat::Sint32x4,
-        wgt::VertexFormat::Unorm10_10_10_2 => naga::back::msl::VertexFormat::Unorm10_10_10_2,
-        wgt::VertexFormat::Unorm8x4Bgra => naga::back::msl::VertexFormat::Unorm8x4Bgra,
+        wgt::VertexFormat::Uint8 => nt::VertexFormat::Uint8,
+        wgt::VertexFormat::Uint8x2 => nt::VertexFormat::Uint8x2,
+        wgt::VertexFormat::Uint8x4 => nt::VertexFormat::Uint8x4,
+        wgt::VertexFormat::Sint8 => nt::VertexFormat::Sint8,
+        wgt::VertexFormat::Sint8x2 => nt::VertexFormat::Sint8x2,
+        wgt::VertexFormat::Sint8x4 => nt::VertexFormat::Sint8x4,
+        wgt::VertexFormat::Unorm8 => nt::VertexFormat::Unorm8,
+        wgt::VertexFormat::Unorm8x2 => nt::VertexFormat::Unorm8x2,
+        wgt::VertexFormat::Unorm8x4 => nt::VertexFormat::Unorm8x4,
+        wgt::VertexFormat::Snorm8 => nt::VertexFormat::Snorm8,
+        wgt::VertexFormat::Snorm8x2 => nt::VertexFormat::Snorm8x2,
+        wgt::VertexFormat::Snorm8x4 => nt::VertexFormat::Snorm8x4,
+        wgt::VertexFormat::Uint16 => nt::VertexFormat::Uint16,
+        wgt::VertexFormat::Uint16x2 => nt::VertexFormat::Uint16x2,
+        wgt::VertexFormat::Uint16x4 => nt::VertexFormat::Uint16x4,
+        wgt::VertexFormat::Sint16 => nt::VertexFormat::Sint16,
+        wgt::VertexFormat::Sint16x2 => nt::VertexFormat::Sint16x2,
+        wgt::VertexFormat::Sint16x4 => nt::VertexFormat::Sint16x4,
+        wgt::VertexFormat::Unorm16 => nt::VertexFormat::Unorm16,
+        wgt::VertexFormat::Unorm16x2 => nt::VertexFormat::Unorm16x2,
+        wgt::VertexFormat::Unorm16x4 => nt::VertexFormat::Unorm16x4,
+        wgt::VertexFormat::Snorm16 => nt::VertexFormat::Snorm16,
+        wgt::VertexFormat::Snorm16x2 => nt::VertexFormat::Snorm16x2,
+        wgt::VertexFormat::Snorm16x4 => nt::VertexFormat::Snorm16x4,
+        wgt::VertexFormat::Float16 => nt::VertexFormat::Float16,
+        wgt::VertexFormat::Float16x2 => nt::VertexFormat::Float16x2,
+        wgt::VertexFormat::Float16x4 => nt::VertexFormat::Float16x4,
+        wgt::VertexFormat::Float32 => nt::VertexFormat::Float32,
+        wgt::VertexFormat::Float32x2 => nt::VertexFormat::Float32x2,
+        wgt::VertexFormat::Float32x3 => nt::VertexFormat::Float32x3,
+        wgt::VertexFormat::Float32x4 => nt::VertexFormat::Float32x4,
+        wgt::VertexFormat::Uint32 => nt::VertexFormat::Uint32,
+        wgt::VertexFormat::Uint32x2 => nt::VertexFormat::Uint32x2,
+        wgt::VertexFormat::Uint32x3 => nt::VertexFormat::Uint32x3,
+        wgt::VertexFormat::Uint32x4 => nt::VertexFormat::Uint32x4,
+        wgt::VertexFormat::Sint32 => nt::VertexFormat::Sint32,
+        wgt::VertexFormat::Sint32x2 => nt::VertexFormat::Sint32x2,
+        wgt::VertexFormat::Sint32x3 => nt::VertexFormat::Sint32x3,
+        wgt::VertexFormat::Sint32x4 => nt::VertexFormat::Sint32x4,
+        wgt::VertexFormat::Unorm10_10_10_2 => nt::VertexFormat::Unorm10_10_10_2,
+        wgt::VertexFormat::Unorm8x4Bgra => nt::VertexFormat::Unorm8x4Bgra,
 
         wgt::VertexFormat::Float64
         | wgt::VertexFormat::Float64x2
@@ -222,6 +222,7 @@ impl super::Device {
                         .module
                         .runtime_checks
                         .mesh_shader_primitive_indices_clamp,
+                    emit_int_div_checks: stage.module.runtime_checks.int_div_checks,
                 };
 
                 let pipeline_options = naga::back::msl::PipelineOptions {
@@ -1958,8 +1959,8 @@ impl crate::Device for super::Device {
             None
         };
         Ok(super::Fence {
-            completed_value: Arc::new(atomic::AtomicU64::new(0)),
-            pending_command_buffers: Vec::new(),
+            sync: Arc::new((Mutex::new(0), Condvar::new())),
+            pending_command_buffers: RwLock::new(Vec::new()),
             shared_event,
         })
     }
@@ -1969,13 +1970,7 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn get_fence_value(&self, fence: &super::Fence) -> DeviceResult<crate::FenceValue> {
-        let mut max_value = fence.completed_value.load(atomic::Ordering::Acquire);
-        for &(value, ref cmd_buf) in fence.pending_command_buffers.iter() {
-            if cmd_buf.status() == MTLCommandBufferStatus::Completed {
-                max_value = value;
-            }
-        }
-        Ok(max_value)
+        Ok(fence.get_latest())
     }
     unsafe fn wait(
         &self,
@@ -1983,34 +1978,34 @@ impl crate::Device for super::Device {
         wait_value: crate::FenceValue,
         timeout: Option<core::time::Duration>,
     ) -> DeviceResult<bool> {
-        if wait_value <= fence.completed_value.load(atomic::Ordering::Acquire) {
+        let (ref mutex, ref condvar) = *fence.sync;
+        let mut lock = mutex.lock();
+
+        if wait_value <= *lock {
             return Ok(true);
         }
 
-        let cmd_buf = match fence
-            .pending_command_buffers
-            .iter()
-            .find(|&&(value, _)| value >= wait_value)
         {
-            Some((_, cmd_buf)) => cmd_buf,
-            None => {
+            let pending_command_buffers = fence.pending_command_buffers.read();
+            if !pending_command_buffers
+                .iter()
+                .any(|&(value, _)| value >= wait_value)
+            {
                 log::error!("No active command buffers for fence value {wait_value}");
                 return Err(crate::DeviceError::Lost);
             }
-        };
-
-        let start = time::Instant::now();
-        loop {
-            if let MTLCommandBufferStatus::Completed = cmd_buf.status() {
-                return Ok(true);
-            }
-            if let Some(timeout) = timeout {
-                if start.elapsed() >= timeout {
-                    return Ok(false);
-                }
-            }
-            thread::sleep(core::time::Duration::from_millis(1));
         }
+
+        if let Some(timeout) = timeout {
+            let result = condvar.wait_while_for(&mut lock, |value| *value < wait_value, timeout);
+            if result.timed_out() {
+                return Ok(*lock >= wait_value);
+            }
+        } else {
+            condvar.wait_while(&mut lock, |value| *value < wait_value);
+        }
+
+        Ok(true)
     }
 
     unsafe fn start_graphics_debugger_capture(&self) -> bool {

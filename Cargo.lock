@@ -1609,9 +1609,9 @@ dependencies = [
 
 [[package]]
 name = "glam"
-version = "0.32.1"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
+checksum = "8fb167719045debebe9f532320accc7b5c993c5a3b813f5696a11d5ca7bdc57b"
 dependencies = [
  "bytemuck",
  "encase",
@@ -2350,6 +2350,7 @@ dependencies = [
  "arrayvec",
  "bit-set 0.10.0",
  "bitflags 2.11.1",
+ "bytemuck",
  "cfg-if",
  "cfg_aliases",
  "codespan-reporting",
@@ -2363,6 +2364,7 @@ dependencies = [
  "libm",
  "log",
  "naga-test",
+ "naga-types",
  "num-traits",
  "once_cell",
  "petgraph 0.8.3",
@@ -2412,6 +2414,18 @@ dependencies = [
  "serde_json",
  "spirv",
  "toml",
+]
+
+[[package]]
+name = "naga-types"
+version = "29.0.0"
+dependencies = [
+ "arbitrary",
+ "hashbrown 0.16.1",
+ "indexmap",
+ "rustc-hash 1.1.0",
+ "serde",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -4713,6 +4727,7 @@ dependencies = [
  "log",
  "macro_rules_attribute",
  "naga",
+ "naga-types",
  "once_cell",
  "parking_lot",
  "portable-atomic",
@@ -4848,6 +4863,7 @@ dependencies = [
  "log",
  "mach-dxcompiler-rs",
  "naga",
+ "naga-types",
  "ndk-sys",
  "objc2 0.6.4",
  "objc2-core-foundation",
@@ -4965,6 +4981,7 @@ dependencies = [
  "hashbrown 0.16.1",
  "js-sys",
  "log",
+ "naga-types",
  "raw-window-handle",
  "serde",
  "serde_json",

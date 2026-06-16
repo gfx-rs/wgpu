@@ -234,6 +234,19 @@ bitflags::bitflags! {
         const FULLY_FEATURED_INSTANCING = 1 << 16;
         /// Supports direct multisampled rendering to a texture without needing a resolve texture.
         const MULTISAMPLED_RENDER_TO_TEXTURE = 1 << 17;
+        /// Supports norm16 sized internal formats as filterable sampled
+        /// textures, with UNORM variants also color-renderable. SNORM
+        /// renderability is gated on `TEXTURE_FORMAT_SNORM16_RENDERABLE`.
+        const TEXTURE_FORMAT_NORM16 = 1 << 18;
+        /// Supports SNORM 16-bit formats as color attachments. Requires
+        /// `GL_EXT_render_snorm` (in addition to `GL_EXT_texture_norm16`
+        /// on GLES) - desktop GL alone only "optionally" renders SNORM 16.
+        const TEXTURE_FORMAT_SNORM16_RENDERABLE = 1 << 19;
+        /// Supports norm16 sized internal formats as image-load/store targets.
+        /// Desktop GL >= 4.2 (core image-format list) or pre-4.2 with
+        /// `GL_ARB_shader_image_load_store`; GLES needs `GL_NV_image_formats`
+        /// (which itself depends on `GL_EXT_texture_norm16`).
+        const TEXTURE_FORMAT_NORM16_STORAGE = 1 << 20;
     }
 }
 
@@ -348,6 +361,12 @@ pub struct Buffer {
     ///
     /// If locked concurrently with the GL context, the GL context should be locked first.
     map_state: Arc<MaybeMutex<BufferMapState>>,
+    /// Set when the buffer wraps an externally-owned GL name created via
+    /// [`Device::buffer_from_raw`](crate::gles::Device::buffer_from_raw).
+    ///
+    /// `Buffer` is `Clone`, so the guard is shared via `Arc`
+    /// and only fires its callback once every clone is dropped.
+    drop_guard: Option<Arc<crate::DropGuard>>,
 }
 
 #[derive(Clone, Debug)]
@@ -669,7 +688,7 @@ struct VertexBufferDesc {
 #[derive(Clone, Debug)]
 struct ImmediateDesc {
     location: glow::UniformLocation,
-    ty: naga::TypeInner,
+    ty: nt::glsl::GlslUniformType,
     offset: u32,
     size_bytes: u32,
 }

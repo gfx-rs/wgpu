@@ -45,7 +45,7 @@ webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_t
 webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=true;stencilReadOnly=true
 webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="stencil8";*
 
-webgpu:api,operation,render_pass,storeOp:*
+webgpu:api,operation,render_pass,*
 webgpu:api,operation,render_pipeline,overrides:*
 webgpu:api,operation,render_pipeline,pipeline_output_targets:color,component_count,blend:*
 webgpu:api,operation,rendering,basic:clear:*
@@ -118,7 +118,8 @@ webgpu:api,validation,createBindGroup:binding_must_contain_resource_defined_in_l
 webgpu:api,validation,createBindGroup:binding_resources,device_mismatch:*
 webgpu:api,validation,createBindGroup:buffer_offset_and_size_for_bind_groups_match:*
 webgpu:api,validation,createBindGroup:buffer,effective_buffer_binding_size:*
-webgpu:api,validation,createBindGroup:buffer,resource_binding_size:*
+// Fails with OOM if maxBindingSize is large. https://github.com/gfx-rs/wgpu/issues/9642
+fails-if(vulkan) webgpu:api,validation,createBindGroup:buffer,resource_binding_size:*
 webgpu:api,validation,createBindGroup:buffer,resource_offset:*
 webgpu:api,validation,createBindGroup:buffer,usage:*
 webgpu:api,validation,createBindGroup:minBindingSize:*
@@ -131,7 +132,7 @@ webgpu:api,validation,createBindGroup:texture_must_have_correct_dimension:*
 webgpu:api,validation,createBindGroupLayout:duplicate_bindings:*
 webgpu:api,validation,createBindGroupLayout:max_dynamic_buffers:*
 // Doesn't actually fail, but is very slow. https://github.com/gfx-rs/wgpu/issues/9229
-fails-if(dx12) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,*
+fails-if(dx12,vulkan) webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,*
 webgpu:api,validation,createBindGroupLayout:maximum_binding_limit:*
 webgpu:api,validation,createBindGroupLayout:multisampled_validation:*
 webgpu:api,validation,createBindGroupLayout:storage_texture,formats:*
@@ -242,12 +243,7 @@ webgpu:api,validation,image_copy,layout_related:rows_per_image_alignment:*
 webgpu:api,validation,image_copy,texture_related:*
 fails-if(dx12) webgpu:api,validation,layout_shader_compat:pipeline_layout_shader_exact_match:*
 webgpu:api,validation,query_set,destroy:*
-webgpu:api,validation,queue,buffer_mapped:copyBufferToBuffer:*
-webgpu:api,validation,queue,buffer_mapped:copyBufferToTexture:*
-webgpu:api,validation,queue,buffer_mapped:copyTextureToBuffer:*
-webgpu:api,validation,queue,buffer_mapped:map_command_recording_order:*
-// `vulkan` failure: https://github.com/gfx-rs/wgpu/issues/????
-fails-if(vulkan) webgpu:api,validation,queue,buffer_mapped:writeBuffer:*
+webgpu:api,validation,queue,buffer_mapped:*
 webgpu:api,validation,queue,submit:command_buffer,*
 webgpu:api,validation,queue,writeBuffer:buffer_state:*
 webgpu:api,validation,queue,writeBuffer:buffer,device_mismatch:*
@@ -262,8 +258,7 @@ fails-if(dx12) webgpu:api,validation,render_pass,attachment_compatibility:render
 webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,sample_count:*
 webgpu:api,validation,render_pass,render_pass_descriptor:attachments,*
 webgpu:api,validation,render_pass,render_pass_descriptor:color_attachments,*
-webgpu:api,validation,render_pass,render_pass_descriptor:depth_stencil_attachment,depth_clear_value:*
-webgpu:api,validation,render_pass,render_pass_descriptor:depth_stencil_attachment,sample_counts_mismatch:*
+webgpu:api,validation,render_pass,render_pass_descriptor:depth_stencil_attachment,*
 webgpu:api,validation,render_pass,render_pass_descriptor:occlusionQuerySet,query_set_type:*
 webgpu:api,validation,render_pass,render_pass_descriptor:resolveTarget,*
 webgpu:api,validation,render_pass,render_pass_descriptor:timestampWrite,query_index:*

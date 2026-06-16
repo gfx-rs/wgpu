@@ -283,16 +283,17 @@ impl ShaderModel {
     }
 }
 
-impl crate::ShaderStage {
-    pub const fn to_hlsl_str(self) -> &'static str {
-        match self {
-            Self::Vertex => "vs",
-            Self::Fragment => "ps",
-            Self::Compute => "cs",
-            Self::Task => "as",
-            Self::Mesh => "ms",
-            Self::RayGeneration | Self::AnyHit | Self::ClosestHit | Self::Miss => "lib",
-        }
+pub const fn shader_stage_to_hlsl_str(st: nt::ShaderStage) -> &'static str {
+    match st {
+        nt::ShaderStage::Vertex => "vs",
+        nt::ShaderStage::Fragment => "ps",
+        nt::ShaderStage::Compute => "cs",
+        nt::ShaderStage::Task => "as",
+        nt::ShaderStage::Mesh => "ms",
+        nt::ShaderStage::RayGeneration
+        | nt::ShaderStage::AnyHit
+        | nt::ShaderStage::ClosestHit
+        | nt::ShaderStage::Miss => "lib",
     }
 }
 

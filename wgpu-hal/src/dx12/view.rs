@@ -13,6 +13,7 @@ pub(super) struct ViewDescriptor {
     mip_level_base: u32,
     mip_level_count: u32,
     swizzle: wgt::TextureComponentSwizzle,
+    plane_slice_override: Option<u32>,
 }
 
 impl crate::TextureViewDescriptor<'_> {
@@ -30,6 +31,7 @@ impl crate::TextureViewDescriptor<'_> {
             array_layer_base: self.range.base_array_layer,
             array_layer_count: self.range.array_layer_count.unwrap_or(!0),
             swizzle: self.swizzle,
+            plane_slice_override: texture.plane_slice_override(),
         }
     }
 }
@@ -40,6 +42,13 @@ fn aspects_to_plane(aspects: crate::FormatAspects) -> u32 {
         crate::FormatAspects::PLANE_1 => 1,
         crate::FormatAspects::PLANE_2 => 2,
         _ => 0,
+    }
+}
+
+impl ViewDescriptor {
+    pub(super) fn plane_slice(&self) -> u32 {
+        self.plane_slice_override
+            .unwrap_or_else(|| aspects_to_plane(self.aspects))
     }
 }
 
@@ -102,7 +111,7 @@ impl ViewDescriptor {
                 desc.Anonymous.Texture2D = Direct3D12::D3D12_TEX2D_SRV {
                     MostDetailedMip: self.mip_level_base,
                     MipLevels: self.mip_level_count,
-                    PlaneSlice: aspects_to_plane(self.aspects),
+                    PlaneSlice: self.plane_slice(),
                     ResourceMinLODClamp: 0.0,
                 }
             }
@@ -122,7 +131,7 @@ impl ViewDescriptor {
                     MipLevels: self.mip_level_count,
                     FirstArraySlice: self.array_layer_base,
                     ArraySize: self.array_layer_count,
-                    PlaneSlice: aspects_to_plane(self.aspects),
+                    PlaneSlice: self.plane_slice(),
                     ResourceMinLODClamp: 0.0,
                 }
             }
@@ -188,7 +197,7 @@ impl ViewDescriptor {
                 desc.ViewDimension = Direct3D12::D3D12_UAV_DIMENSION_TEXTURE2D;
                 desc.Anonymous.Texture2D = Direct3D12::D3D12_TEX2D_UAV {
                     MipSlice: self.mip_level_base,
-                    PlaneSlice: aspects_to_plane(self.aspects),
+                    PlaneSlice: self.plane_slice(),
                 }
             }
             wgt::TextureViewDimension::D2 | wgt::TextureViewDimension::D2Array => {
@@ -197,7 +206,7 @@ impl ViewDescriptor {
                     MipSlice: self.mip_level_base,
                     FirstArraySlice: self.array_layer_base,
                     ArraySize: self.array_layer_count,
-                    PlaneSlice: aspects_to_plane(self.aspects),
+                    PlaneSlice: self.plane_slice(),
                 }
             }
             wgt::TextureViewDimension::D3 => {
@@ -249,7 +258,7 @@ impl ViewDescriptor {
                 desc.ViewDimension = Direct3D12::D3D12_RTV_DIMENSION_TEXTURE2D;
                 desc.Anonymous.Texture2D = Direct3D12::D3D12_TEX2D_RTV {
                     MipSlice: self.mip_level_base,
-                    PlaneSlice: aspects_to_plane(self.aspects),
+                    PlaneSlice: self.plane_slice(),
                 }
             }
             wgt::TextureViewDimension::D2 | wgt::TextureViewDimension::D2Array
@@ -267,7 +276,7 @@ impl ViewDescriptor {
                     MipSlice: self.mip_level_base,
                     FirstArraySlice: self.array_layer_base,
                     ArraySize: self.array_layer_count,
-                    PlaneSlice: aspects_to_plane(self.aspects),
+                    PlaneSlice: self.plane_slice(),
                 }
             }
             wgt::TextureViewDimension::D3

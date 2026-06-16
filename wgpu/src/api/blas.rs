@@ -95,6 +95,13 @@ impl TlasInstance {
     pub fn set_blas(&mut self, blas: &Blas) {
         self.blas = blas.inner.clone();
     }
+
+    /// Returns custom implementation of the BLAS referenced by this instance
+    /// (if the custom backend is active and the BLAS is internally of type T).
+    #[cfg(custom)]
+    pub fn blas_as_custom<T: crate::custom::BlasInterface>(&self) -> Option<&T> {
+        self.blas.as_custom()
+    }
 }
 
 #[derive(Debug)]

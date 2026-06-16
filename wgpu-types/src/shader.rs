@@ -50,6 +50,12 @@ pub struct ShaderRuntimeChecks {
     /// If false, mesh shaders won't clamp the output primitives' vertex indices, which can lead to
     /// undefined behavior and arbitrary memory access.
     pub mesh_shader_primitive_indices_clamp: bool,
+
+    /// If false, integer division and modulo operations will use raw instructions
+    /// without guards against division by zero or signed integer overflow
+    /// (`INT_MIN / -1`). The caller **MUST** ensure that all divisors are non-zero
+    /// and that no signed overflow occurs.
+    pub int_div_checks: bool,
 }
 
 impl ShaderRuntimeChecks {
@@ -85,6 +91,7 @@ impl ShaderRuntimeChecks {
             ray_query_initialization_tracking: all_checks,
             task_shader_dispatch_tracking: all_checks,
             mesh_shader_primitive_indices_clamp: all_checks,
+            int_div_checks: all_checks,
         }
     }
 }

@@ -73,6 +73,8 @@
 //!
 
 #![no_std]
+// `-Znext-solver` requires deeper recursion limits (at least for now) to prove Send/Sync
+#![recursion_limit = "256"]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/trunk/logo.png")]
 #![warn(

@@ -134,7 +134,7 @@ impl FeaturesManager {
         };
         // Only available on glsl core, this means that opengl es can't query the number
         // of samples nor levels in a image and neither do bound checks on the sample nor
-        // the level argument of texelFecth
+        // the level argument of texelFetch
         check_feature!(TEXTURE_SAMPLES, 150);
         check_feature!(TEXTURE_LEVELS, 130);
         check_feature!(IMAGE_SIZE, 430, 310);
@@ -418,32 +418,44 @@ impl<W> Writer<'_, W> {
                                 self.features.request(Features::MULTISAMPLED_TEXTURE_ARRAYS);
                             }
                         }
-                        ImageClass::Storage { format, .. } => match format {
-                            StorageFormat::R8Unorm
-                            | StorageFormat::R8Snorm
-                            | StorageFormat::R8Uint
-                            | StorageFormat::R8Sint
-                            | StorageFormat::R16Uint
-                            | StorageFormat::R16Sint
-                            | StorageFormat::R16Float
-                            | StorageFormat::Rg8Unorm
-                            | StorageFormat::Rg8Snorm
-                            | StorageFormat::Rg8Uint
-                            | StorageFormat::Rg8Sint
-                            | StorageFormat::Rg16Uint
-                            | StorageFormat::Rg16Sint
-                            | StorageFormat::Rg16Float
-                            | StorageFormat::Rgb10a2Uint
-                            | StorageFormat::Rgb10a2Unorm
-                            | StorageFormat::Rg11b10Ufloat
-                            | StorageFormat::R64Uint
-                            | StorageFormat::Rg32Uint
-                            | StorageFormat::Rg32Sint
-                            | StorageFormat::Rg32Float => {
-                                self.features.request(Features::FULL_IMAGE_FORMATS)
+                        ImageClass::Storage { format, .. } => {
+                            // Storage images require `image_load_store`; the extension write
+                            // (and the `NV_image_formats` write nested under it) is otherwise
+                            // never emitted on targets that need it.
+                            self.features.request(Features::IMAGE_LOAD_STORE);
+                            match format {
+                                StorageFormat::R8Unorm
+                                | StorageFormat::R8Snorm
+                                | StorageFormat::R8Uint
+                                | StorageFormat::R8Sint
+                                | StorageFormat::R16Uint
+                                | StorageFormat::R16Sint
+                                | StorageFormat::R16Float
+                                | StorageFormat::R16Unorm
+                                | StorageFormat::R16Snorm
+                                | StorageFormat::Rg8Unorm
+                                | StorageFormat::Rg8Snorm
+                                | StorageFormat::Rg8Uint
+                                | StorageFormat::Rg8Sint
+                                | StorageFormat::Rg16Uint
+                                | StorageFormat::Rg16Sint
+                                | StorageFormat::Rg16Float
+                                | StorageFormat::Rg16Unorm
+                                | StorageFormat::Rg16Snorm
+                                | StorageFormat::Rgba16Unorm
+                                | StorageFormat::Rgba16Snorm
+                                | StorageFormat::Rgb10a2Uint
+                                | StorageFormat::Rgb10a2Unorm
+                                | StorageFormat::Rg11b10Ufloat
+                                | StorageFormat::R64Uint
+                                | StorageFormat::Rg32Uint
+                                | StorageFormat::Rg32Sint
+                                | StorageFormat::Rg32Float => {
+                                    self.features.request(Features::FULL_IMAGE_FORMATS)
+                                }
+                                _ => {}
                             }
-                            _ => {}
-                        },
+                        }
                         ImageClass::Sampled { multi: false, .. }
                         | ImageClass::Depth { multi: false }
                         | ImageClass::External => {}

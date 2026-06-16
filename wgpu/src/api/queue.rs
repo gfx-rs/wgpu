@@ -1,5 +1,5 @@
 use alloc::boxed::Box;
-use core::ops::{Deref, RangeBounds};
+use core::ops::RangeBounds;
 
 use crate::{api::DeferredCommandBufferActions, *};
 
@@ -338,7 +338,7 @@ impl Queue {
     #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: hal::Api>(
         &self,
-    ) -> Option<impl Deref<Target = A::Queue> + WasmNotSendSync> {
+    ) -> Option<impl core::ops::Deref<Target = A::Queue> + WasmNotSendSync> {
         let queue = self.inner.as_core_opt()?;
         unsafe { queue.context.queue_as_hal::<A>(queue) }
     }
