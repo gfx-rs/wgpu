@@ -657,14 +657,7 @@ impl InnerCommandEncoder {
     /// [`transition_buffers`]: hal::CommandEncoder::transition_buffers
     /// [`transition_textures`]: hal::CommandEncoder::transition_textures
     fn close_and_swap(&mut self) -> Result<(), DeviceError> {
-        assert!(self.is_open);
-        self.is_open = false;
-
-        let new =
-            unsafe { self.raw.end_encoding() }.map_err(|e| self.device.handle_hal_error(e))?;
-        self.list.insert(self.list.len() - 1, new);
-
-        Ok(())
+        self.close_and_insert_at(self.list.len() - 1)
     }
 
     /// Finish the current command buffer and insert it at the beginning
@@ -678,12 +671,26 @@ impl InnerCommandEncoder {
     ///
     /// [l]: InnerCommandEncoder::list
     pub(crate) fn close_and_push_front(&mut self) -> Result<(), DeviceError> {
+        self.close_and_insert_at(0)
+    }
+
+    /// Finish the current command buffer and insert it at the given index
+    /// in [`self.list`][l].
+    ///
+    /// On return, the underlying hal encoder is closed.
+    ///
+    /// # Panics
+    ///
+    /// - If the encoder is not open.
+    ///
+    /// [l]: InnerCommandEncoder::list
+    pub(crate) fn close_and_insert_at(&mut self, index: usize) -> Result<(), DeviceError> {
         assert!(self.is_open);
         self.is_open = false;
 
-        let new =
+        let cmd_buf =
             unsafe { self.raw.end_encoding() }.map_err(|e| self.device.handle_hal_error(e))?;
-        self.list.insert(0, new);
+        self.list.insert(index, cmd_buf);
 
         Ok(())
     }
