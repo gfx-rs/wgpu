@@ -403,7 +403,19 @@ impl crate::Adapter for super::Adapter {
             }
         };
 
-        Tfc::COPY_SRC | Tfc::COPY_DST | Tfc::SAMPLED | Tfc::STORAGE_READ_ONLY | extra
+        // Host image copy works on unified-memory devices for any single-aspect
+        // format. Combined depth-stencil is excluded: `replaceRegion`/`getBytes`
+        // can't select the depth vs. stencil aspect (see `Device::copy_*`).
+        // NV12/P010 already return `Tfc::empty()` above (unsupported on Metal).
+        let host_copy_if = if self.shared.private_caps.has_unified_memory == Some(true)
+            && !format.is_combined_depth_stencil_format()
+        {
+            Tfc::HOST_COPY
+        } else {
+            Tfc::empty()
+        };
+
+        Tfc::COPY_SRC | Tfc::COPY_DST | Tfc::SAMPLED | Tfc::STORAGE_READ_ONLY | extra | host_copy_if
     }
 
     unsafe fn surface_capabilities(

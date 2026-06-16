@@ -1861,6 +1861,12 @@ bitflags!(
         const COPY_SRC = 1 << 15;
         /// Format can be copied to.
         const COPY_DST = 1 << 16;
+        /// Format supports host-side image copies (`TextureUsages::HOST_VISIBLE`).
+        ///
+        /// On Vulkan this is per-format (`VK_FORMAT_FEATURE_2_HOST_IMAGE_TRANSFER_BIT`),
+        /// so depth/stencil formats commonly lack it even when the device exposes
+        /// the host-image-copy feature.
+        const HOST_COPY = 1 << 17;
     }
 );
 

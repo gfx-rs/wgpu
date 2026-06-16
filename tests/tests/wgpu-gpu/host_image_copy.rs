@@ -8,6 +8,8 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(HOST_IMAGE_DOWNLOAD);
     vec.push(HOST_IMAGE_READ_UNINITIALIZED);
     vec.push(HOST_IMAGE_PARTIAL_WRITE);
+    vec.push(HOST_IMAGE_DEPTH_ROUNDTRIP);
+    vec.push(HOST_IMAGE_PLANAR_ROUNDTRIP);
 }
 
 /// Upload pixel data into a HOST_VISIBLE texture via the encoder-mapped path
@@ -469,4 +471,195 @@ static HOST_IMAGE_PARTIAL_WRITE: GpuTestConfiguration = GpuTestConfiguration::ne
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
         host_image_partial_write(ctx).await;
+    });
+
+/// Round-trip a depth texture (`Depth32Float`) through host copies: write depth
+/// values from the CPU, read them straight back, and verify. Exercises the
+/// non-color, single depth-aspect host-copy + zero-init path.
+async fn host_image_depth_roundtrip(ctx: TestingContext) {
+    let format = wgpu::TextureFormat::Depth32Float;
+    // Host-copy support is per-format (e.g. Vulkan's host-transfer format
+    // feature); many drivers don't support it for depth formats. Skip if so.
+    if !ctx
+        .adapter
+        .get_texture_format_features(format)
+        .allowed_usages
+        .contains(wgpu::TextureUsages::HOST_VISIBLE)
+    {
+        log::info!("skipping host_image_depth_roundtrip: {format:?} is not host-copyable");
+        return;
+    }
+
+    let width = 4u32;
+    let height = 4u32;
+    let bytes_per_row = 4 * width; // Depth32Float: 4 bytes/texel
+    let data_size = (bytes_per_row * height) as usize;
+
+    // Arbitrary depth values in [0, 1], copied verbatim (no format conversion).
+    let upload: Vec<u8> = (0..width * height)
+        .flat_map(|i| (i as f32 / (width * height) as f32).to_ne_bytes())
+        .collect();
+
+    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("host-visible depth texture"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::HOST_VISIBLE | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+        mapped_at_creation: true,
+    });
+
+    let mapped = texture.get_mapped().expect("texture should be mapped");
+    let layout = wgpu::TexelCopyBufferLayout {
+        offset: 0,
+        bytes_per_row: Some(bytes_per_row),
+        rows_per_image: Some(height),
+    };
+    let size = wgpu::Extent3d {
+        width,
+        height,
+        depth_or_array_layers: 1,
+    };
+
+    mapped.copy_from_memory(
+        wgpu::TexelCopyTextureInfoBase {
+            texture: (),
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &upload,
+        layout,
+        size,
+    );
+    let mut readback = vec![0u8; data_size];
+    mapped.copy_to_memory(
+        wgpu::TexelCopyTextureInfoBase {
+            texture: (),
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &mut readback,
+        layout,
+        size,
+    );
+    assert_eq!(readback, upload, "depth host round-trip failed");
+
+    drop(mapped);
+    texture.unmap();
+}
+
+#[gpu_test]
+static HOST_IMAGE_DEPTH_ROUNDTRIP: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
+    .run_async(|ctx| async move {
+        host_image_depth_roundtrip(ctx).await;
+    });
+
+/// Round-trip both planes of an `NV12` texture through host copies, verifying
+/// per-plane (`Plane0` full-res / `Plane1` half-res) host addressing.
+///
+/// NOTE: gated on `TEXTURE_FORMAT_NV12`, so it is skipped on backends that don't
+/// expose NV12 (including Metal). Validated only where NV12 + `HOST_IMAGE_COPY`
+/// are both available (Vulkan / DX12).
+async fn host_image_planar_roundtrip(ctx: TestingContext) {
+    // Host-copy support is per-format; skip if this adapter can't host-copy NV12.
+    if !ctx
+        .adapter
+        .get_texture_format_features(wgpu::TextureFormat::NV12)
+        .allowed_usages
+        .contains(wgpu::TextureUsages::HOST_VISIBLE)
+    {
+        log::info!("skipping host_image_planar_roundtrip: NV12 is not host-copyable");
+        return;
+    }
+
+    let width = 4u32;
+    let height = 4u32;
+
+    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("host-visible NV12 texture"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::NV12,
+        usage: wgpu::TextureUsages::HOST_VISIBLE | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+        mapped_at_creation: true,
+    });
+    let mapped = texture.get_mapped().expect("texture should be mapped");
+
+    // Plane 0 (Y): full resolution, R8 (1 byte/texel).
+    // Plane 1 (UV): half resolution, Rg8 (2 bytes/texel). Distinct patterns so a
+    // plane swap or plane-0 fallback fails the assertion.
+    let y: Vec<u8> = (0..width * height).map(|i| i as u8).collect();
+    let uv: Vec<u8> = (0..(width / 2) * (height / 2) * 2)
+        .map(|i| (i ^ 0xA5) as u8)
+        .collect();
+
+    for (aspect, data, w, h, bytes_per_texel) in [
+        (wgpu::TextureAspect::Plane0, &y, width, height, 1u32),
+        (wgpu::TextureAspect::Plane1, &uv, width / 2, height / 2, 2u32),
+    ] {
+        let layout = wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(w * bytes_per_texel),
+            rows_per_image: Some(h),
+        };
+        let size = wgpu::Extent3d {
+            width: w,
+            height: h,
+            depth_or_array_layers: 1,
+        };
+        mapped.copy_from_memory(
+            wgpu::TexelCopyTextureInfoBase {
+                texture: (),
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect,
+            },
+            data,
+            layout,
+            size,
+        );
+        let mut readback = vec![0u8; (w * bytes_per_texel * h) as usize];
+        mapped.copy_to_memory(
+            wgpu::TexelCopyTextureInfoBase {
+                texture: (),
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect,
+            },
+            &mut readback,
+            layout,
+            size,
+        );
+        assert_eq!(&readback, data, "NV12 plane {aspect:?} host round-trip failed");
+    }
+
+    drop(mapped);
+    texture.unmap();
+}
+
+#[gpu_test]
+static HOST_IMAGE_PLANAR_ROUNDTRIP: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::HOST_IMAGE_COPY | wgpu::Features::TEXTURE_FORMAT_NV12),
+    )
+    .run_async(|ctx| async move {
+        host_image_planar_roundtrip(ctx).await;
     });

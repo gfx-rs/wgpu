@@ -1534,6 +1534,29 @@ impl Device {
                     desc.sample_count,
                 ));
             }
+            // Every aspect of the format must have a host-copyable block size,
+            // otherwise zero-initialization (and host copies) can't represent it
+            // and a host read could expose uninitialized memory. This rejects
+            // implementation-defined depth formats (`Depth24Plus`,
+            // `Depth24PlusStencil8`) whose depth aspect has no defined layout.
+            for aspect in hal::FormatAspects::from(desc.format).iter() {
+                if desc.format.block_copy_size(Some(aspect.map())).is_none() {
+                    return Err(CreateTextureError::HostVisibleUnsupportedFormat(desc.format));
+                }
+            }
+            // Host-copy support is per-format on some backends (e.g. Vulkan's
+            // `VK_FORMAT_FEATURE_2_HOST_IMAGE_TRANSFER_BIT`), so a format the
+            // device can sample/render may still not be host-copyable. Reject it
+            // here with a clean validation error rather than letting image
+            // creation fail in the backend.
+            if !self
+                .adapter
+                .get_texture_format_features(desc.format)
+                .allowed_usages
+                .contains(wgt::TextureUsages::HOST_VISIBLE)
+            {
+                return Err(CreateTextureError::HostVisibleUnsupportedFormat(desc.format));
+            }
             self.require_features(wgt::Features::HOST_IMAGE_COPY)
                 .map_err(|e| CreateTextureError::MissingFeatures(desc.format, e))?;
         }

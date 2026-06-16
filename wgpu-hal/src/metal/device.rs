@@ -588,6 +588,17 @@ impl crate::Device for super::Device {
     where
         T: Iterator<Item = crate::HostTextureCopy>,
     {
+        // `replaceRegion`/`getBytes` have no aspect/blit-option parameter, so the
+        // depth and stencil aspects of a combined depth-stencil texture can't be
+        // addressed separately on the host timeline (the GPU blit path uses
+        // `MTLBlitOption` for this). Fail loudly rather than corrupt the texture.
+        if dst.format.is_combined_depth_stencil_format() {
+            log::error!(
+                "Metal host image copy does not support combined depth-stencil format {:?}",
+                dst.format
+            );
+            return Err(crate::DeviceError::Unexpected);
+        }
         for copy in regions {
             let dst_origin = conv::map_origin(&copy.texture_base.origin);
             // Metal expects buffer-texture copies in virtual sizes
@@ -635,6 +646,15 @@ impl crate::Device for super::Device {
     where
         T: Iterator<Item = crate::HostTextureCopy>,
     {
+        // See `copy_memory_to_texture`: combined depth-stencil aspects aren't
+        // separately addressable through `getBytes` on the host timeline.
+        if src.format.is_combined_depth_stencil_format() {
+            log::error!(
+                "Metal host image copy does not support combined depth-stencil format {:?}",
+                src.format
+            );
+            return Err(crate::DeviceError::Unexpected);
+        }
         for copy in regions {
             let src_origin = conv::map_origin(&copy.texture_base.origin);
             // Metal expects buffer-texture copies in virtual sizes

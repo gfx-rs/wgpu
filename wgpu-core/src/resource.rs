@@ -1752,6 +1752,12 @@ pub enum CreateTextureError {
     MappedAtCreationRequiresHostVisible,
     #[error("HOST_VISIBLE textures must have sample_count = 1, got {0}")]
     HostVisibleMultisampled(u32),
+    #[error(
+        "HOST_VISIBLE textures cannot use format {0:?}: either it has an aspect with no \
+         host-copyable memory layout (e.g. an implementation-defined depth format), or this \
+         adapter/backend does not support host image copies for it"
+    )]
+    HostVisibleUnsupportedFormat(wgt::TextureFormat),
 }
 
 crate::impl_resource_type!(Texture);
@@ -1788,7 +1794,8 @@ impl WebGpuError for CreateTextureError {
             | Self::InvalidSampleCount(..)
             | Self::MultisampledNotRenderAttachment
             | Self::MappedAtCreationRequiresHostVisible
-            | Self::HostVisibleMultisampled(_) => ErrorType::Validation,
+            | Self::HostVisibleMultisampled(_)
+            | Self::HostVisibleUnsupportedFormat(_) => ErrorType::Validation,
         }
     }
 }

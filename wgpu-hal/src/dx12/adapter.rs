@@ -1277,6 +1277,18 @@ impl crate::Adapter for super::Adapter {
         set_sample_count(8, Tfc::MULTISAMPLE_X8);
         set_sample_count(16, Tfc::MULTISAMPLE_X16);
 
+        // Host image copy (`WriteToSubresource`/`ReadFromSubresource` on a
+        // CPU-visible CUSTOM heap) requires unified memory. Restricted to color
+        // formats: depth/stencil host access through these APIs is unreliable and
+        // is left out until it can be validated on hardware.
+        caps.set(
+            Tfc::HOST_COPY,
+            matches!(
+                self.private_caps.memory_architecture,
+                super::MemoryArchitecture::Unified { .. }
+            ) && !format.is_depth_stencil_format(),
+        );
+
         caps
     }
 

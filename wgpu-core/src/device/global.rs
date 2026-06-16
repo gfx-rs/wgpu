@@ -50,12 +50,6 @@ fn host_zero_init_layers(
     mip_level: u32,
     layer_range: core::ops::Range<u32>,
 ) -> Result<(), HostTextureCopyError> {
-    // Depth/stencil and multi-planar formats can't be zeroed through a plain
-    // color host copy; the GPU clear path skips them too. Leave them be.
-    if texture.desc.format.is_depth_stencil_format() || texture.desc.format.planes().is_some() {
-        return Ok(());
-    }
-
     // Which layers in the range are still uninitialized? (Don't mark yet — only
     // after the zeroing copy has actually succeeded.)
     let uninit: Vec<core::ops::Range<u32>> = {
@@ -70,63 +64,86 @@ fn host_zero_init_layers(
     }
 
     let format = texture.desc.format;
-    let (block_width, block_height) = format.block_dimensions();
-    let block_size = format.block_copy_size(None).unwrap();
-
-    let mut mip_size = texture.desc.mip_level_size(mip_level).unwrap();
-    mip_size.width = wgt::math::align_to(mip_size.width, block_width);
-    mip_size.height = wgt::math::align_to(mip_size.height, block_height);
-
-    let bytes_per_row = mip_size.width / block_width * block_size;
-    let rows = mip_size.height / block_height;
+    let mip_size = texture.desc.mip_level_size(mip_level).unwrap();
     let is_3d = texture.desc.dimension == wgt::TextureDimension::D3;
-    let depth = if is_3d {
-        mip_size.depth_or_array_layers
-    } else {
-        1
-    };
 
-    let zero = alloc::vec![0u8; (bytes_per_row as u64 * rows as u64 * depth as u64) as usize];
-    let host_layout = wgt::TexelCopyBufferLayout {
-        offset: 0,
-        bytes_per_row: Some(bytes_per_row),
-        rows_per_image: Some(rows),
-    };
-    let size = hal::CopyExtent {
-        width: mip_size.width,
-        height: mip_size.height,
-        depth,
+    // A format may have several copyable aspects: depth + stencil for combined
+    // depth-stencil formats, or one region per plane for multi-planar formats.
+    // Each aspect is addressed and sized independently (separate planes, its own
+    // block size, and — for chroma planes — its own subsampled extent), so we
+    // emit one zero region per (aspect, layer). `create_texture` guarantees
+    // every aspect here has a host-copyable `block_copy_size`.
+    let aspects: Vec<hal::FormatAspects> = hal::FormatAspects::from(format).iter().collect();
+
+    // Build a zeroed region for one (aspect, layer); returns the region plus the
+    // number of source bytes it reads, so we can size a single shared zero
+    // buffer big enough for the largest aspect.
+    let make_region = |aspect: hal::FormatAspects, array_layer: u32, depth: u32| {
+        let texture_aspect = aspect.map();
+        let plane = match aspect {
+            hal::FormatAspects::PLANE_0 => Some(0),
+            hal::FormatAspects::PLANE_1 => Some(1),
+            hal::FormatAspects::PLANE_2 => Some(2),
+            _ => None,
+        };
+        let (width_subsampling, height_subsampling) = format.subsampling_factors(plane);
+        let (block_width, block_height) = format.block_dimensions();
+        let block_size = format
+            .block_copy_size(Some(texture_aspect))
+            .expect("host-copyable aspect is guaranteed by create_texture validation");
+
+        let width = wgt::math::align_to(mip_size.width / width_subsampling, block_width);
+        let height = wgt::math::align_to(mip_size.height / height_subsampling, block_height);
+        let bytes_per_row = width / block_width * block_size;
+        let rows = height / block_height;
+        let len = bytes_per_row as u64 * rows as u64 * depth as u64;
+
+        let region = hal::HostTextureCopy {
+            host_layout: wgt::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(bytes_per_row),
+                rows_per_image: Some(rows),
+            },
+            texture_base: hal::TextureCopyBase {
+                mip_level,
+                array_layer,
+                origin: wgt::Origin3d::ZERO,
+                aspect,
+            },
+            size: hal::CopyExtent {
+                width,
+                height,
+                depth,
+            },
+        };
+        (region, len)
     };
 
     let mut regions = Vec::new();
+    let mut zero_len = 0u64;
     if is_3d {
-        // A 3D texture has a single init-tracker "layer" covering the whole volume.
-        regions.push(hal::HostTextureCopy {
-            host_layout,
-            texture_base: hal::TextureCopyBase {
-                mip_level,
-                array_layer: 0,
-                origin: wgt::Origin3d::ZERO,
-                aspect: hal::FormatAspects::COLOR,
-            },
-            size,
-        });
+        // A 3D texture has a single init-tracker "layer" covering the whole
+        // volume (3D textures are always single-aspect color).
+        for &aspect in &aspects {
+            let (region, len) = make_region(aspect, 0, mip_size.depth_or_array_layers);
+            zero_len = zero_len.max(len);
+            regions.push(region);
+        }
     } else {
-        for range in uninit {
-            for array_layer in range {
-                regions.push(hal::HostTextureCopy {
-                    host_layout,
-                    texture_base: hal::TextureCopyBase {
-                        mip_level,
-                        array_layer,
-                        origin: wgt::Origin3d::ZERO,
-                        aspect: hal::FormatAspects::COLOR,
-                    },
-                    size,
-                });
+        for range in &uninit {
+            for array_layer in range.clone() {
+                for &aspect in &aspects {
+                    let (region, len) = make_region(aspect, array_layer, 1);
+                    zero_len = zero_len.max(len);
+                    regions.push(region);
+                }
             }
         }
     }
+
+    // Every region reads from offset 0 of the same all-zero buffer, so it only
+    // needs to be as large as the biggest single region.
+    let zero = alloc::vec![0u8; zero_len as usize];
 
     unsafe {
         raw_device
