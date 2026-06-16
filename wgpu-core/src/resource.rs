@@ -2240,7 +2240,7 @@ pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 
 #[derive(Debug)]
 pub struct QuerySet {
-    pub(crate) raw: ManuallyDrop<Box<dyn hal::DynQuerySet>>,
+    pub(crate) raw: Snatchable<Box<dyn hal::DynQuerySet>>,
     pub(crate) device: Arc<Device>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -2248,13 +2248,41 @@ pub struct QuerySet {
     pub(crate) desc: wgt::QuerySetDescriptor<()>,
 }
 
+impl RawResourceAccess for QuerySet {
+    type DynResource = dyn hal::DynQuerySet;
+
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
+        self.raw.get(guard).map(|b| b.as_ref())
+    }
+}
+
+impl QuerySet {
+    pub fn destroy(self: &Arc<Self>) {
+        let mut snatch_guard = self.device.snatchable_lock.write();
+
+        let raw = match self.raw.snatch(&mut snatch_guard) {
+            Some(raw) => raw,
+            None => {
+                // Per spec, it is valid to call `destroy` multiple times.
+                return;
+            }
+        };
+
+        // SAFETY: We are in the destroy method and we don't use raw anymore after this point.
+        unsafe {
+            self.device.raw().destroy_query_set(raw);
+        }
+    }
+}
+
 impl Drop for QuerySet {
     fn drop(&mut self) {
         resource_log!("Destroy raw {}", self.error_ident());
-        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
-        unsafe {
-            self.device.raw().destroy_query_set(raw);
+        if let Some(raw) = self.raw.take() {
+            // SAFETY: We are in the Drop impl and we don't use raw anymore after this point.
+            unsafe {
+                self.device.raw().destroy_query_set(raw);
+            }
         }
     }
 }
@@ -2264,12 +2292,6 @@ crate::impl_labeled!(QuerySet);
 crate::impl_parent_device!(QuerySet);
 crate::impl_storage_item!(QuerySet);
 crate::impl_trackable!(QuerySet);
-
-impl QuerySet {
-    pub(crate) fn raw(&self) -> &dyn hal::DynQuerySet {
-        self.raw.as_ref()
-    }
-}
 
 pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
 pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;

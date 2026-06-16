@@ -1,4 +1,5 @@
 use wgpu::util::DeviceExt;
+use wgpu::{ComputePassTimestampWrites, QueryType, RenderPassTimestampWrites};
 use wgpu_test::{
     fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
@@ -10,6 +11,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         BUFFER_DESTROY_BEFORE_SUBMIT,
         TEXTURE_DESTROY_BEFORE_SUBMIT,
         EXTERNAL_TEXTURE_DESTROY_BEFORE_SUBMIT,
+        QUERY_SET_DESTROY_BEFORE_SUBMIT,
         REPLACED_BIND_GROUP,
     ]);
 }
@@ -164,6 +166,13 @@ const EXTERNAL_TEXTURE_RENDER_SHADER: &str = "\
 const EXTERNAL_TEXTURE_COMPUTE_SHADER: &str = "\
 @group(0) @binding(0) var tex: texture_external;
 @compute @workgroup_size(1) fn main() { _ = textureLoad(tex, vec2(0)); }";
+
+const EMPTY_COMPUTE_SHADER: &str = "\
+@compute @workgroup_size(1) fn main() {}";
+
+const EMPTY_RENDER_SHADER: &str = "\
+@vertex fn vs() -> @builtin(position) vec4<f32> { return vec4<f32>(0); }
+@fragment fn fs() -> @location(0) vec4<f32> { return vec4<f32>(0); }";
 
 fn create_render_target(device: &wgpu::Device) -> (wgpu::Texture, wgpu::TextureView) {
     let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -558,6 +567,98 @@ static EXTERNAL_TEXTURE_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestCon
         test_external_texture_destroy_before_submit(&ctx, UsageKind::RenderPass);
         test_external_texture_destroy_before_submit(&ctx, UsageKind::ComputePass);
         test_external_texture_destroy_before_submit(&ctx, UsageKind::RenderBundle);
+    });
+
+fn test_query_set_destroy_before_submit(ctx: &TestingContext, ty: QueryType, usage: UsageKind) {
+    let query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
+        label: None,
+        count: 2,
+        ty,
+    });
+
+    let (_render_target, rt_view) = create_render_target(&ctx.device);
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+    match usage {
+        UsageKind::RenderPass => {
+            let pipeline = create_render_pipeline(&ctx.device, EMPTY_RENDER_SHADER);
+            let color_attachment = [Some(wgpu::RenderPassColorAttachment {
+                view: &rt_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })];
+            let (occlusion_query_set, timestamp_writes) = match ty {
+                QueryType::Occlusion => (Some(&query_set), None),
+                QueryType::Timestamp => (
+                    None,
+                    Some(RenderPassTimestampWrites {
+                        query_set: &query_set,
+                        beginning_of_pass_write_index: Some(0),
+                        end_of_pass_write_index: Some(1),
+                    }),
+                ),
+                QueryType::PipelineStatistics(_) => unreachable!(),
+            };
+
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                color_attachments: &color_attachment,
+                occlusion_query_set,
+                timestamp_writes,
+                ..Default::default()
+            });
+            pass.set_pipeline(&pipeline);
+            pass.draw(0..0, 0..0);
+        }
+        UsageKind::ComputePass => {
+            let pipeline = create_compute_pipeline(&ctx.device, EMPTY_COMPUTE_SHADER);
+            let timestamp_writes = match ty {
+                QueryType::Timestamp => Some(ComputePassTimestampWrites {
+                    query_set: &query_set,
+                    beginning_of_pass_write_index: Some(0),
+                    end_of_pass_write_index: Some(1),
+                }),
+                _ => unreachable!(),
+            };
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                timestamp_writes,
+                ..Default::default()
+            });
+            pass.set_pipeline(&pipeline);
+            pass.dispatch_workgroups(0, 0, 0);
+        }
+        UsageKind::RenderBundle => unreachable!(),
+        UsageKind::Direct => unreachable!(),
+    }
+
+    query_set.destroy();
+
+    fail(
+        &ctx.device,
+        || ctx.queue.submit([encoder.finish()]),
+        Some("QuerySet with '' label has been destroyed"),
+    );
+}
+
+// Test that destroying a query set between command encoding and submission fails
+// gracefully.
+#[gpu_test]
+static QUERY_SET_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .enable_noop()
+            .features(wgpu::Features::TIMESTAMP_QUERY),
+    )
+    .run_sync(|ctx| {
+        test_query_set_destroy_before_submit(&ctx, QueryType::Occlusion, UsageKind::RenderPass);
+        test_query_set_destroy_before_submit(&ctx, QueryType::Timestamp, UsageKind::RenderPass);
+        test_query_set_destroy_before_submit(&ctx, QueryType::Timestamp, UsageKind::ComputePass);
     });
 
 fn test_replaced_bind_group(ctx: &TestingContext, usage: UsageKind) {

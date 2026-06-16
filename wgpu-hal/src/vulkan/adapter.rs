@@ -2845,6 +2845,7 @@ impl super::Adapter {
                 }),
                 mesh_shader_primitive_indices_clamp: true,
                 trace_ray_argument_validation: true,
+                emit_int_div_checks: true,
             }
         };
 

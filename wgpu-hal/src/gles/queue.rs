@@ -1683,32 +1683,32 @@ impl super::Queue {
                 }
 
                 let location = Some(&uniform.location);
-
+                use nt::glsl::{GlslScalar, GlslUniformType, GlslVectorSize};
                 match uniform.ty {
                     //
                     // --- Float 1-4 Component ---
                     //
-                    naga::TypeInner::Scalar(naga::Scalar::F32) => {
+                    GlslUniformType::Scalar(GlslScalar::F32) => {
                         let data = get_data::<f32, 1>(data_bytes, offset)[0];
                         unsafe { gl.uniform_1_f32(location, data) };
                     }
-                    naga::TypeInner::Vector {
-                        size: naga::VectorSize::Bi,
-                        scalar: naga::Scalar::F32,
+                    GlslUniformType::Vector {
+                        size: GlslVectorSize::Bi,
+                        scalar: GlslScalar::F32,
                     } => {
                         let data = &get_data::<f32, 2>(data_bytes, offset);
                         unsafe { gl.uniform_2_f32_slice(location, data) };
                     }
-                    naga::TypeInner::Vector {
-                        size: naga::VectorSize::Tri,
-                        scalar: naga::Scalar::F32,
+                    GlslUniformType::Vector {
+                        size: GlslVectorSize::Tri,
+                        scalar: GlslScalar::F32,
                     } => {
                         let data = &get_data::<f32, 3>(data_bytes, offset);
                         unsafe { gl.uniform_3_f32_slice(location, data) };
                     }
-                    naga::TypeInner::Vector {
-                        size: naga::VectorSize::Quad,
-                        scalar: naga::Scalar::F32,
+                    GlslUniformType::Vector {
+                        size: GlslVectorSize::Quad,
+                        scalar: GlslScalar::F32,
                     } => {
                         let data = &get_data::<f32, 4>(data_bytes, offset);
                         unsafe { gl.uniform_4_f32_slice(location, data) };
@@ -1717,27 +1717,27 @@ impl super::Queue {
                     //
                     // --- Int 1-4 Component ---
                     //
-                    naga::TypeInner::Scalar(naga::Scalar::I32) => {
+                    GlslUniformType::Scalar(GlslScalar::I32) => {
                         let data = get_data::<i32, 1>(data_bytes, offset)[0];
                         unsafe { gl.uniform_1_i32(location, data) };
                     }
-                    naga::TypeInner::Vector {
-                        size: naga::VectorSize::Bi,
-                        scalar: naga::Scalar::I32,
+                    GlslUniformType::Vector {
+                        size: GlslVectorSize::Bi,
+                        scalar: GlslScalar::I32,
                     } => {
                         let data = &get_data::<i32, 2>(data_bytes, offset);
                         unsafe { gl.uniform_2_i32_slice(location, data) };
                     }
-                    naga::TypeInner::Vector {
-                        size: naga::VectorSize::Tri,
-                        scalar: naga::Scalar::I32,
+                    GlslUniformType::Vector {
+                        size: GlslVectorSize::Tri,
+                        scalar: GlslScalar::I32,
                     } => {
                         let data = &get_data::<i32, 3>(data_bytes, offset);
                         unsafe { gl.uniform_3_i32_slice(location, data) };
                     }
-                    naga::TypeInner::Vector {
-                        size: naga::VectorSize::Quad,
-                        scalar: naga::Scalar::I32,
+                    GlslUniformType::Vector {
+                        size: GlslVectorSize::Quad,
+                        scalar: GlslScalar::I32,
                     } => {
                         let data = &get_data::<i32, 4>(data_bytes, offset);
                         unsafe { gl.uniform_4_i32_slice(location, data) };
@@ -1746,27 +1746,27 @@ impl super::Queue {
                     //
                     // --- Uint 1-4 Component ---
                     //
-                    naga::TypeInner::Scalar(naga::Scalar::U32) => {
+                    GlslUniformType::Scalar(GlslScalar::U32) => {
                         let data = get_data::<u32, 1>(data_bytes, offset)[0];
                         unsafe { gl.uniform_1_u32(location, data) };
                     }
-                    naga::TypeInner::Vector {
-                        size: naga::VectorSize::Bi,
-                        scalar: naga::Scalar::U32,
+                    GlslUniformType::Vector {
+                        size: GlslVectorSize::Bi,
+                        scalar: GlslScalar::U32,
                     } => {
                         let data = &get_data::<u32, 2>(data_bytes, offset);
                         unsafe { gl.uniform_2_u32_slice(location, data) };
                     }
-                    naga::TypeInner::Vector {
-                        size: naga::VectorSize::Tri,
-                        scalar: naga::Scalar::U32,
+                    GlslUniformType::Vector {
+                        size: GlslVectorSize::Tri,
+                        scalar: GlslScalar::U32,
                     } => {
                         let data = &get_data::<u32, 3>(data_bytes, offset);
                         unsafe { gl.uniform_3_u32_slice(location, data) };
                     }
-                    naga::TypeInner::Vector {
-                        size: naga::VectorSize::Quad,
-                        scalar: naga::Scalar::U32,
+                    GlslUniformType::Vector {
+                        size: GlslVectorSize::Quad,
+                        scalar: GlslScalar::U32,
                     } => {
                         let data = &get_data::<u32, 4>(data_bytes, offset);
                         unsafe { gl.uniform_4_u32_slice(location, data) };
@@ -1775,18 +1775,18 @@ impl super::Queue {
                     //
                     // --- Matrix 2xR ---
                     //
-                    naga::TypeInner::Matrix {
-                        columns: naga::VectorSize::Bi,
-                        rows: naga::VectorSize::Bi,
-                        scalar: naga::Scalar::F32,
+                    GlslUniformType::Matrix {
+                        columns: GlslVectorSize::Bi,
+                        rows: GlslVectorSize::Bi,
+                        scalar: GlslScalar::F32,
                     } => {
                         let data = &get_data::<f32, 4>(data_bytes, offset);
                         unsafe { gl.uniform_matrix_2_f32_slice(location, false, data) };
                     }
-                    naga::TypeInner::Matrix {
-                        columns: naga::VectorSize::Bi,
-                        rows: naga::VectorSize::Tri,
-                        scalar: naga::Scalar::F32,
+                    GlslUniformType::Matrix {
+                        columns: GlslVectorSize::Bi,
+                        rows: GlslVectorSize::Tri,
+                        scalar: GlslScalar::F32,
                     } => {
                         // repack 2 vec3s into 6 values.
                         let unpacked_data = &get_data::<f32, 8>(data_bytes, offset);
@@ -1797,10 +1797,10 @@ impl super::Queue {
                         ];
                         unsafe { gl.uniform_matrix_2x3_f32_slice(location, false, &packed_data) };
                     }
-                    naga::TypeInner::Matrix {
-                        columns: naga::VectorSize::Bi,
-                        rows: naga::VectorSize::Quad,
-                        scalar: naga::Scalar::F32,
+                    GlslUniformType::Matrix {
+                        columns: GlslVectorSize::Bi,
+                        rows: GlslVectorSize::Quad,
+                        scalar: GlslScalar::F32,
                     } => {
                         let data = &get_data::<f32, 8>(data_bytes, offset);
                         unsafe { gl.uniform_matrix_2x4_f32_slice(location, false, data) };
@@ -1809,18 +1809,18 @@ impl super::Queue {
                     //
                     // --- Matrix 3xR ---
                     //
-                    naga::TypeInner::Matrix {
-                        columns: naga::VectorSize::Tri,
-                        rows: naga::VectorSize::Bi,
-                        scalar: naga::Scalar::F32,
+                    GlslUniformType::Matrix {
+                        columns: GlslVectorSize::Tri,
+                        rows: GlslVectorSize::Bi,
+                        scalar: GlslScalar::F32,
                     } => {
                         let data = &get_data::<f32, 6>(data_bytes, offset);
                         unsafe { gl.uniform_matrix_3x2_f32_slice(location, false, data) };
                     }
-                    naga::TypeInner::Matrix {
-                        columns: naga::VectorSize::Tri,
-                        rows: naga::VectorSize::Tri,
-                        scalar: naga::Scalar::F32,
+                    GlslUniformType::Matrix {
+                        columns: GlslVectorSize::Tri,
+                        rows: GlslVectorSize::Tri,
+                        scalar: GlslScalar::F32,
                     } => {
                         // repack 3 vec3s into 9 values.
                         let unpacked_data = &get_data::<f32, 12>(data_bytes, offset);
@@ -1832,10 +1832,10 @@ impl super::Queue {
                         ];
                         unsafe { gl.uniform_matrix_3_f32_slice(location, false, &packed_data) };
                     }
-                    naga::TypeInner::Matrix {
-                        columns: naga::VectorSize::Tri,
-                        rows: naga::VectorSize::Quad,
-                        scalar: naga::Scalar::F32,
+                    GlslUniformType::Matrix {
+                        columns: GlslVectorSize::Tri,
+                        rows: GlslVectorSize::Quad,
+                        scalar: GlslScalar::F32,
                     } => {
                         let data = &get_data::<f32, 12>(data_bytes, offset);
                         unsafe { gl.uniform_matrix_3x4_f32_slice(location, false, data) };
@@ -1844,18 +1844,18 @@ impl super::Queue {
                     //
                     // --- Matrix 4xR ---
                     //
-                    naga::TypeInner::Matrix {
-                        columns: naga::VectorSize::Quad,
-                        rows: naga::VectorSize::Bi,
-                        scalar: naga::Scalar::F32,
+                    GlslUniformType::Matrix {
+                        columns: GlslVectorSize::Quad,
+                        rows: GlslVectorSize::Bi,
+                        scalar: GlslScalar::F32,
                     } => {
                         let data = &get_data::<f32, 8>(data_bytes, offset);
                         unsafe { gl.uniform_matrix_4x2_f32_slice(location, false, data) };
                     }
-                    naga::TypeInner::Matrix {
-                        columns: naga::VectorSize::Quad,
-                        rows: naga::VectorSize::Tri,
-                        scalar: naga::Scalar::F32,
+                    GlslUniformType::Matrix {
+                        columns: GlslVectorSize::Quad,
+                        rows: GlslVectorSize::Tri,
+                        scalar: GlslScalar::F32,
                     } => {
                         // repack 4 vec3s into 12 values.
                         let unpacked_data = &get_data::<f32, 16>(data_bytes, offset);
@@ -1868,10 +1868,10 @@ impl super::Queue {
                         ];
                         unsafe { gl.uniform_matrix_4x3_f32_slice(location, false, &packed_data) };
                     }
-                    naga::TypeInner::Matrix {
-                        columns: naga::VectorSize::Quad,
-                        rows: naga::VectorSize::Quad,
-                        scalar: naga::Scalar::F32,
+                    GlslUniformType::Matrix {
+                        columns: GlslVectorSize::Quad,
+                        rows: GlslVectorSize::Quad,
+                        scalar: GlslScalar::F32,
                     } => {
                         let data = &get_data::<f32, 16>(data_bytes, offset);
                         unsafe { gl.uniform_matrix_4_f32_slice(location, false, data) };
