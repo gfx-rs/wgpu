@@ -1149,8 +1149,10 @@ impl super::CapabilitiesQuery {
                 tvos = 16.0,
                 visionos = 1.0
             ),
-            texture_component_swizzle: device.supportsFamily(MTLGPUFamily::Mac2)
-                || device.supportsFamily(MTLGPUFamily::Apple2),
+            texture_component_swizzle: family_check
+                && (metal3
+                    || device.supportsFamily(MTLGPUFamily::Mac2)
+                    || device.supportsFamily(MTLGPUFamily::Apple2)),
         }
     }
 
