@@ -96,6 +96,7 @@ impl crate::Surface for super::Surface {
             config.color_space,
             wgt::SurfaceColorSpace::ExtendedSrgbLinear
                 | wgt::SurfaceColorSpace::ExtendedSrgb
+                | wgt::SurfaceColorSpace::ExtendedDisplayP3
                 | wgt::SurfaceColorSpace::Hdr10
                 | wgt::SurfaceColorSpace::Hlg
         );
@@ -114,6 +115,9 @@ impl crate::Surface for super::Surface {
             }
             wgt::SurfaceColorSpace::ExtendedSrgb => {
                 Some(unsafe { objc2_core_graphics::kCGColorSpaceExtendedSRGB })
+            }
+            wgt::SurfaceColorSpace::ExtendedDisplayP3 => {
+                Some(unsafe { objc2_core_graphics::kCGColorSpaceExtendedDisplayP3 })
             }
             wgt::SurfaceColorSpace::DisplayP3 => {
                 Some(unsafe { objc2_core_graphics::kCGColorSpaceDisplayP3 })

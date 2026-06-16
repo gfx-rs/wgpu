@@ -215,6 +215,11 @@ pub enum SurfaceColorSpace {
     ///
     /// A wide-gamut SDR color space; the same encoded values cover roughly
     /// 25% more chromaticities than sRGB.
+    ///
+    /// This is standard dynamic range: values outside of `[0.0, 1.0]` (after
+    /// format encoding) are clamped by the display pipeline. For wide-gamut
+    /// HDR output that keeps the P3 primaries but extends the encoded range,
+    /// use [`ExtendedDisplayP3`](Self::ExtendedDisplayP3) instead.
     DisplayP3 = 3,
 
     /// HDR10: BT.2020 primaries, D65 white point, SMPTE ST 2084 perceptual
@@ -253,6 +258,26 @@ pub enum SurfaceColorSpace {
     /// and Metal's `kCGColorSpaceExtendedSRGB`. It is not available on DX12,
     /// which has no encoded-extended-sRGB swapchain color space.
     ExtendedSrgb = 6,
+
+    /// Extended-range Display-P3 (encoded): P3 primaries, D65 white point, the
+    /// **nonlinear sRGB transfer function extended beyond `[0.0, 1.0]`**,
+    /// extended dynamic range.
+    ///
+    /// The wide-gamut (P3) analogue of [`ExtendedSrgb`](Self::ExtendedSrgb):
+    /// the signal is sRGB-*encoded* (gamma), not linear, and the sRGB transfer
+    /// function is applied as usual and then extended to values above `1.0`
+    /// (and below `0.0`) to represent brighter-than-SDR output and colors
+    /// outside the P3 gamut. `(1.0, 1.0, 1.0)` is SDR reference white; values
+    /// above `1.0` produce brighter-than-SDR output on HDR displays.
+    ///
+    /// This is the wide-gamut HDR counterpart to
+    /// [`DisplayP3`](Self::DisplayP3), which is SDR-only: it keeps the P3
+    /// primaries but extends the encoded range for HDR. It is used by browser
+    /// WebGPU (canvas color space `"display-p3"` with `"extended"` tone
+    /// mapping) and corresponds to Metal's `kCGColorSpaceExtendedDisplayP3`. It
+    /// is not available on Vulkan or DX12, neither of which has an
+    /// encoded-extended-Display-P3 swapchain color space.
+    ExtendedDisplayP3 = 7,
 }
 
 impl SurfaceColorSpace {
@@ -267,6 +292,7 @@ impl SurfaceColorSpace {
             Self::Hdr10 => Some(SurfaceColorSpaces::HDR10),
             Self::Hlg => Some(SurfaceColorSpaces::HLG),
             Self::ExtendedSrgb => Some(SurfaceColorSpaces::EXTENDED_SRGB),
+            Self::ExtendedDisplayP3 => Some(SurfaceColorSpaces::EXTENDED_DISPLAY_P3),
         }
     }
 }
@@ -294,6 +320,8 @@ bitflags::bitflags! {
         const HLG = 1 << 4;
         /// [`SurfaceColorSpace::ExtendedSrgb`] is supported.
         const EXTENDED_SRGB = 1 << 5;
+        /// [`SurfaceColorSpace::ExtendedDisplayP3`] is supported.
+        const EXTENDED_DISPLAY_P3 = 1 << 6;
     }
 }
 

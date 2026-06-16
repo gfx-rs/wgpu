@@ -4035,14 +4035,16 @@ impl dispatch::SurfaceInterface for WebSurface {
                     let mut color_spaces =
                         wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::DISPLAY_P3;
                     // An fp16 canvas with "extended" tone mapping holds
-                    // sRGB-encoded extended-range values (the nonlinear sRGB
-                    // OETF, continued beyond [0, 1]), but only an HDR-capable
-                    // display can present values brighter than SDR reference
-                    // white. WebGPU has no linear canvas color space, so the
-                    // web backend advertises the encoded `ExtendedSrgb`, not the
-                    // linear `ExtendedSrgbLinear`.
+                    // encoded extended-range values (the nonlinear sRGB OETF,
+                    // continued beyond [0, 1]), but only an HDR-capable display
+                    // can present values brighter than SDR reference white.
+                    // WebGPU has no linear canvas color space, so the web
+                    // backend advertises the encoded `ExtendedSrgb` and, for the
+                    // "display-p3" canvas, the wide-gamut `ExtendedDisplayP3` —
+                    // not the linear `ExtendedSrgbLinear`.
                     if format == wgt::TextureFormat::Rgba16Float && environment_supports_hdr() {
-                        color_spaces |= wgt::SurfaceColorSpaces::EXTENDED_SRGB;
+                        color_spaces |= wgt::SurfaceColorSpaces::EXTENDED_SRGB
+                            | wgt::SurfaceColorSpaces::EXTENDED_DISPLAY_P3;
                     }
                     wgt::SurfaceFormatCapabilities {
                         format,
@@ -4113,6 +4115,21 @@ impl dispatch::SurfaceInterface for WebSurface {
                 // holds sRGB-encoded extended-range values (the nonlinear sRGB
                 // OETF, continued beyond [0, 1]). This is the W3C HDR-canvas
                 // mechanism shipped in Chrome 129+.
+                let tone_mapping = webgpu_sys::GpuCanvasToneMapping::new();
+                tone_mapping.set_mode(webgpu_sys::GpuCanvasToneMappingMode::Extended);
+                mapped.set_tone_mapping(&tone_mapping);
+            }
+            wgt::SurfaceColorSpace::ExtendedDisplayP3 => {
+                // Wide-gamut HDR: the "display-p3" canvas color space combined
+                // with "extended" tone mapping holds Display-P3-encoded
+                // extended-range values. Set both dictionary members (colorSpace
+                // by reflection, as for `DisplayP3`).
+                js_sys::Reflect::set(
+                    &mapped,
+                    &JsValue::from_str("colorSpace"),
+                    &JsValue::from_str("display-p3"),
+                )
+                .expect("Setting the canvas configuration color space should never fail");
                 let tone_mapping = webgpu_sys::GpuCanvasToneMapping::new();
                 tone_mapping.set_mode(webgpu_sys::GpuCanvasToneMappingMode::Extended);
                 mapped.set_tone_mapping(&tone_mapping);

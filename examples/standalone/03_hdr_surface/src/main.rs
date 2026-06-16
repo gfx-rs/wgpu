@@ -13,8 +13,9 @@
 //!   look oversaturated in HDR10 the gamut conversion is wrong).
 //! * Bottom row: logarithmic luminance gradient from 1 to 10000 nits.
 //!
-//! Set `HDR_MODE=hdr10|hlg|scrgb|extended-srgb|srgb` (on the web: a `?mode=`
-//! query parameter) to force a particular color space instead of auto-picking.
+//! Set `HDR_MODE=hdr10|hlg|scrgb|extended-srgb|extended-display-p3|srgb` (on the
+//! web: a `?mode=` query parameter) to force a particular color space instead of
+//! auto-picking.
 //! Set `WGPU_BACKEND=vulkan` to force the backend.
 
 use std::sync::Arc;
@@ -29,7 +30,7 @@ use winit::{
 const SHADER: &str = r#"
 struct Params {
     // 0 = sRGB SDR, 1 = extended linear scRGB, 2 = HDR10 PQ, 3 = HLG,
-    // 4 = encoded extended-range sRGB
+    // 4 = encoded extended-range sRGB, 5 = encoded extended-range Display-P3
     mode: u32,
     // 1 if the shader must apply the sRGB OETF itself (non-sRGB SDR format)
     encode_srgb: u32,
@@ -139,6 +140,13 @@ const BT709_TO_BT2020 = mat3x3f(
     vec3f(0.043306, 0.011360, 0.895578),
 );
 
+// Linear BT.709 (sRGB) -> linear Display-P3, both D65. Column-major.
+const BT709_TO_DISPLAYP3 = mat3x3f(
+    vec3f(0.8224621, 0.0331942, 0.0170826),
+    vec3f(0.1775380, 0.9668058, 0.0723974),
+    vec3f(0.0000000, 0.0000000, 0.9105199),
+);
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let nits = pattern_nits(in.uv);
@@ -154,6 +162,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             // extended beyond [0, 1]. Same normalization as scRGB
             // (1.0 = 80 nits), but sRGB-encoded rather than linear.
             out = srgb_oetf_extended(nits / 80.0);
+        }
+        case 5u: {
+            // Encoded extended-range Display-P3: convert BT.709 -> P3 primaries
+            // (linear), normalize like scRGB (1.0 = 80 nits), then apply the
+            // extended sRGB OETF. The BT.709 test primaries look identical, just
+            // carried in the wider P3 container.
+            out = srgb_oetf_extended((BT709_TO_DISPLAYP3 * nits) / 80.0);
         }
         case 2u: {
             // HDR10: BT.2020 primaries, PQ-encoded absolute luminance.
@@ -254,17 +269,28 @@ fn pick_mode(caps: &wgpu::SurfaceCapabilities, forced: Option<&str>) -> ModeChoi
             4,
             &[wgpu::TextureFormat::Rgba16Float],
         ),
+        (
+            Cs::ExtendedDisplayP3,
+            Csf::EXTENDED_DISPLAY_P3,
+            5,
+            &[wgpu::TextureFormat::Rgba16Float],
+        ),
     ];
 
+    // `ExtendedDisplayP3` is reachable only via an explicit `extended-display-p3`
+    // request, not auto-picked: it needs gamut conversion and the BT.709 test
+    // pattern looks the same as `ExtendedSrgb`, so auto-pick keeps the simpler
+    // BT.709 HDR path.
     let allowed = |cs: Cs| match forced {
         None => cs == Cs::Hdr10 || cs == Cs::ExtendedSrgbLinear || cs == Cs::ExtendedSrgb,
         Some("hdr10") => cs == Cs::Hdr10,
         Some("hlg") => cs == Cs::Hlg,
         Some("scrgb") => cs == Cs::ExtendedSrgbLinear,
         Some("extended-srgb") => cs == Cs::ExtendedSrgb,
+        Some("extended-display-p3") => cs == Cs::ExtendedDisplayP3,
         Some("srgb") => false,
         Some(other) => {
-            panic!("unknown mode {other:?} (use hdr10|hlg|scrgb|extended-srgb|srgb)")
+            panic!("unknown mode {other:?} (use hdr10|hlg|scrgb|extended-srgb|extended-display-p3|srgb)")
         }
     };
 

@@ -419,9 +419,11 @@ impl crate::Adapter for super::Adapter {
                 wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::DISPLAY_P3;
             if format == wgt::TextureFormat::Rgba16Float {
                 // `Rgba16Float` enables Metal's extended dynamic range, in both
-                // linear (scRGB) and encoded (extended nonlinear sRGB) form.
+                // linear (scRGB) and encoded (extended nonlinear sRGB) form,
+                // for the BT.709 and Display-P3 gamuts.
                 color_spaces |= wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR
-                    | wgt::SurfaceColorSpaces::EXTENDED_SRGB;
+                    | wgt::SurfaceColorSpaces::EXTENDED_SRGB
+                    | wgt::SurfaceColorSpaces::EXTENDED_DISPLAY_P3;
             }
             // PQ/HLG only on the >=10-bit formats: 8-bit PQ is unusable
             // banding. The ITUR_2100 color space constants require

@@ -203,6 +203,9 @@ pub fn map_surface_color_space(color_space: wgt::SurfaceColorSpace) -> vk::Color
         Scs::DisplayP3 => vk::ColorSpaceKHR::DISPLAY_P3_NONLINEAR_EXT,
         Scs::Hdr10 => vk::ColorSpaceKHR::HDR10_ST2084_EXT,
         Scs::Hlg => vk::ColorSpaceKHR::HDR10_HLG_EXT,
+        Scs::ExtendedDisplayP3 => {
+            unreachable!("`ExtendedDisplayP3` is never reported in the Vulkan surface capabilities")
+        }
     }
 }
 
