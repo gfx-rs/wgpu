@@ -464,13 +464,14 @@ pub enum ComponentSwizzle {
 ///
 /// Example:
 /// ```rust
+/// # use wgpu_types::{TextureComponentSwizzle, ComponentSwizzle};
 /// // The swizzle maps `xgxr` to `rg01`, or maps `rgba` to `ag01`
 /// TextureComponentSwizzle {
 ///     r: ComponentSwizzle::A,
 ///     g: ComponentSwizzle::G,
 ///     b: ComponentSwizzle::Zero,
 ///     a: ComponentSwizzle::One,
-/// }
+/// };
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
