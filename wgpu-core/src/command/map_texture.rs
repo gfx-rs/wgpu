@@ -1,16 +1,48 @@
-use alloc::sync::Arc;
+use alloc::{sync::Arc, vec::Vec};
 
 use thiserror::Error;
 use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
     command::{encoder::EncodingState, CommandEncoder, EncoderStateError, EncodingApi},
-    device::{DeviceError, MissingFeatures, TextureMapClosure},
+    device::{DeviceError, MissingFeatures, TextureMapClosure, TextureMapPendingClosure},
     global::Global,
     id::{CommandEncoderId, TextureId},
-    resource::{DestroyedResourceError, InvalidResourceError, ParentDevice as _, TextureMapState},
+    resource::{
+        DestroyedResourceError, InvalidResourceError, ParentDevice as _, Texture, TextureMapState,
+    },
     track::ResourceUsageCompatibilityError,
 };
+
+/// Revert textures that were queued for host-mapping by a command encoder back
+/// to [`TextureMapState::Unmapped`] and return their callbacks paired with an
+/// error, so the callbacks are fired rather than silently dropped.
+///
+/// Called when an encoder (or command buffer) carrying queued maps is dropped,
+/// or its recording fails, before the mapping could be registered with the
+/// queue. Without this the textures would be stranded in
+/// [`TextureMapState::MappingQueued`] forever (rejected by every future submit)
+/// and any caller awaiting the mapping callback would hang. This is the
+/// encoder-side analogue of the device-loss cleanup
+/// `LifetimeTracker::drain_pending_texture_maps`.
+pub(crate) fn cancel_texture_maps(
+    textures: impl IntoIterator<Item = Arc<Texture>>,
+) -> Vec<TextureMapPendingClosure> {
+    let mut closures = Vec::new();
+    for texture in textures {
+        let mut map_state = texture.map_state.lock();
+        if let TextureMapState::MappingQueued(cb) = &mut *map_state {
+            // `DeviceError::Lost` is the existing "this mapping will never
+            // complete" signal (matching `drain_pending_texture_maps`); here the
+            // device isn't necessarily lost, but the mapping has been cancelled.
+            if let Some(cb) = cb.take() {
+                closures.push((cb, Err(DeviceError::Lost)));
+            }
+            *map_state = TextureMapState::Unmapped;
+        }
+    }
+    closures
+}
 
 impl Global {
     pub fn command_encoder_map_texture_on_completion(
