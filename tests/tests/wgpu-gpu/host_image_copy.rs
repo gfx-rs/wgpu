@@ -10,6 +10,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(HOST_IMAGE_PARTIAL_WRITE);
     vec.push(HOST_IMAGE_DEPTH_ROUNDTRIP);
     vec.push(HOST_IMAGE_PLANAR_ROUNDTRIP);
+    vec.push(HOST_IMAGE_GPU_ZERO_INIT_UNWRITTEN);
 }
 
 /// Upload pixel data into a HOST_VISIBLE texture via the encoder-mapped path
@@ -612,7 +613,13 @@ async fn host_image_planar_roundtrip(ctx: TestingContext) {
 
     for (aspect, data, w, h, bytes_per_texel) in [
         (wgpu::TextureAspect::Plane0, &y, width, height, 1u32),
-        (wgpu::TextureAspect::Plane1, &uv, width / 2, height / 2, 2u32),
+        (
+            wgpu::TextureAspect::Plane1,
+            &uv,
+            width / 2,
+            height / 2,
+            2u32,
+        ),
     ] {
         let layout = wgpu::TexelCopyBufferLayout {
             offset: 0,
@@ -647,7 +654,10 @@ async fn host_image_planar_roundtrip(ctx: TestingContext) {
             layout,
             size,
         );
-        assert_eq!(&readback, data, "NV12 plane {aspect:?} host round-trip failed");
+        assert_eq!(
+            &readback, data,
+            "NV12 plane {aspect:?} host round-trip failed"
+        );
     }
 
     drop(mapped);
@@ -662,4 +672,98 @@ static HOST_IMAGE_PLANAR_ROUNDTRIP: GpuTestConfiguration = GpuTestConfiguration:
     )
     .run_async(|ctx| async move {
         host_image_planar_roundtrip(ctx).await;
+    });
+
+/// Regression: a HOST_VISIBLE texture that is mapped then unmapped *without any
+/// host write* must still be zero-initialized when the GPU reads it.
+///
+/// This exercises the GPU-side init path (`clear_texture` via buffer copies) for
+/// host-visible textures, which requires them to carry `COPY_DST` hal usage.
+/// Without it, the clear would fail (Vulkan: no `TRANSFER_DST`) or expose
+/// uninitialized memory.
+async fn host_image_gpu_zero_init_unwritten(ctx: TestingContext) {
+    let width = 4u32;
+    let height = 4u32;
+    let bytes_per_pixel = 4u32;
+    let host_bytes_per_row = bytes_per_pixel * width; // 16
+    let gpu_bytes_per_row = host_bytes_per_row.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT); // 256
+    let gpu_data_size = (gpu_bytes_per_row * height) as usize;
+
+    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("host-visible unwritten texture"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::HOST_VISIBLE | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+        mapped_at_creation: true,
+    });
+
+    // Map then unmap without writing anything: the texture stays uninitialized.
+    texture.unmap();
+
+    // GPU readback must observe zero-initialized memory, not garbage.
+    let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("readback buffer"),
+        size: gpu_data_size as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("copy encoder"),
+        });
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback_buffer,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(gpu_bytes_per_row),
+                rows_per_image: Some(height),
+            },
+        },
+        wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+    );
+    ctx.queue.submit(Some(encoder.finish()));
+
+    let slice = readback_buffer.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |_| {});
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
+
+    let data = slice.get_mapped_range().unwrap();
+    for row in 0..height as usize {
+        let start = row * gpu_bytes_per_row as usize;
+        let pixels = &data[start..start + host_bytes_per_row as usize];
+        assert!(
+            pixels.iter().all(|&b| b == 0),
+            "row {row} of an unwritten host-visible texture must be zero-initialized, got {pixels:?}",
+        );
+    }
+}
+
+#[gpu_test]
+static HOST_IMAGE_GPU_ZERO_INIT_UNWRITTEN: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
+    .run_async(|ctx| async move {
+        host_image_gpu_zero_init_unwritten(ctx).await;
     });
