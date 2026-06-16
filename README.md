@@ -107,7 +107,7 @@ We will avoid bumping the MSRV of `wgpu` without good reason, and such a change 
 Due to complex dependants, we have three MSRV policies:
 
 - `wgpu`'s MSRV is **1.87**
-- `wgpu-core` (and hence `wgpu-hal`, `naga`, and `wgpu-types`)'s MSRV is **1.87**.
+- `wgpu-core` (and hence `wgpu-hal`, `naga`, `naga-types` and `wgpu-types`)'s MSRV is **1.87**.
 - The rest of the workspace has an MSRV of **1.93**.
 
 It is enforced on CI (in "/.github/workflows/ci.yml") with the `WGPU_MSRV`, `CORE_MSRV`, and `REPO_MSRV` variables, respectively.
