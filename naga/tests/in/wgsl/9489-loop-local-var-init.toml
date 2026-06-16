@@ -1,0 +1,11 @@
+targets = "SPIRV | METAL | GLSL | HLSL | WGSL | IR"
+
+[msl.per_entry_point_map.main]
+resources = [
+    { bind_target = { buffer = 0, mutable = false }, resource_binding = { group = 0, binding = 0 } },
+    { bind_target = { buffer = 1, mutable = true }, resource_binding = { group = 0, binding = 1 } },
+]
+sizes_buffer = 24
+
+[glsl]
+version.Desktop = 430

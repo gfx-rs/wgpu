@@ -175,6 +175,12 @@ pub fn map_texture_format_for_copy(
             crate::FormatAspects::STENCIL,
         ) => Dxgi::Common::DXGI_FORMAT_R8_UINT,
 
+        // `CopyTextureRegion` on a plane subresource wants the
+        // single-plane DXGI format, not the planar one.
+        (format, aspects) if format.is_multi_planar_format() && aspects.is_one() => {
+            map_texture_format(format.aspect_specific_format(aspects.map())?)
+        }
+
         (format, crate::FormatAspects::COLOR) => map_texture_format(format),
 
         _ => return None,

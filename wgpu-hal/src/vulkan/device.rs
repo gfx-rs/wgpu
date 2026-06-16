@@ -255,6 +255,34 @@ struct CompiledStage {
     temp_raw_module: Option<vk::ShaderModule>,
 }
 
+struct MemoryProperties {
+    base: vk::PhysicalDeviceMemoryProperties,
+    heap_budget: ArrayVec<vk::DeviceSize, { vk::MAX_MEMORY_HEAPS }>,
+    heap_usage: ArrayVec<vk::DeviceSize, { vk::MAX_MEMORY_HEAPS }>,
+}
+
+impl MemoryProperties {
+    fn types(&self) -> &[vk::MemoryType] {
+        let count = self.base.memory_type_count as usize;
+        &self.base.memory_types[0..count]
+    }
+
+    fn heaps(&self) -> &[vk::MemoryHeap] {
+        let count = self.base.memory_heap_count as usize;
+        &self.base.memory_heaps[0..count]
+    }
+
+    fn heap_budget(&self) -> &[vk::DeviceSize] {
+        let count = self.base.memory_heap_count as usize;
+        &self.heap_budget[0..count]
+    }
+
+    fn heap_usage(&self) -> &[vk::DeviceSize] {
+        let count = self.base.memory_heap_count as usize;
+        &self.heap_usage[0..count]
+    }
+}
+
 impl super::Device {
     /// # Safety
     ///
@@ -692,7 +720,8 @@ impl super::Device {
                     || naga_shader.debug_source.is_some()
                     || !stage.zero_initialize_workgroup_memory
                     || !runtime_checks.task_shader_dispatch_tracking
-                    || !runtime_checks.mesh_shader_primitive_indices_clamp;
+                    || !runtime_checks.mesh_shader_primitive_indices_clamp
+                    || !runtime_checks.int_div_checks;
 
                 let mut temp_options;
                 let options = if needs_temp_options {
@@ -731,6 +760,7 @@ impl super::Device {
                     }
                     temp_options.mesh_shader_primitive_indices_clamp =
                         runtime_checks.mesh_shader_primitive_indices_clamp;
+                    temp_options.emit_int_div_checks = runtime_checks.int_div_checks;
 
                     &temp_options
                 } else {
@@ -813,26 +843,13 @@ impl super::Device {
         &self.shared.instance
     }
 
-    fn error_if_would_oom_on_resource_allocation(
-        &self,
-        needs_host_access: bool,
-        size: u64,
-    ) -> Result<(), crate::DeviceError> {
-        let Some(threshold) = self
-            .shared
-            .instance
-            .memory_budget_thresholds
-            .for_resource_creation
-        else {
-            return Ok(());
-        };
-
+    fn get_memory_properties(&self) -> Option<MemoryProperties> {
         if !self
             .shared
             .enabled_extensions
             .contains(&ext::memory_budget::NAME)
         {
-            return Ok(());
+            return None;
         }
 
         let get_physical_device_properties = self
@@ -842,66 +859,125 @@ impl super::Device {
             .as_ref()
             .unwrap();
 
-        let mut memory_budget_properties = vk::PhysicalDeviceMemoryBudgetPropertiesEXT::default();
-
-        let mut memory_properties =
-            vk::PhysicalDeviceMemoryProperties2::default().push_next(&mut memory_budget_properties);
+        let mut budget = vk::PhysicalDeviceMemoryBudgetPropertiesEXT::default();
+        let mut props = vk::PhysicalDeviceMemoryProperties2::default().push_next(&mut budget);
 
         unsafe {
-            get_physical_device_properties.get_physical_device_memory_properties2(
-                self.shared.physical_device,
-                &mut memory_properties,
-            );
+            get_physical_device_properties
+                .get_physical_device_memory_properties2(self.shared.physical_device, &mut props);
         }
 
-        let mut host_visible_heaps = [false; vk::MAX_MEMORY_HEAPS];
-        let mut device_local_heaps = [false; vk::MAX_MEMORY_HEAPS];
+        let vk::PhysicalDeviceMemoryProperties2 {
+            memory_properties, ..
+        } = props;
 
-        let memory_properties = memory_properties.memory_properties;
+        let mut heap_budget = ArrayVec::from(budget.heap_budget);
+        let mut heap_usage = ArrayVec::from(budget.heap_usage);
+        heap_budget.truncate(memory_properties.memory_heap_count as usize);
+        heap_usage.truncate(memory_properties.memory_heap_count as usize);
 
-        for i in 0..memory_properties.memory_type_count {
-            let memory_type = memory_properties.memory_types[i as usize];
-            let flags = memory_type.property_flags;
+        Some(MemoryProperties {
+            base: memory_properties,
+            heap_budget,
+            heap_usage,
+        })
+    }
 
-            if flags.intersects(
-                vk::MemoryPropertyFlags::LAZILY_ALLOCATED | vk::MemoryPropertyFlags::PROTECTED,
-            ) {
-                continue; // not used by gpu-alloc
-            }
+    /// Predict whether a proposed allocation will result in an OOM condition.
+    ///
+    /// If so, returns `Err(crate::DeviceError::OutOfMemory)`. If not, returns
+    /// `Ok(())`.
+    ///
+    /// The prediction quality depends on accurately selecting the heap that
+    /// [`gpu_allocator`] will use for the allocation, and is subject to
+    /// deteriorate if the logic in [`gpu_allocator`] changes.
+    fn error_if_would_oom_on_resource_allocation(
+        &self,
+        location: gpu_allocator::MemoryLocation,
+        requirements: &vk::MemoryRequirements,
+    ) -> Result<(), crate::DeviceError> {
+        use gpu_allocator::MemoryLocation;
 
-            if flags.contains(vk::MemoryPropertyFlags::HOST_VISIBLE) {
-                host_visible_heaps[memory_type.heap_index as usize] = true;
-            }
-
-            if flags.contains(vk::MemoryPropertyFlags::DEVICE_LOCAL) {
-                device_local_heaps[memory_type.heap_index as usize] = true;
-            }
-        }
-
-        let heaps = if needs_host_access {
-            host_visible_heaps
-        } else {
-            device_local_heaps
+        let Some(threshold) = self
+            .shared
+            .instance
+            .memory_budget_thresholds
+            .for_resource_creation
+        else {
+            return Ok(());
         };
 
-        // NOTE: We might end up checking multiple heaps since gpu-alloc doesn't have a way
-        // for us to query the heap the resource will end up on. But this is unlikely,
-        // there is usually only one heap on integrated GPUs and two on dedicated GPUs.
+        let Some(memory_properties) = self.get_memory_properties() else {
+            return Ok(());
+        };
 
-        for (i, check) in heaps.iter().enumerate() {
-            if !check {
-                continue;
+        // memory types not used by gpu-allocator
+        let invalid_flags =
+            vk::MemoryPropertyFlags::LAZILY_ALLOCATED | vk::MemoryPropertyFlags::PROTECTED;
+
+        let preferred_flags = match location {
+            MemoryLocation::GpuOnly => vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            MemoryLocation::CpuToGpu => {
+                vk::MemoryPropertyFlags::HOST_VISIBLE
+                    | vk::MemoryPropertyFlags::HOST_COHERENT
+                    | vk::MemoryPropertyFlags::DEVICE_LOCAL
             }
-
-            let heap_usage = memory_budget_properties.heap_usage[i];
-            let heap_budget = memory_budget_properties.heap_budget[i];
-
-            if heap_usage + size >= heap_budget / 100 * threshold as u64 {
-                return Err(crate::DeviceError::OutOfMemory);
+            MemoryLocation::GpuToCpu => {
+                vk::MemoryPropertyFlags::HOST_VISIBLE
+                    | vk::MemoryPropertyFlags::HOST_COHERENT
+                    | vk::MemoryPropertyFlags::HOST_CACHED
             }
+            MemoryLocation::Unknown => vk::MemoryPropertyFlags::empty(),
+        };
+
+        let mut selected_heap = memory_properties
+            .types()
+            .iter()
+            .enumerate()
+            .find(|(i, ty)| {
+                (1 << i) & requirements.memory_type_bits != 0
+                    && ty.property_flags.contains(preferred_flags)
+                    && !ty.property_flags.intersects(invalid_flags)
+            });
+
+        if selected_heap.is_none() {
+            let required_flags = match location {
+                MemoryLocation::GpuOnly => vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                MemoryLocation::CpuToGpu | MemoryLocation::GpuToCpu => {
+                    vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT
+                }
+                MemoryLocation::Unknown => vk::MemoryPropertyFlags::empty(),
+            };
+            selected_heap = memory_properties
+                .types()
+                .iter()
+                .enumerate()
+                .find(|(i, ty)| {
+                    (1 << i) & requirements.memory_type_bits != 0
+                        && ty.property_flags.contains(required_flags)
+                        && !ty.property_flags.intersects(invalid_flags)
+                });
         }
 
-        Ok(())
+        if let Some((_, ty)) = selected_heap {
+            let i = ty.heap_index as usize;
+            let heap_usage = memory_properties.heap_usage()[i];
+            let heap_budget = memory_properties.heap_budget()[i];
+            if heap_usage + requirements.size < heap_budget / 100 * threshold as u64 {
+                Ok(())
+            } else {
+                log::warn!(
+                    "Allocation would result in an OOM condition\n\
+                    Request: {requirements:?}\n\
+                    Heap {index} had {heap_usage}B used of {heap_budget}B total before this request.",
+                    index = ty.heap_index,
+                );
+                Err(crate::DeviceError::OutOfMemory)
+            }
+        } else {
+            log::warn!("Failed to find a suitable heap for {requirements:?}");
+            Err(crate::DeviceError::OutOfMemory)
+        }
     }
 }
 
@@ -936,9 +1012,7 @@ impl crate::Device for super::Device {
             (false, false) => gpu_allocator::MemoryLocation::GpuOnly,
         };
 
-        let needs_host_access = is_cpu_read || is_cpu_write;
-
-        self.error_if_would_oom_on_resource_allocation(needs_host_access, requirements.size)
+        self.error_if_would_oom_on_resource_allocation(location, &requirements)
             .inspect_err(|_| {
                 unsafe { self.shared.raw.destroy_buffer(raw, None) };
             })?;
@@ -1105,10 +1179,13 @@ impl crate::Device for super::Device {
     ) -> Result<super::Texture, crate::DeviceError> {
         let image = self.create_image_without_memory(desc, None)?;
 
-        self.error_if_would_oom_on_resource_allocation(false, image.requirements.size)
-            .inspect_err(|_| {
-                unsafe { self.shared.raw.destroy_image(image.raw, None) };
-            })?;
+        self.error_if_would_oom_on_resource_allocation(
+            gpu_allocator::MemoryLocation::GpuOnly,
+            &image.requirements,
+        )
+        .inspect_err(|_| {
+            unsafe { self.shared.raw.destroy_image(image.raw, None) };
+        })?;
 
         let name = desc.label.unwrap_or("Unlabeled texture");
 
@@ -2226,9 +2303,18 @@ impl crate::Device for super::Device {
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> Result<super::QuerySet, crate::DeviceError> {
-        // Assume each query is 256 bytes.
-        // On an AMD W6800 with driver version 32.0.12030.9, occlusion queries are 256.
-        self.error_if_would_oom_on_resource_allocation(true, desc.count as u64 * 256)?;
+        // Assume each query is 256 bytes. This is the case for occlusion
+        // queries on an AMD W6800 with driver version 32.0.12030.9. The
+        // size and allocation policy may vary; this is an approximate
+        // check only.
+        self.error_if_would_oom_on_resource_allocation(
+            gpu_allocator::MemoryLocation::GpuToCpu,
+            &vk::MemoryRequirements {
+                size: desc.count as u64 * 256,
+                alignment: 256,
+                memory_type_bits: self.valid_ash_memory_types,
+            },
+        )?;
 
         let (vk_type, pipeline_statistics) = match desc.ty {
             wgt::QueryType::Occlusion => (
@@ -2567,10 +2653,13 @@ impl crate::Device for super::Device {
 
             let requirements = self.shared.raw.get_buffer_memory_requirements(raw_buffer);
 
-            self.error_if_would_oom_on_resource_allocation(false, requirements.size)
-                .inspect_err(|_| {
-                    self.shared.raw.destroy_buffer(raw_buffer, None);
-                })?;
+            self.error_if_would_oom_on_resource_allocation(
+                gpu_allocator::MemoryLocation::GpuOnly,
+                &requirements,
+            )
+            .inspect_err(|_| {
+                self.shared.raw.destroy_buffer(raw_buffer, None);
+            })?;
 
             let name = desc
                 .label
@@ -2745,38 +2834,13 @@ impl crate::Device for super::Device {
             return Ok(());
         };
 
-        if !self
-            .shared
-            .enabled_extensions
-            .contains(&ext::memory_budget::NAME)
-        {
+        let Some(memory_properties) = self.get_memory_properties() else {
             return Ok(());
-        }
+        };
 
-        let get_physical_device_properties = self
-            .shared
-            .instance
-            .get_physical_device_properties
-            .as_ref()
-            .unwrap();
-
-        let mut memory_budget_properties = vk::PhysicalDeviceMemoryBudgetPropertiesEXT::default();
-
-        let mut memory_properties =
-            vk::PhysicalDeviceMemoryProperties2::default().push_next(&mut memory_budget_properties);
-
-        unsafe {
-            get_physical_device_properties.get_physical_device_memory_properties2(
-                self.shared.physical_device,
-                &mut memory_properties,
-            );
-        }
-
-        let memory_properties = memory_properties.memory_properties;
-
-        for i in 0..memory_properties.memory_heap_count {
-            let heap_usage = memory_budget_properties.heap_usage[i as usize];
-            let heap_budget = memory_budget_properties.heap_budget[i as usize];
+        for i in 0..memory_properties.heaps().len() {
+            let heap_usage = memory_properties.heap_usage()[i];
+            let heap_budget = memory_properties.heap_budget()[i];
 
             if heap_usage >= heap_budget / 100 * threshold as u64 {
                 return Err(crate::DeviceError::OutOfMemory);

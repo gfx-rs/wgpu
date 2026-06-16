@@ -969,7 +969,9 @@ fn multi_draw_indirect(
     };
     let instance_limit = state.vertex.limits.instance_limit;
 
-    let buffer_uses = if state.device.indirect_validation.is_some() {
+    let buffer_uses = if state.device.indirect_validation.is_some()
+        && family != DrawCommandFamily::DrawMeshTasks
+    {
         wgt::BufferUses::STORAGE_READ_ONLY
     } else {
         wgt::BufferUses::INDIRECT
@@ -1228,7 +1230,9 @@ impl RenderBundle {
                     vertex_or_index_limit,
                     instance_limit,
                 } => {
-                    let (buffer, offset) = if self.device.indirect_validation.is_some() {
+                    let (buffer, offset) = if self.device.indirect_validation.is_some()
+                        && *family != DrawCommandFamily::DrawMeshTasks
+                    {
                         let (dst_resource_index, offset) = indirect_draw_validation_batcher.add(
                             indirect_draw_validation_resources,
                             &self.device,

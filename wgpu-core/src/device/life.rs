@@ -304,13 +304,8 @@ impl LifetimeTracker {
     ) -> SmallVec<[SubmittedWorkDoneClosure; 1]> {
         profiling::scope!("triage_submissions");
 
-        //TODO: enable when `is_sorted_by_key` is stable
-        //debug_assert!(self.active.is_sorted_by_key(|a| a.index));
-        let done_count = self
-            .active
-            .iter()
-            .position(|a| a.index > last_done)
-            .unwrap_or(self.active.len());
+        debug_assert!(self.active.is_sorted_by_key(|a| a.index));
+        let done_count = self.active.partition_point(|a| a.index <= last_done);
 
         let mut work_done_closures: SmallVec<_> = self.work_done_closures.drain(..).collect();
         for a in self.active.drain(..done_count) {
