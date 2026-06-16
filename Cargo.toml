@@ -12,6 +12,7 @@ members = [
     "lock-analyzer",
     "naga-cli",
     "naga-test",
+    "naga-types",
     "naga",
     "naga/fuzz",
     "naga/hlsl-snapshots",
@@ -37,6 +38,7 @@ default-members = [
     "lock-analyzer",
     "naga-cli",
     "naga-test",
+    "naga-types",
     "naga",
     "naga/fuzz",
     "naga/hlsl-snapshots",
@@ -72,6 +74,7 @@ authors = ["gfx-rs developers"]
 [workspace.dependencies]
 naga = { version = "29.0.0", path = "./naga" }
 naga-test = { path = "./naga-test" }
+naga-types = { version = "29.0.0", path = "./naga-types" }
 wgpu = { version = "29.0.0", path = "./wgpu", default-features = false, features = [
     "std",
     "serde",

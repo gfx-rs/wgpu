@@ -37,10 +37,15 @@ alloc_instead_of_core = "warn"
 
 [features]
 default = ["std"]
-std = ["js-sys?/std", "web-sys?/std"]
+std = ["js-sys?/std", "web-sys?/std", "naga-types/std"]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
-serde = ["dep:serde", "bitflags/serde"]
+serde = [
+    "dep:serde",
+    "bitflags/serde",
+    "naga-types/serialize",
+    "naga-types/deserialize",
+]
 # Enables some internal instrumentation for debugging purposes.
 counters = []
 # Enables variants of `Trace` other than `Trace::Off`
@@ -50,6 +55,8 @@ web = ["dep:js-sys", "dep:web-sys"]
 exhaust = ["dep:exhaust"]
 
 [dependencies]
+naga-types = { workspace = true, features = [] }
+
 bitflags.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 exhaust = { workspace = true, optional = true }
