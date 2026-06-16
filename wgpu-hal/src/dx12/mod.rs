@@ -1436,7 +1436,7 @@ fn map_surface_color_space(
         Scs::Srgb => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709,
         Scs::ExtendedSrgbLinear => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709,
         Scs::Hdr10 => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020,
-        Scs::Auto | Scs::DisplayP3 | Scs::Hlg => {
+        Scs::Auto | Scs::DisplayP3 | Scs::Hlg | Scs::ExtendedSrgb => {
             unreachable!("`{color_space:?}` is never reported in the DX12 surface capabilities")
         }
     }

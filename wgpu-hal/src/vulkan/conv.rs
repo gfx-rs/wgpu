@@ -185,6 +185,7 @@ pub fn map_vk_color_space(color_space: vk::ColorSpaceKHR) -> Option<wgt::Surface
     Some(match color_space {
         vk::ColorSpaceKHR::SRGB_NONLINEAR => Scs::Srgb,
         vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT => Scs::ExtendedSrgbLinear,
+        vk::ColorSpaceKHR::EXTENDED_SRGB_NONLINEAR_EXT => Scs::ExtendedSrgb,
         vk::ColorSpaceKHR::DISPLAY_P3_NONLINEAR_EXT => Scs::DisplayP3,
         vk::ColorSpaceKHR::HDR10_ST2084_EXT => Scs::Hdr10,
         vk::ColorSpaceKHR::HDR10_HLG_EXT => Scs::Hlg,
@@ -198,6 +199,7 @@ pub fn map_surface_color_space(color_space: wgt::SurfaceColorSpace) -> vk::Color
         Scs::Auto => unreachable!("wgpu-core resolves `Auto` before configuring the surface"),
         Scs::Srgb => vk::ColorSpaceKHR::SRGB_NONLINEAR,
         Scs::ExtendedSrgbLinear => vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT,
+        Scs::ExtendedSrgb => vk::ColorSpaceKHR::EXTENDED_SRGB_NONLINEAR_EXT,
         Scs::DisplayP3 => vk::ColorSpaceKHR::DISPLAY_P3_NONLINEAR_EXT,
         Scs::Hdr10 => vk::ColorSpaceKHR::HDR10_ST2084_EXT,
         Scs::Hlg => vk::ColorSpaceKHR::HDR10_HLG_EXT,
@@ -1069,6 +1071,7 @@ mod tests {
         for vk_color_space in [
             vk::ColorSpaceKHR::SRGB_NONLINEAR,
             vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT,
+            vk::ColorSpaceKHR::EXTENDED_SRGB_NONLINEAR_EXT,
             vk::ColorSpaceKHR::DISPLAY_P3_NONLINEAR_EXT,
             vk::ColorSpaceKHR::HDR10_ST2084_EXT,
             vk::ColorSpaceKHR::HDR10_HLG_EXT,

@@ -5491,6 +5491,23 @@ mod surface_configuration_tests {
         );
     }
 
+    /// `Auto` never resolves to the encoded extended-range sRGB color space,
+    /// even for fp16 formats: it prefers extended *linear* sRGB and falls back
+    /// to plain sRGB, but `ExtendedSrgb` must be requested explicitly.
+    #[test]
+    fn auto_never_resolves_to_extended_srgb() {
+        let caps = caps(vec![format_caps(
+            wgt::TextureFormat::Rgba16Float,
+            wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::EXTENDED_SRGB,
+        )]);
+        let mut config = config(
+            wgt::TextureFormat::Rgba16Float,
+            wgt::SurfaceColorSpace::Auto,
+        );
+        validate_surface_configuration(&mut config, &caps, 4096).unwrap();
+        assert_eq!(config.color_space, wgt::SurfaceColorSpace::Srgb);
+    }
+
     /// `Auto` resolves fp16 to sRGB when extended linear is unavailable
     /// (e.g. the GLES backend).
     #[test]

@@ -204,6 +204,10 @@ pub enum SurfaceColorSpace {
     /// This corresponds to Vulkan's `VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT`,
     /// Metal's extended dynamic range (EDR), and DXGI's
     /// `DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709`.
+    ///
+    /// Native-only: not available on the browser WebGPU backend, which cannot
+    /// express a linear-transfer canvas color space. Use
+    /// [`ExtendedSrgb`](Self::ExtendedSrgb) for HDR canvas output on the web.
     ExtendedSrgbLinear = 2,
 
     /// The Display-P3 color space: P3 primaries, D65 white point, sRGB
@@ -231,6 +235,24 @@ pub enum SurfaceColorSpace {
     /// The application is responsible for applying the HLG OETF in its final
     /// render pass.
     Hlg = 5,
+
+    /// Extended-range sRGB (encoded): BT.709 primaries, D65 white point, the
+    /// **nonlinear sRGB transfer function extended beyond `[0.0, 1.0]`**,
+    /// extended dynamic range.
+    ///
+    /// Unlike [`ExtendedSrgbLinear`](Self::ExtendedSrgbLinear), the signal is
+    /// sRGB-*encoded* (gamma), not linear: the sRGB transfer function is
+    /// applied as usual and then extended to values above `1.0` (and below
+    /// `0.0`) to represent brighter-than-SDR output and colors outside the
+    /// BT.709 gamut. `(1.0, 1.0, 1.0)` is SDR reference white; values above
+    /// `1.0` produce brighter-than-SDR output on HDR displays.
+    ///
+    /// This is the "encoded extended range" sRGB used by browser WebGPU
+    /// (canvas color space `"srgb"` with `"extended"` tone mapping). It
+    /// corresponds to Vulkan's `VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT`
+    /// and Metal's `kCGColorSpaceExtendedSRGB`. It is not available on DX12,
+    /// which has no encoded-extended-sRGB swapchain color space.
+    ExtendedSrgb = 6,
 }
 
 impl SurfaceColorSpace {
@@ -244,6 +266,7 @@ impl SurfaceColorSpace {
             Self::DisplayP3 => Some(SurfaceColorSpaces::DISPLAY_P3),
             Self::Hdr10 => Some(SurfaceColorSpaces::HDR10),
             Self::Hlg => Some(SurfaceColorSpaces::HLG),
+            Self::ExtendedSrgb => Some(SurfaceColorSpaces::EXTENDED_SRGB),
         }
     }
 }
@@ -269,6 +292,8 @@ bitflags::bitflags! {
         const HDR10 = 1 << 3;
         /// [`SurfaceColorSpace::Hlg`] is supported.
         const HLG = 1 << 4;
+        /// [`SurfaceColorSpace::ExtendedSrgb`] is supported.
+        const EXTENDED_SRGB = 1 << 5;
     }
 }
 

@@ -95,6 +95,7 @@ impl crate::Surface for super::Surface {
         let wants_edr = matches!(
             config.color_space,
             wgt::SurfaceColorSpace::ExtendedSrgbLinear
+                | wgt::SurfaceColorSpace::ExtendedSrgb
                 | wgt::SurfaceColorSpace::Hdr10
                 | wgt::SurfaceColorSpace::Hlg
         );
@@ -110,6 +111,9 @@ impl crate::Surface for super::Surface {
             wgt::SurfaceColorSpace::Srgb => None,
             wgt::SurfaceColorSpace::ExtendedSrgbLinear => {
                 Some(unsafe { objc2_core_graphics::kCGColorSpaceExtendedLinearSRGB })
+            }
+            wgt::SurfaceColorSpace::ExtendedSrgb => {
+                Some(unsafe { objc2_core_graphics::kCGColorSpaceExtendedSRGB })
             }
             wgt::SurfaceColorSpace::DisplayP3 => {
                 Some(unsafe { objc2_core_graphics::kCGColorSpaceDisplayP3 })

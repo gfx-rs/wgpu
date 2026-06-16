@@ -4035,10 +4035,14 @@ impl dispatch::SurfaceInterface for WebSurface {
                     let mut color_spaces =
                         wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::DISPLAY_P3;
                     // An fp16 canvas with "extended" tone mapping holds
-                    // extended-linear sRGB values, but only an HDR-capable
-                    // display can present values outside [0, 1].
+                    // sRGB-encoded extended-range values (the nonlinear sRGB
+                    // OETF, continued beyond [0, 1]), but only an HDR-capable
+                    // display can present values brighter than SDR reference
+                    // white. WebGPU has no linear canvas color space, so the
+                    // web backend advertises the encoded `ExtendedSrgb`, not the
+                    // linear `ExtendedSrgbLinear`.
                     if format == wgt::TextureFormat::Rgba16Float && environment_supports_hdr() {
-                        color_spaces |= wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR;
+                        color_spaces |= wgt::SurfaceColorSpaces::EXTENDED_SRGB;
                     }
                     wgt::SurfaceFormatCapabilities {
                         format,
@@ -4103,17 +4107,34 @@ impl dispatch::SurfaceInterface for WebSurface {
                 )
                 .expect("Setting the canvas configuration color space should never fail");
             }
-            wgt::SurfaceColorSpace::ExtendedSrgbLinear => {
+            wgt::SurfaceColorSpace::ExtendedSrgb => {
                 // The canvas keeps the default "srgb" color space; "extended"
                 // tone mapping disables clamping to [0, 1], so an fp16 canvas
-                // holds extended-linear sRGB values. This is the W3C
-                // HDR-canvas mechanism shipped in Chrome 129+.
+                // holds sRGB-encoded extended-range values (the nonlinear sRGB
+                // OETF, continued beyond [0, 1]). This is the W3C HDR-canvas
+                // mechanism shipped in Chrome 129+.
                 let tone_mapping = webgpu_sys::GpuCanvasToneMapping::new();
                 tone_mapping.set_mode(webgpu_sys::GpuCanvasToneMappingMode::Extended);
                 mapped.set_tone_mapping(&tone_mapping);
             }
-            cs @ (wgt::SurfaceColorSpace::Hdr10 | wgt::SurfaceColorSpace::Hlg) => {
-                panic!("Color space {cs:?} is not supported on web: browsers do not expose PQ/HLG canvas signaling")
+            cs @ (wgt::SurfaceColorSpace::ExtendedSrgbLinear
+            | wgt::SurfaceColorSpace::Hdr10
+            | wgt::SurfaceColorSpace::Hlg) => {
+                // Not representable on a WebGPU canvas: `ExtendedSrgbLinear`
+                // needs a linear-transfer canvas (WebGPU has none), and
+                // `Hdr10`/`Hlg` need PQ/HLG canvas signaling (browsers expose
+                // none). `get_capabilities` never advertises these, but an app
+                // may still request one without checking; record the failure and
+                // report the surface as lost (as for a rejected `configure`)
+                // rather than panicking, since there is no `catch_unwind` on
+                // wasm to recover an abort.
+                self.configure_failed.set(true);
+                log::error!(
+                    "Surface color space {cs:?} is not supported on the WebGPU backend; \
+                     the surface will report as lost. Check `get_capabilities` before \
+                     configuring."
+                );
+                return;
             }
         }
         let mapped_view_formats = config

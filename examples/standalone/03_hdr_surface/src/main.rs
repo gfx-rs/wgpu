@@ -2,8 +2,8 @@
 //!
 //! Prints the surface's supported (format, color space) combinations, then
 //! configures the surface with the most capable color space available
-//! (HDR10 > extended linear scRGB > sRGB) and renders a luminance test
-//! pattern:
+//! (HDR10 > extended linear scRGB > encoded extended-range sRGB > sRGB) and
+//! renders a luminance test pattern:
 //!
 //! * Top row: grayscale patches at 50 / 100 / 203 / 400 / 1000 / 10000 nits.
 //!   On an SDR output everything from 100 nits up clips to the same white;
@@ -13,8 +13,8 @@
 //!   look oversaturated in HDR10 the gamut conversion is wrong).
 //! * Bottom row: logarithmic luminance gradient from 1 to 10000 nits.
 //!
-//! Set `HDR_MODE=hdr10|hlg|scrgb|srgb` (on the web: a `?mode=` query
-//! parameter) to force a particular color space instead of auto-picking.
+//! Set `HDR_MODE=hdr10|hlg|scrgb|extended-srgb|srgb` (on the web: a `?mode=`
+//! query parameter) to force a particular color space instead of auto-picking.
 //! Set `WGPU_BACKEND=vulkan` to force the backend.
 
 use std::sync::Arc;
@@ -28,7 +28,8 @@ use winit::{
 
 const SHADER: &str = r#"
 struct Params {
-    // 0 = sRGB SDR, 1 = extended linear scRGB, 2 = HDR10 PQ, 3 = HLG
+    // 0 = sRGB SDR, 1 = extended linear scRGB, 2 = HDR10 PQ, 3 = HLG,
+    // 4 = encoded extended-range sRGB
     mode: u32,
     // 1 if the shader must apply the sRGB OETF itself (non-sRGB SDR format)
     encode_srgb: u32,
@@ -90,10 +91,25 @@ fn pattern_nits(uv: vec2f) -> vec3f {
     }
 }
 
+// Standard sRGB OETF, valid for inputs in [0, 1]. `pow` is undefined for
+// negative inputs, so callers must clamp first (the SDR path does).
 fn srgb_oetf(c: vec3f) -> vec3f {
     let lo = c * 12.92;
     let hi = 1.055 * pow(c, vec3f(1.0 / 2.4)) - 0.055;
     return select(hi, lo, c <= vec3f(0.0031308));
+}
+
+// Extended sRGB OETF: the sRGB transfer function continued beyond [0, 1] with
+// odd (point) symmetry through the origin, so values >1.0 (brighter than SDR
+// reference white) and <0.0 (out-of-gamut) are encoded rather than clamped.
+// This is what the `ExtendedSrgb` color space (browser HDR canvas, Vulkan
+// EXTENDED_SRGB_NONLINEAR, Metal ExtendedSRGB) expects on the wire.
+fn srgb_oetf_extended(c: vec3f) -> vec3f {
+    let s = sign(c);
+    let a = abs(c);
+    let lo = a * 12.92;
+    let hi = 1.055 * pow(a, vec3f(1.0 / 2.4)) - 0.055;
+    return s * select(hi, lo, a <= vec3f(0.0031308));
 }
 
 // SMPTE ST 2084 (PQ) OETF; input is luminance normalized to 10000 nits.
@@ -132,6 +148,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         case 1u: {
             // Extended linear scRGB: BT.709 primaries, linear, 1.0 = 80 nits.
             out = nits / 80.0;
+        }
+        case 4u: {
+            // Encoded extended-range sRGB: BT.709 primaries, the sRGB OETF
+            // extended beyond [0, 1]. Same normalization as scRGB
+            // (1.0 = 80 nits), but sRGB-encoded rather than linear.
+            out = srgb_oetf_extended(nits / 80.0);
         }
         case 2u: {
             // HDR10: BT.2020 primaries, PQ-encoded absolute luminance.
@@ -195,7 +217,8 @@ struct ModeChoice {
 }
 
 /// Pick the most capable (format, color space) combination the surface
-/// supports, preferring HDR10, then extended linear scRGB, then sRGB.
+/// supports, preferring HDR10, then extended linear scRGB, then encoded
+/// extended-range sRGB, then sRGB.
 fn pick_mode(caps: &wgpu::SurfaceCapabilities, forced: Option<&str>) -> ModeChoice {
     use wgpu::{SurfaceColorSpace as Cs, SurfaceColorSpaces as Csf};
 
@@ -225,15 +248,24 @@ fn pick_mode(caps: &wgpu::SurfaceCapabilities, forced: Option<&str>) -> ModeChoi
             1,
             &[wgpu::TextureFormat::Rgba16Float],
         ),
+        (
+            Cs::ExtendedSrgb,
+            Csf::EXTENDED_SRGB,
+            4,
+            &[wgpu::TextureFormat::Rgba16Float],
+        ),
     ];
 
     let allowed = |cs: Cs| match forced {
-        None => cs == Cs::Hdr10 || cs == Cs::ExtendedSrgbLinear,
+        None => cs == Cs::Hdr10 || cs == Cs::ExtendedSrgbLinear || cs == Cs::ExtendedSrgb,
         Some("hdr10") => cs == Cs::Hdr10,
         Some("hlg") => cs == Cs::Hlg,
         Some("scrgb") => cs == Cs::ExtendedSrgbLinear,
+        Some("extended-srgb") => cs == Cs::ExtendedSrgb,
         Some("srgb") => false,
-        Some(other) => panic!("unknown mode {other:?} (use hdr10|hlg|scrgb|srgb)"),
+        Some(other) => {
+            panic!("unknown mode {other:?} (use hdr10|hlg|scrgb|extended-srgb|srgb)")
+        }
     };
 
     for &(cs, flag, shader_mode, preferred_formats) in preferences {
