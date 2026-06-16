@@ -20,6 +20,7 @@ use core::{
     future::Future,
     ops::Range,
     pin::Pin,
+    sync::atomic::{AtomicU8, Ordering},
     task::{self, Poll},
 };
 use wgt::Backends;
@@ -998,6 +999,12 @@ fn future_request_device(
         .map(|device| {
             let queue = device.queue();
 
+            // A `GPUDevice` is the first point at which we can empirically probe
+            // which canvas formats this browser actually supports (see
+            // `probe_rgba16float_canvas_support`). Run it once here so that
+            // `Surface::get_capabilities` can report `Rgba16Float` truthfully.
+            probe_rgba16float_canvas_support(&device);
+
             (
                 WebDevice {
                     inner: device,
@@ -1153,6 +1160,7 @@ impl ContextWebGpu {
             gpu: self.gpu.clone(),
             context,
             canvas,
+            configure_failed: Cell::new(false),
             ident: crate::cmp::Identifier::create(),
         }
         .into())
@@ -1439,6 +1447,15 @@ pub struct WebSurface {
     gpu: Option<DefinedNonNullJsValue<webgpu_sys::Gpu>>,
     canvas: Canvas,
     context: webgpu_sys::GpuCanvasContext,
+    /// Set when the most recent [`configure`](Self::configure) call failed, e.g.
+    /// because the browser rejected the requested canvas format. While set,
+    /// `get_current_texture` reports [`SurfaceStatus::Lost`] instead of letting
+    /// the JS exception turn into a panic — there is no `catch_unwind` on wasm,
+    /// so a panic would be an uncatchable abort the application cannot recover
+    /// from.
+    ///
+    /// [`SurfaceStatus::Lost`]: crate::SurfaceStatus::Lost
+    configure_failed: Cell<bool>,
     /// Unique identifier for this Surface.
     ident: crate::cmp::Identifier,
 }
@@ -3916,13 +3933,86 @@ fn environment_supports_hdr() -> bool {
         .is_some_and(|query_list| query_list.matches())
 }
 
+/// Cached result of probing whether this browser can configure a WebGPU canvas
+/// with the `rgba16float` format: [`PROBE_UNKNOWN`] until first probed,
+/// otherwise [`PROBE_SUPPORTED`]/[`PROBE_UNSUPPORTED`].
+///
+/// Canvas-format support is process-wide and immutable at runtime, so a single
+/// probe suffices. The probe (see [`probe_rgba16float_canvas_support`]) is
+/// empirical — it actually calls `configure()` rather than checking a
+/// browser/version — so it starts reporting supported automatically once a
+/// browser (e.g. Firefox, <https://bugzilla.mozilla.org/show_bug.cgi?id=1834395>)
+/// adds support, with no wgpu change required.
+static RGBA16FLOAT_CANVAS_SUPPORT: AtomicU8 = AtomicU8::new(PROBE_UNKNOWN);
+const PROBE_UNKNOWN: u8 = 0;
+const PROBE_UNSUPPORTED: u8 = 1;
+const PROBE_SUPPORTED: u8 = 2;
+
+/// Whether `Surface::get_capabilities` should advertise `Rgba16Float`.
+///
+/// Optimistic (advertised) until the probe has determined it is unsupported:
+/// the no-panic handling in [`WebSurface::configure`]/
+/// [`WebSurface::get_current_texture`] recovers if an app selects it before a
+/// device exists on a browser that rejects it.
+fn rgba16float_canvas_supported() -> bool {
+    RGBA16FLOAT_CANVAS_SUPPORT.load(Ordering::Relaxed) != PROBE_UNSUPPORTED
+}
+
+/// Probe (once, then cache) whether this browser can configure a `rgba16float`
+/// WebGPU canvas, by actually configuring a throwaway 1×1 `OffscreenCanvas`.
+///
+/// Some browsers list `rgba16float` as a context format but throw from
+/// `configure` (current Firefox), which on wasm would otherwise be an
+/// uncatchable panic. Detecting it empirically — instead of sniffing the user
+/// agent — means the result self-corrects when the browser ships support.
+fn probe_rgba16float_canvas_support(device: &webgpu_sys::GpuDevice) {
+    if RGBA16FLOAT_CANVAS_SUPPORT.load(Ordering::Relaxed) != PROBE_UNKNOWN {
+        return;
+    }
+    // If the probe can't run (e.g. no `OffscreenCanvas`), leave the support
+    // state unknown so we keep advertising the format optimistically.
+    let Some(supported) = try_configure_rgba16float_canvas(device) else {
+        return;
+    };
+    RGBA16FLOAT_CANVAS_SUPPORT.store(
+        if supported {
+            PROBE_SUPPORTED
+        } else {
+            PROBE_UNSUPPORTED
+        },
+        Ordering::Relaxed,
+    );
+}
+
+/// Returns `Some(true)`/`Some(false)` if a `rgba16float` canvas could/couldn't
+/// be configured, or `None` if the probe itself couldn't be set up.
+fn try_configure_rgba16float_canvas(device: &webgpu_sys::GpuDevice) -> Option<bool> {
+    let canvas = web_sys::OffscreenCanvas::new(1, 1).ok()?;
+    let context = canvas.get_context("webgpu").ok()??;
+    let context: webgpu_sys::GpuCanvasContext = context.unchecked_into();
+    let config = webgpu_sys::GpuCanvasConfiguration::new(
+        device,
+        map_texture_format(wgt::TextureFormat::Rgba16Float),
+    );
+    let supported = context.configure(&config).is_ok();
+    if supported {
+        // Leave the throwaway context unconfigured before it's dropped.
+        context.unconfigure();
+    }
+    Some(supported)
+}
+
 impl dispatch::SurfaceInterface for WebSurface {
     fn get_capabilities(&self, _adapter: &dispatch::DispatchAdapter) -> wgt::SurfaceCapabilities {
         let mut formats = vec![
             wgt::TextureFormat::Rgba8Unorm,
             wgt::TextureFormat::Bgra8Unorm,
-            wgt::TextureFormat::Rgba16Float,
         ];
+        // Only advertise `Rgba16Float` where the browser can actually configure
+        // it as a canvas (some, e.g. current Firefox, throw from `configure`).
+        if rgba16float_canvas_supported() {
+            formats.push(wgt::TextureFormat::Rgba16Float);
+        }
         let mut mapped_formats = formats.iter().map(|format| map_texture_format(*format));
         // Preferred canvas format will only be either "rgba8unorm" or "bgra8unorm".
         // https://www.w3.org/TR/webgpu/#dom-gpu-getpreferredcanvasformat
@@ -4036,7 +4126,24 @@ impl dispatch::SurfaceInterface for WebSurface {
             })
             .collect::<Vec<js_sys::JsString>>();
         mapped.set_view_formats(&mapped_view_formats);
-        self.context.configure(&mapped).unwrap();
+        // `configure` can throw (e.g. the browser doesn't support the requested
+        // canvas format). There is no `catch_unwind` on wasm, so unwrapping here
+        // would be an uncatchable abort. Instead, record the failure and report
+        // the surface as lost from `get_current_texture`, which the application
+        // can already handle and recover from (e.g. by selecting a different
+        // format reported by `get_capabilities`).
+        match self.context.configure(&mapped) {
+            Ok(()) => self.configure_failed.set(false),
+            Err(err) => {
+                self.configure_failed.set(true);
+                log::error!(
+                    "Surface configuration failed: {err:?}. The browser may not support \
+                     this canvas format (for example, Firefox does not yet support \
+                     `rgba16float` canvases). The surface will report as lost until it \
+                     is successfully reconfigured."
+                );
+            }
+        }
     }
 
     fn get_current_texture(
@@ -4046,7 +4153,23 @@ impl dispatch::SurfaceInterface for WebSurface {
         crate::SurfaceStatus,
         dispatch::DispatchSurfaceOutputDetail,
     ) {
-        let surface_texture = self.context.get_current_texture().unwrap();
+        let detail = WebSurfaceOutputDetail {
+            ident: crate::cmp::Identifier::create(),
+        };
+
+        // If the last `configure` failed, the context is not usable; report the
+        // surface as lost rather than panicking (see `configure`).
+        if self.configure_failed.get() {
+            return (None, crate::SurfaceStatus::Lost, detail.into());
+        }
+
+        let surface_texture = match self.context.get_current_texture() {
+            Ok(surface_texture) => surface_texture,
+            Err(err) => {
+                log::error!("`getCurrentTexture` failed: {err:?}");
+                return (None, crate::SurfaceStatus::Lost, detail.into());
+            }
+        };
 
         let web_surface_texture = WebTexture {
             inner: surface_texture,
@@ -4056,10 +4179,7 @@ impl dispatch::SurfaceInterface for WebSurface {
         (
             Some(web_surface_texture.into()),
             crate::SurfaceStatus::Good,
-            WebSurfaceOutputDetail {
-                ident: crate::cmp::Identifier::create(),
-            }
-            .into(),
+            detail.into(),
         )
     }
 }
