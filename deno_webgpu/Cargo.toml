@@ -9,6 +9,7 @@ license = "MIT"
 readme = "README.md"
 repository = "https://github.com/gfx-rs/wgpu"
 description = "WebGPU implementation for Deno"
+publish = false
 
 [lib]
 path = "lib.rs"
