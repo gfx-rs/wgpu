@@ -92,7 +92,7 @@ impl Global {
 
 pub(crate) fn encode_map_texture_on_completion(
     state: &mut EncodingState,
-    texture: Arc<crate::resource::Texture>,
+    texture: Arc<Texture>,
 ) -> Result<(), MapTextureOnCompletionError> {
     texture.same_device(state.device)?;
 
