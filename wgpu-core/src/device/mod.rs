@@ -389,6 +389,8 @@ pub enum HostTextureCopyError {
     Transfer(#[from] crate::command::TransferError),
     #[error("Texture is not mapped")]
     NotMapped,
+    #[error("Cannot unmap texture while MappedTexture handles still exist")]
+    MappedHandlesExist,
 }
 
 impl WebGpuError for HostTextureCopyError {
@@ -399,35 +401,6 @@ impl WebGpuError for HostTextureCopyError {
             Self::Device(e) => e.webgpu_error_type(),
             Self::MissingFeatures(e) => e.webgpu_error_type(),
             Self::Transfer(e) => e.webgpu_error_type(),
-            Self::NotMapped => ErrorType::Validation,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Error)]
-#[non_exhaustive]
-pub enum MapTextureError {
-    #[error(transparent)]
-    InvalidResource(#[from] crate::resource::InvalidResourceError),
-    #[error(transparent)]
-    DestroyedResource(#[from] crate::resource::DestroyedResourceError),
-    #[error(transparent)]
-    Device(#[from] DeviceError),
-    #[error(transparent)]
-    MissingFeatures(#[from] MissingFeatures),
-    #[error("Texture is not mapped")]
-    NotMapped,
-    #[error("Cannot unmap texture while MappedTexture handles still exist")]
-    MappedHandlesExist,
-}
-
-impl WebGpuError for MapTextureError {
-    fn webgpu_error_type(&self) -> ErrorType {
-        match self {
-            Self::InvalidResource(e) => e.webgpu_error_type(),
-            Self::DestroyedResource(e) => e.webgpu_error_type(),
-            Self::Device(e) => e.webgpu_error_type(),
-            Self::MissingFeatures(e) => e.webgpu_error_type(),
             Self::NotMapped | Self::MappedHandlesExist => ErrorType::Validation,
         }
     }

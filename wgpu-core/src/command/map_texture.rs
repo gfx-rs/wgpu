@@ -83,7 +83,7 @@ impl Global {
                     }
                 }
 
-                buf.textures_to_map_on_completion.push(texture);
+                buf.pending_texture_maps.push(texture);
                 Ok(())
             },
         )

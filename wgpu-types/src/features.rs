@@ -1483,7 +1483,6 @@ bitflags_array! {
         #[name("wgpu-memory-decoration-volatile")]
         const MEMORY_DECORATION_VOLATILE = 1 << 62;
 
-
         // Adding a new feature? All bits in the first u64 are used. Use `FeaturesWGPU2` (third u64).
     }
 

@@ -1541,7 +1541,9 @@ impl Device {
             // `Depth24PlusStencil8`) whose depth aspect has no defined layout.
             for aspect in hal::FormatAspects::from(desc.format).iter() {
                 if desc.format.block_copy_size(Some(aspect.map())).is_none() {
-                    return Err(CreateTextureError::HostVisibleUnsupportedFormat(desc.format));
+                    return Err(CreateTextureError::HostVisibleUnsupportedFormat(
+                        desc.format,
+                    ));
                 }
             }
             // Host-copy support is per-format on some backends (e.g. Vulkan's
@@ -1555,7 +1557,9 @@ impl Device {
                 .allowed_usages
                 .contains(wgt::TextureUsages::HOST_VISIBLE)
             {
-                return Err(CreateTextureError::HostVisibleUnsupportedFormat(desc.format));
+                return Err(CreateTextureError::HostVisibleUnsupportedFormat(
+                    desc.format,
+                ));
             }
             self.require_features(wgt::Features::HOST_IMAGE_COPY)
                 .map_err(|e| CreateTextureError::MissingFeatures(desc.format, e))?;

@@ -1364,7 +1364,7 @@ impl Queue {
             .allocate_submission(snatch_guard)
             .map_err(|(index, e)| (index, e.into()))?;
         let submit_index = submission.index;
-        let mut textures_to_map_on_completion: Vec<Arc<Texture>> = Vec::new();
+        let mut texture_maps: Vec<Arc<Texture>> = Vec::new();
 
         let res = 'error: {
             let mut used_surface_textures = track::TextureUsageScope::default();
@@ -1509,7 +1509,7 @@ impl Queue {
                         }
 
                         // done
-                        textures_to_map_on_completion.append(&mut baked.encoded_textures_to_map);
+                        texture_maps.append(&mut baked.encoded_texture_maps);
                         submission.executions.push(EncoderInFlight {
                             inner: baked.encoder,
                             trackers: baked.trackers,
@@ -1531,7 +1531,7 @@ impl Queue {
             let pending_writes = self.pending_writes.lock();
 
             let SubmissionResult { snatch_guard } =
-                match submission.submit(pending_writes, textures_to_map_on_completion) {
+                match submission.submit(pending_writes, texture_maps) {
                     Ok(result) => result,
                     Err(e) => break 'error Err(e.into()),
                 };
@@ -2086,9 +2086,9 @@ fn validate_command_buffer(
                     }
                     TextureMapState::MappingQueued(_) => {
                         // Allow only if this command buffer is the one that queued
-                        // the mapping (its encoded_textures_to_map contains this texture).
+                        // the mapping (its encoded_texture_maps contains this texture).
                         let is_own_map = cmd_buf_data
-                            .encoded_textures_to_map
+                            .encoded_texture_maps
                             .iter()
                             .any(|t| Arc::ptr_eq(t, texture));
                         if !is_own_map {

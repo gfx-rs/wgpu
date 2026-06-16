@@ -163,6 +163,7 @@ pub fn map_texture_usage_for_texture(
             if format_features
                 .allowed_usages
                 .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+                // Render targets dimension must be 2d
                 && desc.dimension == wgt::TextureDimension::D2
             {
                 wgt::TextureUses::COLOR_TARGET

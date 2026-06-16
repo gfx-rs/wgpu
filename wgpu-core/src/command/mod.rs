@@ -452,8 +452,8 @@ impl CommandEncoderStatus {
             Self::Recording(d) | Self::Locked(d) | Self::Finished(d) => d,
             Self::Consumed | Self::Error(_) | Self::Transitioning => return Vec::new(),
         };
-        let mut textures = mem::take(&mut cmd_buf_data.textures_to_map_on_completion);
-        textures.append(&mut cmd_buf_data.encoded_textures_to_map);
+        let mut textures = mem::take(&mut cmd_buf_data.pending_texture_maps);
+        textures.append(&mut cmd_buf_data.encoded_texture_maps);
         textures
     }
 }
@@ -829,7 +829,7 @@ pub(crate) struct BakedCommands {
     pub(crate) indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
     /// Textures that had `map_texture_on_completion` encoded; moved here from
     /// `CommandBufferMutable` so queue submit can register them with the life tracker.
-    pub(crate) encoded_textures_to_map: Vec<Arc<crate::resource::Texture>>,
+    pub(crate) encoded_texture_maps: Vec<Arc<crate::resource::Texture>>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
 }
@@ -863,12 +863,12 @@ pub struct CommandBufferMutable {
 
     /// Textures to transition to HOST_COPY state at the very end of encoding,
     /// after all other commands (see `encode_map_texture_on_completion`).
-    pub(crate) textures_to_map_on_completion: Vec<Arc<crate::resource::Texture>>,
+    pub(crate) pending_texture_maps: Vec<Arc<crate::resource::Texture>>,
     /// Textures for which `encode_map_texture_on_completion` has already been
     /// called.  Populated by `finish_recording`; used by queue submit to
     /// validate that `MappingQueued` textures belong to THIS command buffer
     /// (and therefore are allowed) vs. some other command buffer (error).
-    pub(crate) encoded_textures_to_map: Vec<Arc<crate::resource::Texture>>,
+    pub(crate) encoded_texture_maps: Vec<Arc<crate::resource::Texture>>,
 
     /// If tracing, `command_encoder_finish` replaces the `Arc`s in `commands`
     /// with integer pointers, and moves them into `trace_commands`.
@@ -883,7 +883,7 @@ impl CommandBufferMutable {
             trackers: self.trackers,
             temp_resources: self.temp_resources,
             indirect_draw_validation_resources: self.indirect_draw_validation_resources,
-            encoded_textures_to_map: self.encoded_textures_to_map,
+            encoded_texture_maps: self.encoded_texture_maps,
             buffer_memory_init_actions: self.buffer_memory_init_actions,
             texture_memory_actions: self.texture_memory_actions,
         }
@@ -947,8 +947,8 @@ impl CommandEncoder {
                     indirect_draw_validation_resources:
                         crate::indirect_validation::DrawResources::new(device.clone()),
                     commands: Vec::new(),
-                    textures_to_map_on_completion: Vec::new(),
-                    encoded_textures_to_map: Vec::new(),
+                    pending_texture_maps: Vec::new(),
+                    encoded_texture_maps: Vec::new(),
                     #[cfg(feature = "trace")]
                     trace_commands: if device.trace.lock().is_some() {
                         Some(Vec::new())
@@ -1260,10 +1260,10 @@ impl CommandEncoder {
         // Encode texture-map-on-completion operations after all other commands.
         //
         // Iterate over clones of the queued handles so that if encoding fails
-        // partway, every queued texture remains in `textures_to_map_on_completion`
+        // partway, every queued texture remains in `pending_texture_maps`
         // (none are consumed by the iterator) and can be reverted out of
         // `MappingQueued` by the caller / `Drop`.
-        for texture in cmd_buf_data.textures_to_map_on_completion.clone() {
+        for texture in cmd_buf_data.pending_texture_maps.clone() {
             let raw_encoder = cmd_buf_data.encoder.open_if_closed()?;
             let mut state = EncodingState {
                 device,
@@ -1284,8 +1284,8 @@ impl CommandEncoder {
         // command buffer (used by queue submit to allow their `MappingQueued`
         // state) and clear the pending list.
         cmd_buf_data
-            .encoded_textures_to_map
-            .append(&mut cmd_buf_data.textures_to_map_on_completion);
+            .encoded_texture_maps
+            .append(&mut cmd_buf_data.pending_texture_maps);
 
         // Close the encoder, unless it was closed already by a render or compute pass.
         cmd_buf_data.encoder.close_if_open()?;
@@ -1312,9 +1312,8 @@ impl CommandEncoder {
                 match Self::encode_commands(&self.device, &mut cmd_buf_data) {
                     Ok(()) => Ok(cmd_buf_data),
                     Err(error) => {
-                        cancelled_texture_maps =
-                            mem::take(&mut cmd_buf_data.textures_to_map_on_completion);
-                        cancelled_texture_maps.append(&mut cmd_buf_data.encoded_textures_to_map);
+                        cancelled_texture_maps = mem::take(&mut cmd_buf_data.pending_texture_maps);
+                        cancelled_texture_maps.append(&mut cmd_buf_data.encoded_texture_maps);
                         Err(EncoderErrorState {
                             error,
                             #[cfg(feature = "trace")]

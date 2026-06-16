@@ -11,9 +11,7 @@ use crate::{
     },
     command::{self, CommandEncoder},
     conv,
-    device::{
-        life::WaitIdleError, DeviceError, DeviceLostClosure, HostTextureCopyError, MapTextureError,
-    },
+    device::{life::WaitIdleError, DeviceError, DeviceLostClosure, HostTextureCopyError},
     global::Global,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     instance::{self, Adapter, Surface},
@@ -800,17 +798,17 @@ impl Global {
         Ok(())
     }
 
-    pub fn texture_unmap(&self, texture_id: id::TextureId) -> Result<(), MapTextureError> {
+    pub fn texture_unmap(&self, texture_id: id::TextureId) -> Result<(), HostTextureCopyError> {
         profiling::scope!("Texture::unmap");
 
         let texture = self.hub.textures.get(texture_id).get()?;
         let mut map_state = texture.map_state.lock();
 
         let resource::TextureMapState::Mapped(ref arc) = *map_state else {
-            return Err(MapTextureError::NotMapped);
+            return Err(HostTextureCopyError::NotMapped);
         };
         if Arc::strong_count(arc) > 1 {
-            return Err(MapTextureError::MappedHandlesExist);
+            return Err(HostTextureCopyError::MappedHandlesExist);
         }
 
         *map_state = resource::TextureMapState::Unmapped;
