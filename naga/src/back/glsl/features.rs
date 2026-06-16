@@ -134,7 +134,7 @@ impl FeaturesManager {
         };
         // Only available on glsl core, this means that opengl es can't query the number
         // of samples nor levels in a image and neither do bound checks on the sample nor
-        // the level argument of texelFecth
+        // the level argument of texelFetch
         check_feature!(TEXTURE_SAMPLES, 150);
         check_feature!(TEXTURE_LEVELS, 130);
         check_feature!(IMAGE_SIZE, 430, 310);

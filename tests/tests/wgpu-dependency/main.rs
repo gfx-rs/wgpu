@@ -24,7 +24,7 @@ fn check_feature_dependency(requirement: Requirement) {
     println!("Checking: {}", requirement.human_readable_name);
 
     let mut args = Vec::new();
-    args.extend(["tree", "--target", requirement.target]);
+    args.extend(["tree", "--edges", "no-dev", "--target", requirement.target]);
 
     for package in requirement.packages {
         args.push("--package");
@@ -43,11 +43,15 @@ fn check_feature_dependency(requirement: Requirement) {
 
     println!("$ cargo {}", args.join(" "));
 
-    let output = Command::new("cargo")
-        .args(&args)
-        .output()
-        .expect("Failed to run cargo tree")
-        .stdout;
+    let output = match Command::new("cargo").args(&args).output() {
+        Ok(o) if o.status.success() => o.stdout,
+        Ok(o) => panic!(
+            "cargo tree failed ({}):\n{}",
+            o.status,
+            String::from_utf8_lossy(&o.stderr)
+        ),
+        Err(e) => panic!("Failed to run cargo tree: {e}"),
+    };
     let output = String::from_utf8(output).expect("Output is not valid UTF-8");
 
     let mut any_failed = false;
@@ -117,6 +121,15 @@ fn wasm32_without_webgl_or_noop_does_not_depend_on_wgpu_core() {
         default_features: false,
         search_terms: &[Search::Negative("wgpu-core")],
     });
+
+    check_feature_dependency(Requirement {
+        human_readable_name: "wasm32 with only `webgpu` feature does not depend on `wgpu-core`",
+        target: "wasm32-unknown-unknown",
+        packages: &["wgpu-examples"],
+        features: &["webgpu"],
+        default_features: false,
+        search_terms: &[Search::Negative("wgpu-core")],
+    });
 }
 
 #[test]
@@ -126,6 +139,15 @@ fn wasm32_with_webgpu_and_wgsl_does_not_depend_on_naga() {
         target: "wasm32-unknown-unknown",
         packages: &["wgpu"],
         features: &["webgpu", "wgsl"],
+        default_features: false,
+        search_terms: &[Search::Negative("naga")],
+    });
+
+    check_feature_dependency(Requirement {
+        human_readable_name: "wasm32 with only `webgpu` feature does not depend on `naga`",
+        target: "wasm32-unknown-unknown",
+        packages: &["wgpu-examples"],
+        features: &["webgpu"],
         default_features: false,
         search_terms: &[Search::Negative("naga")],
     });

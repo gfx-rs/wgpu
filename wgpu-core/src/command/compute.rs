@@ -107,6 +107,7 @@ impl fmt::Debug for ComputePass {
 }
 
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ComputePassDescriptor<'a, PTW = PassTimestampWrites> {
     pub label: Label<'a>,
     /// Defines where and when timestamp values will be written for this pass.

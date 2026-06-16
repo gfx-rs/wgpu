@@ -745,7 +745,10 @@ impl super::CapabilitiesQuery {
                 1
             },
             format_b5: os_type != super::OsType::Macos,
-            format_bc: os_type == super::OsType::Macos,
+            format_bc: os_type == super::OsType::Macos
+                || (available!(macos = 11.0, ios = 16.4, tvos = 16.4, visionos = 1.0)
+                    && device_class_responds_to(device, sel!(supportsBCTextureCompression))
+                    && device.supportsBCTextureCompression()),
             format_eac_etc: os_type != super::OsType::Macos
                 // M1 in macOS supports EAC/ETC2
                 || (family_check && device.supportsFamily(MTLGPUFamily::Apple7)),

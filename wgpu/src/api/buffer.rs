@@ -2,7 +2,7 @@ use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{
     error, fmt,
     num::NonZero,
-    ops::{Bound, Deref, Range, RangeBounds},
+    ops::{Bound, Range, RangeBounds},
 };
 
 use crate::util::Mutex;
@@ -287,7 +287,7 @@ impl Buffer {
     #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: hal::Api>(
         &self,
-    ) -> Option<impl Deref<Target = A::Buffer> + WasmNotSendSync> {
+    ) -> Option<impl core::ops::Deref<Target = A::Buffer> + WasmNotSendSync> {
         let buffer = self.inner.as_core_opt()?;
         unsafe { buffer.context.buffer_as_hal::<A>(buffer) }
     }

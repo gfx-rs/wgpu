@@ -1,4 +1,5 @@
 //! Convenience macros
+#![cfg_attr(not(wgpu_core), expect(unused_macros, unused_imports))]
 
 #[cfg(doc)]
 use crate::{VertexAttribute, VertexBufferLayout, VertexFormat};

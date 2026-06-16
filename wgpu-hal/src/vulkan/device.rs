@@ -720,7 +720,8 @@ impl super::Device {
                     || naga_shader.debug_source.is_some()
                     || !stage.zero_initialize_workgroup_memory
                     || !runtime_checks.task_shader_dispatch_tracking
-                    || !runtime_checks.mesh_shader_primitive_indices_clamp;
+                    || !runtime_checks.mesh_shader_primitive_indices_clamp
+                    || !runtime_checks.int_div_checks;
 
                 let mut temp_options;
                 let options = if needs_temp_options {
@@ -759,6 +760,7 @@ impl super::Device {
                     }
                     temp_options.mesh_shader_primitive_indices_clamp =
                         runtime_checks.mesh_shader_primitive_indices_clamp;
+                    temp_options.emit_int_div_checks = runtime_checks.int_div_checks;
 
                     &temp_options
                 } else {
