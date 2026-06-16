@@ -587,11 +587,14 @@ impl PhysicalDeviceFeatures {
                 None
             },
             portability_subset: if enabled_extensions.contains(&khr::portability_subset::NAME) {
+                let image_view_format_swizzle_needed =
+                    requested_features.intersects(wgt::Features::TEXTURE_COMPONENT_SWIZZLE);
                 let multisample_array_needed =
                     requested_features.intersects(wgt::Features::MULTISAMPLE_ARRAY);
 
                 Some(
                     vk::PhysicalDevicePortabilitySubsetFeaturesKHR::default()
+                        .image_view_format_swizzle(image_view_format_swizzle_needed)
                         .multisample_array_image(multisample_array_needed),
                 )
             } else {
