@@ -14,17 +14,11 @@ use crate::{
     track::ResourceUsageCompatibilityError,
 };
 
-/// Revert textures that were queued for host-mapping by a command encoder back
-/// to [`TextureMapState::Unmapped`] and return their callbacks paired with an
-/// error, so the callbacks are fired rather than silently dropped.
-///
-/// Called when an encoder (or command buffer) carrying queued maps is dropped,
-/// or its recording fails, before the mapping could be registered with the
-/// queue. Without this the textures would be stranded in
-/// [`TextureMapState::MappingQueued`] forever (rejected by every future submit)
-/// and any caller awaiting the mapping callback would hang. This is the
-/// encoder-side analogue of the device-loss cleanup
-/// `LifetimeTracker::drain_pending_texture_maps`.
+/// Revert queued host-maps to `Unmapped` and return their callbacks paired with
+/// `Err`, for when the encoder/command buffer is dropped or fails to record
+/// before the map is registered with the queue. Otherwise the textures would be
+/// stranded in `MappingQueued` and awaiting callers would hang. Encoder-side
+/// analogue of `drain_pending_texture_maps`.
 pub(crate) fn cancel_texture_maps(
     textures: impl IntoIterator<Item = Arc<Texture>>,
 ) -> Vec<TextureMapPendingClosure> {
@@ -32,9 +26,8 @@ pub(crate) fn cancel_texture_maps(
     for texture in textures {
         let mut map_state = texture.map_state.lock();
         if let TextureMapState::MappingQueued(cb) = &mut *map_state {
-            // `DeviceError::Lost` is the existing "this mapping will never
-            // complete" signal (matching `drain_pending_texture_maps`); here the
-            // device isn't necessarily lost, but the mapping has been cancelled.
+            // `Lost` is the existing "mapping will never complete" signal; the
+            // device isn't lost here, but the map is cancelled all the same.
             if let Some(cb) = cb.take() {
                 closures.push((cb, Err(DeviceError::Lost)));
             }

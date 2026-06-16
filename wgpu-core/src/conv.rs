@@ -152,11 +152,8 @@ pub fn map_texture_usage_for_texture(
         } else if desc.usage.contains(wgt::TextureUsages::COPY_DST) {
             wgt::TextureUses::COPY_DST // (set already)
         } else if desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE) {
-            // Needs COPY_DST so the GPU-side zero-init path (`clear_texture` via
-            // buffer copies) can clear subresources that were never written from
-            // the host. HOST_COPY alone is not a valid GPU copy/clear destination,
-            // so without this a never-host-written layer read by the GPU would
-            // fail to clear (Vulkan) or expose uninitialized memory.
+            // COPY_DST so GPU zero-init (`clear_texture`) can clear layers that
+            // were never written from the host; HOST_COPY isn't a clear target.
             wgt::TextureUses::COPY_DST
         } else {
             // Use COLOR_TARGET for initialization if available, else COPY_DST.

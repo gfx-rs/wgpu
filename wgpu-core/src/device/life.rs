@@ -445,13 +445,9 @@ impl LifetimeTracker {
         }
     }
 
-    /// Drain all pending texture-map callbacks for a lost device.
-    ///
-    /// Called on device loss / queue drop when in-flight submissions will never
-    /// complete. Transitions `MappingQueued` textures back to `Unmapped` and
-    /// returns their callbacks paired with `Err`, so they are fired (rather than
-    /// silently dropped) and callers awaiting the mapping observe the failure
-    /// instead of hanging forever.
+    /// Drain pending texture maps for a lost device: revert `MappingQueued`
+    /// textures to `Unmapped` and return their callbacks paired with `Err`, so
+    /// awaiting callers observe the failure instead of hanging.
     #[must_use]
     pub(crate) fn drain_pending_texture_maps(&mut self) -> Vec<TextureMapPendingClosure> {
         let mut closures = Vec::new();

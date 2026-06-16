@@ -561,10 +561,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
     where
         T: Iterator<Item = crate::TextureBarrier<'a, super::Texture>>,
     {
-        // HOST_COPY textures use `MTLStorageMode::Shared`, which is CPU/GPU
-        // coherent on the unified-memory devices this feature is gated to, so no
-        // explicit synchronization is needed. (`synchronizeResource` only applies
-        // to `Managed` resources and aborts under the Metal validation layer.)
+        // HOST_COPY textures are `Shared` storage (coherent on UMA), so no sync
+        // is needed; `synchronizeResource` is `Managed`-only and would abort.
     }
 
     unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {

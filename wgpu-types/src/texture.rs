@@ -206,24 +206,17 @@ bitflags::bitflags! {
         /// Requires [`StoreOp::Discard`].
         const TRANSIENT = 1 << 17;
 
-        /// Allows a texture to be read from / written to directly by the host
-        /// (CPU) via host image copies, without a staging buffer or the GPU
-        /// timeline.
+        /// Allows a texture to be read/written directly by the host (CPU) via
+        /// host image copies, without a staging buffer or the GPU timeline.
         ///
-        /// A texture is host-mapped via `CommandEncoder::map_texture_on_completion`
-        /// (mapped once the submission completes) or by creating it with
-        /// `mapped_at_creation` set. While mapped it cannot be used on the GPU; it
-        /// must be unmapped first. Host access is then done through
-        /// `wgpu::MappedTexture::{copy_to_memory, copy_from_memory}`.
+        /// Map it with `CommandEncoder::map_texture_on_completion` or
+        /// `mapped_at_creation`, access it through `wgpu::MappedTexture`, and
+        /// unmap before using it on the GPU again.
         ///
-        /// Requires the [`Features::HOST_IMAGE_COPY`] feature, which is generally
-        /// only available on unified-memory (UMA) systems. Support is also
-        /// per-format: a format the device can sample or render may still not be
-        /// host-copyable on a given backend (e.g. Vulkan gates this with
-        /// `VK_FORMAT_FEATURE_2_HOST_IMAGE_TRANSFER_BIT`, which depth/stencil
-        /// formats commonly lack). This usage is therefore only permitted for
-        /// formats whose `allowed_usages` includes it. Multisampled textures and
-        /// [`TextureUsages::TRANSIENT`] are not supported.
+        /// Requires the [`Features::HOST_IMAGE_COPY`] feature (generally UMA-only)
+        /// and is per-format: host-copy support is reported in `allowed_usages`
+        /// and is commonly absent for depth/stencil formats. Multisampled
+        /// textures and [`TextureUsages::TRANSIENT`] are not supported.
         const HOST_VISIBLE = 1 << 18;
     }
 }

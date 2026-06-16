@@ -592,10 +592,9 @@ impl crate::Device for super::Device {
 
         let host_visible = desc.usage.contains(wgt::TextureUses::HOST_COPY);
         if host_visible {
-            // Map(0, None, None) pins the texture into the CPU-visible CUSTOM heap and ensures
-            // the driver has flushed any deferred allocations before WriteToSubresource /
-            // ReadFromSubresource are called.  The third argument NULL means we do not need
-            // the CPU virtual address — WriteToSubresource operates directly on the resource.
+            // Pin the texture into the CPU-visible CUSTOM heap so
+            // Write/ReadFromSubresource work. The null pointer means we don't
+            // need the CPU address (those calls operate on the resource directly).
             unsafe { resource.Map(0, None, None) }.into_device_result("Map texture")?;
         }
 

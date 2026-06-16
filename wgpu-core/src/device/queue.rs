@@ -302,9 +302,8 @@ impl Drop for Queue {
         if self.device.is_valid() {
             assert!(queue_empty);
         } else {
-            // Device was lost; in-flight submissions will never complete. Drain
-            // any textures stuck in MappingQueued back to Unmapped and fire their
-            // callbacks with `Err` so awaiting callers don't hang.
+            // Device lost: in-flight submissions won't complete, so cancel any
+            // queued maps and fire their callbacks with `Err`.
             texture_map_closures.extend(self.lock_life().drain_pending_texture_maps());
         }
 

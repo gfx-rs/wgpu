@@ -162,11 +162,9 @@ pub type TextureMapClosure = Box<dyn FnOnce(Result<(), DeviceError>) + Send + 's
 #[cfg(not(send_sync))]
 pub type TextureMapClosure = Box<dyn FnOnce(Result<(), DeviceError>) + 'static>;
 
-/// A texture-map callback paired with the result it should be fired with.
-///
-/// Mirrors [`BufferMapPendingClosure`]: the callback is *always* invoked once
-/// the mapping attempt resolves — with `Ok` when the submission completes, or
-/// `Err` if the device is lost before then — so callers awaiting it never hang.
+/// A texture-map callback paired with the result to fire it with. Like
+/// [`BufferMapPendingClosure`], it is always invoked once the map resolves
+/// (`Ok` on completion, `Err` on device loss) so callers never hang.
 pub type TextureMapPendingClosure = (TextureMapClosure, Result<(), DeviceError>);
 
 #[derive(Default)]

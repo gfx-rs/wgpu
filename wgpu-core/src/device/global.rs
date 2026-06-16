@@ -33,14 +33,9 @@ use wgt::{BufferAddress, TextureFormat};
 
 use super::UserClosures;
 
-/// Host-side lazy zero-initialization for the host-copy path.
-///
-/// The GPU copy paths zero uninitialized subresources through `clear_texture`,
-/// which needs a command encoder. The host-copy entry points have none, so we
-/// zero any uninitialized layers of `mip_level` directly through
-/// `copy_memory_to_texture` and mark them initialized. This gives host reads
-/// and partial host writes the same guarantee as the GPU paths: uninitialized
-/// texture memory is never observed.
+/// Zero any uninitialized layers of `mip_level` via a host copy and mark them
+/// initialized. The host-copy entry points have no command encoder for the
+/// GPU `clear_texture` path, so they zero here instead.
 fn host_zero_init_layers(
     texture: &resource::Texture,
     raw_texture: &dyn hal::DynTexture,
@@ -48,15 +43,11 @@ fn host_zero_init_layers(
     mip_level: u32,
     layer_range: core::ops::Range<u32>,
 ) -> Result<(), HostTextureCopyError> {
-    // Hold the init-status write lock across the whole operation (compute
-    // uninitialized layers → zero them → mark initialized). This serializes
-    // concurrent host copies on the same mapped texture, so two callers can't
-    // both observe the layers as uninitialized and issue overlapping host copies
-    // to the same image.
+    // Held across the whole operation so concurrent host copies on the same
+    // texture can't both zero the same layers and overlap their host copies.
     let mut init_status = texture.initialization_status.write();
 
-    // Which layers in the range are still uninitialized? (Don't mark yet — only
-    // after the zeroing copy has actually succeeded.)
+    // Don't mark initialized yet — only after the zeroing copy succeeds.
     let uninit: Vec<core::ops::Range<u32>> = {
         let Some(mip_tracker) = init_status.mips.get_mut(mip_level as usize) else {
             return Ok(());
@@ -71,17 +62,13 @@ fn host_zero_init_layers(
     let mip_size = texture.desc.mip_level_size(mip_level).unwrap();
     let is_3d = texture.desc.dimension == wgt::TextureDimension::D3;
 
-    // A format may have several copyable aspects: depth + stencil for combined
-    // depth-stencil formats, or one region per plane for multi-planar formats.
-    // Each aspect is addressed and sized independently (separate planes, its own
-    // block size, and — for chroma planes — its own subsampled extent), so we
-    // emit one zero region per (aspect, layer). `create_texture` guarantees
-    // every aspect here has a host-copyable `block_copy_size`.
+    // One zero region per (aspect, layer): depth/stencil and each plane are
+    // addressed and sized independently. `create_texture` guarantees every
+    // aspect here has a host-copyable `block_copy_size`.
     let aspects: Vec<hal::FormatAspects> = hal::FormatAspects::from(format).iter().collect();
 
-    // Build a zeroed region for one (aspect, layer); returns the region plus the
-    // number of source bytes it reads, so we can size a single shared zero
-    // buffer big enough for the largest aspect.
+    // Returns the region plus its source byte length, so we can size one shared
+    // zero buffer to the largest aspect.
     let make_region = |aspect: hal::FormatAspects, array_layer: u32, depth: u32| {
         let texture_aspect = aspect.map();
         let plane = match aspect {
@@ -126,8 +113,7 @@ fn host_zero_init_layers(
     let mut regions = Vec::new();
     let mut zero_len = 0u64;
     if is_3d {
-        // A 3D texture has a single init-tracker "layer" covering the whole
-        // volume (3D textures are always single-aspect color).
+        // A 3D texture is one init-tracker layer covering the whole volume.
         for &aspect in &aspects {
             let (region, len) = make_region(aspect, 0, mip_size.depth_or_array_layers);
             zero_len = zero_len.max(len);
@@ -145,8 +131,7 @@ fn host_zero_init_layers(
         }
     }
 
-    // Every region reads from offset 0 of the same all-zero buffer, so it only
-    // needs to be as large as the biggest single region.
+    // All regions read from offset 0, so one buffer sized to the largest fits.
     let zero = alloc::vec![0u8; zero_len as usize];
 
     unsafe {
@@ -155,9 +140,7 @@ fn host_zero_init_layers(
             .map_err(|e| texture.device.handle_hal_error(e))?;
     }
 
-    // Now that the layers hold defined (zero) data, mark them initialized. We
-    // still hold `init_status` from the top of this function, so on the `?` error
-    // path above the lock is released without marking anything initialized.
+    // Mark initialized (only reached if the copy above succeeded).
     if let Some(mip_tracker) = init_status.mips.get_mut(mip_level as usize) {
         mip_tracker.drain(layer_range);
     }
@@ -664,8 +647,7 @@ impl Global {
         let raw_texture = texture.try_raw(&snatch_guard)?;
         let raw_device = texture.device.raw();
 
-        // Reading a never-written subresource must not expose uninitialized
-        // memory to the host, so zero any uninitialized layers first.
+        // Zero uninitialized layers so the host read can't observe garbage.
         host_zero_init_layers(
             &texture,
             raw_texture,
@@ -745,10 +727,8 @@ impl Global {
         let raw_texture = texture.try_raw(&snatch_guard)?;
         let raw_device = texture.device.raw();
 
-        // The init tracker is per (mip, layer) — sub-rects aren't tracked. If
-        // this write doesn't fully cover the layer, zero any uninitialized
-        // layers first so the untouched region isn't left as garbage once we
-        // mark the layer initialized below (mirrors `Queue::write_texture`).
+        // Init tracking is per-layer, so a write that doesn't fully cover the
+        // layer must zero the uncovered part first (mirrors `Queue::write_texture`).
         if crate::init_tracker::has_copy_partial_init_tracker_coverage(
             size,
             destination,
@@ -783,8 +763,7 @@ impl Global {
                 .map_err(|e| texture.device.handle_hal_error(e))?;
         }
 
-        // Mark written layers as initialized so that handle_src_texture_init
-        // doesn't clear them before subsequent GPU reads.
+        // Mark written layers initialized so the GPU read path won't re-clear them.
         {
             let mip_level = texture_base.mip_level as usize;
             let layer_start = texture_base.array_layer;
@@ -815,9 +794,8 @@ impl Global {
         Ok(())
     }
 
-    /// Returns the shared map token if the texture is currently mapped, `None`
-    /// otherwise. The mapped-state check and token creation happen under the
-    /// same lock so there is no TOCTOU window between them.
+    /// Returns the shared map token if the texture is currently mapped. The
+    /// check and clone happen under one lock, so there's no TOCTOU window.
     pub fn texture_get_map_token(&self, texture_id: id::TextureId) -> Option<Arc<()>> {
         let Ok(texture) = self.hub.textures.get(texture_id).get() else {
             return None;

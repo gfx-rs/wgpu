@@ -393,9 +393,8 @@ impl super::Device {
                 vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE;
         }
 
-        // Strip HOST_COPY from usage if the host_image_copy extension functions
-        // aren't available (e.g. broken driver that claims the extension but can't
-        // load function pointers), to avoid creating images with HOST_TRANSFER_EXT.
+        // Don't request HOST_TRANSFER_EXT if the extension functions are missing
+        // (e.g. a driver that advertises the extension but can't load them).
         let effective_usage = if self.shared.extension_fns.host_image_copy.is_none() {
             desc.usage - wgt::TextureUses::HOST_COPY
         } else {

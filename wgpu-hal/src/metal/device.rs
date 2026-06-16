@@ -588,10 +588,8 @@ impl crate::Device for super::Device {
     where
         T: Iterator<Item = crate::HostTextureCopy>,
     {
-        // `replaceRegion`/`getBytes` have no aspect/blit-option parameter, so the
-        // depth and stencil aspects of a combined depth-stencil texture can't be
-        // addressed separately on the host timeline (the GPU blit path uses
-        // `MTLBlitOption` for this). Fail loudly rather than corrupt the texture.
+        // `replaceRegion` has no aspect parameter (unlike the GPU blit path's
+        // `MTLBlitOption`), so it can't target depth vs. stencil separately.
         if dst.format.is_combined_depth_stencil_format() {
             log::error!(
                 "Metal host image copy does not support combined depth-stencil format {:?}",

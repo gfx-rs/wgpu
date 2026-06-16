@@ -3083,10 +3083,8 @@ impl crate::Adapter for super::Adapter {
         // Vulkan is very permissive about MSAA
         flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.is_compressed());
 
-        // Host image copy support is per-format
-        // (`VK_FORMAT_FEATURE_2_HOST_IMAGE_TRANSFER_BIT`) and only queryable via
-        // `VkFormatProperties3` (core in Vulkan 1.3). Depth/stencil formats often
-        // lack it even when the device exposes the host-image-copy feature.
+        // Per-format host-copy support (`HOST_IMAGE_TRANSFER`) is only in
+        // `VkFormatProperties3` (Vulkan 1.3); depth/stencil formats often lack it.
         if self.phd_capabilities.device_api_version >= vk::API_VERSION_1_3 {
             let mut properties3 = vk::FormatProperties3::default();
             let mut properties2 = vk::FormatProperties2::default().push_next(&mut properties3);
