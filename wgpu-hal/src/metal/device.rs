@@ -24,8 +24,10 @@ use objc2_metal::{
     MTLVertexDescriptor, MTLVertexStepFunction,
 };
 
-use super::{adapter::VERTEX_BUFFER_SLOT_START, conv, PassthroughShader, ShaderModuleSource};
-use crate::{auxil::map_naga_stage, metal::AttachmentInfo, TlasInstance};
+use super::{
+    adapter::VERTEX_BUFFER_SLOT_START, conv, AttachmentInfo, PassthroughShader, ShaderModuleSource,
+};
+use crate::{auxil::map_naga_stage, TlasInstance};
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
@@ -639,11 +641,10 @@ impl crate::Device for super::Device {
             }
             // Some images are marked as framebuffer-only, and we can't create aliases of them.
             // Also helps working around Metal bugs with aliased array textures.
-            //
-            // And subresource doesn't need a texture view as we set the level and layer in `MTLRenderPassDescriptor`.
             if !has_shader_usage {
                 break 'b false;
             }
+            // Subresource doesn't need a texture view as we use `setLevel` and `setSlice` of `MTLRenderPassDescriptor`.
             if !(type_equal && range_full_resource && swizzle.is_none()) {
                 break 'b true;
             }
@@ -705,8 +706,10 @@ impl crate::Device for super::Device {
         self.counters.texture_views.add(1);
 
         Ok(super::TextureView {
-            // Texture view with swizzzle isn't renderable but depth-stencil texture view uses r001 swizzle.
-            // Solution: If the formats match, we use the texture instead of the view to render it.
+            // Texture view with swizzle isn't renderable but depth-stencil texture view uses r001 swizzle.
+            // This is a problem if depth-stencil texture has both `RENDER_ATTACHMENT` and `TEXTURE_BINDING`,
+            // so if the formats match, we use the original texture + `setLevel` and `setSlice` of `MTLRenderPassDescriptor`
+            // to avoid using the r001 view.
             attachment: if format_equal {
                 AttachmentInfo {
                     texture: texture.raw.clone(),

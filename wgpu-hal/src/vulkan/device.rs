@@ -1190,7 +1190,8 @@ impl crate::Device for super::Device {
         // and VkPhysicalDeviceMaintenance5Properties::depthStencilSwizzleOneSupport is not VK_TRUE,
         // the value of the texel after swizzle is undefined.
         //
-        // We convert `One` to `A` which should sample as 1.0.
+        // We convert `One` to `A` which should sample as 1.0,
+        // according to https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#images-component-substitution
         if texture.format.is_depth_stencil_format()
             && !self.shared.private_caps.depth_stencil_swizzle_one_support
         {

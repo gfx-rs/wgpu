@@ -441,7 +441,7 @@ pub enum StorageTextureAccess {
 /// Specifies the component swizzle for a channel.
 ///
 /// Used in [`TextureComponentSwizzle`]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ComponentSwizzle {
     /// Force its value to 0.
@@ -460,8 +460,19 @@ pub enum ComponentSwizzle {
 
 /// Specifies the texture component swizzle for each channel.
 ///
-/// Used in [texture views](TextureViewDescriptor).
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Used in [`TextureViewDescriptor::swizzle`].
+///
+/// Example:
+/// ```rust
+/// // The swizzle maps `xgxr` to `rg01`, or maps `rgba` to `ag01`
+/// TextureComponentSwizzle {
+///     r: ComponentSwizzle::A,
+///     g: ComponentSwizzle::G,
+///     b: ComponentSwizzle::Zero,
+///     a: ComponentSwizzle::One,
+/// }
+/// ```
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TextureComponentSwizzle {
     /// Replace the red channel with the [`ComponentSwizzle`].

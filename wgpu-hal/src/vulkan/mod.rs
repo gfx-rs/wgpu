@@ -391,6 +391,7 @@ struct PrivateCapabilities {
     ///  a scratch buffer when building acceleration structures.
     scratch_buffer_alignment: u32,
 
+    /// Indicating that depth/stencil texturing operations with `VK_COMPONENT_SWIZZLE_ONE` have defined behavior.
     depth_stencil_swizzle_one_support: bool,
 }
 
