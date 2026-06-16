@@ -50,10 +50,16 @@ fn host_zero_init_layers(
     mip_level: u32,
     layer_range: core::ops::Range<u32>,
 ) -> Result<(), HostTextureCopyError> {
+    // Hold the init-status write lock across the whole operation (compute
+    // uninitialized layers → zero them → mark initialized). This serializes
+    // concurrent host copies on the same mapped texture, so two callers can't
+    // both observe the layers as uninitialized and issue overlapping host copies
+    // to the same image.
+    let mut init_status = texture.initialization_status.write();
+
     // Which layers in the range are still uninitialized? (Don't mark yet — only
     // after the zeroing copy has actually succeeded.)
     let uninit: Vec<core::ops::Range<u32>> = {
-        let mut init_status = texture.initialization_status.write();
         let Some(mip_tracker) = init_status.mips.get_mut(mip_level as usize) else {
             return Ok(());
         };
@@ -151,8 +157,9 @@ fn host_zero_init_layers(
             .map_err(|e| texture.device.handle_hal_error(e))?;
     }
 
-    // Now that the layers hold defined (zero) data, mark them initialized.
-    let mut init_status = texture.initialization_status.write();
+    // Now that the layers hold defined (zero) data, mark them initialized. We
+    // still hold `init_status` from the top of this function, so on the `?` error
+    // path above the lock is released without marking anything initialized.
     if let Some(mip_tracker) = init_status.mips.get_mut(mip_level as usize) {
         mip_tracker.drain(layer_range);
     }
