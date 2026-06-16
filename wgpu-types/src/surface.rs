@@ -172,8 +172,8 @@ pub enum SurfaceColorSpace {
     /// On the browser WebGPU backend, `Auto` always keeps the canvas
     /// defaults (sRGB with standard tone mapping), even for
     /// [`TextureFormat::Rgba16Float`]; request
-    /// [`ExtendedSrgbLinear`](Self::ExtendedSrgbLinear) explicitly for HDR
-    /// canvas output.
+    /// [`ExtendedSrgb`](Self::ExtendedSrgb) explicitly for HDR canvas output
+    /// ([`ExtendedSrgbLinear`](Self::ExtendedSrgbLinear) is native-only).
     #[default]
     Auto = 0,
 
