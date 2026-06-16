@@ -659,8 +659,7 @@ impl PhysicalDeviceFeatures {
             | F::TEXTURE_ATOMIC
             | F::PASSTHROUGH_SHADERS
             | F::MEMORY_DECORATION_COHERENT
-            | F::MEMORY_DECORATION_VOLATILE
-            | F::TEXTURE_COMPONENT_SWIZZLE;
+            | F::MEMORY_DECORATION_VOLATILE;
 
         let mut dl_flags = Df::COMPUTE_SHADERS
             | Df::BASE_VERTEX
@@ -1057,11 +1056,18 @@ impl PhysicalDeviceFeatures {
 
         // Not supported by default by `VK_KHR_portability_subset`, which we use on apple platforms.
         features.set(
+            F::TEXTURE_COMPONENT_SWIZZLE,
+            self.portability_subset
+                .map(|p| p.image_view_format_swizzle == vk::TRUE)
+                .unwrap_or(true),
+        );
+        features.set(
             F::MULTISAMPLE_ARRAY,
             self.portability_subset
                 .map(|p| p.multisample_array_image == vk::TRUE)
                 .unwrap_or(true),
         );
+
         // Enable cooperative matrix if any configuration is supported
         features.set(
             F::EXPERIMENTAL_COOPERATIVE_MATRIX,
