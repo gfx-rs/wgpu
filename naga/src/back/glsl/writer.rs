@@ -961,11 +961,14 @@ impl<'a, W: Write> Writer<'a, W> {
                     "_group_{}_binding_{}_{}",
                     br.group,
                     br.binding,
-                    self.entry_point.stage.to_str()
+                    shader_stage_to_str(self.entry_point.stage)
                 )
             }
             (&None, crate::AddressSpace::Immediate) => {
-                format!("_immediates_binding_{}", self.entry_point.stage.to_str())
+                format!(
+                    "_immediates_binding_{}",
+                    shader_stage_to_str(self.entry_point.stage)
+                )
             }
             (&None, _) => self.names[&NameKey::GlobalVariable(handle)].clone(),
         }
@@ -983,12 +986,12 @@ impl<'a, W: Write> Writer<'a, W> {
                 "_group_{}_binding_{}_{}",
                 br.group,
                 br.binding,
-                self.entry_point.stage.to_str()
+                shader_stage_to_str(self.entry_point.stage)
             )?,
             (&None, crate::AddressSpace::Immediate) => write!(
                 self.out,
                 "_immediates_binding_{}",
-                self.entry_point.stage.to_str()
+                shader_stage_to_str(self.entry_point.stage)
             )?,
             (&None, _) => write!(
                 self.out,
@@ -4588,7 +4591,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 items.push(ImmediateItem {
                     access_path: name,
                     offset: *offset,
-                    ty: self.module.types[ty].inner.clone(),
+                    ty: (&self.module.types[ty].inner).try_into().unwrap(),
                     size_bytes: layout.size,
                 });
                 *offset += layout.size;

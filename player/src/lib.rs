@@ -405,6 +405,12 @@ impl Player {
                     .expect("create_query_set error");
                 self.query_sets.insert(id, query_set);
             }
+            Action::FreeQuerySet(id) => {
+                // Note: query set remains in the HashMap. "Free" and "Destroy"
+                // mean the opposite from WebGPU.
+                let query_set = self.query_sets.get(&id).expect("invalid query set");
+                query_set.destroy();
+            }
             Action::DestroyQuerySet(id) => {
                 self.query_sets.remove(&id).expect("invalid query set");
             }

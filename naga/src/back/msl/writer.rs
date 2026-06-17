@@ -532,6 +532,7 @@ pub struct Writer<W> {
     need_bake_expressions: back::NeedBakeExpressions,
     pub(super) namer: proc::Namer,
     pub(super) wrapped_functions: FastHashSet<WrappedFunction>,
+    emit_int_div_checks: bool,
     #[cfg(test)]
     put_expression_stack_pointers: FastHashSet<*const ()>,
     #[cfg(test)]
@@ -800,6 +801,8 @@ pub(super) struct ExpressionContext<'a> {
     pub(super) guarded_indices: HandleSet<crate::Expression>,
     /// See [`Writer::gen_force_bounded_loop_statements`] for details.
     pub(super) force_loop_bounding: bool,
+    /// Whether to emit safety checks for integer division/modulo.
+    emit_int_div_checks: bool,
     pub(super) ray_query_initialization_tracking: bool,
 }
 
@@ -893,6 +896,7 @@ impl<W: Write> Writer<W> {
             need_bake_expressions: Default::default(),
             namer: proc::Namer::default(),
             wrapped_functions: FastHashSet::default(),
+            emit_int_div_checks: true,
             #[cfg(test)]
             put_expression_stack_pointers: Default::default(),
             #[cfg(test)]
@@ -2276,6 +2280,7 @@ impl<W: Write> Writer<W> {
 
                 if op == crate::BinaryOperator::Divide
                     && (kind == crate::ScalarKind::Sint || kind == crate::ScalarKind::Uint)
+                    && context.emit_int_div_checks
                 {
                     write!(self.out, "{DIV_FUNCTION}(")?;
                     self.put_expression(left, context, true)?;
@@ -2284,6 +2289,7 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ")")?;
                 } else if op == crate::BinaryOperator::Modulo
                     && (kind == crate::ScalarKind::Sint || kind == crate::ScalarKind::Uint)
+                    && context.emit_int_div_checks
                 {
                     write!(self.out, "{MOD_FUNCTION}(")?;
                     self.put_expression(left, context, true)?;
@@ -4402,6 +4408,7 @@ impl<W: Write> Writer<W> {
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
+        self.emit_int_div_checks = options.emit_int_div_checks;
         self.names.clear();
         self.namer.reset(
             module,
@@ -4871,10 +4878,10 @@ template <typename A>
 
     fn write_unpacking_function(
         &mut self,
-        format: back::msl::VertexFormat,
+        format: nt::VertexFormat,
     ) -> Result<(String, u32, Option<crate::VectorSize>, crate::Scalar), Error> {
         use crate::{Scalar, VectorSize};
-        use back::msl::VertexFormat::*;
+        use nt::VertexFormat::*;
         match format {
             Uint8 => {
                 let name = self.namer.call("unpackUint8");
@@ -5672,6 +5679,7 @@ template <typename A>
                 writeln!(self.out, "}}")?;
                 Ok((name, 4, Some(VectorSize::Quad), Scalar::F32))
             }
+            Float64 | Float64x2 | Float64x3 | Float64x4 => unreachable!(),
         }
     }
 
@@ -5767,7 +5775,7 @@ template <typename A>
             (
                 crate::BinaryOperator::Divide,
                 Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint),
-            ) => {
+            ) if self.emit_int_div_checks => {
                 let Some(left_wrapped_ty) = left_ty.vector_size_and_scalar() else {
                     return Ok(());
                 };
@@ -5850,7 +5858,7 @@ template <typename A>
             (
                 crate::BinaryOperator::Modulo,
                 Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint),
-            ) => {
+            ) if self.emit_int_div_checks => {
                 let Some(left_wrapped_ty) = left_ty.vector_size_and_scalar() else {
                     return Ok(());
                 };
@@ -6660,7 +6668,7 @@ template <typename A>
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
-        use back::msl::VertexFormat;
+        use nt::VertexFormat;
 
         // Define structs to hold resolved/generated data for vertex buffers and
         // their attributes.
@@ -6874,6 +6882,7 @@ template <typename A>
                     mod_info,
                     pipeline_options,
                     force_loop_bounding: options.force_loop_bounding,
+                    emit_int_div_checks: options.emit_int_div_checks,
                     ray_query_initialization_tracking: options.ray_query_initialization_tracking,
                 },
                 result_struct: None,
@@ -8093,6 +8102,7 @@ template <typename A>
                     mod_info,
                     pipeline_options,
                     force_loop_bounding: options.force_loop_bounding,
+                    emit_int_div_checks: options.emit_int_div_checks,
                     ray_query_initialization_tracking: options.ray_query_initialization_tracking,
                 },
                 result_struct: if ep.stage == crate::ShaderStage::Task {

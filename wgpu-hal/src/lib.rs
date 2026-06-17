@@ -239,6 +239,8 @@
 )]
 
 extern crate alloc;
+#[allow(unused_extern_crates)]
+extern crate naga_types as nt;
 extern crate wgpu_types as wgt;
 // Each of these backends needs `std` in some fashion; usually `std::thread` functions.
 #[cfg(any(dx12, gles_with_std, metal, vulkan))]
@@ -337,15 +339,15 @@ pub type AtomicFenceValue = core::sync::atomic::AtomicU64;
 pub type AtomicFenceValue = portable_atomic::AtomicU64;
 
 /// A callback to signal that wgpu is no longer using a resource.
-#[cfg(any(gles, vulkan))]
+#[cfg(any(gles, vulkan, metal))]
 pub type DropCallback = Box<dyn FnOnce() + Send + Sync + 'static>;
 
-#[cfg(any(gles, vulkan))]
+#[cfg(any(gles, vulkan, metal))]
 pub struct DropGuard {
     callback: Option<DropCallback>,
 }
 
-#[cfg(all(any(gles, vulkan), any(native, Emscripten)))]
+#[cfg(all(any(gles, vulkan, metal), any(native, Emscripten)))]
 impl DropGuard {
     fn from_option(callback: Option<DropCallback>) -> Option<Self> {
         callback.map(Self::new)
@@ -358,7 +360,7 @@ impl DropGuard {
     }
 }
 
-#[cfg(any(gles, vulkan))]
+#[cfg(any(gles, vulkan, metal))]
 impl Drop for DropGuard {
     fn drop(&mut self) {
         if let Some(cb) = self.callback.take() {
@@ -367,7 +369,7 @@ impl Drop for DropGuard {
     }
 }
 
-#[cfg(any(gles, vulkan))]
+#[cfg(any(gles, vulkan, metal))]
 impl fmt::Debug for DropGuard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DropGuard").finish()

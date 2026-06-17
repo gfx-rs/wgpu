@@ -128,6 +128,7 @@ pub struct SpirvOutParameters {
     pub binding_map: naga::back::spv::BindingMap,
     pub ray_query_initialization_tracking: bool,
     pub use_storage_input_output_16: bool,
+    pub emit_int_div_checks: bool,
 }
 impl Default for SpirvOutParameters {
     fn default() -> Self {
@@ -141,6 +142,7 @@ impl Default for SpirvOutParameters {
             separate_entry_points: false,
             ray_query_initialization_tracking: true,
             use_storage_input_output_16: true,
+            emit_int_div_checks: true,
             binding_map: naga::back::spv::BindingMap::default(),
         }
     }
@@ -179,6 +181,7 @@ impl SpirvOutParameters {
             task_dispatch_limits: shared_info.task_limits,
             mesh_shader_primitive_indices_clamp: shared_info.mesh_output_validation,
             trace_ray_argument_validation: true,
+            emit_int_div_checks: self.emit_int_div_checks,
         }
     }
 }

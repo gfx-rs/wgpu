@@ -30,6 +30,8 @@ pub mod pipeline_constants;
 #[cfg(any(hlsl_out, glsl_out))]
 mod continue_forward;
 
+pub use nt::TaskDispatchLimits;
+
 /// Names of vector components.
 pub const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
 /// Indent for backends.
@@ -391,12 +393,4 @@ bitflags::bitflags! {
 pub enum RayIntersectionType {
     Triangle = 1,
     BoundingBox = 4,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct TaskDispatchLimits {
-    pub max_mesh_workgroups_per_dim: u32,
-    pub max_mesh_workgroups_total: u32,
 }
