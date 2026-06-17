@@ -299,6 +299,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Make `wgpu-core` build with `--no-default-features` by fixing the logic in `wgpu_core::lock`. By @jimblandy in [#10972](https://github.com/gfx-rs/wgpu/pull/10972).
 - `TextureFormat::guaranteed_format_features` no longer reports multisample support for 16-bit normalized formats, which can't be render attachments. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
 - `TextureFormat::P010` now reports `TEXTURE_FORMAT_16BIT_NORM` from `required_features()`, which its plane formats require. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
+- Fixed a panic when using an `Rgb9e5Ufloat` color attachment, which some adapters allow with `TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
 
 #### naga
 
