@@ -322,9 +322,7 @@ fn texture_format_capabilities_check(
                 // when the format advertises STORAGE_ATOMIC *usage* under
                 // adapter-specific features.
                 if caps.allowed_usages.contains(TU::STORAGE_ATOMIC)
-                    && ctx
-                        .device_features
-                        .contains(wgpu::Features::TEXTURE_ATOMIC)
+                    && ctx.device_features.contains(wgpu::Features::TEXTURE_ATOMIC)
                 {
                     eprintln!("Binding it as an atomic storage texture");
                     smoke_storage_bind(
@@ -337,7 +335,10 @@ fn texture_format_capabilities_check(
                     );
                 }
                 if caps.flags.intersects(
-                    FF::MULTISAMPLE_X2 | FF::MULTISAMPLE_X4 | FF::MULTISAMPLE_X8 | FF::MULTISAMPLE_X16,
+                    FF::MULTISAMPLE_X2
+                        | FF::MULTISAMPLE_X4
+                        | FF::MULTISAMPLE_X8
+                        | FF::MULTISAMPLE_X16,
                 ) {
                     // `texture1` already has the chosen `sample_count`; one clear
                     // exercises the multisampled path.
@@ -375,7 +376,10 @@ fn texture_format_capabilities_check(
                 .device_features
                 .contains(wgpu::Features::MULTISAMPLE_ARRAY)
                 && caps.flags.intersects(
-                    FF::MULTISAMPLE_X2 | FF::MULTISAMPLE_X4 | FF::MULTISAMPLE_X8 | FF::MULTISAMPLE_X16,
+                    FF::MULTISAMPLE_X2
+                        | FF::MULTISAMPLE_X4
+                        | FF::MULTISAMPLE_X8
+                        | FF::MULTISAMPLE_X16,
                 )
             {
                 // `texture1` is a multisampled 2D array here; clear layer 0.
