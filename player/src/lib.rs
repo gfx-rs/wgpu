@@ -476,7 +476,7 @@ impl Player {
                 let tlas = device.create_tlas(&desc).expect("create_tlas error");
                 self.tlas_s.insert(id, tlas);
             }
-            Action::DestroyTlas(id) => {
+            Action::DropTlas(id) => {
                 self.tlas_s.remove(&id).expect("invalid tlas");
             }
         }

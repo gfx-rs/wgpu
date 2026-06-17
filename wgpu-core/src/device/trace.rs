@@ -251,7 +251,7 @@ pub enum Action<'a, R: ReferenceType> {
         id: R::Tlas,
         desc: crate::resource::TlasDescriptor<'a>,
     },
-    DestroyTlas(R::Tlas),
+    DropTlas(R::Tlas),
 }
 
 /// cbindgen:ignore

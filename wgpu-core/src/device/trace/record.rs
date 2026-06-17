@@ -968,7 +968,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
             error,
         },
         A::DropBlas(blas) => A::DropBlas(blas),
-        A::DestroyTlas(tlas) => A::DestroyTlas(tlas),
+        A::DropTlas(tlas) => A::DropTlas(tlas),
 
         A::CreateTexture(..)
         | A::CreateTextureView { .. }
