@@ -142,7 +142,7 @@ pub enum Action<'a, R: ReferenceType> {
         planes: alloc::boxed::Box<[R::TextureView]>,
     },
     FreeExternalTexture(R::ExternalTexture),
-    DestroyExternalTexture(R::ExternalTexture),
+    DropExternalTexture(R::ExternalTexture),
     CreateSampler(
         PointerId<markers::Sampler>,
         crate::resource::SamplerDescriptor<'a>,

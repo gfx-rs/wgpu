@@ -183,7 +183,7 @@ impl Player {
                     .expect("invalid external texture");
                 external_texture.destroy();
             }
-            Action::DestroyExternalTexture(id) => {
+            Action::DropExternalTexture(id) => {
                 self.external_textures
                     .remove(&id)
                     .expect("invalid external texture");
