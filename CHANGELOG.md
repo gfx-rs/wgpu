@@ -99,7 +99,7 @@ To interact with mapped textures, you can use the methods `copy_from_memory` and
 To first map a texture, you can call `CommandEncoder::map_texture_on_completion`, which lets you include a callback. Once the command encoder finishes and the callback is fired, you may
 use `Texture::get_mapped`. There is no synchronous mapping mechanism.
 
-Textures can also now be mapped at creation, through the `mapped_at_creation` function on texture descriptors.
+Textures can also now be mapped at creation, through the `mapped_at_creation` field on texture descriptors. The addition of this field is a breaking change.
 
 Example:
 
@@ -110,10 +110,12 @@ let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
     mapped_at_creation: true,
 });
 
-let mapped = texture.get_mapped();
+let mapped = texture.get_mapped().unwrap();
 
 mapped.copy_from_memory(
     wgpu::TexelCopyTextureInfoBase {
+        // Texture implied by the mapped handle, not need for this generic instantiation
+        // of `TexelCopyTextureInfoBase`.
         texture: (),
         mip_level: 0,
         origin: wgpu::Origin3d::ZERO,
@@ -136,6 +138,8 @@ texture.unmap();
 
 // The texture is now usable.
 ```
+
+By @inner-daemons in [#9053](https://github.com/gfx-rs/wgpu/pull/9053).
 
 #### Empty buffer slices are now permitted
 
