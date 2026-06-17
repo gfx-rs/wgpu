@@ -187,7 +187,6 @@ fn texture_format_capabilities_check(
 
             //let supports_transient = caps.allowed_usages.contains(wgpu::TextureUsages::TRANSIENT);
 
-            // TODO: test all of these?
             let sample_count = if caps.flags.contains(FF::MULTISAMPLE_X16) {
                 16
             } else if caps.flags.contains(FF::MULTISAMPLE_X8) {
@@ -297,7 +296,28 @@ fn texture_format_capabilities_check(
                         },
                     );
                 }
-                // TODO: atomic, render, multisample usages etc
+                if caps.allowed_usages.contains(TU::RENDER_ATTACHMENT) {
+                    // TODO: render with it
+                }
+                if caps.allowed_usages.contains(TU::STORAGE_BINDING) {
+                    // TODO: use as a storage binding
+                }
+                if caps.allowed_usages.contains(TU::STORAGE_ATOMIC) {
+                    // TODO: use as a storage atomic
+                }
+                for flag in [
+                    FF::MULTISAMPLE_X2,
+                    FF::MULTISAMPLE_X4,
+                    FF::MULTISAMPLE_X8,
+                    FF::MULTISAMPLE_X16,
+                ] {
+                    if caps.flags.contains(flag) {
+                        // TODO: multisample with it
+                    }
+                }
+                if caps.flags.contains(FF::MULTISAMPLE_RESOLVE) {
+                    // TODO: multisample resolve
+                }
             } else if (ctx
                 .device_features
                 .contains(wgpu::Features::TEXTURE_INT64_ATOMIC)
@@ -311,7 +331,16 @@ fn texture_format_capabilities_check(
                 .device_features
                 .contains(wgpu::Features::MULTISAMPLE_ARRAY)
             {
-                // TODO: use texture as a multisample arrayf
+                for flag in [
+                    FF::MULTISAMPLE_X2,
+                    FF::MULTISAMPLE_X4,
+                    FF::MULTISAMPLE_X8,
+                    FF::MULTISAMPLE_X16,
+                ] {
+                    if caps.flags.contains(flag) {
+                        // TODO: multisample with it in an array
+                    }
+                }
             }
         }
         // Submit and then poll immediately. This lets the textures be dropped to avoid OOMs with combinatorial explosion
@@ -332,6 +361,8 @@ fn texture_format_capabilities_check(
     }
 }
 
+/// Return the reported caps along with the actually sensible supported caps
+/// (removing nonsense capabilities with error messages).
 fn get_caps(
     ctx: &TestingContext,
     format: wgpu::TextureFormat,
@@ -538,7 +569,6 @@ make_format_feature_functions!(
         (
             compression_astc,
             wgpu::Features::TEXTURE_COMPRESSION_ASTC,
-            // TODO: exhaust
             Box::new([
                 wgpu::TextureFormat::Astc {
                     channel: wgpu::AstcChannel::Unorm,
@@ -553,7 +583,6 @@ make_format_feature_functions!(
         (
             compression_astc_hdr,
             wgpu::Features::TEXTURE_COMPRESSION_ASTC_HDR,
-            // TODO: exhaust
             Box::new(std::iter::once(
                 wgpu::TextureFormat::Astc {
                     channel: wgpu::AstcChannel::Hdr,
