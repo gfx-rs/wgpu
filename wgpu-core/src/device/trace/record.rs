@@ -901,7 +901,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         A::DropTextureView(texture_view) => A::DropTextureView(texture_view),
         A::DestroyExternalTexture(external_texture) => A::DestroyExternalTexture(external_texture),
         A::DropExternalTexture(external_texture) => A::DropExternalTexture(external_texture),
-        A::DestroySampler(sampler) => A::DestroySampler(sampler),
+        A::DropSampler(sampler) => A::DropSampler(sampler),
         A::GetSurfaceTexture { id, parent } => A::GetSurfaceTexture { id, parent },
         A::Present(surface) => A::Present(surface),
         A::DiscardSurfaceTexture(surface) => A::DiscardSurfaceTexture(surface),

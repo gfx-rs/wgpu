@@ -190,7 +190,7 @@ impl Player {
                 let sampler = device.create_sampler(&desc).expect("create_sampler error");
                 self.samplers.insert(id, sampler);
             }
-            Action::DestroySampler(id) => {
+            Action::DropSampler(id) => {
                 self.samplers.remove(&id).expect("invalid sampler");
             }
             Action::GetSurfaceTexture { .. } => {

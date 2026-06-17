@@ -147,7 +147,7 @@ pub enum Action<'a, R: ReferenceType> {
         PointerId<markers::Sampler>,
         crate::resource::SamplerDescriptor<'a>,
     ),
-    DestroySampler(PointerId<markers::Sampler>),
+    DropSampler(PointerId<markers::Sampler>),
     GetSurfaceTexture {
         id: R::Texture,
         parent: R::Surface,

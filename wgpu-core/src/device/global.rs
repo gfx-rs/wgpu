@@ -645,7 +645,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(sampler) = _sampler.get() {
             if let Some(t) = sampler.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroySampler(sampler.to_trace()));
+                t.add(trace::Action::DropSampler(sampler.to_trace()));
             }
         }
     }
