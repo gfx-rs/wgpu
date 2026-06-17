@@ -243,6 +243,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Fixed vkAcquireNextImage fence being awaited on non-Windows platforms causing frametime spikes on nvidia drivers. By @cohaereo in [#9486](https://github.com/gfx-rs/wgpu/pull/9486).
 - Fixed alignment and `MatrixStride` for mat2x2 in SPIR-V uniform blocks. By @39ali [#9369](https://github.com/gfx-rs/wgpu/pull/9369).
 - Fixed loading of `libvulkan.so` on OpenHarmony (`target_env = "ohos"`). By @jschwe in [#9649](https://github.com/gfx-rs/wgpu/pull/9649).
+- Fixed signed integer `%` (and `%=`) returning the wrong result for negative operands in the SPIR-V backend, e.g. `-1 % 768` yielding `255` instead of `-1` on NVIDIA. `OpSRem` is poison for negative operands in the Vulkan SPIR-V environment without `VK_KHR_maintenance8`, even though WGSL defines `%` for these operands, so signed remainder is now always lowered as `a - b * (a / b)`. By @mstampfli in [#9674](https://github.com/gfx-rs/wgpu/pull/9674).
 
 #### DX12
 

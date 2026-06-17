@@ -560,10 +560,22 @@ impl Writer {
                             // is negative one, or when the divisor is zero. These wrapped
                             // functions override the divisor to one in these cases,
                             // matching the WGSL spec.
+                            //
+                            // Signed `%` is additionally always wrapped (even without
+                            // `emit_int_div_checks`) so it can be lowered to
+                            // `a - b * (a / b)`: `OpSRem` produces a poison result for
+                            // negative operands in the Vulkan SPIR-V environment unless
+                            // `VK_KHR_maintenance8` is enabled. See
+                            // <https://github.com/gfx-rs/wgpu/issues/8191>.
                             (
                                 crate::BinaryOperator::Divide | crate::BinaryOperator::Modulo,
                                 crate::ScalarKind::Sint | crate::ScalarKind::Uint,
-                            ) if self.emit_int_div_checks => {
+                            ) if self.emit_int_div_checks
+                                || matches!(
+                                    (op, expr_ty.scalar().kind),
+                                    (crate::BinaryOperator::Modulo, crate::ScalarKind::Sint)
+                                ) =>
+                            {
                                 self.write_wrapped_binary_op(
                                     op,
                                     expr_ty,
@@ -804,21 +816,57 @@ impl Writer {
             composite_one_id,
             rhs_id,
         ));
-        let op = match (op, scalar.kind) {
-            (crate::BinaryOperator::Divide, crate::ScalarKind::Sint) => spirv::Op::SDiv,
-            (crate::BinaryOperator::Divide, crate::ScalarKind::Uint) => spirv::Op::UDiv,
-            (crate::BinaryOperator::Modulo, crate::ScalarKind::Sint) => spirv::Op::SRem,
-            (crate::BinaryOperator::Modulo, crate::ScalarKind::Uint) => spirv::Op::UMod,
-            _ => unreachable!(),
+        let return_id = if matches!(op, crate::BinaryOperator::Modulo)
+            && matches!(scalar.kind, crate::ScalarKind::Sint)
+        {
+            // `OpSRem` produces a poison result for negative operands in the Vulkan
+            // environment without the `maintenance8` feature. `OpSDiv` is not poisoned, so
+            // reconstruct the remainder as `a - b * (a / b)`, which is well-defined for
+            // negative operands. `divisor_id` is the zero/overflow-guarded divisor selected
+            // above, so the degenerate cases still match `OpSRem`'s guarded result (0).
+            let quotient_id = self.id_gen.next();
+            block.body.push(Instruction::binary(
+                spirv::Op::SDiv,
+                return_type_id,
+                quotient_id,
+                lhs_id,
+                divisor_id,
+            ));
+            let product_id = self.id_gen.next();
+            block.body.push(Instruction::binary(
+                spirv::Op::IMul,
+                return_type_id,
+                product_id,
+                quotient_id,
+                divisor_id,
+            ));
+            let remainder_id = self.id_gen.next();
+            block.body.push(Instruction::binary(
+                spirv::Op::ISub,
+                return_type_id,
+                remainder_id,
+                lhs_id,
+                product_id,
+            ));
+            remainder_id
+        } else {
+            let spv_op = match (op, scalar.kind) {
+                (crate::BinaryOperator::Divide, crate::ScalarKind::Sint) => spirv::Op::SDiv,
+                (crate::BinaryOperator::Divide, crate::ScalarKind::Uint) => spirv::Op::UDiv,
+                (crate::BinaryOperator::Modulo, crate::ScalarKind::Sint) => spirv::Op::SRem,
+                (crate::BinaryOperator::Modulo, crate::ScalarKind::Uint) => spirv::Op::UMod,
+                _ => unreachable!(),
+            };
+            let return_id = self.id_gen.next();
+            block.body.push(Instruction::binary(
+                spv_op,
+                return_type_id,
+                return_id,
+                lhs_id,
+                divisor_id,
+            ));
+            return_id
         };
-        let return_id = self.id_gen.next();
-        block.body.push(Instruction::binary(
-            op,
-            return_type_id,
-            return_id,
-            lhs_id,
-            divisor_id,
-        ));
 
         function.consume(block, Instruction::return_value(return_id));
         function.to_words(&mut self.logical_layout.function_definitions);
