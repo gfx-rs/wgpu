@@ -248,7 +248,7 @@ impl Player {
                     .expect("create_pipeline_layout error");
                 self.pipeline_layouts.insert(id, pipeline_layout);
             }
-            Action::DestroyPipelineLayout(id) => {
+            Action::DropPipelineLayout(id) => {
                 self.pipeline_layouts
                     .remove(&id)
                     .expect("invalid pipeline layout");

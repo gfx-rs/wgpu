@@ -782,7 +782,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(layout) = _layout.get() {
             if let Some(t) = layout.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyPipelineLayout(layout.to_trace()));
+                t.add(trace::Action::DropPipelineLayout(layout.to_trace()));
             }
         }
     }

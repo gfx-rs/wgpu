@@ -924,7 +924,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
             pipeline,
             index,
         },
-        A::DestroyPipelineLayout(layout) => A::DestroyPipelineLayout(layout),
+        A::DropPipelineLayout(layout) => A::DropPipelineLayout(layout),
         A::DestroyBindGroup(bind_group) => A::DestroyBindGroup(bind_group),
         A::DestroyShaderModule(shader_module) => A::DestroyShaderModule(shader_module),
         A::DestroyComputePipeline(pipeline) => A::DestroyComputePipeline(pipeline),
