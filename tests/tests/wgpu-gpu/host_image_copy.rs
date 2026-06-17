@@ -11,6 +11,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(HOST_IMAGE_DEPTH_ROUNDTRIP);
     vec.push(HOST_IMAGE_PLANAR_ROUNDTRIP);
     vec.push(HOST_IMAGE_GPU_ZERO_INIT_UNWRITTEN);
+    vec.push(HOST_IMAGE_DEPTH_GPU_ZERO_INIT_UNWRITTEN);
     vec.push(HOST_IMAGE_MAP_CALLBACK_OK);
     vec.push(HOST_IMAGE_MAP_CANCEL_ON_ENCODER_DROP);
     vec.push(HOST_IMAGE_MAP_CANCEL_ON_COMMAND_BUFFER_DROP);
@@ -814,6 +815,111 @@ static HOST_IMAGE_GPU_ZERO_INIT_UNWRITTEN: GpuTestConfiguration = GpuTestConfigu
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
         host_image_gpu_zero_init_unwritten(ctx).await;
+    });
+
+/// Like `host_image_gpu_zero_init_unwritten`, but for a depth (`Depth32Float`)
+/// HOST_VISIBLE texture. This exercises a different GPU zero-init path: for
+/// depth formats `map_texture_usage_for_texture` selects `DEPTH_STENCIL_WRITE`
+/// (a render-pass clear), not the `COPY_DST` buffer clear the color case uses,
+/// so a never-written host-visible depth texture must still read back as zeros
+/// once the GPU initializes it.
+async fn host_image_depth_gpu_zero_init_unwritten(ctx: TestingContext) {
+    let format = wgpu::TextureFormat::Depth32Float;
+    // Host-copy support is per-format; HOST_VISIBLE depth requires it. Skip if
+    // this adapter can't host-copy the format (same guard as the round-trip test).
+    if !ctx
+        .adapter
+        .get_texture_format_features(format)
+        .allowed_usages
+        .contains(wgpu::TextureUsages::HOST_VISIBLE)
+    {
+        log::info!(
+            "skipping host_image_depth_gpu_zero_init_unwritten: {format:?} is not host-copyable"
+        );
+        return;
+    }
+
+    let width = 4u32;
+    let height = 4u32;
+    let host_bytes_per_row = 4 * width; // Depth32Float: 4 bytes/texel
+    let gpu_bytes_per_row = host_bytes_per_row.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
+    let gpu_data_size = (gpu_bytes_per_row * height) as usize;
+
+    // HOST_VISIBLE | COPY_SRC, never written from the host: it stays
+    // uninitialized until the GPU copy below forces a zero-init.
+    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("host-visible unwritten depth texture"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::HOST_VISIBLE | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+        mapped_at_creation: false,
+    });
+
+    let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("readback buffer"),
+        size: gpu_data_size as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("copy encoder"),
+        });
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback_buffer,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(gpu_bytes_per_row),
+                rows_per_image: Some(height),
+            },
+        },
+        wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+    );
+    ctx.queue.submit(Some(encoder.finish()));
+
+    let slice = readback_buffer.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |_| {});
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
+
+    let data = slice.get_mapped_range().unwrap();
+    for row in 0..height as usize {
+        let start = row * gpu_bytes_per_row as usize;
+        let pixels = &data[start..start + host_bytes_per_row as usize];
+        assert!(
+            pixels.iter().all(|&b| b == 0),
+            "row {row} of an unwritten host-visible depth texture must be zero-initialized, got {pixels:?}",
+        );
+    }
+}
+
+#[gpu_test]
+static HOST_IMAGE_DEPTH_GPU_ZERO_INIT_UNWRITTEN: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
+    .run_async(|ctx| async move {
+        host_image_depth_gpu_zero_init_unwritten(ctx).await;
     });
 
 /// The map callback must actually be delivered with `Ok` once the submission
