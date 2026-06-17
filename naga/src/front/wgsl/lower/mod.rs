@@ -1916,6 +1916,17 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let handle = ctx
                         .as_expression(block, &mut emitter)
                         .interrupt_emitter(ir::Expression::LocalVariable(var), Span::UNDEFINED)?;
+                    let initializer = if is_inside_loop {
+                        match initializer {
+                            Some(initializer) => Some(initializer),
+                            None => Some(
+                                ctx.as_expression(block, &mut emitter)
+                                    .append_expression(ir::Expression::ZeroValue(ty), stmt.span)?,
+                            ),
+                        }
+                    } else {
+                        initializer
+                    };
                     block.extend(emitter.finish(&ctx.function.expressions));
                     ctx.local_table
                         .insert(v.handle, Declared::Runtime(Typed::Reference(handle)));

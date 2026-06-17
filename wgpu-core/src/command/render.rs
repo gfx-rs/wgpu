@@ -255,14 +255,15 @@ pub struct ResolvedRenderPassDepthStencilAttachment<TV> {
 
 /// Describes the attachments of a render pass.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RenderPassDescriptor<'a> {
     pub label: Label<'a>,
     /// The color attachments of the render pass.
     pub color_attachments: Cow<'a, [Option<RenderPassColorAttachment>]>,
     /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<&'a RenderPassDepthStencilAttachment<id::TextureViewId>>,
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<id::TextureViewId>>,
     /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Option<&'a PassTimestampWrites>,
+    pub timestamp_writes: Option<PassTimestampWrites>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<id::QuerySetId>,
     /// The multiview array layers that will be used
@@ -1632,7 +1633,7 @@ impl RenderPassInfo {
             }
 
             Some(hal::PassTimestampWrites {
-                query_set: query_set.raw(),
+                query_set: query_set.try_raw(snatch_guard)?,
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                 end_of_pass_write_index: tw.end_of_pass_write_index,
             })
@@ -1642,7 +1643,7 @@ impl RenderPassInfo {
 
         let occlusion_query_set_hal = if let Some(query_set) = occlusion_query_set.as_ref() {
             query_set.same_device(device)?;
-            Some(query_set.raw())
+            Some(query_set.try_raw(snatch_guard)?)
         } else {
             None
         };
@@ -1868,7 +1869,7 @@ impl Global {
 
             arc_desc.depth_stencil_attachment =
                 // https://gpuweb.github.io/gpuweb/#abstract-opdef-gpurenderpassdepthstencilattachment-gpurenderpassdepthstencilattachment-valid-usage
-                if let Some(depth_stencil_attachment) = desc.depth_stencil_attachment {
+                if let Some(depth_stencil_attachment) = desc.depth_stencil_attachment.as_ref() {
                     let view = texture_views.get(depth_stencil_attachment.view).get()?;
                     view.same_device(device)?;
 
@@ -1921,6 +1922,7 @@ impl Global {
 
             arc_desc.timestamp_writes = desc
                 .timestamp_writes
+                .as_ref()
                 .map(|tw| {
                     Global::validate_pass_timestamp_writes::<RenderPassErrorInner>(
                         device,
@@ -2387,6 +2389,7 @@ pub(super) fn encode_render_pass(
                         query_index,
                         Some(&mut pending_query_resets),
                         &mut state.active_occlusion_query,
+                        state.pass.base.snatch_guard,
                     )
                     .map_pass_err(scope)?;
                 }
@@ -2397,6 +2400,7 @@ pub(super) fn encode_render_pass(
                     end_occlusion_query(
                         state.pass.base.raw_encoder,
                         &mut state.active_occlusion_query,
+                        state.pass.base.snatch_guard,
                     )
                     .map_pass_err(scope)?;
                 }
@@ -2418,6 +2422,7 @@ pub(super) fn encode_render_pass(
                         query_index,
                         Some(&mut pending_query_resets),
                         &mut state.active_pipeline_statistics_query,
+                        state.pass.base.snatch_guard,
                     )
                     .map_pass_err(scope)?;
                 }
@@ -2428,6 +2433,7 @@ pub(super) fn encode_render_pass(
                     end_pipeline_statistics_query(
                         state.pass.base.raw_encoder,
                         &mut state.active_pipeline_statistics_query,
+                        state.pass.base.snatch_guard,
                     )
                     .map_pass_err(scope)?;
                 }
@@ -2501,7 +2507,9 @@ pub(super) fn encode_render_pass(
             parent_state.snatch_guard,
         );
 
-        pending_query_resets.reset_queries(transit);
+        pending_query_resets
+            .reset_queries(transit, parent_state.snatch_guard)
+            .map_pass_err(pass_scope)?;
 
         CommandEncoder::insert_barriers_from_scope(
             transit,

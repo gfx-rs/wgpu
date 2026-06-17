@@ -7,6 +7,8 @@
 //!
 
 #![no_std]
+// `-Znext-solver` requires deeper recursion limits (at least for now) to prove Send/Sync
+#![recursion_limit = "256"]
 // When we have no backends, we end up with a lot of dead or otherwise unreachable code.
 #![cfg_attr(
     all(
@@ -60,6 +62,7 @@
 #![cfg_attr(not(send_sync), allow(clippy::arc_with_non_send_sync))]
 
 extern crate alloc;
+extern crate naga_types as nt;
 #[cfg(feature = "std")]
 extern crate std;
 extern crate wgpu_hal as hal;
@@ -72,7 +75,6 @@ mod conv;
 pub mod device;
 pub mod error;
 pub mod global;
-mod hash_utils;
 pub mod hub;
 pub mod id;
 pub mod identity;
@@ -110,7 +112,7 @@ use alloc::{
     string::String,
 };
 
-pub(crate) use hash_utils::*;
+pub(crate) use nt::{FastHashMap, FastHashSet, FastIndexMap};
 
 /// The index of a queue submission.
 ///

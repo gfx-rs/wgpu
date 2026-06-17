@@ -1313,6 +1313,25 @@ impl Global {
         (id, Some(error))
     }
 
+    pub fn query_set_destroy(&self, query_set_id: id::QuerySetId) {
+        profiling::scope!("QuerySet::destroy");
+        api_log!("QuerySet::destroy {query_set_id:?}");
+
+        let hub = &self.hub;
+
+        let Ok(query_set) = hub.query_sets.get(query_set_id).get() else {
+            // If the query set is already invalid, there's nothing to do.
+            return;
+        };
+
+        query_set.destroy();
+
+        #[cfg(feature = "trace")]
+        if let Some(trace) = query_set.device.trace.lock().as_mut() {
+            trace.add(trace::Action::FreeQuerySet(query_set.to_trace()));
+        };
+    }
+
     pub fn query_set_drop(&self, query_set_id: id::QuerySetId) {
         profiling::scope!("QuerySet::drop");
         api_log!("QuerySet::drop {query_set_id:?}");

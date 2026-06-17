@@ -698,7 +698,7 @@ struct VertexBufferDesc {
 #[derive(Clone, Debug)]
 struct ImmediateDesc {
     location: glow::UniformLocation,
-    ty: naga::TypeInner,
+    ty: nt::glsl::GlslUniformType,
     offset: u32,
     size_bytes: u32,
 }

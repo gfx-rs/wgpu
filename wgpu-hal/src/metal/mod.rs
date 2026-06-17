@@ -858,6 +858,10 @@ pub struct Texture {
     array_layers: u32,
     mip_levels: u32,
     copy_size: crate::CopyExtent,
+
+    // The `drop_guard` field must be the last field of this struct so it is dropped last.
+    // Do not add new fields after it.
+    _drop_guard: Option<crate::DropGuard>,
 }
 
 impl Texture {

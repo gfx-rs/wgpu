@@ -131,8 +131,8 @@ impl GPUCommandEncoder {
     let wgpu_descriptor = wgpu_core::command::RenderPassDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
       color_attachments,
-      depth_stencil_attachment: depth_stencil_attachment.as_ref(),
-      timestamp_writes: timestamp_writes.as_ref(),
+      depth_stencil_attachment,
+      timestamp_writes,
       occlusion_query_set: descriptor
         .occlusion_query_set
         .map(|query_set| query_set.id),
