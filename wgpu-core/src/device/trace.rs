@@ -196,7 +196,7 @@ pub enum Action<'a, R: ReferenceType> {
         id: Option<PointerId<markers::ComputePipeline>>,
         desc: TraceComputePipelineDescriptor<'a>,
     },
-    DestroyComputePipeline(PointerId<markers::ComputePipeline>),
+    DropComputePipeline(PointerId<markers::ComputePipeline>),
     CreateGeneralRenderPipeline {
         id: Option<PointerId<markers::RenderPipeline>>,
         desc: TraceGeneralRenderPipelineDescriptor<'a>,

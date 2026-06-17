@@ -353,7 +353,7 @@ impl Player {
                     pipeline,
                 );
             }
-            Action::DestroyComputePipeline(id) => {
+            Action::DropComputePipeline(id) => {
                 self.compute_pipelines
                     .remove(&id)
                     .expect("invalid compute pipeline");

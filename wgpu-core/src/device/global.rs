@@ -1793,7 +1793,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(pipeline) = _pipeline.get() {
             if let Some(t) = pipeline.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyComputePipeline(pipeline.to_trace()));
+                t.add(trace::Action::DropComputePipeline(pipeline.to_trace()));
             }
         }
     }
