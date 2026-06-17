@@ -104,6 +104,7 @@ Textures can also now be mapped at creation, through the `mapped_at_creation` fi
 Example:
 
 ```rust
+// `device` created with `Features::HOST_IMAGE_COPY`.
 let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
     ...
     usage: wgpu::TextureUsages::HOST_VISIBLE, // and however else you plan to use it
@@ -114,7 +115,7 @@ let mapped = texture.get_mapped().unwrap();
 
 mapped.copy_from_memory(
     wgpu::TexelCopyTextureInfoBase {
-        // Texture implied by the mapped handle, not need for this generic instantiation
+        // Texture implied by the mapped handle, not needed for this generic instantiation
         // of `TexelCopyTextureInfoBase`.
         texture: (),
         mip_level: 0,
