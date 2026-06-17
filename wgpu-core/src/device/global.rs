@@ -1343,7 +1343,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(query_set) = _query_set.get() {
             if let Some(trace) = query_set.device.trace.lock().as_mut() {
-                trace.add(trace::Action::DestroyQuerySet(query_set.to_trace()));
+                trace.add(trace::Action::DropQuerySet(query_set.to_trace()));
             }
         }
     }

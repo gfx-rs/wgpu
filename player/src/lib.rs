@@ -411,7 +411,7 @@ impl Player {
                 let query_set = self.query_sets.get(&id).expect("invalid query set");
                 query_set.destroy();
             }
-            Action::DestroyQuerySet(id) => {
+            Action::DropQuerySet(id) => {
                 self.query_sets.remove(&id).expect("invalid query set");
             }
             Action::WriteBuffer {

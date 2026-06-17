@@ -217,7 +217,7 @@ pub enum Action<'a, R: ReferenceType> {
         id: PointerId<markers::QuerySet>,
         desc: crate::resource::QuerySetDescriptor<'a>,
     },
-    DestroyQuerySet(PointerId<markers::QuerySet>),
+    DropQuerySet(PointerId<markers::QuerySet>),
     FreeQuerySet(PointerId<markers::QuerySet>),
     WriteBuffer {
         id: R::Buffer,

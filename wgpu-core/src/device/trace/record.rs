@@ -932,7 +932,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         A::DestroyPipelineCache(cache) => A::DestroyPipelineCache(cache),
         A::DestroyRenderBundle(render_bundle) => A::DestroyRenderBundle(render_bundle),
         A::FreeQuerySet(query_set) => A::FreeQuerySet(query_set),
-        A::DestroyQuerySet(query_set) => A::DestroyQuerySet(query_set),
+        A::DropQuerySet(query_set) => A::DropQuerySet(query_set),
         A::WriteBuffer {
             id,
             data,
