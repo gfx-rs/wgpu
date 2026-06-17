@@ -63,6 +63,6 @@ fragment main_vec2scalarOutput main_vec2scalar(
     output_1.scalari = 0;
     output_1.scalaru = 0u;
     FragmentOutputVec2Scalar _e16 = output_1;
-    const auto _tmp = _e16;
-    return main_vec2scalarOutput { _tmp.vec2f, _tmp.vec2i, _tmp.vec2u, _tmp.scalarf, _tmp.scalari, _tmp.scalaru };
+    const auto _tmp_1 = _e16;
+    return main_vec2scalarOutput { _tmp_1.vec2f, _tmp_1.vec2i, _tmp_1.vec2u, _tmp_1.scalarf, _tmp_1.scalari, _tmp_1.scalaru };
 }
