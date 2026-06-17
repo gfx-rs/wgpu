@@ -3,25 +3,17 @@ name = "wgpu-benchmark"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "wgpu benchmarking suite"
 homepage.workspace = true
 repository.workspace = true
-keywords.workspace = true
 license.workspace = true
-rust-version.workspace = true
+keywords.workspace = true
 publish = false
 
 [[bench]]
-name = "wgpu-benchmark"
 harness = false
-
-[features]
-tracy = ["dep:tracy-client"]
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = [
-    'cfg(feature, values("tracy"))',
-] }
+name = "wgpu-benchmark"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 anyhow.workspace = true
@@ -29,14 +21,14 @@ bincode = { workspace = true, features = ["serde"] }
 bytemuck.workspace = true
 naga = { workspace = true, features = [
     "deserialize",
-    "serialize",
-    "wgsl-in",
-    "spv-in",
     "glsl-in",
-    "spv-out",
-    "msl-out",
-    "hlsl-out",
     "glsl-out",
+    "hlsl-out",
+    "msl-out",
+    "serialize",
+    "spv-in",
+    "spv-out",
+    "wgsl-in",
     "wgsl-out",
 ] }
 naga-test = { workspace = true, features = [] }
@@ -50,3 +42,11 @@ serde_json.workspace = true
 termcolor.workspace = true
 tracy-client = { workspace = true, optional = true }
 wgpu.workspace = true
+
+[features]
+tracy = ["dep:tracy-client"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(feature, values("tracy"))',
+] }

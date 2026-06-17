@@ -14,28 +14,34 @@ publish = false
 [lib]
 path = "lib.rs"
 
+# Windows and Unix (not Emscripten)
+#
+# We want the Vulkan backend.
+[target.'cfg(any(windows, all(unix, not(target_os = "emscripten"))))'.dependencies]
+wgpu-core = { workspace = true, features = ["vulkan"] }
+
 # We make all dependencies conditional on not being wasm,
 # so the whole workspace can built as wasm.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 wgpu-core = { workspace = true, features = [
-    "trace",
+    "gles",
     "replay",
     "serde",
     "strict_asserts",
+    "trace",
     "wgsl",
-    "gles",
 ] }
 wgpu-types = { workspace = true, features = ["serde", "std"] }
 
 deno_core.workspace = true
 deno_error.workspace = true
-serde = { workspace = true, features = ["derive"] }
-tokio = { workspace = true, features = ["full"] }
-raw-window-handle.workspace = true
-thiserror.workspace = true
-indexmap.workspace = true
-serde_json.workspace = true
 deno_unsync.workspace = true
+indexmap.workspace = true
+raw-window-handle.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["full"] }
 
 # Apple Platforms
 #
@@ -48,9 +54,3 @@ wgpu-core = { workspace = true, features = ["metal"] }
 # We want the DX12 backend.
 [target.'cfg(windows)'.dependencies]
 wgpu-core = { workspace = true, features = ["dx12"] }
-
-# Windows and Unix (not Emscripten)
-#
-# We want the Vulkan backend.
-[target.'cfg(any(windows, all(unix, not(target_os = "emscripten"))))'.dependencies]
-wgpu-core = { workspace = true, features = ["vulkan"] }

@@ -2,8 +2,8 @@
 name = "hlsl-snapshots"
 version.workspace = true
 edition.workspace = true
-publish = false
 license.workspace = true
+publish = false
 
 [lib]
 name = "hlsl_snapshots"

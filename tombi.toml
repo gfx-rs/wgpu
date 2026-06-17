@@ -1,0 +1,19 @@
+toml-version = "v1.0.0"
+
+[format]
+[format.rules]
+indent-width = 4
+
+# See https://github.com/zed-industries/zed/issues/58311
+# Also https://github.com/tombi-toml/tombi/issues/1927#issuecomment-4580404934
+# Rust versions prior to 1.93 don't support toml 1.1, which
+# allows inline tables over multiple lines.
+#
+# But now because 1.93 added support for toml 1.1, tombi
+# assumes it is always allowed which isn't the case for
+# older versions of rust. Therefore we manually tell tombi
+# to use toml version 1.0.
+[[schemas]]
+toml-version = "v1.0.0"
+path = "tombi://www.schemastore.org/cargo.json"
+include = ["Cargo.toml"]

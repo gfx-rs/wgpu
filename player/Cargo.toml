@@ -3,12 +3,12 @@ name = "player"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "WebGPU trace player"
 homepage.workspace = true
 repository.workspace = true
-keywords.workspace = true
 license.workspace = true
-rust-version.workspace = true
+keywords.workspace = true
 publish = false
 
 [lib]
@@ -21,13 +21,16 @@ test = false
 [dependencies]
 wgpu-types = { workspace = true, features = ["serde", "std"] }
 
+bytemuck.workspace = true
 env_logger.workspace = true
 hashbrown.workspace = true
 log.workspace = true
 raw-window-handle.workspace = true
 ron.workspace = true
 winit = { workspace = true, optional = true }
-bytemuck.workspace = true
+
+[dev-dependencies]
+serde.workspace = true
 
 # Non-Webassembly
 #
@@ -35,14 +38,11 @@ bytemuck.workspace = true
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgpu-core]
 workspace = true
 features = [
+    "dx12",
+    "gles",
+    "metal",
     "replay",
     "strict_asserts",
-    "wgsl",
-    "metal",
-    "dx12",
     "vulkan",
-    "gles",
+    "wgsl",
 ]
-
-[dev-dependencies]
-serde.workspace = true

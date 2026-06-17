@@ -12,15 +12,6 @@ license.workspace = true
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
-[lints]
-workspace = true
-
-[features]
-serialize = ["dep:serde", "indexmap/serde"]
-deserialize = ["dep:serde", "indexmap/serde"]
-arbitrary = ["dep:arbitrary", "std", "indexmap/arbitrary"]
-std = []
-
 [dependencies]
 arbitrary = { workspace = true, features = ["derive"], optional = true }
 hashbrown.workspace = true
@@ -28,3 +19,12 @@ indexmap.workspace = true
 rustc-hash.workspace = true
 serde = { workspace = true, features = ["alloc", "derive"], optional = true }
 thiserror.workspace = true
+
+[features]
+arbitrary = ["dep:arbitrary", "indexmap/arbitrary", "std"]
+deserialize = ["dep:serde", "indexmap/serde"]
+serialize = ["dep:serde", "indexmap/serde"]
+std = []
+
+[lints]
+workspace = true

@@ -4,11 +4,11 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "Shader translator and validator. Part of the wgpu project"
-repository.workspace = true
-keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
-license.workspace = true
-exclude = ["bin/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
 readme = "README.md"
+repository.workspace = true
+license.workspace = true
+keywords = ["GLSL", "MSL", "SPIR-V", "shader"]
+exclude = ["Cargo.lock", "bin/**/*", "target/**/*", "tests/**/*"]
 
 # Override the workspace's `rust-version` key. Firefox uses `cargo vendor` to
 # copy the crates it actually uses out of the workspace, so it's meaningful for
@@ -18,6 +18,53 @@ rust-version = "1.87"
 
 [package.metadata.docs.rs]
 all-features = true
+
+[dependencies]
+naga-types = { workspace = true }
+
+arbitrary = { workspace = true, features = ["derive"], optional = true }
+arrayvec.workspace = true
+bit-set.workspace = true
+bitflags.workspace = true
+cfg-if.workspace = true
+codespan-reporting = { workspace = true }
+half = { workspace = true, features = ["num-traits"] }
+hashbrown.workspace = true
+indexmap.workspace = true
+libm = { workspace = true, default-features = false }
+log.workspace = true
+num-traits.workspace = true
+once_cell = { workspace = true, features = ["alloc", "race"] }
+petgraph = { workspace = true, optional = true }
+pp-rs = { workspace = true, optional = true }
+rustc-hash.workspace = true
+serde = { workspace = true, features = ["alloc", "derive"], optional = true }
+spirv = { workspace = true, optional = true }
+thiserror.workspace = true
+unicode-ident = { workspace = true, optional = true }
+
+[dev-dependencies]
+bytemuck.workspace = true
+diff.workspace = true
+env_logger.workspace = true
+hashbrown = { workspace = true, features = ["serde"] }
+hlsl-snapshots.workspace = true
+itertools.workspace = true
+naga-test.workspace = true
+ron.workspace = true
+rspirv.workspace = true
+serde = { workspace = true, features = ["default", "derive"] }
+# So we don't actually need this, however if we remove this, it
+# brakes calling `--features spirv` at the workspace level. I think
+# this is because there is a `dep:spirv` in the regular feature set,
+# so cargo tries to match the feature against that, fails as it's a optional dep,
+# and then refuses to build instead of ignoring it.
+spirv.workspace = true
+strum = { workspace = true }
+walkdir.workspace = true
+
+[build-dependencies]
+cfg_aliases.workspace = true
 
 [features]
 default = []
@@ -36,28 +83,28 @@ msl-out = []
 ## If you want to enable MSL output it regardless of the target platform, use `naga/msl-out`.
 msl-out-if-target-apple = []
 
-serialize = [
-    "dep:serde",
-    "bitflags/serde",
-    "half/serde",
-    "hashbrown/serde",
-    "naga-types/serialize",
-]
-deserialize = [
-    "dep:serde",
-    "bitflags/serde",
-    "half/serde",
-    "hashbrown/serde",
-    "naga-types/deserialize",
-]
 arbitrary = [
-    "dep:arbitrary",
     "bitflags/arbitrary",
+    "dep:arbitrary",
     "half/arbitrary",
     "half/std",
     "naga-types/arbitrary",
 ]
-spv-in = ["dep:petgraph", "petgraph/graphmap", "dep:spirv"]
+deserialize = [
+    "bitflags/serde",
+    "dep:serde",
+    "half/serde",
+    "hashbrown/serde",
+    "naga-types/deserialize",
+]
+serialize = [
+    "bitflags/serde",
+    "dep:serde",
+    "half/serde",
+    "hashbrown/serde",
+    "naga-types/serialize",
+]
+spv-in = ["dep:petgraph", "dep:spirv", "petgraph/graphmap"]
 spv-out = ["dep:spirv"]
 wgsl-in = ["dep:unicode-ident"]
 wgsl-out = []
@@ -82,54 +129,7 @@ stderr = ["codespan-reporting/std"]
 ## Enables integration with the underlying filesystem.
 fs = []
 
-[dependencies]
-naga-types = { workspace = true }
-
-arbitrary = { workspace = true, features = ["derive"], optional = true }
-arrayvec.workspace = true
-bitflags.workspace = true
-bit-set.workspace = true
-cfg-if.workspace = true
-codespan-reporting = { workspace = true }
-hashbrown.workspace = true
-half = { workspace = true, features = ["num-traits"] }
-indexmap.workspace = true
-rustc-hash.workspace = true
-libm = { workspace = true, default-features = false }
-log.workspace = true
-num-traits.workspace = true
-once_cell = { workspace = true, features = ["alloc", "race"] }
-spirv = { workspace = true, optional = true }
-thiserror.workspace = true
-serde = { workspace = true, features = ["alloc", "derive"], optional = true }
-petgraph = { workspace = true, optional = true }
-pp-rs = { workspace = true, optional = true }
-unicode-ident = { workspace = true, optional = true }
-
-[build-dependencies]
-cfg_aliases.workspace = true
-
-[dev-dependencies]
-bytemuck.workspace = true
-diff.workspace = true
-env_logger.workspace = true
-hashbrown = { workspace = true, features = ["serde"] }
-hlsl-snapshots.workspace = true
-itertools.workspace = true
-naga-test.workspace = true
-ron.workspace = true
-rspirv.workspace = true
-# So we don't actually need this, however if we remove this, it
-# brakes calling `--features spirv` at the workspace level. I think
-# this is because there is a `dep:spirv` in the regular feature set,
-# so cargo tries to match the feature against that, fails as it's a optional dep,
-# and then refuses to build instead of ignoring it.
-spirv.workspace = true
-serde = { workspace = true, features = ["default", "derive"] }
-strum = { workspace = true }
-walkdir.workspace = true
-
 [lints.clippy]
+alloc_instead_of_core = "warn"
 std_instead_of_alloc = "warn"
 std_instead_of_core = "warn"
-alloc_instead_of_core = "warn"

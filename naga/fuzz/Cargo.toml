@@ -2,13 +2,44 @@
 name = "naga-fuzz"
 version.workspace = true
 authors.workspace = true
-publish = false
 edition.workspace = true
 license.workspace = true
 build = "build.rs"
+publish = false
 
 [package.metadata]
 cargo-fuzz = true
+
+[[bin]]
+bench = false
+doc = false
+name = "spv_parser"
+path = "fuzz_targets/spv_parser.rs"
+test = false
+
+[[bin]]
+bench = false
+doc = false
+name = "wgsl_parser"
+path = "fuzz_targets/wgsl_parser.rs"
+test = false
+
+[[bin]]
+bench = false
+doc = false
+name = "glsl_parser"
+path = "fuzz_targets/glsl_parser.rs"
+test = false
+
+[[bin]]
+bench = false
+doc = false
+name = "ir"
+path = "fuzz_targets/ir.rs"
+test = false
+
+[build-dependencies]
+cfg_aliases.workspace = true
 
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies]
 arbitrary = { workspace = true, features = ["derive"] }
@@ -16,38 +47,7 @@ libfuzzer-sys.workspace = true
 
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos")))'.dependencies.naga]
 workspace = true
-features = ["arbitrary", "spv-in", "wgsl-in", "glsl-in"]
-
-[build-dependencies]
-cfg_aliases.workspace = true
-
-[[bin]]
-name = "spv_parser"
-path = "fuzz_targets/spv_parser.rs"
-bench = false
-test = false
-doc = false
-
-[[bin]]
-name = "wgsl_parser"
-path = "fuzz_targets/wgsl_parser.rs"
-bench = false
-test = false
-doc = false
-
-[[bin]]
-name = "glsl_parser"
-path = "fuzz_targets/glsl_parser.rs"
-bench = false
-test = false
-doc = false
-
-[[bin]]
-name = "ir"
-path = "fuzz_targets/ir.rs"
-bench = false
-test = false
-doc = false
+features = ["arbitrary", "glsl-in", "spv-in", "wgsl-in"]
 
 [lints.clippy]
 disallowed_types = "allow"

@@ -4,13 +4,13 @@ edition = "2021"
 rust-version = "1.87"
 publish = false
 
+[dependencies]
+pollster = { version = "0.4", features = ["macro"] }
+wgpu = { version = "29.0.0", default-features = false, features = [
+    "custom",
+    "wgsl",
+] }
+
 [features]
 default = ["web"]
 web = ["wgpu/web"]
-
-[dependencies]
-wgpu = { version = "29.0.0", features = [
-    "custom",
-    "wgsl",
-], default-features = false }
-pollster = { version = "0.4", features = ["macro"] }

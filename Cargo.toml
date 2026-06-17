@@ -6,19 +6,20 @@ members = [
 
     # default members
     "benches",
+    "examples/bug-repro/*",
     "examples/features",
     "examples/standalone/*",
-    "examples/bug-repro/*",
     "lock-analyzer",
+    "naga",
     "naga-cli",
     "naga-test",
     "naga-types",
-    "naga",
     "naga/fuzz",
     "naga/hlsl-snapshots",
     "naga/xtask",
     "player",
     "tests",
+    "wgpu",
     "wgpu-core",
     "wgpu-core/platform-deps/*",
     "wgpu-hal",
@@ -26,25 +27,25 @@ members = [
     "wgpu-macros",
     "wgpu-naga-bridge",
     "wgpu-types",
-    "wgpu",
     "xtask",
 ]
 exclude = []
 default-members = [
     "benches",
+    "examples/bug-repro/*",
     "examples/features",
     "examples/standalone/*",
-    "examples/bug-repro/*",
     "lock-analyzer",
+    "naga",
     "naga-cli",
     "naga-test",
     "naga-types",
-    "naga",
     "naga/fuzz",
     "naga/hlsl-snapshots",
     "naga/xtask",
     "player",
     "tests",
+    "wgpu",
     "wgpu-core",
     "wgpu-core/platform-deps/*",
     "wgpu-hal",
@@ -52,57 +53,51 @@ default-members = [
     "wgpu-macros",
     "wgpu-naga-bridge",
     "wgpu-types",
-    "wgpu",
     "xtask",
 ]
 
-[workspace.lints.clippy]
-ref_as_ptr = "warn"
-# NOTE: clippy configuration values (disallowed-types and
-# large-error-threshold) are in other file: clippy.toml
-
 [workspace.package]
-edition = "2021"
-rust-version = "1.93"
-keywords = ["graphics"]
-license = "MIT OR Apache-2.0"
-homepage = "https://wgpu.rs/"
-repository = "https://github.com/gfx-rs/wgpu"
 version = "29.0.0"
 authors = ["gfx-rs developers"]
+edition = "2021"
+rust-version = "1.93"
+homepage = "https://wgpu.rs/"
+repository = "https://github.com/gfx-rs/wgpu"
+license = "MIT OR Apache-2.0"
+keywords = ["graphics"]
 
 [workspace.dependencies]
-naga = { version = "29.0.0", path = "./naga" }
+naga = { path = "./naga", version = "29.0.0" }
 naga-test = { path = "./naga-test" }
-naga-types = { version = "29.0.0", path = "./naga-types" }
-wgpu = { version = "29.0.0", path = "./wgpu", default-features = false, features = [
-    "std",
-    "serde",
-    "wgsl",
-    "vulkan",
-    "gles",
-    "dx12",
-    "metal",
-    "vulkan-portability",
+naga-types = { path = "./naga-types", version = "29.0.0" }
+wgpu = { path = "./wgpu", version = "29.0.0", default-features = false, features = [
     "angle",
+    "dx12",
+    "gles",
+    "metal",
+    "serde",
     "static-dxc",
+    "std",
+    "vulkan",
+    "vulkan-portability",
+    "wgsl",
 ] }
-wgpu-core = { version = "29.0.0", path = "./wgpu-core" }
-wgpu-hal = { version = "29.0.0", path = "./wgpu-hal" }
-wgpu-macros = { version = "29.0.0", path = "./wgpu-macros" }
-wgpu-naga-bridge = { version = "29.0.0", path = "./wgpu-naga-bridge" }
-wgpu-test = { version = "29.0.0", path = "./tests" }
-wgpu-types = { version = "29.0.0", path = "./wgpu-types", default-features = false }
+wgpu-core = { path = "./wgpu-core", version = "29.0.0" }
+wgpu-hal = { path = "./wgpu-hal", version = "29.0.0" }
+wgpu-macros = { path = "./wgpu-macros", version = "29.0.0" }
+wgpu-naga-bridge = { path = "./wgpu-naga-bridge", version = "29.0.0" }
+wgpu-test = { path = "./tests", version = "29.0.0" }
+wgpu-types = { path = "./wgpu-types", version = "29.0.0", default-features = false }
 
 # These _cannot_ have a version specified. If it does, crates.io will look
 # for a version of the package on crates when we publish naga. Path dependencies
 # are allowed through though.
 hlsl-snapshots = { path = "naga/hlsl-snapshots" }
 
-wgpu-core-deps-windows-linux-android = { version = "29.0.0", path = "./wgpu-core/platform-deps/windows-linux-android" }
-wgpu-core-deps-apple = { version = "29.0.0", path = "./wgpu-core/platform-deps/apple" }
-wgpu-core-deps-wasm = { version = "29.0.0", path = "./wgpu-core/platform-deps/wasm" }
-wgpu-core-deps-emscripten = { version = "29.0.0", path = "./wgpu-core/platform-deps/emscripten" }
+wgpu-core-deps-apple = { path = "./wgpu-core/platform-deps/apple", version = "29.0.0" }
+wgpu-core-deps-emscripten = { path = "./wgpu-core/platform-deps/emscripten", version = "29.0.0" }
+wgpu-core-deps-wasm = { path = "./wgpu-core/platform-deps/wasm", version = "29.0.0" }
+wgpu-core-deps-windows-linux-android = { path = "./wgpu-core/platform-deps/windows-linux-android", version = "29.0.0" }
 
 anyhow = { version = "1.0.87", default-features = false }
 approx = "0.5"
@@ -131,7 +126,7 @@ flume = "0.12"
 futures-lite = "2"
 glam = "0.33.0"
 glob = "0.3"
-half = { version = "2.5", default-features = false } # We require 2.5 to have `Arbitrary` support.
+half = { version = "2.5", default-features = false }  # We require 2.5 to have `Arbitrary` support.
 hashbrown = { version = "0.17", default-features = false, features = [
     "default-hasher",
     "inline-more",
@@ -151,8 +146,8 @@ libm = { version = "0.2.6", default-features = false }
 libtest-mimic = "0.8"
 log = "0.4.29"
 macro_rules_attribute = "0.2"
-nanoserde = "0.2"
 nanorand = { version = "0.8", default-features = false, features = ["wyrand"] }
+nanoserde = "0.2"
 noise = "0.9"
 num_cpus = "1"
 # `half` requires 0.2.16 for `FromBytes` and `ToBytes`.
@@ -166,9 +161,9 @@ ordered-float = { version = ">=3, <6.0", default-features = false }
 parking_lot = "0.12.3"
 petgraph = { version = "0.8", default-features = false }
 pico-args = { version = "0.5", features = [
+    "combined-flags",
     "eq-separator",
     "short-space-opt",
-    "combined-flags",
 ] }
 png = "0.18"
 pollster = "0.4"
@@ -181,14 +176,14 @@ raw-window-handle = { version = "0.6.2", default-features = false }
 rayon = "1.3"
 regex-lite = "0.1"
 renderdoc-sys = "1"
-rspirv = "0.13"
 ron = "0.12"
+rspirv = "0.13"
 # NOTE: rustc-hash v2 is a completely different hasher with different performance characteristics
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
 rustc-hash = { version = "1.1", default-features = false }
-serde_json = "1.0.143"
 serde = { version = "1.0.225", default-features = false }
+serde_json = "1.0.143"
 shell-words = "1"
 smallvec = "1.14"
 spirv = "0.4"
@@ -196,33 +191,34 @@ static_assertions = "1.1"
 strum = { version = "0.28", default-features = false, features = ["derive"] }
 syn = "2.0.98"
 tempfile = "3"
-toml = "1.0.0"
-trybuild = "1"
-tracy-client = "0.18"
 thiserror = { version = "2.0.12", default-features = false }
+toml = "1.0.0"
+tracy-client = "0.18"
+trybuild = "1"
 unicode-ident = "1.0.5"
 walkdir = "2.3"
-winit = { version = "0.30.8", features = ["android-native-activity"] }
 which = "8"
+winit = { version = "0.30.8", features = ["android-native-activity"] }
 xshell = "0.2.2"
 
 # Metal dependencies
 block2 = "0.6.2"
 objc2 = "0.6.3"
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
-    "std",
     "CFCGTypes",
+    "std",
 ] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = [
-    "std",
     "NSError",
     "NSProcessInfo",
     "NSRange",
     "NSString",
+    "std",
 ] }
 objc2-metal = { version = "0.3.2", default-features = false, features = [
-    "std",
-    "block2",
+    "MTLAccelerationStructure",
+    "MTLAccelerationStructureCommandEncoder",
+    "MTLAccelerationStructureTypes",
     "MTLAllocation",
     "MTLBlitCommandEncoder",
     "MTLBlitPass",
@@ -246,23 +242,22 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "MTLRenderCommandEncoder",
     "MTLRenderPass",
     "MTLRenderPipeline",
+    "MTLResidencySet",
     "MTLResource",
     "MTLSampler",
     "MTLStageInputOutputDescriptor",
     "MTLTexture",
     "MTLTypes",
     "MTLVertexDescriptor",
-    "MTLAccelerationStructure",
-    "MTLAccelerationStructureTypes",
-    "MTLAccelerationStructureCommandEncoder",
-    "MTLResidencySet",
+    "block2",
+    "std",
 ] }
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
-    "std",
-    "objc2-core-foundation",
     "CALayer",
     "CAMetalLayer",
+    "objc2-core-foundation",
     "objc2-metal",
+    "std",
 ] }
 raw-window-metal = "1.0"
 
@@ -270,9 +265,9 @@ raw-window-metal = "1.0"
 android_system_properties = "0.1.1"
 ash = "0.38"
 
+mach-dxcompiler-rs = { version = "0.1.4", default-features = false }  # remember to increase max_shader_model if applicable
 # DX12 dependencies
 range-alloc = "0.1"
-mach-dxcompiler-rs = { version = "0.1.4", default-features = false } # remember to increase max_shader_model if applicable
 windows-core = { version = "0.62", default-features = false }
 windows-result = { version = "0.4", default-features = false }
 
@@ -281,12 +276,12 @@ gpu-allocator = { version = "0.28", default-features = false, features = [
     "hashbrown",
 ] }
 
-# Gles dependencies
-khronos-egl = "6"
 glow = "0.17"
 glutin = { version = "0.32", default-features = false }
-glutin-winit = { version = "0.5", default-features = false }
 glutin_wgl_sys = "0.6"
+glutin-winit = { version = "0.5", default-features = false }
+# Gles dependencies
+khronos-egl = "6"
 
 # DX12 and GLES dependencies
 windows = { version = "0.62", default-features = false }
@@ -304,30 +299,35 @@ web-time = "1.1.0"
 # deno dependencies
 deno_console = "0.214.0"
 deno_core = "0.355.0"
+deno_error = "0.7.0"
 deno_features = "0.11.0"
+deno_unsync = "0.4.4"
 deno_url = "0.214.0"
 deno_web = "0.245.0"
+deno_webgpu = { path = "./deno_webgpu", version = "0.181.0" }
 deno_webidl = "0.214.0"
-deno_webgpu = { version = "0.181.0", path = "./deno_webgpu" }
-deno_unsync = "0.4.4"
-deno_error = "0.7.0"
-tokio = "1.47"
 termcolor = "1.4.1"
+tokio = "1.47"
 
 # android dependencies
 ndk-sys = "0.6"
+
+[workspace.lints.clippy]
+ref_as_ptr = "warn"
+# NOTE: clippy configuration values (disallowed-types and
+# large-error-threshold) are in other file: clippy.toml
 
 # These overrides allow our examples to explicitly depend on release crates
 [patch.crates-io]
 wgpu = { path = "./wgpu" }
 
-env_logger = { version = "0.11", git = "https://github.com/rust-cli/env_logger.git", rev = "d550741" }
-libtest-mimic = { version = "0.8", git = "https://github.com/cwfitzgerald/libtest-mimic.git", rev = "9979b3c" }
-
-[profile.release]
-lto = "thin"
-debug = true
+env_logger = { git = "https://github.com/rust-cli/env_logger.git", rev = "d550741", version = "0.11" }
+libtest-mimic = { git = "https://github.com/cwfitzgerald/libtest-mimic.git", rev = "9979b3c", version = "0.8" }
 
 # Speed up image comparison even in debug builds
 [profile.dev.package."nv-flip-sys"]
 opt-level = 3
+
+[profile.release]
+debug = true
+lto = "thin"
