@@ -11,10 +11,6 @@ license.workspace = true
 rust-version.workspace = true
 publish = false
 
-[package.metadata.cargo-machete]
-# Cargo machete struggles with this dev dependency:
-ignored = ["wasm_bindgen_test"]
-
 [lib]
 path = "src/lib.rs"
 harness = false
@@ -79,9 +75,6 @@ web-sys = { workspace = true, features = [
     "WebGl2RenderingContext",
     "CanvasRenderingContext2d",
 ] }
-
-[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-wasm-bindgen-test.workspace = true
 
 [lints.clippy]
 disallowed_types = "allow"

@@ -109,7 +109,6 @@ parking_lot = { workspace = true, features = ["deadlock_detection"] }
 image.workspace = true
 js-sys.workspace = true
 wasm-bindgen-futures.workspace = true
-wasm-bindgen-test.workspace = true
 wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "Blob"] }
 
