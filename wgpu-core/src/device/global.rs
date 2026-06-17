@@ -1641,7 +1641,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(pipeline) = _pipeline.get() {
             if let Some(t) = pipeline.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyRenderPipeline(pipeline.to_trace()));
+                t.add(trace::Action::DropRenderPipeline(pipeline.to_trace()));
             }
         }
     }

@@ -371,7 +371,7 @@ impl Player {
                     pipeline,
                 );
             }
-            Action::DestroyRenderPipeline(id) => {
+            Action::DropRenderPipeline(id) => {
                 self.render_pipelines
                     .remove(&id)
                     .expect("invalid render pipeline");

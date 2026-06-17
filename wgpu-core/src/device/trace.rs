@@ -201,7 +201,7 @@ pub enum Action<'a, R: ReferenceType> {
         id: Option<PointerId<markers::RenderPipeline>>,
         desc: TraceGeneralRenderPipelineDescriptor<'a>,
     },
-    DestroyRenderPipeline(PointerId<markers::RenderPipeline>),
+    DropRenderPipeline(PointerId<markers::RenderPipeline>),
     CreatePipelineCache {
         id: PointerId<markers::PipelineCache>,
         desc: crate::pipeline::PipelineCacheDescriptor<'a>,
