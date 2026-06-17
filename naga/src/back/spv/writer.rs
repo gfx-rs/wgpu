@@ -96,6 +96,7 @@ impl Writer {
             ray_query_initialization_tracking: options.ray_query_initialization_tracking,
             trace_ray_argument_validation: options.trace_ray_argument_validation,
             use_storage_input_output_16: options.use_storage_input_output_16,
+            emit_int_div_checks: options.emit_int_div_checks,
             void_type,
             tuple_of_u32s_ty_id: None,
             lookup_type: crate::FastHashMap::default(),
@@ -181,6 +182,7 @@ impl Writer {
             binding_map: take(&mut self.binding_map),
             task_dispatch_limits: self.task_dispatch_limits,
             mesh_shader_primitive_indices_clamp: self.mesh_shader_primitive_indices_clamp,
+            emit_int_div_checks: self.emit_int_div_checks,
 
             // Initialized afresh:
             id_gen,
@@ -561,7 +563,7 @@ impl Writer {
                             (
                                 crate::BinaryOperator::Divide | crate::BinaryOperator::Modulo,
                                 crate::ScalarKind::Sint | crate::ScalarKind::Uint,
-                            ) => {
+                            ) if self.emit_int_div_checks => {
                                 self.write_wrapped_binary_op(
                                     op,
                                     expr_ty,

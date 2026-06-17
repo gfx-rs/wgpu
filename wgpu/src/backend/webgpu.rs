@@ -2992,7 +2992,12 @@ impl Drop for WebTlas {
     }
 }
 
-impl dispatch::QuerySetInterface for WebQuerySet {}
+impl dispatch::QuerySetInterface for WebQuerySet {
+    fn destroy(&self) {
+        self.inner.destroy();
+    }
+}
+
 impl Drop for WebQuerySet {
     fn drop(&mut self) {
         // no-op
@@ -3927,6 +3932,14 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
             ident: crate::cmp::Identifier::create(),
         }
         .into()
+    }
+
+    #[cfg(custom)]
+    fn finish_boxed(
+        self: Box<Self>,
+        desc: &crate::RenderBundleDescriptor<'_>,
+    ) -> dispatch::DispatchRenderBundle {
+        (*self).finish(desc)
     }
 }
 impl Drop for WebRenderBundleEncoder {

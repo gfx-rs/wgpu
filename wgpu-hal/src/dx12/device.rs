@@ -418,7 +418,11 @@ impl super::Device {
 
         let source_name = stage.module.raw_name.as_deref();
 
-        let full_stage = format!("{}_{}", naga_stage.to_hlsl_str(), key.shader_model.to_str());
+        let full_stage = format!(
+            "{}_{}",
+            naga::back::hlsl::shader_stage_to_hlsl_str(naga_stage),
+            key.shader_model.to_str()
+        );
 
         let compiled_shader = self.compiler_container.compile(
             self,

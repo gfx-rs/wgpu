@@ -2439,7 +2439,11 @@ impl Drop for CoreTlas {
     }
 }
 
-impl dispatch::QuerySetInterface for CoreQuerySet {}
+impl dispatch::QuerySetInterface for CoreQuerySet {
+    fn destroy(&self) {
+        self.context.0.query_set_destroy(self.id);
+    }
+}
 
 impl Drop for CoreQuerySet {
     fn drop(&mut self) {
@@ -2688,9 +2692,9 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             self.id,
             &wgc::command::RenderPassDescriptor {
                 label: desc.label.map(Borrowed),
-                timestamp_writes: timestamp_writes.as_ref(),
+                timestamp_writes,
                 color_attachments: Borrowed(&colors),
-                depth_stencil_attachment: depth_stencil.as_ref(),
+                depth_stencil_attachment: depth_stencil,
                 occlusion_query_set: desc.occlusion_query_set.map(|qs| qs.inner.as_core().id),
                 multiview_mask: desc.multiview_mask,
             },
@@ -3983,6 +3987,14 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
             id,
         }
         .into()
+    }
+
+    #[cfg(custom)]
+    fn finish_boxed(
+        self: Box<Self>,
+        desc: &crate::RenderBundleDescriptor<'_>,
+    ) -> dispatch::DispatchRenderBundle {
+        (*self).finish(desc)
     }
 }
 

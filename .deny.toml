@@ -1,68 +1,27 @@
+[graph]
+# This configuration is tuned for the published `wgpu`/`naga` library crates and
+# their dependencies *only* -- the skip/ignore/allow entries below assume that
+# scope. The binaries, tests, examples, and tooling in this workspace pull in many
+# more dependencies that would produce false-positive advisory/ban/license noise.
+exclude-unpublished = true
+
 [bans]
 multiple-versions = "deny"
-skip-tree = [
-    { name = "rustc-hash", version = "1.1.0" },
-
-    # introduced by Deno, to be investigated
-    { name = "petgraph", version = "0.6.5" },
-
-    # Winit 0.30 uses an older objc2
-    { name = "objc2-foundation", version = "0.2" },
-
-    # glutin and tracy-client-sys use windows-sys 0.52, pulling older windows-targets
-    { name = "windows-targets", version = "0.52" },
-]
+skip-tree = [{ name = "rustc-hash", version = "1.1.0" }]
 skip = [
-    # the ecosystem is migrating from getrandom 0.3 to 0.4, so this captures many stragglers
-    { name = "getrandom", version = "0.3.4" },
-
-    # Deno uses an old version
-    { name = "bincode", version = "1.3.3" },
-    { name = "which", version = "6.0.3" },
-
-    # Winit uses an old version via calloop → rustix 0.38
-    { name = "linux-raw-sys", version = "0.4" },
-    { name = "rustix", version = "0.38" },
-    { name = "windows-sys", version = "0.59" },
-
-    # Winit uses an old version via android-activity
-    { name = "thiserror", version = "1" },
-    { name = "thiserror-impl", version = "1" },
-
-    # glutin uses an old version
-    { name = "windows-sys", version = "0.52" },
-
-    # getrandom 0.3 uses an old version
-    { name = "r-efi", version = "5" },
-
-    # winit uses this old version
-    { name = "redox_syscall", version = "0.4.1" },
-    # parking-lot uses this old version
-    { name = "redox_syscall", version = "0.5.18" },
-
-    # deno uses an old version
-    { name = "bit-vec", version = "0.8.0" },
-    { name = "bit-set", version = "0.8.0" },
-
-    # drm uses an older version via drm-sys, and a newer version via rustix
-    { name = "linux-raw-sys", version = "0.9.4" },
-
-    # getrandom -> wasip3 -> wit-bindgen uses an old version but
-    # getrandom -> wasip2 -> wit-bindgen uses a newer version
-    { name = "wit-bindgen", version = "0.51.0" },
-
-    # android-activity -> ndk -> jni-sys uses an old version but
-    # android-activity -> jni -> jni-sys uses a newer version
-    { name = "jni-sys", version = "0.3.1" },
-
-    # v8 -> bindgen -> itertools uses an old version
-    { name = "itertools", version = "0.13" },
-
-    # gpu-descriptor and petgraph use an old version
+    # naga -> petgraph uses an old version
     { name = "hashbrown", version = "0.15.5" },
-
     # Used by hashbrown 0.15.5
     { name = "foldhash", version = "0.1.5" },
+
+    # naga depends on hashbrown 0.16 directly, while naga -> indexmap pulls hashbrown 0.17
+    { name = "hashbrown", version = "0.16.1" },
+
+    # wgpu-hal -> drm -> drm-sys uses an older version, while wgpu-hal -> drm -> rustix uses a newer one
+    { name = "linux-raw-sys", version = "0.9.4" },
+
+    # wgpu-hal -> ndk-sys -> jni-sys uses an old version, while jni-sys 0.4 re-exports it
+    { name = "jni-sys", version = "0.3.1" },
 ]
 wildcards = "deny"
 allow-wildcard-paths = true
@@ -70,16 +29,9 @@ allow-wildcard-paths = true
 [advisories]
 ignore = [
     # `paste` crate is no longer maintained https://rustsec.org/advisories/RUSTSEC-2024-0436
-    # It's a dependency of `metal` (which is to be replaced with `objc2-metal`), and a
-    # transitive dependency of `deno`. https://github.com/gfx-rs/wgpu/issues/7873
+    # It's a transitive dependency of `wgpu-core` via `macro_rules_attribute`.
+    # https://github.com/gfx-rs/wgpu/issues/7873
     "RUSTSEC-2024-0436",
-    # `unic-*` crates are no longer maintained https://rustsec.org/advisories/RUSTSEC-2025-0100
-    # These are used via `deno`. https://github.com/gfx-rs/wgpu/issues/8393
-    "RUSTSEC-2025-0075",
-    "RUSTSEC-2025-0080",
-    "RUSTSEC-2025-0081",
-    "RUSTSEC-2025-0098",
-    "RUSTSEC-2025-0100",
     # `bincode` is no longer maintained https://rustsec.org/advisories/RUSTSEC-2025-0141
     # We only use it directly for tests and tools. It is also used indirectly via deno.
     "RUSTSEC-2025-0141",
@@ -88,13 +40,10 @@ ignore = [
 [licenses]
 allow = [
     "Apache-2.0",
-    "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC",
-    "MPL-2.0",
     "MIT",
-    "MIT-0",
     "Unicode-3.0",
     "Zlib",
 ]
@@ -102,12 +51,8 @@ private = { ignore = true }
 
 [sources]
 allow-git = [
-    # Waiting on releases; used in examples/tests only
-
     # Pending a release for https://github.com/rust-cli/env_logger/commit/143fa647ab33ed3acc9f160dfa3cb075cc62b5a3
     "https://github.com/rust-cli/env_logger",
-    # Pending merge/release for https://github.com/LukasKalbertodt/libtest-mimic/pull/58
-    "https://github.com/cwfitzgerald/libtest-mimic",
 ]
 unknown-registry = "deny"
 unknown-git = "deny"
