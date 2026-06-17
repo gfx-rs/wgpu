@@ -191,7 +191,7 @@ pub enum Action<'a, R: ReferenceType> {
         label: crate::Label<'a>,
         entry_points: Cow<'a, [wgt::PassthroughShaderEntryPoint<'a>]>,
     },
-    DestroyShaderModule(PointerId<markers::ShaderModule>),
+    DropShaderModule(PointerId<markers::ShaderModule>),
     CreateComputePipeline {
         id: Option<PointerId<markers::ComputePipeline>>,
         desc: TraceComputePipelineDescriptor<'a>,

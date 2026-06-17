@@ -1145,7 +1145,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(shader_module) = _shader_module.get() {
             if let Some(t) = shader_module.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyShaderModule(shader_module.to_trace()));
+                t.add(trace::Action::DropShaderModule(shader_module.to_trace()));
             }
         }
     }

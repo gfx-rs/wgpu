@@ -338,7 +338,7 @@ impl Player {
                     Err(e) => panic!("shader compilation error:\n{e}"),
                 };
             }
-            Action::DestroyShaderModule(id) => {
+            Action::DropShaderModule(id) => {
                 self.shader_modules
                     .remove(&id)
                     .expect("invalid shader module");
