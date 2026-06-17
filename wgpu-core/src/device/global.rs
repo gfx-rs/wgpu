@@ -800,8 +800,8 @@ impl Global {
         let Ok(texture) = self.hub.textures.get(texture_id).get() else {
             return None;
         };
-        let mut map_state = texture.map_state.lock();
-        let resource::TextureMapState::Mapped(ref mut arc) = *map_state else {
+        let map_state = texture.map_state.lock();
+        let resource::TextureMapState::Mapped(ref arc) = *map_state else {
             return None;
         };
         Some(arc.clone())

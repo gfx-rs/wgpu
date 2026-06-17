@@ -1659,6 +1659,12 @@ impl Device {
             ));
         }
 
+        if desc.mapped_at_creation {
+            if !desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE) {
+                return Err(CreateTextureError::MappedAtCreationRequiresHostVisible);
+            }
+        }
+
         let mut hal_view_formats = Vec::new();
         for format in desc.view_formats.iter() {
             if desc.format == *format {
@@ -1765,11 +1771,6 @@ impl Device {
         let texture = Arc::new(texture);
 
         if desc.mapped_at_creation {
-            if !desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE) {
-                return Err(CreateTextureError::MappedAtCreationRequiresHostVisible);
-            }
-            self.require_features(wgt::Features::HOST_IMAGE_COPY)
-                .map_err(|e| CreateTextureError::MissingFeatures(desc.format, e))?;
             *texture.map_state.lock() = resource::TextureMapState::Mapped(Arc::new(()));
         }
 
