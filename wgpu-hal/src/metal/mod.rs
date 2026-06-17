@@ -875,7 +875,9 @@ impl Texture {
         aspect: crate::FormatAspects,
     ) -> &Retained<ProtocolObject<dyn MTLTexture>> {
         if aspect == crate::FormatAspects::PLANE_1 {
-            self.plane1.as_ref().expect("plane1 present")
+            self.plane1
+                .as_ref()
+                .expect("plane_texture(PLANE_1) called on a single-plane texture")
         } else {
             &self.raw
         }
