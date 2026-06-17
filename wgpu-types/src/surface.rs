@@ -134,11 +134,12 @@ pub enum CompositeAlphaMode {
 /// The color space in which the presentation engine interprets the values
 /// written to a surface texture.
 ///
-/// A color space defines the color primaries, white point, and transfer
-/// function of the output signal, following the same convention as
-/// [CSS `predefined color spaces`] and [`VkColorSpaceKHR`]. It does **not**
-/// change the texel format of the surface; it changes how the compositor /
-/// display pipeline interprets those texels.
+/// A color space defines the *primaries*, *white point*, and *transfer
+/// function* of the output signal (see the Terminology section below),
+/// following the same convention as [CSS predefined color spaces] and
+/// [`VkColorSpaceKHR`].
+/// It does **not** change the texel format of the surface; it changes how the
+/// compositor / display pipeline interprets those texels.
 ///
 /// Support is queried via [`SurfaceCapabilities`], which reports a set of
 /// [`SurfaceColorSpaces`] for every supported texture format. Selecting a
@@ -146,8 +147,55 @@ pub enum CompositeAlphaMode {
 /// surface into high-dynamic-range (HDR) or wide-color-gamut output on
 /// platforms that support it.
 ///
-/// [CSS `predefined color spaces`]: https://www.w3.org/TR/css-color-4/#predefined
+/// # Terminology
+///
+/// Each variant is described by four properties:
+///
+/// * **Primaries** (the *gamut*): the chromaticities of the red, green, and
+///   blue that color values address, and so the range of colors that can be
+///   expressed. [BT.709] (the sRGB / HDTV primaries) is the standard-gamut set;
+///   [Display P3] and [BT.2020] are progressively wider.
+/// * **White point**: the chromaticity produced by equal red, green, and blue.
+///   Every color space here uses [D65], the standard daylight white.
+/// * **Transfer function**: how stored values map to light, such as the [sRGB]
+///   curve, a linear transfer, or an HDR curve like [PQ] or [HLG]. Except for
+///   writes to an `*Srgb` texture format (which apply the sRGB curve for you),
+///   wgpu does **not** encode this for you: your final render pass must output
+///   values in whatever encoding the chosen color space expects (linear for a
+///   linear transfer). The [HDR surface example] shows the encoder each variant
+///   expects.
+/// * **Dynamic range**: standard dynamic range (SDR), where `1.0` is reference
+///   (SDR) white, or high dynamic range (HDR), where values above `1.0` drive
+///   brighter-than-SDR output.
+///
+/// # Web (WebGPU) backend
+///
+/// Browsers do not expose these named color spaces directly. A WebGPU canvas is
+/// configured with a [`colorSpace`] (only `"srgb"` or `"display-p3"`) plus a
+/// separate [`toneMapping`] mode (`"standard"` or `"extended"`), so on the web
+/// wgpu offers only the combinations that pair can produce: [`Srgb`](Self::Srgb)
+/// and [`DisplayP3`](Self::DisplayP3) with standard tone mapping, plus their
+/// extended-range HDR forms [`ExtendedSrgb`](Self::ExtendedSrgb) and
+/// [`ExtendedDisplayP3`](Self::ExtendedDisplayP3) with extended tone mapping.
+/// There is no linear-transfer canvas color space, so
+/// [`ExtendedSrgbLinear`](Self::ExtendedSrgbLinear) (scRGB) is native-only, and
+/// [`Hdr10`](Self::Hdr10) and [`Hlg`](Self::Hlg) are unavailable (browsers
+/// expose no PQ or HLG canvas signaling).
+///
+/// [CSS predefined color spaces]: https://www.w3.org/TR/css-color-4/#predefined
 /// [`VkColorSpaceKHR`]: https://registry.khronos.org/vulkan/specs/latest/man/html/VkColorSpaceKHR.html
+///
+/// [BT.709]: https://www.itu.int/rec/R-REC-BT.709
+/// [BT.2020]: https://www.itu.int/rec/R-REC-BT.2020
+/// [Display P3]: https://en.wikipedia.org/wiki/DCI-P3
+/// [D65]: https://en.wikipedia.org/wiki/Standard_illuminant
+/// [sRGB]: https://registry.color.org/rgb-registry/srgb
+/// [PQ]: https://en.wikipedia.org/wiki/Perceptual_quantizer
+/// [HLG]: https://www.arib.or.jp/english/std_tr/broadcasting/std-b67.html
+/// [HDR surface example]: https://github.com/gfx-rs/wgpu/tree/trunk/examples/standalone/03_hdr_surface
+///
+/// [`colorSpace`]: https://www.w3.org/TR/webgpu/#dom-gpucanvasconfiguration-colorspace
+/// [`toneMapping`]: https://www.w3.org/TR/webgpu/#gpucanvastonemappingmode
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -192,7 +240,7 @@ pub enum SurfaceColorSpace {
     /// sRGB-encoded.
     Srgb = 1,
 
-    /// Extended linear sRGB, also known as scRGB (IEC 61966-2-2): BT.709
+    /// Extended linear sRGB, also known as [scRGB] (IEC 61966-2-2): BT.709
     /// primaries, D65 white point, **linear** transfer function, extended
     /// dynamic range.
     ///
@@ -208,37 +256,48 @@ pub enum SurfaceColorSpace {
     /// Native-only: not available on the browser WebGPU backend, which cannot
     /// express a linear-transfer canvas color space. Use
     /// [`ExtendedSrgb`](Self::ExtendedSrgb) for HDR canvas output on the web.
+    ///
+    /// [scRGB]: https://en.wikipedia.org/wiki/ScRGB
     ExtendedSrgbLinear = 2,
 
-    /// The Display-P3 color space: P3 primaries, D65 white point, sRGB
+    /// The [Display P3] color space: P3 primaries, D65 white point, sRGB
     /// transfer function, standard dynamic range.
     ///
-    /// A wide-gamut SDR color space; the same encoded values cover roughly
-    /// 25% more chromaticities than sRGB.
+    /// A wide-gamut SDR color space, covering noticeably more of the visible
+    /// range than sRGB (on the order of 25% more area in the CIE chromaticity
+    /// diagram). It uses the wide P3 primaries of theatrical DCI-P3, but with
+    /// the D65 white point and the sRGB transfer function (not DCI's white
+    /// point and 2.6 gamma).
     ///
     /// This is standard dynamic range: values outside of `[0.0, 1.0]` (after
     /// format encoding) are clamped by the display pipeline. For wide-gamut
     /// HDR output that keeps the P3 primaries but extends the encoded range,
     /// use [`ExtendedDisplayP3`](Self::ExtendedDisplayP3) instead.
+    ///
+    /// [Display P3]: https://en.wikipedia.org/wiki/DCI-P3
     DisplayP3 = 3,
 
     /// HDR10: BT.2020 primaries, D65 white point, SMPTE ST 2084 perceptual
-    /// quantizer (PQ) transfer function, high dynamic range.
+    /// quantizer ([PQ]) transfer function, high dynamic range.
     ///
     /// Texel values are interpreted as a PQ-encoded signal where the encoded
     /// range maps to absolute luminance from 0 to 10,000 nits. The
     /// application is responsible for applying the PQ encoding (and the
-    /// BT.709 → BT.2020 gamut conversion) in its final render pass; the
+    /// BT.709 -> BT.2020 gamut conversion) in its final render pass; the
     /// surface format itself is non-sRGB, typically
     /// [`TextureFormat::Rgb10a2Unorm`].
+    ///
+    /// [PQ]: https://en.wikipedia.org/wiki/Perceptual_quantizer
     Hdr10 = 4,
 
-    /// BT.2100 hybrid log-gamma: BT.2020 primaries, D65 white point, HLG
+    /// BT.2100 hybrid log-gamma: BT.2020 primaries, D65 white point, [HLG]
     /// (ARIB STD-B67) transfer function, high dynamic range.
     ///
     /// A relative-luminance HDR signal, primarily used for broadcast content.
     /// The application is responsible for applying the HLG OETF in its final
     /// render pass.
+    ///
+    /// [HLG]: https://www.arib.or.jp/english/std_tr/broadcasting/std-b67.html
     Hlg = 5,
 
     /// Extended-range sRGB (encoded): BT.709 primaries, D65 white point, the
@@ -250,13 +309,17 @@ pub enum SurfaceColorSpace {
     /// applied as usual and then extended to values above `1.0` (and below
     /// `0.0`) to represent brighter-than-SDR output and colors outside the
     /// BT.709 gamut. `(1.0, 1.0, 1.0)` is SDR reference white; values above
-    /// `1.0` produce brighter-than-SDR output on HDR displays.
+    /// `1.0` produce brighter-than-SDR output on HDR displays. Your final
+    /// render pass must apply this extended sRGB curve itself; see the
+    /// [HDR surface example].
     ///
     /// This is the "encoded extended range" sRGB used by browser WebGPU
     /// (canvas color space `"srgb"` with `"extended"` tone mapping). It
     /// corresponds to Vulkan's `VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT`
     /// and Metal's `kCGColorSpaceExtendedSRGB`. It is not available on DX12,
     /// which has no encoded-extended-sRGB swapchain color space.
+    ///
+    /// [HDR surface example]: https://github.com/gfx-rs/wgpu/tree/trunk/examples/standalone/03_hdr_surface
     ExtendedSrgb = 6,
 
     /// Extended-range Display-P3 (encoded): P3 primaries, D65 white point, the
@@ -268,7 +331,9 @@ pub enum SurfaceColorSpace {
     /// function is applied as usual and then extended to values above `1.0`
     /// (and below `0.0`) to represent brighter-than-SDR output and colors
     /// outside the P3 gamut. `(1.0, 1.0, 1.0)` is SDR reference white; values
-    /// above `1.0` produce brighter-than-SDR output on HDR displays.
+    /// above `1.0` produce brighter-than-SDR output on HDR displays. As with
+    /// [`ExtendedSrgb`](Self::ExtendedSrgb), your final render pass must apply
+    /// the extended sRGB curve itself, here over the wider P3 primaries.
     ///
     /// This is the wide-gamut HDR counterpart to
     /// [`DisplayP3`](Self::DisplayP3), which is SDR-only: it keeps the P3
@@ -373,6 +438,10 @@ pub struct SurfaceCapabilities {
 impl SurfaceCapabilities {
     /// Returns the set of color spaces supported for the given format, or an
     /// empty set if the format is not supported.
+    ///
+    /// This is a convenience lookup over
+    /// [`format_capabilities`](Self::format_capabilities): an empty result
+    /// means `format` is absent from that list.
     #[must_use]
     pub fn color_spaces(&self, format: TextureFormat) -> SurfaceColorSpaces {
         self.format_capabilities

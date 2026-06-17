@@ -58,6 +58,11 @@ impl Surface<'_> {
 
     /// Return a default `SurfaceConfiguration` from width and height to use for the [`Surface`] with this adapter.
     ///
+    /// The returned configuration requests the surface's preferred format and
+    /// [`SurfaceColorSpace::Auto`], reproducing wgpu's historical SDR / standard
+    /// behavior. Set the `color_space` field to opt into wide-gamut or HDR
+    /// output; see [`SurfaceColorSpace`] for what each color space means.
+    ///
     /// Returns None if the surface isn't supported by this adapter
     pub fn get_default_config(
         &self,
