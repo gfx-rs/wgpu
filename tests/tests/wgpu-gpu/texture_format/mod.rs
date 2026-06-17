@@ -334,23 +334,29 @@ fn texture_format_capabilities_check(
                         wgpu::StorageTextureAccess::Atomic,
                     );
                 }
-                if caps.flags.intersects(
-                    FF::MULTISAMPLE_X2
-                        | FF::MULTISAMPLE_X4
-                        | FF::MULTISAMPLE_X8
-                        | FF::MULTISAMPLE_X16,
-                ) {
-                    // `texture1` already has the chosen `sample_count`; one clear
-                    // exercises the multisampled path.
-                    eprintln!("Rendering into it multisampled");
-                    smoke_render_clear(&mut encoder, &texture1, format);
-                }
-                if caps.flags.contains(FF::MULTISAMPLE_RESOLVE)
-                    && !format.has_depth_aspect()
-                    && !format.has_stencil_aspect()
-                {
-                    eprintln!("Resolving it");
-                    smoke_multisample_resolve(&ctx, &mut encoder, &texture1, format, TEXTURE_DIM);
+                // Exercise *every* sample count the format claims, not just the
+                // highest one chosen for `texture1`. Each count gets a fresh
+                // texture cloned from the same descriptor.
+                for ms_count in supported_multisample_counts(caps.flags) {
+                    eprintln!("Rendering into it multisampled (sample_count {ms_count})");
+                    let ms_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+                        sample_count: ms_count,
+                        ..texture_desc.clone()
+                    });
+                    smoke_render_clear(&mut encoder, &ms_texture, format);
+                    if caps.flags.contains(FF::MULTISAMPLE_RESOLVE)
+                        && !format.has_depth_aspect()
+                        && !format.has_stencil_aspect()
+                    {
+                        eprintln!("Resolving it (sample_count {ms_count})");
+                        smoke_multisample_resolve(
+                            &ctx,
+                            &mut encoder,
+                            &ms_texture,
+                            format,
+                            TEXTURE_DIM,
+                        );
+                    }
                 }
             } else if (ctx
                 .device_features
@@ -382,9 +388,18 @@ fn texture_format_capabilities_check(
                         | FF::MULTISAMPLE_X16,
                 )
             {
-                // `texture1` is a multisampled 2D array here; clear layer 0.
-                eprintln!("Rendering into it multisampled in an array");
-                smoke_render_clear(&mut encoder, &texture1, format);
+                // Same as above, but for the multisampled 2D array path: clear
+                // layer 0 of a fresh array texture at each claimed sample count.
+                for ms_count in supported_multisample_counts(caps.flags) {
+                    eprintln!(
+                        "Rendering into it multisampled in an array (sample_count {ms_count})"
+                    );
+                    let ms_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+                        sample_count: ms_count,
+                        ..texture_desc.clone()
+                    });
+                    smoke_render_clear(&mut encoder, &ms_texture, format);
+                }
             }
         }
         // Submit and then poll immediately. This lets the textures be dropped to avoid OOMs with combinatorial explosion
@@ -504,6 +519,25 @@ fn get_caps(
         caps.flags.remove(FF::MULTISAMPLE_RESOLVE);
     }
     (actual_caps, caps)
+}
+
+/// Every multisample count a format advertises via its
+/// `MULTISAMPLE_X{2,4,8,16}` flags, smallest first. Used so the smoke tests
+/// exercise *each* claimed count instead of only the highest one.
+fn supported_multisample_counts(flags: wgpu::TextureFormatFeatureFlags) -> Vec<u32> {
+    use wgpu::TextureFormatFeatureFlags as FF;
+    let mut counts = Vec::new();
+    for (flag, count) in [
+        (FF::MULTISAMPLE_X2, 2),
+        (FF::MULTISAMPLE_X4, 4),
+        (FF::MULTISAMPLE_X8, 8),
+        (FF::MULTISAMPLE_X16, 16),
+    ] {
+        if flags.contains(flag) {
+            counts.push(count);
+        }
+    }
+    counts
 }
 
 /// Smoke test: clear `texture` through a render pass. Single 2D layer, which
