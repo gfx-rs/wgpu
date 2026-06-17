@@ -118,6 +118,7 @@ define_lock_ranks! {
         TEXTURE_MAP_STATE,
     }
     rank TEXTURE_HOST_COPY "Texture::host_copy_lock" followed by {
+        TEXTURE_MAP_STATE,
         DEVICE_SNATCHABLE_LOCK,
     }
     rank DEVICE_SNATCHABLE_LOCK "Device::snatchable_lock" followed by {

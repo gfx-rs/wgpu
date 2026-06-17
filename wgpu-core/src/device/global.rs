@@ -626,6 +626,17 @@ impl Global {
             .device
             .require_features(wgt::Features::HOST_IMAGE_COPY)?;
 
+        // Shared host-access lock: concurrent reads are allowed, but a host
+        // write (`copy_from_memory`, exclusive) cannot start until every read
+        // holding this guard has finished. Held across the whole read.
+        //
+        // Acquired *before* the `Mapped` check so the check is atomic with
+        // respect to `texture_unmap` (which takes this lock exclusively): once
+        // we hold it shared the texture cannot be unmapped — and thus cannot be
+        // handed back to the GPU — until this copy completes, closing the
+        // check-then-copy race.
+        let _host_access = texture.host_copy_lock.read();
+
         if !matches!(
             *texture.map_state.lock(),
             resource::TextureMapState::Mapped(_)
@@ -646,11 +657,6 @@ impl Global {
             CopySide::Destination,
             size,
         )?;
-
-        // Shared host-access lock: concurrent reads are allowed, but a host
-        // write (`copy_from_memory`, exclusive) cannot start until every read
-        // holding this guard has finished. Held across the whole read.
-        let _host_access = texture.host_copy_lock.read();
 
         let snatch_guard = texture.device.snatchable_lock.read();
         let raw_texture = texture.try_raw(&snatch_guard)?;
@@ -713,6 +719,17 @@ impl Global {
             .device
             .require_features(wgt::Features::HOST_IMAGE_COPY)?;
 
+        // Exclusive host-access lock: blocks all other host copies on this
+        // texture — other writes, and reads (which hold it shared) — for the
+        // whole write, so a write can't start while a read is in progress and
+        // vice versa. Held across zero-init, the write copy, and mark-init.
+        //
+        // Acquired *before* the `Mapped` check so the check is atomic with
+        // respect to `texture_unmap` (which also takes this lock exclusively):
+        // the texture cannot be unmapped — and thus cannot be handed back to
+        // the GPU — until this copy completes, closing the check-then-copy race.
+        let _host_access = texture.host_copy_lock.write();
+
         if !matches!(
             *texture.map_state.lock(),
             resource::TextureMapState::Mapped(_)
@@ -733,12 +750,6 @@ impl Global {
             CopySide::Source,
             size,
         )?;
-
-        // Exclusive host-access lock: blocks all other host copies on this
-        // texture — other writes, and reads (which hold it shared) — for the
-        // whole write, so a write can't start while a read is in progress and
-        // vice versa. Held across zero-init, the write copy, and mark-init.
-        let _host_access = texture.host_copy_lock.write();
 
         let snatch_guard = texture.device.snatchable_lock.read();
         let raw_texture = texture.try_raw(&snatch_guard)?;
@@ -797,6 +808,14 @@ impl Global {
         profiling::scope!("Texture::unmap");
 
         let texture = self.hub.textures.get(texture_id).get()?;
+
+        // Exclusive host-access lock: blocks until every in-flight host copy
+        // (read = shared, write = exclusive) has finished, and prevents any new
+        // copy from starting. Combined with the copy paths checking `Mapped`
+        // under this lock, unmapping can never race a copy, so the texture is
+        // only handed back to the GPU once no host access is in progress.
+        let _host_access = texture.host_copy_lock.write();
+
         let mut map_state = texture.map_state.lock();
 
         let resource::TextureMapState::Mapped(ref arc) = *map_state else {
