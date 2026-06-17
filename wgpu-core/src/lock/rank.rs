@@ -117,6 +117,9 @@ define_lock_ranks! {
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
         TEXTURE_MAP_STATE,
     }
+    rank TEXTURE_HOST_COPY "Texture::host_copy_lock" followed by {
+        DEVICE_SNATCHABLE_LOCK,
+    }
     rank DEVICE_SNATCHABLE_LOCK "Device::snatchable_lock" followed by {
         BUFFER_MAP_STATE,
         DEVICE_COMMAND_INDICES,

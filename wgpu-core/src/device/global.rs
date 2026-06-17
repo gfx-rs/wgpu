@@ -36,6 +36,12 @@ use super::UserClosures;
 /// Zero any uninitialized layers of `mip_level` via a host copy and mark them
 /// initialized. The host-copy entry points have no command encoder for the
 /// GPU `clear_texture` path, so they zero here instead.
+///
+/// Locks `initialization_status` internally to serialize the zeroing between
+/// concurrent readers (which only hold `host_copy_lock` shared): the first to
+/// reach a given layer zeroes and marks it, the rest then see it initialized.
+/// Mutual exclusion against host *writes* is provided by the caller's
+/// `host_copy_lock`. See [`Global::texture_copy_to_memory`].
 fn host_zero_init_layers(
     texture: &resource::Texture,
     raw_texture: &dyn hal::DynTexture,
@@ -43,8 +49,6 @@ fn host_zero_init_layers(
     mip_level: u32,
     layer_range: core::ops::Range<u32>,
 ) -> Result<(), HostTextureCopyError> {
-    // Held across the whole operation so concurrent host copies on the same
-    // texture can't both zero the same layers and overlap their host copies.
     let mut init_status = texture.initialization_status.write();
 
     // Don't mark initialized yet — only after the zeroing copy succeeds.
@@ -643,11 +647,18 @@ impl Global {
             size,
         )?;
 
+        // Shared host-access lock: concurrent reads are allowed, but a host
+        // write (`copy_from_memory`, exclusive) cannot start until every read
+        // holding this guard has finished. Held across the whole read.
+        let _host_access = texture.host_copy_lock.read();
+
         let snatch_guard = texture.device.snatchable_lock.read();
         let raw_texture = texture.try_raw(&snatch_guard)?;
         let raw_device = texture.device.raw();
 
         // Zero uninitialized layers so the host read can't observe garbage.
+        // `host_zero_init_layers` locks `initialization_status` internally so
+        // concurrent readers don't double-zero the same layer.
         host_zero_init_layers(
             &texture,
             raw_texture,
@@ -723,6 +734,12 @@ impl Global {
             size,
         )?;
 
+        // Exclusive host-access lock: blocks all other host copies on this
+        // texture — other writes, and reads (which hold it shared) — for the
+        // whole write, so a write can't start while a read is in progress and
+        // vice versa. Held across zero-init, the write copy, and mark-init.
+        let _host_access = texture.host_copy_lock.write();
+
         let snatch_guard = texture.device.snatchable_lock.read();
         let raw_texture = texture.try_raw(&snatch_guard)?;
         let raw_device = texture.device.raw();
@@ -764,15 +781,14 @@ impl Global {
         }
 
         // Mark written layers initialized so the GPU read path won't re-clear them.
-        {
-            let mip_level = texture_base.mip_level as usize;
-            let layer_start = texture_base.array_layer;
-            let layer_end = layer_start + array_layer_count;
-            let mut init_status = texture.initialization_status.write();
-            if let Some(mip_tracker) = init_status.mips.get_mut(mip_level) {
-                mip_tracker.drain(layer_start..layer_end);
-            }
+        let mip_level = texture_base.mip_level as usize;
+        let layer_start = texture_base.array_layer;
+        let layer_end = layer_start + array_layer_count;
+        let mut init_status = texture.initialization_status.write();
+        if let Some(mip_tracker) = init_status.mips.get_mut(mip_level) {
+            mip_tracker.drain(layer_start..layer_end);
         }
+        drop(init_status);
 
         Ok(())
     }

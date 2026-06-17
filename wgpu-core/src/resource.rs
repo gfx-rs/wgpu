@@ -1394,6 +1394,10 @@ pub struct Texture {
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
     /// Host-mapping state for this texture. See [`TextureMapState`].
     pub(crate) map_state: Mutex<TextureMapState>,
+    /// Serializes host image copies (`copy_to_memory`/`copy_from_memory`) on
+    /// this texture: reads take it shared, writes exclusive, so a write can't
+    /// run concurrently with a read or another write.
+    pub(crate) host_copy_lock: RwLock<()>,
 }
 
 impl Texture {
@@ -1430,6 +1434,7 @@ impl Texture {
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
             map_state: Mutex::new(rank::TEXTURE_MAP_STATE, TextureMapState::Unmapped),
+            host_copy_lock: RwLock::new(rank::TEXTURE_HOST_COPY, ()),
         }
     }
 
