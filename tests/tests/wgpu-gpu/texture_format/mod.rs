@@ -318,7 +318,14 @@ fn texture_format_capabilities_check(
                         access,
                     );
                 }
-                if caps.allowed_usages.contains(TU::STORAGE_ATOMIC) {
+                // An atomic-access storage binding needs TEXTURE_ATOMIC, even
+                // when the format advertises STORAGE_ATOMIC *usage* under
+                // adapter-specific features.
+                if caps.allowed_usages.contains(TU::STORAGE_ATOMIC)
+                    && ctx
+                        .device_features
+                        .contains(wgpu::Features::TEXTURE_ATOMIC)
+                {
                     eprintln!("Binding it as an atomic storage texture");
                     smoke_storage_bind(
                         &ctx,
@@ -508,6 +515,12 @@ fn smoke_render_clear(
         array_layer_count: Some(1),
         ..Default::default()
     });
+    // TRANSIENT (memoryless) attachments can't be stored, only discarded.
+    let store = if texture.usage().contains(wgpu::TextureUsages::TRANSIENT) {
+        wgpu::StoreOp::Discard
+    } else {
+        wgpu::StoreOp::Store
+    };
     if format.has_depth_aspect() || format.has_stencil_aspect() {
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("smoke depth/stencil clear"),
@@ -516,11 +529,11 @@ fn smoke_render_clear(
                 view: &view,
                 depth_ops: format.has_depth_aspect().then_some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
-                    store: wgpu::StoreOp::Store,
+                    store,
                 }),
                 stencil_ops: format.has_stencil_aspect().then_some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(0),
-                    store: wgpu::StoreOp::Store,
+                    store,
                 }),
             }),
             timestamp_writes: None,
@@ -536,7 +549,7 @@ fn smoke_render_clear(
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
-                    store: wgpu::StoreOp::Store,
+                    store,
                 },
             })],
             depth_stencil_attachment: None,
@@ -577,6 +590,13 @@ fn smoke_multisample_resolve(
         ..Default::default()
     });
     let resolve_view = resolve.create_view(&Default::default());
+    // The resolve target always receives the resolved output; a memoryless
+    // (TRANSIENT) multisample source can only discard its own contents.
+    let store = if msaa.usage().contains(wgpu::TextureUsages::TRANSIENT) {
+        wgpu::StoreOp::Discard
+    } else {
+        wgpu::StoreOp::Store
+    };
     encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("smoke multisample resolve"),
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -585,7 +605,7 @@ fn smoke_multisample_resolve(
             resolve_target: Some(&resolve_view),
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
-                store: wgpu::StoreOp::Store,
+                store,
             },
         })],
         depth_stencil_attachment: None,
