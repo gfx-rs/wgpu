@@ -41,6 +41,11 @@ impl QuerySet {
         self.inner.as_custom()
     }
 
+    /// Destroys the [`QuerySet`], releasing its resources.
+    pub fn destroy(&self) {
+        self.inner.destroy();
+    }
+
     /// Returns the type of queries stored.
     pub fn ty(&self) -> QueryType {
         self.ty

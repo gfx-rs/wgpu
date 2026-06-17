@@ -60,6 +60,7 @@ mod queue_transfer;
 mod ray_tracing;
 mod render_pass_ownership;
 mod render_target;
+mod resolve_query_set_init;
 mod resource_descriptor_accessor;
 mod resource_error;
 mod samplers;
@@ -126,6 +127,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     primitive_index::all_tests(&mut tests);
     immediates::all_tests(&mut tests);
     query_set::all_tests(&mut tests);
+    resolve_query_set_init::all_tests(&mut tests);
     queue_transfer::all_tests(&mut tests);
     ray_tracing::all_tests(&mut tests);
     regression::issue_3349::all_tests(&mut tests);

@@ -1416,6 +1416,13 @@ impl Queue {
                             }
                         };
 
+                        if let Err(e) = baked.process_deferred_query_set_resolves(
+                            &self.device,
+                            &submission.snatch_guard,
+                        ) {
+                            break 'error Err(e.into());
+                        }
+
                         // execute resource transitions
                         if let Err(e) = baked.encoder.open_pass(hal_label(
                             Some("(wgpu internal) Transit"),
@@ -2062,6 +2069,12 @@ fn validate_command_buffer(
                             .unwrap();
                     };
                 }
+            }
+        }
+        {
+            profiling::scope!("query sets");
+            for query_set in &cmd_buf_data.trackers.query_sets {
+                query_set.try_raw(snatch_guard)?;
             }
         }
         // WebGPU requires that we check every bind group referenced during

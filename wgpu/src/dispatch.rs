@@ -301,7 +301,9 @@ pub trait BlasInterface: CommonTraits {
     fn ready_for_compaction(&self) -> bool;
 }
 pub trait TlasInterface: CommonTraits {}
-pub trait QuerySetInterface: CommonTraits {}
+pub trait QuerySetInterface: CommonTraits {
+    fn destroy(&self);
+}
 pub trait PipelineLayoutInterface: CommonTraits {}
 pub trait RenderPipelineInterface: CommonTraits {
     fn get_bind_group_layout(&self, index: u32) -> DispatchBindGroupLayout;

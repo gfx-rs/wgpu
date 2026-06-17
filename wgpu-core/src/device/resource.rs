@@ -5025,11 +5025,15 @@ impl Device {
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let query_set = QuerySet {
-            raw: ManuallyDrop::new(raw),
+            raw: Snatchable::new(raw),
             device: self.clone(),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.query_sets.clone()),
             desc: desc.map_label(|_| ()),
+            initialized_slots: Mutex::new(
+                rank::QUERY_SET_INITIALIZED_SLOTS,
+                bit_vec::BitVec::from_elem(desc.count as usize, false),
+            ),
         };
 
         let query_set = Arc::new(query_set);

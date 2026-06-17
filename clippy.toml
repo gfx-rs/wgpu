@@ -8,3 +8,10 @@ disallowed-types = [
 # The default large-error-threshold is 128. We have a bunch of complex error
 # types that are slightly larger than that.
 large-error-threshold = 192
+
+# This relatively small stack frame limit is set to avoid problems in several deeply
+# recursive functions in naga. If your function has a genuine need for a larger stack frame,
+# and is not at risk of deep recursion based on shader structure, it is okay to waive the
+# associated `clippy::large_stack_frames` lint.
+# TODO(https://github.com/gfx-rs/wgpu/issues/9456): Consider reducing this further
+stack-size-threshold = 40_960
