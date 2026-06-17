@@ -297,26 +297,52 @@ fn texture_format_capabilities_check(
                     );
                 }
                 if caps.allowed_usages.contains(TU::RENDER_ATTACHMENT) {
-                    // TODO: render with it
+                    eprintln!("Rendering into it");
+                    smoke_render_clear(&mut encoder, &texture1, format);
                 }
                 if caps.allowed_usages.contains(TU::STORAGE_BINDING) {
-                    // TODO: use as a storage binding
+                    eprintln!("Binding it as a storage texture");
+                    let access = if caps.flags.contains(FF::STORAGE_WRITE_ONLY) {
+                        wgpu::StorageTextureAccess::WriteOnly
+                    } else if caps.flags.contains(FF::STORAGE_READ_WRITE) {
+                        wgpu::StorageTextureAccess::ReadWrite
+                    } else {
+                        wgpu::StorageTextureAccess::ReadOnly
+                    };
+                    smoke_storage_bind(
+                        &ctx,
+                        &texture1,
+                        format,
+                        view_dim,
+                        array_layer_count,
+                        access,
+                    );
                 }
                 if caps.allowed_usages.contains(TU::STORAGE_ATOMIC) {
-                    // TODO: use as a storage atomic
+                    eprintln!("Binding it as an atomic storage texture");
+                    smoke_storage_bind(
+                        &ctx,
+                        &texture1,
+                        format,
+                        view_dim,
+                        array_layer_count,
+                        wgpu::StorageTextureAccess::Atomic,
+                    );
                 }
-                for flag in [
-                    FF::MULTISAMPLE_X2,
-                    FF::MULTISAMPLE_X4,
-                    FF::MULTISAMPLE_X8,
-                    FF::MULTISAMPLE_X16,
-                ] {
-                    if caps.flags.contains(flag) {
-                        // TODO: multisample with it
-                    }
+                if caps.flags.intersects(
+                    FF::MULTISAMPLE_X2 | FF::MULTISAMPLE_X4 | FF::MULTISAMPLE_X8 | FF::MULTISAMPLE_X16,
+                ) {
+                    // `texture1` already has the chosen `sample_count`; one clear
+                    // exercises the multisampled path.
+                    eprintln!("Rendering into it multisampled");
+                    smoke_render_clear(&mut encoder, &texture1, format);
                 }
-                if caps.flags.contains(FF::MULTISAMPLE_RESOLVE) {
-                    // TODO: multisample resolve
+                if caps.flags.contains(FF::MULTISAMPLE_RESOLVE)
+                    && !format.has_depth_aspect()
+                    && !format.has_stencil_aspect()
+                {
+                    eprintln!("Resolving it");
+                    smoke_multisample_resolve(&ctx, &mut encoder, &texture1, format, TEXTURE_DIM);
                 }
             } else if (ctx
                 .device_features
@@ -326,21 +352,28 @@ fn texture_format_capabilities_check(
                     && [wgpu::TextureFormat::R32Uint, wgpu::TextureFormat::R32Sint]
                         .contains(&format))
             {
-                // TODO: Use texture atomically
+                // Multisample usage types strip storage usages above.
+                if caps.allowed_usages.contains(TU::STORAGE_ATOMIC) {
+                    eprintln!("Binding it as an atomic storage texture");
+                    smoke_storage_bind(
+                        &ctx,
+                        &texture1,
+                        format,
+                        view_dim,
+                        array_layer_count,
+                        wgpu::StorageTextureAccess::Atomic,
+                    );
+                }
             } else if ctx
                 .device_features
                 .contains(wgpu::Features::MULTISAMPLE_ARRAY)
+                && caps.flags.intersects(
+                    FF::MULTISAMPLE_X2 | FF::MULTISAMPLE_X4 | FF::MULTISAMPLE_X8 | FF::MULTISAMPLE_X16,
+                )
             {
-                for flag in [
-                    FF::MULTISAMPLE_X2,
-                    FF::MULTISAMPLE_X4,
-                    FF::MULTISAMPLE_X8,
-                    FF::MULTISAMPLE_X16,
-                ] {
-                    if caps.flags.contains(flag) {
-                        // TODO: multisample with it in an array
-                    }
-                }
+                // `texture1` is a multisampled 2D array here; clear layer 0.
+                eprintln!("Rendering into it multisampled in an array");
+                smoke_render_clear(&mut encoder, &texture1, format);
             }
         }
         // Submit and then poll immediately. This lets the textures be dropped to avoid OOMs with combinatorial explosion
@@ -460,6 +493,146 @@ fn get_caps(
         caps.flags.remove(FF::MULTISAMPLE_RESOLVE);
     }
     (actual_caps, caps)
+}
+
+/// Smoke test: clear `texture` through a render pass. Single 2D layer, which
+/// covers standard/multisample/array (3D isn't render-attachable here).
+fn smoke_render_clear(
+    encoder: &mut wgpu::CommandEncoder,
+    texture: &wgpu::Texture,
+    format: wgpu::TextureFormat,
+) {
+    let view = texture.create_view(&wgpu::TextureViewDescriptor {
+        dimension: Some(wgpu::TextureViewDimension::D2),
+        base_array_layer: 0,
+        array_layer_count: Some(1),
+        ..Default::default()
+    });
+    if format.has_depth_aspect() || format.has_stencil_aspect() {
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("smoke depth/stencil clear"),
+            color_attachments: &[],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &view,
+                depth_ops: format.has_depth_aspect().then_some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: format.has_stencil_aspect().then_some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(0),
+                    store: wgpu::StoreOp::Store,
+                }),
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+    } else {
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("smoke color clear"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+    }
+}
+
+/// Smoke test: render into `msaa` and resolve into a fresh single-sample target.
+/// Color only — the core render-pass API has no depth/stencil resolve.
+fn smoke_multisample_resolve(
+    ctx: &TestingContext,
+    encoder: &mut wgpu::CommandEncoder,
+    msaa: &wgpu::Texture,
+    format: wgpu::TextureFormat,
+    dim: u32,
+) {
+    let resolve = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("resolve target"),
+        size: wgpu::Extent3d {
+            width: dim,
+            height: dim,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    let msaa_view = msaa.create_view(&wgpu::TextureViewDescriptor {
+        dimension: Some(wgpu::TextureViewDimension::D2),
+        base_array_layer: 0,
+        array_layer_count: Some(1),
+        ..Default::default()
+    });
+    let resolve_view = resolve.create_view(&Default::default());
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("smoke multisample resolve"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: &msaa_view,
+            depth_slice: None,
+            resolve_target: Some(&resolve_view),
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: None,
+    });
+}
+
+/// Smoke test: bind `texture` as a storage texture with the given `access`.
+/// No shader/dispatch — the bind group alone validates format/view/usage.
+fn smoke_storage_bind(
+    ctx: &TestingContext,
+    texture: &wgpu::Texture,
+    format: wgpu::TextureFormat,
+    view_dimension: wgpu::TextureViewDimension,
+    array_layer_count: Option<u32>,
+    access: wgpu::StorageTextureAccess,
+) {
+    let bgl = ctx
+        .device
+        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("smoke storage bgl"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::StorageTexture {
+                    access,
+                    format,
+                    view_dimension,
+                },
+                count: None,
+            }],
+        });
+    let view = texture.create_view(&wgpu::TextureViewDescriptor {
+        dimension: Some(view_dimension),
+        array_layer_count,
+        ..Default::default()
+    });
+    let _bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("smoke storage bind group"),
+        layout: &bgl,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: wgpu::BindingResource::TextureView(&view),
+        }],
+    });
 }
 
 macro_rules! make_format_feature_functions {
