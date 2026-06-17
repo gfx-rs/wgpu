@@ -14,11 +14,7 @@ use crate::{
     track::ResourceUsageCompatibilityError,
 };
 
-/// Revert queued host-maps to `Unmapped` and return their callbacks paired with
-/// `Err`, for when the encoder/command buffer is dropped or fails to record
-/// before the map is registered with the queue. Otherwise the textures would be
-/// stranded in `MappingQueued` and awaiting callers would hang. Encoder-side
-/// analogue of `drain_pending_texture_maps`.
+/// Encoder-side analogue of `drain_pending_texture_maps`.
 pub(crate) fn cancel_texture_maps(
     textures: impl IntoIterator<Item = Arc<Texture>>,
 ) -> Vec<TextureMapPendingClosure> {
