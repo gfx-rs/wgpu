@@ -151,7 +151,7 @@ impl Player {
                 let texture = self.textures.get(&id).expect("invalid texture");
                 texture.destroy();
             }
-            Action::DestroyTexture(id) => {
+            Action::DropTexture(id) => {
                 self.textures.remove(&id).expect("invalid texture");
             }
             Action::CreateTextureView { id, parent, desc } => {

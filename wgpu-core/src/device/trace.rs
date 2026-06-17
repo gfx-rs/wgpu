@@ -129,7 +129,7 @@ pub enum Action<'a, R: ReferenceType> {
     DropBuffer(R::Buffer),
     CreateTexture(R::Texture, crate::resource::TextureDescriptor<'a>),
     FreeTexture(R::Texture),
-    DestroyTexture(R::Texture),
+    DropTexture(R::Texture),
     CreateTextureView {
         id: R::TextureView,
         parent: R::Texture,
