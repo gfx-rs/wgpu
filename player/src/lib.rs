@@ -139,7 +139,7 @@ impl Player {
                 let buffer = self.buffers.get(&id).expect("invalid buffer");
                 buffer.destroy();
             }
-            Action::DestroyBuffer(id) => {
+            Action::DropBuffer(id) => {
                 let buffer = self.buffers.remove(&id).expect("invalid buffer");
                 let _ = buffer.unmap();
             }

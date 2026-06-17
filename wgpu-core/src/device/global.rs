@@ -273,7 +273,7 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(t) = buffer.device.trace.lock().as_mut() {
-            t.add(trace::Action::DestroyBuffer(buffer.to_trace()));
+            t.add(trace::Action::DropBuffer(buffer.to_trace()));
         }
 
         let _ = buffer.unmap();

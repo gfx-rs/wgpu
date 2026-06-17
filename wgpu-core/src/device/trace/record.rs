@@ -895,7 +895,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
             },
         ),
         A::FreeBuffer(buffer) => A::FreeBuffer(buffer),
-        A::DestroyBuffer(buffer) => A::DestroyBuffer(buffer),
+        A::DropBuffer(buffer) => A::DropBuffer(buffer),
         A::FreeTexture(texture) => A::FreeTexture(texture),
         A::DestroyTexture(texture) => A::DestroyTexture(texture),
         A::DestroyTextureView(texture_view) => A::DestroyTextureView(texture_view),
