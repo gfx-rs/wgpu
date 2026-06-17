@@ -63,9 +63,34 @@ pub fn run_wasm_tests(
 
     let show = args.contains("--show");
     let debug = args.contains("--debug");
+    let list = args.contains("--list");
 
     let cargo_args = flatten_args(args, passthrough_args);
 
+    if list {
+        list_tests(shell, cargo_args)
+    } else {
+        run_tests(shell, show, debug, cargo_args)
+    }
+}
+
+fn list_tests(shell: Shell, cargo_args: Vec<OsString>) -> anyhow::Result<()> {
+    shell
+        .cmd("cargo")
+        .args(["nextest", "list", "--profile", "wasm"])
+        .args(cargo_args)
+        .env("RUSTFLAGS", "--cfg wasm_test")
+        .run()?;
+
+    Ok(())
+}
+
+fn run_tests(
+    shell: Shell,
+    show: bool,
+    debug: bool,
+    cargo_args: Vec<OsString>,
+) -> anyhow::Result<()> {
     let bins = [
         Bin {
             name: "wgpu-test",
@@ -171,5 +196,6 @@ pub fn run_wasm_tests(
             .env("RUSTFLAGS", "--cfg wasm_test")
             .run()?;
     }
+
     Ok(())
 }
