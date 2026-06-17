@@ -168,7 +168,7 @@ pub enum Action<'a, R: ReferenceType> {
         pipeline: PointerId<markers::ComputePipeline>,
         index: u32,
     },
-    DestroyBindGroupLayout(PointerId<markers::BindGroupLayout>),
+    DropBindGroupLayout(PointerId<markers::BindGroupLayout>),
     CreatePipelineLayout(
         PointerId<markers::PipelineLayout>,
         crate::binding_model::ResolvedPipelineLayoutDescriptor<

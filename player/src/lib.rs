@@ -224,7 +224,7 @@ impl Player {
                     .expect("invalid compute pipeline");
                 self.bind_group_layouts.insert(id, bgl);
             }
-            Action::DestroyBindGroupLayout(id) => {
+            Action::DropBindGroupLayout(id) => {
                 self.bind_group_layouts
                     .remove(&id)
                     .expect("invalid bind group layout");
