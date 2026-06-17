@@ -419,7 +419,7 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(trace) = texture.device.trace.lock().as_mut() {
-            trace.add(trace::Action::FreeTexture(texture.to_trace()));
+            trace.add(trace::Action::DestroyTexture(texture.to_trace()));
         }
 
         texture.destroy();

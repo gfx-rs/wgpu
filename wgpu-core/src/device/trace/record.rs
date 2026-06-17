@@ -896,7 +896,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         ),
         A::DestroyBuffer(buffer) => A::DestroyBuffer(buffer),
         A::DropBuffer(buffer) => A::DropBuffer(buffer),
-        A::FreeTexture(texture) => A::FreeTexture(texture),
+        A::DestroyTexture(texture) => A::DestroyTexture(texture),
         A::DropTexture(texture) => A::DropTexture(texture),
         A::DestroyTextureView(texture_view) => A::DestroyTextureView(texture_view),
         A::FreeExternalTexture(external_texture) => A::FreeExternalTexture(external_texture),

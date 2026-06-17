@@ -145,9 +145,7 @@ impl Player {
                 let texture = device.create_texture(&desc).expect("create_texture error");
                 self.textures.insert(id, texture);
             }
-            Action::FreeTexture(id) => {
-                // Note: texture remains in the HashMap. "Free" and "Destroy"
-                // mean the opposite from WebGPU.
+            Action::DestroyTexture(id) => {
                 let texture = self.textures.get(&id).expect("invalid texture");
                 texture.destroy();
             }
