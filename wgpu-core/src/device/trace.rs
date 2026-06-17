@@ -125,7 +125,7 @@ pub enum Action<'a, R: ReferenceType> {
         wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
     ),
     CreateBuffer(R::Buffer, crate::resource::BufferDescriptor<'a>),
-    FreeBuffer(R::Buffer),
+    DestroyBuffer(R::Buffer),
     DropBuffer(R::Buffer),
     CreateTexture(R::Texture, crate::resource::TextureDescriptor<'a>),
     FreeTexture(R::Texture),

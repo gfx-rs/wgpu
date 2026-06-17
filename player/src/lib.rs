@@ -133,9 +133,7 @@ impl Player {
                 let buffer = device.create_buffer(&desc).expect("create_buffer error");
                 self.buffers.insert(id, buffer);
             }
-            Action::FreeBuffer(id) => {
-                // Note: buffer remains in the HashMap. "Free" and "Destroy"
-                // mean the opposite from WebGPU.
+            Action::DestroyBuffer(id) => {
                 let buffer = self.buffers.get(&id).expect("invalid buffer");
                 buffer.destroy();
             }

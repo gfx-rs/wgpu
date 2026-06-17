@@ -894,7 +894,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
                 mapped_at_creation: desc.mapped_at_creation,
             },
         ),
-        A::FreeBuffer(buffer) => A::FreeBuffer(buffer),
+        A::DestroyBuffer(buffer) => A::DestroyBuffer(buffer),
         A::DropBuffer(buffer) => A::DropBuffer(buffer),
         A::FreeTexture(texture) => A::FreeTexture(texture),
         A::DestroyTexture(texture) => A::DestroyTexture(texture),
