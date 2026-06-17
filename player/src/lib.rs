@@ -469,7 +469,7 @@ impl Player {
                 let blas = device.create_blas(&desc, sizes).expect("create_blas error");
                 self.blas_s.insert(id, blas);
             }
-            Action::DestroyBlas(id) => {
+            Action::DropBlas(id) => {
                 self.blas_s.remove(&id).expect("invalid blas");
             }
             Action::CreateTlas { id, desc } => {

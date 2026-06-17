@@ -385,7 +385,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(blas) = _blas.get() {
             if let Some(t) = blas.device.trace.lock().as_mut() {
-                t.add(Action::DestroyBlas(blas.to_trace()));
+                t.add(Action::DropBlas(blas.to_trace()));
             }
         }
     }

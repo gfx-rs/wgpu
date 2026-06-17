@@ -246,7 +246,7 @@ pub enum Action<'a, R: ReferenceType> {
         desc: crate::resource::BlasDescriptor<'a>,
         sizes: wgt::BlasGeometrySizeDescriptors,
     },
-    DestroyBlas(R::Blas),
+    DropBlas(R::Blas),
     CreateTlas {
         id: R::Tlas,
         desc: crate::resource::TlasDescriptor<'a>,
