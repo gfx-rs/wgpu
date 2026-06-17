@@ -219,6 +219,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Stencil clear and reference values are now truncated to 8 bits. By @beicause in [#9607](https://github.com/gfx-rs/wgpu/pull/9607).
 - Fixed missing initialization of other aspects when writing to a single aspect of a multi-aspect texture. By @andyleiserson in [#9626](https://github.com/gfx-rs/wgpu/pull/9626).
 - `TextureFormat::P010` now reports `TEXTURE_FORMAT_16BIT_NORM` in addition to `TEXTURE_FORMAT_P010` from `required_features()`, reflecting that its `R16Unorm`/`Rg16Unorm` plane views require that feature. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
+- Fixed a panic when validating a color attachment whose format is renderable only via `TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` (e.g. `Rgb9e5Ufloat` on Apple GPUs); `TextureFormat::target_pixel_byte_cost`/`target_component_alignment` now return values for `Rgb9e5Ufloat`. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
 
 #### naga
 
