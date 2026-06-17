@@ -12,7 +12,7 @@ use windows::{
             SPDRP_ADDRESS, SPDRP_BUSNUMBER, SPDRP_HARDWAREID, SP_DEVINFO_DATA,
         },
         Foundation::{GetLastError, ERROR_NO_MORE_ITEMS, HWND},
-        Graphics::{Direct3D, Direct3D12, Dxgi, Gdi},
+        Graphics::{Direct3D, Direct3D12, Dxgi},
         UI::WindowsAndMessaging,
     },
 };
@@ -1045,54 +1045,15 @@ impl super::Adapter {
     /// Returns whether the output (monitor) that `wnd_handle` is currently on
     /// has HDR enabled, i.e. its advanced color mode is HDR10 (PQ / BT.2020).
     ///
-    /// Returns `false` if the output cannot be identified or queried.
-    fn is_hdr_output_for_window(&self, wnd_handle: HWND) -> bool {
-        let hmonitor = unsafe { Gdi::MonitorFromWindow(wnd_handle, Gdi::MONITOR_DEFAULTTONEAREST) };
-        if hmonitor.is_invalid() {
-            log::warn!("MonitorFromWindow failed; assuming the output is not HDR");
-            return false;
-        }
-        for i in 0.. {
-            let output = match unsafe { self.raw.EnumOutputs(i) } {
-                Ok(output) => output,
-                Err(e) if e.code() == Dxgi::DXGI_ERROR_NOT_FOUND => break,
-                Err(e) => {
-                    log::warn!("EnumOutputs failed: {e}; assuming the output is not HDR");
-                    return false;
-                }
-            };
-            let desc = match unsafe { output.GetDesc() } {
-                Ok(desc) => desc,
-                Err(e) => {
-                    log::warn!("IDXGIOutput::GetDesc failed: {e}; assuming the output is not HDR");
-                    return false;
-                }
-            };
-            if desc.Monitor != hmonitor {
-                continue;
-            }
-            let output6 = match output.cast::<Dxgi::IDXGIOutput6>() {
-                Ok(output6) => output6,
-                Err(e) => {
-                    log::warn!(
-                        "Casting to IDXGIOutput6 failed: {e}; assuming the output is not HDR"
-                    );
-                    return false;
-                }
-            };
-            let desc1 = match unsafe { output6.GetDesc1() } {
-                Ok(desc1) => desc1,
-                Err(e) => {
-                    log::warn!(
-                        "IDXGIOutput6::GetDesc1 failed: {e}; assuming the output is not HDR"
-                    );
-                    return false;
-                }
-            };
-            return desc1.ColorSpace == Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
-        }
-        log::warn!("No DXGI output matches the window's monitor; assuming the output is not HDR");
-        false
+    /// Returns `false` if the output cannot be identified or queried. The DXGI
+    /// output walk is shared with the Vulkan-on-Windows backend (see
+    /// [`auxil::dxgi::hdr::output_desc1_for_window`]).
+    fn is_hdr_output_for_window(wnd_handle: HWND) -> bool {
+        auxil::dxgi::hdr::output_desc1_for_window(wnd_handle)
+            .map(|desc1| {
+                desc1.ColorSpace == Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
+            })
+            .unwrap_or(false)
     }
 }
 
@@ -1366,7 +1327,7 @@ impl crate::Adapter for super::Adapter {
             SurfaceTarget::WndHandle(wnd_handle)
             | SurfaceTarget::VisualFromWndHandle {
                 handle: wnd_handle, ..
-            } => self.is_hdr_output_for_window(wnd_handle),
+            } => Self::is_hdr_output_for_window(wnd_handle),
             // Composition targets have no monitor identity, so there is no
             // output whose HDR state we could query.
             SurfaceTarget::Visual(_)
@@ -1424,6 +1385,29 @@ impl crate::Adapter for super::Adapter {
                 ],
             },
         })
+    }
+
+    unsafe fn surface_display_hdr_info(
+        &self,
+        surface: &super::Surface,
+    ) -> Option<wgt::DisplayHdrInfo> {
+        // Only an HWND-bearing window resolves to a monitor; composition /
+        // SwapChainPanel / surface-handle targets have no output identity.
+        let wnd_handle = match surface.target {
+            SurfaceTarget::WndHandle(wnd_handle)
+            | SurfaceTarget::VisualFromWndHandle {
+                handle: wnd_handle, ..
+            } => wnd_handle,
+            SurfaceTarget::Visual(_)
+            | SurfaceTarget::SurfaceHandle(_)
+            | SurfaceTarget::SwapChainPanel(_) => return None,
+        };
+        let desc1 = auxil::dxgi::hdr::output_desc1_for_window(wnd_handle)?;
+        let sdr_white_nits = auxil::dxgi::hdr::sdr_white_nits_for_monitor(desc1.Monitor);
+        Some(auxil::dxgi::hdr::display_hdr_info_from_desc1(
+            &desc1,
+            sdr_white_nits,
+        ))
     }
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {

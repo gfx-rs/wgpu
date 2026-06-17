@@ -1,4 +1,7 @@
-#[cfg(dx12)]
+// The DX12 backend owns this module, but the Vulkan-on-Windows backend reuses
+// the shared `dxgi::hdr` display-query mapping, so it is also compiled there.
+// The dx12-only submodules stay gated behind `dx12` inside `dxgi/mod.rs`.
+#[cfg(any(dx12, all(vulkan, windows)))]
 pub(super) mod dxgi;
 
 #[cfg(all(native, feature = "renderdoc"))]

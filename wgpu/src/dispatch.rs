@@ -595,6 +595,16 @@ pub trait RenderBundleInterface: CommonTraits {}
 pub trait SurfaceInterface: CommonTraits {
     fn get_capabilities(&self, adapter: &DispatchAdapter) -> crate::SurfaceCapabilities;
 
+    /// Snapshot of the backing display's HDR / luminance characteristics.
+    ///
+    /// Defaults to [`crate::DisplayHdrInfo::default`] (all fields `None`) so a
+    /// custom backend that does not implement a display query is not required to
+    /// override it.
+    fn display_hdr_info(&self, adapter: &DispatchAdapter) -> crate::DisplayHdrInfo {
+        let _ = adapter;
+        crate::DisplayHdrInfo::default()
+    }
+
     fn configure(&self, device: &DispatchDevice, config: &crate::SurfaceConfiguration);
     fn get_current_texture(
         &self,

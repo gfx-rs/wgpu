@@ -3936,9 +3936,29 @@ impl Drop for WebRenderBundle {
 /// Worker contexts have no [`web_sys::Window`] (and thus no `matchMedia`), so
 /// they conservatively report `false`.
 fn environment_supports_hdr() -> bool {
-    web_sys::window()
-        .and_then(|window| window.match_media("(dynamic-range: high)").ok().flatten())
-        .is_some_and(|query_list| query_list.matches())
+    match_media_query("(dynamic-range: high)") == Some(true)
+}
+
+/// Evaluates a CSS media query, or returns `None` when there is no
+/// [`web_sys::Window`] (e.g. a Worker / `OffscreenCanvas` context, where
+/// `matchMedia` is absent). Never panics.
+fn match_media_query(query: &str) -> Option<bool> {
+    let list = web_sys::window()?.match_media(query).ok().flatten()?;
+    Some(list.matches())
+}
+
+/// Classifies the display's gamut from CSS `color-gamut`, widest bucket first.
+/// `None` if there is no `Window` or the browser reports nothing.
+fn environment_color_gamut() -> Option<wgt::DisplayGamut> {
+    if match_media_query("(color-gamut: rec2020)") == Some(true) {
+        Some(wgt::DisplayGamut::Rec2020)
+    } else if match_media_query("(color-gamut: p3)") == Some(true) {
+        Some(wgt::DisplayGamut::DisplayP3)
+    } else if match_media_query("(color-gamut: srgb)") == Some(true) {
+        Some(wgt::DisplayGamut::Srgb)
+    } else {
+        None
+    }
 }
 
 /// Cached result of probing whether this browser can configure a WebGPU canvas
@@ -4068,6 +4088,25 @@ impl dispatch::SurfaceInterface for WebSurface {
             // Statically set to RENDER_ATTACHMENT for now. See https://gpuweb.github.io/gpuweb/#dom-gpucanvasconfiguration-usage
             usages: wgt::TextureUsages::RENDER_ATTACHMENT,
         }
+    }
+
+    fn display_hdr_info(&self, _adapter: &dispatch::DispatchAdapter) -> wgt::DisplayHdrInfo {
+        // The web exposes only coarse, boolean dynamic-range + gamut buckets
+        // (CSS media queries) and no HDR *mode* signal — `(dynamic-range: high)`
+        // is "capable", not "active" — so `hdr_active` and every numeric field
+        // stay `None`. Worker / `OffscreenCanvas` contexts have no `Window`
+        // (hence no `matchMedia`), so this degrades to `default()`; never panics.
+        let high_dynamic_range = match_media_query("(dynamic-range: high)");
+        let gamut = environment_color_gamut();
+
+        let mut info = wgt::DisplayHdrInfo::default();
+        if high_dynamic_range.is_some() || gamut.is_some() {
+            let mut coarse = wgt::DisplayCoarseRange::default();
+            coarse.high_dynamic_range = high_dynamic_range;
+            coarse.gamut = gamut;
+            info.coarse = Some(coarse);
+        }
+        info
     }
 
     fn configure(&self, device: &dispatch::DispatchDevice, config: &crate::SurfaceConfiguration) {

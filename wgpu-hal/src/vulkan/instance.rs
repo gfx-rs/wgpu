@@ -407,7 +407,7 @@ impl super::Instance {
                 .expect("XlibSurface::create_xlib_surface() failed")
         };
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
 
     fn create_surface_from_xcb(
@@ -432,7 +432,7 @@ impl super::Instance {
                 .expect("XcbSurface::create_xcb_surface() failed")
         };
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
 
     fn create_surface_from_wayland(
@@ -457,7 +457,7 @@ impl super::Instance {
             unsafe { w_loader.create_wayland_surface(&info, None) }.expect("WaylandSurface failed")
         };
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
 
     fn create_surface_android(
@@ -480,7 +480,7 @@ impl super::Instance {
             unsafe { a_loader.create_android_surface(&info, None) }.expect("AndroidSurface failed")
         };
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
 
     fn create_surface_from_hwnd(
@@ -508,7 +508,9 @@ impl super::Instance {
             }
         };
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        // Retain the borrowed `HWND` (ash types it as `isize`) so the display
+        // HDR query can reach this window's monitor through DXGI on Windows.
+        Ok(self.create_surface_from_vk_surface_khr(surface, Some(hwnd)))
     }
 
     #[cfg(target_vendor = "apple")]
@@ -534,15 +536,16 @@ impl super::Instance {
             unsafe { metal_loader.create_metal_surface(&vk_info, None).unwrap() }
         };
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
 
     pub(super) fn create_surface_from_vk_surface_khr(
         &self,
         surface: vk::SurfaceKHR,
+        hwnd: Option<isize>,
     ) -> super::Surface {
         let native_surface =
-            crate::vulkan::swapchain::NativeSurface::from_vk_surface_khr(self, surface);
+            crate::vulkan::swapchain::NativeSurface::from_vk_surface_khr(self, surface, hwnd);
 
         super::Surface {
             swapchain: RwLock::new(None),

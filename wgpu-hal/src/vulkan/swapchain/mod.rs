@@ -25,6 +25,17 @@ pub(super) trait Surface: Send + Sync + 'static {
         provided_old_swapchain: Option<Box<dyn Swapchain>>,
     ) -> Result<Box<dyn Swapchain>, crate::SurfaceError>;
 
+    /// The Win32 `HWND` (as an `isize`) this surface was created from, if any.
+    ///
+    /// Retained only to query display HDR info through DXGI on Windows (DXGI is
+    /// an OS service that needs no D3D device). `None` for non-Win32 surfaces
+    /// (Wayland / X11 / Android / Metal), which is also the default. Only called
+    /// on Windows, so it is dead code elsewhere.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    fn raw_window_hwnd(&self) -> Option<isize> {
+        None
+    }
+
     /// Allows downcasting to the concrete type.
     fn as_any(&self) -> &dyn Any;
 }

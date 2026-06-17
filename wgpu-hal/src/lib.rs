@@ -799,6 +799,27 @@ pub trait Adapter: WasmNotSendSync {
         surface: &<Self::A as Api>::Surface,
     ) -> Option<SurfaceCapabilities>;
 
+    /// Returns a point-in-time snapshot of the HDR / luminance characteristics
+    /// of the display currently backing `surface`, as reported by the platform's
+    /// windowing or display layer.
+    ///
+    /// This is a *poll*, not a stream: the backend re-queries the OS on every
+    /// call and never caches. `None` means the backend synthesizes nothing for
+    /// this surface (the default for backends without a display-query path);
+    /// wgpu-core collapses that to [`wgt::DisplayHdrInfo::default`]. Backends
+    /// must never panic here — any OS-call failure degrades to `None` /
+    /// `Default`.
+    ///
+    /// The default implementation returns `None`, so backends with no luminance
+    /// source (GLES, noop, Vulkan on non-Windows) need not override it.
+    unsafe fn surface_display_hdr_info(
+        &self,
+        surface: &<Self::A as Api>::Surface,
+    ) -> Option<wgt::DisplayHdrInfo> {
+        let _ = surface;
+        None
+    }
+
     /// Creates a [`PresentationTimestamp`] using the adapter's WSI.
     ///
     /// [`PresentationTimestamp`]: wgt::PresentationTimestamp

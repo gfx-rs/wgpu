@@ -3087,6 +3087,28 @@ impl crate::Adapter for super::Adapter {
         surface.inner.surface_capabilities(self)
     }
 
+    unsafe fn surface_display_hdr_info(
+        &self,
+        surface: &super::Surface,
+    ) -> Option<wgt::DisplayHdrInfo> {
+        // Vulkan has no portable luminance query of its own. On Windows the
+        // display facts live in DXGI — an OS service reachable from the window's
+        // `HWND` with no D3D device — so a Win32 Vulkan surface reads the same
+        // `DXGI_OUTPUT_DESC1` as the DX12 backend (see `dxgi::hdr`). Every other
+        // Vulkan surface (Wayland / X11 / Android / Metal / headless) carries no
+        // `HWND` and returns `None`.
+        #[cfg(windows)]
+        {
+            let hwnd = surface.inner.raw_window_hwnd()?;
+            display_hdr_info_for_hwnd(hwnd)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = surface;
+            None
+        }
+    }
+
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         // VK_GOOGLE_display_timing is the only way to get presentation
         // timestamps on vulkan right now and it is only ever available
@@ -3427,4 +3449,27 @@ fn query_cooperative_matrix_properties(
         result.len()
     );
     result
+}
+
+/// Reads the [`wgt::DisplayHdrInfo`] for the monitor backing `hwnd` through DXGI.
+///
+/// DXGI needs no D3D device and its `windows`-crate bindings are free-threaded,
+/// so it is reachable from the Vulkan backend. The DXGI output walk and the
+/// `DXGI_OUTPUT_DESC1` → [`wgt::DisplayHdrInfo`] mapping are both shared with the
+/// DX12 backend via [`crate::auxil::dxgi::hdr`], so a Vulkan-on-Windows surface
+/// reports numbers identical to DX12 for the same monitor.
+///
+/// Returns `None` on any failure (no `IDXGIOutput6` / pre-Win10-1703, no matching
+/// monitor, transient COM error). Never panics.
+#[cfg(windows)]
+fn display_hdr_info_for_hwnd(hwnd: isize) -> Option<wgt::DisplayHdrInfo> {
+    use windows::Win32::Foundation::HWND;
+
+    let hwnd = HWND(hwnd as *mut core::ffi::c_void);
+    let desc1 = crate::auxil::dxgi::hdr::output_desc1_for_window(hwnd)?;
+    let sdr_white_nits = crate::auxil::dxgi::hdr::sdr_white_nits_for_monitor(desc1.Monitor);
+    Some(crate::auxil::dxgi::hdr::display_hdr_info_from_desc1(
+        &desc1,
+        sdr_white_nits,
+    ))
 }

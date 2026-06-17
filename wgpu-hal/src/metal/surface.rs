@@ -33,6 +33,130 @@ impl super::Surface {
         &self.render_layer
     }
 
+    /// Reads the EDR headroom of the screen currently hosting this surface's
+    /// layer, as a [`wgt::DisplayHdrInfo`].
+    ///
+    /// Apple exposes a *relative* EDR multiplier (`1.0` == SDR white), no
+    /// absolute nits, and no discrete HDR-mode flag — so this fills the
+    /// `headroom` frame and *derives* `hdr_active` from the live `current`
+    /// multiplier (`> 1.0`), not from `potential` (which is `> 1.0` on nearly
+    /// every Apple display and would conflate "capable" with "active").
+    ///
+    /// macOS only for now: it returns `None` on iOS/tvOS/visionOS (their
+    /// `UIScreen.currentEDRHeadroom` path is a follow-up) and whenever the
+    /// hosting screen cannot be resolved.
+    ///
+    /// # Thread safety
+    ///
+    /// `NSScreen` / `NSWindow` are main-thread-affine; reading them off the main
+    /// thread is undefined behavior. This gates on `pthread_main_np()` and
+    /// returns `None` — with *no* Objective-C message send — when not on the
+    /// main thread, rather than risk a crash or a `dispatch_sync` deadlock.
+    pub(super) fn display_hdr_info(&self) -> Option<wgt::DisplayHdrInfo> {
+        #[cfg(target_os = "macos")]
+        {
+            use objc2::rc::Retained;
+            use objc2::runtime::NSObject;
+            use objc2_quartz_core::CALayer;
+
+            // SAFETY: `pthread_main_np` is always safe to call. Bail before any
+            // message send if we are not on the main thread.
+            if unsafe { libc::pthread_main_np() } == 0 {
+                return None;
+            }
+
+            // Take an owned reference to the layer and drop the lock *before*
+            // climbing to the window/screen, so a main-thread AppKit callback
+            // can never deadlock against this lock.
+            let render_layer = {
+                let guard = self.render_layer.lock();
+                guard.clone()
+            };
+
+            // Resolve the hosting `NSScreen` by climbing
+            // layer → NSView (the delegate) → NSWindow → NSScreen, mirroring the
+            // occlusion walk in `acquire_texture`. `NSWindow.screen` is nil when
+            // the window is off-screen, so this can legitimately yield `None`.
+            let screen: Retained<NSObject> = autoreleasepool(|_| {
+                let mut current_layer: Option<Retained<CALayer>> =
+                    Some(Retained::into_super(render_layer));
+                while let Some(layer) = current_layer {
+                    if let Some(delegate) = layer.delegate() {
+                        let window: Option<Retained<NSObject>> =
+                            unsafe { objc2::msg_send![&*delegate, window] };
+                        return window
+                            .and_then(|window| unsafe { objc2::msg_send![&*window, screen] });
+                    }
+                    current_layer = layer.superlayer();
+                }
+                None
+            })?;
+
+            // AppKit documents these EDR properties as finite multipliers
+            // (`1.0` == SDR white), but guard against a non-finite read anyway so
+            // the advisory values stay finite and `hdr_active` reports *unknown*
+            // (`None`) rather than a false `Some(false)` — mirroring the
+            // `is_finite` discipline in [`wgt::DisplayHdrInfo::tone_map_headroom`].
+            // The EDR properties return `CGFloat` (`f64` on 64-bit macOS).
+            let finite = |v: f64| v.is_finite().then_some(v as f32);
+
+            // `maximumExtendedDynamicRangeColorComponentValue` is macOS 10.11+, so
+            // it is safe at our 10.13 minimum.
+            let current: f64 = unsafe {
+                objc2::msg_send![&*screen, maximumExtendedDynamicRangeColorComponentValue]
+            };
+
+            // Apple exposes no discrete HDR-mode flag; derive it from the live
+            // `current` EDR multiplier (`> 1.0`), *not* `potential` (which is
+            // `> 1.0` on nearly every Apple display and would conflate "capable"
+            // with "active").
+            let hdr_active = current.is_finite().then_some(current > 1.0);
+
+            let mut headroom = wgt::DisplayHeadroom::default();
+            headroom.current = finite(current);
+            // `maximumPotential…`/`maximumReference…` are macOS 10.15+, below which
+            // sending them would raise an unrecognized-selector exception — so
+            // only message them where available; otherwise leave them `None`.
+            if available!(macos = 10.15) {
+                let potential: f64 = unsafe {
+                    objc2::msg_send![
+                        &*screen,
+                        maximumPotentialExtendedDynamicRangeColorComponentValue
+                    ]
+                };
+                let reference: f64 = unsafe {
+                    objc2::msg_send![
+                        &*screen,
+                        maximumReferenceExtendedDynamicRangeColorComponentValue
+                    ]
+                };
+                headroom.potential = finite(potential);
+                // AppKit reports `0.0` when there is no reference value; treat that
+                // (and any non-finite read) as "unknown" rather than a real `0.0`.
+                headroom.reference = finite(reference).filter(|&v| v > 0.0);
+            }
+
+            let mut coarse = wgt::DisplayCoarseRange::default();
+            coarse.high_dynamic_range = hdr_active;
+            // `NSScreen.colorSpace` returns generic names on HDR panels
+            // post-Monterey, so deriving a gamut bucket from it would lie — leave
+            // `coarse.gamut` as `None` on macOS.
+
+            let mut info = wgt::DisplayHdrInfo::default();
+            info.hdr_active = hdr_active;
+            info.headroom = Some(headroom);
+            info.coarse = Some(coarse);
+            // Apple exposes no absolute nits, CIE-xy primaries, or panel bit
+            // depth, so `luminance` / `chromaticity` / `bits_per_color` stay
+            // `None`.
+            Some(info)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            None
+        }
+    }
+
     /// Gets the current dimensions of the `Surface`.
     ///
     /// This function is safe to call off of the main thread. However, note that

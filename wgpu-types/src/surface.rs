@@ -463,6 +463,356 @@ impl Default for SurfaceCapabilities {
     }
 }
 
+/// A point-in-time snapshot of the HDR / luminance characteristics of the
+/// display currently backing a [`Surface`], as reported by the platform's
+/// windowing or display layer.
+///
+/// This is the read-only *sensor* half of HDR surface output: it describes what
+/// the panel can show *right now*, so an application can pick a tone-map white
+/// point and decide whether requesting an HDR [`SurfaceColorSpace`] is even
+/// worthwhile. It does *not* drive the display; selecting an output color space
+/// is done separately through [`SurfaceConfiguration::color_space`].
+///
+/// It is also *not* content-mastering metadata (the write direction, e.g.
+/// `vkSetHdrMetadataEXT` / DXGI `SetHDRMetaData`), which this type does not
+/// cover.
+///
+/// # Snapshot, not a stream
+///
+/// This is a *poll*. wgpu only ever holds an opaque window handle and owns no
+/// event loop, so it cannot notify you when these values change (the brightness
+/// slider, ambient light, the window moving to another monitor, HDR toggled in
+/// OS settings). Re-query it when your windowing library signals that the
+/// surface may have moved/resized or the display configuration changed.
+///
+/// # Asymmetric coverage
+///
+/// No platform fills every field; every value is [`Option`]. `None` means "this
+/// platform / this moment cannot tell us", *never* zero, and never "this is an
+/// SDR display". The same monitor can report a full set of nits on Windows and
+/// only a headroom multiplier on macOS — fall back to a sensible default, not to
+/// "assume the worst".
+///
+/// # Advisory
+///
+/// Numeric values are *advisory*: OS / EDID figures are frequently optimistic (a
+/// "DisplayHDR 400" panel claims 400 nits it cannot sustain), and a queried nit
+/// value is the panel's claim, not what survives the OS compositor's own
+/// tone-mapping and ambient adaptation. Treat them as tone-mapping hints, not
+/// contracts; layer your own calibration / user override on top. The most
+/// reliable cross-platform signal is [`hdr_active`](Self::hdr_active).
+///
+#[doc = link_to_wgpu_item!(struct Surface)]
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
+pub struct DisplayHdrInfo {
+    /// Whether the backing display is *currently* in an HDR / advanced-color
+    /// mode.
+    ///
+    /// This is dynamic: the user can toggle it in OS settings at any time. It is
+    /// the cleanest cross-platform signal to gate an HDR decision on — more
+    /// reliable than any raw number.
+    ///
+    /// - On Windows it is `Some(true)` for any advanced-color output space (DXGI
+    ///   `RGB_FULL_G2084_NONE_P2020` HDR10/PQ *or* `RGB_FULL_G10_NONE_P709`
+    ///   scRGB / linear extended), so scRGB HDR is not mis-reported as SDR;
+    ///   `Some(false)` for a queried SDR mode.
+    /// - On Apple there is no discrete HDR-mode flag, so this is *derived* from
+    ///   the live EDR headroom ([`DisplayHeadroom::current`] `> 1.0`): true when
+    ///   the EDR layer can exceed SDR white right now. It falls as the user dims
+    ///   the screen or the device throttles.
+    /// - `None` where the platform reports nothing usable (Vulkan on
+    ///   Wayland/X11; the web, where *capability* is exposed but not active
+    ///   *mode*; GLES; noop).
+    pub hdr_active: Option<bool>,
+
+    /// Absolute-nit luminance levels. `Some` only on platforms that report
+    /// absolute nits (Windows, via DXGI). `None` on Apple EDR, the web, Vulkan
+    /// on non-Windows, GLES, and noop.
+    pub luminance: Option<DisplayLuminance>,
+
+    /// Relative EDR-headroom multipliers. `Some` only on Apple. `None`
+    /// elsewhere.
+    pub headroom: Option<DisplayHeadroom>,
+
+    /// Chromaticity of the display's primaries and white point (CIE 1931 xy).
+    /// `Some` only on Windows (via DXGI). `None` on Apple (which exposes no
+    /// primaries), the web (boolean-only), Vulkan on non-Windows, GLES, and
+    /// noop. Advisory (often EDID-sourced).
+    pub chromaticity: Option<DisplayChromaticity>,
+
+    /// Coarse, boolean dynamic-range + gamut bucket. The only luminance-adjacent
+    /// data the web exposes (CSS `dynamic-range` / `color-gamut`), and a useful
+    /// cross-check elsewhere. `None` only when nothing at all is known (noop).
+    pub coarse: Option<DisplayCoarseRange>,
+
+    /// Output signal bit depth, e.g. `8` / `10` / `12` (DXGI `BitsPerColor`).
+    /// Advisory and often unreliable (may report `8` on a 10-bit panel). `None`
+    /// if unreported.
+    pub bits_per_color: Option<u8>,
+}
+
+/// Absolute luminance levels in nits (cd/m²).
+///
+/// All values are *advisory* (EDID optimism; the DisplayHDR-400 problem) — treat
+/// them as tone-mapping hints, never as guarantees. A `0.0` reported by the OS
+/// is passed through as `Some(0.0)`; absence is always `None`.
+///
+/// These are **achromatic** — the *white* / peak capability (luminance = CIE Y).
+/// A display cannot reach [`max_nits`](Self::max_nits) at a saturated
+/// chromaticity (the luminance volume tapers toward the gamut corners), so this
+/// is **not** a per-color ceiling. Combine these scalars with
+/// [`DisplayChromaticity`] and let your tone-mapper gamut-map; a single "x nits"
+/// cannot, by itself, tell you how to avoid corner clipping and the hue shifts
+/// it causes.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
+pub struct DisplayLuminance {
+    /// Peak luminance of a small patch, nits. DXGI `MaxLuminance`.
+    pub max_nits: Option<f32>,
+    /// Sustained full-white-frame luminance, nits — the ceiling for a fully-lit
+    /// frame, which a panel's power/thermal limits can hold below its small-patch
+    /// peak [`max_nits`](Self::max_nits). Advisory and OS/EDID-sourced, so it may
+    /// be optimistic (a panel can report a value it cannot actually sustain), and
+    /// may simply equal [`max_nits`](Self::max_nits) when the OS reports no
+    /// distinct full-frame limit. Don't derive it from `max_nits`; prefer it over
+    /// `max_nits` as the budget for large bright regions, but treat it as a hint.
+    /// DXGI `MaxFullFrameLuminance`.
+    pub max_full_frame_nits: Option<f32>,
+    /// Minimum (black) luminance, nits. DXGI `MinLuminance`.
+    pub min_nits: Option<f32>,
+    /// Luminance the OS maps SDR "paper white" to, nits. Dynamic with the
+    /// brightness slider, and the bridge value between the absolute and relative
+    /// frames. Sourced separately from the other nits — it is not carried by DXGI
+    /// `GetDesc1` but by the `DISPLAYCONFIG_SDR_WHITE_LEVEL` query, performed
+    /// whenever the descriptor is read. Normally present alongside the other nits;
+    /// `None` only if that separate query fails (or on platforms that do not
+    /// report it).
+    pub sdr_white_nits: Option<f32>,
+}
+
+/// Relative EDR headroom (Apple): unitless multipliers over *current* SDR white,
+/// where `1.0` means SDR white (no headroom).
+///
+/// Dynamic with brightness, ambient light, battery, and which display the window
+/// is on. Apple exposes no public absolute-nit equivalent, which is why this is
+/// a separate frame from [`DisplayLuminance`] rather than convertible into it.
+///
+/// Currently populated only on macOS. The iOS/tvOS/visionOS `UIScreen` EDR path
+/// is not wired up yet, so on those platforms `DisplayHdrInfo::headroom` is
+/// `None`; that is a known gap, not a per-device failure.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
+pub struct DisplayHeadroom {
+    /// Headroom available *right now* (`maximumExtendedDynamicRangeColorComponentValue`
+    /// / iOS `UIScreen.currentEDRHeadroom`). `1.0` means no headroom at this
+    /// instant, even on an HDR-capable panel.
+    pub current: Option<f32>,
+    /// Headroom the display could reach under ideal conditions
+    /// (`maximumPotentialExtendedDynamicRangeColorComponentValue` /
+    /// `UIScreen.potentialEDRHeadroom`).
+    pub potential: Option<f32>,
+    /// Headroom for reference-white content
+    /// (`maximumReferenceExtendedDynamicRangeColorComponentValue`). `None` if
+    /// unreported.
+    pub reference: Option<f32>,
+}
+
+/// CIE 1931 xy chromaticity of a display's primaries and white point. Each
+/// coordinate is `[x, y]`; a coordinate the platform omits is `None`.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
+pub struct DisplayChromaticity {
+    /// xy of the red primary.
+    pub red: Option<[f32; 2]>,
+    /// xy of the green primary.
+    pub green: Option<[f32; 2]>,
+    /// xy of the blue primary.
+    pub blue: Option<[f32; 2]>,
+    /// xy of the white point.
+    pub white: Option<[f32; 2]>,
+}
+
+/// Coarse, boolean dynamic-range + gamut signal — the lowest common denominator,
+/// and all the web exposes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
+pub struct DisplayCoarseRange {
+    /// CSS `@media (dynamic-range: high)`: the display *can* present HDR-range
+    /// content. Best-effort and platform-defined — on the web this is "capable",
+    /// not "an HDR mode is active"; use [`DisplayHdrInfo::hdr_active`] for
+    /// active-mode semantics where available.
+    pub high_dynamic_range: Option<bool>,
+    /// Best gamut bucket the display covers (CSS `color-gamut`).
+    pub gamut: Option<DisplayGamut>,
+}
+
+/// Coarse gamut classification, mirroring CSS `color-gamut`.
+///
+/// Declaration order is **not** a containment lattice; do not rely on ordering.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
+pub enum DisplayGamut {
+    /// Approximately sRGB / Rec.709.
+    Srgb,
+    /// Approximately Display-P3.
+    DisplayP3,
+    /// Approximately Rec.2020.
+    Rec2020,
+}
+
+impl DisplayHdrInfo {
+    /// Best-effort tone-map headroom: the linear multiplier of SDR white the
+    /// display can drive before clipping. This is the single value most
+    /// tone-mappers want, with the subjective parts left to the application.
+    ///
+    /// Resolution order, first available wins:
+    /// 1. Apple EDR: [`DisplayHeadroom::current`] (already a multiplier).
+    /// 2. Absolute nits: `max_nits / sdr_white_nits` when both are known and
+    ///    `sdr_white_nits > 0.0`.
+    /// 3. `Some(1.0)` when [`DisplayCoarseRange::high_dynamic_range`] is
+    ///    `Some(false)` (definitively SDR — no headroom).
+    /// 4. Otherwise `None`: it refuses to guess across reference frames (e.g.
+    ///    `max_nits` known but `sdr_white_nits` unknown).
+    ///
+    /// `unwrap_or(1.0)` on the result is the universal SDR fallback. Never
+    /// returns a non-finite value.
+    #[must_use]
+    pub fn tone_map_headroom(&self) -> Option<f32> {
+        if let Some(h) = self
+            .headroom
+            .and_then(|h| h.current)
+            .filter(|h| h.is_finite())
+        {
+            return Some(h);
+        }
+        if let Some(l) = self.luminance {
+            if let (Some(max), Some(sdr)) = (l.max_nits, l.sdr_white_nits) {
+                if sdr > 0.0 && max.is_finite() && sdr.is_finite() {
+                    return Some(max / sdr);
+                }
+            }
+        }
+        // Definitively SDR (web `dynamic-range: standard`) → no headroom.
+        (self.coarse.and_then(|c| c.high_dynamic_range) == Some(false)).then_some(1.0)
+    }
+
+    /// `true` only with positive evidence of usable HDR headroom
+    /// ([`hdr_active`](Self::hdr_active) is `Some(true)`, or a derived headroom
+    /// `> 1.0`).
+    ///
+    /// Conservative: unknown reads as `false`. Never panics.
+    #[must_use]
+    pub fn has_hdr_headroom(&self) -> bool {
+        self.hdr_active == Some(true) || self.tone_map_headroom().is_some_and(|h| h > 1.0)
+    }
+}
+
+#[cfg(test)]
+mod display_hdr_info_tests {
+    use super::*;
+
+    #[test]
+    fn default_is_all_none_and_sdr() {
+        let info = DisplayHdrInfo::default();
+        assert_eq!(info.hdr_active, None);
+        assert_eq!(info.luminance, None);
+        assert_eq!(info.headroom, None);
+        assert_eq!(info.chromaticity, None);
+        assert_eq!(info.coarse, None);
+        assert_eq!(info.bits_per_color, None);
+        // Unknown must never read as HDR, and tone_map_headroom refuses to guess.
+        assert_eq!(info.tone_map_headroom(), None);
+        assert!(!info.has_hdr_headroom());
+    }
+
+    #[test]
+    fn apple_headroom_is_used_directly() {
+        let info = DisplayHdrInfo {
+            headroom: Some(DisplayHeadroom {
+                current: Some(3.0),
+                potential: Some(5.0),
+                reference: None,
+            }),
+            ..Default::default()
+        };
+        assert_eq!(info.tone_map_headroom(), Some(3.0));
+        assert!(info.has_hdr_headroom());
+    }
+
+    #[test]
+    fn windows_nits_derive_headroom_only_with_sdr_white() {
+        // Both nits present and sdr_white > 0 → ratio.
+        let info = DisplayHdrInfo {
+            luminance: Some(DisplayLuminance {
+                max_nits: Some(800.0),
+                sdr_white_nits: Some(200.0),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(info.tone_map_headroom(), Some(4.0));
+        assert!(info.has_hdr_headroom());
+
+        // max_nits known but sdr_white unknown → refuse to guess across frames.
+        let info = DisplayHdrInfo {
+            luminance: Some(DisplayLuminance {
+                max_nits: Some(800.0),
+                sdr_white_nits: None,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(info.tone_map_headroom(), None);
+    }
+
+    #[test]
+    fn coarse_sdr_collapses_to_unity_but_not_active() {
+        let info = DisplayHdrInfo {
+            coarse: Some(DisplayCoarseRange {
+                high_dynamic_range: Some(false),
+                gamut: Some(DisplayGamut::Srgb),
+            }),
+            ..Default::default()
+        };
+        assert_eq!(info.tone_map_headroom(), Some(1.0));
+        assert!(!info.has_hdr_headroom());
+    }
+
+    #[test]
+    fn hdr_active_alone_is_enough_for_has_headroom() {
+        let info = DisplayHdrInfo {
+            hdr_active: Some(true),
+            ..Default::default()
+        };
+        assert!(info.has_hdr_headroom());
+    }
+
+    #[test]
+    fn non_finite_inputs_never_leak_out() {
+        let info = DisplayHdrInfo {
+            headroom: Some(DisplayHeadroom {
+                current: Some(f32::INFINITY),
+                ..Default::default()
+            }),
+            luminance: Some(DisplayLuminance {
+                max_nits: Some(1000.0),
+                sdr_white_nits: Some(100.0),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        // The infinite EDR value is skipped; falls through to the nit ratio.
+        assert_eq!(info.tone_map_headroom(), Some(10.0));
+    }
+}
+
 /// Configures a [`Surface`] for presentation.
 ///
 #[doc = link_to_wgpu_item!(struct Surface)]

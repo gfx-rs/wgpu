@@ -198,6 +198,27 @@ fn report(msg: &str) {
     web_sys::console::log_1(&msg.into());
 }
 
+/// Report the display HDR snapshot returned by [`wgpu::Surface::display_hdr_info`]
+/// — the read-only *sensor* that says what the panel can show right now. Every
+/// field is advisory and platform-dependent (`None` == unknown here, *not* an
+/// SDR display). This is also the manual-verification surface: on macOS, dimming
+/// the display changes `headroom`/`hdr_active` live.
+fn report_display_hdr_info(info: &wgpu::DisplayHdrInfo) {
+    report("Display HDR snapshot (advisory; None = unknown on this platform):");
+    report(&format!("  hdr_active:     {:?}", info.hdr_active));
+    report(&format!("  luminance:      {:?}", info.luminance));
+    report(&format!("  headroom:       {:?}", info.headroom));
+    report(&format!("  chromaticity:   {:?}", info.chromaticity));
+    report(&format!("  coarse:         {:?}", info.coarse));
+    report(&format!("  bits_per_color: {:?}", info.bits_per_color));
+    // The single value most tone-mappers want, plus the HDR-worthwhile gate.
+    report(&format!(
+        "  -> tone_map_headroom() = {:?}, has_hdr_headroom() = {}",
+        info.tone_map_headroom(),
+        info.has_hdr_headroom()
+    ));
+}
+
 /// The forced mode, from the `HDR_MODE` environment variable on native or
 /// the `?mode=` query parameter on the web.
 fn forced_mode() -> Option<String> {
@@ -329,13 +350,26 @@ fn pick_mode(caps: &wgpu::SurfaceCapabilities, forced: Option<&str>) -> ModeChoi
 
 struct State {
     window: Arc<Window>,
+    /// Kept so the display snapshot can be re-polled after startup —
+    /// `display_hdr_info` takes the adapter, exactly like `get_capabilities`.
+    adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
+    /// The most recent display snapshot, so a re-poll only logs on change.
+    last_hdr_info: wgpu::DisplayHdrInfo,
+    /// Frames since the last display re-poll (the snapshot is throttled rather
+    /// than read every frame; see [`State::poll_display_hdr_info`]).
+    frames_since_poll: u32,
 }
+
+/// How often (in frames) the demo re-polls the display snapshot. The values
+/// change on human timescales, so a coarse interval still surfaces live changes
+/// (e.g. dimming the display) without re-walking the OS display every frame.
+const HDR_POLL_INTERVAL_FRAMES: u32 = 30;
 
 impl State {
     async fn new(window: Arc<Window>) -> State {
@@ -364,6 +398,12 @@ impl State {
         for fc in &caps.format_capabilities {
             report(&format!("  {:?}: {:?}", fc.format, fc.color_spaces));
         }
+
+        // Read the display sensor alongside the surface capabilities. An app
+        // uses this to decide whether requesting HDR output is worthwhile and to
+        // seed a tone-map target; here we just report it (and re-poll later).
+        let hdr_info = surface.display_hdr_info(&adapter);
+        report_display_hdr_info(&hdr_info);
 
         let forced = forced_mode();
         let choice = pick_mode(&caps, forced.as_deref());
@@ -460,12 +500,15 @@ impl State {
 
         State {
             window,
+            adapter,
             device,
             queue,
             surface,
             config,
             pipeline,
             bind_group,
+            last_hdr_info: hdr_info,
+            frames_since_poll: 0,
         }
     }
 
@@ -473,6 +516,31 @@ impl State {
         self.config.width = size.width.max(1);
         self.config.height = size.height.max(1);
         self.surface.configure(&self.device, &self.config);
+    }
+
+    /// Re-poll the display snapshot (throttled) and report it only when it
+    /// changes.
+    ///
+    /// `display_hdr_info` is a snapshot, not a stream: wgpu owns no event loop
+    /// and can't notify us, so an app re-queries from its own loop. Brightness,
+    /// HDR-toggle, and monitor moves are not delivered as events — the value
+    /// just changes — so a real app would also re-pick its color space / refresh
+    /// its tone-map target here. A real app would re-query from its windowing
+    /// events; this demo polls every [`HDR_POLL_INTERVAL_FRAMES`] frames, which
+    /// still surfaces live changes to a human while avoiding a per-frame OS walk.
+    fn poll_display_hdr_info(&mut self) {
+        self.frames_since_poll += 1;
+        if self.frames_since_poll < HDR_POLL_INTERVAL_FRAMES {
+            return;
+        }
+        self.frames_since_poll = 0;
+
+        let info = self.surface.display_hdr_info(&self.adapter);
+        if info != self.last_hdr_info {
+            report("Display HDR snapshot changed:");
+            report_display_hdr_info(&info);
+            self.last_hdr_info = info;
+        }
     }
 
     fn render(&mut self) {
@@ -575,6 +643,7 @@ impl ApplicationHandler<State> for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => state.resize(size),
             WindowEvent::RedrawRequested => {
+                state.poll_display_hdr_info();
                 state.render();
                 state.window.request_redraw();
             }

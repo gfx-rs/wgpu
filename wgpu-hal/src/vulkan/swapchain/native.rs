@@ -17,15 +17,28 @@ pub(crate) struct NativeSurface {
     raw: vk::SurfaceKHR,
     functor: khr::surface::Instance,
     instance: Arc<InstanceShared>,
+    /// The Win32 `HWND` (as an `isize`) the surface was created from, if any.
+    /// Borrowed — its lifetime is the application's window, exactly like the
+    /// DX12 surface contract; querying after the window is destroyed is the
+    /// app's UB to avoid. `None` for every non-Win32 surface. Stored as an
+    /// `isize` (not a raw pointer) to keep `NativeSurface: Send + Sync`. Only
+    /// read on Windows, to drive the DXGI display-HDR query.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    hwnd: Option<isize>,
 }
 
 impl NativeSurface {
-    pub fn from_vk_surface_khr(instance: &crate::vulkan::Instance, raw: vk::SurfaceKHR) -> Self {
+    pub fn from_vk_surface_khr(
+        instance: &crate::vulkan::Instance,
+        raw: vk::SurfaceKHR,
+        hwnd: Option<isize>,
+    ) -> Self {
         let functor = khr::surface::Instance::new(&instance.shared.entry, &instance.shared.raw);
         Self {
             raw,
             functor,
             instance: Arc::clone(&instance.shared),
+            hwnd,
         }
     }
 
@@ -277,6 +290,13 @@ impl Surface for NativeSurface {
             present_semaphores,
             next_present_time: None,
         }))
+    }
+
+    // Only ever called on Windows (to drive the DXGI display-HDR query); the
+    // borrowed `HWND` is meaningless to the other platforms' Vulkan surfaces.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    fn raw_window_hwnd(&self) -> Option<isize> {
+        self.hwnd
     }
 
     fn as_any(&self) -> &dyn Any {
