@@ -206,7 +206,7 @@ pub enum Action<'a, R: ReferenceType> {
         id: PointerId<markers::PipelineCache>,
         desc: crate::pipeline::PipelineCacheDescriptor<'a>,
     },
-    DestroyPipelineCache(PointerId<markers::PipelineCache>),
+    DropPipelineCache(PointerId<markers::PipelineCache>),
     CreateRenderBundle {
         id: R::RenderBundle,
         desc: crate::command::RenderBundleEncoderDescriptor<'a>,

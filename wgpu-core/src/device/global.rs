@@ -1853,7 +1853,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(cache) = _cache.get() {
             if let Some(t) = cache.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyPipelineCache(cache.to_trace()));
+                t.add(trace::Action::DropPipelineCache(cache.to_trace()));
             }
         }
     }

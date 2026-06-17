@@ -380,7 +380,7 @@ impl Player {
                 let cache = unsafe { device.create_pipeline_cache(&desc) }.unwrap();
                 self.pipeline_caches.insert(id, cache);
             }
-            Action::DestroyPipelineCache(id) => {
+            Action::DropPipelineCache(id) => {
                 self.pipeline_caches
                     .remove(&id)
                     .expect("invalid pipeline cache");
