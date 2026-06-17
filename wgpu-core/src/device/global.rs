@@ -1271,7 +1271,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(bundle) = _bundle.get() {
             if let Some(t) = bundle.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyRenderBundle(bundle.to_trace()));
+                t.add(trace::Action::DropRenderBundle(bundle.to_trace()));
             }
         }
     }

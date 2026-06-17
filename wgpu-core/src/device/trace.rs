@@ -212,7 +212,7 @@ pub enum Action<'a, R: ReferenceType> {
         desc: crate::command::RenderBundleEncoderDescriptor<'a>,
         base: BasePass<RenderCommand<R>, Infallible>,
     },
-    DestroyRenderBundle(PointerId<markers::RenderBundle>),
+    DropRenderBundle(PointerId<markers::RenderBundle>),
     CreateQuerySet {
         id: PointerId<markers::QuerySet>,
         desc: crate::resource::QuerySetDescriptor<'a>,

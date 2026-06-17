@@ -388,7 +388,7 @@ impl Player {
             Action::CreateRenderBundle { .. } => {
                 unimplemented!("traced render bundles are not supported");
             }
-            Action::DestroyRenderBundle(id) => {
+            Action::DropRenderBundle(id) => {
                 self.render_bundles
                     .remove(&id)
                     .expect("invalid render bundle");
