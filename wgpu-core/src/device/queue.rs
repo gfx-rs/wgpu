@@ -222,7 +222,7 @@ impl Queue {
         //   encoded above.
         pending_writes.insert_texture(texture);
 
-        submission.submit(pending_writes, vec![])?;
+        submission.submit(pending_writes, &mut Vec::new())?;
 
         Ok(())
     }
@@ -621,7 +621,7 @@ impl<'a> PendingSubmission<'a> {
     fn submit(
         self,
         pending_writes: MutexGuard<'a, PendingWrites>,
-        textures_to_map: Vec<Arc<Texture>>,
+        textures_to_map: &mut Vec<Arc<Texture>>,
     ) -> Result<SubmissionResult<'a>, DeviceError> {
         self.queue
             .submit_pending_submission(pending_writes, self, textures_to_map)
@@ -1304,7 +1304,7 @@ impl Queue {
             return Ok(());
         }
 
-        submission.submit(pending_writes, vec![])?;
+        submission.submit(pending_writes, &mut Vec::new())?;
 
         Ok(())
     }
@@ -1317,7 +1317,7 @@ impl Queue {
         let submit_index = submission.index;
         let pending_writes = self.pending_writes.lock();
         if pending_writes.is_recording {
-            submission.submit(pending_writes, vec![])?;
+            submission.submit(pending_writes, &mut Vec::new())?;
             Ok(Some(submit_index))
         } else {
             Ok(None)
@@ -1358,14 +1358,22 @@ impl Queue {
         profiling::scope!("Queue::submit");
         api_log!("Queue::submit");
 
-        let snatch_guard = self.device.snatchable_lock.read();
-        let mut submission = self
-            .allocate_submission(snatch_guard)
-            .map_err(|(index, e)| (index, e.into()))?;
-        let submit_index = submission.index;
+        // Host-maps queued by the submitted command buffers. On success these are
+        // registered with the life tracker; on any failure path the survivors are
+        // cancelled at the end so their callbacks fire instead of hanging.
         let mut texture_maps: Vec<Arc<Texture>> = Vec::new();
+        let submit_index;
 
+        // `submission` (and the queue guards it holds) lives inside this block so
+        // it is dropped before we fire any cancellation callbacks below.
         let res = 'error: {
+            let snatch_guard = self.device.snatchable_lock.read();
+            let mut submission = match self.allocate_submission(snatch_guard) {
+                Ok(submission) => submission,
+                Err((index, e)) => return Err((index, e.into())),
+            };
+            submit_index = submission.index;
+
             let mut used_surface_textures = track::TextureUsageScope::default();
 
             {
@@ -1392,6 +1400,11 @@ impl Queue {
                         let mut cmd_buf_data = command_buffer.take_finished();
 
                         if first_error.is_some() {
+                            // This batch is already failing, so this buffer won't be
+                            // submitted. Collect its queued host-maps for cancellation.
+                            if let Ok(data) = &mut cmd_buf_data {
+                                texture_maps.append(&mut data.encoded_texture_maps);
+                            }
                             continue;
                         }
 
@@ -1402,7 +1415,7 @@ impl Queue {
                             .and_then(|data| mem::take(&mut data.trace_commands));
 
                         let mut baked = match cmd_buf_data {
-                            Ok(cmd_buf_data) => {
+                            Ok(mut cmd_buf_data) => {
                                 let res = validate_command_buffer(
                                     command_buffer,
                                     self,
@@ -1419,6 +1432,9 @@ impl Queue {
                                         trace_commands,
                                         err.to_string(),
                                     );
+                                    // This buffer won't be submitted; collect its
+                                    // queued host-maps for cancellation.
+                                    texture_maps.append(&mut cmd_buf_data.encoded_texture_maps);
                                     first_error.get_or_insert(err);
                                     continue;
                                 }
@@ -1444,6 +1460,12 @@ impl Queue {
                                 continue;
                             }
                         };
+
+                        // Collect this buffer's queued host-maps now, before the
+                        // fallible steps below: if any `break 'error`, the maps are
+                        // already in `texture_maps` for cancellation rather than
+                        // dropped with `baked`.
+                        texture_maps.append(&mut baked.encoded_texture_maps);
 
                         // execute resource transitions
                         if let Err(e) = baked.encoder.open_pass(hal_label(
@@ -1508,7 +1530,6 @@ impl Queue {
                         }
 
                         // done
-                        texture_maps.append(&mut baked.encoded_texture_maps);
                         submission.executions.push(EncoderInFlight {
                             inner: baked.encoder,
                             trackers: baked.trackers,
@@ -1530,7 +1551,7 @@ impl Queue {
             let pending_writes = self.pending_writes.lock();
 
             let SubmissionResult { snatch_guard } =
-                match submission.submit(pending_writes, texture_maps) {
+                match submission.submit(pending_writes, &mut texture_maps) {
                     Ok(result) => result,
                     Err(e) => break 'error Err(e.into()),
                 };
@@ -1560,7 +1581,17 @@ impl Queue {
 
         let callbacks = match res {
             Ok(ok) => ok,
-            Err(e) => return Err((submit_index, e)),
+            Err(e) => {
+                // The submission failed, so any host-maps queued by these command
+                // buffers will never be registered or completed. `submission` (and
+                // the queue guards it held) is dropped now, so cancel them and fire
+                // their callbacks with `Err` — otherwise awaiting callers hang and
+                // the textures stay pinned in `MappingQueued` forever.
+                for (callback, result) in crate::command::cancel_texture_maps(texture_maps) {
+                    callback(result);
+                }
+                return Err((submit_index, e));
+            }
         };
 
         // the closures should execute with nothing locked!
@@ -1638,7 +1669,7 @@ impl Queue {
         &self,
         mut pending_writes: MutexGuard<'_, PendingWrites>,
         prepared: PendingSubmission<'a>,
-        textures_to_map: Vec<Arc<Texture>>,
+        textures_to_map: &mut Vec<Arc<Texture>>,
     ) -> Result<SubmissionResult<'a>, DeviceError> {
         let PendingSubmission {
             queue: _,
@@ -1731,7 +1762,7 @@ impl Queue {
         // this will register the new submission to the life time tracker
         let mut life = self.lock_life();
         life.track_submission(submit_index, executions);
-        life.register_texture_maps(textures_to_map);
+        life.register_texture_maps(mem::take(textures_to_map));
 
         // `device.maintain` relies on being able to prevent new submissions by
         // using `command_index_guard` while also checking whether there are

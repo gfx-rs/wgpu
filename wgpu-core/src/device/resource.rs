@@ -1659,10 +1659,8 @@ impl Device {
             ));
         }
 
-        if desc.mapped_at_creation {
-            if !desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE) {
-                return Err(CreateTextureError::MappedAtCreationRequiresHostVisible);
-            }
+        if desc.mapped_at_creation && !desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE) {
+            return Err(CreateTextureError::MappedAtCreationRequiresHostVisible);
         }
 
         let mut hal_view_formats = Vec::new();

@@ -72,6 +72,7 @@ pub use self::{
 pub(crate) use self::{
     clear::clear_texture,
     encoder::EncodingState,
+    map_texture::cancel_texture_maps,
     memory_init::CommandBufferTextureMemoryActions,
     render::{get_dst_stride_of_indirect_args, get_src_stride_of_indirect_args, VertexState},
     transfer::{
@@ -553,7 +554,7 @@ impl Drop for CommandEncoder {
         resource_log!("Drop {}", self.error_ident());
         // Cancel host-maps queued into this never-submitted encoder.
         let textures = self.data.lock().take_pending_texture_maps();
-        for (callback, result) in map_texture::cancel_texture_maps(textures) {
+        for (callback, result) in cancel_texture_maps(textures) {
             callback(result);
         }
     }
@@ -903,7 +904,7 @@ impl Drop for CommandBuffer {
         resource_log!("Drop {}", self.error_ident());
         // Cancel host-maps left queued by a finished-but-never-submitted buffer.
         let textures = self.data.lock().take_pending_texture_maps();
-        for (callback, result) in map_texture::cancel_texture_maps(textures) {
+        for (callback, result) in cancel_texture_maps(textures) {
             callback(result);
         }
     }
@@ -1352,7 +1353,7 @@ impl CommandEncoder {
 
         // Fire cancelled host-map callbacks outside the encoder lock.
         drop(cmd_enc_status);
-        for (callback, result) in map_texture::cancel_texture_maps(cancelled_texture_maps) {
+        for (callback, result) in cancel_texture_maps(cancelled_texture_maps) {
             callback(result);
         }
 

@@ -1,5 +1,5 @@
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -11,6 +11,54 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(HOST_IMAGE_DEPTH_ROUNDTRIP);
     vec.push(HOST_IMAGE_PLANAR_ROUNDTRIP);
     vec.push(HOST_IMAGE_GPU_ZERO_INIT_UNWRITTEN);
+    vec.push(HOST_IMAGE_MAP_CALLBACK_OK);
+    vec.push(HOST_IMAGE_MAP_CANCEL_ON_ENCODER_DROP);
+    vec.push(HOST_IMAGE_MAP_CANCEL_ON_COMMAND_BUFFER_DROP);
+    vec.push(HOST_IMAGE_MAP_CANCEL_ON_SUBMIT_FAILURE);
+    vec.push(HOST_IMAGE_SUBMIT_WHILE_MAPPED);
+    vec.push(HOST_IMAGE_WRITE_TEXTURE_WHILE_MAPPED);
+}
+
+/// A 4x4 `Rgba8Unorm` texture with the given usage, for the lifecycle/validation
+/// tests below (which don't care about contents).
+fn host_test_texture(
+    device: &wgpu::Device,
+    usage: wgpu::TextureUsages,
+    mapped_at_creation: bool,
+) -> wgpu::Texture {
+    device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("host-visible texture"),
+        size: wgpu::Extent3d {
+            width: 4,
+            height: 4,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage,
+        view_formats: &[],
+        mapped_at_creation,
+    })
+}
+
+type MapResultReceiver = std::sync::mpsc::Receiver<Result<(), wgpu::TextureAsyncError>>;
+
+/// Queue a `map_texture_on_completion` whose callback forwards its result over a
+/// channel, so a test can assert on the exact `Ok`/`Err` the caller would see.
+fn queue_map_with_channel(
+    encoder: &mut wgpu::CommandEncoder,
+    texture: &wgpu::Texture,
+) -> MapResultReceiver {
+    let (tx, rx) = std::sync::mpsc::channel();
+    encoder.map_texture_on_completion(
+        texture,
+        Box::new(move |result| {
+            let _ = tx.send(result);
+        }),
+    );
+    rx
 }
 
 /// Upload pixel data into a HOST_VISIBLE texture via the encoder-mapped path
@@ -766,4 +814,277 @@ static HOST_IMAGE_GPU_ZERO_INIT_UNWRITTEN: GpuTestConfiguration = GpuTestConfigu
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
         host_image_gpu_zero_init_unwritten(ctx).await;
+    });
+
+/// The map callback must actually be delivered with `Ok` once the submission
+/// that queues the map completes — the happy-path round-trip tests pass a
+/// callback that discards its result, so nothing else asserts this.
+async fn host_image_map_callback_ok(ctx: TestingContext) {
+    let texture = host_test_texture(&ctx.device, wgpu::TextureUsages::HOST_VISIBLE, false);
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    let rx = queue_map_with_channel(&mut encoder, &texture);
+    ctx.queue.submit(Some(encoder.finish()));
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
+
+    let result = rx
+        .try_recv()
+        .expect("map callback should have fired after the submission completed");
+    assert!(
+        result.is_ok(),
+        "map callback should report Ok, got {result:?}"
+    );
+    assert!(
+        texture.get_mapped().is_some(),
+        "texture should be mapped after a successful map"
+    );
+    texture.unmap();
+}
+
+#[gpu_test]
+static HOST_IMAGE_MAP_CALLBACK_OK: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
+    .run_async(|ctx| async move {
+        host_image_map_callback_ok(ctx).await;
+    });
+
+/// Dropping the encoder a map was queued into, without finishing it, must fire
+/// the callback with `Err` (not silently drop it) and leave the texture unmapped.
+async fn host_image_map_cancel_on_encoder_drop(ctx: TestingContext) {
+    let texture = host_test_texture(&ctx.device, wgpu::TextureUsages::HOST_VISIBLE, false);
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    let rx = queue_map_with_channel(&mut encoder, &texture);
+    drop(encoder);
+
+    let result = rx
+        .try_recv()
+        .expect("map callback should fire when the encoder is dropped");
+    assert!(
+        result.is_err(),
+        "cancelled map callback must report Err, got {result:?}"
+    );
+    assert!(
+        texture.get_mapped().is_none(),
+        "texture must not be mapped after the map was cancelled"
+    );
+}
+
+#[gpu_test]
+static HOST_IMAGE_MAP_CANCEL_ON_ENCODER_DROP: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
+    .run_async(|ctx| async move {
+        host_image_map_cancel_on_encoder_drop(ctx).await;
+    });
+
+/// Finishing the encoder but dropping the command buffer without submitting it
+/// must also fire the callback with `Err`.
+async fn host_image_map_cancel_on_command_buffer_drop(ctx: TestingContext) {
+    let texture = host_test_texture(&ctx.device, wgpu::TextureUsages::HOST_VISIBLE, false);
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    let rx = queue_map_with_channel(&mut encoder, &texture);
+    let command_buffer = encoder.finish();
+    drop(command_buffer);
+
+    let result = rx
+        .try_recv()
+        .expect("map callback should fire when the command buffer is dropped");
+    assert!(
+        result.is_err(),
+        "cancelled map callback must report Err, got {result:?}"
+    );
+    assert!(
+        texture.get_mapped().is_none(),
+        "texture must not be mapped after the map was cancelled"
+    );
+}
+
+#[gpu_test]
+static HOST_IMAGE_MAP_CANCEL_ON_COMMAND_BUFFER_DROP: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
+        .run_async(|ctx| async move {
+            host_image_map_cancel_on_command_buffer_drop(ctx).await;
+        });
+
+/// A submission that fails (here: a second command buffer using a destroyed
+/// buffer) must not strand a map queued by another command buffer in the same
+/// submit. The callback must fire with `Err` and the texture revert to unmapped,
+/// otherwise the texture is pinned in `MappingQueued` forever and awaiting
+/// callers hang.
+async fn host_image_map_cancel_on_submit_failure(ctx: TestingContext) {
+    let texture = host_test_texture(&ctx.device, wgpu::TextureUsages::HOST_VISIBLE, false);
+
+    let mut map_encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    let rx = queue_map_with_channel(&mut map_encoder, &texture);
+    let map_command_buffer = map_encoder.finish();
+
+    // A second command buffer whose submit fails validation: copy from a buffer
+    // that gets destroyed before submit.
+    let src = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("doomed src"),
+        size: 4,
+        usage: wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+    let dst = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("dst"),
+        size: 4,
+        usage: wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let mut bad_encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    bad_encoder.copy_buffer_to_buffer(&src, 0, &dst, 0, 4);
+    let bad_command_buffer = bad_encoder.finish();
+    src.destroy();
+
+    fail(
+        &ctx.device,
+        || {
+            ctx.queue.submit([map_command_buffer, bad_command_buffer]);
+        },
+        Some("destroyed"),
+    );
+
+    let result = rx
+        .try_recv()
+        .expect("map callback should fire when the submission fails");
+    assert!(
+        result.is_err(),
+        "map callback must report Err on submit failure, got {result:?}"
+    );
+    assert!(
+        texture.get_mapped().is_none(),
+        "texture must revert to unmapped after a failed submit"
+    );
+}
+
+#[gpu_test]
+static HOST_IMAGE_MAP_CANCEL_ON_SUBMIT_FAILURE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
+    .run_async(|ctx| async move {
+        host_image_map_cancel_on_submit_failure(ctx).await;
+    });
+
+// NOTE: the device-loss path (`drain_pending_texture_maps`, which fires queued
+// maps with `Err` in `Queue::drop` when the device is invalid) is not covered
+// here: it only triggers for a submission still in flight at device loss, and
+// there's no deterministic way to hold a submission in flight across adapters
+// (fast software adapters complete it before the drain runs, so the callback
+// resolves `Ok`). Left for a future test with a lower-level fence hook.
+
+/// Submitting a command buffer that uses a still-mapped texture must fail
+/// validation (`TextureStillMapped`).
+async fn host_image_submit_while_mapped(ctx: TestingContext) {
+    let texture = host_test_texture(
+        &ctx.device,
+        wgpu::TextureUsages::HOST_VISIBLE | wgpu::TextureUsages::COPY_SRC,
+        true,
+    );
+
+    let readback = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("readback"),
+        size: 256 * 4,
+        usage: wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(256),
+                rows_per_image: Some(4),
+            },
+        },
+        wgpu::Extent3d {
+            width: 4,
+            height: 4,
+            depth_or_array_layers: 1,
+        },
+    );
+    let command_buffer = encoder.finish();
+
+    // The texture was never unmapped, so the submit must reject it.
+    fail(
+        &ctx.device,
+        || {
+            ctx.queue.submit(Some(command_buffer));
+        },
+        Some("still mapped"),
+    );
+}
+
+#[gpu_test]
+static HOST_IMAGE_SUBMIT_WHILE_MAPPED: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
+    .run_async(|ctx| async move {
+        host_image_submit_while_mapped(ctx).await;
+    });
+
+/// `queue.write_texture` to a still-mapped texture must fail validation
+/// (`TransferError::TextureNotAvailable`).
+async fn host_image_write_texture_while_mapped(ctx: TestingContext) {
+    let texture = host_test_texture(
+        &ctx.device,
+        wgpu::TextureUsages::HOST_VISIBLE | wgpu::TextureUsages::COPY_DST,
+        true,
+    );
+
+    let data = [0u8; 4 * 4 * 4];
+    fail(
+        &ctx.device,
+        || {
+            ctx.queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &data,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(16),
+                    rows_per_image: Some(4),
+                },
+                wgpu::Extent3d {
+                    width: 4,
+                    height: 4,
+                    depth_or_array_layers: 1,
+                },
+            );
+        },
+        Some("unmapped"),
+    );
+}
+
+#[gpu_test]
+static HOST_IMAGE_WRITE_TEXTURE_WHILE_MAPPED: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
+    .run_async(|ctx| async move {
+        host_image_write_texture_while_mapped(ctx).await;
     });
