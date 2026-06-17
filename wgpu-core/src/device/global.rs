@@ -571,7 +571,7 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(trace) = external_texture.device.trace.lock().as_mut() {
-            trace.add(trace::Action::FreeExternalTexture(
+            trace.add(trace::Action::DestroyExternalTexture(
                 external_texture.to_trace(),
             ));
         }

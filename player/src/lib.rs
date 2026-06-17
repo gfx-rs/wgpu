@@ -174,9 +174,7 @@ impl Player {
                     .expect("create_external_texture error");
                 self.external_textures.insert(id, external_texture);
             }
-            Action::FreeExternalTexture(id) => {
-                // Note: external texture remains in the HashMap. "Free" and "Destroy"
-                // mean the opposite from WebGPU.
+            Action::DestroyExternalTexture(id) => {
                 let external_texture = self
                     .external_textures
                     .get(&id)

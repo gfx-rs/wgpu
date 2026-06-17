@@ -141,7 +141,7 @@ pub enum Action<'a, R: ReferenceType> {
         desc: crate::resource::ExternalTextureDescriptor<'a>,
         planes: alloc::boxed::Box<[R::TextureView]>,
     },
-    FreeExternalTexture(R::ExternalTexture),
+    DestroyExternalTexture(R::ExternalTexture),
     DropExternalTexture(R::ExternalTexture),
     CreateSampler(
         PointerId<markers::Sampler>,
