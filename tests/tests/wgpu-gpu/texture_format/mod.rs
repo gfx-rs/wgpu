@@ -629,6 +629,11 @@ fn smoke_storage_bind(
     array_layer_count: Option<u32>,
     access: wgpu::StorageTextureAccess,
 ) {
+    // Storage textures are color-only; a whole-image view of a combined
+    // depth/stencil format has both aspects, which can't be a storage binding.
+    if format.has_depth_aspect() || format.has_stencil_aspect() {
+        return;
+    }
     let bgl = ctx
         .device
         .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
