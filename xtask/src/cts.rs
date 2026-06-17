@@ -448,7 +448,7 @@ pub fn run_cts(
                 } else {
                     print!("{}", stdout);
                     eprint!("{}", stderr);
-                    bail!("CTS failed");
+                    bail!("CTS failed ({})", output.status);
                 }
             }
             PrintOutputWhen::Always => {
