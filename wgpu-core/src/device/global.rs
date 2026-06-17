@@ -973,7 +973,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(bind_group) = _bind_group.get() {
             if let Some(t) = bind_group.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyBindGroup(bind_group.to_trace()));
+                t.add(trace::Action::DropBindGroup(bind_group.to_trace()));
             }
         }
     }

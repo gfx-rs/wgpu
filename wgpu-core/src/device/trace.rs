@@ -178,7 +178,7 @@ pub enum Action<'a, R: ReferenceType> {
     ),
     DropPipelineLayout(PointerId<markers::PipelineLayout>),
     CreateBindGroup(PointerId<markers::BindGroup>, TraceBindGroupDescriptor<'a>),
-    DestroyBindGroup(PointerId<markers::BindGroup>),
+    DropBindGroup(PointerId<markers::BindGroup>),
     CreateShaderModule {
         id: PointerId<markers::ShaderModule>,
         desc: crate::pipeline::ShaderModuleDescriptor<'a>,

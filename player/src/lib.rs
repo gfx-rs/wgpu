@@ -260,7 +260,7 @@ impl Player {
                     .expect("create_bind_group error");
                 self.bind_groups.insert(id, bind_group);
             }
-            Action::DestroyBindGroup(id) => {
+            Action::DropBindGroup(id) => {
                 let _bind_group = self.bind_groups.remove(&id).expect("invalid bind group");
             }
             Action::CreateShaderModule { id, desc, data } => {
