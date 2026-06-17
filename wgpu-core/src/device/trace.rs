@@ -135,7 +135,7 @@ pub enum Action<'a, R: ReferenceType> {
         parent: R::Texture,
         desc: crate::resource::TextureViewDescriptor<'a>,
     },
-    DestroyTextureView(R::TextureView),
+    DropTextureView(R::TextureView),
     CreateExternalTexture {
         id: R::ExternalTexture,
         desc: crate::resource::ExternalTextureDescriptor<'a>,

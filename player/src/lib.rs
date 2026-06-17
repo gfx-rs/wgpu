@@ -159,7 +159,7 @@ impl Player {
                     .expect("create_texture_view error");
                 self.texture_views.insert(id, texture_view);
             }
-            Action::DestroyTextureView(id) => {
+            Action::DropTextureView(id) => {
                 self.texture_views
                     .remove(&id)
                     .expect("invalid texture view");

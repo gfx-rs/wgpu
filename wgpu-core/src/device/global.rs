@@ -495,7 +495,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(view) = _view.get() {
             if let Some(t) = view.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyTextureView(view.to_trace()));
+                t.add(trace::Action::DropTextureView(view.to_trace()));
             }
         }
     }
