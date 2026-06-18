@@ -961,12 +961,6 @@ pub enum RenderPassErrorInner {
     Draw(#[from] DrawError),
     #[error(transparent)]
     Bind(#[from] BindError),
-    #[error("Immediate data offset must be aligned to 4 bytes")]
-    ImmediateOffsetAlignment,
-    #[error("Immediate data size must be aligned to 4 bytes")]
-    ImmediateDataizeAlignment,
-    #[error("Ran out of immediate data space. Don't set 4gb of immediates per ComputePass.")]
-    ImmediateOutOfMemory,
     #[error(transparent)]
     QueryUse(#[from] QueryUseError),
     #[error("Multiview layer count must match")]
@@ -1073,9 +1067,6 @@ impl WebGpuError for RenderPassError {
             | RenderPassErrorInner::IndirectCountBufferOverrun { .. }
             | RenderPassErrorInner::ResourceUsageCompatibility(..)
             | RenderPassErrorInner::IncompatibleBundleReadOnlyDepthStencil { .. }
-            | RenderPassErrorInner::ImmediateOffsetAlignment
-            | RenderPassErrorInner::ImmediateDataizeAlignment
-            | RenderPassErrorInner::ImmediateOutOfMemory
             | RenderPassErrorInner::MultiViewMismatch
             | RenderPassErrorInner::MultiViewDimensionMismatch
             | RenderPassErrorInner::TooManyMultiviewViews
@@ -3617,29 +3608,18 @@ impl Global {
         let scope = PassErrorScope::SetImmediate;
         let base = pass_base!(pass, scope);
 
-        if offset & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1) != 0 {
-            pass_try!(
-                base,
-                scope,
-                Err(RenderPassErrorInner::ImmediateOffsetAlignment)
-            );
-        }
-        if data.len() as u32 & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1) != 0 {
-            pass_try!(
-                base,
-                scope,
-                Err(RenderPassErrorInner::ImmediateDataizeAlignment)
-            );
-        }
-
-        let value_offset = pass_try!(
+        let size_bytes = pass_try!(
             base,
             scope,
-            base.immediates_data
-                .len()
-                .try_into()
-                .map_err(|_| RenderPassErrorInner::ImmediateOutOfMemory),
+            u32::try_from(data.len()).map_err(|_| ImmediateUploadError::ImmediateOutOfMemory)
         );
+        pass_try!(
+            base,
+            scope,
+            pass::validate_immediates_alignment(offset, size_bytes)
+        );
+
+        let values_offset = base.immediates_data.len().try_into().unwrap();
 
         base.immediates_data.extend(
             data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
@@ -3649,7 +3629,7 @@ impl Global {
         base.commands.push(ArcRenderCommand::SetImmediate {
             offset,
             size_bytes: data.len() as u32,
-            values_offset: Some(value_offset),
+            values_offset: Some(values_offset),
         });
 
         Ok(())
