@@ -475,13 +475,17 @@ pub mod tests {
     ) {
         let queries = submit_render_and_compute_pass_with_queries(&ctx.device, &ctx.queue);
         let raw_results = queries.wait_for_results(&ctx.device);
+        println!("Raw timestamp buffer contents: {raw_results:?}");
+        let query_results = QueryResults::from_raw_results(raw_results, timestamps_inside_passes);
+        query_results.print(&ctx.queue);
+
         let QueryResults {
             encoder_timestamps,
             render_start_end_timestamps,
             render_inside_timestamp,
             compute_start_end_timestamps,
             compute_inside_timestamp,
-        } = QueryResults::from_raw_results(raw_results, timestamps_inside_passes);
+        } = query_results;
 
         // Timestamps may wrap around, so can't really only reason about deltas!
         // Making things worse, deltas are allowed to be zero.
