@@ -379,12 +379,11 @@ fn clear_texture_via_buffer_copies(
 ) {
     assert!(!texture_desc.format.is_depth_stencil_format());
 
-    let aspects = if texture_desc.format == wgt::TextureFormat::NV12
-        || texture_desc.format == wgt::TextureFormat::P010
-    {
+    let aspects = if texture_desc.format.is_multi_planar_format() {
         [
             (hal::FormatAspects::PLANE_0, TextureAspect::Plane0),
             (hal::FormatAspects::PLANE_1, TextureAspect::Plane1),
+            (hal::FormatAspects::PLANE_2, TextureAspect::Plane2),
         ]
         .as_slice()
     } else {
@@ -393,7 +392,9 @@ fn clear_texture_via_buffer_copies(
 
     let mut zero_buffer_copy_regions = Vec::new();
     for &(hal_aspect, aspect) in aspects {
-        let aspect_format = texture_desc.format.aspect_specific_format(aspect).unwrap();
+        let Some(aspect_format) = texture_desc.format.aspect_specific_format(aspect) else {
+            break;
+        };
         // Gather list of zero_buffer copies and issue a single command then to perform them
         let buffer_copy_pitch = alignments.buffer_copy_pitch.get() as u32;
         let (block_width, block_height) = aspect_format.block_dimensions();
