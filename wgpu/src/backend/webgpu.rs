@@ -2964,7 +2964,12 @@ impl Drop for WebTlas {
     }
 }
 
-impl dispatch::QuerySetInterface for WebQuerySet {}
+impl dispatch::QuerySetInterface for WebQuerySet {
+    fn destroy(&self) {
+        self.inner.destroy();
+    }
+}
+
 impl Drop for WebQuerySet {
     fn drop(&mut self) {
         // no-op

@@ -7,7 +7,7 @@ use core::ops::Range;
 use hashbrown::hash_map::Entry;
 
 use crate::{
-    device::Device,
+    device::{Device, DeviceError},
     init_tracker::*,
     resource::{DestroyedResourceError, ParentDevice, RawResourceAccess, Texture, Trackable},
     snatch::SnatchGuard,
@@ -331,6 +331,76 @@ impl BakedCommands {
                 .initialization_status
                 .write()
                 .discard(surface_discard.mip_level, surface_discard.layer);
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn process_deferred_query_set_resolves(
+        &mut self,
+        device: &Device,
+        snatch_guard: &SnatchGuard<'_>,
+    ) -> Result<(), DeviceError> {
+        profiling::scope!("process_deferred_query_set_resolves");
+
+        for mut resolve in self.deferred_query_set_resolves.drain(..).rev() {
+            let raw_dst = resolve.dst_buffer.try_raw(snatch_guard).unwrap();
+            let raw_query_set = resolve.query_set.try_raw(snatch_guard).unwrap();
+
+            let raw_encoder = self.encoder.open_pass(crate::hal_label(
+                Some("(wgpu internal) Deferred query set resolve"),
+                device.instance_flags,
+            ))?;
+
+            let initialized_slots_guard = resolve.query_set.initialized_slots.lock();
+            let initialized_slots =
+                if let Some(query_set_writes) = resolve.query_set_writes.as_mut() {
+                    query_set_writes.or(&initialized_slots_guard);
+                    &*query_set_writes
+                } else {
+                    &*initialized_slots_guard
+                };
+
+            let mut start = resolve.start_query;
+            while start < resolve.end_query {
+                let is_initialized = initialized_slots[start as usize];
+                let end = (start + 1..resolve.end_query)
+                    .find(|&i| initialized_slots[i as usize] != is_initialized)
+                    .unwrap_or(resolve.end_query);
+
+                let byte_offset = resolve.destination_offset
+                    + (start - resolve.start_query) as u64 * resolve.stride;
+                let byte_len = (end - start) as u64 * resolve.stride;
+
+                if is_initialized {
+                    unsafe {
+                        raw_encoder.copy_query_results(
+                            raw_query_set,
+                            start..end,
+                            raw_dst,
+                            byte_offset,
+                            wgt::BufferSize::new_unchecked(resolve.stride),
+                        );
+                    }
+                } else {
+                    unsafe {
+                        raw_encoder.clear_buffer(raw_dst, byte_offset..byte_offset + byte_len);
+                    }
+                }
+
+                start = end;
+            }
+            drop(initialized_slots_guard);
+
+            self.encoder.close_and_insert_at(resolve.insertion_point)?;
+        }
+
+        // Update query set initialization state.
+        for query_set in &self.trackers.query_sets {
+            if let Some(slots) = self.query_set_writes.get(&query_set.tracker_index()) {
+                let mut initialized = query_set.initialized_slots.lock();
+                initialized.or(slots);
+            }
         }
 
         Ok(())

@@ -133,6 +133,7 @@ define_lock_ranks! {
         TEXTURE_BIND_GROUPS,
         TEXTURE_CLEAR_MODE,
         TEXTURE_VIEWS,
+        QUERY_SET_INITIALIZED_SLOTS,
         // Uncomment this to see an interesting cycle.
         // COMMAND_BUFFER_DATA,
     }
@@ -185,6 +186,7 @@ define_lock_ranks! {
     rank DEVICE_USAGE_SCOPES "Device::usage_scopes" followed by { }
     rank REGISTRY_STORAGE "Registry::storage" followed by { }
     rank SHARED_TRACKER_INDEX_ALLOCATOR_INNER "SharedTrackerIndexAllocator::inner" followed by { }
+    rank QUERY_SET_INITIALIZED_SLOTS "QuerySet::initialized_slots" followed by { }
     rank TEXTURE_BIND_GROUPS "Texture::bind_groups" followed by { }
     rank TEXTURE_CLEAR_MODE "Texture::clear_mode" followed by { }
     rank TEXTURE_VIEWS "Texture::views" followed by { }
