@@ -430,7 +430,8 @@ pub fn main() {
 
 #[cfg(test)]
 pub mod tests {
-    use wgpu_test::{gpu_test, GpuTestConfiguration};
+    use wgpu::Backends;
+    use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration};
 
     use super::{submit_render_and_compute_pass_with_queries, QueryResults};
 
@@ -464,6 +465,11 @@ pub mod tests {
                     wgpu::Features::TIMESTAMP_QUERY
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
+                )
+                .expect_fail(
+                    FailureCase::backend_adapter(Backends::GL, "llvmpipe")
+                        .panic("unexpected: inner timestamp before compute pass start timestamp")
+                        .flaky(),
                 ),
         )
         .run_sync(|ctx| test_timestamps(ctx, true, true));
@@ -504,7 +510,10 @@ pub mod tests {
             assert!(render_inside_timestamp <= render_start_end_timestamps[1]);
         }
         if let Some(compute_inside_timestamp) = compute_inside_timestamp {
-            assert!(compute_inside_timestamp >= compute_start_end_timestamps[0]);
+            assert!(
+                compute_inside_timestamp >= compute_start_end_timestamps[0],
+                "unexpected: inner timestamp before compute pass start timestamp"
+            );
             assert!(compute_inside_timestamp <= compute_start_end_timestamps[1]);
         }
     }
