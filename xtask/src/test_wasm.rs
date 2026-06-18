@@ -191,7 +191,7 @@ fn run_tests(
 
         shell
             .cmd("cargo")
-            .args(["nextest", "run", "--profile", "wasm", "--test-threads", "5"])
+            .args(["nextest", "run", "--profile", "wasm"])
             .args(cargo_args)
             .env("RUSTFLAGS", "--cfg wasm_test")
             .run()?;
