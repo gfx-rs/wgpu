@@ -3,6 +3,7 @@ toml-version = "v1.0.0"
 [format]
 [format.rules]
 indent-width = 4
+line-width = 120
 string-quote-style = "preserve"
 
 # By default, `tombi` assumes 1.1's features, particularly the ability to write inline tables over
