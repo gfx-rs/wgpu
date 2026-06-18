@@ -72,8 +72,9 @@ Commands:
     --show      Show each test's browser window instead of running headless.
     --debug     Instead of running tests, just start the test server and keep it
                 running. Tests can then be debugged individually in a browser by visiting
-                the test URL with a test name, for example:
-                http://127.0.0.1/?wasm=wgpu_gpu&name=wgpu_gpu::buffer_usages::buffer_usage
+                the test URL with the test's package name for the `wasm` param
+                and the test's name for the `name` param, for example:
+                http://127.0.0.1:3000/?wasm=wgpu-test&name=wgpu_gpu::buffer_usages::buffer_usage
                 When you run a test this way, check the browser's console for output.
 
     All extra arguments will be forwarded to cargo-nextest (NOT wgpu-info)
