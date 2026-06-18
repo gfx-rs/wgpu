@@ -26,6 +26,7 @@ pub fn run_wasm_tests(
     mut args: Arguments,
     passthrough_args: Option<Vec<OsString>>,
 ) -> anyhow::Result<()> {
+    shell.remove_path("tests/wasm/dist")?;
     shell.create_dir("tests/wasm/dist")?;
 
     for file in shell.read_dir("tests/wasm/web")? {
@@ -58,14 +59,12 @@ pub fn run_wasm_tests(
             build_args: vec![
                 "test",
                 "-p",
-                "wgpu-test",
+                "wgpu-examples",
                 "--no-run",
                 "--target",
                 "wasm32-unknown-unknown",
                 "--features",
                 "webgl",
-                "--test",
-                "wgpu-gpu",
             ],
         },
     ];
@@ -132,28 +131,28 @@ pub fn run_wasm_tests(
         sleep(Duration::from_millis(100));
     }
 
-    let mut response = ureq::get("http://127.0.0.1:3000/gpu_report")
-        .query("wasm", bins[0].name)
-        .call()
-        .expect("Failed to get gpu config from browser");
-
-    let gpu_config = response
-        .body_mut()
-        .read_to_string()
-        .expect("Failed to get gpu config from browser");
-
-    std::fs::write(
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../.wasmgpuconfig"),
-        gpu_config,
-    )
-    .expect("Failed to write wasm gpu_config");
-
     if debug {
         let _ = server.0.wait();
     } else {
+        let mut response = ureq::get("http://127.0.0.1:3000/gpu_report")
+            .query("wasm", bins[0].name)
+            .call()
+            .expect("Failed to get gpu config from browser");
+
+        let gpu_config = response
+            .body_mut()
+            .read_to_string()
+            .expect("Failed to get gpu config from browser");
+
+        std::fs::write(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../.wasmgpuconfig"),
+            gpu_config,
+        )
+        .expect("Failed to write wasm gpu_config");
+
         shell
             .cmd("cargo")
-            .args(["nextest", "run", "-P", "wasm", "--test-threads", "1"])
+            .args(["nextest", "run", "-P", "wasm"])
             .args(cargo_args)
             .env("TEST_WASM", "true")
             .run()?;

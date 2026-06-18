@@ -27,8 +27,9 @@ test = false
 
 [features]
 default = []
-webgl = ["wgpu/webgl"]
-webgpu = ["wgpu/webgpu"]
+webgl = ["wgpu/webgl", "wgpu-test/webgl"]
+webgpu = ["wgpu/webgpu", "wgpu-test/webgl"]
+exhaust = ["wgpu/exhaust"]
 
 [dependencies]
 bytemuck.workspace = true

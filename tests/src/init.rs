@@ -264,7 +264,7 @@ impl SurfaceGuard {
     any(target_os = "emscripten", feature = "webgl")
 ))]
 #[derive(Debug)]
-struct WebDisplayHandle;
+pub struct WebDisplayHandle;
 
 #[cfg(all(
     target_arch = "wasm32",

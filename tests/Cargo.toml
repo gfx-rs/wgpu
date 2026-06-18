@@ -32,7 +32,8 @@ name = "wgpu-validation"
 harness = true
 
 [features]
-webgl = []
+webgl = ["wgpu/webgl"]
+exhaust = ["wgpu/exhaust"]
 # This feature is not actually used by this package, but it being present somewhere in the workspace
 # allows us to force the build to have profiling code enabled so we can test that configuration.
 test-build-with-profiling = ["profiling/type-check"]
@@ -62,6 +63,7 @@ arrayvec.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true
 cfg-if.workspace = true
+exhaust.workspace = true
 futures-lite.workspace = true
 libtest-mimic.workspace = true
 log.workspace = true
