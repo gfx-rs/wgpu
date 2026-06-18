@@ -2261,7 +2261,7 @@ impl QuerySet {
     pub fn destroy(self: &Arc<Self>) {
         let device = &self.device;
 
-        let mut temp = {
+        let temp = {
             let mut snatch_guard = self.device.snatchable_lock.write();
 
             let raw = match self.raw.snatch(&mut snatch_guard) {
@@ -2274,7 +2274,7 @@ impl QuerySet {
 
             drop(snatch_guard);
 
-            Some(DestroyedQuerySet {
+            queue::TempResource::DestroyedQuerySet(DestroyedQuerySet {
                 raw: ManuallyDrop::new(raw),
                 device: Arc::clone(&self.device),
                 label: self.label().to_owned(),
@@ -2285,7 +2285,11 @@ impl QuerySet {
             return;
         };
 
-        queue.lock_life().schedule_query_set_destruction(&mut temp);
+        let mut life_lock = queue.lock_life();
+        let last_submit_index = life_lock.get_query_set_latest_submission_index(self);
+        if let Some(last_submit_index) = last_submit_index {
+            life_lock.schedule_resource_destruction(temp, last_submit_index);
+        }
     }
 }
 

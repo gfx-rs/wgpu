@@ -9,7 +9,7 @@ use crate::{
         DeviceError,
     },
     ray_tracing::BlasCompactReadyPendingClosure,
-    resource::{Blas, Buffer, DestroyedQuerySet, Texture, Trackable},
+    resource::{Blas, Buffer, QuerySet, Texture, Trackable},
     snatch::SnatchGuard,
     SubmissionIndex,
 };
@@ -52,9 +52,6 @@ struct ActiveSubmission {
     /// List of queue "on_submitted_work_done" closures to be called once this
     /// submission has completed.
     work_done_closures: SmallVec<[SubmittedWorkDoneClosure; 1]>,
-
-    /// Query sets to be destroyed when this submission has completed.
-    destroy_query_sets: Vec<DestroyedQuerySet>,
 }
 
 impl ActiveSubmission {
@@ -118,6 +115,16 @@ impl ActiveSubmission {
             }
 
             if encoder.pending_blas_s.contains_key(&blas.tracker_index()) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn contains_query_set(&self, query_set: &QuerySet) -> bool {
+        for encoder in &self.encoders {
+            if encoder.trackers.query_sets.contains(query_set) {
                 return true;
             }
         }
@@ -219,7 +226,6 @@ impl LifetimeTracker {
             compact_read_back: Vec::new(),
             encoders,
             work_done_closures: SmallVec::new(),
-            destroy_query_sets: Vec::new(),
         });
     }
 
@@ -287,6 +293,23 @@ impl LifetimeTracker {
         })
     }
 
+    /// Returns the submission index of the most recent submission that uses the
+    /// given query set.
+    pub fn get_query_set_latest_submission_index(
+        &self,
+        query_set: &QuerySet,
+    ) -> Option<SubmissionIndex> {
+        // We iterate in reverse order, so that we can bail out early as soon
+        // as we find a hit.
+        self.active.iter().rev().find_map(|submission| {
+            if submission.contains_query_set(query_set) {
+                Some(submission.index)
+            } else {
+                None
+            }
+        })
+    }
+
     /// Sort out the consequences of completed submissions.
     ///
     /// Assume that all submissions up through `last_done` have completed.
@@ -343,26 +366,6 @@ impl LifetimeTracker {
             });
         if let Some(resources) = resources {
             resources.push(temp_resource);
-        }
-    }
-
-    /// Schedule a query set for destruction.
-    ///
-    /// Similar to `schedule_resource_destruction`, but unlike textures and buffers, we
-    /// don't track query set usage information in a way that supports fast lookup, so we
-    /// pessimistically schedule them for destruction after all current submissions are
-    /// completed.
-    ///
-    /// If there are active submissions, then the `DestroyedQuerySet` is taken from the
-    /// `Option` and scheduled for destruction when all those submissions have completed.
-    ///
-    /// If there are no active submissions, then the `DestroyedQuerySet` remains in the
-    /// `Option`, and may be safely dropped by the caller (after locks are released).
-    pub fn schedule_query_set_destruction(&mut self, query_set: &mut Option<DestroyedQuerySet>) {
-        if let Some(submission) = self.active.last_mut() {
-            if let Some(query_set) = query_set.take() {
-                submission.destroy_query_sets.push(query_set);
-            }
         }
     }
 
