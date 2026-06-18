@@ -3,6 +3,7 @@ toml-version = "v1.0.0"
 [format]
 [format.rules]
 indent-width = 4
+string-quote-style = "preserve"
 
 # By default, `tombi` assumes 1.1's features, particularly the ability to write inline tables over
 # multiple lines. This breaks Cargo in Rust versions older than 1.93.
