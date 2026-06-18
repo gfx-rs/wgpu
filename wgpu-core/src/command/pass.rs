@@ -217,6 +217,21 @@ where
     Ok(())
 }
 
+pub(crate) fn validate_immediates_alignment(
+    offset: u32,
+    size_bytes: u32,
+) -> Result<(), ImmediateUploadError> {
+    if !offset.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
+        return Err(ImmediateUploadError::StartOffsetUnaligned(offset));
+    }
+
+    if !size_bytes.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
+        return Err(ImmediateUploadError::SizeUnaligned(size_bytes));
+    }
+
+    Ok(())
+}
+
 pub(crate) fn set_immediates<E, F: FnOnce(&[u32])>(
     state: &mut PassState,
     immediates_data: &[u32],
@@ -229,6 +244,8 @@ where
     E: From<ImmediateUploadError> + From<InvalidValuesOffset> + From<MissingPipeline>,
 {
     api_log!("Pass::set_immediates");
+
+    // Alignment has been validated by `validate_immediates_alignment` when pushing `SetImmediate` commands.
 
     let values_offset = values_offset.ok_or(InvalidValuesOffset)?;
 
@@ -243,24 +260,25 @@ where
     let values_offset_usize = usize::try_from(values_offset)
         .expect("`values_offset` is outside the bounds of `usize` (!?)");
     if values_offset_usize > immediates_data.len() {
-        return Err(ImmediateUploadError::ValueStartIndexOverrun {
-            start_index: values_offset,
-            data_size: immediates_data.len(),
-        }
-        .into());
+        panic!(
+            "Internal error: `set_immediates` values offset ({}) \
+            overruns the immediates data length ({})",
+            values_offset,
+            immediates_data.len()
+        );
     }
 
-    // NOTE: The `validate_immediates_ranges` call above validates `size_bytes` is aligned.
     let size_immediate_elements = size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT;
     let size_immediate_elements_usize = usize::try_from(size_immediate_elements)
         .expect("`size_immediate_elements` is outside the bounds of `usize` (!?)");
     if size_immediate_elements_usize > immediates_data.len() - values_offset_usize {
-        return Err(ImmediateUploadError::ValueEndIndexOverrun {
-            start_index: values_offset,
-            count: size_immediate_elements,
-            data_size: immediates_data.len(),
-        }
-        .into());
+        panic!(
+            "Internal error: `set_immediates` values offset + count ({} + {}) \
+            overruns the immediates data length ({})",
+            values_offset,
+            size_immediate_elements,
+            immediates_data.len()
+        );
     }
 
     // NOTE: These additions are will not overflow, because we've validated the range above.

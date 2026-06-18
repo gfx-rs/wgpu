@@ -34,9 +34,9 @@ use crate::{
     ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError},
     resource::{
         Blas, BlasCompactState, Buffer, BufferAccessError, BufferMapState, DestroyedBuffer,
-        DestroyedResourceError, DestroyedTexture, Fallible, FlushedStagingBuffer,
-        InvalidResourceError, Labeled, ParentDevice, ResourceErrorIdent, StagingBuffer, Texture,
-        TextureInner, Trackable, TrackingData,
+        DestroyedQuerySet, DestroyedResourceError, DestroyedTexture, Fallible,
+        FlushedStagingBuffer, InvalidResourceError, Labeled, ParentDevice, ResourceErrorIdent,
+        StagingBuffer, Texture, TextureInner, Trackable, TrackingData,
     },
     resource_log,
     scratch::ScratchBuffer,
@@ -331,6 +331,7 @@ pub enum TempResource {
     ScratchBuffer(ScratchBuffer),
     DestroyedBuffer(DestroyedBuffer),
     DestroyedTexture(DestroyedTexture),
+    DestroyedQuerySet(DestroyedQuerySet),
 }
 
 /// A series of raw [`CommandBuffer`]s that have been submitted to a
@@ -2073,7 +2074,7 @@ fn validate_command_buffer(
         }
         {
             profiling::scope!("query sets");
-            for query_set in &cmd_buf_data.trackers.query_sets {
+            for query_set in cmd_buf_data.trackers.query_sets.used_resources() {
                 query_set.try_raw(snatch_guard)?;
             }
         }

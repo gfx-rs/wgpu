@@ -396,7 +396,7 @@ impl BakedCommands {
         }
 
         // Update query set initialization state.
-        for query_set in &self.trackers.query_sets {
+        for query_set in self.trackers.query_sets.used_resources() {
             if let Some(slots) = self.query_set_writes.get(&query_set.tracker_index()) {
                 let mut initialized = query_set.initialized_slots.lock();
                 initialized.or(slots);

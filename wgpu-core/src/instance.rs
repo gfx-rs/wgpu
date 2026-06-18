@@ -625,8 +625,9 @@ impl Instance {
             limits.max_buffer_size = limits.max_buffer_size.min(u32::MAX as u64);
             limits.max_uniform_buffer_binding_size =
                 limits.max_uniform_buffer_binding_size.min(u32::MAX as u64);
-            limits.max_storage_buffer_binding_size =
-                limits.max_storage_buffer_binding_size.min(u32::MAX as u64);
+            limits.max_storage_buffer_binding_size = limits
+                .max_storage_buffer_binding_size
+                .min(u32::MAX as u64 & !(wgt::STORAGE_BINDING_SIZE_ALIGNMENT as u64 - 1));
         }
     }
 

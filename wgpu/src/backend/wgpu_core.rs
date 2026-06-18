@@ -3844,12 +3844,12 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
 
     fn set_immediates(&mut self, offset: u32, data: &[u8]) {
         unsafe {
-            wgpu_render_bundle_set_immediates(
+            wgpu_core::command::bundle_ffi::wgpu_render_bundle_set_immediates(
                 &mut self.encoder,
                 offset,
                 data.len().try_into().unwrap(),
                 data.as_ptr(),
-            )
+            );
         }
     }
 

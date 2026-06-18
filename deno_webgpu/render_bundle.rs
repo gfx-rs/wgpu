@@ -18,6 +18,7 @@ use deno_error::JsErrorBox;
 
 use crate::buffer::GPUBuffer;
 use crate::error::GPUGenericError;
+use crate::get_data_slice;
 use crate::texture::GPUTextureFormat;
 use crate::Instance;
 
@@ -381,6 +382,34 @@ impl GPURenderBundleEncoder {
       indirect_buffer.id,
       indirect_offset,
     );
+    Ok(())
+  }
+
+  #[required(2)]
+  #[undefined]
+  fn set_immediates<'a>(
+    &self,
+    scope: &mut v8::HandleScope<'a>,
+    #[webidl(options(enforce_range = true))] offset: u32,
+    data_arg: v8::Local<'a, v8::Value>,
+    #[webidl(default = 0, options(enforce_range = true))] data_offset: u64,
+    #[webidl(options(enforce_range = true))] data_size: Option<u64>,
+  ) -> Result<(), JsErrorBox> {
+    let data = get_data_slice(scope, data_arg, data_offset, data_size)?;
+
+    let mut encoder = self.encoder.borrow_mut();
+    let encoder = encoder.as_mut().ok_or_else(|| {
+      JsErrorBox::generic("Encoder has already been finished")
+    })?;
+
+    unsafe {
+      wgpu_core::command::bundle_ffi::wgpu_render_bundle_set_immediates(
+        encoder,
+        offset,
+        data.len().try_into().unwrap(),
+        data.as_ptr(),
+      );
+    }
     Ok(())
   }
 }

@@ -174,8 +174,73 @@ impl deno_web::TimersPermission for Permissions {
     }
 }
 
+/// On Windows, install an SEH filter that logs the exception code, so
+/// unhandled-exception crashes from native code (driver bugs, WARP, D3D12) are
+/// more visible in CI. (See <https://github.com/gfx-rs/wgpu/issues/9693> for an
+/// example.)
+#[cfg(windows)]
+fn install_unhandled_exception_filter() {
+    use core::ffi::c_void;
+
+    #[repr(C)]
+    struct ExceptionRecord {
+        exception_code: u32,
+        exception_flags: u32,
+        exception_record: *mut ExceptionRecord,
+        exception_address: *mut c_void,
+        number_parameters: u32,
+        exception_information: [usize; 15],
+    }
+
+    #[repr(C)]
+    struct ExceptionPointers {
+        exception_record: *mut ExceptionRecord,
+        context_record: *mut c_void,
+    }
+
+    type FilterFn = unsafe extern "system" fn(*mut ExceptionPointers) -> i32;
+
+    unsafe extern "system" {
+        fn SetUnhandledExceptionFilter(filter: Option<FilterFn>) -> Option<FilterFn>;
+    }
+
+    unsafe extern "system" fn filter(info: *mut ExceptionPointers) -> i32 {
+        let (code, addr) = unsafe {
+            if info.is_null() || (*info).exception_record.is_null() {
+                (0u32, core::ptr::null_mut::<c_void>())
+            } else {
+                let r = &*(*info).exception_record;
+                (r.exception_code, r.exception_address)
+            }
+        };
+        let name = match code {
+            0x80000003 => "STATUS_BREAKPOINT",
+            0xC0000005 => "STATUS_ACCESS_VIOLATION",
+            0xC0000094 => "STATUS_INTEGER_DIVIDE_BY_ZERO",
+            0xC00000FD => "STATUS_STACK_OVERFLOW",
+            0xC0000374 => "STATUS_HEAP_CORRUPTION",
+            0xC0000409 => "STATUS_STACK_BUFFER_OVERRUN",
+            0xC0000602 => "STATUS_FAIL_FAST_EXCEPTION",
+            _ => "<unknown>",
+        };
+        eprintln!("cts_runner: unhandled SEH exception 0x{code:08x} ({name}) at {addr:p}");
+        // EXCEPTION_CONTINUE_SEARCH: let the OS proceed with its default
+        // termination so the process exit code still reflects the fault.
+        0
+    }
+
+    // SAFETY: passing a valid `extern "system"` function pointer.
+    unsafe {
+        SetUnhandledExceptionFilter(Some(filter));
+    }
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
+    #[cfg(windows)]
+    {
+        install_unhandled_exception_filter();
+    }
     env_logger::init();
     unwrap_or_exit(run().await)
 }
