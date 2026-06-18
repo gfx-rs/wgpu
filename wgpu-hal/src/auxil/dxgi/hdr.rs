@@ -27,7 +27,7 @@ const REC2020: [[f32; 2]; 3] = [[0.708, 0.292], [0.170, 0.797], [0.131, 0.046]];
 /// bucket (least-squares over the R/G/B chromaticities). Advisory only.
 ///
 /// Returns `None` if every primary is zeroed (the EDID reported nothing usable),
-/// so a bogus all-zero descriptor is not mis-classified as sRGB.
+/// so a bogus all-zero descriptor is not misclassified as sRGB.
 fn classify_gamut(red: [f32; 2], green: [f32; 2], blue: [f32; 2]) -> Option<wgt::DisplayGamut> {
     let measured = [red, green, blue];
     if measured.iter().all(|p| p[0] == 0.0 && p[1] == 0.0) {
@@ -72,7 +72,7 @@ pub fn display_hdr_info_from_desc1(
 ) -> wgt::DisplayHdrInfo {
     // Treat *both* advanced-color output spaces as active HDR: HDR10 / PQ
     // (`G2084_NONE_P2020`) and scRGB / linear-extended (`G10_NONE_P709`), so
-    // scRGB HDR is not mis-reported as SDR.
+    // scRGB HDR is not misreported as SDR.
     let hdr_active = desc1.ColorSpace == Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
         || desc1.ColorSpace == Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709;
 

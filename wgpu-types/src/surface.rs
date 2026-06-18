@@ -516,7 +516,7 @@ pub struct DisplayHdrInfo {
     ///
     /// - On Windows it is `Some(true)` for any advanced-color output space (DXGI
     ///   `RGB_FULL_G2084_NONE_P2020` HDR10/PQ *or* `RGB_FULL_G10_NONE_P709`
-    ///   scRGB / linear extended), so scRGB HDR is not mis-reported as SDR;
+    ///   scRGB / linear extended), so scRGB HDR is not misreported as SDR;
     ///   `Some(false)` for a queried SDR mode.
     /// - On Apple there is no discrete HDR-mode flag, so this is *derived* from
     ///   the live EDR headroom ([`DisplayHeadroom::current`] `> 1.0`): true when
