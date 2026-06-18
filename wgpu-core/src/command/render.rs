@@ -19,8 +19,9 @@ use crate::{
         pass::{self, flush_bindings_helper},
         pass_base, pass_try,
         query::{
-            end_occlusion_query, end_pipeline_statistics_query, validate_and_begin_occlusion_query,
-            validate_and_begin_pipeline_statistics_query, QueryResetMap,
+            end_occlusion_query, end_pipeline_statistics_query, record_pass_timestamp_writes,
+            validate_and_begin_occlusion_query, validate_and_begin_pipeline_statistics_query,
+            QueryResetMap, QuerySetWrites,
         },
         render_command::ArcRenderCommand,
         ArcCommand, ArcPassTimestampWrites, BasePass, BindGroupStateChange,
@@ -960,12 +961,6 @@ pub enum RenderPassErrorInner {
     Draw(#[from] DrawError),
     #[error(transparent)]
     Bind(#[from] BindError),
-    #[error("Immediate data offset must be aligned to 4 bytes")]
-    ImmediateOffsetAlignment,
-    #[error("Immediate data size must be aligned to 4 bytes")]
-    ImmediateDataizeAlignment,
-    #[error("Ran out of immediate data space. Don't set 4gb of immediates per ComputePass.")]
-    ImmediateOutOfMemory,
     #[error(transparent)]
     QueryUse(#[from] QueryUseError),
     #[error("Multiview layer count must match")]
@@ -1072,9 +1067,6 @@ impl WebGpuError for RenderPassError {
             | RenderPassErrorInner::IndirectCountBufferOverrun { .. }
             | RenderPassErrorInner::ResourceUsageCompatibility(..)
             | RenderPassErrorInner::IncompatibleBundleReadOnlyDepthStencil { .. }
-            | RenderPassErrorInner::ImmediateOffsetAlignment
-            | RenderPassErrorInner::ImmediateDataizeAlignment
-            | RenderPassErrorInner::ImmediateOutOfMemory
             | RenderPassErrorInner::MultiViewMismatch
             | RenderPassErrorInner::MultiViewDimensionMismatch
             | RenderPassErrorInner::TooManyMultiviewViews
@@ -1166,6 +1158,7 @@ impl RenderPassInfo {
         pending_query_resets: &mut QueryResetMap,
         pending_discard_init_fixups: &mut SurfacesInDiscardState,
         snatch_guard: &SnatchGuard<'_>,
+        query_set_writes: &mut QuerySetWrites,
         multiview_mask: Option<NonZeroU32>,
     ) -> Result<Self, RenderPassErrorInner> {
         profiling::scope!("RenderPassInfo::start");
@@ -1631,6 +1624,8 @@ impl RenderPassInfo {
             if let Some(index) = tw.end_of_pass_write_index {
                 pending_query_resets.use_query_set(query_set, index);
             }
+
+            record_pass_timestamp_writes(tw, query_set_writes);
 
             Some(hal::PassTimestampWrites {
                 query_set: query_set.try_raw(snatch_guard)?,
@@ -2109,6 +2104,7 @@ pub(super) fn encode_render_pass(
             &mut pending_query_resets,
             &mut pending_discard_init_fixups,
             parent_state.snatch_guard,
+            parent_state.query_set_writes,
             multiview_mask,
         )
         .map_pass_err(pass_scope)?;
@@ -2148,6 +2144,8 @@ pub(super) fn encode_render_pass(
                         .indirect_draw_validation_resources,
                     snatch_guard: parent_state.snatch_guard,
                     debug_scope_depth: &mut debug_scope_depth,
+                    query_set_writes: parent_state.query_set_writes,
+                    deferred_query_set_resolves: parent_state.deferred_query_set_resolves,
                 },
                 pending_discard_init_fixups,
                 scope: device.new_usage_scope(),
@@ -2401,6 +2399,7 @@ pub(super) fn encode_render_pass(
                         state.pass.base.raw_encoder,
                         &mut state.active_occlusion_query,
                         state.pass.base.snatch_guard,
+                        state.pass.base.query_set_writes,
                     )
                     .map_pass_err(scope)?;
                 }
@@ -2434,6 +2433,7 @@ pub(super) fn encode_render_pass(
                         state.pass.base.raw_encoder,
                         &mut state.active_pipeline_statistics_query,
                         state.pass.base.snatch_guard,
+                        state.pass.base.query_set_writes,
                     )
                     .map_pass_err(scope)?;
                 }
@@ -3608,29 +3608,18 @@ impl Global {
         let scope = PassErrorScope::SetImmediate;
         let base = pass_base!(pass, scope);
 
-        if offset & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1) != 0 {
-            pass_try!(
-                base,
-                scope,
-                Err(RenderPassErrorInner::ImmediateOffsetAlignment)
-            );
-        }
-        if data.len() as u32 & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1) != 0 {
-            pass_try!(
-                base,
-                scope,
-                Err(RenderPassErrorInner::ImmediateDataizeAlignment)
-            );
-        }
-
-        let value_offset = pass_try!(
+        let size_bytes = pass_try!(
             base,
             scope,
-            base.immediates_data
-                .len()
-                .try_into()
-                .map_err(|_| RenderPassErrorInner::ImmediateOutOfMemory),
+            u32::try_from(data.len()).map_err(|_| ImmediateUploadError::ImmediateOutOfMemory)
         );
+        pass_try!(
+            base,
+            scope,
+            pass::validate_immediates_alignment(offset, size_bytes)
+        );
+
+        let values_offset = base.immediates_data.len().try_into().unwrap();
 
         base.immediates_data.extend(
             data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
@@ -3640,7 +3629,7 @@ impl Global {
         base.commands.push(ArcRenderCommand::SetImmediate {
             offset,
             size_bytes: data.len() as u32,
-            values_offset: Some(value_offset),
+            values_offset: Some(values_offset),
         });
 
         Ok(())

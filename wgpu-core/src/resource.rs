@@ -2246,6 +2246,7 @@ pub struct QuerySet {
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) desc: wgt::QuerySetDescriptor<()>,
+    pub(crate) initialized_slots: Mutex<bit_vec::BitVec>,
 }
 
 impl RawResourceAccess for QuerySet {
@@ -2258,19 +2259,36 @@ impl RawResourceAccess for QuerySet {
 
 impl QuerySet {
     pub fn destroy(self: &Arc<Self>) {
-        let mut snatch_guard = self.device.snatchable_lock.write();
+        let device = &self.device;
 
-        let raw = match self.raw.snatch(&mut snatch_guard) {
-            Some(raw) => raw,
-            None => {
-                // Per spec, it is valid to call `destroy` multiple times.
-                return;
-            }
+        let temp = {
+            let mut snatch_guard = self.device.snatchable_lock.write();
+
+            let raw = match self.raw.snatch(&mut snatch_guard) {
+                Some(raw) => raw,
+                None => {
+                    // Per spec, it is valid to call `destroy` multiple times.
+                    return;
+                }
+            };
+
+            drop(snatch_guard);
+
+            queue::TempResource::DestroyedQuerySet(DestroyedQuerySet {
+                raw: ManuallyDrop::new(raw),
+                device: Arc::clone(&self.device),
+                label: self.label().to_owned(),
+            })
         };
 
-        // SAFETY: We are in the destroy method and we don't use raw anymore after this point.
-        unsafe {
-            self.device.raw().destroy_query_set(raw);
+        let Some(queue) = device.get_queue() else {
+            return;
+        };
+
+        let mut life_lock = queue.lock_life();
+        let last_submit_index = life_lock.get_query_set_latest_submission_index(self);
+        if let Some(last_submit_index) = last_submit_index {
+            life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
     }
 }
@@ -2292,6 +2310,31 @@ crate::impl_labeled!(QuerySet);
 crate::impl_parent_device!(QuerySet);
 crate::impl_storage_item!(QuerySet);
 crate::impl_trackable!(QuerySet);
+
+/// A query set that has been marked as destroyed and is staged for actual deletion soon
+#[derive(Debug)]
+pub struct DestroyedQuerySet {
+    raw: ManuallyDrop<Box<dyn hal::DynQuerySet>>,
+    device: Arc<Device>,
+    label: String,
+}
+
+impl DestroyedQuerySet {
+    pub fn label(&self) -> &dyn fmt::Debug {
+        &self.label
+    }
+}
+
+impl Drop for DestroyedQuerySet {
+    fn drop(&mut self) {
+        resource_log!("Destroy raw QuerySet (destroyed) {:?}", self.label());
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            hal::DynDevice::destroy_query_set(self.device.raw(), raw);
+        }
+    }
+}
 
 pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
 pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
