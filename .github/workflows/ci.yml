@@ -727,7 +727,7 @@ jobs:
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
