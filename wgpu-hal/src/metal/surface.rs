@@ -49,9 +49,10 @@ impl super::Surface {
     /// # Thread safety
     ///
     /// `NSScreen` / `NSWindow` are main-thread-affine; reading them off the main
-    /// thread is undefined behavior. This gates on `pthread_main_np()` and
-    /// returns `None` — with *no* Objective-C message send — when not on the
-    /// main thread, rather than risk a crash or a `dispatch_sync` deadlock.
+    /// thread is undefined behavior. This gates on `MainThreadMarker::new()` and
+    /// returns `None` — with *no* Objective-C message send, but with a one-time
+    /// `log::warn!` — when not on the main thread, rather than risk a crash or a
+    /// `dispatch_sync` deadlock.
     pub(super) fn display_hdr_info(&self) -> Option<wgt::DisplayHdrInfo> {
         #[cfg(target_os = "macos")]
         {
@@ -59,9 +60,23 @@ impl super::Surface {
             use objc2::runtime::NSObject;
             use objc2_quartz_core::CALayer;
 
-            // SAFETY: `pthread_main_np` is always safe to call. Bail before any
-            // message send if we are not on the main thread.
-            if unsafe { libc::pthread_main_np() } == 0 {
+            // Bail before any message send if we are not on the main thread.
+            // `MainThreadMarker::new()` is `None` off the main thread and does no
+            // Objective-C work, so it is a cheap, safe gate.
+            if objc2::MainThreadMarker::new().is_none() {
+                // Of the paths that yield `None`, this is the only one a caller
+                // can fix (the others — off-screen window, non-macOS — are
+                // environmental), so leave a breadcrumb instead of failing
+                // silently. Warn once per process so a caller that polls this
+                // per frame is not spammed.
+                static WARN_ONCE: std::sync::Once = std::sync::Once::new();
+                WARN_ONCE.call_once(|| {
+                    log::warn!(
+                        "Surface::display_hdr_info() called off the main thread; \
+                         NSScreen is main-thread-affine, so no HDR info is \
+                         available. Query it from the main thread on macOS."
+                    );
+                });
                 return None;
             }
 

@@ -81,6 +81,14 @@ impl Surface<'_> {
     /// returned [`DisplayHdrInfo::default`] (all fields `None`) means "nothing
     /// known here", *not* "this is an SDR display". Never panics, including on
     /// wasm.
+    ///
+    /// # Threading
+    ///
+    /// On Apple platforms the display's HDR characteristics live on
+    /// main-thread-only AppKit objects (`NSScreen` / `NSWindow`), so query this
+    /// from the main thread; called from any other thread it logs a one-time
+    /// warning and returns [`DisplayHdrInfo::default`]. Other backends
+    /// (Windows / Vulkan / DX12) have no such requirement.
     pub fn display_hdr_info(&self, adapter: &Adapter) -> DisplayHdrInfo {
         self.inner.display_hdr_info(&adapter.inner)
     }

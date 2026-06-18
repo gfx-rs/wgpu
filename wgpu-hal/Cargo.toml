@@ -76,7 +76,6 @@ metal = [
     "dep:arrayvec",
     "dep:block2",
     "dep:bytemuck",
-    "dep:libc",
     "dep:objc2",
     "dep:objc2-core-foundation",
     "dep:objc2-core-graphics",
