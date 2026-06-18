@@ -833,11 +833,15 @@ pub enum AttachmentError {
         `LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and  `StoreOp::Discard`. Operations `{0:?}` were provided"
     )]
     InvalidTransientDepthAttachmentOps((LoadOp<Option<f32>>, StoreOp)),
+    #[error("Depth attachment with `TRANSIENT_ATTACHMENT` usage cannot be read-only")]
+    ReadOnlyTransientDepthAttachment,
     #[error(
         "Stencil attachment with `TRANSIENT_ATTACHMENT` usage can only be used with \
         `LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and  `StoreOp::Discard`. Operations `{0:?}` were provided"
     )]
     InvalidTransientStencilAttachmentOps((LoadOp<Option<u32>>, StoreOp)),
+    #[error("Stencil attachment with `TRANSIENT_ATTACHMENT` usage cannot be read-only")]
+    ReadOnlyTransientStencilAttachment,
     #[error("LoadOp must be None for read-only attachments")]
     ReadOnlyWithLoad,
     #[error("StoreOp must be None for read-only attachments")]
@@ -1918,43 +1922,59 @@ impl Global {
                     .usage
                     .contains(TextureUsages::TRANSIENT_ATTACHMENT)
                 {
+                    // We raise errors here for transient depth/stencil attachments if they
+                    // are read only, or use unsupported ops. `resolve` (called below)
+                    // validates that operations are specified iff the attachment is not
+                    // read-only.
                     if format.has_depth_aspect() {
-                        let Some(load_op) = depth_stencil_attachment.depth.load_op else {
-                            return Err(RenderPassErrorInner::InvalidAttachment(
-                                AttachmentError::NoLoad,
-                            ));
-                        };
-                        let Some(store_op) = depth_stencil_attachment.depth.store_op else {
-                            return Err(RenderPassErrorInner::InvalidAttachment(
-                                AttachmentError::NoStore,
-                            ));
-                        };
-                        if !check_transient_attachment_ops(load_op, store_op) {
-                            return Err(RenderPassErrorInner::InvalidAttachment(
-                                AttachmentError::InvalidTransientDepthAttachmentOps((
-                                    load_op, store_op,
-                                )),
-                            ));
+                        match depth_stencil_attachment.depth {
+                            PassChannel {
+                                load_op: Some(load_op),
+                                store_op: Some(store_op),
+                                read_only: _,
+                            } => {
+                                if !check_transient_attachment_ops(load_op, store_op) {
+                                    return Err(RenderPassErrorInner::InvalidAttachment(
+                                        AttachmentError::InvalidTransientDepthAttachmentOps((
+                                            load_op, store_op,
+                                        )),
+                                    ));
+                                }
+                            }
+                            PassChannel {
+                                read_only: true, ..
+                            } => {
+                                return Err(RenderPassErrorInner::InvalidAttachment(
+                                    AttachmentError::ReadOnlyTransientDepthAttachment,
+                                ))
+                            }
+                            _ => {}
                         }
                     }
 
                     if format.has_stencil_aspect() {
-                        let Some(load_op) = depth_stencil_attachment.stencil.load_op else {
-                            return Err(RenderPassErrorInner::InvalidAttachment(
-                                AttachmentError::NoLoad,
-                            ));
-                        };
-                        let Some(store_op) = depth_stencil_attachment.stencil.store_op else {
-                            return Err(RenderPassErrorInner::InvalidAttachment(
-                                AttachmentError::NoStore,
-                            ));
-                        };
-                        if !check_transient_attachment_ops(load_op, store_op) {
-                            return Err(RenderPassErrorInner::InvalidAttachment(
-                                AttachmentError::InvalidTransientStencilAttachmentOps((
-                                    load_op, store_op,
-                                )),
-                            ));
+                        match depth_stencil_attachment.stencil {
+                            PassChannel {
+                                load_op: Some(load_op),
+                                store_op: Some(store_op),
+                                read_only: _,
+                            } => {
+                                if !check_transient_attachment_ops(load_op, store_op) {
+                                    return Err(RenderPassErrorInner::InvalidAttachment(
+                                        AttachmentError::InvalidTransientStencilAttachmentOps((
+                                            load_op, store_op,
+                                        )),
+                                    ));
+                                }
+                            }
+                            PassChannel {
+                                read_only: true, ..
+                            } => {
+                                return Err(RenderPassErrorInner::InvalidAttachment(
+                                    AttachmentError::ReadOnlyTransientStencilAttachment,
+                                ))
+                            }
+                            _ => {}
                         }
                     }
                 }
