@@ -1824,6 +1824,13 @@ impl Device {
             });
         }
 
+        if desc.range.aspect == wgt::TextureAspect::All && resolved_format.is_multi_planar_format()
+        {
+            return Err(resource::CreateTextureViewError::MultiplanarFullTexture(
+                resolved_format,
+            ));
+        }
+
         let format_is_good = if desc.range.aspect == wgt::TextureAspect::All {
             resolved_format == texture.desc.format
                 || texture.desc.view_formats.contains(&resolved_format)
