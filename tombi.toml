@@ -18,3 +18,7 @@ trailing-comment-space-width = 1
 toml-version = "v1.0.0"
 path = "tombi://www.schemastore.org/cargo.json"
 include = ["Cargo.toml"]
+
+[schemas.format.rules]
+array-values-order.enabled = false
+table-keys-order.enabled = false
