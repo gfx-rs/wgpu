@@ -24,6 +24,9 @@ metalness = "metalness"
 # A DXC command line argument
 Fo = "Fo"
 
+# Abbreviation of Structured Exception Handling
+SEH = "SEH"
+
 # Usernames
 Healthire = "Healthire"
 REASY = "REASY"
