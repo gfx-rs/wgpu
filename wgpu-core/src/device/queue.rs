@@ -34,9 +34,9 @@ use crate::{
     ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError},
     resource::{
         Blas, BlasCompactState, Buffer, BufferAccessError, BufferMapState, DestroyedBuffer,
-        DestroyedResourceError, DestroyedTexture, Fallible, FlushedStagingBuffer,
-        InvalidResourceError, Labeled, ParentDevice, ResourceErrorIdent, StagingBuffer, Texture,
-        TextureInner, TextureMapState, Trackable, TrackingData,
+        DestroyedQuerySet, DestroyedResourceError, DestroyedTexture, Fallible,
+        FlushedStagingBuffer, InvalidResourceError, Labeled, ParentDevice, ResourceErrorIdent,
+        StagingBuffer, Texture, TextureInner, TextureMapState, Trackable, TrackingData,
     },
     resource_log,
     scratch::ScratchBuffer,
@@ -348,6 +348,7 @@ pub enum TempResource {
     ScratchBuffer(ScratchBuffer),
     DestroyedBuffer(DestroyedBuffer),
     DestroyedTexture(DestroyedTexture),
+    DestroyedQuerySet(DestroyedQuerySet),
 }
 
 /// A series of raw [`CommandBuffer`]s that have been submitted to a
@@ -1466,6 +1467,12 @@ impl Queue {
                         // already in `texture_maps` for cancellation rather than
                         // dropped with `baked`.
                         texture_maps.append(&mut baked.encoded_texture_maps);
+                        if let Err(e) = baked.process_deferred_query_set_resolves(
+                            &self.device,
+                            &submission.snatch_guard,
+                        ) {
+                            break 'error Err(e.into());
+                        }
 
                         // execute resource transitions
                         if let Err(e) = baked.encoder.open_pass(hal_label(
@@ -2149,7 +2156,7 @@ fn validate_command_buffer(
         }
         {
             profiling::scope!("query sets");
-            for query_set in &cmd_buf_data.trackers.query_sets {
+            for query_set in cmd_buf_data.trackers.query_sets.used_resources() {
                 query_set.try_raw(snatch_guard)?;
             }
         }

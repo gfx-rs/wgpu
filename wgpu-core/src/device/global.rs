@@ -369,7 +369,7 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(trace) = buffer.device.trace.lock().as_mut() {
-            trace.add(trace::Action::FreeBuffer(buffer.to_trace()));
+            trace.add(trace::Action::DestroyBuffer(buffer.to_trace()));
         }
 
         let _ = buffer.unmap();
@@ -392,7 +392,7 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(t) = buffer.device.trace.lock().as_mut() {
-            t.add(trace::Action::DestroyBuffer(buffer.to_trace()));
+            t.add(trace::Action::DropBuffer(buffer.to_trace()));
         }
 
         let _ = buffer.unmap();
@@ -538,7 +538,7 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(trace) = texture.device.trace.lock().as_mut() {
-            trace.add(trace::Action::FreeTexture(texture.to_trace()));
+            trace.add(trace::Action::DestroyTexture(texture.to_trace()));
         }
 
         texture.destroy();
@@ -554,7 +554,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(texture) = _texture.get() {
             if let Some(t) = texture.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyTexture(texture.to_trace()));
+                t.add(trace::Action::DropTexture(texture.to_trace()));
             }
         }
     }
@@ -853,7 +853,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(view) = _view.get() {
             if let Some(t) = view.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyTextureView(view.to_trace()));
+                t.add(trace::Action::DropTextureView(view.to_trace()));
             }
         }
     }
@@ -929,7 +929,7 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(trace) = external_texture.device.trace.lock().as_mut() {
-            trace.add(trace::Action::FreeExternalTexture(
+            trace.add(trace::Action::DestroyExternalTexture(
                 external_texture.to_trace(),
             ));
         }
@@ -948,7 +948,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(external_texture) = _external_texture.get() {
             if let Some(t) = external_texture.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyExternalTexture(
+                t.add(trace::Action::DropExternalTexture(
                     external_texture.to_trace(),
                 ));
             }
@@ -1003,7 +1003,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(sampler) = _sampler.get() {
             if let Some(t) = sampler.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroySampler(sampler.to_trace()));
+                t.add(trace::Action::DropSampler(sampler.to_trace()));
             }
         }
     }
@@ -1059,7 +1059,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(layout) = _layout.get() {
             if let Some(t) = layout.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyBindGroupLayout(layout.to_trace()));
+                t.add(trace::Action::DropBindGroupLayout(layout.to_trace()));
             }
         }
     }
@@ -1140,7 +1140,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(layout) = _layout.get() {
             if let Some(t) = layout.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyPipelineLayout(layout.to_trace()));
+                t.add(trace::Action::DropPipelineLayout(layout.to_trace()));
             }
         }
     }
@@ -1331,7 +1331,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(bind_group) = _bind_group.get() {
             if let Some(t) = bind_group.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyBindGroup(bind_group.to_trace()));
+                t.add(trace::Action::DropBindGroup(bind_group.to_trace()));
             }
         }
     }
@@ -1503,7 +1503,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(shader_module) = _shader_module.get() {
             if let Some(t) = shader_module.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyShaderModule(shader_module.to_trace()));
+                t.add(trace::Action::DropShaderModule(shader_module.to_trace()));
             }
         }
     }
@@ -1629,7 +1629,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(bundle) = _bundle.get() {
             if let Some(t) = bundle.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyRenderBundle(bundle.to_trace()));
+                t.add(trace::Action::DropRenderBundle(bundle.to_trace()));
             }
         }
     }
@@ -1686,7 +1686,7 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(trace) = query_set.device.trace.lock().as_mut() {
-            trace.add(trace::Action::FreeQuerySet(query_set.to_trace()));
+            trace.add(trace::Action::DestroyQuerySet(query_set.to_trace()));
         };
     }
 
@@ -1701,7 +1701,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(query_set) = _query_set.get() {
             if let Some(trace) = query_set.device.trace.lock().as_mut() {
-                trace.add(trace::Action::DestroyQuerySet(query_set.to_trace()));
+                trace.add(trace::Action::DropQuerySet(query_set.to_trace()));
             }
         }
     }
@@ -1999,7 +1999,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(pipeline) = _pipeline.get() {
             if let Some(t) = pipeline.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyRenderPipeline(pipeline.to_trace()));
+                t.add(trace::Action::DropRenderPipeline(pipeline.to_trace()));
             }
         }
     }
@@ -2151,7 +2151,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(pipeline) = _pipeline.get() {
             if let Some(t) = pipeline.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyComputePipeline(pipeline.to_trace()));
+                t.add(trace::Action::DropComputePipeline(pipeline.to_trace()));
             }
         }
     }
@@ -2211,7 +2211,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(cache) = _cache.get() {
             if let Some(t) = cache.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyPipelineCache(cache.to_trace()));
+                t.add(trace::Action::DropPipelineCache(cache.to_trace()));
             }
         }
     }

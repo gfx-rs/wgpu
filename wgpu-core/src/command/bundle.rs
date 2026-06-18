@@ -101,8 +101,9 @@ use crate::command::ArcReferences;
 use crate::{
     binding_model::{BindError, BindGroup, PipelineLayout},
     command::{
-        bind::Binder, BasePass, BindGroupStateChange, ColorAttachmentError, DrawError,
-        IdReferences, MapPassErr, PassErrorScope, RenderCommand, RenderCommandError, StateChange,
+        bind::Binder, pass::validate_immediates_alignment, BasePass, BindGroupStateChange,
+        ColorAttachmentError, DrawError, IdReferences, MapPassErr, PassErrorScope, RenderCommand,
+        RenderCommandError, StateChange,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
@@ -798,6 +799,8 @@ fn set_immediates(
     size_bytes: u32,
     values_offset: Option<u32>,
 ) -> Result<(), RenderBundleErrorInner> {
+    validate_immediates_alignment(offset, size_bytes)?;
+
     let pipeline = state
         .pipeline
         .as_deref()
@@ -1594,7 +1597,7 @@ where
 pub mod bundle_ffi {
     use super::{RenderBundleEncoder, RenderCommand};
     use crate::{command::DrawCommandFamily, id, RawString};
-    use core::{convert::TryInto, slice};
+    use core::slice;
     use wgt::{BufferAddress, BufferSize, DynamicOffset, IndexFormat};
 
     /// # Safety
@@ -1677,21 +1680,10 @@ pub mod bundle_ffi {
         size_bytes: u32,
         data: *const u8,
     ) {
-        assert_eq!(
-            offset & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1),
-            0,
-            "Immediate data offset must be aligned to 4 bytes."
-        );
-        assert_eq!(
-            size_bytes & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1),
-            0,
-            "Immediate data size must be aligned to 4 bytes."
-        );
         let data_slice = unsafe { slice::from_raw_parts(data, size_bytes as usize) };
         let value_offset = pass.base.immediates_data.len().try_into().expect(
             "Ran out of immediate data space. Don't set 4gb of immediates per RenderBundle.",
         );
-
         pass.base.immediates_data.extend(
             data_slice
                 .chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
