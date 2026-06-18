@@ -2,8 +2,8 @@
 name = "naga-xtask"
 version = "0.1.0"
 edition = "2021"
-rust-version.workspace = true
 publish = false
+rust-version.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 anyhow.workspace = true

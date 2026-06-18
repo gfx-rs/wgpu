@@ -6,8 +6,8 @@ edition.workspace = true
 description = "Common types and utilities for wgpu, the cross-platform, safe, pure-rust graphics API"
 homepage.workspace = true
 repository.workspace = true
-license.workspace = true
 keywords.workspace = true
+license.workspace = true
 
 # Override the workspace's `rust-version` key. `wgpu-core` and its dependencies
 # have a less strict MSRV, to allow firefox more leeway in updating their Rust toolchain.
@@ -25,7 +25,34 @@ targets = [
     "wasm32-unknown-unknown",
 ]
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
+
+[lints.clippy]
+std_instead_of_core = "warn"
+std_instead_of_alloc = "warn"
+alloc_instead_of_core = "warn"
+
 [lib]
+
+[features]
+default = ["std"]
+std = ["js-sys?/std", "web-sys?/std", "naga-types/std"]
+strict_asserts = []
+fragile-send-sync-non-atomic-wasm = []
+serde = [
+    "dep:serde",
+    "bitflags/serde",
+    "naga-types/serialize",
+    "naga-types/deserialize",
+]
+# Enables some internal instrumentation for debugging purposes.
+counters = []
+# Enables variants of `Trace` other than `Trace::Off`
+trace = ["std", "serde/std"]
+# Enable web-specific dependencies for wasm.
+web = ["dep:js-sys", "dep:web-sys"]
+exhaust = ["dep:exhaust"]
 
 [dependencies]
 naga-types = { workspace = true, features = [] }
@@ -41,47 +68,20 @@ serde = { workspace = true, default-features = false, features = [
 ], optional = true }
 static_assertions.workspace = true
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = { workspace = true, optional = true, default-features = false }
+web-sys = { workspace = true, optional = true, default-features = false, features = [
+    "ImageBitmap",
+    "ImageData",
+    "HtmlImageElement",
+    "HtmlVideoElement",
+    "HtmlCanvasElement",
+    "OffscreenCanvas",
+    "VideoFrame",
+] }
+
 [dev-dependencies]
 exhaust.workspace = true
 hashbrown.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-js-sys = { workspace = true, default-features = false, optional = true }
-web-sys = { workspace = true, default-features = false, features = [
-    "HtmlCanvasElement",
-    "HtmlImageElement",
-    "HtmlVideoElement",
-    "ImageBitmap",
-    "ImageData",
-    "OffscreenCanvas",
-    "VideoFrame",
-], optional = true }
-
-[features]
-default = ["std"]
-# Enables some internal instrumentation for debugging purposes.
-counters = []
-exhaust = ["dep:exhaust"]
-fragile-send-sync-non-atomic-wasm = []
-serde = [
-    "bitflags/serde",
-    "dep:serde",
-    "naga-types/deserialize",
-    "naga-types/serialize",
-]
-std = ["js-sys?/std", "naga-types/std", "web-sys?/std"]
-strict_asserts = []
-# Enables variants of `Trace` other than `Trace::Off`
-trace = ["serde/std", "std"]
-# Enable web-specific dependencies for wasm.
-web = ["dep:js-sys", "dep:web-sys"]
-
-[lints.clippy]
-alloc_instead_of_core = "warn"
-std_instead_of_alloc = "warn"
-std_instead_of_core = "warn"
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(web_sys_unstable_apis)"] }

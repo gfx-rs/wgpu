@@ -3,53 +3,59 @@ name = "wgpu-test"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-rust-version.workspace = true
 description = "common code for wgpu tests"
 homepage.workspace = true
 repository.workspace = true
-license.workspace = true
 keywords.workspace = true
+license.workspace = true
+rust-version.workspace = true
 publish = false
 
 [[test]]
-harness = true
 name = "wgpu-compile"
+harness = true
 
 [[test]]
-harness = true
 name = "wgpu-dependency"
+harness = true
 
 [[test]]
-harness = false
 name = "wgpu-gpu"
+harness = false
 
 [[test]]
-harness = true
 name = "wgpu_trace"
+harness = true
 
 [[test]]
-harness = true
 name = "wgpu-validation"
+harness = true
+
+[features]
+webgl = []
+# This feature is not actually used by this package, but it being present somewhere in the workspace
+# allows us to force the build to have profiling code enabled so we can test that configuration.
+test-build-with-profiling = ["profiling/type-check"]
 
 # Note that even though this is a package of tests and a library of tests, there is a split of
 # [depenencies] and [dev-dependencies]. This is because keeping as many deps as possible as
 # dev-dependencies will make the dependency graph just a bit shallower, and makes
 # `cargo clippy -- -Wunused-crate-dependencies` give fewer false positives.
 [dependencies]
-naga = { workspace = true, features = [
-    "glsl-out",
-    "hlsl-out",
-    "msl-out",
-    "spv-out",
-    "wgsl-out",
-] }
 # Passthrough backend uses as_hal for the GLES backend, and there's not a great way to cfg-gate that.
 # These are all enabled for any testing on CI anyway, and won't do anything if no devices are detected.
-wgpu = { workspace = true, features = ["angle", "gles", "noop", "webgl"] }
+wgpu = { workspace = true, features = ["noop", "gles", "webgl", "angle"] }
 wgpu-core = { workspace = true, features = ["trace"] }
 wgpu-hal = { workspace = true, features = ["validation_canary"] }
 wgpu-macros.workspace = true
 wgpu-types.workspace = true
+naga = { workspace = true, features = [
+    "spv-out",
+    "wgsl-out",
+    "hlsl-out",
+    "msl-out",
+    "glsl-out",
+] }
 
 anyhow.workspace = true
 arrayvec.workspace = true
@@ -70,15 +76,12 @@ serde_json.workspace = true
 approx.workspace = true
 glam.workspace = true
 half = { workspace = true, features = ["bytemuck", "std"] }
-image.workspace = true
 itertools.workspace = true
+image.workspace = true
 nanorand.workspace = true
 parking_lot.workspace = true
 strum = { workspace = true, features = ["derive"] }
 trybuild.workspace = true
-
-[target.'cfg(not(any(target_arch = "wasm32", miri)))'.dependencies]
-nv-flip.workspace = true
 
 # Non-Webassembly
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -86,6 +89,9 @@ nv-flip.workspace = true
 cargo_metadata.workspace = true
 env_logger.workspace = true
 parking_lot = { workspace = true, features = ["deadlock_detection"] }
+
+[target.'cfg(not(any(target_arch = "wasm32", miri)))'.dependencies]
+nv-flip.workspace = true
 
 # Webassembly
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -97,16 +103,10 @@ web-sys = { workspace = true }
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 image.workspace = true
 js-sys.workspace = true
-wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 wasm-bindgen-test.workspace = true
-web-sys = { workspace = true, features = ["Blob", "CanvasRenderingContext2d"] }
-
-[features]
-# This feature is not actually used by this package, but it being present somewhere in the workspace
-# allows us to force the build to have profiling code enabled so we can test that configuration.
-test-build-with-profiling = ["profiling/type-check"]
-webgl = []
+wasm-bindgen.workspace = true
+web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "Blob"] }
 
 [lints.clippy]
 bool_assert_comparison = "allow"

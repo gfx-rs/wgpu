@@ -10,9 +10,6 @@ publish = false
 [dependencies]
 env_logger.workspace = true
 
-[dev-dependencies]
-tempfile.workspace = true
-
 # We make all dependencies conditional on not being wasm,
 # so the whole workspace can built as wasm.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -21,9 +18,12 @@ deno_core.workspace = true
 deno_features.workspace = true
 deno_url.workspace = true
 deno_web.workspace = true
-deno_webgpu.workspace = true
 deno_webidl.workspace = true
+deno_webgpu.workspace = true
 log.workspace = true
 pico-args.workspace = true
-termcolor.workspace = true
 tokio = { workspace = true, features = ["full"] }
+termcolor.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

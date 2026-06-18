@@ -8,17 +8,17 @@ retries = 0
 
 # Use two threads for tests with "2 threads" in their name
 [[profile.default.overrides]]
-filter = "test(~2_threads) | test(~2 threads)"
+filter = 'test(~2_threads) | test(~2 threads)'
 threads-required = 2
 
 # Use four threads for tests with "4 threads" in their name
 [[profile.default.overrides]]
-filter = "test(~4_threads) | test(~4 threads)"
+filter = 'test(~4_threads) | test(~4 threads)'
 threads-required = 4
 
 # Use eight threads for tests with "8 threads" in their name
 [[profile.default.overrides]]
-filter = "test(~8_threads) | test(~8 threads)"
+filter = 'test(~8_threads) | test(~8 threads)'
 threads-required = 8
 
 #
@@ -27,16 +27,16 @@ threads-required = 8
 
 # https://github.com/gfx-rs/wgpu/issues/7200
 [[profile.default.overrides]]
-filter = "test(wgpu_gpu::image_atomics::image_32_atomics)"
+filter = 'test(wgpu_gpu::image_atomics::image_32_atomics)'
 platform = 'cfg(target_vendor = "apple")'
 retries = 1
 
 [[profile.default.overrides]]
-filter = "test(compile_fail)"
+filter = 'test(compile_fail)'
 slow-timeout = { period = "3m", terminate-after = 2 }
 
 [[profile.default.overrides]]
-filter = "test(~oom_test)"
+filter = 'test(~oom_test)'
 threads-required = "num-test-threads"
 
 #
@@ -46,7 +46,7 @@ threads-required = "num-test-threads"
 #
 [[profile.default.overrides]]
 priority = 1
-filter = "test(clear_texture) | test(clear_buffer_range_respected) | test(compile_fail) | test(test_api)"
+filter = 'test(clear_texture) | test(clear_buffer_range_respected) | test(compile_fail) | test(test_api)'
 
 [profile.default-miri]
 # Miri is very very slow, so give it a much longer timeout.

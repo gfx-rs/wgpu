@@ -5,18 +5,18 @@ edition = "2021"
 rust-version.workspace = true
 publish = false
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    # Added by xshell
+    'cfg(trick_rust_analyzer_into_highlighting_interpolated_bits)',
+] }
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # The dependencies in this config have no transitive dependencies.
 anyhow.workspace = true
 env_logger.workspace = true
+regex-lite.workspace = true
 log.workspace = true
 pico-args.workspace = true
-regex-lite.workspace = true
 serde_json.workspace = true
 xshell.workspace = true
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = [
-    # Added by xshell
-    "cfg(trick_rust_analyzer_into_highlighting_interpolated_bits)",
-] }

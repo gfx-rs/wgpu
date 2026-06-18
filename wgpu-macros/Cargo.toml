@@ -3,12 +3,12 @@ name = "wgpu-macros"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-rust-version.workspace = true
 description = "Macros for wgpu"
 homepage.workspace = true
 repository.workspace = true
-license.workspace = true
 keywords.workspace = true
+license.workspace = true
+rust-version.workspace = true
 exclude = ["Cargo.lock"]
 publish = false
 
