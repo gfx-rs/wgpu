@@ -877,16 +877,11 @@ impl Texture {
     }
 
     /// Panics if called on a single-plane texture and `aspect` is [`crate::FormatAspects::PLANE_1`].
-    /// Panics if called with an aspect different than:
-    ///   - [`crate::FormatAspects::COLOR`],
-    ///   - [`crate::FormatAspects::PLANE_0`],
-    ///   - [`crate::FormatAspects::PLANE_1`],
     pub fn raw_plane(
         &self,
         aspect: crate::FormatAspects,
     ) -> &Retained<ProtocolObject<dyn MTLTexture>> {
         match aspect {
-            crate::FormatAspects::PLANE_0 | crate::FormatAspects::COLOR => &self.raw,
             crate::FormatAspects::PLANE_1 => self
                 .plane1
                 .as_ref()
@@ -894,10 +889,7 @@ impl Texture {
             crate::FormatAspects::PLANE_2 => {
                 panic!("plane_texture(PLANE_2) called and 3-plane textures are unsupported")
             }
-            _ => panic!(
-                "plane_texture called with an unsupported aspect for this texture: {:?}",
-                aspect
-            ),
+            _ => &self.raw,
         }
     }
 }
