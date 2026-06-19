@@ -195,6 +195,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Relaxed locking within `wgpu-core` to enable queue submission processing on one thread to proceed while another thread is blocked in a device poll. To facilitate this, `wgpu-hal` fences are now internally synchronized. By @Vecvec in [#9475](https://github.com/gfx-rs/wgpu/pull/9475).
 - `AdapterInfo::transient_saves_memory` now is `Option<bool>` instead of `bool`. It is `None` on web and `Some` on native platforms. By @beicause in [#9568](https://github.com/gfx-rs/wgpu/pull/9568).
 - BREAKING: `TextureUsages::TRANSIENT` is renamed to `TextureUsages::TRANSIENT_ATTACHMENT` and brought in line with WebGPU spec. Transient textures may now only be used with `LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and `StoreOp::Discard`. By @beicause in [#9568](https://github.com/gfx-rs/wgpu/pull/9568).
+- Validate pipeline layout `immediate_size` and fix its calculation when there are multiple immediate variables. Now it must be >= required size of the shader entry point. By @beicause in [#9711](https://github.com/gfx-rs/wgpu/pull/9711).
 
 #### Validation
 
