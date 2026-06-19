@@ -6,6 +6,9 @@ use crate::{
     proc::{IndexableLengthError, ResolveError},
 };
 
+#[cfg(test)]
+use alloc::boxed::Box;
+
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum ExpressionError {
@@ -1487,7 +1490,7 @@ pub const fn check_literal_value(literal: crate::Literal) -> Result<(), LiteralE
 fn validate_with_expression(
     expr: crate::Expression,
     caps: super::Capabilities,
-) -> Result<ModuleInfo, crate::span::WithSpan<super::ValidationError>> {
+) -> Result<ModuleInfo, Box<crate::span::WithSpan<super::ValidationError>>> {
     use crate::span::Span;
 
     let mut function = crate::Function::default();
@@ -1510,7 +1513,7 @@ fn validate_with_expression(
 fn validate_with_const_expression(
     expr: crate::Expression,
     caps: super::Capabilities,
-) -> Result<ModuleInfo, crate::span::WithSpan<super::ValidationError>> {
+) -> Result<ModuleInfo, Box<crate::span::WithSpan<super::ValidationError>>> {
     use crate::span::Span;
 
     let mut module = crate::Module::default();
@@ -1530,8 +1533,8 @@ fn f64_runtime_literals() {
     );
     let error = result.unwrap_err().into_inner();
     assert!(matches!(
-        error.as_ref(),
-        crate::valid::ValidationErrorInner::Function {
+        error,
+        crate::valid::ValidationError::Function {
             source: super::FunctionError::Expression {
                 source: ExpressionError::Literal(LiteralError::Width(
                     super::r#type::WidthError::MissingCapability {
@@ -1561,8 +1564,8 @@ fn f64_const_literals() {
     );
     let error = result.unwrap_err().into_inner();
     assert!(matches!(
-        error.as_ref(),
-        crate::valid::ValidationErrorInner::ConstExpression {
+        error,
+        crate::valid::ValidationError::ConstExpression {
             source: ConstExpressionError::Literal(LiteralError::Width(
                 super::r#type::WidthError::MissingCapability {
                     name: "f64",

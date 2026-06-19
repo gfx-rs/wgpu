@@ -87,7 +87,7 @@ fn populate_atomic_result() {
     // the differences between the test cases.
     fn try_variant(
         variant: Variant,
-    ) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    ) -> Result<ModuleInfo, Box<naga::WithSpan<naga::valid::ValidationError>>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_u32 = module.types.insert(
@@ -189,7 +189,7 @@ fn populate_call_result() {
     // the differences between the test cases.
     fn try_variant(
         variant: Variant,
-    ) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    ) -> Result<ModuleInfo, Box<naga::WithSpan<naga::valid::ValidationError>>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_u32 = module.types.insert(
@@ -265,7 +265,9 @@ fn emit_workgroup_uniform_load_result() {
     //
     // Looking at uses of the `wg_load` makes it easy to identify the
     // differences between the two variants.
-    fn variant(wg_load: bool) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    fn variant(
+        wg_load: bool,
+    ) -> Result<ModuleInfo, Box<naga::WithSpan<naga::valid::ValidationError>>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_u32 = module.types.insert(
@@ -337,7 +339,7 @@ fn builtin_cross_product_args() {
     fn variant(
         size: VectorSize,
         arity: usize,
-    ) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    ) -> Result<ModuleInfo, Box<naga::WithSpan<naga::valid::ValidationError>>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_vec3f = module.types.insert(
@@ -754,7 +756,7 @@ error: Function [1] 'main' is invalid
 
 #[test]
 fn bad_texture_dimensions_level() {
-    fn validate(level: &str) -> Result<ModuleInfo, naga::valid::ValidationError> {
+    fn validate(level: &str) -> Result<ModuleInfo, Box<naga::valid::ValidationError>> {
         let source = format!(
             r#"
             @group(0) @binding(0)
@@ -767,13 +769,13 @@ fn bad_texture_dimensions_level() {
         let module = naga::front::wgsl::parse_str(&source).expect("module should parse");
         valid::Validator::new(Default::default(), valid::Capabilities::all())
             .validate(&module)
-            .map_err(|err| err.into_inner()) // discard spans
+            .map_err(|err| Box::new(err.into_inner())) // discard spans
     }
 
-    fn is_bad_level_error(result: Result<ModuleInfo, naga::valid::ValidationError>) -> bool {
+    fn is_bad_level_error(result: Result<ModuleInfo, Box<naga::valid::ValidationError>>) -> bool {
         matches!(
-            result.as_ref().map_err(|err| err.as_ref()),
-            Err(naga::valid::ValidationErrorInner::Function {
+            result.map_err(|e| *e),
+            Err(naga::valid::ValidationError::Function {
                 handle: _,
                 name: _,
                 source: naga::valid::FunctionError::Expression {
@@ -923,8 +925,8 @@ fn invalid_local_var_override_sized_array() {
         .into_inner();
 
     assert!(matches!(
-        err.as_ref(),
-        valid::ValidationErrorInner::Function {
+        err,
+        valid::ValidationError::Function {
             source: valid::FunctionError::LocalVariable {
                 name: local_var_name,
                 source: valid::LocalVariableError::InvalidType(_),
@@ -963,8 +965,8 @@ fn invalid_zero_value_runtime_array() {
         .into_inner();
 
     assert!(matches!(
-        err.as_ref(),
-        valid::ValidationErrorInner::Function {
+        err,
+        valid::ValidationError::Function {
             source: valid::FunctionError::LocalVariable {
                 name: local_var_name,
                 source: valid::LocalVariableError::InvalidType(_),
@@ -1004,8 +1006,8 @@ fn invalid_zero_value_override_array() {
         .into_inner();
 
     assert!(matches!(
-        err.as_ref(),
-        valid::ValidationErrorInner::Function {
+        err,
+        valid::ValidationError::Function {
             source: valid::FunctionError::LocalVariable {
                 name: local_var_name,
                 source: valid::LocalVariableError::InvalidType(_),
@@ -1059,8 +1061,8 @@ fn invalid_zero_value_texture() {
         .into_inner();
 
     assert!(matches!(
-        err.as_ref(),
-        valid::ValidationErrorInner::Function {
+        err,
+        valid::ValidationError::Function {
             source: valid::FunctionError::LocalVariable {
                 name: local_var_name,
                 source: valid::LocalVariableError::InvalidType(_),
@@ -1127,8 +1129,8 @@ fn invalid_constructor_runtime_array() {
         .into_inner();
 
     assert!(matches!(
-        err.as_ref(),
-        valid::ValidationErrorInner::Function {
+        err,
+        valid::ValidationError::Function {
             source: valid::FunctionError::LocalVariable {
                 name: local_var_name,
                 source: valid::LocalVariableError::InvalidType(_),
@@ -1186,8 +1188,8 @@ fn invalid_constructor_unsized_struct() {
         .into_inner();
 
     assert!(matches!(
-        err.as_ref(),
-        valid::ValidationErrorInner::Function {
+        err,
+        valid::ValidationError::Function {
             source: valid::FunctionError::LocalVariable {
                 source: valid::LocalVariableError::InvalidType(_),
                 ..
@@ -1203,7 +1205,7 @@ fn arity_check() {
     use naga::Span;
     let _ = env_logger::builder().is_test(true).try_init();
 
-    type Result = core::result::Result<ModuleInfo, naga::valid::ValidationError>;
+    type Result = core::result::Result<ModuleInfo, Box<naga::valid::ValidationError>>;
 
     fn validate(fun: ir::MathFunction, args: &[usize]) -> Result {
         let nowhere = Span::default();
@@ -1244,7 +1246,7 @@ fn arity_check() {
         module.functions.append(f, nowhere);
         valid::Validator::new(Default::default(), valid::Capabilities::all())
             .validate(&module)
-            .map_err(|err| err.into_inner()) // discard spans
+            .map_err(|err| Box::new(err.into_inner())) // discard spans
     }
 
     assert!(validate(Mf::Sin, &[]).is_ok());
@@ -1670,8 +1672,8 @@ fn unexpected_task_payload() {
     );
 
     assert!(matches!(
-        err.as_ref(),
-        valid::ValidationErrorInner::EntryPoint {
+        err,
+        valid::ValidationError::EntryPoint {
             source: valid::EntryPointError::UnexpectedTaskPayload,
             ..
         }
@@ -1690,8 +1692,8 @@ fn coherent_requires_capability() {
         .validate(&module)
         .expect_err("should fail without capability");
     assert!(matches!(
-        err.into_inner().as_ref(),
-        valid::ValidationErrorInner::GlobalVariable {
+        err.into_inner(),
+        valid::ValidationError::GlobalVariable {
             source: valid::GlobalVariableError::CoherentNotSupported,
             ..
         }
@@ -1717,8 +1719,8 @@ fn volatile_requires_capability() {
         .validate(&module)
         .expect_err("should fail without capability");
     assert!(matches!(
-        err.into_inner().as_ref(),
-        valid::ValidationErrorInner::GlobalVariable {
+        err.into_inner(),
+        valid::ValidationError::GlobalVariable {
             source: valid::GlobalVariableError::VolatileNotSupported,
             ..
         }
@@ -1744,8 +1746,8 @@ fn memory_decorations_require_storage_address_space() {
     .validate(&module)
     .expect_err("should fail on non-storage address space");
     assert!(matches!(
-        err.into_inner().as_ref(),
-        valid::ValidationErrorInner::GlobalVariable {
+        err.into_inner(),
+        valid::ValidationError::GlobalVariable {
             source: valid::GlobalVariableError::InvalidMemoryDecorationsAddressSpace,
             ..
         }

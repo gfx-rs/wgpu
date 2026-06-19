@@ -1,8 +1,9 @@
 //! Implementation of `Validator::validate_module_handles`.
 
+use alloc::boxed::Box;
 use core::{convert::TryInto, hash::Hash};
 
-use super::{TypeError, ValidationErrorInner};
+use super::{TypeError, ValidationError};
 use crate::non_max_u32::NonMaxU32;
 use crate::{
     arena::{BadHandle, BadRangeError},
@@ -32,7 +33,7 @@ impl super::Validator {
     /// validation pass.
     pub(super) fn validate_module_handles(
         module: &crate::Module,
-    ) -> Result<(), ValidationErrorInner> {
+    ) -> Result<(), Box<ValidationError>> {
         let &crate::Module {
             ref constants,
             ref overrides,
@@ -302,7 +303,7 @@ impl super::Validator {
                             .contains(&struct_member_index)
                             .then_some(())
                             // TODO: what errors should this be?
-                            .ok_or_else(|| ValidationErrorInner::Type {
+                            .ok_or_else(|| ValidationError::Type {
                                 handle: ty,
                                 name: struct_type.name.as_ref().map_or_else(
                                     || "members length incorrect".to_string(),
@@ -314,14 +315,14 @@ impl super::Validator {
                     _ => {
                         // TODO: internal error ? We should never get here.
                         // If entering there, it's probably that we forgot to adjust a handle in the compact phase.
-                        return Err(ValidationErrorInner::Type {
+                        return Err(Box::new(ValidationError::Type {
                             handle: ty,
                             name: struct_type
                                 .name
                                 .as_ref()
                                 .map_or_else(|| "Unknown".to_string(), |name| name.to_string()),
                             source: TypeError::InvalidData(ty),
-                        });
+                        }));
                     }
                 }
                 for (&function, _) in doc_comments_for_functions.iter() {
@@ -887,21 +888,27 @@ impl super::Validator {
     }
 }
 
-impl From<BadHandle> for ValidationErrorInner {
+impl From<BadHandle> for Box<ValidationError> {
     fn from(source: BadHandle) -> Self {
-        ValidationErrorInner::InvalidHandle(source.into())
+        Box::new(ValidationError::InvalidHandle(source.into()))
     }
 }
 
-impl From<FwdDepError> for ValidationErrorInner {
+impl From<FwdDepError> for Box<ValidationError> {
     fn from(source: FwdDepError) -> Self {
-        ValidationErrorInner::InvalidHandle(source.into())
+        Box::new(ValidationError::InvalidHandle(source.into()))
     }
 }
 
-impl From<BadRangeError> for ValidationErrorInner {
+impl From<BadRangeError> for Box<ValidationError> {
     fn from(source: BadRangeError) -> Self {
-        ValidationErrorInner::InvalidHandle(source.into())
+        Box::new(ValidationError::InvalidHandle(source.into()))
+    }
+}
+
+impl From<InvalidHandleError> for Box<ValidationError> {
+    fn from(source: InvalidHandleError) -> Self {
+        Box::new(ValidationError::InvalidHandle(source))
     }
 }
 

@@ -12,7 +12,7 @@ mod interface;
 mod r#type;
 
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
-use core::ops::{self, Deref, DerefMut};
+use core::ops;
 
 use bit_set::BitSet;
 
@@ -474,35 +474,7 @@ pub enum OverrideError {
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
-#[error(transparent)]
-pub struct ValidationError(Box<ValidationErrorInner>);
-
-impl<T> From<T> for ValidationError
-where
-    T: Into<ValidationErrorInner>,
-{
-    fn from(value: T) -> Self {
-        ValidationError(Box::new(value.into()))
-    }
-}
-
-impl Deref for ValidationError {
-    type Target = Box<ValidationErrorInner>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for ValidationError {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-#[derive(Clone, Debug, thiserror::Error)]
-#[cfg_attr(test, derive(PartialEq))]
-pub enum ValidationErrorInner {
+pub enum ValidationError {
     #[error(transparent)]
     InvalidHandle(#[from] InvalidHandleError),
     #[error(transparent)]
@@ -761,7 +733,7 @@ impl Validator {
     pub fn validate(
         &mut self,
         module: &crate::Module,
-    ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
+    ) -> Result<ModuleInfo, Box<WithSpan<ValidationError>>> {
         self.overrides_resolved = false;
         self.validate_impl(module)
     }
@@ -776,7 +748,7 @@ impl Validator {
     pub fn validate_resolved_overrides(
         &mut self,
         module: &crate::Module,
-    ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
+    ) -> Result<ModuleInfo, Box<WithSpan<ValidationError>>> {
         self.overrides_resolved = true;
         self.validate_impl(module)
     }
@@ -784,11 +756,11 @@ impl Validator {
     fn validate_impl(
         &mut self,
         module: &crate::Module,
-    ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
+    ) -> Result<ModuleInfo, Box<WithSpan<ValidationError>>> {
         self.reset();
         self.reset_types(module.types.len());
 
-        Self::validate_module_handles(module).map_err(|e| ValidationError::from(e).with_span())?;
+        Self::validate_module_handles(module).map_err(|e| Box::new((*e).with_span()))?;
 
         self.layouter.update(module.to_ctx()).map_err(|e| {
             let handle = e.ty;
@@ -813,11 +785,11 @@ impl Validator {
             let ty_info = self
                 .validate_type(handle, module.to_ctx())
                 .map_err(|source| {
-                    ValidationError::from(ValidationErrorInner::Type {
+                    ValidationError::Type {
                         handle,
                         name: ty.name.clone().unwrap_or_default(),
                         source,
-                    })
+                    }
                     .with_span_handle(handle, &module.types)
                 })?;
             debug_assert!(
@@ -835,11 +807,8 @@ impl Validator {
                 mod_info
                     .process_const_expression(handle, &resolve_context, module.to_ctx())
                     .map_err(|source| {
-                        ValidationError::from(ValidationErrorInner::ConstExpression {
-                            handle,
-                            source,
-                        })
-                        .with_span_handle(handle, &module.global_expressions)
+                        ValidationError::ConstExpression { handle, source }
+                            .with_span_handle(handle, &module.global_expressions)
                     })?
             }
         }
@@ -855,7 +824,7 @@ impl Validator {
                     &global_expr_kind,
                 )
                 .map_err(|source| {
-                    ValidationError::from(ValidationErrorInner::ConstExpression { handle, source })
+                    ValidationError::ConstExpression { handle, source }
                         .with_span_handle(handle, &module.global_expressions)
                 })?
             }
@@ -863,11 +832,11 @@ impl Validator {
             for (handle, constant) in module.constants.iter() {
                 self.validate_constant(handle, module.to_ctx(), &mod_info, &global_expr_kind)
                     .map_err(|source| {
-                        ValidationError::from(ValidationErrorInner::Constant {
+                        ValidationError::Constant {
                             handle,
                             name: constant.name.clone().unwrap_or_default(),
                             source,
-                        })
+                        }
                         .with_span_handle(handle, &module.constants)
                     })?
             }
@@ -875,11 +844,11 @@ impl Validator {
             for (handle, r#override) in module.overrides.iter() {
                 self.validate_override(handle, module.to_ctx(), &mod_info)
                     .map_err(|source| {
-                        ValidationError::from(ValidationErrorInner::Override {
+                        ValidationError::Override {
                             handle,
                             name: r#override.name.clone().unwrap_or_default(),
                             source,
-                        })
+                        }
                         .with_span_handle(handle, &module.overrides)
                     })?;
             }
@@ -888,11 +857,11 @@ impl Validator {
         for (var_handle, var) in module.global_variables.iter() {
             self.validate_global_var(var, module.to_ctx(), &mod_info, &global_expr_kind)
                 .map_err(|source| {
-                    ValidationError::from(ValidationErrorInner::GlobalVariable {
+                    ValidationError::GlobalVariable {
                         handle: var_handle,
                         name: var.name.clone().unwrap_or_default(),
                         source,
-                    })
+                    }
                     .with_span_handle(var_handle, &module.global_variables)
                 })?;
         }
@@ -901,14 +870,14 @@ impl Validator {
             match self.validate_function(fun, module, &mod_info, false) {
                 Ok(info) => mod_info.functions.push(info),
                 Err(error) => {
-                    return Err(error.and_then(|source| {
-                        ValidationError::from(ValidationErrorInner::Function {
+                    return Err(Box::new(error.and_then(|source| {
+                        ValidationError::Function {
                             handle,
                             name: fun.name.clone().unwrap_or_default(),
                             source,
-                        })
+                        }
                         .with_span_handle(handle, &module.functions)
-                    }))
+                    })))
                 }
             }
         }
@@ -916,25 +885,27 @@ impl Validator {
         let mut ep_map = FastHashSet::default();
         for ep in module.entry_points.iter() {
             if !ep_map.insert((ep.stage, &ep.name)) {
-                return Err(ValidationError::from(ValidationErrorInner::EntryPoint {
-                    stage: ep.stage,
-                    name: ep.name.clone(),
-                    source: EntryPointError::Conflict,
-                })
-                .with_span()); // TODO: keep some EP span information?
+                return Err(Box::new(
+                    ValidationError::EntryPoint {
+                        stage: ep.stage,
+                        name: ep.name.clone(),
+                        source: EntryPointError::Conflict,
+                    }
+                    .with_span(),
+                )); // TODO: keep some EP span information?
             }
 
             match self.validate_entry_point(ep, module, &mod_info) {
                 Ok(info) => mod_info.entry_points.push(info),
                 Err(error) => {
-                    return Err(error.and_then(|source| {
-                        ValidationError::from(ValidationErrorInner::EntryPoint {
+                    return Err(Box::new(error.and_then(|source| {
+                        ValidationError::EntryPoint {
                             stage: ep.stage,
                             name: ep.name.clone(),
                             source,
-                        })
+                        }
                         .with_span()
-                    }));
+                    })));
                 }
             }
         }
