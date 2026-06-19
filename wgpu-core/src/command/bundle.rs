@@ -585,6 +585,137 @@ impl RenderBundleEncoder {
             size,
         });
     }
+
+    pub fn set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group_id: Option<id::BindGroupId>,
+        offsets: &[wgt::DynamicOffset],
+    ) {
+        let redundant = self.current_bind_groups.set_and_check_redundant(
+            bind_group_id,
+            index,
+            &mut self.base.dynamic_offsets,
+            offsets,
+        );
+
+        if redundant {
+            return;
+        }
+
+        self.base.commands.push(RenderCommand::SetBindGroup {
+            index,
+            num_dynamic_offsets: offsets.len(),
+            bind_group: bind_group_id,
+        });
+    }
+
+    pub fn set_pipeline(&mut self, pipeline_id: id::RenderPipelineId) {
+        if self.current_pipeline.set_and_check_redundant(pipeline_id) {
+            return;
+        }
+
+        self.base
+            .commands
+            .push(RenderCommand::SetPipeline(pipeline_id));
+    }
+
+    pub fn set_vertex_buffer(
+        &mut self,
+        slot: u32,
+        buffer_id: Option<id::BufferId>,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferSize>,
+    ) {
+        self.base.commands.push(RenderCommand::SetVertexBuffer {
+            slot,
+            buffer: buffer_id,
+            offset,
+            size,
+        });
+    }
+
+    pub fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        let value_offset = self.base.immediates_data.len().try_into().expect(
+            "Ran out of immediate data space. Don't set 4gb of immediates per RenderBundle.",
+        );
+        self.base.immediates_data.extend(
+            data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
+                .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
+        );
+
+        self.base.commands.push(RenderCommand::SetImmediate {
+            offset,
+            size_bytes: data.len() as u32,
+            values_offset: Some(value_offset),
+        });
+    }
+
+    pub fn draw(
+        &mut self,
+        vertex_count: u32,
+        instance_count: u32,
+        first_vertex: u32,
+        first_instance: u32,
+    ) {
+        self.base.commands.push(RenderCommand::Draw {
+            vertex_count,
+            instance_count,
+            first_vertex,
+            first_instance,
+        });
+    }
+
+    pub fn draw_indexed(
+        &mut self,
+        index_count: u32,
+        instance_count: u32,
+        first_index: u32,
+        base_vertex: i32,
+        first_instance: u32,
+    ) {
+        self.base.commands.push(RenderCommand::DrawIndexed {
+            index_count,
+            instance_count,
+            first_index,
+            base_vertex,
+            first_instance,
+        });
+    }
+
+    pub fn draw_indirect(&mut self, buffer_id: id::BufferId, offset: wgt::BufferAddress) {
+        self.base.commands.push(RenderCommand::DrawIndirect {
+            buffer: buffer_id,
+            offset,
+            count: 1,
+            family: DrawCommandFamily::Draw,
+            vertex_or_index_limit: None,
+            instance_limit: None,
+        });
+    }
+
+    pub fn draw_indexed_indirect(&mut self, buffer_id: id::BufferId, offset: wgt::BufferAddress) {
+        self.base.commands.push(RenderCommand::DrawIndirect {
+            buffer: buffer_id,
+            offset,
+            count: 1,
+            family: DrawCommandFamily::DrawIndexed,
+            vertex_or_index_limit: None,
+            instance_limit: None,
+        });
+    }
+
+    pub fn push_debug_group(&mut self, _label: &str) {
+        //TODO
+    }
+
+    pub fn pop_debug_group(&mut self) {
+        //TODO
+    }
+
+    pub fn insert_debug_marker(&mut self, _label: &str) {
+        //TODO
+    }
 }
 
 fn set_bind_group(
@@ -1594,12 +1725,131 @@ where
     }
 }
 
+impl crate::global::Global {
+    pub fn render_bundle_encoder_set_bind_group(
+        &self,
+        bundle: &mut RenderBundleEncoder,
+        index: u32,
+        bind_group_id: Option<id::BindGroupId>,
+        offsets: &[wgt::DynamicOffset],
+    ) {
+        bundle.set_bind_group(index, bind_group_id, offsets);
+    }
+
+    pub fn render_bundle_encoder_set_pipeline(
+        &self,
+        bundle: &mut RenderBundleEncoder,
+        pipeline_id: id::RenderPipelineId,
+    ) {
+        bundle.set_pipeline(pipeline_id);
+    }
+
+    pub fn render_bundle_encoder_set_vertex_buffer(
+        &self,
+        bundle: &mut RenderBundleEncoder,
+        slot: u32,
+        buffer_id: Option<id::BufferId>,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferSize>,
+    ) {
+        bundle.set_vertex_buffer(slot, buffer_id, offset, size);
+    }
+
+    pub fn render_bundle_encoder_set_index_buffer(
+        &self,
+        encoder: &mut RenderBundleEncoder,
+        buffer: id::BufferId,
+        index_format: wgt::IndexFormat,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferSize>,
+    ) {
+        encoder.set_index_buffer(buffer, index_format, offset, size);
+    }
+
+    pub fn render_bundle_encoder_set_immediates(
+        &self,
+        pass: &mut RenderBundleEncoder,
+        offset: u32,
+        data: &[u8],
+    ) {
+        pass.set_immediates(offset, data);
+    }
+
+    pub fn render_bundle_encoder_draw(
+        &self,
+        bundle: &mut RenderBundleEncoder,
+        vertex_count: u32,
+        instance_count: u32,
+        first_vertex: u32,
+        first_instance: u32,
+    ) {
+        bundle.draw(vertex_count, instance_count, first_vertex, first_instance);
+    }
+
+    pub fn render_bundle_encoder_draw_indexed(
+        &self,
+        bundle: &mut RenderBundleEncoder,
+        index_count: u32,
+        instance_count: u32,
+        first_index: u32,
+        base_vertex: i32,
+        first_instance: u32,
+    ) {
+        bundle.draw_indexed(
+            index_count,
+            instance_count,
+            first_index,
+            base_vertex,
+            first_instance,
+        );
+    }
+
+    pub fn render_bundle_encoder_draw_indirect(
+        &self,
+        bundle: &mut RenderBundleEncoder,
+        buffer_id: id::BufferId,
+        offset: wgt::BufferAddress,
+    ) {
+        bundle.draw_indirect(buffer_id, offset);
+    }
+
+    pub fn render_bundle_encoder_draw_indexed_indirect(
+        &self,
+        bundle: &mut RenderBundleEncoder,
+        buffer_id: id::BufferId,
+        offset: wgt::BufferAddress,
+    ) {
+        bundle.draw_indexed_indirect(buffer_id, offset);
+    }
+
+    pub fn render_bundle_encoder_push_debug_group(
+        &self,
+        bundle: &mut RenderBundleEncoder,
+        label: &str,
+    ) {
+        bundle.push_debug_group(label);
+    }
+
+    pub fn render_bundle_encoder_pop_debug_group(&self, bundle: &mut RenderBundleEncoder) {
+        bundle.pop_debug_group();
+    }
+
+    pub fn render_bundle_encoder_insert_debug_marker(
+        &self,
+        bundle: &mut RenderBundleEncoder,
+        label: &str,
+    ) {
+        bundle.insert_debug_marker(label);
+    }
+}
+
 pub mod bundle_ffi {
-    use super::{RenderBundleEncoder, RenderCommand};
-    use crate::{command::DrawCommandFamily, id, RawString};
+    use super::RenderBundleEncoder;
+    use crate::{id, RawString};
     use core::slice;
     use wgt::{BufferAddress, BufferSize, DynamicOffset, IndexFormat};
 
+    #[deprecated(note = "Use `Global::render_bundle_encoder_set_bind_group` instead.")]
     /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
@@ -1613,38 +1863,18 @@ pub mod bundle_ffi {
     ) {
         let offsets = unsafe { slice::from_raw_parts(offsets, offset_length) };
 
-        let redundant = bundle.current_bind_groups.set_and_check_redundant(
-            bind_group_id,
-            index,
-            &mut bundle.base.dynamic_offsets,
-            offsets,
-        );
-
-        if redundant {
-            return;
-        }
-
-        bundle.base.commands.push(RenderCommand::SetBindGroup {
-            index,
-            num_dynamic_offsets: offset_length,
-            bind_group: bind_group_id,
-        });
+        bundle.set_bind_group(index, bind_group_id, offsets);
     }
 
+    #[deprecated(note = "Use `Global::render_bundle_encoder_set_pipeline` instead.")]
     pub fn wgpu_render_bundle_set_pipeline(
         bundle: &mut RenderBundleEncoder,
         pipeline_id: id::RenderPipelineId,
     ) {
-        if bundle.current_pipeline.set_and_check_redundant(pipeline_id) {
-            return;
-        }
-
-        bundle
-            .base
-            .commands
-            .push(RenderCommand::SetPipeline(pipeline_id));
+        bundle.set_pipeline(pipeline_id);
     }
 
+    #[deprecated(note = "Use `Global::render_bundle_encoder_set_vertex_buffer` instead.")]
     pub fn wgpu_render_bundle_set_vertex_buffer(
         bundle: &mut RenderBundleEncoder,
         slot: u32,
@@ -1652,14 +1882,10 @@ pub mod bundle_ffi {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
-        bundle.base.commands.push(RenderCommand::SetVertexBuffer {
-            slot,
-            buffer: buffer_id,
-            offset,
-            size,
-        });
+        bundle.set_vertex_buffer(slot, buffer_id, offset, size);
     }
 
+    #[deprecated(note = "Use `Global::render_bundle_encoder_set_index_buffer` instead.")]
     pub fn wgpu_render_bundle_set_index_buffer(
         encoder: &mut RenderBundleEncoder,
         buffer: id::BufferId,
@@ -1670,6 +1896,7 @@ pub mod bundle_ffi {
         encoder.set_index_buffer(buffer, index_format, offset, size);
     }
 
+    #[deprecated(note = "Use `Global::render_bundle_encoder_set_immediates` instead.")]
     /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
@@ -1681,22 +1908,10 @@ pub mod bundle_ffi {
         data: *const u8,
     ) {
         let data_slice = unsafe { slice::from_raw_parts(data, size_bytes as usize) };
-        let value_offset = pass.base.immediates_data.len().try_into().expect(
-            "Ran out of immediate data space. Don't set 4gb of immediates per RenderBundle.",
-        );
-        pass.base.immediates_data.extend(
-            data_slice
-                .chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
-                .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
-        );
-
-        pass.base.commands.push(RenderCommand::SetImmediate {
-            offset,
-            size_bytes,
-            values_offset: Some(value_offset),
-        });
+        pass.set_immediates(offset, data_slice);
     }
 
+    #[deprecated(note = "Use `Global::render_bundle_encoder_draw` instead.")]
     pub fn wgpu_render_bundle_draw(
         bundle: &mut RenderBundleEncoder,
         vertex_count: u32,
@@ -1704,14 +1919,10 @@ pub mod bundle_ffi {
         first_vertex: u32,
         first_instance: u32,
     ) {
-        bundle.base.commands.push(RenderCommand::Draw {
-            vertex_count,
-            instance_count,
-            first_vertex,
-            first_instance,
-        });
+        bundle.draw(vertex_count, instance_count, first_vertex, first_instance);
     }
 
+    #[deprecated(note = "Use `Global::render_bundle_encoder_draw_indexed` instead.")]
     pub fn wgpu_render_bundle_draw_indexed(
         bundle: &mut RenderBundleEncoder,
         index_count: u32,
@@ -1720,45 +1931,34 @@ pub mod bundle_ffi {
         base_vertex: i32,
         first_instance: u32,
     ) {
-        bundle.base.commands.push(RenderCommand::DrawIndexed {
+        bundle.draw_indexed(
             index_count,
             instance_count,
             first_index,
             base_vertex,
             first_instance,
-        });
+        );
     }
 
+    #[deprecated(note = "Use `Global::render_bundle_encoder_draw_indirect` instead.")]
     pub fn wgpu_render_bundle_draw_indirect(
         bundle: &mut RenderBundleEncoder,
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        bundle.base.commands.push(RenderCommand::DrawIndirect {
-            buffer: buffer_id,
-            offset,
-            count: 1,
-            family: DrawCommandFamily::Draw,
-            vertex_or_index_limit: None,
-            instance_limit: None,
-        });
+        bundle.draw_indirect(buffer_id, offset);
     }
 
+    #[deprecated(note = "Use `Global::render_bundle_encoder_draw_indexed_indirect` instead.")]
     pub fn wgpu_render_bundle_draw_indexed_indirect(
         bundle: &mut RenderBundleEncoder,
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        bundle.base.commands.push(RenderCommand::DrawIndirect {
-            buffer: buffer_id,
-            offset,
-            count: 1,
-            family: DrawCommandFamily::DrawIndexed,
-            vertex_or_index_limit: None,
-            instance_limit: None,
-        });
+        bundle.draw_indexed_indirect(buffer_id, offset);
     }
 
+    #[deprecated(note = "Use `Global::render_bundle_encoder_push_debug_group` instead.")]
     /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given `label`
@@ -1770,10 +1970,12 @@ pub mod bundle_ffi {
         //TODO
     }
 
+    #[deprecated(note = "Use `Global::render_bundle_encoder_pop_debug_group` instead.")]
     pub fn wgpu_render_bundle_pop_debug_group(_bundle: &mut RenderBundleEncoder) {
         //TODO
     }
 
+    #[deprecated(note = "Use `Global::render_bundle_encoder_insert_debug_marker` instead.")]
     /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given `label`
