@@ -432,7 +432,7 @@ impl AdapterShared {
                     // for more information.
                     subgroup_min_size: 4,
                     subgroup_max_size: 64,
-                    transient_saves_memory: shared.private_caps.supports_memoryless_storage,
+                    transient_saves_memory: Some(shared.private_caps.supports_memoryless_storage),
                     ..wgt::AdapterInfo::new(shared.private_caps.device_type(), wgt::Backend::Metal)
                 },
                 features,
@@ -858,6 +858,10 @@ pub struct Texture {
     array_layers: u32,
     mip_levels: u32,
     copy_size: crate::CopyExtent,
+
+    // The `drop_guard` field must be the last field of this struct so it is dropped last.
+    // Do not add new fields after it.
+    _drop_guard: Option<crate::DropGuard>,
 }
 
 impl Texture {

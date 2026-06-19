@@ -4,3 +4,10 @@ disallowed-types = [
     { path = "std::collections::HashMap", reason = "use hashbrown::HashMap instead" },
     { path = "std::collections::HashSet", reason = "use hashbrown::HashSet instead" },
 ]
+
+# This relatively small stack frame limit is set to avoid problems in several deeply
+# recursive functions in naga. If your function has a genuine need for a larger stack frame,
+# and is not at risk of deep recursion based on shader structure, it is okay to waive the
+# associated `clippy::large_stack_frames` lint.
+# TODO(https://github.com/gfx-rs/wgpu/issues/9456): Consider reducing this further
+stack-size-threshold = 40_960

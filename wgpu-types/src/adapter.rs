@@ -209,8 +209,9 @@ pub struct AdapterInfo {
     /// - WARP: 4 or 128
     /// - lavapipe: 8
     pub subgroup_max_size: u32,
-    /// If true, adding [`TextureUsages::TRANSIENT`] to a texture will decrease memory usage.
-    pub transient_saves_memory: bool,
+    /// Whether adding [`TextureUsages::TRANSIENT_ATTACHMENT`] to a texture will decrease memory usage.
+    /// This is None on web, which means it is unknown from the adapter.
+    pub transient_saves_memory: Option<bool>,
 
     /// If limit bucketing was requested, contains the name of the applied
     /// bucket and the original capabilities of the adapter.
@@ -233,7 +234,7 @@ impl AdapterInfo {
             backend,
             subgroup_min_size: crate::MINIMUM_SUBGROUP_MIN_SIZE,
             subgroup_max_size: crate::MAXIMUM_SUBGROUP_MAX_SIZE,
-            transient_saves_memory: false,
+            transient_saves_memory: None,
             limit_bucket: None,
         }
     }
