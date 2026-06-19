@@ -595,10 +595,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::TextureCopy>,
     {
-        let reinterpret_dst = if src.format != dst.format
-            && !dst.format.is_multi_planar_format()
-            && !src.format.is_multi_planar_format()
-        {
+        let reinterpret_dst = if src.format != dst.format && !src.format.is_multi_planar_format() {
             let raw_format = self
                 .shared
                 .private_texture_format_caps
