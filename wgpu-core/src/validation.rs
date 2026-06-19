@@ -296,11 +296,23 @@ struct EntryPoint {
     immediate_slots_required: naga::valid::ImmediateSlots,
 }
 
+#[derive(Debug, Hash, PartialEq, Eq)]
+struct EntryPointKey(naga::ShaderStage, String);
+
+#[derive(Debug, Hash, PartialEq, Eq)]
+struct EntryPointKeyRef<'a>(naga::ShaderStage, &'a str);
+
+impl hashbrown::Equivalent<EntryPointKey> for EntryPointKeyRef<'_> {
+    fn equivalent(&self, key: &EntryPointKey) -> bool {
+        self.0 == key.0 && self.1 == key.1
+    }
+}
+
 #[derive(Debug)]
 pub struct Interface {
     limits: wgt::Limits,
     resources: naga::Arena<Resource>,
-    entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
+    entry_points: FastHashMap<EntryPointKey, EntryPoint>,
     pub(crate) immediate_size: u32,
 }
 
@@ -1321,7 +1333,10 @@ impl Interface {
                 );
             }
 
-            entry_points.insert((entry_point.stage, entry_point.name.clone()), ep);
+            entry_points.insert(
+                EntryPointKey(entry_point.stage, entry_point.name.clone()),
+                ep,
+            );
         }
 
         Self {
@@ -1338,7 +1353,7 @@ impl Interface {
         entry_point_name: &str,
     ) -> naga::valid::ImmediateSlots {
         self.entry_points
-            .get(&(stage, entry_point_name.to_string()))
+            .get(&EntryPointKeyRef(stage, entry_point_name))
             .map_or(Default::default(), |ep| ep.immediate_slots_required)
     }
 
@@ -1351,10 +1366,12 @@ impl Interface {
             .map(|ep| ep.to_string())
             .map(Ok)
             .unwrap_or_else(|| {
-                let mut entry_points = self
-                    .entry_points
-                    .keys()
-                    .filter_map(|(ep_stage, name)| (ep_stage == &stage).then_some(name));
+                let mut entry_points =
+                    self.entry_points
+                        .keys()
+                        .filter_map(|EntryPointKey(ep_stage, name)| {
+                            (ep_stage == &stage).then_some(name)
+                        });
                 let first = entry_points.next().ok_or(StageError::NoEntryPointFound)?;
                 if entry_points.next().is_some() {
                     return Err(StageError::MultipleEntryPointsFound);
@@ -1376,12 +1393,12 @@ impl Interface {
     ) -> Result<StageIo, StageError> {
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
-        let pair = (shader_stage.to_naga(), entry_point_name.to_string());
+        let pair = EntryPointKeyRef(shader_stage.to_naga(), entry_point_name);
         let entry_point = match self.entry_points.get(&pair) {
             Some(some) => some,
-            None => return Err(StageError::MissingEntryPoint(pair.1)),
+            None => return Err(StageError::MissingEntryPoint(pair.1.to_string())),
         };
-        let (_, entry_point_name) = pair;
+        let EntryPointKeyRef(_, entry_point_name) = pair;
 
         let stage_bit = shader_stage.to_wgt_bit();
 
@@ -1892,17 +1909,6 @@ impl Interface {
                 None
             },
         })
-    }
-
-    pub fn fragment_uses_dual_source_blending(
-        &self,
-        entry_point_name: &str,
-    ) -> Result<bool, StageError> {
-        let pair = (naga::ShaderStage::Fragment, entry_point_name.to_string());
-        self.entry_points
-            .get(&pair)
-            .ok_or(StageError::MissingEntryPoint(pair.1))
-            .map(|ep| ep.dual_source_blending)
     }
 }
 
