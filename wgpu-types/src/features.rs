@@ -1009,7 +1009,7 @@ bitflags_array! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
-        /// - Metal
+        /// - Metal (simulated)
         ///
         /// This is a native only feature.
         ///

@@ -614,10 +614,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
             // no clamping is done: Metal expects physical sizes here
             let extent = conv::map_copy_extent(&copy.size);
 
-            let src_raw = src.plane_texture(copy.src_base.aspect);
+            let src_raw = src.raw_plane(copy.src_base.aspect);
             let dst_raw = match reinterpret_dst.as_ref() {
                 Some(dst) => dst,
-                None => dst.plane_texture(copy.dst_base.aspect),
+                None => dst.raw_plane(copy.dst_base.aspect),
             };
             unsafe {
                 encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin(
@@ -669,7 +669,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     bytes_per_row as usize,
                     image_byte_stride as usize,
                     conv::map_copy_extent(&extent),
-                    dst.plane_texture(copy.texture_base.aspect),
+                    dst.raw_plane(copy.texture_base.aspect),
                     copy.texture_base.array_layer as usize,
                     copy.texture_base.mip_level as usize,
                     dst_origin,
@@ -703,7 +703,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 .map_or(0, |v| v as u64 * bytes_per_row);
             unsafe {
                 encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage_options(
-                    src.plane_texture(copy.texture_base.aspect),
+                    src.raw_plane(copy.texture_base.aspect),
                     copy.texture_base.array_layer as usize,
                     copy.texture_base.mip_level as usize,
                     src_origin,

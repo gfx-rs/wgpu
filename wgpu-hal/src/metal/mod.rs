@@ -852,6 +852,7 @@ impl crate::BufferBinding<'_, Buffer> {
 
 #[derive(Debug)]
 pub struct Texture {
+    /// Should be accessed using [`Texture::raw_plane`]
     raw: Retained<ProtocolObject<dyn MTLTexture>>,
     plane1: Option<Retained<ProtocolObject<dyn MTLTexture>>>,
     format: wgt::TextureFormat,
@@ -866,20 +867,37 @@ pub struct Texture {
 }
 
 impl Texture {
+    /// Panics if called on a multi-plane texture
     pub fn raw_handle(&self) -> &ProtocolObject<dyn MTLTexture> {
+        if self.plane1.is_some() {
+            panic!("raw_handle called on a multi-plane texture");
+        }
+
         &self.raw
     }
 
-    pub fn plane_texture(
+    /// Panics if called on a single-plane texture and `aspect` is [`crate::FormatAspects::PLANE_1`].
+    /// Panics if called with an aspect different than:
+    ///   - [`crate::FormatAspects::COLOR`],
+    ///   - [`crate::FormatAspects::PLANE_0`],
+    ///   - [`crate::FormatAspects::PLANE_1`],
+    pub fn raw_plane(
         &self,
         aspect: crate::FormatAspects,
     ) -> &Retained<ProtocolObject<dyn MTLTexture>> {
-        if aspect == crate::FormatAspects::PLANE_1 {
-            self.plane1
+        match aspect {
+            crate::FormatAspects::PLANE_0 | crate::FormatAspects::COLOR => &self.raw,
+            crate::FormatAspects::PLANE_1 => self
+                .plane1
                 .as_ref()
-                .expect("plane_texture(PLANE_1) called on a single-plane texture")
-        } else {
-            &self.raw
+                .expect("plane_texture(PLANE_1) called on a single-plane texture"),
+            crate::FormatAspects::PLANE_2 => {
+                panic!("plane_texture(PLANE_2) called and 3-plane textures are unsupported")
+            }
+            _ => panic!(
+                "plane_texture called with an unsupported aspect for this texture: {:?}",
+                aspect
+            ),
         }
     }
 }
