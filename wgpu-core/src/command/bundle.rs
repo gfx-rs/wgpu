@@ -794,14 +794,12 @@ fn set_vertex_buffer(
 }
 
 fn set_immediates(state: &mut State, offset: u32, data: &[u8]) -> Result<(), ImmediateUploadError> {
-    let size_bytes =
-        u32::try_from(data.len()).map_err(|_| ImmediateUploadError::ImmediateOutOfMemory)?;
-    validate_immediates_alignment(offset, size_bytes)?;
+    validate_immediates_alignment(offset, data.len())?;
 
     let limit = state.device.limits.max_immediate_size;
     let beyond_limit_err = ImmediateUploadError::EndOffsetBeyondLimit {
         start_offset: offset,
-        size: size_bytes,
+        size: data.len(),
         limit,
     };
     if data
@@ -818,7 +816,7 @@ fn set_immediates(state: &mut State, offset: u32, data: &[u8]) -> Result<(), Imm
         state.immediates.resize(end_offset, 0);
     }
     state.immediates[(offset as usize)..][..data.len()].copy_from_slice(data);
-    state.immediate_slots_set |= naga::valid::ImmediateSlots::from_range(offset, size_bytes);
+    state.immediate_slots_set |= naga::valid::ImmediateSlots::from_range(offset, data.len() as u32);
     state.immediate_dirty = true;
     Ok(())
 }

@@ -205,13 +205,13 @@ where
 
 pub(crate) fn validate_immediates_alignment(
     offset: u32,
-    size_bytes: u32,
+    size_bytes: usize,
 ) -> Result<(), ImmediateUploadError> {
     if !offset.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
         return Err(ImmediateUploadError::StartOffsetUnaligned(offset));
     }
 
-    if !size_bytes.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
+    if !size_bytes.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT as usize) {
         return Err(ImmediateUploadError::SizeUnaligned(size_bytes));
     }
 
@@ -224,12 +224,12 @@ where
 {
     api_log!("Pass::set_immediates");
 
-    // Alignment and `data.len()` has been validated when pushing `SetImmediate` commands.
+    // Alignment has been validated when pushing `SetImmediate` commands.
 
     let limit = state.base.device.limits.max_immediate_size;
     let beyond_limit_err = ImmediateUploadError::EndOffsetBeyondLimit {
         start_offset: offset,
-        size: data.len() as u32,
+        size: data.len(),
         limit,
     };
     if data

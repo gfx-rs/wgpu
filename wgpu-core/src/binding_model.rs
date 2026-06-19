@@ -873,8 +873,6 @@ impl WebGpuError for CreatePipelineLayoutError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ImmediateUploadError {
-    #[error("Ran out of immediate data space. Don't set 4gb of immediates per pass")]
-    ImmediateOutOfMemory,
     #[error(
         "Provided immediate data start offset {start_offset} overruns the range with a size of {immediate_size}"
     )]
@@ -893,7 +891,7 @@ pub enum ImmediateUploadError {
         `IMMEDIATE_DATA_ALIGNMENT` ({ida})",
         ida = wgt::IMMEDIATE_DATA_ALIGNMENT
     )]
-    SizeUnaligned(u32),
+    SizeUnaligned(usize),
     #[error(
         "Provided immediate data start offset {} + size {} overruns `max_immediate_size` {} ",
         start_offset,
@@ -902,7 +900,7 @@ pub enum ImmediateUploadError {
     )]
     EndOffsetBeyondLimit {
         start_offset: u32,
-        size: u32,
+        size: usize,
         limit: u32,
     },
 }

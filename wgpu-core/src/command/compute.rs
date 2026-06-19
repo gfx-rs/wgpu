@@ -1217,15 +1217,10 @@ impl Global {
         let scope = PassErrorScope::SetImmediate;
         let base = pass_base!(pass, scope);
 
-        let size_bytes = pass_try!(
-            base,
-            scope,
-            u32::try_from(data.len()).map_err(|_| ImmediateUploadError::ImmediateOutOfMemory)
-        );
         pass_try!(
             base,
             scope,
-            pass::validate_immediates_alignment(offset, size_bytes)
+            pass::validate_immediates_alignment(offset, data.len())
         );
 
         base.commands.push(ArcComputeCommand::SetImmediate {
