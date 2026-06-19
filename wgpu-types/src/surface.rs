@@ -399,6 +399,10 @@ pub struct SurfaceFormatCapabilities {
     pub format: TextureFormat,
     /// The set of color spaces the surface supports for this format.
     ///
+    /// This reports which color spaces the surface can be *configured* with; it
+    /// does not reflect whether the display is currently in HDR mode. For the
+    /// display's live HDR state, see [`DisplayHdrInfo`].
+    ///
     /// Guaranteed to be non-empty.
     pub color_spaces: SurfaceColorSpaces,
 }

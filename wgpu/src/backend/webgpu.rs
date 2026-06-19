@@ -3936,14 +3936,6 @@ impl Drop for WebRenderBundle {
     }
 }
 
-/// Returns whether the current output device reports a high dynamic range.
-///
-/// Worker contexts have no [`web_sys::Window`] (and thus no `matchMedia`), so
-/// they conservatively report `false`.
-fn environment_supports_hdr() -> bool {
-    match_media_query("(dynamic-range: high)") == Some(true)
-}
-
 /// Evaluates a CSS media query, or returns `None` when there is no
 /// [`web_sys::Window`] (e.g. a Worker / `OffscreenCanvas` context, where
 /// `matchMedia` is absent). Never panics.
@@ -4069,13 +4061,20 @@ impl dispatch::SurfaceInterface for WebSurface {
                         wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::DISPLAY_P3;
                     // An fp16 canvas with "extended" tone mapping holds
                     // encoded extended-range values (the nonlinear sRGB OETF,
-                    // continued beyond [0, 1]), but only an HDR-capable display
-                    // can present values brighter than SDR reference white.
-                    // WebGPU has no linear canvas color space, so the web
-                    // backend advertises the encoded `ExtendedSrgb` and, for the
-                    // "display-p3" canvas, the wide-gamut `ExtendedDisplayP3` —
-                    // not the linear `ExtendedSrgbLinear`.
-                    if format == wgt::TextureFormat::Rgba16Float && environment_supports_hdr() {
+                    // continued beyond [0, 1]). "extended" tone mapping is a
+                    // configuration the canvas always accepts on an fp16 surface,
+                    // independent of the display: an SDR display clamps the
+                    // out-of-range values rather than rejecting the config (and
+                    // `configure` here never gates on display HDR state either).
+                    // So these spaces are gated on fp16-canvas support alone —
+                    // the same condition that puts `Rgba16Float` in `formats` —
+                    // not on whether the display is currently HDR; that signal
+                    // belongs to `display_hdr_info`. WebGPU has no linear canvas
+                    // color space, so the web backend advertises the encoded
+                    // `ExtendedSrgb` and, for the "display-p3" canvas, the
+                    // wide-gamut `ExtendedDisplayP3` — not the linear
+                    // `ExtendedSrgbLinear`.
+                    if format == wgt::TextureFormat::Rgba16Float {
                         color_spaces |= wgt::SurfaceColorSpaces::EXTENDED_SRGB
                             | wgt::SurfaceColorSpaces::EXTENDED_DISPLAY_P3;
                     }
