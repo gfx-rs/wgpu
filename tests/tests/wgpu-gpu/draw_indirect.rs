@@ -29,6 +29,10 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         INDIRECT_BUFFER_OFFSETS,
         MULTI_DRAW_INDEXED_INDIRECT,
         MULTI_DRAW_INDIRECT,
+        MULTI_DRAW_INDIRECT_COUNT,
+        MULTI_DRAW_INDEXED_INDIRECT_COUNT,
+        MULTI_DRAW_INDIRECT_COUNT_PARTIAL_COUNT,
+        MULTI_DRAW_INDEXED_INDIRECT_COUNT_PARTIAL_COUNT,
     ]);
 }
 
@@ -833,3 +837,242 @@ static MULTI_DRAW_INDIRECT: GpuTestConfiguration = GpuTestConfiguration::new()
             .limits(wgpu::Limits::downlevel_defaults()),
     )
     .run_async(|ctx| run_test_inner(ctx, get_draw_test_data(0, 6), false, true));
+
+async fn run_test_multi_draw_indirect_count(
+    ctx: TestingContext,
+    test_data: TestData,
+    actual_count: u32,
+    max_count: u32,
+) {
+    let vertex_buffer_layout = wgpu::VertexBufferLayout {
+        array_stride: 8,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &vertex_attr_array![0 => Float32x2],
+    };
+    let vertex_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(test_data.vertex_buffer_content()),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+
+    let (index_buffer, index_format) = match test_data.kind {
+        Kind::NonIndexed { .. } => (None, wgpu::IndexFormat::default()),
+        Kind::Indexed {
+            index_buffer_content,
+            ..
+        } => (
+            Some(ctx.device.create_buffer_init(&BufferInitDescriptor {
+                label: None,
+                contents: bytemuck::cast_slice(index_buffer_content),
+                usage: wgpu::BufferUsages::INDEX,
+            })),
+            wgpu::IndexFormat::Uint32,
+        ),
+    };
+
+    let shader_src = "
+        @vertex
+        fn vs_main(@location(0) position: vec2f) -> @builtin(position) vec4f {
+            return vec4f(position, 0.0, 1.0);
+        }
+
+        @fragment
+        fn fs_main() -> @location(0) vec4f {
+            return vec4f(1.0);
+        }
+    ";
+
+    let shader = ctx
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(shader_src.into()),
+        });
+
+    let pipeline_desc = wgpu::RenderPipelineDescriptor {
+        label: None,
+        layout: None,
+        vertex: wgpu::VertexState {
+            buffers: &[Some(vertex_buffer_layout)],
+            module: &shader,
+            entry_point: Some("vs_main"),
+            compilation_options: Default::default(),
+        },
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_main"),
+            compilation_options: Default::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: wgpu::TextureFormat::R8Unorm,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        multiview_mask: None,
+        cache: None,
+    };
+    let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
+
+    let out_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: 256,
+            height: 256,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::R8Unorm,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let out_texture_view = out_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+    let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 256 * 256,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut indirect_bytes = Vec::new();
+    for _ in 0..max_count {
+        test_data.write_indirect_args(&mut indirect_bytes);
+    }
+    let indirect_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: &indirect_bytes,
+        usage: wgpu::BufferUsages::INDIRECT,
+    });
+
+    let count_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice::<u32, u8>(&[actual_count]),
+        usage: wgpu::BufferUsages::INDIRECT,
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &out_texture_view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                    store: wgpu::StoreOp::Store,
+                },
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+
+        rpass.set_pipeline(&pipeline);
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        if let Some(ref index_buffer) = index_buffer {
+            rpass.set_index_buffer(index_buffer.slice(..), index_format);
+        }
+
+        if index_buffer.is_some() {
+            rpass.multi_draw_indexed_indirect_count(
+                &indirect_buffer,
+                0,
+                &count_buffer,
+                0,
+                max_count,
+            );
+        } else {
+            rpass.multi_draw_indirect_count(&indirect_buffer, 0, &count_buffer, 0, max_count);
+        }
+    }
+
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &out_texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback_buffer,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(256),
+                rows_per_image: None,
+            },
+        },
+        wgpu::Extent3d {
+            width: 256,
+            height: 256,
+            depth_or_array_layers: 1,
+        },
+    );
+
+    ctx.queue.submit([encoder.finish()]);
+
+    let slice = readback_buffer.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |_| ());
+
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
+
+    let data = slice.get_mapped_range().unwrap();
+    let succeeded = data.iter().all(|b| *b == u8::MAX);
+    assert!(succeeded);
+}
+
+#[gpu_test]
+static MULTI_DRAW_INDIRECT_COUNT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+            .features(wgpu::Features::MULTI_DRAW_INDIRECT_COUNT)
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| run_test_multi_draw_indirect_count(ctx, get_draw_test_data(0, 6), 2, 2));
+
+#[gpu_test]
+static MULTI_DRAW_INDEXED_INDIRECT_COUNT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+            .features(wgpu::Features::MULTI_DRAW_INDIRECT_COUNT)
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| {
+        run_test_multi_draw_indirect_count(ctx, get_indexed_draw_test_data(0, 6), 2, 2)
+    });
+
+#[gpu_test]
+static MULTI_DRAW_INDIRECT_COUNT_PARTIAL_COUNT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+            .features(wgpu::Features::MULTI_DRAW_INDIRECT_COUNT)
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| run_test_multi_draw_indirect_count(ctx, get_draw_test_data(0, 6), 1, 4));
+
+#[gpu_test]
+static MULTI_DRAW_INDEXED_INDIRECT_COUNT_PARTIAL_COUNT: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+                .features(wgpu::Features::MULTI_DRAW_INDIRECT_COUNT)
+                .limits(wgpu::Limits::downlevel_defaults()),
+        )
+        .run_async(|ctx| {
+            run_test_multi_draw_indirect_count(ctx, get_indexed_draw_test_data(0, 6), 1, 4)
+        });

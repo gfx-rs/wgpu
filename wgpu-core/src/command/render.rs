@@ -2196,6 +2196,8 @@ pub(super) fn encode_render_pass(
 
     let mut indirect_draw_validation_batcher = crate::indirect_validation::DrawBatcher::new();
 
+    let mut pending_multi_draws: Vec<crate::multi_draw_emulation::PendingDraw> = Vec::new();
+
     // We automatically keep extending command buffers over time, and because
     // we want to insert a command buffer _before_ what we're about to record,
     // we need to make sure to close the previous one.
@@ -2265,6 +2267,7 @@ pub(super) fn encode_render_pass(
                     temp_resources: parent_state.temp_resources,
                     indirect_draw_validation_resources: parent_state
                         .indirect_draw_validation_resources,
+                    multi_draw_resources: parent_state.multi_draw_resources,
                     snatch_guard: parent_state.snatch_guard,
                     debug_scope_depth: &mut debug_scope_depth,
                     query_set_writes: parent_state.query_set_writes,
@@ -2466,6 +2469,7 @@ pub(super) fn encode_render_pass(
                         count_buffer_offset,
                         max_count,
                         family,
+                        &mut pending_multi_draws,
                     )
                     .map_pass_err(scope)?;
                 }
@@ -2651,6 +2655,18 @@ pub(super) fn encode_render_pass(
                     parent_state.temp_resources,
                     transit,
                     indirect_draw_validation_batcher,
+                )
+                .map_pass_err(pass_scope)?;
+        }
+
+        if let Some(ref multi_draw_emulation) = device.multi_draw_emulation {
+            multi_draw_emulation
+                .inject_emulation_pass(
+                    device,
+                    parent_state.multi_draw_resources,
+                    transit,
+                    pending_multi_draws,
+                    parent_state.snatch_guard,
                 )
                 .map_pass_err(pass_scope)?;
         }
@@ -3322,6 +3338,7 @@ fn multi_draw_indirect_count(
     count_buffer_offset: u64,
     max_count: u32,
     family: DrawCommandFamily,
+    pending_multi_draws: &mut Vec<crate::multi_draw_emulation::PendingDraw>,
 ) -> Result<(), RenderPassErrorInner> {
     api_log!(
         "RenderPass::multi_draw_indirect_count (family:{family:?}) {} {offset} {} {count_buffer_offset:?} {max_count:?}",
@@ -3412,34 +3429,90 @@ fn multi_draw_indirect_count(
         ),
     );
 
-    match family {
-        DrawCommandFamily::Draw => unsafe {
-            state.pass.base.raw_encoder.draw_indirect_count(
-                indirect_raw,
-                offset,
-                count_raw,
-                count_buffer_offset,
-                max_count,
-            );
-        },
-        DrawCommandFamily::DrawIndexed => unsafe {
-            state.pass.base.raw_encoder.draw_indexed_indirect_count(
-                indirect_raw,
-                offset,
-                count_raw,
-                count_buffer_offset,
-                max_count,
-            );
-        },
-        DrawCommandFamily::DrawMeshTasks => unsafe {
-            state.pass.base.raw_encoder.draw_mesh_tasks_indirect_count(
-                indirect_raw,
-                offset,
-                count_raw,
-                count_buffer_offset,
-                max_count,
-            );
-        },
+    if device.multi_draw_emulation.is_some() {
+        if max_count == 0 {
+            return Ok(());
+        }
+
+        let stride_u32 = stride as u32 / 4;
+        let temp_size = max_count as u64 * stride;
+
+        let temp_buffer_index = state
+            .pass
+            .base
+            .multi_draw_resources
+            .acquire_temp_entry(temp_size, device.instance_flags)
+            .map_err(RenderPassErrorInner::Device)?;
+
+        pending_multi_draws.push(crate::multi_draw_emulation::PendingDraw {
+            temp_buffer_index,
+            src_buffer: indirect_buffer,
+            count_buffer,
+            src_offset: offset,
+            count_offset: count_buffer_offset,
+            max_count,
+            stride_u32,
+        });
+
+        let temp_raw = state
+            .pass
+            .base
+            .multi_draw_resources
+            .get_temp_buffer(temp_buffer_index);
+
+        match family {
+            DrawCommandFamily::Draw => unsafe {
+                state
+                    .pass
+                    .base
+                    .raw_encoder
+                    .draw_indirect(temp_raw, 0, max_count);
+            },
+            DrawCommandFamily::DrawIndexed => unsafe {
+                state
+                    .pass
+                    .base
+                    .raw_encoder
+                    .draw_indexed_indirect(temp_raw, 0, max_count);
+            },
+            DrawCommandFamily::DrawMeshTasks => unsafe {
+                state
+                    .pass
+                    .base
+                    .raw_encoder
+                    .draw_mesh_tasks_indirect(temp_raw, 0, max_count);
+            },
+        }
+    } else {
+        match family {
+            DrawCommandFamily::Draw => unsafe {
+                state.pass.base.raw_encoder.draw_indirect_count(
+                    indirect_raw,
+                    offset,
+                    count_raw,
+                    count_buffer_offset,
+                    max_count,
+                );
+            },
+            DrawCommandFamily::DrawIndexed => unsafe {
+                state.pass.base.raw_encoder.draw_indexed_indirect_count(
+                    indirect_raw,
+                    offset,
+                    count_raw,
+                    count_buffer_offset,
+                    max_count,
+                );
+            },
+            DrawCommandFamily::DrawMeshTasks => unsafe {
+                state.pass.base.raw_encoder.draw_mesh_tasks_indirect_count(
+                    indirect_raw,
+                    offset,
+                    count_raw,
+                    count_buffer_offset,
+                    max_count,
+                );
+            },
+        }
     }
     Ok(())
 }

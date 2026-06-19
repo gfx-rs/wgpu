@@ -81,6 +81,12 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgpu: true,
     },
     ExampleDesc {
+        name: "multi_draw_indirect_count",
+        function: wgpu_examples::multi_draw_indirect_count::main,
+        webgl: false,
+        webgpu: false,
+    },
+    ExampleDesc {
         name: "multiple_render_targets",
         function: wgpu_examples::multiple_render_targets::main,
         webgl: false,

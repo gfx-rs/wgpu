@@ -869,13 +869,12 @@ bitflags_array! {
         const PARTIALLY_BOUND_BINDING_ARRAY = 1 << 13;
         /// Allows the user to call [`RenderPass::multi_draw_indirect_count`] and [`RenderPass::multi_draw_indexed_indirect_count`].
         ///
-        /// This allows the use of a buffer containing the actual number of draw calls. This feature being present also implies
-        /// that all calls to [`RenderPass::multi_draw_indirect`] and [`RenderPass::multi_draw_indexed_indirect`] are not being emulated
-        /// with a series of `draw_indirect` calls.
+        /// This allows the use of a buffer containing the actual number of draw calls.
         ///
         /// Supported platforms:
         /// - DX12
         /// - Vulkan 1.2+ (or VK_KHR_draw_indirect_count)
+        /// - Metal (emulated via compute shader)
         ///
         /// This is a native only feature.
         ///

@@ -17,6 +17,7 @@ pub mod hello_workgroups;
 pub mod mesh_shader;
 pub mod mipmap;
 pub mod msaa_line;
+pub mod multi_draw_indirect_count;
 pub mod multiple_render_targets;
 pub mod multiview;
 pub mod ray_aabb_compute;
@@ -56,6 +57,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
         mipmap::TEST,
         mipmap::TEST_QUERY,
         msaa_line::TEST,
+        multi_draw_indirect_count::TEST,
         multiple_render_targets::TEST,
         ray_aabb_compute::TEST,
         ray_cube_compute::TEST,

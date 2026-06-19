@@ -829,6 +829,7 @@ pub(crate) struct BakedCommands {
     pub(crate) trackers: Tracker,
     pub(crate) temp_resources: Vec<TempResource>,
     pub(crate) indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
+    pub(crate) multi_draw_resources: crate::multi_draw_emulation::MultiDrawResources,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
     pub(crate) query_set_writes: query::QuerySetWrites,
@@ -859,6 +860,7 @@ pub struct CommandBufferMutable {
     temp_resources: Vec<TempResource>,
 
     indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
+    multi_draw_resources: crate::multi_draw_emulation::MultiDrawResources,
 
     pub(crate) commands: Vec<Command<ArcReferences>>,
 
@@ -880,6 +882,7 @@ impl CommandBufferMutable {
             trackers: self.trackers,
             temp_resources: self.temp_resources,
             indirect_draw_validation_resources: self.indirect_draw_validation_resources,
+            multi_draw_resources: self.multi_draw_resources,
             buffer_memory_init_actions: self.buffer_memory_init_actions,
             texture_memory_actions: self.texture_memory_actions,
             query_set_writes: self.query_set_writes,
@@ -938,6 +941,9 @@ impl CommandEncoder {
                     temp_resources: Default::default(),
                     indirect_draw_validation_resources:
                         crate::indirect_validation::DrawResources::new(device.clone()),
+                    multi_draw_resources: crate::multi_draw_emulation::MultiDrawResources::new(
+                        device.clone(),
+                    ),
                     commands: Vec::new(),
                     query_set_writes: Default::default(),
                     deferred_query_set_resolves: Default::default(),
@@ -1088,6 +1094,7 @@ impl CommandEncoder {
                     temp_resources: &mut cmd_buf_data.temp_resources,
                     indirect_draw_validation_resources: &mut cmd_buf_data
                         .indirect_draw_validation_resources,
+                    multi_draw_resources: &mut cmd_buf_data.multi_draw_resources,
                     snatch_guard: &snatch_guard,
                     debug_scope_depth: &mut debug_scope_depth,
                     query_set_writes: &mut cmd_buf_data.query_set_writes,
@@ -1180,6 +1187,7 @@ impl CommandEncoder {
                     temp_resources: &mut cmd_buf_data.temp_resources,
                     indirect_draw_validation_resources: &mut cmd_buf_data
                         .indirect_draw_validation_resources,
+                    multi_draw_resources: &mut cmd_buf_data.multi_draw_resources,
                     snatch_guard: &snatch_guard,
                     debug_scope_depth: &mut debug_scope_depth,
                     query_set_writes: &mut cmd_buf_data.query_set_writes,

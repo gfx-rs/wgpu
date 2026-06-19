@@ -1173,6 +1173,7 @@ impl super::CapabilitiesQuery {
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
         features.set(F::FLOAT32_BLENDABLE, true);
         features.set(F::INDIRECT_FIRST_INSTANCE, self.indirect_draw_dispatch);
+        features.set(F::MULTI_DRAW_INDIRECT_COUNT, self.indirect_draw_dispatch);
         features.set(
             F::TIMESTAMP_QUERY,
             self.timestamp_query_support
