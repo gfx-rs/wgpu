@@ -270,7 +270,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
 ### Testing/Internal
 
-- BREAKING: We now use `tombi` as our TOML linter and formatter instead of `taplo`, which has been unmaintained for some time. If you currently use `taplo` as part of your workflow, we recommend you migrate, or change your editor settings while working with wgpu.
+- We now use `tombi` as our TOML formatter instead of `taplo`, which has been unmaintained for some time. If you currently use `taplo` as part of your workflow, we recommend you migrate, or change your editor settings while working with wgpu.
 
 ## v29.0.1 (2026-03-26)
 
