@@ -53,17 +53,6 @@ impl ImmediateSlots {
         Self(self.0 & !other.0)
     }
 
-    /// Returns the byte size of the `var<immediate>` type in a module.
-    /// Zero if the module has no `var<immediate>`.
-    pub fn size_for_module(module: &crate::Module) -> u32 {
-        module
-            .global_variables
-            .iter()
-            .find(|&(_, var)| var.space == crate::AddressSpace::Immediate)
-            .map(|(_, var)| module.types[var.ty].inner.size(module.to_ctx()))
-            .unwrap_or(0)
-    }
-
     /// Compute the immediate slot bitmask for a pointer expression that
     /// refers to (part of) an immediate global variable.
     ///

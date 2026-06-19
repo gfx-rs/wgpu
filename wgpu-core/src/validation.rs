@@ -294,6 +294,7 @@ struct EntryPoint {
     task_payload_size: Option<u32>,
     mesh_info: Option<EntryPointMeshInfo>,
     immediate_slots_required: naga::valid::ImmediateSlots,
+    immediate_size: u32,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -313,7 +314,6 @@ pub struct Interface {
     limits: wgt::Limits,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<EntryPointKey, EntryPoint>,
-    pub(crate) immediate_size: u32,
 }
 
 #[derive(Debug)]
@@ -1268,12 +1268,10 @@ impl Interface {
             resource_mapping.insert(var_handle, handle);
         }
 
-        let immediate_size = naga::valid::ImmediateSlots::size_for_module(module);
-
         let mut entry_points = FastHashMap::default();
         entry_points.reserve(module.entry_points.len());
         for (index, entry_point) in module.entry_points.iter().enumerate() {
-            let info = info.get_entry_point(index);
+            let func_info = info.get_entry_point(index);
             let mut ep = EntryPoint::default();
             for arg in entry_point.function.arguments.iter() {
                 Self::populate(&mut ep.inputs, arg.binding.as_ref(), arg.ty, &module.types);
@@ -1288,19 +1286,20 @@ impl Interface {
             }
 
             for (var_handle, var) in module.global_variables.iter() {
-                let usage = info[var_handle];
+                let usage = func_info[var_handle];
                 if !usage.is_empty() && var.binding.is_some() {
                     ep.resources.push(resource_mapping[&var_handle]);
                 }
             }
 
-            for key in info.sampling_set.iter() {
+            for key in func_info.sampling_set.iter() {
                 ep.sampling_pairs
                     .insert((resource_mapping[&key.image], resource_mapping[&key.sampler]));
             }
-            ep.dual_source_blending = info.dual_source_blending;
+            ep.dual_source_blending = func_info.dual_source_blending;
             ep.workgroup_size = entry_point.workgroup_size;
-            ep.immediate_slots_required = info.immediate_slots_used;
+            ep.immediate_slots_required = func_info.immediate_slots_used;
+            ep.immediate_size = info.get_entry_point_immediate_size(index);
 
             if let Some(task_payload) = entry_point.task_payload {
                 ep.task_payload_size = Some(
@@ -1343,18 +1342,19 @@ impl Interface {
             limits,
             resources,
             entry_points,
-            immediate_size,
         }
     }
 
-    pub fn immediate_slots_required(
+    pub fn immediate_size_and_slots_required(
         &self,
         stage: naga::ShaderStage,
         entry_point_name: &str,
-    ) -> naga::valid::ImmediateSlots {
+    ) -> (u32, naga::valid::ImmediateSlots) {
         self.entry_points
             .get(&EntryPointKeyRef(stage, entry_point_name))
-            .map_or(Default::default(), |ep| ep.immediate_slots_required)
+            .map_or(Default::default(), |ep| {
+                (ep.immediate_size, ep.immediate_slots_required)
+            })
     }
 
     pub fn finalize_entry_point_name(

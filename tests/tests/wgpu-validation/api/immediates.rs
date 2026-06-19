@@ -358,3 +358,155 @@ fn auto_layout_infers_immediate_size() {
     }
     wgpu_test::valid(&device, || encoder.finish());
 }
+
+const RENDER_SHADER_MULTI_IMMEDIATES: &str = "
+    struct ImmediateA {
+        a1: u32,
+        a2: u32,
+    }
+    var<immediate> im_a: ImmediateA;
+
+    struct ImmediateB {
+        b1: u32,
+        b2: vec4<f32>,
+    }
+    var<immediate> im_b: ImmediateB;
+
+    struct VertexOutput {
+        @builtin(position) position: vec4f,
+        @location(0) @interpolate(flat) index: u32,
+    }
+
+    @vertex fn vertex() -> VertexOutput {
+        return VertexOutput(vec4f(1.0, 0.0, 0.0, 1.0), im_a.a2);
+    }
+
+    @fragment fn fragment(
+        @location(0) @interpolate(flat) ix: u32,
+     ) -> @location(0) vec4f {
+        return im_b.b2;
+    }
+";
+
+fn begin_render_pass<'b, 'a: 'b>(
+    output_texture_view: &'a wgpu::TextureView,
+    encoder: &'a mut wgpu::CommandEncoder,
+    f: impl Fn(&mut wgpu::RenderPass<'b>),
+) {
+    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("Render Pass"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: output_texture_view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::default()),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        ..Default::default()
+    });
+    f(&mut render_pass);
+}
+
+fn set_render() -> (
+    wgpu::Device,
+    wgpu::Queue,
+    wgpu::RenderPipeline,
+    wgpu::TextureView,
+) {
+    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor {
+        required_features: wgpu::Features::IMMEDIATES,
+        required_limits: wgpu::Limits {
+            max_immediate_size: 64,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+
+    let output_texture = device.create_texture(&wgpu::TextureDescriptor {
+        size: wgpu::Extent3d {
+            width: 2,
+            height: 2,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        label: Some("Output Texture"),
+        view_formats: &[],
+    });
+    let output_texture_view = output_texture.create_view(&Default::default());
+
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Shader"),
+        source: wgpu::ShaderSource::Wgsl(RENDER_SHADER_MULTI_IMMEDIATES.into()),
+    });
+
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Render Pipeline"),
+        layout: None,
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: None,
+            buffers: &[],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: None,
+            targets: &[Some(output_texture.format().into())],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::PointList,
+            ..Default::default()
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    });
+
+    (device, queue, pipeline, output_texture_view)
+}
+
+#[test]
+fn render_multi_immediates_with_all_immediates_set_succeeds() {
+    let (device, _queue, pipeline, output_texture_view) = set_render();
+    fn do_encoding<'a>(
+        encoder: &mut dyn wgpu::util::RenderEncoder<'a>,
+        pipeline: &'a wgpu::RenderPipeline,
+    ) {
+        encoder.set_pipeline(pipeline);
+        encoder.set_immediates(4, &[0u8; 4]);
+        encoder.set_immediates(16, &[0u8; 16]);
+        encoder.draw(0..4, 0..1);
+    }
+
+    let mut encoder = device.create_command_encoder(&Default::default());
+
+    begin_render_pass(&output_texture_view, &mut encoder, |pass| {
+        do_encoding(pass, &pipeline);
+    });
+
+    wgpu_test::valid(&device, || encoder.finish());
+
+    let mut encoder = device.create_command_encoder(&Default::default());
+    let mut bundle_encoder =
+        device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
+            color_formats: &[Some(output_texture_view.texture().format())],
+            sample_count: 1,
+            ..wgpu::RenderBundleEncoderDescriptor::default()
+        });
+    do_encoding(&mut bundle_encoder, &pipeline);
+    let bundle = bundle_encoder.finish(&wgpu::RenderBundleDescriptor::default());
+
+    begin_render_pass(&output_texture_view, &mut encoder, |pass| {
+        pass.execute_bundles([&bundle]);
+    });
+
+    wgpu_test::valid(&device, || encoder.finish());
+}

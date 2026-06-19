@@ -1239,7 +1239,7 @@ impl super::Validator {
         ep: &crate::EntryPoint,
         module: &crate::Module,
         mod_info: &ModuleInfo,
-    ) -> Result<FunctionInfo, WithSpan<EntryPointError>> {
+    ) -> Result<(FunctionInfo, u32), WithSpan<EntryPointError>> {
         match ep.stage {
             crate::ShaderStage::Task | crate::ShaderStage::Mesh
                 if !self.capabilities.contains(Capabilities::MESH_SHADER) =>
@@ -1425,6 +1425,7 @@ impl super::Validator {
             return Err(EntryPointError::WrongTaskShaderEntryResult.with_span());
         }
 
+        let mut immediate_size: u32 = 0;
         {
             let mut used_immediates = module
                 .global_variables
@@ -1432,11 +1433,16 @@ impl super::Validator {
                 .filter(|&(_, var)| var.space == crate::AddressSpace::Immediate)
                 .map(|(handle, _)| handle)
                 .filter(|&handle| !info[handle].is_empty());
+            let used_immediate0 = used_immediates.next();
             // Check if there is more than one immediate data, and error if so.
             // Use a loop for when returning multiple errors is supported.
-            if let Some(handle) = used_immediates.nth(1) {
+            if let Some(handle) = used_immediates.next() {
                 return Err(EntryPointError::MoreThanOneImmediateUsed
                     .with_span_handle(handle, &module.global_variables));
+            }
+            if let Some(immediate) = used_immediate0 {
+                let ty = &module.types[module.global_variables[immediate].ty];
+                immediate_size = ty.inner.size(module.to_ctx());
             }
         }
 
@@ -1591,6 +1597,6 @@ impl super::Validator {
             )?;
         }
 
-        Ok(info)
+        Ok((info, immediate_size))
     }
 }

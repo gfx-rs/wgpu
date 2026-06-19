@@ -344,6 +344,7 @@ pub struct ModuleInfo {
     type_flags: Vec<TypeFlags>,
     functions: Vec<FunctionInfo>,
     entry_points: Vec<FunctionInfo>,
+    entry_point_immediate_sizes: Vec<u32>,
     const_expression_types: Box<[TypeResolution]>,
 }
 
@@ -777,6 +778,7 @@ impl Validator {
             type_flags: Vec::with_capacity(module.types.len()),
             functions: Vec::with_capacity(module.functions.len()),
             entry_points: Vec::with_capacity(module.entry_points.len()),
+            entry_point_immediate_sizes: Vec::with_capacity(module.entry_points.len()),
             const_expression_types: vec![placeholder; module.global_expressions.len()]
                 .into_boxed_slice(),
         };
@@ -894,7 +896,10 @@ impl Validator {
             }
 
             match self.validate_entry_point(ep, module, &mod_info) {
-                Ok(info) => mod_info.entry_points.push(info),
+                Ok((info, immediate_size)) => {
+                    mod_info.entry_points.push(info);
+                    mod_info.entry_point_immediate_sizes.push(immediate_size);
+                }
                 Err(error) => {
                     return Err(error.and_then(|source| {
                         ValidationError::EntryPoint {

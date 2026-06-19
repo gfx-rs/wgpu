@@ -3960,13 +3960,27 @@ impl Device {
             }
         }
 
+        let (immediate_size, immediate_slots_required) = shader_module
+            .interface
+            .interface()
+            .map_or(Default::default(), |iface| {
+                iface.immediate_size_and_slots_required(
+                    naga::ShaderStage::Compute,
+                    &final_entry_point_name,
+                )
+            });
+
         let pipeline_layout = match binding_layout_source {
-            validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
+            validation::BindingLayoutSource::Provided(pipeline_layout) => {
+                if pipeline_layout.immediate_size < immediate_size {
+                    return Err(pipeline::CreateComputePipelineError::ImmediateSize {
+                        layout: pipeline_layout.immediate_size,
+                        required: immediate_size,
+                    });
+                }
+                pipeline_layout
+            }
             validation::BindingLayoutSource::Derived(entries) => {
-                let immediate_size = shader_module
-                    .interface
-                    .interface()
-                    .map_or(0, |i| i.immediate_size);
                 self.create_derived_pipeline_layout(entries, immediate_size)?
             }
         };
@@ -4013,17 +4027,6 @@ impl Device {
                     }
                 },
             )?;
-
-        let immediate_slots_required =
-            shader_module
-                .interface
-                .interface()
-                .map_or(Default::default(), |iface| {
-                    iface.immediate_slots_required(
-                        naga::ShaderStage::Compute,
-                        &final_entry_point_name,
-                    )
-                });
 
         let pipeline = pipeline::ComputePipeline {
             raw: ManuallyDrop::new(raw),
@@ -4479,6 +4482,7 @@ impl Device {
         let mut _task_entry_point_name = String::new();
         let mut _mesh_entry_point_name = String::new();
         let mut immediate_slots_required = naga::valid::ImmediateSlots::default();
+        let mut immediate_size_required = 0u32;
         match desc.vertex {
             pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
                 vertex_stage = {
@@ -4505,8 +4509,13 @@ impl Device {
                         .map_err(stage_err)?;
 
                     if let Some(interface) = vertex_shader_module.interface.interface() {
-                        immediate_slots_required |= interface
-                            .immediate_slots_required(stage.to_naga(), &_vertex_entry_point_name);
+                        let (_immediate_size, _immediate_slots_required) = interface
+                            .immediate_size_and_slots_required(
+                                stage.to_naga(),
+                                &_vertex_entry_point_name,
+                            );
+                        immediate_slots_required |= _immediate_slots_required;
+                        immediate_size_required = immediate_size_required.max(_immediate_size);
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -4551,8 +4560,13 @@ impl Device {
                         .map_err(stage_err)?;
 
                     if let Some(interface) = task_shader_module.interface.interface() {
-                        immediate_slots_required |= interface
-                            .immediate_slots_required(stage.to_naga(), &_task_entry_point_name);
+                        let (_immediate_size, _immediate_slots_required) = interface
+                            .immediate_size_and_slots_required(
+                                stage.to_naga(),
+                                &_task_entry_point_name,
+                            );
+                        immediate_slots_required |= _immediate_slots_required;
+                        immediate_size_required = immediate_size_required.max(_immediate_size);
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -4595,8 +4609,13 @@ impl Device {
                         .map_err(stage_err)?;
 
                     if let Some(interface) = mesh_shader_module.interface.interface() {
-                        immediate_slots_required |= interface
-                            .immediate_slots_required(stage.to_naga(), &_mesh_entry_point_name);
+                        let (_immediate_size, _immediate_slots_required) = interface
+                            .immediate_size_and_slots_required(
+                                stage.to_naga(),
+                                &_mesh_entry_point_name,
+                            );
+                        immediate_slots_required |= _immediate_slots_required;
+                        immediate_size_required = immediate_size_required.max(_immediate_size);
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -4649,8 +4668,13 @@ impl Device {
                     .map_err(stage_err)?;
 
                 if let Some(interface) = shader_module.interface.interface() {
-                    immediate_slots_required |= interface
-                        .immediate_slots_required(stage.to_naga(), &fragment_entry_point_name);
+                    let (_immediate_size, _immediate_slots_required) = interface
+                        .immediate_size_and_slots_required(
+                            stage.to_naga(),
+                            &fragment_entry_point_name,
+                        );
+                    immediate_slots_required |= _immediate_slots_required;
+                    immediate_size_required = immediate_size_required.max(_immediate_size);
                     io = interface
                         .check_stage(
                             &mut binding_layout_source,
@@ -4713,28 +4737,17 @@ impl Device {
         }
 
         let pipeline_layout = match binding_layout_source {
-            validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
+            validation::BindingLayoutSource::Provided(pipeline_layout) => {
+                if pipeline_layout.immediate_size < immediate_size_required {
+                    return Err(pipeline::CreateRenderPipelineError::ImmediateSize {
+                        layout: pipeline_layout.immediate_size,
+                        required: immediate_size_required,
+                    });
+                }
+                pipeline_layout
+            }
             validation::BindingLayoutSource::Derived(entries) => {
-                let immediate_size = {
-                    let immediate_size_of = |sm: &pipeline::ShaderModule| {
-                        sm.interface.interface().map(|i| i.immediate_size)
-                    };
-                    let vertex = match desc.vertex {
-                        pipeline::RenderPipelineVertexProcessor::Vertex(ref v) => {
-                            immediate_size_of(&v.stage.module)
-                        }
-                        pipeline::RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => task
-                            .as_ref()
-                            .and_then(|t| immediate_size_of(&t.stage.module))
-                            .max(immediate_size_of(&mesh.stage.module)),
-                    };
-                    let fragment = desc
-                        .fragment
-                        .as_ref()
-                        .and_then(|f| immediate_size_of(&f.stage.module));
-                    vertex.max(fragment).unwrap_or(0)
-                };
-                self.create_derived_pipeline_layout(entries, immediate_size)?
+                self.create_derived_pipeline_layout(entries, immediate_size_required)?
             }
         };
 

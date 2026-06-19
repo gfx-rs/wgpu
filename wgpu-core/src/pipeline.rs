@@ -277,6 +277,8 @@ pub enum CreateComputePipelineError {
     Internal(String),
     #[error("Pipeline constant error: {0}")]
     PipelineConstants(String),
+    #[error("Pipeline layout immediate size ({layout}) must be >= the required immediate size ({required}) of the shader entry point")]
+    ImmediateSize { layout: u32, required: u32 },
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error(transparent)]
@@ -292,7 +294,7 @@ impl WebGpuError for CreateComputePipelineError {
             Self::Implicit(e) => e.webgpu_error_type(),
             Self::Stage(e) => e.webgpu_error_type(),
             Self::Internal(_) => ErrorType::Internal,
-            Self::PipelineConstants(_) => ErrorType::Validation,
+            Self::PipelineConstants(_) | Self::ImmediateSize { .. } => ErrorType::Validation,
         }
     }
 }
@@ -760,6 +762,8 @@ pub enum CreateRenderPipelineError {
         "but no render target for the pipeline was specified."
     ))]
     NoTargetSpecified,
+    #[error("Pipeline layout immediate size ({layout}) must be >= the required immediate size ({required}) of the shader entry point")]
+    ImmediateSize { layout: u32, required: u32 },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
@@ -794,7 +798,8 @@ impl WebGpuError for CreateRenderPipelineError {
             | Self::DualSourceBlendingWithMultipleColorTargets { .. }
             | Self::NoTargetSpecified
             | Self::PipelineConstants { .. }
-            | Self::VertexAttributeStrideTooLarge { .. } => ErrorType::Validation,
+            | Self::VertexAttributeStrideTooLarge { .. }
+            | Self::ImmediateSize { .. } => ErrorType::Validation,
         }
     }
 }
