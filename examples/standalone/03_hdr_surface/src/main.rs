@@ -399,6 +399,28 @@ impl State {
             report(&format!("  {:?}: {:?}", fc.format, fc.color_spaces));
         }
 
+        // Spell out the HDR / wide-gamut spaces each format offers beyond the
+        // universally-supported SDR `Srgb`/`DisplayP3` — i.e. exactly what an
+        // app must see advertised here before it can request HDR output. On the
+        // web this is the signal under test: an fp16 (`Rgba16Float`) canvas
+        // should advertise `ExtendedSrgb` / `ExtendedDisplayP3` whenever it is
+        // configurable, regardless of whether the display is *currently* in HDR
+        // mode (that state lives in the display snapshot below, not here).
+        let sdr = wgpu::SurfaceColorSpaces::SRGB | wgpu::SurfaceColorSpaces::DISPLAY_P3;
+        report("HDR / wide-gamut color spaces (beyond SDR sRGB / Display-P3):");
+        for fc in &caps.format_capabilities {
+            let hdr = fc.color_spaces.difference(sdr);
+            report(&format!(
+                "  {:?}: {}",
+                fc.format,
+                if hdr.is_empty() {
+                    "none (SDR only)".to_owned()
+                } else {
+                    format!("{hdr:?}")
+                }
+            ));
+        }
+
         // Read the display sensor alongside the surface capabilities. An app
         // uses this to decide whether requesting HDR output is worthwhile and to
         // seed a tone-map target; here we just report it (and re-poll later).
@@ -406,7 +428,26 @@ impl State {
         report_display_hdr_info(&hdr_info);
 
         let forced = forced_mode();
+        if let Some(mode) = forced.as_deref() {
+            report(&format!(
+                "Forced mode requested (?mode= / HDR_MODE): {mode:?}"
+            ));
+        }
         let choice = pick_mode(&caps, forced.as_deref());
+        // Make the SDR fallback explicit: landing on the `Auto` path after a
+        // (non-`srgb`) mode was requested means the requested color space was
+        // *not* advertised by `color_spaces()` — the symptom this example
+        // exists to catch. On web + `Rgba16Float` the extended spaces should be
+        // advertised regardless of display HDR state, so seeing this there
+        // means the capability query is under-reporting.
+        if matches!(choice.color_space, wgpu::SurfaceColorSpace::Auto)
+            && forced.as_deref().is_some_and(|m| m != "srgb")
+        {
+            report(
+                "  -> requested color space is NOT advertised by the surface; \
+                 falling back to SDR (Auto).",
+            );
+        }
         report(&format!(
             "Configuring surface with {:?} + {:?}",
             choice.format, choice.color_space
