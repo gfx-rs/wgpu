@@ -432,7 +432,7 @@ impl AdapterShared {
                     // for more information.
                     subgroup_min_size: 4,
                     subgroup_max_size: 64,
-                    transient_saves_memory: shared.private_caps.supports_memoryless_storage,
+                    transient_saves_memory: Some(shared.private_caps.supports_memoryless_storage),
                     ..wgt::AdapterInfo::new(shared.private_caps.device_type(), wgt::Backend::Metal)
                 },
                 features,

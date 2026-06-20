@@ -233,7 +233,7 @@ static_assertions.workspace = true
 # Needed for only wgpu-core backend. Not optional as only wgpu-core backend exists on native platforms.
 wgpu-core = { workspace = true, features = [
     "renderdoc",
-    "wgsl",            # needed for indirect draw/dispatch validation
+    "wgsl", # needed for indirect draw/dispatch validation
     "portable-atomic",
 ] }
 wgpu-hal.workspace = true

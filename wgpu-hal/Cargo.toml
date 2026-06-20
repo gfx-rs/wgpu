@@ -36,13 +36,12 @@ ignored = ["cfg_aliases"]
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(feature, values("cargo-clippy"))', # objc's `msg_send` macro injects this in our code https://github.com/SSheldon/rust-objc/issues/125
-    'cfg(web_sys_unstable_apis)',           # web-sys uses this
+    'cfg(web_sys_unstable_apis)', # web-sys uses this
 ] }
 
 [lib]
 
 [features]
-
 ########################
 ### Backend Features ###
 ########################
@@ -122,7 +121,7 @@ gles = [
     "dep:windows-result",
     "naga/glsl-out",
     "wgpu-types/web",
-    "windows-result/std",                   # Need to enable this for the `Error` impl on `windows_result::Error` to work.
+    "windows-result/std", # Need to enable this for the `Error` impl on `windows_result::Error` to work.
     "windows/Win32_Graphics_Gdi",
     "windows/Win32_Graphics_OpenGL",
     "windows/Win32_System_LibraryLoader",
@@ -346,9 +345,9 @@ cfg_aliases.workspace = true
 
 [dev-dependencies]
 env_logger.workspace = true
-glam.workspace = true                                            # for ray-traced-triangle example
+glam.workspace = true # for ray-traced-triangle example
 naga = { workspace = true, features = ["wgsl-in", "termcolor"] }
-winit.workspace = true                                           # for "halmark" example
+winit.workspace = true # for "halmark" example
 
 ### Platform: Windows + MacOS + Linux for "raw-gles" example ###
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos", target_env = "ohos")))'.dev-dependencies]
