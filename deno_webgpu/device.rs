@@ -394,7 +394,7 @@ impl GPUDevice {
     let wgpu_descriptor = wgpu_core::binding_model::PipelineLayoutDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
       bind_group_layouts: Cow::Owned(bind_group_layouts),
-      immediate_size: 0,
+      immediate_size: descriptor.immediate_size,
     };
 
     let (id, err) = self.instance.device_create_pipeline_layout(

@@ -1174,9 +1174,14 @@ impl super::CapabilitiesQuery {
         features.set(F::FLOAT32_BLENDABLE, true);
         features.set(F::INDIRECT_FIRST_INSTANCE, self.indirect_draw_dispatch);
         features.set(
-            F::TIMESTAMP_QUERY | F::TIMESTAMP_QUERY_INSIDE_ENCODERS,
+            F::TIMESTAMP_QUERY,
             self.timestamp_query_support
                 .contains(TimestampQuerySupport::STAGE_BOUNDARIES),
+        );
+        features.set(
+            F::TIMESTAMP_QUERY_INSIDE_ENCODERS,
+            self.timestamp_query_support
+                .contains(TimestampQuerySupport::ON_BLIT_ENCODER),
         );
         features.set(
             F::TIMESTAMP_QUERY_INSIDE_PASSES,

@@ -711,7 +711,7 @@ bitflags_array! {
         /// Supported platforms:
         /// - Vulkan
         /// - DX12
-        /// - Metal
+        /// - Metal (AMD & Intel, not Apple GPUs)
         /// - OpenGL (with GL_ARB_timer_query)
         ///
         /// This is a native only feature.

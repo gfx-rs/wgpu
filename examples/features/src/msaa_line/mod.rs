@@ -112,7 +112,8 @@ impl Example {
             sample_count,
             dimension: wgpu::TextureDimension::D2,
             format: config.view_formats[0],
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
             label: None,
             view_formats: &[],
         };

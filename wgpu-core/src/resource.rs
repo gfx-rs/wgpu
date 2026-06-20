@@ -1689,8 +1689,6 @@ pub enum CreateTextureError {
     CreateTextureView(#[from] CreateTextureViewError),
     #[error("Invalid usage flags {0:?}")]
     InvalidUsage(wgt::TextureUsages),
-    #[error("Texture usage {0:?} is not compatible with texture usage {1:?}")]
-    IncompatibleUsage(wgt::TextureUsages, wgt::TextureUsages),
     #[error(transparent)]
     InvalidDimension(#[from] TextureDimensionError),
     #[error("Depth texture ({1:?}) can't be created as {0:?}")]
@@ -1708,6 +1706,10 @@ pub enum CreateTextureError {
     InvalidFormatUsages(wgt::TextureUsages, wgt::TextureFormat, bool),
     #[error("The view format {0:?} is not compatible with texture format {1:?}, only changing srgb-ness is allowed.")]
     InvalidViewFormat(wgt::TextureFormat, wgt::TextureFormat),
+    #[error("Transient texture usage must be equal to `TRANSIENT_ATTACHMENT | RENDER_ATTACHMENT`, but got `{0:?}`")]
+    InvalidTransientTextureUsage(wgt::TextureUsages),
+    #[error("Transient texture view formats must be empty")]
+    InvalidTransientTextureViewFormats,
     #[error("Texture usages {0:?} are not allowed on a texture of dimensions {1:?}")]
     InvalidDimensionUsages(wgt::TextureUsages, wgt::TextureDimension),
     #[error("Texture usage STORAGE_BINDING is not allowed for multisampled textures")]
@@ -1718,6 +1720,10 @@ pub enum CreateTextureError {
     InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
     #[error("Multisampled textures must have RENDER_ATTACHMENT usage")]
     MultisampledNotRenderAttachment,
+    #[error("Transient texture mip level count ({0}) must be 1")]
+    InvalidTransientTextureMipLevelCount(u32),
+    #[error("Transient texture layer count ({0}) must be 1")]
+    InvalidTransientTextureLayerCount(u32),
     #[error("Texture format {0:?} can't be used due to missing features")]
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
     #[error(transparent)]
@@ -1746,7 +1752,6 @@ impl WebGpuError for CreateTextureError {
             Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
 
             Self::InvalidUsage(_)
-            | Self::IncompatibleUsage(_, _)
             | Self::InvalidDepthDimension(_, _)
             | Self::InvalidCompressedDimension(_, _)
             | Self::InvalidMipLevelCount { .. }
@@ -1756,6 +1761,10 @@ impl WebGpuError for CreateTextureError {
             | Self::InvalidMultisampledStorageBinding
             | Self::InvalidMultisampledFormat(_)
             | Self::InvalidSampleCount(..)
+            | Self::InvalidTransientTextureUsage(_)
+            | Self::InvalidTransientTextureMipLevelCount(_)
+            | Self::InvalidTransientTextureLayerCount(_)
+            | Self::InvalidTransientTextureViewFormats
             | Self::MultisampledNotRenderAttachment => ErrorType::Validation,
         }
     }
@@ -1956,6 +1965,13 @@ pub enum CreateTextureViewError {
         texture: wgt::TextureFormat,
         view: wgt::TextureFormat,
     },
+    #[error(
+        "The texture view (`{view:?}`) from transient texture (`{texture:?}`) must have the same usage"
+    )]
+    InvalidTransientTextureViewUsage {
+        texture: wgt::TextureUsages,
+        view: wgt::TextureUsages,
+    },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
@@ -1984,6 +2000,7 @@ impl WebGpuError for CreateTextureViewError {
             | Self::TextureViewFormatNotRenderable(_)
             | Self::TextureViewFormatNotStorage(_)
             | Self::InvalidTextureViewUsage { .. }
+            | Self::InvalidTransientTextureViewUsage { .. }
             | Self::MissingFeatures(_) => ErrorType::Validation,
         }
     }
@@ -2246,6 +2263,7 @@ pub struct QuerySet {
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) desc: wgt::QuerySetDescriptor<()>,
+    pub(crate) initialized_slots: Mutex<bit_vec::BitVec>,
 }
 
 impl RawResourceAccess for QuerySet {
@@ -2258,19 +2276,36 @@ impl RawResourceAccess for QuerySet {
 
 impl QuerySet {
     pub fn destroy(self: &Arc<Self>) {
-        let mut snatch_guard = self.device.snatchable_lock.write();
+        let device = &self.device;
 
-        let raw = match self.raw.snatch(&mut snatch_guard) {
-            Some(raw) => raw,
-            None => {
-                // Per spec, it is valid to call `destroy` multiple times.
-                return;
-            }
+        let temp = {
+            let mut snatch_guard = self.device.snatchable_lock.write();
+
+            let raw = match self.raw.snatch(&mut snatch_guard) {
+                Some(raw) => raw,
+                None => {
+                    // Per spec, it is valid to call `destroy` multiple times.
+                    return;
+                }
+            };
+
+            drop(snatch_guard);
+
+            queue::TempResource::DestroyedQuerySet(DestroyedQuerySet {
+                raw: ManuallyDrop::new(raw),
+                device: Arc::clone(&self.device),
+                label: self.label().to_owned(),
+            })
         };
 
-        // SAFETY: We are in the destroy method and we don't use raw anymore after this point.
-        unsafe {
-            self.device.raw().destroy_query_set(raw);
+        let Some(queue) = device.get_queue() else {
+            return;
+        };
+
+        let mut life_lock = queue.lock_life();
+        let last_submit_index = life_lock.get_query_set_latest_submission_index(self);
+        if let Some(last_submit_index) = last_submit_index {
+            life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
     }
 }
@@ -2292,6 +2327,31 @@ crate::impl_labeled!(QuerySet);
 crate::impl_parent_device!(QuerySet);
 crate::impl_storage_item!(QuerySet);
 crate::impl_trackable!(QuerySet);
+
+/// A query set that has been marked as destroyed and is staged for actual deletion soon
+#[derive(Debug)]
+pub struct DestroyedQuerySet {
+    raw: ManuallyDrop<Box<dyn hal::DynQuerySet>>,
+    device: Arc<Device>,
+    label: String,
+}
+
+impl DestroyedQuerySet {
+    pub fn label(&self) -> &dyn fmt::Debug {
+        &self.label
+    }
+}
+
+impl Drop for DestroyedQuerySet {
+    fn drop(&mut self) {
+        resource_log!("Destroy raw QuerySet (destroyed) {:?}", self.label());
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            hal::DynDevice::destroy_query_set(self.device.raw(), raw);
+        }
+    }
+}
 
 pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
 pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;

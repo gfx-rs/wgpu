@@ -20,6 +20,7 @@ resources = [
     { resource_binding = { group = 0, binding = 1 }, bind_target = { texture = 0 } },
     { resource_binding = { group = 0, binding = 2 }, bind_target = { sampler.Inline = 0 } },
 ]
+
 [msl.per_entry_point_map.vs_main]
 resources = [
     { resource_binding = { group = 0, binding = 0 }, bind_target = { buffer = 0 } },

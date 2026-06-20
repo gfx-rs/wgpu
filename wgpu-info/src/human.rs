@@ -122,7 +122,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t           Driver Info: {}", print_empty_string(driver_info))?;
     writeln!(output, "\t     Subgroup Min Size: {subgroup_min_size}")?;
     writeln!(output, "\t     Subgroup Max Size: {subgroup_max_size}")?;
-    writeln!(output, "\tTransient Saves Memory: {transient_saves_memory}")?;
+    writeln!(output, "\tTransient Saves Memory: {transient_saves_memory:?}")?;
     writeln!(output, "\t          Limit Bucket: {}", limit_bucket.as_ref().map_or("<disabled>", |b| &b.name))?;
     writeln!(output, "\t      WebGPU Compliant: {:?}", downlevel.is_webgpu_compliant())?;
 
