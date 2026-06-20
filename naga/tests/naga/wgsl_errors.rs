@@ -1212,12 +1212,15 @@ macro_rules! check_validation {
     }
 }
 
-#[allow(
-    clippy::result_large_err,
-    reason = "`ValidationError` is large enough that it should usually be boxed, \
+#[cfg_attr(
+    not(target_pointer_width = "32"),
+    expect(
+        clippy::result_large_err,
+        reason = "`ValidationError` is large enough that it should usually be boxed, \
               but this is only a test, and it makes the `match` expressions \
               in the callers a bit cleaner. \
-              This lint does not trigger on 32-bit builds, hence `allow`."
+              This lint does not trigger on 32-bit builds."
+    )
 )]
 #[track_caller]
 fn validation_error(
