@@ -1,3 +1,135 @@
+//! Surface presentation configuration: present modes, alpha compositing, and
+//! color space (HDR and wide-gamut output).
+//!
+//! Most of this module is plumbing for [`SurfaceConfiguration`]. The part that
+//! needs a concept primer is the color space: how to get HDR or wide-gamut
+//! output onto the screen.
+//!
+//! # HDR output in a nutshell
+//!
+//! By default a surface is standard dynamic range (SDR) with the sRGB gamut: the
+//! value `1.0` is the brightest white, anything above it clips, and only colors
+//! within sRGB are expressible. Other [`SurfaceColorSpace`]s opt into a **wider
+//! gamut** (for example [`DisplayP3`](SurfaceColorSpace::DisplayP3), still SDR
+//! but with more saturated colors than sRGB), **high dynamic range** (values
+//! above `1.0` drive brighter-than-white output), or both (for example
+//! [`Hdr10`](SurfaceColorSpace::Hdr10)), on platforms that support it.
+//!
+//! Three ideas carry most of the weight:
+//!
+//! * **Reference white and headroom.** Brightness is measured in *nits*
+//!   (cd/m²). SDR reference white (plain white, `(1.0, 1.0, 1.0)` in the
+//!   extended color spaces) sits *below* the display's peak on purpose, so
+//!   highlights have room above it. That gap is the display's *headroom*.
+//! * **The transfer function is a round-trip.** Your render pass applies an
+//!   *encode* curve (the OETF) to turn the light it computed into a stored
+//!   signal, and the display applies the inverse *decode* curve (the EOTF) to
+//!   turn it back into light. Choosing a color space chooses which curves both
+//!   ends use.
+//! * **Who applies the encode curve.** wgpu applies it for you **only** when you
+//!   render to an `*Srgb` texture format, where the hardware runs the sRGB OETF
+//!   on store. For every other color space (linear extended sRGB, encoded
+//!   extended sRGB or P3, PQ, HLG) **your final render pass must apply the
+//!   encode curve itself**, along with any gamut conversion. wgpu hands the
+//!   signal to the compositor unchanged; getting this wrong produces a wrong
+//!   image with no error.
+//!
+//! wgpu does **not** tone-map or gamut-map for you. It gives you the surface
+//! and, through [`DisplayHdrInfo`], the display's advisory capabilities;
+//! *choosing* and *applying* a tone curve is your application's job.
+//!
+//! # The practical path
+//!
+//! 1. **Query capabilities.** Call `Surface::get_capabilities`. To use HDR or
+//!    wide-gamut output, read [`SurfaceCapabilities::format_capabilities`] (each
+//!    format and the [`SurfaceColorSpaces`] it supports), **not**
+//!    [`SurfaceCapabilities::formats`]: the latter lists only formats usable
+//!    with [`Auto`](SurfaceColorSpace::Auto), which never selects HDR.
+//!    [`SurfaceCapabilities::color_spaces`] is a convenience lookup for one
+//!    format.
+//! 2. **Optionally query the display.** Call `Surface::display_hdr_info` for a
+//!    [`DisplayHdrInfo`] snapshot (peak and SDR-white nits, EDR headroom,
+//!    primaries, and whether HDR is active right now). Use it to decide
+//!    *whether* HDR is worthwhile and to pick a tone-map target. Every field is
+//!    advisory and optional; `None` means "cannot tell here", never "SDR".
+//! 3. **Choose a format and color space.** Intersect what you want with what
+//!    step 1 advertises, in your own preference order (for example HDR10, then
+//!    linear extended sRGB, then encoded extended sRGB, then SDR
+//!    [`Srgb`](SurfaceColorSpace::Srgb)). Keep an SDR fallback for when nothing
+//!    HDR is advertised, such as when OS HDR is off.
+//! 4. **Configure the surface.** Set [`SurfaceConfiguration::color_space`] and
+//!    `format`. [`Auto`](SurfaceColorSpace::Auto) (the default) reproduces
+//!    wgpu's historical behavior and never picks HDR; any other value must be in
+//!    that format's advertised set or configuration fails validation.
+//! 5. **Encode in your final render pass.** For an `*Srgb` format, output linear
+//!    and the hardware encodes for you. Otherwise apply the curve the chosen
+//!    color space expects (sRGB, extended sRGB, PQ, or HLG) **and** any gamut
+//!    conversion (for example BT.709 to BT.2020 for HDR10) yourself; see the
+//!    table below.
+//! 6. **Present** as usual. If OS HDR is toggled mid-run you will see it on the
+//!    next `Surface::display_hdr_info` poll, or as a suboptimal surface status;
+//!    re-run steps 1 to 4.
+//!
+//! The standalone [HDR surface example] implements every step, including the
+//! encode curve for each color space.
+//!
+//! # What to output from your fragment shader
+//!
+//! What your final render pass writes for each color space, and whether wgpu
+//! applies the transfer curve for you:
+//!
+//! | Color space | Typical format | You write | wgpu encodes? |
+//! | ----------- | -------------- | --------- | ------------- |
+//! | `Srgb`, `*Srgb` format | `Bgra8UnormSrgb` | linear | **yes** (hardware sRGB OETF on store) |
+//! | `Srgb`, non-srgb format | `Bgra8Unorm` | sRGB-encoded | no; apply the sRGB OETF yourself |
+//! | `ExtendedSrgbLinear` (scRGB) | `Rgba16Float` | linear, `1.0` = SDR white | no (transfer is linear) |
+//! | `ExtendedSrgb` | `Rgba16Float` | extended sRGB-encoded | no; apply the extended sRGB OETF yourself |
+//! | `DisplayP3` | `Bgra8Unorm` | sRGB-encoded, P3 primaries | no; apply the sRGB OETF (and gamut-map to P3) |
+//! | `ExtendedDisplayP3` | `Rgba16Float` | extended sRGB-encoded, P3 primaries | no; apply the extended sRGB OETF (and gamut-map to P3) |
+//! | `Hdr10` | `Rgb10a2Unorm` | PQ-encoded, BT.2020 primaries | no; apply the PQ OETF (and BT.709 to BT.2020) |
+//! | `Hlg` | `Rgb10a2Unorm` | HLG-encoded, BT.2020 primaries | no; apply the HLG OETF (and BT.709 to BT.2020) |
+//!
+//! In short, wgpu applies the transfer curve for you only when you render to an
+//! `*Srgb` format. In every other case your final pass owns both the transfer
+//! curve and any gamut conversion. The [HDR surface example] implements every
+//! encoder in WGSL.
+//!
+//! # Glossary
+//!
+//! * **Primaries / gamut** --- the chromaticities of the red, green, and blue a
+//!   color space addresses, and so the range of colors it can express. [BT.709]
+//!   is the sRGB gamut, [Display P3] is wider, and [BT.2020] is wider still.
+//! * **White point** --- the chromaticity of `R = G = B` (what "white" looks
+//!   like). Every color space here uses [D65], standard daylight.
+//! * **Transfer function (OETF / EOTF)** --- how stored values map to light. The
+//!   *OETF* is the encode curve your application applies; the *EOTF* is the
+//!   inverse decode curve the display applies.
+//! * **SDR / HDR** --- standard dynamic range clips at `1.0` (reference white);
+//!   high dynamic range lets values above `1.0` drive brighter-than-white
+//!   output.
+//! * **Nits and reference white** --- a *nit* (cd/m²) is a unit of brightness;
+//!   SDR *reference white* is the brightness of plain white, set below the
+//!   panel's peak so highlights have room above it.
+//! * **Headroom (EDR)** --- how much brighter than current SDR white the display
+//!   can go right now, as a multiplier (`1.0` means none). Dynamic; see
+//!   [`DisplayHdrInfo::tone_map_headroom`].
+//! * **PQ / HLG** --- the two HDR transfer curves: [PQ] (SMPTE ST 2084, HDR10)
+//!   encodes absolute luminance, [HLG] (BT.2100) encodes relative luminance.
+//! * **scRGB / extended-range sRGB** --- sRGB extended past `[0.0, 1.0]` for
+//!   HDR: [scRGB] is *linear*
+//!   ([`ExtendedSrgbLinear`](SurfaceColorSpace::ExtendedSrgbLinear)), while
+//!   [`ExtendedSrgb`](SurfaceColorSpace::ExtendedSrgb) is the same range but
+//!   sRGB-*encoded* (gamma), the web's HDR path.
+//!
+//! [HDR surface example]: https://github.com/gfx-rs/wgpu/tree/trunk/examples/standalone/03_hdr_surface
+//! [BT.709]: https://www.itu.int/rec/R-REC-BT.709
+//! [BT.2020]: https://www.itu.int/rec/R-REC-BT.2020
+//! [Display P3]: https://en.wikipedia.org/wiki/DCI-P3#Display_P3
+//! [D65]: https://en.wikipedia.org/wiki/Standard_illuminant#D65_values
+//! [PQ]: https://en.wikipedia.org/wiki/Perceptual_quantizer
+//! [HLG]: https://www.itu.int/rec/R-REC-BT.2100
+//! [scRGB]: https://en.wikipedia.org/wiki/ScRGB
+
 use alloc::{vec, vec::Vec};
 
 use crate::{link_to_wgpu_docs, link_to_wgpu_item, TextureFormat, TextureUsages};
@@ -147,6 +279,9 @@ pub enum CompositeAlphaMode {
 /// surface into high-dynamic-range (HDR) or wide-color-gamut output on
 /// platforms that support it.
 ///
+/// New to HDR? The [module overview](crate::surface) walks through the concepts
+/// and the steps to get HDR output on screen.
+///
 /// # Terminology
 ///
 /// Each variant is described by four properties:
@@ -157,16 +292,44 @@ pub enum CompositeAlphaMode {
 ///   [Display P3] and [BT.2020] are progressively wider.
 /// * **White point**: the chromaticity produced by equal red, green, and blue.
 ///   Every color space here uses [D65], the standard daylight white.
-/// * **Transfer function**: how stored values map to light, such as the [sRGB]
-///   curve, a linear transfer, or an HDR curve like [PQ] or [HLG]. Except for
-///   writes to an `*Srgb` texture format (which apply the sRGB curve for you),
-///   wgpu does **not** encode this for you: your final render pass must output
-///   values in whatever encoding the chosen color space expects (linear for a
-///   linear transfer). The [HDR surface example] shows the encoder each variant
-///   expects.
+/// * **Transfer function** (the *OETF*): how stored values map to light, such
+///   as the [sRGB] curve, a linear transfer, or an HDR curve like [PQ] or
+///   [HLG]. Your render pass applies this encode curve; the display applies the
+///   inverse (the *EOTF*). Except for writes to an `*Srgb` texture format (where
+///   the hardware applies the sRGB curve for you), wgpu does **not** encode for
+///   you: your final render pass must output values in whatever encoding the
+///   chosen color space expects (linear for a linear transfer). The [HDR surface
+///   example] shows the encoder each variant expects.
 /// * **Dynamic range**: standard dynamic range (SDR), where `1.0` is reference
-///   (SDR) white, or high dynamic range (HDR), where values above `1.0` drive
-///   brighter-than-SDR output.
+///   (SDR) white and values outside `[0.0, 1.0]` are clamped, or high dynamic
+///   range (HDR), where `(1.0, 1.0, 1.0)` is SDR reference white and values
+///   above `1.0` drive brighter-than-SDR output on HDR displays.
+///
+/// ![Gamut comparison][color_gamuts]
+///
+/// *The primaries of each color space form a triangle on the CIE 1931
+/// chromaticity diagram; colors inside it are expressible, colors outside are
+/// not. [`Srgb`](Self::Srgb) uses the [BT.709] gamut;
+/// [`DisplayP3`](Self::DisplayP3) and [`Hdr10`](Self::Hdr10)'s [BT.2020] are
+/// progressively wider. All share the [D65] white point.*
+///
+/// ![SDR vs HDR value range][sdr_hdr_range]
+///
+/// *`0.0` is black and `1.0` is SDR reference white. [`Srgb`](Self::Srgb) and
+/// [`DisplayP3`](Self::DisplayP3) clamp above `1.0`; the extended-range and HDR
+/// color spaces drive values above `1.0` as brighter-than-SDR output, up to the
+/// display's headroom (query it via [`DisplayHdrInfo::tone_map_headroom`]).*
+///
+/// # Extended-range variants: linear vs encoded
+///
+/// The extended-range color spaces come in two forms that share a range but
+/// differ in transfer: [`ExtendedSrgbLinear`](Self::ExtendedSrgbLinear) carries
+/// a **linear** signal, while [`ExtendedSrgb`](Self::ExtendedSrgb) and
+/// [`ExtendedDisplayP3`](Self::ExtendedDisplayP3) carry the **sRGB-encoded**
+/// (gamma) signal: the sRGB curve is applied as usual and then continued to
+/// values above `1.0` (brighter than SDR white) and below `0.0` (colors outside
+/// the base gamut). Pick by whether your final render pass outputs linear or
+/// encoded values; confusing the two is the most common HDR setup mistake.
 ///
 /// # Web (WebGPU) backend
 ///
@@ -187,12 +350,15 @@ pub enum CompositeAlphaMode {
 ///
 /// [BT.709]: https://www.itu.int/rec/R-REC-BT.709
 /// [BT.2020]: https://www.itu.int/rec/R-REC-BT.2020
-/// [Display P3]: https://en.wikipedia.org/wiki/DCI-P3
-/// [D65]: https://en.wikipedia.org/wiki/Standard_illuminant
+/// [Display P3]: https://en.wikipedia.org/wiki/DCI-P3#Display_P3
+/// [D65]: https://en.wikipedia.org/wiki/Standard_illuminant#D65_values
 /// [sRGB]: https://registry.color.org/rgb-registry/srgb
 /// [PQ]: https://en.wikipedia.org/wiki/Perceptual_quantizer
-/// [HLG]: https://www.arib.or.jp/english/std_tr/broadcasting/std-b67.html
+/// [HLG]: https://www.itu.int/rec/R-REC-BT.2100
 /// [HDR surface example]: https://github.com/gfx-rs/wgpu/tree/trunk/examples/standalone/03_hdr_surface
+///
+/// [color_gamuts]: https://raw.githubusercontent.com/gfx-rs/wgpu/refs/heads/trunk/docs/color_gamuts.png
+/// [sdr_hdr_range]: https://raw.githubusercontent.com/gfx-rs/wgpu/refs/heads/trunk/docs/sdr_hdr_range.png
 ///
 /// [`colorSpace`]: https://www.w3.org/TR/webgpu/#dom-gpucanvasconfiguration-colorspace
 /// [`toneMapping`]: https://www.w3.org/TR/webgpu/#gpucanvastonemappingmode
@@ -240,22 +406,24 @@ pub enum SurfaceColorSpace {
     /// sRGB-encoded.
     Srgb = 1,
 
-    /// Extended linear sRGB, also known as [scRGB] (IEC 61966-2-2): BT.709
-    /// primaries, D65 white point, **linear** transfer function, extended
-    /// dynamic range.
+    /// Extended linear sRGB, also known as [scRGB] (the **linear** encoding of
+    /// IEC 61966-2-2): BT.709 primaries, D65 white point, **linear** transfer
+    /// function, extended dynamic range. Typically used with
+    /// [`TextureFormat::Rgba16Float`].
     ///
-    /// `(1.0, 1.0, 1.0)` is SDR reference white; values above `1.0` produce
-    /// brighter-than-SDR output on HDR displays and colors outside the BT.709
-    /// gamut may be represented with values outside of `[0.0, 1.0]`.
-    /// Typically used with [`TextureFormat::Rgba16Float`].
+    /// The linear counterpart to the sRGB-encoded
+    /// [`ExtendedSrgb`](Self::ExtendedSrgb) (IEC 61966-2-2 defines both); pick
+    /// this one if your final render pass outputs **linear** values.
     ///
     /// This corresponds to Vulkan's `VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT`,
     /// Metal's extended dynamic range (EDR), and DXGI's
     /// `DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709`.
     ///
-    /// Native-only: not available on the browser WebGPU backend, which cannot
-    /// express a linear-transfer canvas color space. Use
-    /// [`ExtendedSrgb`](Self::ExtendedSrgb) for HDR canvas output on the web.
+    /// * **Supported on**: native only (Vulkan, Metal, DX12). Not available on
+    ///   the browser WebGPU backend, which cannot express a linear-transfer
+    ///   canvas color space; use [`ExtendedSrgb`](Self::ExtendedSrgb) for HDR
+    ///   canvas output on the web.
+    /// * **Also known as**: scRGB.
     ///
     /// [scRGB]: https://en.wikipedia.org/wiki/ScRGB
     ExtendedSrgbLinear = 2,
@@ -263,61 +431,77 @@ pub enum SurfaceColorSpace {
     /// The [Display P3] color space: P3 primaries, D65 white point, sRGB
     /// transfer function, standard dynamic range.
     ///
-    /// A wide-gamut SDR color space, covering noticeably more of the visible
-    /// range than sRGB (on the order of 25% more area in the CIE chromaticity
-    /// diagram). It uses the wide P3 primaries of theatrical DCI-P3, but with
-    /// the D65 white point and the sRGB transfer function (not DCI's white
-    /// point and 2.6 gamma).
+    /// A wide-gamut SDR color space covering roughly 25% more area than sRGB in
+    /// the CIE chromaticity diagram. It uses the wide P3 primaries of theatrical
+    /// DCI-P3, but with the D65 white point and the sRGB transfer function (not
+    /// DCI's white point and 2.6 gamma).
     ///
-    /// This is standard dynamic range: values outside of `[0.0, 1.0]` (after
-    /// format encoding) are clamped by the display pipeline. For wide-gamut
-    /// HDR output that keeps the P3 primaries but extends the encoded range,
-    /// use [`ExtendedDisplayP3`](Self::ExtendedDisplayP3) instead.
+    /// Like [`Srgb`](Self::Srgb), this is standard dynamic range (values outside
+    /// `[0.0, 1.0]` are clamped). For wide-gamut HDR that keeps the P3 primaries
+    /// but extends the range, use [`ExtendedDisplayP3`](Self::ExtendedDisplayP3).
     ///
-    /// [Display P3]: https://en.wikipedia.org/wiki/DCI-P3
+    /// * **Supported on**: Vulkan (where the driver exposes it), Metal, and the
+    ///   browser WebGPU backend (canvas color space `"display-p3"`). Not
+    ///   reported on DX12.
+    ///
+    /// [Display P3]: https://en.wikipedia.org/wiki/DCI-P3#Display_P3
     DisplayP3 = 3,
 
     /// HDR10: BT.2020 primaries, D65 white point, SMPTE ST 2084 perceptual
     /// quantizer ([PQ]) transfer function, high dynamic range.
     ///
-    /// Texel values are interpreted as a PQ-encoded signal where the encoded
-    /// range maps to absolute luminance from 0 to 10,000 nits. The
-    /// application is responsible for applying the PQ encoding (and the
-    /// BT.709 -> BT.2020 gamut conversion) in its final render pass; the
-    /// surface format itself is non-sRGB, typically
-    /// [`TextureFormat::Rgb10a2Unorm`].
+    /// Texel values are interpreted as a PQ-encoded signal whose encoded range
+    /// maps to absolute luminance from 0 to 10,000 nits. Your final render pass
+    /// must apply the PQ encoding and the BT.709 to BT.2020 gamut conversion
+    /// itself; the [HDR surface example] implements both. The format is
+    /// non-sRGB, typically [`TextureFormat::Rgb10a2Unorm`].
+    ///
+    /// * **Supported on**: Vulkan (where the driver exposes it), DX12 (on
+    ///   `Rgb10a2Unorm` when the output has HDR enabled), and Metal. Unavailable
+    ///   on the browser WebGPU backend (no PQ canvas signaling).
     ///
     /// [PQ]: https://en.wikipedia.org/wiki/Perceptual_quantizer
+    /// [HDR surface example]: https://github.com/gfx-rs/wgpu/tree/trunk/examples/standalone/03_hdr_surface
     Hdr10 = 4,
 
     /// BT.2100 hybrid log-gamma: BT.2020 primaries, D65 white point, [HLG]
     /// (ARIB STD-B67) transfer function, high dynamic range.
     ///
     /// A relative-luminance HDR signal, primarily used for broadcast content.
-    /// The application is responsible for applying the HLG OETF in its final
-    /// render pass.
+    /// Your final render pass must apply the HLG OETF and the BT.709 to BT.2020
+    /// gamut conversion itself; the [HDR surface example] implements both. The
+    /// format is non-sRGB, typically [`TextureFormat::Rgb10a2Unorm`].
     ///
-    /// [HLG]: https://www.arib.or.jp/english/std_tr/broadcasting/std-b67.html
+    /// * **Supported on**: Vulkan (where the driver exposes it) and Metal.
+    ///   Unavailable on DX12 and the browser WebGPU backend (no HLG canvas
+    ///   signaling).
+    ///
+    /// [HLG]: https://www.itu.int/rec/R-REC-BT.2100
+    /// [HDR surface example]: https://github.com/gfx-rs/wgpu/tree/trunk/examples/standalone/03_hdr_surface
     Hlg = 5,
 
     /// Extended-range sRGB (encoded): BT.709 primaries, D65 white point, the
     /// **nonlinear sRGB transfer function extended beyond `[0.0, 1.0]`**,
     /// extended dynamic range.
     ///
-    /// Unlike [`ExtendedSrgbLinear`](Self::ExtendedSrgbLinear), the signal is
-    /// sRGB-*encoded* (gamma), not linear: the sRGB transfer function is
-    /// applied as usual and then extended to values above `1.0` (and below
-    /// `0.0`) to represent brighter-than-SDR output and colors outside the
-    /// BT.709 gamut. `(1.0, 1.0, 1.0)` is SDR reference white; values above
-    /// `1.0` produce brighter-than-SDR output on HDR displays. Your final
-    /// render pass must apply this extended sRGB curve itself; see the
-    /// [HDR surface example].
+    /// The sRGB-encoded sibling of
+    /// [`ExtendedSrgbLinear`](Self::ExtendedSrgbLinear): the signal is
+    /// sRGB-*encoded* (gamma), not linear. Typically used with
+    /// [`TextureFormat::Rgba16Float`].
     ///
-    /// This is the "encoded extended range" sRGB used by browser WebGPU
-    /// (canvas color space `"srgb"` with `"extended"` tone mapping). It
-    /// corresponds to Vulkan's `VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT`
-    /// and Metal's `kCGColorSpaceExtendedSRGB`. It is not available on DX12,
-    /// which has no encoded-extended-sRGB swapchain color space.
+    /// If your final render pass outputs **linear** values, you want
+    /// [`ExtendedSrgbLinear`](Self::ExtendedSrgbLinear) (scRGB) instead;
+    /// confusing the two is the most common HDR setup mistake. See the [HDR
+    /// surface example] for the encoder.
+    ///
+    /// This is the "encoded extended range" sRGB used by browser WebGPU (canvas
+    /// color space `"srgb"` with `"extended"` tone mapping). It corresponds to
+    /// Vulkan's `VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT` and Metal's
+    /// `kCGColorSpaceExtendedSRGB`.
+    ///
+    /// * **Supported on**: Vulkan (where the driver exposes it), Metal, and the
+    ///   browser WebGPU backend. Not available on DX12, which has no
+    ///   encoded-extended-sRGB swapchain color space.
     ///
     /// [HDR surface example]: https://github.com/gfx-rs/wgpu/tree/trunk/examples/standalone/03_hdr_surface
     ExtendedSrgb = 6,
@@ -326,22 +510,17 @@ pub enum SurfaceColorSpace {
     /// **nonlinear sRGB transfer function extended beyond `[0.0, 1.0]`**,
     /// extended dynamic range.
     ///
-    /// The wide-gamut (P3) analogue of [`ExtendedSrgb`](Self::ExtendedSrgb):
-    /// the signal is sRGB-*encoded* (gamma), not linear, and the sRGB transfer
-    /// function is applied as usual and then extended to values above `1.0`
-    /// (and below `0.0`) to represent brighter-than-SDR output and colors
-    /// outside the P3 gamut. `(1.0, 1.0, 1.0)` is SDR reference white; values
-    /// above `1.0` produce brighter-than-SDR output on HDR displays. As with
-    /// [`ExtendedSrgb`](Self::ExtendedSrgb), your final render pass must apply
-    /// the extended sRGB curve itself, here over the wider P3 primaries.
+    /// The wide-gamut (P3) analogue of [`ExtendedSrgb`](Self::ExtendedSrgb), and
+    /// the HDR counterpart to the SDR-only [`DisplayP3`](Self::DisplayP3): it
+    /// keeps the P3 primaries but extends the encoded range for HDR. Like
+    /// [`ExtendedSrgb`](Self::ExtendedSrgb) the signal is sRGB-*encoded* (gamma),
+    /// not linear. Typically used with [`TextureFormat::Rgba16Float`].
     ///
-    /// This is the wide-gamut HDR counterpart to
-    /// [`DisplayP3`](Self::DisplayP3), which is SDR-only: it keeps the P3
-    /// primaries but extends the encoded range for HDR. It is used by browser
-    /// WebGPU (canvas color space `"display-p3"` with `"extended"` tone
-    /// mapping) and corresponds to Metal's `kCGColorSpaceExtendedDisplayP3`. It
-    /// is not available on Vulkan or DX12, neither of which has an
-    /// encoded-extended-Display-P3 swapchain color space.
+    /// * **Supported on**: Metal and the browser WebGPU backend (canvas color
+    ///   space `"display-p3"` with `"extended"` tone mapping; Metal's
+    ///   `kCGColorSpaceExtendedDisplayP3`). Not available on Vulkan or DX12,
+    ///   neither of which has an encoded-extended-Display-P3 swapchain color
+    ///   space.
     ExtendedDisplayP3 = 7,
 }
 
@@ -471,39 +650,39 @@ impl Default for SurfaceCapabilities {
 /// display currently backing a [`Surface`], as reported by the platform's
 /// windowing or display layer.
 ///
-/// This is the read-only *sensor* half of HDR surface output: it describes what
-/// the panel can show *right now*, so an application can pick a tone-map white
-/// point and decide whether requesting an HDR [`SurfaceColorSpace`] is even
-/// worthwhile. It does *not* drive the display; selecting an output color space
-/// is done separately through [`SurfaceConfiguration::color_space`].
+/// This is the read-only, query side of HDR surface output: it describes what
+/// the panel can show *right now*, so an application can pick a tone-map target
+/// and decide whether requesting an HDR [`SurfaceColorSpace`] is worthwhile. It
+/// does **not** drive the display; the output color space is selected separately
+/// through [`SurfaceConfiguration::color_space`].
 ///
-/// It is also *not* content-mastering metadata (the write direction, e.g.
+/// It is also **not** content-mastering metadata (the write direction, e.g.
 /// `vkSetHdrMetadataEXT` / DXGI `SetHDRMetaData`), which this type does not
 /// cover.
 ///
-/// # Snapshot, not a stream
+/// # Polling
 ///
-/// This is a *poll*. wgpu only ever holds an opaque window handle and owns no
-/// event loop, so it cannot notify you when these values change (the brightness
-/// slider, ambient light, the window moving to another monitor, HDR toggled in
-/// OS settings). Re-query it when your windowing library signals that the
-/// surface may have moved/resized or the display configuration changed.
+/// This is a poll, not a stream. wgpu only ever holds an opaque window handle
+/// and owns no event loop, so it cannot notify you when these values change (the
+/// brightness slider, ambient light, the window moving to another monitor, HDR
+/// toggled in OS settings). Re-query it when your windowing library signals that
+/// the surface may have moved or resized, or the display configuration changed.
 ///
-/// # Asymmetric coverage
+/// # Coverage
 ///
 /// No platform fills every field; every value is [`Option`]. `None` means "this
-/// platform / this moment cannot tell us", *never* zero, and never "this is an
-/// SDR display". The same monitor can report a full set of nits on Windows and
-/// only a headroom multiplier on macOS — fall back to a sensible default, not to
-/// "assume the worst".
+/// platform or this moment cannot tell us", **never** zero, and **never** "this
+/// is an SDR display". The same monitor can report a full set of nits on Windows
+/// and only a headroom multiplier on macOS, so fall back to a sensible default
+/// rather than assuming the worst.
 ///
-/// # Advisory
+/// # Reliability
 ///
-/// Numeric values are *advisory*: OS / EDID figures are frequently optimistic (a
+/// Numeric values are advisory: OS / EDID figures are frequently optimistic (a
 /// "DisplayHDR 400" panel claims 400 nits it cannot sustain), and a queried nit
 /// value is the panel's claim, not what survives the OS compositor's own
 /// tone-mapping and ambient adaptation. Treat them as tone-mapping hints, not
-/// contracts; layer your own calibration / user override on top. The most
+/// contracts, and layer your own calibration or user override on top. The most
 /// reliable cross-platform signal is [`hdr_active`](Self::hdr_active).
 ///
 #[doc = link_to_wgpu_item!(struct Surface)]
@@ -515,7 +694,7 @@ pub struct DisplayHdrInfo {
     /// mode.
     ///
     /// This is dynamic: the user can toggle it in OS settings at any time. It is
-    /// the cleanest cross-platform signal to gate an HDR decision on — more
+    /// the cleanest cross-platform signal to gate an HDR decision on, and more
     /// reliable than any raw number.
     ///
     /// - On Windows it is `Some(true)` for any advanced-color output space (DXGI
@@ -559,24 +738,24 @@ pub struct DisplayHdrInfo {
 
 /// Absolute luminance levels in nits (cd/m²).
 ///
-/// All values are *advisory* (EDID optimism; the DisplayHDR-400 problem) — treat
-/// them as tone-mapping hints, never as guarantees. A `0.0` reported by the OS
-/// is passed through as `Some(0.0)`; absence is always `None`.
+/// All values are advisory (OS / EDID figures are frequently optimistic; a
+/// "DisplayHDR 400" panel claims 400 nits it cannot sustain). Treat them as
+/// tone-mapping hints, never as guarantees. A `0.0` reported by the OS is passed
+/// through as `Some(0.0)`; absence is always `None`.
 ///
-/// These are **achromatic** — the *white* / peak capability (luminance = CIE Y).
-/// A display cannot reach [`max_nits`](Self::max_nits) at a saturated
-/// chromaticity (the luminance volume tapers toward the gamut corners), so this
-/// is **not** a per-color ceiling. Combine these scalars with
-/// [`DisplayChromaticity`] and let your tone-mapper gamut-map; a single "x nits"
-/// cannot, by itself, tell you how to avoid corner clipping and the hue shifts
-/// it causes.
+/// These are **achromatic**: the white / peak capability (luminance = CIE Y). A
+/// display cannot reach [`max_nits`](Self::max_nits) at a saturated chromaticity
+/// (peak luminance falls off toward the edges of the gamut), so this is **not** a
+/// per-color ceiling. Combine these scalars with [`DisplayChromaticity`] and let
+/// your tone-mapper gamut-map; a single nits value cannot, by itself, tell you
+/// how to avoid corner clipping and the hue shifts it causes.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[non_exhaustive]
 pub struct DisplayLuminance {
     /// Peak luminance of a small patch, nits. DXGI `MaxLuminance`.
     pub max_nits: Option<f32>,
-    /// Sustained full-white-frame luminance, nits — the ceiling for a fully-lit
+    /// Sustained full-white-frame luminance, nits: the ceiling for a fully-lit
     /// frame, which a panel's power/thermal limits can hold below its small-patch
     /// peak [`max_nits`](Self::max_nits). Advisory and OS/EDID-sourced, so it may
     /// be optimistic (a panel can report a value it cannot actually sustain), and
@@ -587,10 +766,12 @@ pub struct DisplayLuminance {
     pub max_full_frame_nits: Option<f32>,
     /// Minimum (black) luminance, nits. DXGI `MinLuminance`.
     pub min_nits: Option<f32>,
-    /// Luminance the OS maps SDR "paper white" to, nits. Dynamic with the
-    /// brightness slider, and the bridge value between the absolute and relative
-    /// frames. Sourced separately from the other nits — it is not carried by DXGI
-    /// `GetDesc1` but by the `DISPLAYCONFIG_SDR_WHITE_LEVEL` query, performed
+    /// Luminance the OS maps SDR reference white to, nits. Dynamic with the
+    /// brightness slider. This is the value that converts between absolute nits
+    /// and relative EDR headroom (`max_nits / sdr_white_nits`); reference white
+    /// sits below the panel's peak on purpose, leaving that ratio as headroom for
+    /// highlights. Sourced separately from the other nits: it is not carried by
+    /// DXGI `GetDesc1` but by the `DISPLAYCONFIG_SDR_WHITE_LEVEL` query, performed
     /// whenever the descriptor is read. Normally present alongside the other nits;
     /// `None` only if that separate query fails (or on platforms that do not
     /// report it).
@@ -601,12 +782,12 @@ pub struct DisplayLuminance {
 /// where `1.0` means SDR white (no headroom).
 ///
 /// Dynamic with brightness, ambient light, battery, and which display the window
-/// is on. Apple exposes no public absolute-nit equivalent, which is why this is
-/// a separate frame from [`DisplayLuminance`] rather than convertible into it.
+/// is on. Apple exposes no public absolute-nit equivalent, so this is reported
+/// separately from [`DisplayLuminance`] and cannot be converted into nits.
 ///
 /// Currently populated only on macOS. The iOS/tvOS/visionOS `UIScreen` EDR path
-/// is not wired up yet, so on those platforms `DisplayHdrInfo::headroom` is
-/// `None`; that is a known gap, not a per-device failure.
+/// is not yet implemented, so on those platforms `DisplayHdrInfo::headroom` is
+/// `None`.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[non_exhaustive]
@@ -641,14 +822,16 @@ pub struct DisplayChromaticity {
     pub white: Option<[f32; 2]>,
 }
 
-/// Coarse, boolean dynamic-range + gamut signal — the lowest common denominator,
-/// and all the web exposes.
+/// Coarse, boolean dynamic-range and gamut signal.
+///
+/// This is the only luminance-adjacent data the web exposes, and a useful
+/// cross-check on other platforms.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[non_exhaustive]
 pub struct DisplayCoarseRange {
     /// CSS `@media (dynamic-range: high)`: the display *can* present HDR-range
-    /// content. Best-effort and platform-defined — on the web this is "capable",
+    /// content. Best-effort and platform-defined: on the web this is "capable",
     /// not "an HDR mode is active"; use [`DisplayHdrInfo::hdr_active`] for
     /// active-mode semantics where available.
     pub high_dynamic_range: Option<bool>,
@@ -658,7 +841,8 @@ pub struct DisplayCoarseRange {
 
 /// Coarse gamut classification, mirroring CSS `color-gamut`.
 ///
-/// Declaration order is **not** a containment lattice; do not rely on ordering.
+/// These variants are **not** ordered by containment; do not rely on their
+/// declaration order to compare gamut sizes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[non_exhaustive]
@@ -681,12 +865,12 @@ impl DisplayHdrInfo {
     /// 2. Absolute nits: `max_nits / sdr_white_nits` when both are known and
     ///    `sdr_white_nits > 0.0`.
     /// 3. `Some(1.0)` when [`DisplayCoarseRange::high_dynamic_range`] is
-    ///    `Some(false)` (definitively SDR — no headroom).
-    /// 4. Otherwise `None`: it refuses to guess across reference frames (e.g.
-    ///    `max_nits` known but `sdr_white_nits` unknown).
+    ///    `Some(false)` (definitively SDR, so no headroom).
+    /// 4. Otherwise `None`: no value is derived when the available figures are in
+    ///    different units (e.g. `max_nits` known but `sdr_white_nits` unknown).
     ///
-    /// `unwrap_or(1.0)` on the result is the universal SDR fallback. Never
-    /// returns a non-finite value.
+    /// Use `unwrap_or(1.0)` on the result for the SDR fallback. Never returns a
+    /// non-finite value.
     #[must_use]
     pub fn tone_map_headroom(&self) -> Option<f32> {
         if let Some(h) = self

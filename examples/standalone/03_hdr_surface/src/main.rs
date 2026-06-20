@@ -8,9 +8,9 @@
 //! * Top row: grayscale patches at 50 / 100 / 203 / 400 / 1000 / 10000 nits.
 //!   On an SDR output everything from 100 nits up clips to the same white;
 //!   on a working HDR output each patch is visibly brighter than the last.
-//! * Middle row: red / green / blue / cyan / magenta / yellow at 203 nits
-//!   (BT.709 primaries — they should look *the same* in every mode; if they
-//!   look oversaturated in HDR10 the gamut conversion is wrong).
+//! * Middle row: red / green / blue / cyan / magenta / yellow at 203 nits.
+//!   These are BT.709 primaries, so they should look *the same* in every mode;
+//!   if they look oversaturated in HDR10 the gamut conversion is wrong.
 //! * Bottom row: logarithmic luminance gradient from 1 to 10000 nits.
 //!
 //! Set `HDR_MODE=hdr10|hlg|scrgb|extended-srgb|extended-display-p3|srgb` (on the
@@ -198,11 +198,11 @@ fn report(msg: &str) {
     web_sys::console::log_1(&msg.into());
 }
 
-/// Report the display HDR snapshot returned by [`wgpu::Surface::display_hdr_info`]
-/// — the read-only *sensor* that says what the panel can show right now. Every
-/// field is advisory and platform-dependent (`None` == unknown here, *not* an
-/// SDR display). This is also the manual-verification surface: on macOS, dimming
-/// the display changes `headroom`/`hdr_active` live.
+/// Report the display HDR snapshot returned by
+/// [`wgpu::Surface::display_hdr_info`], the read-only query of what the panel can
+/// show right now. Every field is advisory and platform-dependent (`None` ==
+/// unknown here, **not** an SDR display). This is also the manual-verification
+/// surface: on macOS, dimming the display changes `headroom`/`hdr_active` live.
 fn report_display_hdr_info(info: &wgpu::DisplayHdrInfo) {
     report("Display HDR snapshot (advisory; None = unknown on this platform):");
     report(&format!("  hdr_active:     {:?}", info.hdr_active));
@@ -350,7 +350,7 @@ fn pick_mode(caps: &wgpu::SurfaceCapabilities, forced: Option<&str>) -> ModeChoi
 
 struct State {
     window: Arc<Window>,
-    /// Kept so the display snapshot can be re-polled after startup —
+    /// Kept so the display snapshot can be re-polled after startup;
     /// `display_hdr_info` takes the adapter, exactly like `get_capabilities`.
     adapter: wgpu::Adapter,
     device: wgpu::Device,
@@ -400,7 +400,7 @@ impl State {
         }
 
         // Spell out the HDR / wide-gamut spaces each format offers beyond the
-        // universally-supported SDR `Srgb`/`DisplayP3` — i.e. exactly what an
+        // universally-supported SDR `Srgb`/`DisplayP3`, i.e. exactly what an
         // app must see advertised here before it can request HDR output. On the
         // web this is the signal under test: an fp16 (`Rgba16Float`) canvas
         // should advertise `ExtendedSrgb` / `ExtendedDisplayP3` whenever it is
@@ -421,7 +421,7 @@ impl State {
             ));
         }
 
-        // Read the display sensor alongside the surface capabilities. An app
+        // Read the display snapshot alongside the surface capabilities. An app
         // uses this to decide whether requesting HDR output is worthwhile and to
         // seed a tone-map target; here we just report it (and re-poll later).
         let hdr_info = surface.display_hdr_info(&adapter);
@@ -436,7 +436,7 @@ impl State {
         let choice = pick_mode(&caps, forced.as_deref());
         // Make the SDR fallback explicit: landing on the `Auto` path after a
         // (non-`srgb`) mode was requested means the requested color space was
-        // *not* advertised by `color_spaces()` — the symptom this example
+        // **not** advertised by `color_spaces()`, the symptom this example
         // exists to catch. On web + `Rgba16Float` the extended spaces should be
         // advertised regardless of display HDR state, so seeing this there
         // means the capability query is under-reporting.
@@ -564,11 +564,11 @@ impl State {
     ///
     /// `display_hdr_info` is a snapshot, not a stream: wgpu owns no event loop
     /// and can't notify us, so an app re-queries from its own loop. Brightness,
-    /// HDR-toggle, and monitor moves are not delivered as events — the value
-    /// just changes — so a real app would also re-pick its color space / refresh
-    /// its tone-map target here. A real app would re-query from its windowing
-    /// events; this demo polls every [`HDR_POLL_INTERVAL_FRAMES`] frames, which
-    /// still surfaces live changes to a human while avoiding a per-frame OS walk.
+    /// HDR-toggle, and monitor moves are not delivered as events; the value just
+    /// changes, so a real app would also re-pick its color space and refresh its
+    /// tone-map target here. A real app would re-query from its windowing events;
+    /// this demo polls every [`HDR_POLL_INTERVAL_FRAMES`] frames, which still
+    /// surfaces live changes to a human while avoiding a per-frame OS walk.
     fn poll_display_hdr_info(&mut self) {
         self.frames_since_poll += 1;
         if self.frames_since_poll < HDR_POLL_INTERVAL_FRAMES {

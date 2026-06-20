@@ -56,39 +56,25 @@ impl Surface<'_> {
         self.inner.get_capabilities(&adapter.inner)
     }
 
-    /// Queries a point-in-time snapshot of the HDR / luminance characteristics
-    /// of the display currently backing this surface on `adapter` — peak / SDR
-    /// luminance, EDR headroom, primaries, and whether HDR is active right now —
-    /// so a tone-mapper can pick a target instead of guessing.
+    /// Returns a point-in-time snapshot of the HDR and luminance characteristics
+    /// of the display currently backing this surface on `adapter`: peak and SDR
+    /// luminance, EDR headroom, primaries, and whether HDR is active right now.
     ///
-    /// This is the read-only *sensor* that complements requesting an HDR
-    /// [`SurfaceColorSpace`] via [`SurfaceConfiguration::color_space`]: read this
-    /// to decide *whether* HDR output is worthwhile, then opt in there.
-    ///
-    /// # Snapshot, not a stream
-    ///
-    /// wgpu holds only an opaque window handle and owns no event loop, so it
-    /// cannot notify you when these values change (the brightness slider,
-    /// ambient light, the window moving to another monitor, HDR toggled in OS
-    /// settings). Re-call this after your windowing library signals the surface
-    /// may have moved/resized or the display configuration changed.
-    ///
-    /// # Coverage
-    ///
-    /// Every field is optional and platform-dependent (see [`DisplayHdrInfo`]):
-    /// Windows reports absolute nits, Apple reports an EDR headroom multiplier,
-    /// the web reports coarse booleans, and other platforms report nothing. A
-    /// returned [`DisplayHdrInfo::default`] (all fields `None`) means "nothing
-    /// known here", *not* "this is an SDR display". Never panics, including on
-    /// wasm.
+    /// This is the read-only, query side of HDR output; use it to decide
+    /// *whether* an HDR [`SurfaceColorSpace`] is worthwhile, then opt in through
+    /// [`SurfaceConfiguration::color_space`]. See [`DisplayHdrInfo`] for what the
+    /// fields mean, how complete they are per platform, and how to read them (it
+    /// is an advisory poll, not a stream). A returned [`DisplayHdrInfo::default`]
+    /// (all fields `None`) means "nothing known here", **not** "this is an SDR
+    /// display". Never panics, including on wasm.
     ///
     /// # Threading
     ///
     /// On Apple platforms the display's HDR characteristics live on
     /// main-thread-only AppKit objects (`NSScreen` / `NSWindow`), so query this
     /// from the main thread; called from any other thread it logs a one-time
-    /// warning and returns [`DisplayHdrInfo::default`]. Other backends
-    /// (Windows / Vulkan / DX12) have no such requirement.
+    /// warning and returns [`DisplayHdrInfo::default`]. Other backends (Windows,
+    /// Vulkan, DX12) have no such requirement.
     pub fn display_hdr_info(&self, adapter: &Adapter) -> DisplayHdrInfo {
         self.inner.display_hdr_info(&adapter.inner)
     }

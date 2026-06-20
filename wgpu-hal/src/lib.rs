@@ -803,12 +803,11 @@ pub trait Adapter: WasmNotSendSync {
     /// of the display currently backing `surface`, as reported by the platform's
     /// windowing or display layer.
     ///
-    /// This is a *poll*, not a stream: the backend re-queries the OS on every
-    /// call and never caches. `None` means the backend synthesizes nothing for
-    /// this surface (the default for backends without a display-query path);
-    /// wgpu-core collapses that to [`wgt::DisplayHdrInfo::default`]. Backends
-    /// must never panic here — any OS-call failure degrades to `None` /
-    /// `Default`.
+    /// This is a point-in-time poll: the backend re-queries the OS on every call
+    /// and never caches. `None` means the backend synthesizes nothing for this
+    /// surface (the default for backends without a display-query path); wgpu-core
+    /// collapses that to [`wgt::DisplayHdrInfo::default`]. Backends **must** never
+    /// panic here; any OS-call failure **must** degrade to `None` or `Default`.
     ///
     /// The default implementation returns `None`, so backends with no luminance
     /// source (GLES, noop, Vulkan on non-Windows) need not override it.
