@@ -897,7 +897,7 @@ fn map_adapter_info(adapter_info: &webgpu_sys::GpuAdapterInfo) -> wgt::AdapterIn
         backend: wgt::Backend::BrowserWebGpu,
         subgroup_min_size: adapter_info.subgroup_min_size(),
         subgroup_max_size: adapter_info.subgroup_max_size(),
-        transient_saves_memory: false,
+        transient_saves_memory: None,
         limit_bucket: None,
     }
 }
@@ -2373,7 +2373,7 @@ impl dispatch::DeviceInterface for WebDevice {
         let mapped_desc = webgpu_sys::GpuTextureDescriptor::new_with_gpu_extent_3d_dict(
             map_texture_format(desc.format),
             &map_extent_3d(desc.size),
-            (desc.usage - crate::TextureUsages::TRANSIENT).bits(),
+            desc.usage.bits(),
         );
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);

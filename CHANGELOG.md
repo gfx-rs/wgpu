@@ -135,6 +135,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Extend `copy_texture_to_texture` to allow copying a single plane of a multi-planar source (NV12, P010) into a single-plane destination of the matching format (e.g. NV12 `Plane0` → `R8Unorm`, NV12 `Plane1` → `Rg8Unorm`). `copy_size` is interpreted in plane texels, not luma texels. By @AdrianEddy in [#9551](https://github.com/gfx-rs/wgpu/pull/9551).
 - Added `InstanceFlags::STRICT_WEBGPU_COMPLIANCE` flag, which restricts the available feature set to the one defined by the WebGPU specification. By @teoxoy in [#9586](https://github.com/gfx-rs/wgpu/pull/9586).
 - Implemented `QuerySet::destroy` by @sagudev in [#9671](https://github.com/gfx-rs/wgpu/pull/9671)
+- Implemented query set initialization tracking, ensuring unwritten query slots resolve to 0; avoiding UB. By @teoxoy in [#9664](https://github.com/gfx-rs/wgpu/pull/9664).
 
 #### Metal
 
@@ -192,6 +193,8 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
   - `TextureDescriptor::map_label_and_view_formats` and `SurfaceConfiguration::map_view_formats` now take `FnOnce(&V)` instead of `FnOnce(V)`.
   - All `map_label` helpers except `CreateShaderModuleDescriptorPassthrough` now have the signature `map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K)` (previously the lifetimes were implicit and thus could differ).
 - Relaxed locking within `wgpu-core` to enable queue submission processing on one thread to proceed while another thread is blocked in a device poll. To facilitate this, `wgpu-hal` fences are now internally synchronized. By @Vecvec in [#9475](https://github.com/gfx-rs/wgpu/pull/9475).
+- `AdapterInfo::transient_saves_memory` now is `Option<bool>` instead of `bool`. It is `None` on web and `Some` on native platforms. By @beicause in [#9568](https://github.com/gfx-rs/wgpu/pull/9568).
+- BREAKING: `TextureUsages::TRANSIENT` is renamed to `TextureUsages::TRANSIENT_ATTACHMENT` and brought in line with WebGPU spec. Transient textures may now only be used with `LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and `StoreOp::Discard`. By @beicause in [#9568](https://github.com/gfx-rs/wgpu/pull/9568).
 
 #### Validation
 
@@ -267,6 +270,10 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 #### WebGPU
 
 - Upgrade vendored `wasm-bindgen` WebGPU bindings to 0.2.115 and adapt the `webgpu` backend to the new API. `ExternalImageSource::VideoFrame` no longer requires `--cfg=web_sys_unstable_apis`, as `web_sys::VideoFrame` is now stable. The GLES backend still requires the cfg to upload `VideoFrame`s, since `glow` still needs to adapt. By @evilpie in [#9090](https://github.com/gfx-rs/wgpu/pull/9090).
+
+### Testing/Internal
+
+- We now use `tombi` as our TOML formatter instead of `taplo`, which has been unmaintained for some time. If you currently use `taplo` as part of your workflow, we recommend you migrate, or change your editor settings while working with wgpu.
 
 ## v29.0.1 (2026-03-26)
 

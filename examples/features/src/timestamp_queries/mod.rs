@@ -143,7 +143,6 @@ impl Queries {
     fn resolve(&self, encoder: &mut wgpu::CommandEncoder) {
         encoder.resolve_query_set(
             &self.set,
-            // TODO(https://github.com/gfx-rs/wgpu/issues/3993): Musn't be larger than the number valid queries in the set.
             0..self.next_unused_query,
             &self.resolve_buffer,
             0,
@@ -157,25 +156,11 @@ impl Queries {
         );
     }
 
-    fn wait_for_results(&self, device: &wgpu::Device, is_test_on_metal: bool) -> Vec<u64> {
+    fn wait_for_results(&self, device: &wgpu::Device) -> Vec<u64> {
         self.destination_buffer
             .slice(..)
             .map_async(wgpu::MapMode::Read, |_| ());
-        let poll_type = if is_test_on_metal {
-            // Use a short timeout because the `timestamps_encoder` test (which
-            // is also marked as flaky) has been observed to hang on Metal.
-            //
-            // Note that a timeout here is *not* considered an error. In this
-            // particular case that is what we want, but in general, waits in
-            // tests should probably treat a timeout as an error.
-            wgpu::PollType::Wait {
-                submission_index: None,
-                timeout: Some(std::time::Duration::from_secs(5)),
-            }
-        } else {
-            wgpu::PollType::wait_indefinitely()
-        };
-        device.poll(poll_type).unwrap();
+        device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
         let timestamps = {
             let timestamp_view = self
@@ -234,7 +219,7 @@ async fn run() {
         .unwrap();
 
     let queries = submit_render_and_compute_pass_with_queries(&device, &queue);
-    let raw_results = queries.wait_for_results(&device, false);
+    let raw_results = queries.wait_for_results(&device);
     println!("Raw timestamp buffer contents: {raw_results:?}");
     QueryResults::from_raw_results(raw_results, timestamps_inside_passes).print(&queue);
 }
@@ -445,6 +430,7 @@ pub fn main() {
 
 #[cfg(test)]
 pub mod tests {
+    use wgpu::Backends;
     use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration};
 
     use super::{submit_render_and_compute_pass_with_queries, QueryResults};
@@ -466,11 +452,7 @@ pub mod tests {
                 .features(
                     wgpu::Features::TIMESTAMP_QUERY
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
-                )
-                // see https://github.com/gfx-rs/wgpu/issues/2521
-                // If marking this test non-flaky, also consider removing the silent
-                // timeout in `wait_for_results`.
-                .expect_fail(FailureCase::always().panic("unexpected timestamp").flaky()),
+                ),
         )
         .run_sync(|ctx| test_timestamps(ctx, true, false));
 
@@ -484,10 +466,11 @@ pub mod tests {
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
                 )
-                // see https://github.com/gfx-rs/wgpu/issues/2521
-                // If marking this test non-flaky, also consider removing the silent
-                // timeout in `wait_for_results`.
-                .expect_fail(FailureCase::always().panic("unexpected timestamp").flaky()),
+                .expect_fail(
+                    FailureCase::backend_adapter(Backends::GL, "llvmpipe")
+                        .panic("unexpected: inner timestamp before compute pass start timestamp")
+                        .flaky(),
+                ),
         )
         .run_sync(|ctx| test_timestamps(ctx, true, true));
 
@@ -496,16 +479,19 @@ pub mod tests {
         timestamps_on_encoder: bool,
         timestamps_inside_passes: bool,
     ) {
-        let is_metal = ctx.adapter.get_info().backend == wgpu::Backend::Metal;
         let queries = submit_render_and_compute_pass_with_queries(&ctx.device, &ctx.queue);
-        let raw_results = queries.wait_for_results(&ctx.device, is_metal);
+        let raw_results = queries.wait_for_results(&ctx.device);
+        println!("Raw timestamp buffer contents: {raw_results:?}");
+        let query_results = QueryResults::from_raw_results(raw_results, timestamps_inside_passes);
+        query_results.print(&ctx.queue);
+
         let QueryResults {
             encoder_timestamps,
             render_start_end_timestamps,
             render_inside_timestamp,
             compute_start_end_timestamps,
             compute_inside_timestamp,
-        } = QueryResults::from_raw_results(raw_results, timestamps_inside_passes);
+        } = query_results;
 
         // Timestamps may wrap around, so can't really only reason about deltas!
         // Making things worse, deltas are allowed to be zero.
@@ -516,31 +502,19 @@ pub mod tests {
         let encoder_delta = encoder_timestamps[1].wrapping_sub(encoder_timestamps[0]);
 
         if timestamps_on_encoder {
-            assert!(encoder_delta > 0, "unexpected timestamp");
-            assert!(
-                encoder_delta >= render_delta + compute_delta,
-                "unexpected timestamp"
-            );
+            assert!(encoder_delta > 0);
+            assert!(encoder_delta >= render_delta + compute_delta);
         }
         if let Some(render_inside_timestamp) = render_inside_timestamp {
-            assert!(
-                render_inside_timestamp >= render_start_end_timestamps[0],
-                "unexpected timestamp"
-            );
-            assert!(
-                render_inside_timestamp <= render_start_end_timestamps[1],
-                "unexpected timestamp"
-            );
+            assert!(render_inside_timestamp >= render_start_end_timestamps[0]);
+            assert!(render_inside_timestamp <= render_start_end_timestamps[1]);
         }
         if let Some(compute_inside_timestamp) = compute_inside_timestamp {
             assert!(
                 compute_inside_timestamp >= compute_start_end_timestamps[0],
-                "unexpected timestamp"
+                "unexpected: inner timestamp before compute pass start timestamp"
             );
-            assert!(
-                compute_inside_timestamp <= compute_start_end_timestamps[1],
-                "unexpected timestamp"
-            );
+            assert!(compute_inside_timestamp <= compute_start_end_timestamps[1]);
         }
     }
 }

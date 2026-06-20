@@ -17,7 +17,10 @@ use crate::{
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
         pass::{self, flush_bindings_helper},
         pass_base, pass_try,
-        query::{end_pipeline_statistics_query, validate_and_begin_pipeline_statistics_query},
+        query::{
+            end_pipeline_statistics_query, record_pass_timestamp_writes,
+            validate_and_begin_pipeline_statistics_query,
+        },
         ArcCommand, ArcPassTimestampWrites, BasePass, BindGroupStateChange, CommandEncoder,
         CommandEncoderError, DebugGroupError, EncoderStateError, InnerCommandEncoder, MapPassErr,
         PassErrorScope, PassStateError, PassTimestampWrites, QueryUseError, StateChange,
@@ -175,12 +178,6 @@ pub enum ComputePassErrorInner {
     Bind(#[from] BindError),
     #[error(transparent)]
     ImmediateData(#[from] ImmediateUploadError),
-    #[error("Immediate data offset must be aligned to 4 bytes")]
-    ImmediateOffsetAlignment,
-    #[error("Immediate data size must be aligned to 4 bytes")]
-    ImmediateDataizeAlignment,
-    #[error("Ran out of immediate data space. Don't set 4gb of immediates per ComputePass.")]
-    ImmediateOutOfMemory,
     #[error(transparent)]
     QueryUse(#[from] QueryUseError),
     #[error(transparent)]
@@ -253,9 +250,6 @@ impl WebGpuError for ComputePassError {
             | ComputePassErrorInner::BindGroupIndexOutOfRange { .. }
             | ComputePassErrorInner::UnalignedIndirectBufferOffset(_)
             | ComputePassErrorInner::IndirectBufferOverrun { .. }
-            | ComputePassErrorInner::ImmediateOffsetAlignment
-            | ComputePassErrorInner::ImmediateDataizeAlignment
-            | ComputePassErrorInner::ImmediateOutOfMemory
             | ComputePassErrorInner::PassEnded => ErrorType::Validation,
         }
     }
@@ -632,6 +626,8 @@ pub(super) fn encode_compute_pass(
                 indirect_draw_validation_resources: parent_state.indirect_draw_validation_resources,
                 snatch_guard: parent_state.snatch_guard,
                 debug_scope_depth: &mut debug_scope_depth,
+                query_set_writes: parent_state.query_set_writes,
+                deferred_query_set_resolves: parent_state.deferred_query_set_resolves,
             },
             binder: Binder::new(),
             temp_offsets: Vec::new(),
@@ -669,6 +665,8 @@ pub(super) fn encode_compute_pass(
     let timestamp_writes: Option<hal::PassTimestampWrites<'_, dyn hal::DynQuerySet>> =
         if let Some(tw) = timestamp_writes.take() {
             tw.query_set.same_device(device).map_pass_err(pass_scope)?;
+
+            record_pass_timestamp_writes(&tw, state.pass.base.query_set_writes);
 
             let query_set = state
                 .pass
@@ -825,6 +823,7 @@ pub(super) fn encode_compute_pass(
                     state.pass.base.raw_encoder,
                     &mut state.active_query,
                     state.pass.base.snatch_guard,
+                    state.pass.base.query_set_writes,
                 )
                 .map_pass_err(scope)?;
             }
@@ -1251,29 +1250,18 @@ impl Global {
         let scope = PassErrorScope::SetImmediate;
         let base = pass_base!(pass, scope);
 
-        if offset & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1) != 0 {
-            pass_try!(
-                base,
-                scope,
-                Err(ComputePassErrorInner::ImmediateOffsetAlignment),
-            );
-        }
-
-        if data.len() as u32 & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1) != 0 {
-            pass_try!(
-                base,
-                scope,
-                Err(ComputePassErrorInner::ImmediateDataizeAlignment),
-            )
-        }
-        let value_offset = pass_try!(
+        let size_bytes = pass_try!(
             base,
             scope,
-            base.immediates_data
-                .len()
-                .try_into()
-                .map_err(|_| ComputePassErrorInner::ImmediateOutOfMemory)
+            u32::try_from(data.len()).map_err(|_| ImmediateUploadError::ImmediateOutOfMemory)
         );
+        pass_try!(
+            base,
+            scope,
+            pass::validate_immediates_alignment(offset, size_bytes)
+        );
+
+        let values_offset = base.immediates_data.len().try_into().unwrap();
 
         base.immediates_data.extend(
             data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
@@ -1283,7 +1271,7 @@ impl Global {
         base.commands.push(ArcComputeCommand::SetImmediate {
             offset,
             size_bytes: data.len() as u32,
-            values_offset: value_offset,
+            values_offset,
         });
 
         Ok(())

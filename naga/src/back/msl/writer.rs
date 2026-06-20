@@ -33,9 +33,6 @@ use crate::{
     valid, FastHashMap, FastHashSet,
 };
 
-#[cfg(test)]
-use core::ptr;
-
 // This is a hack: we need to pass a pointer to an atomic,
 // but generally the backend isn't putting "&" in front of every pointer.
 // Some more general handling of pointers is needed to be implemented here.
@@ -533,10 +530,6 @@ pub struct Writer<W> {
     pub(super) namer: proc::Namer,
     pub(super) wrapped_functions: FastHashSet<WrappedFunction>,
     emit_int_div_checks: bool,
-    #[cfg(test)]
-    put_expression_stack_pointers: FastHashSet<*const ()>,
-    #[cfg(test)]
-    put_block_stack_pointers: FastHashSet<*const ()>,
     /// Set of (struct type, struct field index) denoting which fields require
     /// padding inserted **before** them (i.e. between fields at index - 1 and index)
     struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
@@ -897,10 +890,6 @@ impl<W: Write> Writer<W> {
             namer: proc::Namer::default(),
             wrapped_functions: FastHashSet::default(),
             emit_int_div_checks: true,
-            #[cfg(test)]
-            put_expression_stack_pointers: Default::default(),
-            #[cfg(test)]
-            put_block_stack_pointers: Default::default(),
             struct_member_pads: FastHashSet::default(),
             needs_object_memory_barriers: false,
         }
@@ -2006,11 +1995,6 @@ impl<W: Write> Writer<W> {
         context: &ExpressionContext,
         is_scoped: bool,
     ) -> BackendResult {
-        // Add to the set in order to track the stack size.
-        #[cfg(test)]
-        self.put_expression_stack_pointers
-            .insert(ptr::from_ref(&expr_handle).cast());
-
         if let Some(name) = self.named_expressions.get(&expr_handle) {
             write!(self.out, "{name}")?;
             return Ok(());
@@ -3483,7 +3467,7 @@ impl<W: Write> Writer<W> {
                 let result_ty = context.function.result.as_ref().unwrap().ty;
                 match context.module.types[result_ty].inner {
                     crate::TypeInner::Struct { ref members, .. } => {
-                        let tmp = "_tmp";
+                        let tmp = self.namer.call("_tmp");
                         write!(self.out, "{level}const auto {tmp} = ")?;
                         self.put_expression(expr_handle, context, true)?;
                         writeln!(self.out, ";")?;
@@ -3785,11 +3769,6 @@ impl<W: Write> Writer<W> {
         statements: &[crate::Statement],
         context: &StatementContext,
     ) -> BackendResult {
-        // Add to the set in order to track the stack size.
-        #[cfg(test)]
-        self.put_block_stack_pointers
-            .insert(ptr::from_ref(&level).cast());
-
         for statement in statements {
             log::trace!("statement[{}] {:?}", level.0, statement);
             match *statement {

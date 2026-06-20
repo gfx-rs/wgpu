@@ -2405,6 +2405,7 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// # Notes
     /// Doesn't add any newlines or leading/trailing spaces
+    #[allow(clippy::large_stack_frames)] // TODO(https://github.com/gfx-rs/wgpu/issues/9456)
     fn write_expr(
         &mut self,
         expr: Handle<crate::Expression>,
