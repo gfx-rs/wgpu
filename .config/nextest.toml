@@ -6,10 +6,6 @@ slow-timeout = { period = "45s", terminate-after = 2 }
 fail-fast = false
 retries = 0
 
-[profile.default-miri]
-# Miri is very very slow, so give it a much longer timeout.
-slow-timeout = { period = "120s", terminate-after = 4 }
-
 # Use two threads for tests with "2 threads" in their name
 [[profile.default.overrides]]
 filter = 'test(~2_threads) | test(~2 threads)'
@@ -51,3 +47,7 @@ threads-required = "num-test-threads"
 [[profile.default.overrides]]
 priority = 1
 filter = 'test(clear_texture) | test(clear_buffer_range_respected) | test(compile_fail) | test(test_api)'
+
+[profile.default-miri]
+# Miri is very very slow, so give it a much longer timeout.
+slow-timeout = { period = "120s", terminate-after = 4 }

@@ -207,7 +207,7 @@ impl super::Adapter {
             driver_info: String::new(),
             subgroup_min_size: features1.WaveLaneCountMin,
             subgroup_max_size: features1.WaveLaneCountMax,
-            transient_saves_memory: false,
+            transient_saves_memory: Some(false),
             limit_bucket: None,
         };
 

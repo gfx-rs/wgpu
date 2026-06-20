@@ -106,7 +106,7 @@ We use the following components in a wgpu development environment:
   [`rust-toolchain.toml`](./rust-toolchain.toml), to compile wgpu's code. If you
   use `rustup`, this will be automatically installed when you first run a
   `cargo` command in the repository.
-- [Taplo](https://taplo.tamasfe.dev/) to keep TOML files formatted.
+- [Tombi](https://tombi-toml.github.io/tombi/) to keep TOML files formatted.
 - [Vulkan SDK](https://vulkan.lunarg.com/) to provide Vulkan validation layers
   and other Vulkan/SPIR-V tools for testing.
 

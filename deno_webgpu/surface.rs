@@ -74,6 +74,15 @@ impl GPUCanvasContext {
     &self,
     #[webidl] configuration: GPUCanvasConfiguration,
   ) -> Result<(), JsErrorBox> {
+    if configuration
+      .usage
+      .0
+      .contains(wgpu_types::TextureUsages::TRANSIENT_ATTACHMENT)
+    {
+      return Err(JsErrorBox::type_error(
+        "`GPUCanvasConfiguration.usage` must not include `TRANSIENT_ATTACHMENT`",
+      ));
+    }
     let format = configuration.format.clone().into();
     let conf = wgpu_types::SurfaceConfiguration {
       usage: configuration.usage.into(),

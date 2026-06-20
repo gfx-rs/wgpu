@@ -13,7 +13,7 @@ use crate::{
         ParentDevice, QuerySet, RawResourceAccess, Trackable,
     },
     snatch::SnatchGuard,
-    track::{StatelessTracker, TrackerIndex},
+    track::{QuerySetTracker, TrackerIndex},
     FastHashMap,
 };
 use thiserror::Error;
@@ -321,7 +321,7 @@ impl QuerySet {
 pub(super) fn validate_and_begin_occlusion_query(
     query_set: Arc<QuerySet>,
     raw_encoder: &mut dyn hal::DynCommandEncoder,
-    tracker: &mut StatelessTracker<QuerySet>,
+    tracker: &mut QuerySetTracker,
     query_index: u32,
     reset_state: Option<&mut QueryResetMap>,
     active_query: &mut Option<(Arc<QuerySet>, u32)>,
@@ -372,7 +372,7 @@ pub(super) fn end_occlusion_query(
 pub(super) fn validate_and_begin_pipeline_statistics_query(
     query_set: Arc<QuerySet>,
     raw_encoder: &mut dyn hal::DynCommandEncoder,
-    tracker: &mut StatelessTracker<QuerySet>,
+    tracker: &mut QuerySetTracker,
     device: &Arc<Device>,
     query_index: u32,
     reset_state: Option<&mut QueryResetMap>,
