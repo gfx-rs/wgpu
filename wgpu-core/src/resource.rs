@@ -27,7 +27,10 @@ use crate::{
     lock::{rank, Mutex, RwLock},
     ray_tracing::{BlasCompactReadyPendingClosure, BlasPrepareCompactError},
     resource_log,
-    snatch::{SnatchGuard, Snatchable, Snatchable2},
+    snatch::{
+        DestructibleResourceState, InvalidOrDestroyedResourceError, SnatchGuard, Snatchable,
+        Snatchable2,
+    },
     timestamp_normalization::TimestampNormalizationBindGroup,
     track::{SharedTrackerIndexAllocator, TrackerIndex},
     weak_vec::WeakVec,
@@ -1495,22 +1498,39 @@ impl Texture {
     pub(crate) fn try_inner<'a>(
         &'a self,
         guard: &'a SnatchGuard,
-    ) -> Result<&'a TextureInner, DestroyedResourceError> {
-        self.inner
-            .get(guard)
-            .maybe_valid()
-            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+    ) -> Result<&'a TextureInner, InvalidOrDestroyedResourceError> {
+        match self.inner.get(guard) {
+            DestructibleResourceState::Valid(t) => Ok(t),
+            DestructibleResourceState::Invalid => {
+                Err(InvalidOrDestroyedResourceError::InvalidResource(
+                    InvalidResourceError(self.error_ident()),
+                ))
+            }
+            DestructibleResourceState::Destroyed => {
+                Err(InvalidOrDestroyedResourceError::DestroyedResource(
+                    DestroyedResourceError(self.error_ident()),
+                ))
+            }
+        }
     }
 
     pub(crate) fn check_destroyed(
         &self,
         guard: &SnatchGuard,
     ) -> Result<(), DestroyedResourceError> {
-        self.inner
-            .get(guard)
-            .maybe_valid()
-            .map(|_| ())
-            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+        match self.inner.get(guard) {
+            DestructibleResourceState::Valid(_) => Ok(()),
+            DestructibleResourceState::Invalid => Ok(()),
+            DestructibleResourceState::Destroyed => Err(DestroyedResourceError(self.error_ident())),
+        }
+    }
+
+    pub(crate) fn check_valid(&self, guard: &SnatchGuard) -> Result<(), InvalidResourceError> {
+        match self.inner.get(guard) {
+            DestructibleResourceState::Valid(_) => Ok(()),
+            DestructibleResourceState::Invalid => Err(InvalidResourceError(self.error_ident())),
+            DestructibleResourceState::Destroyed => Ok(()),
+        }
     }
 
     pub(crate) fn get_clear_view<'a>(

@@ -40,7 +40,7 @@ use crate::{
     },
     resource_log,
     scratch::ScratchBuffer,
-    snatch::{SnatchGuard, Snatchable},
+    snatch::{InvalidOrDestroyedResourceError, SnatchGuard, Snatchable},
     track::{self, Tracker, TrackerIndex},
     FastHashMap, SubmissionIndex,
 };
@@ -559,6 +559,15 @@ pub enum QueueSubmitError {
     CommandEncoder(#[from] CommandEncoderError),
     #[error(transparent)]
     ValidateAsActionsError(#[from] crate::ray_tracing::ValidateAsActionsError),
+}
+
+impl From<InvalidOrDestroyedResourceError> for QueueSubmitError {
+    fn from(e: InvalidOrDestroyedResourceError) -> Self {
+        match e {
+            InvalidOrDestroyedResourceError::InvalidResource(e) => Self::InvalidResource(e),
+            InvalidOrDestroyedResourceError::DestroyedResource(e) => Self::DestroyedResource(e),
+        }
+    }
 }
 
 impl WebGpuError for QueueSubmitError {
@@ -1644,7 +1653,10 @@ impl Queue {
                 // encoded. If it was destroyed after that, then it was transferred
                 // to `pending_writes.temp_resources` at the time of destruction, so
                 // we are still okay to use it.
-                Err(DestroyedResourceError(_)) => {}
+                Err(InvalidOrDestroyedResourceError::DestroyedResource(_)) => {}
+                Err(InvalidOrDestroyedResourceError::InvalidResource(_)) => {
+                    unreachable!()
+                }
             }
         }
 

@@ -83,15 +83,13 @@ impl<T> DestructibleResourceState<T> {
     }
 }
 
-/*
 #[derive(thiserror::Error, Debug)]
-pub enum InvalidOrDestroyedError {
+pub enum InvalidOrDestroyedResourceError {
     #[error(transparent)]
     InvalidResource(#[from] crate::resource::InvalidResourceError),
     #[error(transparent)]
     DestroyedResource(#[from] crate::resource::DestroyedResourceError),
 }
-*/
 
 impl<T> DestructibleResourceState<T> {
     pub fn maybe_valid(self) -> Option<T> {

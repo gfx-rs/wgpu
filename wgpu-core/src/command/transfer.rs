@@ -902,10 +902,15 @@ impl Global {
         let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
 
+        let texture = self.resolve_texture_id(source.texture);
+        texture
+            .check_valid(&cmd_enc.device.snatchable_lock.read())
+            .map_err(|_| EncoderStateError::Invalid)?;
+
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             Ok(ArcCommand::CopyTextureToBuffer {
                 src: wgt::TexelCopyTextureInfo::<Arc<Texture>> {
-                    texture: self.resolve_texture_id(source.texture),
+                    texture,
                     mip_level: source.mip_level,
                     origin: source.origin,
                     aspect: source.aspect,
