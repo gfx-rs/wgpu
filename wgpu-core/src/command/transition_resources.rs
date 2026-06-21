@@ -40,9 +40,7 @@ impl Global {
                 texture_transitions: texture_transitions
                     .map(|t| {
                         let texture = self.resolve_texture_id(t.texture);
-                        texture
-                            .check_valid(&snatch_guard)
-                            .map_err(|_| EncoderStateError::Invalid)?;
+                        texture.check_valid(&snatch_guard)?;
                         Ok(wgt::TextureTransition {
                             texture,
                             selector: t.selector,

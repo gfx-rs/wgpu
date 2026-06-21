@@ -138,17 +138,11 @@ impl Global {
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
 
-        let texture = self.resolve_texture_id(dst);
-        {
-            let snatch_guard = cmd_enc.device.snatchable_lock.read();
-            texture
-                .check_valid(&snatch_guard)
-                .map_err(|_| EncoderStateError::Invalid)?;
-        }
-
         let mut cmd_buf_data = cmd_enc.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, ClearError> {
+            let texture = self.resolve_texture_id(dst);
+            texture.check_valid(&cmd_enc.device.snatchable_lock.read())?;
             Ok(ArcCommand::ClearTexture {
                 dst: texture,
                 subresource_range: *subresource_range,
