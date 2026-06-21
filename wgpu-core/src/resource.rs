@@ -27,7 +27,7 @@ use crate::{
     lock::{rank, Mutex, RwLock},
     ray_tracing::{BlasCompactReadyPendingClosure, BlasPrepareCompactError},
     resource_log,
-    snatch::{SnatchGuard, Snatchable},
+    snatch::{SnatchGuard, Snatchable, Snatchable2},
     timestamp_normalization::TimestampNormalizationBindGroup,
     track::{SharedTrackerIndexAllocator, TrackerIndex},
     weak_vec::WeakVec,
@@ -1355,7 +1355,7 @@ pub enum TextureClearMode {
 
 #[derive(Debug)]
 pub struct Texture {
-    pub(crate) inner: Snatchable<TextureInner>,
+    pub(crate) inner: Snatchable2<TextureInner>,
     pub(crate) device: Arc<Device>,
     pub(crate) desc: wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
     pub(crate) _hal_usage: wgt::TextureUses,
@@ -1380,7 +1380,7 @@ impl Texture {
         init: bool,
     ) -> Self {
         Texture {
-            inner: Snatchable::new(inner),
+            inner: Snatchable2::new(inner),
             device: device.clone(),
             desc: desc.map_label(|label| label.to_string()),
             _hal_usage: hal_usage,
@@ -1449,7 +1449,7 @@ impl Drop for Texture {
             _ => {}
         };
 
-        if let Some(TextureInner::Native { raw }) = self.inner.take() {
+        if let Some(TextureInner::Native { raw }) = self.inner.take().maybe_valid() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
                 self.device.raw().destroy_texture(raw);
@@ -1462,7 +1462,7 @@ impl RawResourceAccess for Texture {
     type DynResource = dyn hal::DynTexture;
 
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
-        self.inner.get(guard).map(|t| t.raw())
+        self.inner.get(guard).maybe_valid().map(|t| t.raw())
     }
 }
 
@@ -1473,6 +1473,7 @@ impl Texture {
     ) -> Result<&'a TextureInner, DestroyedResourceError> {
         self.inner
             .get(guard)
+            .maybe_valid()
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 
@@ -1482,6 +1483,7 @@ impl Texture {
     ) -> Result<(), DestroyedResourceError> {
         self.inner
             .get(guard)
+            .maybe_valid()
             .map(|_| ())
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
@@ -1519,7 +1521,11 @@ impl Texture {
         let device = &self.device;
 
         let temp = {
-            let raw = match self.inner.snatch(&mut device.snatchable_lock.write()) {
+            let raw = match self
+                .inner
+                .snatch(&mut device.snatchable_lock.write())
+                .maybe_valid()
+            {
                 Some(TextureInner::Native { raw }) => raw,
                 Some(TextureInner::Surface { .. }) => {
                     return;
