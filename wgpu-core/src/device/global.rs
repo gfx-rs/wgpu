@@ -426,12 +426,12 @@ impl Global {
 
         let hub = &self.hub;
 
-        let texture = hub.textures.remove(texture_id);
+        let _texture = hub.textures.remove(texture_id);
         #[cfg(feature = "trace")]
         {
-            let mut t = texture.device.trace.lock();
+            let mut t = _texture.device.trace.lock();
             if let Some(t) = t.as_mut() {
-                t.add(trace::Action::DropTexture(texture.to_trace()));
+                t.add(trace::Action::DropTexture(_texture.to_trace()));
             }
         }
     }
