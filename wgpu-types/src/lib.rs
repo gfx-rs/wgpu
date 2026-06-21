@@ -46,7 +46,7 @@ mod render;
 #[doc(hidden)] // without this we get spurious missing_docs warnings
 mod send_sync;
 mod shader;
-pub mod surface;
+mod surface;
 mod texture;
 mod tokens;
 mod transfers;
