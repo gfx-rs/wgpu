@@ -201,7 +201,7 @@
 //!   [`ExtendedSrgb`](SurfaceColorSpace::ExtendedSrgb) is the same range but
 //!   sRGB-*encoded* (gamma), the web's HDR path.
 //!
-//! [HDR surface example]: https://github.com/gfx-rs/wgpu/tree/trunk/examples/standalone/03_hdr_surface
+//! [HDR surface example]: https://github.com/gfx-rs/wgpu/tree/v29/examples/standalone/03_hdr_surface
 //! [BT.709]: https://www.itu.int/rec/R-REC-BT.709
 //! [BT.2020]: https://www.itu.int/rec/R-REC-BT.2020
 //! [Display P3]: https://en.wikipedia.org/wiki/DCI-P3#Display_P3
