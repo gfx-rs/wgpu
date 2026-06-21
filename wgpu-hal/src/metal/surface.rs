@@ -15,6 +15,23 @@ use parking_lot::{Mutex, RwLock};
 
 use super::OsFeatures;
 
+/// Walks up from `start` to the `NSWindow` hosting this layer: the first ancestor
+/// layer with a delegate is the backing `NSView`, and we return its `window`.
+/// `None` if no ancestor has a delegate.
+#[cfg(target_os = "macos")]
+fn hosting_window(
+    start: Retained<objc2_quartz_core::CALayer>,
+) -> Option<Retained<objc2::runtime::NSObject>> {
+    let mut current = Some(start);
+    while let Some(layer) = current {
+        if let Some(delegate) = layer.delegate() {
+            return unsafe { objc2::msg_send![&*delegate, window] };
+        }
+        current = layer.superlayer();
+    }
+    None
+}
+
 impl super::Surface {
     pub fn new(layer: Retained<CAMetalLayer>) -> Self {
         Self {
@@ -55,7 +72,6 @@ impl super::Surface {
         {
             use objc2::rc::Retained;
             use objc2::runtime::NSObject;
-            use objc2_quartz_core::CALayer;
 
             // Bail before any message send if we are not on the main thread.
             // `MainThreadMarker::new()` is `None` off the main thread and does no
@@ -86,23 +102,11 @@ impl super::Surface {
                 guard.clone()
             };
 
-            // Resolve the hosting `NSScreen` by climbing
-            // layer → NSView (the delegate) → NSWindow → NSScreen, mirroring the
-            // occlusion walk in `acquire_texture`. `NSWindow.screen` is nil when
-            // the window is off-screen, so this can legitimately yield `None`.
+            // Resolve the hosting `NSScreen` from the hosting window. `NSWindow.screen`
+            // is nil when the window is off-screen, so this can legitimately yield `None`.
             let screen: Retained<NSObject> = autoreleasepool(|_| {
-                let mut current_layer: Option<Retained<CALayer>> =
-                    Some(Retained::into_super(render_layer));
-                while let Some(layer) = current_layer {
-                    if let Some(delegate) = layer.delegate() {
-                        let window: Option<Retained<NSObject>> =
-                            unsafe { objc2::msg_send![&*delegate, window] };
-                        return window
-                            .and_then(|window| unsafe { objc2::msg_send![&*window, screen] });
-                    }
-                    current_layer = layer.superlayer();
-                }
-                None
+                hosting_window(Retained::into_super(render_layer))
+                    .and_then(|window| unsafe { objc2::msg_send![&*window, screen] })
             })?;
 
             // AppKit documents these EDR properties as finite multipliers
@@ -319,33 +323,15 @@ impl crate::Surface for super::Surface {
             // for vsync. Check the window's occlusion state and skip acquisition if
             // the window is not visible - this avoids a 1-second hang in nextDrawable().
             use objc2::rc::Retained;
-            use objc2::runtime::NSObject;
-            use objc2_quartz_core::CALayer;
 
-            // The CAMetalLayer is typically a sublayer, so we need to traverse up
-            // to find the root layer whose delegate is the NSView.
-            let mut current_layer: Option<Retained<CALayer>> =
-                Some(Retained::into_super(render_layer.clone()));
-
-            while let Some(layer) = current_layer {
-                if let Some(delegate) = layer.delegate() {
-                    // Found a layer with a delegate - this should be the NSView
-                    let window: Option<Retained<NSObject>> =
-                        unsafe { objc2::msg_send![&*delegate, window] };
-
-                    if let Some(window) = window {
-                        const NS_WINDOW_OCCLUSION_STATE_VISIBLE: usize = 1 << 1;
-                        let occlusion_state: usize =
-                            unsafe { objc2::msg_send![&*window, occlusionState] };
-                        let is_visible = (occlusion_state & NS_WINDOW_OCCLUSION_STATE_VISIBLE) != 0;
-
-                        if !is_visible {
-                            return Err(crate::SurfaceError::Occluded);
-                        }
-                    }
-                    break;
+            // The CAMetalLayer is typically a sublayer; find the hosting window
+            // and skip acquisition while it is occluded.
+            if let Some(window) = hosting_window(Retained::into_super(render_layer.clone())) {
+                const NS_WINDOW_OCCLUSION_STATE_VISIBLE: usize = 1 << 1;
+                let occlusion_state: usize = unsafe { objc2::msg_send![&*window, occlusionState] };
+                if occlusion_state & NS_WINDOW_OCCLUSION_STATE_VISIBLE == 0 {
+                    return Err(crate::SurfaceError::Occluded);
                 }
-                current_layer = layer.superlayer();
             }
         }
 

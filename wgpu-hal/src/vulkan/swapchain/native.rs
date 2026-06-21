@@ -9,7 +9,9 @@ use parking_lot::{Mutex, MutexGuard};
 use crate::vulkan::{
     conv, map_host_device_oom_and_lost_err,
     semaphore_list::SemaphoreType,
-    swapchain::{Surface, SurfaceTextureMetadata, Swapchain, SwapchainSubmissionSemaphoreGuard},
+    swapchain::{
+        Surface, SurfaceTextureMetadata, Swapchain, SwapchainSubmissionSemaphoreGuard, WindowHandle,
+    },
     DeviceShared, InstanceShared,
 };
 
@@ -17,21 +19,17 @@ pub(crate) struct NativeSurface {
     raw: vk::SurfaceKHR,
     functor: khr::surface::Instance,
     instance: Arc<InstanceShared>,
-    /// The Win32 `HWND` (as an `isize`) the surface was created from, if any.
-    /// Borrowed — its lifetime is the application's window, exactly like the
-    /// DX12 surface contract; querying after the window is destroyed is the
-    /// app's UB to avoid. `None` for every non-Win32 surface. Stored as an
-    /// `isize` (not a raw pointer) to keep `NativeSurface: Send + Sync`. Only
-    /// read on Windows, to drive the DXGI display-HDR query.
+    /// The window this surface was created from, kept only for the DXGI HDR query
+    /// on Windows. `None` for non-Win32 surfaces. See [`WindowHandle`].
     #[cfg_attr(not(windows), allow(dead_code))]
-    hwnd: Option<isize>,
+    hwnd: Option<WindowHandle>,
 }
 
 impl NativeSurface {
     pub fn from_vk_surface_khr(
         instance: &crate::vulkan::Instance,
         raw: vk::SurfaceKHR,
-        hwnd: Option<isize>,
+        hwnd: Option<WindowHandle>,
     ) -> Self {
         let functor = khr::surface::Instance::new(&instance.shared.entry, &instance.shared.raw);
         Self {
@@ -295,7 +293,7 @@ impl Surface for NativeSurface {
     // Only ever called on Windows (to drive the DXGI display-HDR query); the
     // borrowed `HWND` is meaningless to the other platforms' Vulkan surfaces.
     #[cfg_attr(not(windows), allow(dead_code))]
-    fn raw_window_hwnd(&self) -> Option<isize> {
+    fn raw_window_hwnd(&self) -> Option<WindowHandle> {
         self.hwnd
     }
 

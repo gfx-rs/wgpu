@@ -508,9 +508,15 @@ impl super::Instance {
             }
         };
 
-        // Retain the borrowed `HWND` (ash types it as `isize`) so the display
-        // HDR query can reach this window's monitor through DXGI on Windows.
-        Ok(self.create_surface_from_vk_surface_khr(surface, Some(hwnd)))
+        // Keep the `HWND` for the DXGI HDR query on Windows. ash hands it to us as
+        // an `isize`; wrap it in the `Send` `WindowHandle` for storage.
+        #[cfg(windows)]
+        let window_handle = Some(crate::vulkan::swapchain::WindowHandle(
+            windows::Win32::Foundation::HWND(hwnd as *mut c_void),
+        ));
+        #[cfg(not(windows))]
+        let window_handle: Option<crate::vulkan::swapchain::WindowHandle> = None;
+        Ok(self.create_surface_from_vk_surface_khr(surface, window_handle))
     }
 
     #[cfg(target_vendor = "apple")]
@@ -542,7 +548,7 @@ impl super::Instance {
     pub(super) fn create_surface_from_vk_surface_khr(
         &self,
         surface: vk::SurfaceKHR,
-        hwnd: Option<isize>,
+        hwnd: Option<crate::vulkan::swapchain::WindowHandle>,
     ) -> super::Surface {
         let native_surface =
             crate::vulkan::swapchain::NativeSurface::from_vk_surface_khr(self, surface, hwnd);

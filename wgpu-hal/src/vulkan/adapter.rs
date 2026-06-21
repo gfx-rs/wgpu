@@ -3099,8 +3099,8 @@ impl crate::Adapter for super::Adapter {
         // `HWND` and returns `None`.
         #[cfg(windows)]
         {
-            let hwnd = surface.inner.raw_window_hwnd()?;
-            display_hdr_info_for_hwnd(hwnd)
+            let handle = surface.inner.raw_window_hwnd()?;
+            display_hdr_info_for_hwnd(handle)
         }
         #[cfg(not(windows))]
         {
@@ -3451,7 +3451,7 @@ fn query_cooperative_matrix_properties(
     result
 }
 
-/// Reads the [`wgt::DisplayHdrInfo`] for the monitor backing `hwnd` through DXGI.
+/// Reads the [`wgt::DisplayHdrInfo`] for the monitor backing `handle` through DXGI.
 ///
 /// DXGI needs no D3D device and its `windows`-crate bindings can be called from
 /// any thread, so it is reachable from the Vulkan backend. The DXGI output walk and the
@@ -3462,11 +3462,10 @@ fn query_cooperative_matrix_properties(
 /// Returns `None` on any failure (no `IDXGIOutput6` / pre-Win10-1703, no matching
 /// monitor, transient COM error). Never panics.
 #[cfg(windows)]
-fn display_hdr_info_for_hwnd(hwnd: isize) -> Option<wgt::DisplayHdrInfo> {
-    use windows::Win32::Foundation::HWND;
-
-    let hwnd = HWND(hwnd as *mut core::ffi::c_void);
-    let desc1 = crate::auxil::dxgi::hdr::output_desc1_for_window(hwnd)?;
+fn display_hdr_info_for_hwnd(
+    handle: crate::vulkan::swapchain::WindowHandle,
+) -> Option<wgt::DisplayHdrInfo> {
+    let desc1 = crate::auxil::dxgi::hdr::output_desc1_for_window(handle.0)?;
     let sdr_white_nits = crate::auxil::dxgi::hdr::sdr_white_nits_for_monitor(desc1.Monitor);
     Some(crate::auxil::dxgi::hdr::display_hdr_info_from_desc1(
         &desc1,

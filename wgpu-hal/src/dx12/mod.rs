@@ -1626,7 +1626,11 @@ impl crate::Surface for Surface {
             log::error!("CheckColorSpaceSupport failed: {err}");
             crate::SurfaceError::Other("IDXGISwapChain3::CheckColorSpaceSupport")
         })?;
-        if support & Dxgi::DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT.0 as u32 == 0 {
+        // The binding hands back the flags as a raw `u32`; wrap it so we can check
+        // by name. `_PRESENT` means the current display can show this color space:
+        // https://learn.microsoft.com/windows/win32/api/dxgi1_4/nf-dxgi1_4-idxgiswapchain3-checkcolorspacesupport
+        let support = Dxgi::DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG(support as i32);
+        if !support.contains(Dxgi::DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT) {
             return Err(crate::SurfaceError::Other(
                 "swapchain does not support the requested color space",
             ));
