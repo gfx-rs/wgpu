@@ -1716,8 +1716,8 @@ impl Global {
     fn resolve_texture_id(
         &self,
         texture_id: Id<id::markers::Texture>,
-    ) -> Result<Arc<crate::resource::Texture>, InvalidResourceError> {
-        self.hub.textures.get(texture_id).get()
+    ) -> Arc<crate::resource::Texture> {
+        self.hub.textures.get(texture_id)
     }
 
     fn resolve_query_set(

@@ -1373,7 +1373,7 @@ impl Device {
         }
     }
 
-    pub fn create_texture(
+    pub fn create_texture_inner(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
@@ -1746,6 +1746,19 @@ impl Device {
             .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
 
         Ok(texture)
+    }
+
+    pub fn create_texture(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+    ) -> (Arc<Texture>, Option<resource::CreateTextureError>) {
+        match self.create_texture_inner(desc) {
+            Ok(texture) => (texture, None),
+            Err(e) => {
+                let texture = Texture::dummy(self, desc);
+                (Arc::new(texture), Some(e))
+            }
+        }
     }
 
     pub fn create_texture_view(

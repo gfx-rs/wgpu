@@ -141,7 +141,7 @@ impl Global {
 
         cmd_buf_data.push_with(|| -> Result<_, ClearError> {
             Ok(ArcCommand::ClearTexture {
-                dst: self.resolve_texture_id(dst)?,
+                dst: self.resolve_texture_id(dst),
                 subresource_range: *subresource_range,
             })
         })

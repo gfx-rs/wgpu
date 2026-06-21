@@ -434,9 +434,7 @@ impl Global {
         }
 
         let status = output.status;
-        let texture_id = output
-            .texture
-            .map(|texture| fid.assign(resource::Fallible::Valid(texture)));
+        let texture_id = output.texture.map(|texture| fid.assign(texture));
 
         Ok(SurfaceOutput {
             status,

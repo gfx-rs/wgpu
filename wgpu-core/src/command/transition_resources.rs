@@ -39,7 +39,7 @@ impl Global {
                 texture_transitions: texture_transitions
                     .map(|t| {
                         Ok(wgt::TextureTransition {
-                            texture: self.resolve_texture_id(t.texture)?,
+                            texture: self.resolve_texture_id(t.texture),
                             selector: t.selector,
                             state: t.state,
                         })

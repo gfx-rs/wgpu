@@ -875,7 +875,7 @@ impl Global {
                     layout: source.layout,
                 },
                 dst: wgt::TexelCopyTextureInfo::<Arc<Texture>> {
-                    texture: self.resolve_texture_id(destination.texture)?,
+                    texture: self.resolve_texture_id(destination.texture),
                     mip_level: destination.mip_level,
                     origin: destination.origin,
                     aspect: destination.aspect,
@@ -905,7 +905,7 @@ impl Global {
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             Ok(ArcCommand::CopyTextureToBuffer {
                 src: wgt::TexelCopyTextureInfo::<Arc<Texture>> {
-                    texture: self.resolve_texture_id(source.texture)?,
+                    texture: self.resolve_texture_id(source.texture),
                     mip_level: source.mip_level,
                     origin: source.origin,
                     aspect: source.aspect,
@@ -939,13 +939,13 @@ impl Global {
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             Ok(ArcCommand::CopyTextureToTexture {
                 src: wgt::TexelCopyTextureInfo {
-                    texture: self.resolve_texture_id(source.texture)?,
+                    texture: self.resolve_texture_id(source.texture),
                     mip_level: source.mip_level,
                     origin: source.origin,
                     aspect: source.aspect,
                 },
                 dst: wgt::TexelCopyTextureInfo {
-                    texture: self.resolve_texture_id(destination.texture)?,
+                    texture: self.resolve_texture_id(destination.texture),
                     mip_level: destination.mip_level,
                     origin: destination.origin,
                     aspect: destination.aspect,

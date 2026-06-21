@@ -142,7 +142,8 @@ impl Player {
                 let _ = buffer.unmap();
             }
             Action::CreateTexture(id, desc) => {
-                let texture = device.create_texture(&desc).expect("create_texture error");
+                let (texture, _) = device.create_texture(&desc);
+
                 self.textures.insert(id, texture);
             }
             Action::DestroyTexture(id) => {

@@ -1896,7 +1896,7 @@ impl Global {
         size: &wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
         let queue = self.hub.queues.get(queue_id);
-        let texture = self.hub.textures.get(destination.texture).get()?;
+        let texture = self.hub.textures.get(destination.texture);
         let destination = wgt::TexelCopyTextureInfo {
             texture,
             mip_level: destination.mip_level,
