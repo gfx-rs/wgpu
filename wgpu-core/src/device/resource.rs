@@ -1770,7 +1770,7 @@ impl Device {
 
         let snatch_guard = texture.device.snatchable_lock.read();
 
-        let texture_raw = texture.try_raw(&snatch_guard)?;
+        let texture_raw = texture.try_inner(&snatch_guard)?.raw();
 
         // resolve TextureViewDescriptor defaults
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureviewdescriptor-defaults

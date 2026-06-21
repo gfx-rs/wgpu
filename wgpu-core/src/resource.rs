@@ -1489,6 +1489,7 @@ impl Drop for Texture {
 impl RawResourceAccess for Texture {
     type DynResource = dyn hal::DynTexture;
 
+    // TODO: this one is bad
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
         self.inner.get(guard).maybe_valid().map(|t| t.raw())
     }
@@ -2028,6 +2029,15 @@ pub enum CreateTextureViewError {
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+}
+
+impl From<InvalidOrDestroyedResourceError> for CreateTextureViewError {
+    fn from(value: InvalidOrDestroyedResourceError) -> Self {
+        match value {
+            InvalidOrDestroyedResourceError::InvalidResource(e) => Self::InvalidResource(e),
+            InvalidOrDestroyedResourceError::DestroyedResource(e) => Self::DestroyedResource(e),
+        }
+    }
 }
 
 impl WebGpuError for CreateTextureViewError {
