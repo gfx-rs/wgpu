@@ -3453,8 +3453,8 @@ fn query_cooperative_matrix_properties(
 
 /// Reads the [`wgt::DisplayHdrInfo`] for the monitor backing `hwnd` through DXGI.
 ///
-/// DXGI needs no D3D device and its `windows`-crate bindings are free-threaded,
-/// so it is reachable from the Vulkan backend. The DXGI output walk and the
+/// DXGI needs no D3D device and its `windows`-crate bindings can be called from
+/// any thread, so it is reachable from the Vulkan backend. The DXGI output walk and the
 /// `DXGI_OUTPUT_DESC1` → [`wgt::DisplayHdrInfo`] mapping are both shared with the
 /// DX12 backend via [`crate::auxil::dxgi::hdr`], so a Vulkan-on-Windows surface
 /// reports numbers identical to DX12 for the same monitor.

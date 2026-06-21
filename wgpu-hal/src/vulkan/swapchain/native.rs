@@ -152,12 +152,12 @@ impl Surface for NativeSurface {
             .into_iter()
             .filter_map(conv::map_vk_surface_formats)
         {
-            let flag = color_space.to_flag().unwrap();
+            let color_spaces = color_space.to_color_spaces().unwrap();
             match formats.iter_mut().find(|fc| fc.format == format) {
-                Some(fc) => fc.color_spaces |= flag,
+                Some(fc) => fc.color_spaces |= color_spaces,
                 None => formats.push(wgt::SurfaceFormatCapabilities {
                     format,
-                    color_spaces: flag,
+                    color_spaces,
                 }),
             }
         }

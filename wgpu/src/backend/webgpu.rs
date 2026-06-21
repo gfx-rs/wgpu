@@ -1003,7 +1003,7 @@ fn future_request_device(
             // which canvas formats this browser actually supports (see
             // `probe_rgba16float_canvas_support`). Run it once here so that
             // `Surface::get_capabilities` can report `Rgba16Float` truthfully.
-            probe_rgba16float_canvas_support(&device);
+            rgba16float_probe::probe_rgba16float_canvas_support(&device);
 
             (
                 WebDevice {
@@ -3958,73 +3958,80 @@ fn environment_color_gamut() -> Option<wgt::DisplayGamut> {
     }
 }
 
-/// Cached result of probing whether this browser can configure a WebGPU canvas
-/// with the `rgba16float` format: [`PROBE_UNKNOWN`] until first probed,
-/// otherwise [`PROBE_SUPPORTED`]/[`PROBE_UNSUPPORTED`].
-///
-/// Canvas-format support is process-wide and immutable at runtime, so a single
-/// probe suffices. The probe (see [`probe_rgba16float_canvas_support`]) is
-/// empirical — it actually calls `configure()` rather than checking a
-/// browser/version — so it starts reporting supported automatically once a
-/// browser (e.g. Firefox, <https://bugzilla.mozilla.org/show_bug.cgi?id=1834395>)
-/// adds support, with no wgpu change required.
-static RGBA16FLOAT_CANVAS_SUPPORT: AtomicU8 = AtomicU8::new(PROBE_UNKNOWN);
-const PROBE_UNKNOWN: u8 = 0;
-const PROBE_UNSUPPORTED: u8 = 1;
-const PROBE_SUPPORTED: u8 = 2;
+/// Probing and caching of whether this browser can configure an `rgba16float`
+/// WebGPU canvas. Only the reader functions are visible outside this module; the
+/// cached state and the probe machinery are private to it.
+mod rgba16float_probe {
+    use super::*;
 
-/// Whether `Surface::get_capabilities` should advertise `Rgba16Float`.
-///
-/// Optimistic (advertised) until the probe has determined it is unsupported:
-/// the no-panic handling in [`WebSurface::configure`]/
-/// [`WebSurface::get_current_texture`] recovers if an app selects it before a
-/// device exists on a browser that rejects it.
-fn rgba16float_canvas_supported() -> bool {
-    RGBA16FLOAT_CANVAS_SUPPORT.load(Ordering::Relaxed) != PROBE_UNSUPPORTED
-}
+    /// Cached result of probing whether this browser can configure a WebGPU canvas
+    /// with the `rgba16float` format: [`PROBE_UNKNOWN`] until first probed,
+    /// otherwise [`PROBE_SUPPORTED`]/[`PROBE_UNSUPPORTED`].
+    ///
+    /// Canvas-format support is process-wide and immutable at runtime, so a single
+    /// probe suffices. The probe (see [`probe_rgba16float_canvas_support`]) is
+    /// empirical (it actually calls `configure()` rather than checking a
+    /// browser/version), so it starts reporting supported automatically once a
+    /// browser (e.g. Firefox, <https://bugzilla.mozilla.org/show_bug.cgi?id=1834395>)
+    /// adds support, with no wgpu change required.
+    static RGBA16FLOAT_CANVAS_SUPPORT: AtomicU8 = AtomicU8::new(PROBE_UNKNOWN);
+    const PROBE_UNKNOWN: u8 = 0;
+    const PROBE_UNSUPPORTED: u8 = 1;
+    const PROBE_SUPPORTED: u8 = 2;
 
-/// Probe (once, then cache) whether this browser can configure a `rgba16float`
-/// WebGPU canvas, by actually configuring a throwaway 1×1 `OffscreenCanvas`.
-///
-/// Some browsers list `rgba16float` as a context format but throw from
-/// `configure` (current Firefox), which on wasm would otherwise be an
-/// uncatchable panic. Detecting it empirically — instead of sniffing the user
-/// agent — means the result self-corrects when the browser ships support.
-fn probe_rgba16float_canvas_support(device: &webgpu_sys::GpuDevice) {
-    if RGBA16FLOAT_CANVAS_SUPPORT.load(Ordering::Relaxed) != PROBE_UNKNOWN {
-        return;
+    /// Whether `Surface::get_capabilities` should advertise `Rgba16Float`.
+    ///
+    /// Optimistic (advertised) until the probe has determined it is unsupported:
+    /// the no-panic handling in [`WebSurface::configure`]/
+    /// [`WebSurface::get_current_texture`] recovers if an app selects it before a
+    /// device exists on a browser that rejects it.
+    pub(super) fn rgba16float_canvas_supported() -> bool {
+        RGBA16FLOAT_CANVAS_SUPPORT.load(Ordering::Relaxed) != PROBE_UNSUPPORTED
     }
-    // If the probe can't run (e.g. no `OffscreenCanvas`), leave the support
-    // state unknown so we keep advertising the format optimistically.
-    let Some(supported) = try_configure_rgba16float_canvas(device) else {
-        return;
-    };
-    RGBA16FLOAT_CANVAS_SUPPORT.store(
+
+    /// Probe (once, then cache) whether this browser can configure a `rgba16float`
+    /// WebGPU canvas, by actually configuring a throwaway 1x1 `OffscreenCanvas`.
+    ///
+    /// Some browsers list `rgba16float` as a context format but throw from
+    /// `configure` (current Firefox), which on wasm would otherwise be an
+    /// uncatchable panic. Detecting it empirically (instead of sniffing the user
+    /// agent) means the result self-corrects when the browser ships support.
+    pub(super) fn probe_rgba16float_canvas_support(device: &webgpu_sys::GpuDevice) {
+        if RGBA16FLOAT_CANVAS_SUPPORT.load(Ordering::Relaxed) != PROBE_UNKNOWN {
+            return;
+        }
+        // If the probe can't run (e.g. no `OffscreenCanvas`), leave the support
+        // state unknown so we keep advertising the format optimistically.
+        let Some(supported) = try_configure_rgba16float_canvas(device) else {
+            return;
+        };
+        RGBA16FLOAT_CANVAS_SUPPORT.store(
+            if supported {
+                PROBE_SUPPORTED
+            } else {
+                PROBE_UNSUPPORTED
+            },
+            Ordering::Relaxed,
+        );
+    }
+
+    /// Returns `Some(true)`/`Some(false)` if a `rgba16float` canvas could/couldn't
+    /// be configured, or `None` if the probe itself couldn't be set up.
+    fn try_configure_rgba16float_canvas(device: &webgpu_sys::GpuDevice) -> Option<bool> {
+        let canvas = web_sys::OffscreenCanvas::new(1, 1).ok()?;
+        let context = canvas.get_context("webgpu").ok()??;
+        let context: webgpu_sys::GpuCanvasContext = context.unchecked_into();
+        let config = webgpu_sys::GpuCanvasConfiguration::new(
+            device,
+            map_texture_format(wgt::TextureFormat::Rgba16Float),
+        );
+        let supported = context.configure(&config).is_ok();
         if supported {
-            PROBE_SUPPORTED
-        } else {
-            PROBE_UNSUPPORTED
-        },
-        Ordering::Relaxed,
-    );
-}
-
-/// Returns `Some(true)`/`Some(false)` if a `rgba16float` canvas could/couldn't
-/// be configured, or `None` if the probe itself couldn't be set up.
-fn try_configure_rgba16float_canvas(device: &webgpu_sys::GpuDevice) -> Option<bool> {
-    let canvas = web_sys::OffscreenCanvas::new(1, 1).ok()?;
-    let context = canvas.get_context("webgpu").ok()??;
-    let context: webgpu_sys::GpuCanvasContext = context.unchecked_into();
-    let config = webgpu_sys::GpuCanvasConfiguration::new(
-        device,
-        map_texture_format(wgt::TextureFormat::Rgba16Float),
-    );
-    let supported = context.configure(&config).is_ok();
-    if supported {
-        // Leave the throwaway context unconfigured before it's dropped.
-        context.unconfigure();
+            // Leave the throwaway context unconfigured before it's dropped.
+            context.unconfigure();
+        }
+        Some(supported)
     }
-    Some(supported)
 }
 
 impl dispatch::SurfaceInterface for WebSurface {
@@ -4035,7 +4042,7 @@ impl dispatch::SurfaceInterface for WebSurface {
         ];
         // Only advertise `Rgba16Float` where the browser can actually configure
         // it as a canvas (some, e.g. current Firefox, throw from `configure`).
-        if rgba16float_canvas_supported() {
+        if rgba16float_probe::rgba16float_canvas_supported() {
             formats.push(wgt::TextureFormat::Rgba16Float);
         }
         let mut mapped_formats = formats.iter().map(|format| map_texture_format(*format));
@@ -4103,14 +4110,19 @@ impl dispatch::SurfaceInterface for WebSurface {
         let high_dynamic_range = match_media_query("(dynamic-range: high)");
         let gamut = environment_color_gamut();
 
-        let mut info = wgt::DisplayHdrInfo::default();
-        if high_dynamic_range.is_some() || gamut.is_some() {
-            let mut coarse = wgt::DisplayCoarseRange::default();
-            coarse.high_dynamic_range = high_dynamic_range;
-            coarse.gamut = gamut;
-            info.coarse = Some(coarse);
+        let coarse =
+            (high_dynamic_range.is_some() || gamut.is_some()).then_some(wgt::DisplayCoarseRange {
+                high_dynamic_range,
+                gamut,
+            });
+        wgt::DisplayHdrInfo {
+            hdr_active: None,
+            luminance: None,
+            headroom: None,
+            chromaticity: None,
+            coarse,
+            bits_per_color: None,
         }
-        info
     }
 
     fn configure(&self, device: &dispatch::DispatchDevice, config: &crate::SurfaceConfiguration) {
@@ -4221,6 +4233,10 @@ impl dispatch::SurfaceInterface for WebSurface {
         // the surface as lost from `get_current_texture`, which the application
         // can already handle and recover from (e.g. by selecting a different
         // format reported by `get_capabilities`).
+        //
+        // This isn't WebGPU behavior we have to support forever: some browsers
+        // (current Firefox) list a context format and then reject it from
+        // `configure`. Once they stop doing that, this handling can go away.
         match self.context.configure(&mapped) {
             Ok(()) => self.configure_failed.set(false),
             Err(err) => {

@@ -57,11 +57,11 @@ impl Global {
 
             let usages = conv::map_texture_usage_from_hal(hal_caps.usage);
 
-            // The legacy `formats` list only contains formats that can be
-            // configured with the default `SurfaceColorSpace::Auto`, so that
-            // formats which a driver exposes exclusively in explicit-opt-in
-            // color spaces (e.g. HDR10-only) don't surprise existing
-            // applications that scan this list.
+            // To allow color-space-unaware applications to function correctly,
+            // `SurfaceCapabilities::formats` must consist of formats which can
+            // accept sRGB color (either encoded or linear). Therefore, we filter
+            // out all formats which support only color spaces that are not
+            // sRGB's color space (e.g. HDR10).
             let auto_configurable =
                 wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR;
             Ok(wgt::SurfaceCapabilities {
@@ -79,21 +79,21 @@ impl Global {
         })
     }
 
-    /// Queries a point-in-time snapshot of the HDR / luminance characteristics
-    /// of the display currently backing `surface_id` on `adapter_id`.
+    /// Returns the **current** HDR / luminance characteristics of the display
+    /// currently backing `surface_id` on `adapter_id`.
     ///
-    /// Infallible (mirrors the read-only snapshot contract): a surface that is
-    /// not present on the adapter's backend, or a backend that synthesizes
-    /// nothing, both collapse to [`wgt::DisplayHdrInfo::default`]. Unlike
-    /// [`Self::surface_get_capabilities`] this does **not** filter by color
-    /// space — it returns the raw display facts as-is.
+    /// If the information is not available, returns
+    /// [`wgt::DisplayHdrInfo::default`].
+    ///
+    /// Unlike [`Self::surface_get_capabilities`] this does **not** filter by
+    /// color space; it returns the raw display facts as-is.
     pub fn surface_display_hdr_info(
         &self,
         surface_id: SurfaceId,
         adapter_id: AdapterId,
     ) -> wgt::DisplayHdrInfo {
         profiling::scope!("Surface::display_hdr_info");
-        self.fetch_adapter_and_surface::<_, _>(surface_id, adapter_id, |adapter, surface| {
+        self.fetch_adapter_and_surface(surface_id, adapter_id, |adapter, surface| {
             surface.display_hdr_info(adapter)
         })
     }

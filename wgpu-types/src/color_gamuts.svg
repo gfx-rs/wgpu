@@ -10,7 +10,7 @@
 <polygon points="384.0,262.5 210.8,141.8 134.4,383.2" fill="#ff444418" stroke="#ee5555" stroke-width="1.8"/>
 <circle cx="217.3" cy="262.9" r="3.2" fill="#888"/>
 <text class="tick" x="224.3" y="265.9" fill="#aaa">D65</text>
-<text class="gname" x="231.2" y="213.3" fill="#ee5555">sRGB / BT.709</text>
+<text class="gname" x="225" y="230" fill="#ee5555">sRGB / BT.709</text>
 <text class="gname" x="210.8" y="88.1" fill="#23a866">Display-P3</text>
 <text class="gname" x="147.1" y="45.6" fill="#6f8cff">BT.2020</text>
 </svg>

@@ -191,28 +191,28 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 "#;
 
 /// Print to stdout on native, the developer console on the web.
-fn report(msg: &str) {
+fn report(msg: impl std::fmt::Display) {
     #[cfg(not(target_arch = "wasm32"))]
     println!("{msg}");
     #[cfg(target_arch = "wasm32")]
-    web_sys::console::log_1(&msg.into());
+    web_sys::console::log_1(&msg.to_string().into());
 }
 
-/// Report the display HDR snapshot returned by
+/// Report the display HDR info returned by
 /// [`wgpu::Surface::display_hdr_info`], the read-only query of what the panel can
 /// show right now. Every field is advisory and platform-dependent (`None` ==
 /// unknown here, **not** an SDR display). This is also the manual-verification
 /// surface: on macOS, dimming the display changes `headroom`/`hdr_active` live.
 fn report_display_hdr_info(info: &wgpu::DisplayHdrInfo) {
-    report("Display HDR snapshot (advisory; None = unknown on this platform):");
-    report(&format!("  hdr_active:     {:?}", info.hdr_active));
-    report(&format!("  luminance:      {:?}", info.luminance));
-    report(&format!("  headroom:       {:?}", info.headroom));
-    report(&format!("  chromaticity:   {:?}", info.chromaticity));
-    report(&format!("  coarse:         {:?}", info.coarse));
-    report(&format!("  bits_per_color: {:?}", info.bits_per_color));
+    report("Display HDR info (advisory; None = unknown on this platform):");
+    report(format_args!("  hdr_active:     {:?}", info.hdr_active));
+    report(format_args!("  luminance:      {:?}", info.luminance));
+    report(format_args!("  headroom:       {:?}", info.headroom));
+    report(format_args!("  chromaticity:   {:?}", info.chromaticity));
+    report(format_args!("  coarse:         {:?}", info.coarse));
+    report(format_args!("  bits_per_color: {:?}", info.bits_per_color));
     // The single value most tone-mappers want, plus the HDR-worthwhile gate.
-    report(&format!(
+    report(format_args!(
         "  -> tone_map_headroom() = {:?}, has_hdr_headroom() = {}",
         info.tone_map_headroom(),
         info.has_hdr_headroom()
@@ -237,12 +237,17 @@ fn forced_mode() -> Option<String> {
     }
 }
 
-/// Run a future to completion: synchronously on native, in the browser's
-/// event loop on the web (where blocking is not allowed).
+/// Run a future to completion concurrently: on a worker thread on native, or in
+/// the browser's event loop on the web (where blocking is not allowed).
+#[cfg(not(target_arch = "wasm32"))]
+fn spawn(future: impl core::future::Future<Output = ()> + Send + 'static) {
+    std::thread::spawn(move || pollster::block_on(future));
+}
+
+/// Run a future to completion concurrently: on a worker thread on native, or in
+/// the browser's event loop on the web (where blocking is not allowed).
+#[cfg(target_arch = "wasm32")]
 fn spawn(future: impl core::future::Future<Output = ()> + 'static) {
-    #[cfg(not(target_arch = "wasm32"))]
-    pollster::block_on(future);
-    #[cfg(target_arch = "wasm32")]
     wasm_bindgen_futures::spawn_local(future);
 }
 
@@ -259,7 +264,7 @@ fn pick_mode(caps: &wgpu::SurfaceCapabilities, forced: Option<&str>) -> ModeChoi
     use wgpu::{SurfaceColorSpace as Cs, SurfaceColorSpaces as Csf};
 
     // (color space, flag, shader mode, preferred formats in order)
-    let preferences: &[(Cs, Csf, u32, &[wgpu::TextureFormat])] = &[
+    const PREFERENCES: &[(Cs, Csf, u32, &[wgpu::TextureFormat])] = &[
         (
             Cs::Hdr10,
             Csf::HDR10,
@@ -315,7 +320,7 @@ fn pick_mode(caps: &wgpu::SurfaceCapabilities, forced: Option<&str>) -> ModeChoi
         }
     };
 
-    for &(cs, flag, shader_mode, preferred_formats) in preferences {
+    for &(cs, flag, shader_mode, preferred_formats) in PREFERENCES {
         if !allowed(cs) {
             continue;
         }
@@ -350,7 +355,7 @@ fn pick_mode(caps: &wgpu::SurfaceCapabilities, forced: Option<&str>) -> ModeChoi
 
 struct State {
     window: Arc<Window>,
-    /// Kept so the display snapshot can be re-polled after startup;
+    /// Kept so the display info can be re-polled after startup;
     /// `display_hdr_info` takes the adapter, exactly like `get_capabilities`.
     adapter: wgpu::Adapter,
     device: wgpu::Device,
@@ -359,14 +364,14 @@ struct State {
     config: wgpu::SurfaceConfiguration,
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
-    /// The most recent display snapshot, so a re-poll only logs on change.
+    /// The most recent display info, so a re-poll only logs on change.
     last_hdr_info: wgpu::DisplayHdrInfo,
-    /// Frames since the last display re-poll (the snapshot is throttled rather
+    /// Frames since the last display re-poll (the query is throttled rather
     /// than read every frame; see [`State::poll_display_hdr_info`]).
     frames_since_poll: u32,
 }
 
-/// How often (in frames) the demo re-polls the display snapshot. The values
+/// How often (in frames) the demo re-polls the display info. The values
 /// change on human timescales, so a coarse interval still surfaces live changes
 /// (e.g. dimming the display) without re-walking the OS display every frame.
 const HDR_POLL_INTERVAL_FRAMES: u32 = 30;
@@ -391,26 +396,26 @@ impl State {
             .unwrap();
 
         let info = adapter.get_info();
-        report(&format!("Adapter: {} ({:?})", info.name, info.backend));
+        report(format_args!("Adapter: {} ({:?})", info.name, info.backend));
 
         let caps = surface.get_capabilities(&adapter);
         report("Surface formats and color spaces:");
         for fc in &caps.format_capabilities {
-            report(&format!("  {:?}: {:?}", fc.format, fc.color_spaces));
+            report(format_args!("  {:?}: {:?}", fc.format, fc.color_spaces));
         }
 
         // Spell out the HDR / wide-gamut spaces each format offers beyond the
         // universally-supported SDR `Srgb`/`DisplayP3`, i.e. exactly what an
         // app must see advertised here before it can request HDR output. On the
-        // web this is the signal under test: an fp16 (`Rgba16Float`) canvas
+        // web this is the key signal: an fp16 (`Rgba16Float`) canvas
         // should advertise `ExtendedSrgb` / `ExtendedDisplayP3` whenever it is
         // configurable, regardless of whether the display is *currently* in HDR
-        // mode (that state lives in the display snapshot below, not here).
+        // mode (that state lives in the display info below, not here).
         let sdr = wgpu::SurfaceColorSpaces::SRGB | wgpu::SurfaceColorSpaces::DISPLAY_P3;
         report("HDR / wide-gamut color spaces (beyond SDR sRGB / Display-P3):");
         for fc in &caps.format_capabilities {
             let hdr = fc.color_spaces.difference(sdr);
-            report(&format!(
+            report(format_args!(
                 "  {:?}: {}",
                 fc.format,
                 if hdr.is_empty() {
@@ -421,23 +426,23 @@ impl State {
             ));
         }
 
-        // Read the display snapshot alongside the surface capabilities. An app
+        // Read the display info alongside the surface capabilities. An app
         // uses this to decide whether requesting HDR output is worthwhile and to
-        // seed a tone-map target; here we just report it (and re-poll later).
+        // set a tone-map target; here we just report it (and re-poll later).
         let hdr_info = surface.display_hdr_info(&adapter);
         report_display_hdr_info(&hdr_info);
 
         let forced = forced_mode();
         if let Some(mode) = forced.as_deref() {
-            report(&format!(
+            report(format_args!(
                 "Forced mode requested (?mode= / HDR_MODE): {mode:?}"
             ));
         }
         let choice = pick_mode(&caps, forced.as_deref());
         // Make the SDR fallback explicit: landing on the `Auto` path after a
         // (non-`srgb`) mode was requested means the requested color space was
-        // **not** advertised by `color_spaces()`, the symptom this example
-        // exists to catch. On web + `Rgba16Float` the extended spaces should be
+        // **not** advertised by `color_spaces()`, the situation this example
+        // makes visible. On web + `Rgba16Float` the extended spaces should be
         // advertised regardless of display HDR state, so seeing this there
         // means the capability query is under-reporting.
         if matches!(choice.color_space, wgpu::SurfaceColorSpace::Auto)
@@ -448,7 +453,7 @@ impl State {
                  falling back to SDR (Auto).",
             );
         }
-        report(&format!(
+        report(format_args!(
             "Configuring surface with {:?} + {:?}",
             choice.format, choice.color_space
         ));
@@ -479,13 +484,13 @@ impl State {
         // mode, encode_srgb
         let params: [u32; 2] = [
             choice.shader_mode,
-            (choice.shader_mode == 0 && !choice.format.is_srgb()) as u32,
+            u32::from(choice.shader_mode == 0 && !choice.format.is_srgb()),
         ];
         let params_buffer = wgpu::util::DeviceExt::create_buffer_init(
             &device,
             &wgpu::util::BufferInitDescriptor {
                 label: Some("params"),
-                contents: bytemuck_cast(&params),
+                contents: params.map(u32::to_ne_bytes).as_flattened(),
                 usage: wgpu::BufferUsages::UNIFORM,
             },
         );
@@ -559,16 +564,16 @@ impl State {
         self.surface.configure(&self.device, &self.config);
     }
 
-    /// Re-poll the display snapshot (throttled) and report it only when it
+    /// Re-poll the display info (throttled) and report it only when it
     /// changes.
     ///
-    /// `display_hdr_info` is a snapshot, not a stream: wgpu owns no event loop
-    /// and can't notify us, so an app re-queries from its own loop. Brightness,
+    /// `display_hdr_info` is a one-shot query, not a stream: wgpu owns no event loop
+    /// and can't notify us, so an app must re-query on its own initiative. Brightness,
     /// HDR-toggle, and monitor moves are not delivered as events; the value just
     /// changes, so a real app would also re-pick its color space and refresh its
     /// tone-map target here. A real app would re-query from its windowing events;
     /// this demo polls every [`HDR_POLL_INTERVAL_FRAMES`] frames, which still
-    /// surfaces live changes to a human while avoiding a per-frame OS walk.
+    /// reacts to live changes at a reasonable latency.
     fn poll_display_hdr_info(&mut self) {
         self.frames_since_poll += 1;
         if self.frames_since_poll < HDR_POLL_INTERVAL_FRAMES {
@@ -578,7 +583,7 @@ impl State {
 
         let info = self.surface.display_hdr_info(&self.adapter);
         if info != self.last_hdr_info {
-            report("Display HDR snapshot changed:");
+            report("Display HDR info changed:");
             report_display_hdr_info(&info);
             self.last_hdr_info = info;
         }
@@ -594,14 +599,11 @@ impl State {
             }
             _ => return,
         };
-        let view = surface_texture
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        let view = surface_texture.texture.create_view(&Default::default());
 
         let mut encoder = self.device.create_command_encoder(&Default::default());
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     depth_slice: None,
@@ -621,11 +623,6 @@ impl State {
         self.window.pre_present_notify();
         self.queue.present(surface_texture);
     }
-}
-
-fn bytemuck_cast(params: &[u32; 2]) -> &[u8] {
-    // Avoid a bytemuck dependency for two u32s.
-    unsafe { core::slice::from_raw_parts(params.as_ptr().cast(), size_of_val(params)) }
 }
 
 struct App {
@@ -663,8 +660,8 @@ impl ApplicationHandler<State> for App {
 
         let window = Arc::new(event_loop.create_window(attributes).unwrap());
 
-        // On native this blocks and the state arrives before `resumed`
-        // returns; on the web it is delivered later via `user_event`.
+        // `State::new` runs off the main thread (native) or in the browser
+        // event loop (web); the result is delivered later via `user_event`.
         spawn(async move {
             let state = State::new(window).await;
             let _ = proxy.send_event(state);

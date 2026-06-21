@@ -597,7 +597,7 @@ pub trait RenderBundleInterface: CommonTraits {}
 pub trait SurfaceInterface: CommonTraits {
     fn get_capabilities(&self, adapter: &DispatchAdapter) -> crate::SurfaceCapabilities;
 
-    /// Snapshot of the backing display's HDR / luminance characteristics.
+    /// The backing display's current HDR / luminance characteristics.
     ///
     /// Defaults to [`crate::DisplayHdrInfo::default`] (all fields `None`) so a
     /// custom backend that does not implement a display query is not required to

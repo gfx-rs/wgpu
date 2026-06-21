@@ -42,17 +42,14 @@ impl super::Surface {
     /// multiplier (`> 1.0`), not from `potential` (which is `> 1.0` on nearly
     /// every Apple display and would conflate "capable" with "active").
     ///
-    /// macOS only for now: it returns `None` on iOS/tvOS/visionOS (their
-    /// `UIScreen.currentEDRHeadroom` path is a follow-up) and whenever the
-    /// hosting screen cannot be resolved.
+    /// macOS only for now; it returns `None` on iOS, tvOS, and visionOS, and
+    /// whenever the hosting screen cannot be resolved.
     ///
     /// # Thread safety
     ///
-    /// `NSScreen` / `NSWindow` are main-thread-affine; reading them off the main
-    /// thread is undefined behavior. This gates on `MainThreadMarker::new()` and
-    /// returns `None` — with *no* Objective-C message send, but with a one-time
-    /// `log::warn!` — when not on the main thread, rather than risk a crash or a
-    /// `dispatch_sync` deadlock.
+    /// `NSScreen` and `NSWindow` may only be used from the main thread; reading
+    /// them off the main thread is undefined behavior.
+    /// Therefore, if this function is called on any other thread, it returns `None`.
     pub(super) fn display_hdr_info(&self) -> Option<wgt::DisplayHdrInfo> {
         #[cfg(target_os = "macos")]
         {
@@ -72,16 +69,17 @@ impl super::Surface {
                 static WARN_ONCE: std::sync::Once = std::sync::Once::new();
                 WARN_ONCE.call_once(|| {
                     log::warn!(
-                        "Surface::display_hdr_info() called off the main thread; \
-                         NSScreen is main-thread-affine, so no HDR info is \
-                         available. Query it from the main thread on macOS."
+                        "Surface::display_hdr_info() was called from thread {:?} \
+                         and will return None. On the Metal backend, it must be \
+                         called from the main thread to succeed.",
+                        std::thread::current().id()
                     );
                 });
                 return None;
             }
 
             // Take an owned reference to the layer and drop the lock *before*
-            // climbing to the window/screen, so a main-thread AppKit callback
+            // accessing the window and screen, so a main-thread AppKit callback
             // can never deadlock against this lock.
             let render_layer = {
                 let guard = self.render_layer.lock();
@@ -127,12 +125,11 @@ impl super::Surface {
             // with "active").
             let hdr_active = current.is_finite().then_some(current > 1.0);
 
-            let mut headroom = wgt::DisplayHeadroom::default();
-            headroom.current = finite(current);
-            // `maximumPotential…`/`maximumReference…` are macOS 10.15+, below which
-            // sending them would raise an unrecognized-selector exception — so
-            // only message them where available; otherwise leave them `None`.
-            if available!(macos = 10.15) {
+            // `maximumPotential...` and `maximumReference...` are macOS 10.15+,
+            // below which sending them would raise an unrecognized-selector
+            // exception, so only message them where available; otherwise leave
+            // them `None`.
+            let (potential, reference) = if available!(macos = 10.15) {
                 let potential: f64 = unsafe {
                     objc2::msg_send![
                         &*screen,
@@ -145,29 +142,42 @@ impl super::Surface {
                         maximumReferenceExtendedDynamicRangeColorComponentValue
                     ]
                 };
-                headroom.potential = finite(potential);
                 // AppKit reports `0.0` when there is no reference value; treat that
                 // (and any non-finite read) as "unknown" rather than a real `0.0`.
-                headroom.reference = finite(reference).filter(|&v| v > 0.0);
-            }
+                (finite(potential), finite(reference).filter(|&v| v > 0.0))
+            } else {
+                (None, None)
+            };
+            let headroom = wgt::DisplayHeadroom {
+                current: finite(current),
+                potential,
+                reference,
+            };
 
-            let mut coarse = wgt::DisplayCoarseRange::default();
-            coarse.high_dynamic_range = hdr_active;
             // `NSScreen.colorSpace` returns generic names on HDR panels
-            // post-Monterey, so deriving a gamut bucket from it would lie — leave
-            // `coarse.gamut` as `None` on macOS.
+            // post-Monterey, so deriving a gamut bucket from it would lie; leave
+            // `gamut` as `None` on macOS.
+            let coarse = wgt::DisplayCoarseRange {
+                high_dynamic_range: hdr_active,
+                gamut: None,
+            };
 
-            let mut info = wgt::DisplayHdrInfo::default();
-            info.hdr_active = hdr_active;
-            info.headroom = Some(headroom);
-            info.coarse = Some(coarse);
             // Apple exposes no absolute nits, CIE-xy primaries, or panel bit
-            // depth, so `luminance` / `chromaticity` / `bits_per_color` stay
-            // `None`.
+            // depth, so `luminance` / `chromaticity` / `bits_per_color` stay `None`.
+            let info = wgt::DisplayHdrInfo {
+                hdr_active,
+                luminance: None,
+                headroom: Some(headroom),
+                chromaticity: None,
+                coarse: Some(coarse),
+                bits_per_color: None,
+            };
             Some(info)
         }
         #[cfg(not(target_os = "macos"))]
         {
+            // TODO: iOS/tvOS/visionOS could report EDR headroom via
+            // `UIScreen.currentEDRHeadroom`.
             None
         }
     }

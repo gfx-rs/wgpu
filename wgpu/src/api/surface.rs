@@ -56,7 +56,7 @@ impl Surface<'_> {
         self.inner.get_capabilities(&adapter.inner)
     }
 
-    /// Returns a point-in-time snapshot of the HDR and luminance characteristics
+    /// Returns the current HDR and luminance characteristics
     /// of the display currently backing this surface on `adapter`: peak and SDR
     /// luminance, EDR headroom, primaries, and whether HDR is active right now.
     ///

@@ -799,12 +799,11 @@ pub trait Adapter: WasmNotSendSync {
         surface: &<Self::A as Api>::Surface,
     ) -> Option<SurfaceCapabilities>;
 
-    /// Returns a point-in-time snapshot of the HDR / luminance characteristics
+    /// Returns the current HDR / luminance characteristics
     /// of the display currently backing `surface`, as reported by the platform's
     /// windowing or display layer.
     ///
-    /// This is a point-in-time poll: the backend re-queries the OS on every call
-    /// and never caches. `None` means the backend synthesizes nothing for this
+    /// The backend re-queries the OS on every call and never caches. `None` means the backend synthesizes nothing for this
     /// surface (the default for backends without a display-query path); wgpu-core
     /// collapses that to [`wgt::DisplayHdrInfo::default`]. Backends **must** never
     /// panic here; any OS-call failure **must** degrade to `None` or `Default`.
@@ -2060,6 +2059,14 @@ pub struct SurfaceCapabilities {
     ///
     /// Must be at least one.
     pub composite_alpha_modes: Vec<wgt::CompositeAlphaMode>,
+}
+
+impl SurfaceCapabilities {
+    /// Returns the supported texture formats, dropping the per-format color-space
+    /// information carried in [`Self::formats`].
+    pub fn texture_formats(&self) -> impl Iterator<Item = wgt::TextureFormat> + '_ {
+        self.formats.iter().map(|fc| fc.format)
+    }
 }
 
 #[derive(Debug)]

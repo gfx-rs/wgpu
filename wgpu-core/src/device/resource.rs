@@ -5109,7 +5109,7 @@ impl Device {
                     if !caps.formats.iter().any(|fc| fc.format == config.format) {
                         break 'error E::UnsupportedFormat {
                             requested: config.format,
-                            available: caps.formats.iter().map(|fc| fc.format).collect(),
+                            available: caps.texture_formats().collect(),
                         };
                     }
                     if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
@@ -5364,7 +5364,7 @@ fn validate_surface_configuration(
     let Some(format_caps) = caps.formats.iter().find(|fc| fc.format == config.format) else {
         return Err(E::UnsupportedFormat {
             requested: config.format,
-            available: caps.formats.iter().map(|fc| fc.format).collect(),
+            available: caps.texture_formats().collect(),
         });
     };
     if config.color_space == wgt::SurfaceColorSpace::Auto {
@@ -5372,22 +5372,25 @@ fn validate_surface_configuration(
         // historical behavior: extended linear scRGB for fp16 formats
         // when the surface supports it, sRGB otherwise.
         //
-        // `Auto` never resolves to a wide-gamut or HDR color space:
-        // those change how the application must encode its output,
-        // so they must be explicitly requested.
-        let fallbacks = if config.format == TextureFormat::Rgba16Float {
+        // `Auto` only ever resolves to `Srgb` or the linear
+        // `ExtendedSrgbLinear` (the historical fp16 default). It never
+        // resolves to any of the other color spaces (DisplayP3, ExtendedSrgb,
+        // ExtendedDisplayP3, HDR10, HLG), because those change how the
+        // application must encode its output, so they must be requested
+        // explicitly.
+        let fallbacks: &[_] = if config.format == TextureFormat::Rgba16Float {
             &[
                 wgt::SurfaceColorSpace::ExtendedSrgbLinear,
                 wgt::SurfaceColorSpace::Srgb,
-            ][..]
+            ]
         } else {
-            &[wgt::SurfaceColorSpace::Srgb][..]
+            &[wgt::SurfaceColorSpace::Srgb]
         };
 
         let Some(new_color_space) = fallbacks.iter().copied().find(|fallback| {
             format_caps
                 .color_spaces
-                .contains(fallback.to_flag().unwrap())
+                .contains(fallback.to_color_spaces().unwrap())
         }) else {
             // The format is only available in color spaces that must
             // be explicitly requested (e.g. HDR10-only on some
@@ -5407,7 +5410,7 @@ fn validate_surface_configuration(
     }
     if !format_caps
         .color_spaces
-        .contains(config.color_space.to_flag().unwrap())
+        .contains(config.color_space.to_color_spaces().unwrap())
     {
         return Err(E::UnsupportedColorSpace {
             requested: config.color_space,

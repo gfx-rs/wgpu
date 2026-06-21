@@ -1620,6 +1620,8 @@ impl crate::Surface for Surface {
         // Apply the color space unconditionally (even for sRGB) so that
         // reconfiguring away from HDR10 resets the swapchain's state.
         let color_space = map_surface_color_space(config.color_space);
+        // SAFETY: `swap_chain` is a live `IDXGISwapChain3`; `color_space` is a
+        // valid `DXGI_COLOR_SPACE_TYPE`.
         let support = unsafe { swap_chain.CheckColorSpaceSupport(color_space) }.map_err(|err| {
             log::error!("CheckColorSpaceSupport failed: {err}");
             crate::SurfaceError::Other("IDXGISwapChain3::CheckColorSpaceSupport")
@@ -1629,6 +1631,8 @@ impl crate::Surface for Surface {
                 "swapchain does not support the requested color space",
             ));
         }
+        // SAFETY: `swap_chain` is a live `IDXGISwapChain3`; `color_space` is a
+        // valid `DXGI_COLOR_SPACE_TYPE` whose support was confirmed just above.
         unsafe { swap_chain.SetColorSpace1(color_space) }.map_err(|err| {
             log::error!("SetColorSpace1 failed: {err}");
             crate::SurfaceError::Other("IDXGISwapChain3::SetColorSpace1")

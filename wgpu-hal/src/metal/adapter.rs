@@ -425,7 +425,7 @@ impl crate::Adapter for super::Adapter {
                     | wgt::SurfaceColorSpaces::EXTENDED_SRGB
                     | wgt::SurfaceColorSpaces::EXTENDED_DISPLAY_P3;
             }
-            // PQ/HLG only on the >=10-bit formats: 8-bit PQ is unusable
+            // PQ/HLG only on the >=10-bit formats: 8-bit PQ would result in unusable
             // banding. The ITUR_2100 color space constants require
             // macOS 11.0/iOS 14.0.
             if matches!(

@@ -1046,8 +1046,7 @@ impl super::Adapter {
     /// has HDR enabled, i.e. its advanced color mode is HDR10 (PQ / BT.2020).
     ///
     /// Returns `false` if the output cannot be identified or queried. The DXGI
-    /// output walk is shared with the Vulkan-on-Windows backend (see
-    /// [`auxil::dxgi::hdr::output_desc1_for_window`]).
+    /// output is located via [`auxil::dxgi::hdr::output_desc1_for_window`].
     fn is_hdr_output_for_window(wnd_handle: HWND) -> bool {
         auxil::dxgi::hdr::output_desc1_for_window(wnd_handle)
             .map(|desc1| {
