@@ -866,6 +866,12 @@ impl Global {
         );
 
         let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
+
+        let texture = self.resolve_texture_id(destination.texture);
+        texture
+            .check_valid(&cmd_enc.device.snatchable_lock.read())
+            .map_err(|_| EncoderStateError::Invalid)?;
+
         let mut cmd_buf_data = cmd_enc.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
@@ -875,7 +881,7 @@ impl Global {
                     layout: source.layout,
                 },
                 dst: wgt::TexelCopyTextureInfo::<Arc<Texture>> {
-                    texture: self.resolve_texture_id(destination.texture),
+                    texture,
                     mip_level: destination.mip_level,
                     origin: destination.origin,
                     aspect: destination.aspect,
@@ -900,12 +906,13 @@ impl Global {
         );
 
         let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
-        let mut cmd_buf_data = cmd_enc.data.lock();
 
         let texture = self.resolve_texture_id(source.texture);
         texture
             .check_valid(&cmd_enc.device.snatchable_lock.read())
             .map_err(|_| EncoderStateError::Invalid)?;
+
+        let mut cmd_buf_data = cmd_enc.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             Ok(ArcCommand::CopyTextureToBuffer {
@@ -939,18 +946,31 @@ impl Global {
         );
 
         let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
+
+        let src_texture = self.resolve_texture_id(source.texture);
+        let dst_texture = self.resolve_texture_id(destination.texture);
+        {
+            let snatch_guard = cmd_enc.device.snatchable_lock.read();
+            src_texture
+                .check_valid(&snatch_guard)
+                .map_err(|_| EncoderStateError::Invalid)?;
+            dst_texture
+                .check_valid(&snatch_guard)
+                .map_err(|_| EncoderStateError::Invalid)?;
+        }
+
         let mut cmd_buf_data = cmd_enc.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             Ok(ArcCommand::CopyTextureToTexture {
                 src: wgt::TexelCopyTextureInfo {
-                    texture: self.resolve_texture_id(source.texture),
+                    texture: src_texture,
                     mip_level: source.mip_level,
                     origin: source.origin,
                     aspect: source.aspect,
                 },
                 dst: wgt::TexelCopyTextureInfo {
-                    texture: self.resolve_texture_id(destination.texture),
+                    texture: dst_texture,
                     mip_level: destination.mip_level,
                     origin: destination.origin,
                     aspect: destination.aspect,
