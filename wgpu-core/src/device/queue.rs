@@ -1065,7 +1065,7 @@ impl Queue {
     pub fn copy_external_image_to_texture(
         &self,
         source: &wgt::CopyExternalImageSourceInfo,
-        destination: wgt::CopyExternalImageDestInfo<Fallible<Texture>>,
+        destination: wgt::CopyExternalImageDestInfo<Arc<Texture>>,
         size: wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
         use crate::conv;
@@ -1093,7 +1093,7 @@ impl Queue {
         let src_width = source.source.width();
         let src_height = source.source.height();
 
-        let dst = destination.texture.get()?;
+        let dst = destination.texture;
         let premultiplied_alpha = destination.premultiplied_alpha;
         let destination = wgt::TexelCopyTextureInfo {
             texture: (),
