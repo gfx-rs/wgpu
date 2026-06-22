@@ -33,7 +33,7 @@ impl<W: Write> Writer<W> {
     }
 
     /// Checks whether `expr` does not have the bitpattern of IEEE f32 `NaN`.
-    /// 
+    ///
     /// Note that this evaluates `expr` in the written code multiple times.
     fn write_is_nan(&mut self, expr: &str) -> BackendResult {
         write!(self.out, "(")?;
