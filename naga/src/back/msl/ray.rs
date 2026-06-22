@@ -480,7 +480,7 @@ impl<W: Write> Writer<W> {
                     current_level = current_level.next();
                     write!(self.out, "{current_level}if (")?;
                     self.put_expression(query, &context.expression, true)?;
-                    write!(self.out, ".get_candidate_intersection_type() == {RT_NAMESPACE}::intersection_type::triangle) {{")?;
+                    writeln!(self.out, ".get_candidate_intersection_type() == {RT_NAMESPACE}::intersection_type::triangle) {{")?;
                 }
                 write!(self.out, "{level}")?;
                 self.put_expression(query, &context.expression, true)?;

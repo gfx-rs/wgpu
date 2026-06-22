@@ -211,7 +211,8 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
     } else {
         if (intersection_1.kind == 1u) {
             if (((naga_query_init_tracker_for_rq & 2) == 2) && !((naga_query_init_tracker_for_rq & 4) == 4)) {
-                if (rq.get_candidate_intersection_type() == metal::raytracing::intersection_type::triangle) {            rq.commit_triangle_intersection();
+                if (rq.get_candidate_intersection_type() == metal::raytracing::intersection_type::triangle) {
+            rq.commit_triangle_intersection();
                 }
             }
             return;
