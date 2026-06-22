@@ -53,7 +53,7 @@ constant float o = 2.0;
         if (metal::all(loop_bound == uint2(0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
         bool _e31 = false;
-        if ((naga_query_init_tracker_for_rq & 1) == 1) {
+        if (((naga_query_init_tracker_for_rq & 1) == 1) && !((naga_query_init_tracker_for_rq & 4) == 4)) {
             _e31 = rq.next();
             naga_query_init_tracker_for_rq = naga_query_init_tracker_for_rq | (_e31 ? 2: 6);
         }

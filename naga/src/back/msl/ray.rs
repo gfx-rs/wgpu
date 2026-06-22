@@ -387,11 +387,17 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, "false;")?;
 
                 if context.expression.ray_query_initialization_tracking {
-                    write!(self.out, "{level}if ")?;
+                    write!(self.out, "{level}if (")?;
                     self.write_contains_flags(
                         &tracker_expr_name,
                         back::RayQueryPoint::INITIALIZED.bits(),
                     )?;
+                    write!(self.out, " && !")?;
+                    self.write_contains_flags(
+                        &tracker_expr_name,
+                        back::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+                    )?;
+                    write!(self.out, ")")?;
                     writeln!(self.out, " {{")?;
                     current_level = current_level.next();
                 }

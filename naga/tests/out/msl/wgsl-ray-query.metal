@@ -98,7 +98,7 @@ RayIntersection query_loop(
         if (metal::all(loop_bound == uint2(0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
         bool _e9 = false;
-        if ((naga_query_init_tracker_for_rq_1 & 1) == 1) {
+        if (((naga_query_init_tracker_for_rq_1 & 1) == 1) && !((naga_query_init_tracker_for_rq_1 & 4) == 4)) {
             _e9 = rq_1.next();
             naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | (_e9 ? 2: 6);
         }
