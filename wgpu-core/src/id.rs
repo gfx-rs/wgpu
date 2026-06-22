@@ -261,14 +261,18 @@ where
 ///
 /// For example, `Device<A>` will have the same type of identifier as
 /// `Device<B>` because `Device<T>` for any `T` defines the same maker type.
-pub trait Marker: 'static + WasmNotSendSync {}
+pub trait Marker: 'static + WasmNotSendSync {
+    const TYPE: &'static str;
+}
 
 // This allows `()` to be used as a marker type for tests.
 //
 // We don't want these in production code, since they essentially remove type
 // safety, like how identifiers across different types can be compared.
 #[cfg(test)]
-impl Marker for () {}
+impl Marker for () {
+    const TYPE: &'static str = "Untyped";
+}
 
 /// Define identifiers for each resource.
 macro_rules! ids {
@@ -281,7 +285,9 @@ macro_rules! ids {
             $(
                 #[derive(Debug)]
                 pub enum $marker {}
-                impl super::Marker for $marker {}
+                impl super::Marker for $marker {
+                    const TYPE: &'static str = stringify!($marker);
+                }
             )*
         }
 
