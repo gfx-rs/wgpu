@@ -733,19 +733,25 @@ impl DisplayHdrInfo {
     /// display can drive before clipping. This is the single value most
     /// tone-mappers want, with the subjective parts left to the application.
     ///
-    /// Resolution order, first available wins:
+    /// Resolution order, first match wins:
     /// 1. Apple EDR: [`DisplayHeadroom::current`] (already a multiplier).
-    /// 2. Absolute nits: `max_nits / sdr_white_nits` when both are known and
+    /// 2. `Some(1.0)` when the display reports it is not in an HDR mode
+    ///    ([`hdr_active`](Self::hdr_active) is `Some(false)`, or
+    ///    [`DisplayCoarseRange::high_dynamic_range`] is `Some(false)`). An SDR
+    ///    display has no usable headroom even when its panel's peak luminance
+    ///    sits above its SDR white level, so that ratio is not reported as
+    ///    headroom you could drive.
+    /// 3. Absolute nits: `max_nits / sdr_white_nits`, when both are known and
     ///    `sdr_white_nits > 0.0`.
-    /// 3. `Some(1.0)` when [`DisplayCoarseRange::high_dynamic_range`] is
-    ///    `Some(false)` (definitively SDR, so no headroom).
-    /// 4. Otherwise `None`: no value is derived when the available figures are in
-    ///    different units (e.g. `max_nits` known but `sdr_white_nits` unknown).
+    /// 4. Otherwise `None`: the available figures are in different units (e.g.
+    ///    `max_nits` known but `sdr_white_nits` unknown), so no multiplier is
+    ///    derived.
     ///
     /// Use `unwrap_or(1.0)` on the result for the SDR fallback. Never returns a
     /// non-finite value.
     #[must_use]
     pub fn tone_map_headroom(&self) -> Option<f32> {
+        // Apple EDR reports a multiplier directly.
         if let Some(h) = self
             .headroom
             .and_then(|h| h.current)
@@ -753,15 +759,24 @@ impl DisplayHdrInfo {
         {
             return Some(h);
         }
-        if let Some(l) = self.luminance {
-            if let (Some(max), Some(sdr)) = (l.max_nits, l.sdr_white_nits) {
-                if sdr > 0.0 && max.is_finite() && sdr.is_finite() {
-                    return Some(max / sdr);
-                }
-            }
+        // Checked before the nit ratio below: an SDR display still reports a
+        // physical peak against a default SDR white, so that ratio would be
+        // phantom headroom (see the resolution order above).
+        if self.hdr_active == Some(false)
+            || self.coarse.and_then(|c| c.high_dynamic_range) == Some(false)
+        {
+            return Some(1.0);
         }
-        // Definitively SDR (web `dynamic-range: standard`) → no headroom.
-        (self.coarse.and_then(|c| c.high_dynamic_range) == Some(false)).then_some(1.0)
+        // Otherwise derive the multiplier from absolute nits, when both the peak
+        // and the SDR white level are known.
+        if let Some((max, sdr)) = self
+            .luminance
+            .and_then(|l| l.max_nits.zip(l.sdr_white_nits))
+            .filter(|&(max, sdr)| sdr > 0.0 && max.is_finite() && sdr.is_finite())
+        {
+            return Some(max / sdr);
+        }
+        None
     }
 
     /// `true` only with positive evidence of usable HDR headroom
@@ -809,7 +824,7 @@ mod display_hdr_info_tests {
 
     #[test]
     fn windows_nits_derive_headroom_only_with_sdr_white() {
-        // Both nits present and sdr_white > 0 → ratio.
+        // Both nits present and sdr_white > 0, so it returns the ratio.
         let info = DisplayHdrInfo {
             luminance: Some(DisplayLuminance {
                 max_nits: Some(800.0),
@@ -821,7 +836,7 @@ mod display_hdr_info_tests {
         assert_eq!(info.tone_map_headroom(), Some(4.0));
         assert!(info.has_hdr_headroom());
 
-        // max_nits known but sdr_white unknown → refuse to guess across frames.
+        // max_nits known but sdr_white unknown, so it refuses to guess across frames.
         let info = DisplayHdrInfo {
             luminance: Some(DisplayLuminance {
                 max_nits: Some(800.0),
@@ -839,6 +854,40 @@ mod display_hdr_info_tests {
             coarse: Some(DisplayCoarseRange {
                 high_dynamic_range: Some(false),
                 gamut: Some(DisplayGamut::Srgb),
+            }),
+            ..Default::default()
+        };
+        assert_eq!(info.tone_map_headroom(), Some(1.0));
+        assert!(!info.has_hdr_headroom());
+    }
+
+    #[test]
+    fn sdr_mode_overrides_panel_nits() {
+        // A Windows SDR output still reports its EDID peak (270 nits) against a
+        // default 80-nit SDR white, but says it is not in an HDR mode. The
+        // unusable 270/80 ratio must not surface as headroom; the display reads
+        // as SDR (1.0) and `has_hdr_headroom` is false.
+        let sdr = DisplayLuminance {
+            max_nits: Some(270.0),
+            sdr_white_nits: Some(80.0),
+            ..Default::default()
+        };
+
+        // `hdr_active: Some(false)` is decisive on its own, with no `coarse`.
+        let info = DisplayHdrInfo {
+            hdr_active: Some(false),
+            luminance: Some(sdr),
+            ..Default::default()
+        };
+        assert_eq!(info.tone_map_headroom(), Some(1.0));
+        assert!(!info.has_hdr_headroom());
+
+        // `coarse.high_dynamic_range: Some(false)` is equally decisive.
+        let info = DisplayHdrInfo {
+            luminance: Some(sdr),
+            coarse: Some(DisplayCoarseRange {
+                high_dynamic_range: Some(false),
+                gamut: Some(DisplayGamut::DisplayP3),
             }),
             ..Default::default()
         };
