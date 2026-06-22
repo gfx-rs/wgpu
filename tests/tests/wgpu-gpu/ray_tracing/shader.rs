@@ -115,8 +115,8 @@ static PREVENT_INVALID_RAY_QUERY_CALLS: GpuTestConfiguration = GpuTestConfigurat
             .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
             // Otherwise, mistakes in the generated code won't be caught.
             .instance_flags(InstanceFlags::GPU_BASED_VALIDATION),
-        // Don't disable metal shader validation because the shader validation
-        // is important here and the results from the ray query don't matter.
+            // Don't disable metal shader validation because the shader validation
+            // is important here and the results from the ray query don't matter.
     )
     .run_sync(prevent_invalid_ray_query_calls);
 
