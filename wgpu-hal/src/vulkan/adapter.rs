@@ -700,7 +700,8 @@ impl PhysicalDeviceFeatures {
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,
-            caps.supports_extension(khr::swapchain_mutable_format::NAME),
+            caps.supports_extension(khr::swapchain_mutable_format::NAME)
+                || !caps.supports_extension(khr::swapchain::NAME),
         );
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
         dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);
