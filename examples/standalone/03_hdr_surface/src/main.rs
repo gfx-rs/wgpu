@@ -201,8 +201,8 @@ fn report(msg: impl std::fmt::Display) {
 /// Report the display HDR info returned by
 /// [`wgpu::Surface::display_hdr_info`], the read-only query of what the panel can
 /// show right now. Every field is advisory and platform-dependent (`None` ==
-/// unknown here, **not** an SDR display). This is also the manual-verification
-/// surface: on macOS, dimming the display changes `headroom`/`hdr_active` live.
+/// unknown here, **not** an SDR display). It's also a live check: on macOS,
+/// dimming the display changes `headroom` / `hdr_active` between re-queries.
 fn report_display_hdr_info(info: &wgpu::DisplayHdrInfo) {
     report("Display HDR info (advisory; None = unknown on this platform):");
     report(format_args!("  hdr_active:     {:?}", info.hdr_active));
@@ -355,7 +355,7 @@ fn pick_mode(caps: &wgpu::SurfaceCapabilities, forced: Option<&str>) -> ModeChoi
 
 struct State {
     window: Arc<Window>,
-    /// Kept so the display info can be re-polled after startup;
+    /// Kept so the display info can be re-queried after startup;
     /// `display_hdr_info` takes the adapter, exactly like `get_capabilities`.
     adapter: wgpu::Adapter,
     device: wgpu::Device,
@@ -364,25 +364,16 @@ struct State {
     config: wgpu::SurfaceConfiguration,
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
-    /// The most recent display info, so a re-poll only logs on change.
+    /// The most recent display info, so a re-query only logs on change.
     last_hdr_info: wgpu::DisplayHdrInfo,
-    /// Frames since the last display re-poll (the query is throttled rather
-    /// than read every frame; see [`State::poll_display_hdr_info`]).
-    frames_since_poll: u32,
 }
 
-/// How often (in frames) the demo re-polls the display info. The values
-/// change on human timescales, so a coarse interval still surfaces live changes
-/// (e.g. dimming the display) without re-walking the OS display every frame.
-const HDR_POLL_INTERVAL_FRAMES: u32 = 30;
-
 impl State {
-    async fn new(window: Arc<Window>) -> State {
-        // `from_env_or_default` honors `WGPU_BACKEND` (e.g. `vulkan`, `dx12`)
-        // so each backend's color-space path can be tested separately.
-        let instance =
-            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-        let surface = instance.create_surface(window.clone()).unwrap();
+    async fn new(
+        window: Arc<Window>,
+        instance: wgpu::Instance,
+        surface: wgpu::Surface<'static>,
+    ) -> State {
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 compatible_surface: Some(&surface),
@@ -425,12 +416,6 @@ impl State {
                 }
             ));
         }
-
-        // Read the display info alongside the surface capabilities. An app
-        // uses this to decide whether requesting HDR output is worthwhile and to
-        // set a tone-map target; here we just report it (and re-poll later).
-        let hdr_info = surface.display_hdr_info(&adapter);
-        report_display_hdr_info(&hdr_info);
 
         let forced = forced_mode();
         if let Some(mode) = forced.as_deref() {
@@ -553,8 +538,8 @@ impl State {
             config,
             pipeline,
             bind_group,
-            last_hdr_info: hdr_info,
-            frames_since_poll: 0,
+            // Seeded by the first main-thread query in `user_event`.
+            last_hdr_info: wgpu::DisplayHdrInfo::default(),
         }
     }
 
@@ -564,23 +549,44 @@ impl State {
         self.surface.configure(&self.device, &self.config);
     }
 
-    /// Re-poll the display info (throttled) and report it only when it
-    /// changes.
+    /// Re-query the display HDR info and report it if it changed.
     ///
-    /// `display_hdr_info` is a one-shot query, not a stream: wgpu owns no event loop
-    /// and can't notify us, so an app must re-query on its own initiative. Brightness,
-    /// HDR-toggle, and monitor moves are not delivered as events; the value just
-    /// changes, so a real app would also re-pick its color space and refresh its
-    /// tone-map target here. A real app would re-query from its windowing events;
-    /// this demo polls every [`HDR_POLL_INTERVAL_FRAMES`] frames, which still
-    /// reacts to live changes at a reasonable latency.
-    fn poll_display_hdr_info(&mut self) {
-        self.frames_since_poll += 1;
-        if self.frames_since_poll < HDR_POLL_INTERVAL_FRAMES {
-            return;
-        }
-        self.frames_since_poll = 0;
-
+    /// wgpu does not push you a notification when the display changes, so you
+    /// call [`wgpu::Surface::display_hdr_info`] again whenever something might
+    /// have. Each call re-reads the OS, so re-querying *is* how you observe a
+    /// change. A real app would also re-pick its color space and refresh its
+    /// tone-map target from the new values; here we just log them.
+    ///
+    /// Call this on the main thread: on the Metal backend `display_hdr_info`
+    /// reads main-thread-only `NSScreen`. The winit `Resized` / `Moved` events
+    /// that drive it already run there.
+    ///
+    /// This example re-queries on the winit `Resized` and `Moved` events, which
+    /// is enough to catch the window being dragged to a *different physical
+    /// monitor* with different limits, the portable case worth showing. It does
+    /// **not** catch *in-place* changes to the current monitor: winit delivers
+    /// no event for those, so to react you would re-query `display_hdr_info`
+    /// from a platform-specific trigger (or just poll it, where there is none):
+    ///
+    /// * **Windows:** toggling HDR fires only the Win32 `WM_DISPLAYCHANGE`
+    ///   message (which winit does not forward), and the SDR-content brightness
+    ///   slider fires nothing at all. Re-querying `display_hdr_info` reflects
+    ///   both, since each call re-reads DXGI and the OS display config.
+    /// * **macOS:** re-query on `NSApplicationDidChangeScreenParametersNotification`.
+    ///   The EDR headroom also drifts continuously and ramps over ~1-2 s, so apps
+    ///   that feed it into tone mapping tend to re-query every frame.
+    /// * **Wayland:** `Moved` never fires (per the winit docs); the per-surface
+    ///   "preferred image description changed" event that would replace it is not
+    ///   bound by wgpu or winit yet, so `display_hdr_info` is `None` here today
+    ///   regardless.
+    /// * **Web / X11:** nothing to re-query for (web exposes no usable signal;
+    ///   X11 has no HDR).
+    ///
+    /// Wiring up those platform-specific triggers is out of scope for this
+    /// example. Most apps query once at startup and never look again; every value
+    /// except macOS's headroom is advisory, so shipping HDR titles usually add a
+    /// user calibration step regardless.
+    fn requery_display_hdr_info(&mut self) {
         let info = self.surface.display_hdr_info(&self.adapter);
         if info != self.last_hdr_info {
             report("Display HDR info changed:");
@@ -660,15 +666,34 @@ impl ApplicationHandler<State> for App {
 
         let window = Arc::new(event_loop.create_window(attributes).unwrap());
 
-        // `State::new` runs off the main thread (native) or in the browser
-        // event loop (web); the result is delivered later via `user_event`.
+        // Create the surface here, on the main thread: winit only hands out the
+        // raw window handle from the thread that owns the window (on Windows,
+        // `window_handle()` errors with `Unavailable` anywhere else).
+        //
+        // `InstanceDescriptor::new_without_display_handle_from_env` honors
+        // `WGPU_BACKEND` (e.g. `vulkan`, `dx12`) so each backend's color-space
+        // path can be exercised separately.
+        let instance =
+            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+        let surface = instance.create_surface(window.clone()).unwrap();
+
+        // The async tail (adapter, device, pipeline) runs off the main thread
+        // (native) or in the browser event loop (web); the finished `State`
+        // arrives back on the main thread via `user_event`.
         spawn(async move {
-            let state = State::new(window).await;
+            let state = State::new(window, instance, surface).await;
             let _ = proxy.send_event(state);
         });
     }
 
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, state: State) {
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut state: State) {
+        // The first display query runs here because it must be on the main
+        // thread (see `requery_display_hdr_info`) and `State::new` ran on a
+        // worker. It also seeds the baseline that later re-queries compare against.
+        let info = state.surface.display_hdr_info(&state.adapter);
+        report_display_hdr_info(&info);
+        state.last_hdr_info = info;
+
         state.window.request_redraw();
         self.state = Some(state);
     }
@@ -679,12 +704,19 @@ impl ApplicationHandler<State> for App {
         };
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Resized(size) => state.resize(size),
-            WindowEvent::RedrawRequested => {
-                state.poll_display_hdr_info();
-                state.render();
+            WindowEvent::Resized(size) => {
+                state.resize(size);
+                // A resize can also land the window on another monitor, so
+                // re-query here too.
+                state.requery_display_hdr_info();
                 state.window.request_redraw();
             }
+            // The main signal for a monitor change. winit doesn't deliver it on
+            // Wayland or web, so they won't react (see `requery_display_hdr_info`).
+            WindowEvent::Moved(_) => state.requery_display_hdr_info(),
+            // The test pattern is static, so we render on demand (startup, OS
+            // expose, resize) rather than spinning a continuous redraw loop.
+            WindowEvent::RedrawRequested => state.render(),
             _ => {}
         }
     }
