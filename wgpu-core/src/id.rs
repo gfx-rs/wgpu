@@ -210,7 +210,7 @@ where
 {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         let (index, epoch) = self.unzip();
-        write!(formatter, "Id({index},{epoch})")?;
+        write!(formatter, "{}Id({index},{epoch})", T::TYPE)?;
         Ok(())
     }
 }
