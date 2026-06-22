@@ -184,11 +184,15 @@ impl GPU {
     let instance = if let Some(instance) = state.try_borrow::<Instance>() {
       instance
     } else {
+      let mut flags = wgpu_types::InstanceFlags::from_build_config();
+      if std::env::var_os("DENO_WEBGPU_STRICT_COMPLIANCE").is_some() {
+        flags |= wgpu_types::InstanceFlags::STRICT_WEBGPU_COMPLIANCE;
+      }
       state.put(Arc::new(wgpu_core::global::Global::new(
         "webgpu",
         wgpu_types::InstanceDescriptor {
           backends,
-          flags: wgpu_types::InstanceFlags::from_build_config(),
+          flags,
           memory_budget_thresholds: wgpu_types::MemoryBudgetThresholds {
             for_resource_creation: Some(97),
             for_device_loss: Some(99),
