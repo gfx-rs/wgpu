@@ -22,6 +22,10 @@ use std::{
 
 use anyhow::{Context, Result};
 
+// When printing the rank graph, include the source locations where the acquisitions were
+// observed. Setting this to `false` produces output that more closely matches `rank.rs`.
+const PRINT_ACQUISITION_LOCATIONS: bool = false;
+
 fn main() -> Result<()> {
     let mut ranks: BTreeMap<u32, Rank> = BTreeMap::default();
 
@@ -113,69 +117,82 @@ fn main() -> Result<()> {
         }
     }
 
-    for older_rank in ranks.values() {
+    let (order, connected) = order_ranks(&ranks);
+
+    // Assemble the ranks into three groups, in this list:
+    // 1. Non-leaf ranks, in the topological order.
+    // 2. Leaf ranks that are connected to the graph, alphabetically.
+    // 3. Ranks that aren't connected to the graph at all, alphabetically.
+    let mut grouped_order = Vec::with_capacity(order.len());
+
+    // Non-leaf ranks in topological order.
+    grouped_order.extend(order.iter().filter(|bit| !ranks[bit].is_leaf()));
+
+    // Leaf ranks that are connected to the graph, in alphabetical order.
+    grouped_order.extend({
+        let mut tmp = order
+            .iter()
+            .copied()
+            .filter(|bit| ranks[bit].is_leaf() && connected & (1 << *bit) != 0)
+            .collect::<Vec<_>>();
+        tmp.sort_by_key(|bit| &ranks[bit].const_name);
+        tmp
+    });
+
+    // Ranks that aren't connected to the graph at all, in alphabetical order.
+    grouped_order.extend({
+        let mut tmp = order
+            .iter()
+            .copied()
+            .filter(|bit| ranks[bit].is_leaf() && connected & (1 << *bit) == 0)
+            .collect::<Vec<_>>();
+        tmp.sort_by_key(|bit| &ranks[bit].const_name);
+        tmp
+    });
+
+    // Finally, compute indexes so we can sort the followers of each rank in the same order
+    // as the ranks themselves.
+    let mut place_in_group_order = vec![0; ranks.len()];
+    for (i, &bit) in grouped_order.iter().enumerate() {
+        place_in_group_order[bit as usize] = i;
+    }
+
+    for bit in &grouped_order {
+        let older_rank = &ranks[bit];
         if older_rank.is_leaf() {
-            // We'll print leaf locks separately, below.
+            println!(
+                "    rank {} {:?} followed by {{ }};",
+                older_rank.const_name, older_rank.member_name
+            );
             continue;
         }
         println!(
             "    rank {} {:?} followed by {{",
             older_rank.const_name, older_rank.member_name
         );
-        let mut acquired_any_leaf_locks = false;
-        let mut first_newer = true;
-        for (newer_rank, locations) in &older_rank.acquisitions {
-            // List acquisitions of leaf locks at the end.
-            if ranks[newer_rank].is_leaf() {
-                acquired_any_leaf_locks = true;
-                continue;
-            }
-            if !first_newer {
-                println!();
-            }
-            for (older_location, newer_locations) in locations {
-                if newer_locations.len() == 1 {
-                    for newer_loc in newer_locations {
-                        println!("        // holding {older_location} while locking {newer_loc}");
-                    }
-                } else {
-                    println!("        // holding {older_location} while locking:");
-                    for newer_loc in newer_locations {
-                        println!("        //     {newer_loc}");
+        let mut acquisitions = older_rank.acquisitions.iter().collect::<Vec<_>>();
+        acquisitions.sort_by_key(|(&newer_rank, _)| place_in_group_order[newer_rank as usize]);
+        for (newer_rank, locations) in acquisitions {
+            if PRINT_ACQUISITION_LOCATIONS {
+                for (older_location, newer_locations) in locations {
+                    if newer_locations.len() == 1 {
+                        for newer_loc in newer_locations {
+                            println!(
+                                "        // holding {older_location} while locking {newer_loc}"
+                            );
+                        }
+                    } else {
+                        println!("        // holding {older_location} while locking:");
+                        for newer_loc in newer_locations {
+                            println!("        //     {newer_loc}");
+                        }
                     }
                 }
             }
             println!("        {},", ranks[newer_rank].const_name);
-            first_newer = false;
         }
 
-        if acquired_any_leaf_locks {
-            // We checked that older_rank isn't a leaf lock, so we
-            // must have printed something above.
-            if !first_newer {
-                println!();
-            }
-            println!("        // leaf lock acquisitions:");
-            for newer_rank in older_rank.acquisitions.keys() {
-                if !ranks[newer_rank].is_leaf() {
-                    continue;
-                }
-                println!("        {},", ranks[newer_rank].const_name);
-            }
-        }
-        println!("    }};");
-        println!();
-    }
-
-    for older_rank in ranks.values() {
-        if !older_rank.is_leaf() {
-            continue;
-        }
-
-        println!(
-            "    rank {} {:?} followed by {{ }};",
-            older_rank.const_name, older_rank.member_name
-        );
+        println!("    }}");
     }
 
     Ok(())
@@ -251,4 +268,55 @@ impl fmt::Display for Location {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}", self.file, self.line)
     }
+}
+
+/// Generate a topological order for lock ranks, and find unconnected ranks.
+///
+/// Return a pair `(ranks, connected)` such that:
+///
+/// - `ranks` is a vector of rank numbers in which each rank R occurs
+///   before all other ranks acquired while R is held.
+///
+/// - `connected` is a bit mask of all ranks that are acquired while
+///   some other rank is held. In other words, this is the set of
+///   ranks that have predecessors in the partial order.
+fn order_ranks(ranks: &BTreeMap<u32, Rank>) -> (Vec<u32>, u64) {
+    let mut order = Vec::with_capacity(ranks.len());
+    let mut connected = 0; // mask of ranks that are connected to the graph
+
+    // Generate the ordering in reverse: traverse the graph in
+    // depth-first order, adding a rank to end of the list only after
+    // all other ranks reachable from it have been appended.
+
+    // A mask of the ranks already visited by the traversal.
+    let mut visited = 0;
+
+    fn visit(
+        bit: u32,
+        visited: &mut u64,
+        ranks: &BTreeMap<u32, Rank>,
+        order: &mut Vec<u32>,
+        connected: &mut u64,
+    ) {
+        if *visited & (1 << bit) != 0 {
+            return;
+        }
+        *visited |= 1 << bit;
+
+        for &next_rank_bit in ranks[&bit].acquisitions.keys() {
+            *connected |= 1 << next_rank_bit;
+            visit(next_rank_bit, visited, ranks, order, connected);
+        }
+
+        order.push(bit);
+    }
+
+    for &bit in ranks.keys() {
+        visit(bit, &mut visited, ranks, &mut order, &mut connected);
+    }
+
+    // Reverse the ordering, so visitors appear before the visited.
+    order.reverse();
+
+    (order, connected)
 }

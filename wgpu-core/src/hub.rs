@@ -124,6 +124,7 @@ use crate::{
     command::{CommandBuffer, CommandEncoder, RenderBundle},
     device::{queue::Queue, Device},
     instance::Adapter,
+    lock::rank,
     pipeline::{ComputePipeline, PipelineCache, RenderPipeline, ShaderModule},
     registry::{Registry, RegistryReport},
     resource::{
@@ -209,6 +210,13 @@ pub struct Hub {
 
 impl Hub {
     pub(crate) fn new() -> Self {
+        // Unique lock ranks are required only for registries that are accessed concurrently.
+        // This happens in render pass/bundle encoding, and bind group creation. (Concurrent
+        // access could probably be avoided even in those cases, but acquiring all the locks
+        // at once simplifies the code.)
+        //
+        // The _first_ concurrently-held registry lock uses REGISTRY_STORAGE. Others have
+        // their own named lock rank.
         Self {
             adapters: Registry::new(),
             devices: Registry::new(),
@@ -216,22 +224,22 @@ impl Hub {
             pipeline_layouts: Registry::new(),
             shader_modules: Registry::new(),
             bind_group_layouts: Registry::new(),
-            bind_groups: Registry::new(),
+            bind_groups: Registry::with_rank(rank::HUB_BIND_GROUPS),
             command_encoders: Registry::new(),
             command_buffers: Registry::new(),
             render_bundles: Registry::new(),
-            render_pipelines: Registry::new(),
+            render_pipelines: Registry::with_rank(rank::HUB_RENDER_PIPELINES),
             compute_pipelines: Registry::new(),
             pipeline_caches: Registry::new(),
             query_sets: Registry::new(),
             buffers: Registry::new(),
             staging_buffers: Registry::new(),
             textures: Registry::new(),
-            texture_views: Registry::new(),
-            external_textures: Registry::new(),
-            samplers: Registry::new(),
+            texture_views: Registry::with_rank(rank::HUB_TEXTURE_VIEWS),
+            external_textures: Registry::with_rank(rank::HUB_EXTERNAL_TEXTURES),
+            samplers: Registry::with_rank(rank::HUB_SAMPLERS),
             blas_s: Registry::new(),
-            tlas_s: Registry::new(),
+            tlas_s: Registry::with_rank(rank::HUB_TLAS),
         }
     }
 

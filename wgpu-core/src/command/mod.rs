@@ -1271,9 +1271,9 @@ impl CommandEncoder {
         self: &Arc<Self>,
         desc: &wgt::CommandBufferDescriptor<Label>,
     ) -> (Arc<CommandBuffer>, Option<CommandEncoderError>) {
-        let mut cmd_enc_status = self.data.lock();
+        let status = self.data.lock().finish();
 
-        let res = match cmd_enc_status.finish() {
+        let res = match status {
             CommandEncoderStatus::Finished(mut cmd_buf_data) => {
                 match Self::encode_commands(&self.device, &mut cmd_buf_data) {
                     Ok(()) => Ok(cmd_buf_data),
