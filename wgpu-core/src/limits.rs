@@ -362,6 +362,7 @@ const BUCKET_M1: Bucket = Bucket {
         max_dynamic_uniform_buffers_per_pipeline_layout: 12,
         max_sampled_textures_per_shader_stage: 48,
         max_storage_buffer_binding_size: 1 << 30, // 1 GB,
+        max_storage_buffers_per_shader_stage: 9,
         max_vertex_attributes: 31,
         ..UPLEVEL.limits
     },

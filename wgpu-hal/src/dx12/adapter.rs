@@ -1013,6 +1013,7 @@ impl super::Adapter {
                         0
                     },
                     max_acceleration_structures_per_shader_stage,
+                    max_buffers_and_acceleration_structures_per_shader_stage: u32::MAX,
                     max_binding_array_acceleration_structure_elements_per_shader_stage:
                         max_acceleration_structures_per_shader_stage,
                     max_multiview_view_count,

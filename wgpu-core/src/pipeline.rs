@@ -772,6 +772,8 @@ pub enum CreateRenderPipelineError {
     TooManyVertexBuffers { given: u32, limit: u32 },
     #[error("The number of bind groups + vertex buffers {given} exceeds the limit {limit}")]
     TooManyBindGroupsPlusVertexBuffers { given: u32, limit: u32 },
+    #[error("The number of vertex-stage buffers and acceleration structures {given} exceeds the limit {limit}")]
+    TooManyBuffersAndAccelerationStructuresInVertexStage { given: u32, limit: u32 },
     #[error("The total number of vertex attributes {given} exceeds the limit {limit}")]
     TooManyVertexAttributes { given: u32, limit: u32 },
     #[error("Vertex attribute location {given} must be less than limit {limit}")]
@@ -853,6 +855,7 @@ impl WebGpuError for CreateRenderPipelineError {
             | Self::InvalidSampleCount(_)
             | Self::TooManyVertexBuffers { .. }
             | Self::TooManyBindGroupsPlusVertexBuffers { .. }
+            | Self::TooManyBuffersAndAccelerationStructuresInVertexStage { .. }
             | Self::TooManyVertexAttributes { .. }
             | Self::VertexAttributeLocationTooLarge { .. }
             | Self::VertexStrideTooLarge { .. }

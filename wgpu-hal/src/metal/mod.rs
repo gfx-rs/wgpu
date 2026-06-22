@@ -137,7 +137,9 @@ impl OsFeatures {
 }
 
 #[derive(Debug)]
-pub struct Instance {}
+pub struct Instance {
+    flags: wgt::InstanceFlags,
+}
 
 impl Instance {
     pub fn create_surface_from_layer(&self, layer: &CAMetalLayer) -> Surface {
@@ -148,11 +150,11 @@ impl Instance {
 impl crate::Instance for Instance {
     type A = Api;
 
-    unsafe fn init(_desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
+    unsafe fn init(desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init Metal Backend");
         // We do not enable metal validation based on the validation flags as it affects the entire
         // process. Instead, we enable the validation inside the test harness itself in tests/src/native.rs.
-        Ok(Instance {})
+        Ok(Instance { flags: desc.flags })
     }
 
     unsafe fn create_surface(
@@ -190,8 +192,11 @@ impl crate::Instance for Instance {
         _surface_hint: Option<&Surface>,
     ) -> Vec<crate::ExposedAdapter<Api>> {
         let devices = objc2_metal::MTLCopyAllDevices();
-        let mut adapters: Vec<crate::ExposedAdapter<Api>> =
-            devices.into_iter().map(AdapterShared::expose).collect();
+        let instance_flags = self.flags;
+        let mut adapters: Vec<crate::ExposedAdapter<Api>> = devices
+            .into_iter()
+            .map(|d| AdapterShared::expose(d, instance_flags))
+            .collect();
         adapters.sort_by_key(|ad| {
             (
                 ad.adapter.shared.private_caps.low_power,
@@ -420,13 +425,16 @@ impl AdapterShared {
         }
     }
 
-    fn expose(device: Retained<ProtocolObject<dyn MTLDevice>>) -> crate::ExposedAdapter<Api> {
+    fn expose(
+        device: Retained<ProtocolObject<dyn MTLDevice>>,
+        instance_flags: wgt::InstanceFlags,
+    ) -> crate::ExposedAdapter<Api> {
         autoreleasepool(|_| {
             let name = device.name().to_string();
             let capabilities_query = CapabilitiesQuery::new(&device);
             let shared = AdapterShared::new(device, &capabilities_query);
             let features = capabilities_query.features();
-            let capabilities = capabilities_query.capabilities();
+            let capabilities = capabilities_query.capabilities(instance_flags);
             crate::ExposedAdapter {
                 info: wgt::AdapterInfo {
                     name,

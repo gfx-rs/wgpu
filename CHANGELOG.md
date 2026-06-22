@@ -168,6 +168,7 @@ By @stuartparmenter in [#9658](https://github.com/gfx-rs/wgpu/pull/9658).
 - Implemented `QuerySet::destroy` by @sagudev in [#9671](https://github.com/gfx-rs/wgpu/pull/9671)
 - Implemented query set initialization tracking, ensuring unwritten query slots resolve to 0; avoiding UB. By @teoxoy in [#9664](https://github.com/gfx-rs/wgpu/pull/9664).
 - Add `Surface::display_hdr_info`, a read-only snapshot of the backing display's HDR characteristics (luminance in nits, EDR headroom, primaries, bit depth, and a coarse dynamic-range/gamut bucket) for tone-mapping. `DisplayHdrInfo::tone_map_headroom()` folds it into the one multiplier most tone-mappers want; whether to request an HDR surface at all is a separate, capability question answered by `SurfaceCapabilities`, not by this live value. Populated on DX12 and Vulkan on Windows, Metal on macOS, and the web. By @stuartparmenter.
+- Added `Limits::max_buffers_and_acceleration_structures_per_shader_stage`, a combined limit for all buffer types (storage, uniform, vertex buffers, and acceleration structures) that share Metal's buffer argument table. On Metal without `InstanceFlags::STRICT_WEBGPU_COMPLIANCE` set, the new limit and the individual per-type limits (`max_storage_buffers_per_shader_stage`, `max_uniform_buffers_per_shader_stage`, `max_vertex_buffers`, `max_acceleration_structures_per_shader_stage`) are set to 29. By @teoxoy in [#9709](https://github.com/gfx-rs/wgpu/pull/9709).
 
 #### Metal
 

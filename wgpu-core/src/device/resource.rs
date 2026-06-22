@@ -2952,7 +2952,7 @@ impl Device {
         // If a single bind group layout violates limits, the pipeline layout is
         // definitely going to violate limits too, lets catch it now.
         count_validator
-            .validate(&self.limits)
+            .validate(&self.limits, self.instance_flags)
             .map_err(CreateBindGroupLayoutError::TooManyBindings)?;
 
         // Validate that binding arrays don't conflict with dynamic offsets.
@@ -3902,8 +3902,11 @@ impl Device {
         }
 
         count_validator
-            .validate(&self.limits)
+            .validate(&self.limits, self.instance_flags)
             .map_err(Error::TooManyBindings)?;
+
+        let buffers_and_acceleration_structures_in_vertex_stage =
+            count_validator.buffers_and_acceleration_structures_in_vertex_stage();
 
         let get_bgl_iter = || {
             desc.bind_group_layouts
@@ -3945,6 +3948,7 @@ impl Device {
             label: desc.label.to_string(),
             bind_group_layouts,
             immediate_size: desc.immediate_size,
+            buffers_and_acceleration_structures_in_vertex_stage,
         };
 
         let layout = Arc::new(layout);
@@ -4899,6 +4903,26 @@ impl Device {
                         limit: self.limits.max_bind_groups_plus_vertex_buffers,
                     },
                 );
+            }
+
+            let given = pipeline_layout
+                .buffers_and_acceleration_structures_in_vertex_stage
+                .saturating_add(vertex.buffers.len() as u32);
+            if !self
+                .instance_flags
+                .contains(wgt::InstanceFlags::STRICT_WEBGPU_COMPLIANCE)
+            {
+                let limit = self
+                    .limits
+                    .max_buffers_and_acceleration_structures_per_shader_stage;
+                if given > limit {
+                    return Err(
+                    pipeline::CreateRenderPipelineError::TooManyBuffersAndAccelerationStructuresInVertexStage {
+                        given,
+                        limit,
+                    },
+                );
+                }
             }
         }
 

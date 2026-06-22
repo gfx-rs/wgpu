@@ -20,6 +20,7 @@ mod bind_groups;
 mod binding_array;
 mod buffer;
 mod buffer_copy;
+mod buffer_resource_limits;
 mod buffer_usages;
 mod clear_texture;
 mod clip_distances;
@@ -90,6 +91,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
 
     adapter::all_tests(&mut tests);
     bgra8unorm_storage::all_tests(&mut tests);
+    buffer_resource_limits::all_tests(&mut tests);
     bind_group_layout_dedup::all_tests(&mut tests);
     bind_groups::all_tests(&mut tests);
     binding_array::all_tests(&mut tests);

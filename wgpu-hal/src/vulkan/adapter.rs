@@ -1780,6 +1780,7 @@ impl PhysicalDeviceProperties {
             max_blas_geometry_count,
             max_tlas_instance_count,
             max_acceleration_structures_per_shader_stage,
+            max_buffers_and_acceleration_structures_per_shader_stage: u32::MAX,
 
             max_multiview_view_count,
 

@@ -14,7 +14,7 @@ use objc2_metal::{
 };
 
 use super::{
-    adapter::{self, VERTEX_BUFFER_SLOT_START},
+    adapter::{self, MAX_BUFFERS},
     conv, TimestampQuerySupport,
 };
 use crate::CommandEncoder as _;
@@ -1411,7 +1411,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         index: u32,
         binding: crate::BufferBinding<'a, super::Buffer>,
     ) {
-        let buffer_index = VERTEX_BUFFER_SLOT_START + index;
+        let buffer_index = MAX_BUFFERS - 1 - index;
         let encoder = self.state.render.as_ref().unwrap();
         unsafe {
             encoder.setVertexBuffer_offset_atIndex(

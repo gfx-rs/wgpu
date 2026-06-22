@@ -334,6 +334,7 @@ pub enum BindingTypeMaxCountErrorKind {
     BindingArraySamplerElements,
     BindingArrayAccelerationStructureElements,
     AccelerationStructures,
+    BuffersAndAccelerationStructures,
 }
 
 impl BindingTypeMaxCountErrorKind {
@@ -365,6 +366,9 @@ impl BindingTypeMaxCountErrorKind {
             }
             BindingTypeMaxCountErrorKind::AccelerationStructures => {
                 "max_acceleration_structures_per_shader_stage"
+            }
+            BindingTypeMaxCountErrorKind::BuffersAndAccelerationStructures => {
+                "max_buffers_and_acceleration_structures_per_shader_stage"
             }
         }
     }
@@ -534,7 +538,11 @@ impl BindingTypeMaxCountValidator {
             .merge(&other.binding_array_acceleration_structure_elements);
     }
 
-    pub(crate) fn validate(&self, limits: &wgt::Limits) -> Result<(), BindingTypeMaxCountError> {
+    pub(crate) fn validate(
+        &self,
+        limits: &wgt::Limits,
+        instance_flags: wgt::InstanceFlags,
+    ) -> Result<(), BindingTypeMaxCountError> {
         if limits.max_dynamic_uniform_buffers_per_pipeline_layout < self.dynamic_uniform_buffers {
             return Err(BindingTypeMaxCountError {
                 kind: BindingTypeMaxCountErrorKind::DynamicUniformBuffers,
@@ -588,7 +596,27 @@ impl BindingTypeMaxCountValidator {
             limits.max_acceleration_structures_per_shader_stage,
             BindingTypeMaxCountErrorKind::AccelerationStructures,
         )?;
+
+        if !instance_flags.contains(wgt::InstanceFlags::STRICT_WEBGPU_COMPLIANCE) {
+            self.buffers_and_acceleration_structures().validate(
+                limits.max_buffers_and_acceleration_structures_per_shader_stage,
+                BindingTypeMaxCountErrorKind::BuffersAndAccelerationStructures,
+            )?;
+        }
+
         Ok(())
+    }
+
+    fn buffers_and_acceleration_structures(&self) -> PerStageBindingTypeCounter {
+        let mut buffers_and_acceleration_structures = PerStageBindingTypeCounter::default();
+        buffers_and_acceleration_structures.merge(&self.uniform_buffers);
+        buffers_and_acceleration_structures.merge(&self.storage_buffers);
+        buffers_and_acceleration_structures.merge(&self.acceleration_structures);
+        buffers_and_acceleration_structures
+    }
+
+    pub(crate) fn buffers_and_acceleration_structures_in_vertex_stage(&self) -> u32 {
+        self.buffers_and_acceleration_structures().vertex.0
     }
 
     /// Validate that the bind group layout does not contain both a binding array and a dynamic offset array.
@@ -1005,6 +1033,7 @@ pub struct PipelineLayout {
     pub(crate) label: String,
     pub(crate) bind_group_layouts: ArrayVec<Option<Arc<BindGroupLayout>>, { hal::MAX_BIND_GROUPS }>,
     pub(crate) immediate_size: u32,
+    pub(crate) buffers_and_acceleration_structures_in_vertex_stage: u32,
 }
 
 impl Drop for PipelineLayout {
@@ -1111,6 +1140,7 @@ impl PipelineLayout {
             label,
             bind_group_layouts: ArrayVec::new(),
             immediate_size: 0,
+            buffers_and_acceleration_structures_in_vertex_stage: 0,
         })
     }
 }
