@@ -164,7 +164,7 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
     }
     RayIntersection intersection_1 = ray_query_get_intersection_false(rq);
     if (intersection_1.kind == 3u) {
-{
+        {
             float t = 10.0;
             rq.commit_bounding_box_intersection(t);
         }

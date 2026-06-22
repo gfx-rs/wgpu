@@ -426,6 +426,9 @@ impl<W: Write> Writer<W> {
                         back::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
                     )?;
                     write!(self.out, ")")?;
+                } else {
+                    // For readablity
+                    write!(self.out, "{level}")?;
                 }
                 writeln!(self.out, "{{")?;
                 current_level = current_level.next();
