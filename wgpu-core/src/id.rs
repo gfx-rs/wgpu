@@ -60,27 +60,8 @@ impl RawId {
 ///
 /// An `Id<T>` value identifies a value stored in a [`Global`]'s [`Hub`].
 ///
-/// ## Note on `Id` typing
-///
-/// You might assume that an `Id<T>` can only be used to retrieve a resource of
-/// type `T`, but that is not quite the case. The id types in `wgpu-core`'s
-/// public API ([`TextureId`], for example) can refer to resources belonging to
-/// any backend, but the corresponding resource types ([`Texture<A>`], for
-/// example) are always parameterized by a specific backend `A`.
-///
-/// So the `T` in `Id<T>` is usually a resource type like `Texture<Noop>`,
-/// where [`Noop`] is the `wgpu_hal` dummy back end. These empty types are
-/// never actually used, beyond just making sure you access each `Storage` with
-/// the right kind of identifier. The members of [`Hub<A>`] pair up each
-/// `X<Noop>` type with the resource type `X<A>`, for some specific backend
-/// `A`.
-///
 /// [`Global`]: crate::global::Global
 /// [`Hub`]: crate::hub::Hub
-/// [`Hub<A>`]: crate::hub::Hub
-/// [`Texture<A>`]: crate::resource::Texture
-/// [`Registry`]: crate::registry::Registry
-/// [`Noop`]: hal::api::Noop
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
