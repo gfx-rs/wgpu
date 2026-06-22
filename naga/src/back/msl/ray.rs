@@ -32,6 +32,9 @@ impl<W: Write> Writer<W> {
         self.write_contains_flags(&format!("as_type<uint>({expr})"), 0x7f800000)
     }
 
+    /// Checks whether `expr` does not have the bitpattern of IEEE f32 `NaN`.
+    /// 
+    /// Note that this evaluates `expr` in the written code multiple times.
     fn write_is_nan(&mut self, expr: &str) -> BackendResult {
         write!(self.out, "(")?;
         self.write_not_finite(expr)?;
