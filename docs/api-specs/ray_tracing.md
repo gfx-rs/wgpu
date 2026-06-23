@@ -107,7 +107,8 @@ development. Naming is mostly taken from vulkan.
 // - If `ray_desc` is "invalid" (see definition on struct) then either:
 //    1. the call is discarded (see behaviour of other calls if the ray query is uninitialized)
 //    2. the call behaves *as if* the minimum number of fields were changed to make `ray_desc` valid
-// - A ray query is "initialized" if this function has been called *and* was not discarded
+// - A ray query is "initialized" if this function has been called *and* was not discarded. If the call was discarded,
+//   the ray query may either be treated as if it were uninitialized or left in its previous state.
 rayQueryInitialize(rq: ptr<function, ray_query>, acceleration_structure: acceleration_structure, ray_desc: RayDesc)
 // Overload.
 rayQueryInitialize(rq: ptr<function, ray_query<vertex_return>>, acceleration_structure: acceleration_structure<vertex_return>, ray_desc: RayDesc)
@@ -142,7 +143,9 @@ rayQueryGenerateIntersection(rq: ptr<function, ray_query>, hit_t: f32)
 rayQueryConfirmIntersection(rq: ptr<function, ray_query>)
 
 // Aborts the query which is in progress, that is, the next `rayQueryProceed` is guaranteed to return `false`
-// and any call to `rayQueryGetCommittedIntersection` will return the closest committed result so far.
+// and any call to `rayQueryGetCommittedIntersection` after the `rayQueryProceed` will return the closest
+// committed result so far. (`rayQueryProceed` must be called for `rayQueryGetCommittedIntersection` to return
+// a non zeroed value).
 //
 // - If `rq` was not previously initialized, the call is discarded.
 // - If the previous proceed returned false (and no initialize was performed in between), the call is discarded.
