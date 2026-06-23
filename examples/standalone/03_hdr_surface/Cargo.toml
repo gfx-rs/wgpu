@@ -18,9 +18,9 @@ pollster = "0.4"
 # surface that event. These crates are already in the tree via winit and wgpu's
 # Metal backend, so this adds no extra build.
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSNotification", "NSOperation", "NSString"] }
-block2 = "0.6"
+objc2 = "0.6.3"
+objc2-foundation = { version = "0.3.2", features = ["NSNotification", "NSOperation", "NSString"] }
+block2 = "0.6.2"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.5"
