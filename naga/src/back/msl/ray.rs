@@ -367,7 +367,7 @@ impl<W: Write> Writer<W> {
                 self.put_expression(acceleration_structure, &context.expression, true)?;
                 writeln!(self.out, ", desc.cull_mask, params);")?;
                 if context.expression.ray_query_initialization_tracking {
-                    // We don't set the initialization tracker to zero (unitialized)
+                    // We don't set the initialization tracker to zero (uninitialized)
                     // if the call fails. Resetting to uninitialized might be useful
                     // for debugging, but for everything else it is just extra code.
                     writeln!(
@@ -520,7 +520,7 @@ impl<W: Write> Writer<W> {
                 // Terminate appears to map to abort in spirv-cross, but metal only documents
                 // the existence of this method, not what it does.
                 writeln!(self.out, ".abort();")?;
-                // To get the comitted intersection, an extra proceed must occur as specified in
+                // To get the committed intersection, an extra proceed must occur as specified in
                 // the API docs.
                 if context.expression.ray_query_initialization_tracking {
                     writeln!(self.out, "{level}}}")?;
