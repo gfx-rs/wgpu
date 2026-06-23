@@ -55,9 +55,9 @@ impl super::Surface {
     ///
     /// Apple exposes a *relative* EDR multiplier (`1.0` == SDR white), no
     /// absolute nits, and no discrete HDR-mode flag — so this fills the
-    /// `headroom` frame and *derives* `hdr_active` from the live `current`
-    /// multiplier (`> 1.0`), not from `potential` (which is `> 1.0` on nearly
-    /// every Apple display and would conflate "capable" with "active").
+    /// `headroom` frame and *derives* the coarse `high_dynamic_range` bit from the
+    /// live `current` multiplier (`> 1.0`), not from `potential` (which is `> 1.0`
+    /// on nearly every Apple display and would conflate "capable" with "active").
     ///
     /// macOS only for now; it returns `None` on iOS, tvOS, and visionOS, and
     /// whenever the hosting screen cannot be resolved.
@@ -111,10 +111,11 @@ impl super::Surface {
 
             // AppKit documents these EDR properties as finite multipliers
             // (`1.0` == SDR white), but guard against a non-finite read anyway so
-            // the advisory values stay finite and `hdr_active` reports *unknown*
-            // (`None`) rather than a false `Some(false)` — mirroring the
-            // `is_finite` discipline in [`wgt::DisplayHdrInfo::tone_map_headroom`].
-            // The EDR properties return `CGFloat` (`f64` on 64-bit macOS).
+            // the advisory values stay finite and the coarse `high_dynamic_range`
+            // bit reports *unknown* (`None`) rather than a false `Some(false)` —
+            // mirroring the `is_finite` discipline in
+            // [`wgt::DisplayHdrInfo::tone_map_headroom`]. The EDR properties return
+            // `CGFloat` (`f64` on 64-bit macOS).
             let finite = |v: f64| v.is_finite().then_some(v as f32);
 
             // `maximumExtendedDynamicRangeColorComponentValue` is macOS 10.11+, so
@@ -123,11 +124,11 @@ impl super::Surface {
                 objc2::msg_send![&*screen, maximumExtendedDynamicRangeColorComponentValue]
             };
 
-            // Apple exposes no discrete HDR-mode flag; derive it from the live
-            // `current` EDR multiplier (`> 1.0`), *not* `potential` (which is
-            // `> 1.0` on nearly every Apple display and would conflate "capable"
-            // with "active").
-            let hdr_active = current.is_finite().then_some(current > 1.0);
+            // Apple exposes no discrete HDR-mode flag, so derive the coarse
+            // dynamic-range bit from the live `current` EDR multiplier (`> 1.0`),
+            // *not* `potential` (which is `> 1.0` on nearly every Apple display and
+            // would conflate "capable" with "active").
+            let high_dynamic_range = current.is_finite().then_some(current > 1.0);
 
             // `maximumPotential...` and `maximumReference...` are macOS 10.15+,
             // below which sending them would raise an unrecognized-selector
@@ -162,14 +163,13 @@ impl super::Surface {
             // post-Monterey, so deriving a gamut bucket from it would lie; leave
             // `gamut` as `None` on macOS.
             let coarse = wgt::DisplayCoarseRange {
-                high_dynamic_range: hdr_active,
+                high_dynamic_range,
                 gamut: None,
             };
 
             // Apple exposes no absolute nits, CIE-xy primaries, or panel bit
             // depth, so `luminance` / `chromaticity` / `bits_per_color` stay `None`.
             let info = wgt::DisplayHdrInfo {
-                hdr_active,
                 luminance: None,
                 headroom: Some(headroom),
                 chromaticity: None,
@@ -243,16 +243,9 @@ impl crate::Surface for super::Surface {
         render_layer.setDevice(Some(device_raw));
         render_layer.setPixelFormat(caps.map_format(config.format));
         render_layer.setFramebufferOnly(framebuffer_only);
-        // opt-in to Metal EDR
-        // EDR potentially more power used in display and more bandwidth, memory footprint.
-        let wants_edr = matches!(
-            config.color_space,
-            wgt::SurfaceColorSpace::ExtendedSrgbLinear
-                | wgt::SurfaceColorSpace::ExtendedSrgb
-                | wgt::SurfaceColorSpace::ExtendedDisplayP3
-                | wgt::SurfaceColorSpace::Hdr10
-                | wgt::SurfaceColorSpace::Hlg
-        );
+        // Opt into Metal EDR for the HDR color spaces (more display power, memory,
+        // and bandwidth). The HDR spaces are exactly those `is_hdr()` classifies.
+        let wants_edr = config.color_space.is_hdr();
         if wants_edr != render_layer.wantsExtendedDynamicRangeContent() {
             render_layer.setWantsExtendedDynamicRangeContent(wants_edr);
         }

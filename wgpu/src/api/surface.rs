@@ -58,11 +58,13 @@ impl Surface<'_> {
 
     /// Returns the current HDR and luminance characteristics
     /// of the display currently backing this surface on `adapter`: peak and SDR
-    /// luminance, EDR headroom, primaries, and whether HDR is active right now.
+    /// luminance, EDR headroom, primaries, and a coarse dynamic-range/gamut bucket.
     ///
-    /// This is the read-only, query side of HDR output; use it to decide
-    /// *whether* an HDR [`SurfaceColorSpace`] is worthwhile, then opt in through
-    /// [`SurfaceConfiguration::color_space`]. See [`DisplayHdrInfo`] for what the
+    /// This is the read-only, query side of HDR output. Use it for the live
+    /// tone-map target ([`DisplayHdrInfo::tone_map_headroom`]); *whether* to
+    /// configure an HDR [`SurfaceColorSpace`] is a separate, capability question
+    /// answered by [`Surface::get_capabilities`], not by this value. See
+    /// [`DisplayHdrInfo`] for what the
     /// fields mean, how complete they are per platform, and how to read them (it
     /// is an advisory poll, not a stream). A returned [`DisplayHdrInfo::default`]
     /// (all fields `None`) means "nothing known here", **not** "this is an SDR

@@ -124,9 +124,11 @@
 //!    format.
 //! 2. **Optionally query the display.** Call `Surface::display_hdr_info` for the
 //!    current [`DisplayHdrInfo`] (peak and SDR-white nits, EDR headroom,
-//!    primaries, and whether HDR is active right now). Use it to decide
-//!    *whether* HDR is worthwhile and to pick a tone-map target. Every field is
-//!    advisory and optional; `None` means "cannot tell here", never "SDR".
+//!    primaries, and a coarse dynamic-range/gamut bucket). Use it to pick a
+//!    tone-map target ([`DisplayHdrInfo::tone_map_headroom`]); *whether* HDR is
+//!    worthwhile is the capability question from step 1, not this live value.
+//!    Every field is advisory and optional; `None` means "cannot tell here",
+//!    never "SDR".
 //! 3. **Choose a format and color space.** Intersect what you want with what
 //!    step 1 advertises, in your own preference order (for example HDR10, then
 //!    linear extended sRGB, then encoded extended sRGB, then SDR

@@ -114,7 +114,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
 #### Surface color space selection (HDR output)
 
-Surfaces can now be configured with an explicit color space, enabling HDR and wide-gamut output where the platform supports it (initially the Vulkan backend; see below). `SurfaceConfiguration` has a new `color_space` field, and `SurfaceCapabilities` reports the supported color spaces for every supported format in a new `format_capabilities` field ([#2920](https://github.com/gfx-rs/wgpu/issues/2920)).
+Surfaces can now be configured with an explicit color space, enabling HDR and wide-gamut output where the platform supports it (initially the Vulkan backend; see below). `SurfaceConfiguration` has a new `color_space` field, and `SurfaceCapabilities` reports the supported color spaces for every supported format in a new `format_capabilities` field ([#2920](https://github.com/gfx-rs/wgpu/issues/2920)). `SurfaceColorSpace::is_hdr()` classifies a color space (the extended-range and PQ/HLG spaces are HDR) so you can branch after picking one.
 
 The new `SurfaceColorSpace::Auto` default reproduces wgpu's historical behavior (extended linear scRGB for `Rgba16Float` where supported, sRGB otherwise; never a wide-gamut or HDR color space), so to migrate, add the field:
 
@@ -167,7 +167,7 @@ By @stuartparmenter in [#9658](https://github.com/gfx-rs/wgpu/pull/9658).
 - Added `InstanceFlags::STRICT_WEBGPU_COMPLIANCE` flag, which restricts the available feature set to the one defined by the WebGPU specification. By @teoxoy in [#9586](https://github.com/gfx-rs/wgpu/pull/9586).
 - Implemented `QuerySet::destroy` by @sagudev in [#9671](https://github.com/gfx-rs/wgpu/pull/9671)
 - Implemented query set initialization tracking, ensuring unwritten query slots resolve to 0; avoiding UB. By @teoxoy in [#9664](https://github.com/gfx-rs/wgpu/pull/9664).
-- Add `Surface::display_hdr_info`, a read-only snapshot of the backing display's HDR characteristics (luminance in nits, EDR headroom, primaries, bit depth, and whether HDR is active) for tone-mapping. Populated on DX12 and Vulkan on Windows, Metal on macOS, and the web. By @stuartparmenter.
+- Add `Surface::display_hdr_info`, a read-only snapshot of the backing display's HDR characteristics (luminance in nits, EDR headroom, primaries, bit depth, and a coarse dynamic-range/gamut bucket) for tone-mapping. `DisplayHdrInfo::tone_map_headroom()` folds it into the one multiplier most tone-mappers want; whether to request an HDR surface at all is a separate, capability question answered by `SurfaceCapabilities`, not by this live value. Populated on DX12 and Vulkan on Windows, Metal on macOS, and the web. By @stuartparmenter.
 
 #### Metal
 

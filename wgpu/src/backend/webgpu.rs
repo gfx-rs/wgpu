@@ -4103,10 +4103,10 @@ impl dispatch::SurfaceInterface for WebSurface {
 
     fn display_hdr_info(&self, _adapter: &dispatch::DispatchAdapter) -> wgt::DisplayHdrInfo {
         // The web exposes only coarse, boolean dynamic-range + gamut buckets
-        // (CSS media queries) and no HDR *mode* signal — `(dynamic-range: high)`
-        // is "capable", not "active" — so `hdr_active` and every numeric field
-        // stay `None`. Worker / `OffscreenCanvas` contexts have no `Window`
-        // (hence no `matchMedia`), so this degrades to `default()`; never panics.
+        // (CSS media queries) and no numeric luminance — `(dynamic-range: high)`
+        // is "capable", not "active" — so every numeric field stays `None`.
+        // Worker / `OffscreenCanvas` contexts have no `Window` (hence no
+        // `matchMedia`), so this degrades to `default()`; never panics.
         let high_dynamic_range = match_media_query("(dynamic-range: high)");
         let gamut = environment_color_gamut();
 
@@ -4116,7 +4116,6 @@ impl dispatch::SurfaceInterface for WebSurface {
                 gamut,
             });
         wgt::DisplayHdrInfo {
-            hdr_active: None,
             luminance: None,
             headroom: None,
             chromaticity: None,

@@ -75,7 +75,8 @@ pub fn display_hdr_info_from_desc1(
     // Windows uses for HDR swap-chains: HDR10 / PQ (`G2084_NONE_P2020`) or
     // scRGB / linear-extended-sRGB (`G10_NONE_P709`). Checking both ensures scRGB
     // HDR is not misreported as SDR.
-    let hdr_active = desc1.ColorSpace == Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
+    let high_dynamic_range = desc1.ColorSpace
+        == Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
         || desc1.ColorSpace == Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709;
 
     let luminance = wgt::DisplayLuminance {
@@ -93,7 +94,7 @@ pub fn display_hdr_info_from_desc1(
     };
 
     let coarse = wgt::DisplayCoarseRange {
-        high_dynamic_range: Some(hdr_active),
+        high_dynamic_range: Some(high_dynamic_range),
         gamut: classify_gamut(desc1.RedPrimary, desc1.GreenPrimary, desc1.BluePrimary),
     };
 
@@ -101,7 +102,6 @@ pub fn display_hdr_info_from_desc1(
     // `luminance`) rather than a relative headroom ratio. `bits_per_color` drops
     // values that don't fit `u8`.
     wgt::DisplayHdrInfo {
-        hdr_active: Some(hdr_active),
         luminance: Some(luminance),
         headroom: None,
         chromaticity: Some(chromaticity),
