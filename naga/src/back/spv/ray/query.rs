@@ -691,12 +691,33 @@ impl Writer {
                 RayQueryPoint::INITIALIZED.bits(),
             );
 
+            // Unlike in HLSL, in SPIR-V proceed is only guaranteed to return false once,
+            // after that it is UB to call. Therefore, don't call proceed if we have
+            // already finished as this will appear to have the same behaviour (after the
+            // first call that returns false, all subsequent ones will also return false)
+            let finished_proceed_id = write_ray_flags_contains_flags(
+                self,
+                &mut block,
+                initialized_tracker_id,
+                RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+            );
+
+            let not_finished_id = self.id_gen.next();
+            block.body.push(Instruction::unary(
+                spirv::Op::LogicalNot,
+                bool_type_id,
+                not_finished_id,
+                finished_proceed_id,
+            ));
+
+            let is_valid_id = self.write_logical_and(&mut block, not_finished_id, is_initialized);
+
             block.body.push(Instruction::selection_merge(
                 merge_id,
                 spirv::SelectionControl::NONE,
             ));
 
-            Instruction::branch_conditional(is_initialized, valid_block_id, merge_id)
+            Instruction::branch_conditional(is_valid_id, valid_block_id, merge_id)
         } else {
             Instruction::branch(valid_block_id)
         };
