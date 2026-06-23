@@ -521,7 +521,7 @@ impl<W: Write> Writer<W> {
                 // the existence of this method, not what it does.
                 writeln!(self.out, ".abort();")?;
                 // To get the comitted intersection, an extra proceed must occur as specified in
-                // the API docs. 
+                // the API docs.
                 if context.expression.ray_query_initialization_tracking {
                     writeln!(self.out, "{level}}}")?;
                 }
