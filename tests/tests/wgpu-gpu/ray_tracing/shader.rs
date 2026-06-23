@@ -109,14 +109,15 @@ fn access_all_struct_members(ctx: TestingContext) {
 #[gpu_test]
 static PREVENT_INVALID_RAY_QUERY_CALLS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
+        // Don't disable metal shader validation in `TestParameters` because
+        // the shader validation is important here and the results from the
+        // ray query don't matter.
         TestParameters::default()
             .test_features_limits()
             .limits(acceleration_structure_limits())
             .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
             // Otherwise, mistakes in the generated code won't be caught.
             .instance_flags(InstanceFlags::GPU_BASED_VALIDATION),
-            // Don't disable metal shader validation because the shader validation
-            // is important here and the results from the ray query don't matter.
     )
     .run_sync(prevent_invalid_ray_query_calls);
 
