@@ -1467,7 +1467,7 @@ impl Writer {
         function.to_words(&mut self.logical_layout.function_definitions);
 
         self.ray_query_functions
-            .insert(LookupRayQueryFunction::Proceed, func_id);
+            .insert(LookupRayQueryFunction::Terminate, func_id);
         func_id
     }
 }
