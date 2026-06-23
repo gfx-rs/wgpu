@@ -430,7 +430,7 @@ impl<W: Write> Writer<W> {
                     )?;
                     write!(self.out, ")")?;
                 } else {
-                    // For readablity
+                    // For readability
                     write!(self.out, "{level}")?;
                 }
                 writeln!(self.out, "{{")?;
