@@ -113,7 +113,7 @@ define_lock_ranks! {
         BUFFER_POOL,
         DEVICE_TRACE,
         DEVICE_USAGE_SCOPES,
-        REGISTRY_STORAGE,
+        HUB_OTHER,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
     rank DEVICE_SNATCHABLE_LOCK "Device::snatchable_lock" followed by {
@@ -128,7 +128,7 @@ define_lock_ranks! {
         BUFFER_POOL,
         DEVICE_TRACE,
         DEVICE_USAGE_SCOPES,
-        REGISTRY_STORAGE,
+        HUB_OTHER,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
         TEXTURE_BIND_GROUPS,
         TEXTURE_CLEAR_MODE,
@@ -175,6 +175,25 @@ define_lock_ranks! {
     rank COMMAND_ALLOCATOR_FREE_ENCODERS "CommandAllocator::free_encoders" followed by {
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
+    rank HUB_OTHER "Hub (general)" followed by {
+        HUB_TEXTURE_VIEWS,
+        HUB_BIND_GROUPS,
+    }
+    rank HUB_BIND_GROUPS "Hub::bind_groups" followed by {
+        HUB_RENDER_PIPELINES,
+    }
+    rank HUB_RENDER_PIPELINES "Hub::render_pipelines" followed by {
+        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
+    }
+    rank HUB_TEXTURE_VIEWS "Hub::texture_views" followed by {
+        HUB_SAMPLERS,
+    }
+    rank HUB_SAMPLERS "Hub::samplers" followed by {
+        HUB_TLAS,
+    }
+    rank HUB_TLAS "Hub::tlas" followed by {
+        HUB_EXTERNAL_TEXTURES,
+    }
 
     // Leaf ranks reachable from the graph above, alphabetical.
     rank BLAS_COMPACTION_STATE "Blas::compaction_state" followed by { }
@@ -184,7 +203,7 @@ define_lock_ranks! {
     rank DEVICE_DEFERRED_DESTROY "Device::deferred_destroy" followed by { }
     rank DEVICE_TRACE "Device::trace" followed by { }
     rank DEVICE_USAGE_SCOPES "Device::usage_scopes" followed by { }
-    rank REGISTRY_STORAGE "Registry::storage" followed by { }
+    rank HUB_EXTERNAL_TEXTURES "Hub::external_textures" followed by { }
     rank SHARED_TRACKER_INDEX_ALLOCATOR_INNER "SharedTrackerIndexAllocator::inner" followed by { }
     rank QUERY_SET_INITIALIZED_SLOTS "QuerySet::initialized_slots" followed by { }
     rank TEXTURE_BIND_GROUPS "Texture::bind_groups" followed by { }
