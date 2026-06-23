@@ -1,4 +1,4 @@
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 use core::ops::Range;
 
 use crate::{
@@ -370,7 +370,7 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
 }
 
 fn clear_texture_via_buffer_copies(
-    texture_desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
+    texture_desc: &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
     alignments: &hal::Alignments,
     zero_buffer: &dyn hal::DynBuffer, // Buffer of size device::ZERO_BUFFER_SIZE
     range: TextureInitRange,
