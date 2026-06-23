@@ -1387,14 +1387,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .extension_fns
             .ray_tracing
             .as_ref()
-            .expect("Feature `RAY_TRACING` not enabled");
+            .expect("Feature `EXPERIMENTAL_RAY_TRACING` not enabled");
 
         let ray_tracing_pipeline_functions = self
             .device
             .extension_fns
             .ray_tracing_pipelines
             .as_ref()
-            .expect("Feature `RAY_TRACING_PIPELINES` not enabled");
+            .expect("Feature `EXPERIMENTAL_RAY_TRACING_PIPELINES` not enabled");
 
         let get_device_address = |buffer: &super::Buffer| unsafe {
             ray_tracing_functions
