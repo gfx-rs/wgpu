@@ -429,7 +429,7 @@ impl Writer {
         ));
         function.consume(
             not_none_block,
-            Instruction::branch_conditional(not_none_comp_id, tri_label_id, merge_label_id),
+            Instruction::branch_conditional(tri_comp_id, tri_label_id, merge_label_id),
         );
 
         let barycentrics_id = self.id_gen.next();
