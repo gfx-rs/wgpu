@@ -1411,7 +1411,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     device_address: get_device_address(ray_generation_group_data.buffer)
                         + ray_generation_group_data.offset,
                     stride: ray_generation_group_data.stride,
-                    size: ray_generation_group_data.stride /* no need for multiplying by count, vulkan requires the to be just one group */,
+                    size: ray_generation_group_data.stride /* no need for multiplying by count, vulkan requires the ray gen sbt to be just one group */,
                 },
                 &vk::StridedDeviceAddressRegionKHR {
                     device_address: get_device_address(miss_group_data.buffer)

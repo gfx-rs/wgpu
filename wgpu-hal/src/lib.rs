@@ -1085,7 +1085,7 @@ pub trait Device: WasmNotSendSync {
         >,
     ) -> Result<<Self::A as Api>::RayTracingPipeline, PipelineError>;
     unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: <Self::A as Api>::RayTracingPipeline);
-    /// Obtain the opaque data from each group, behaves as if group 0 is the closest hit, group 1
+    /// Obtain the opaque data from each group, behaves as if group 0 is the ray generation, group 1
     /// is the miss shader, and group 2.. are the intersection groups.
     unsafe fn get_raytracing_pipeline_group_data(
         &self,
