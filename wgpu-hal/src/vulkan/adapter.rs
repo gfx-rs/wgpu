@@ -979,7 +979,7 @@ impl PhysicalDeviceFeatures {
             features.insert(
                 F::EXPERIMENTAL_RAY_TRACING_PIPELINES
                         // Same reason as for ray queries.
-                            | F::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
+                        | F::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
             );
         }
 
