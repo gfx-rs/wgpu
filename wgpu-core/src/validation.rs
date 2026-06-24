@@ -1519,22 +1519,14 @@ impl Interface {
                 )?,
                 naga::ShaderStage::Task => check_workgroup_sizes(
                     &entry_point.workgroup_size,
-                    &[
-                        self.limits.max_task_invocations_per_dimension,
-                        self.limits.max_task_invocations_per_dimension,
-                        self.limits.max_task_invocations_per_dimension,
-                    ],
+                    &[self.limits.max_task_invocations_per_dimension; 3],
                     "max_task_invocations_per_dimension",
                     self.limits.max_task_invocations_per_workgroup,
                     "max_task_invocations_per_workgroup",
                 )?,
                 naga::ShaderStage::Mesh => check_workgroup_sizes(
                     &entry_point.workgroup_size,
-                    &[
-                        self.limits.max_mesh_invocations_per_dimension,
-                        self.limits.max_mesh_invocations_per_dimension,
-                        self.limits.max_mesh_invocations_per_dimension,
-                    ],
+                    &[self.limits.max_mesh_invocations_per_dimension; 3],
                     "max_mesh_invocations_per_dimension",
                     self.limits.max_mesh_invocations_per_workgroup,
                     "max_mesh_invocations_per_workgroup",
