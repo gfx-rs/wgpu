@@ -146,15 +146,18 @@ pub fn run_cts(
 
     #[cfg(windows)]
     if running_on_backend.as_ref().is_none_or(|b| b == "dx12") {
+        const DENO_WEBGPU_DX12_COMPILER: &str = "DENO_WEBGPU_DX12_COMPILER";
         const DEFAULT_DX12_COMPILER: &str = "dynamicdxc";
 
-        match shell.var("DENO_WEBGPU_DX12_COMPILER") {
+        match shell.var(DENO_WEBGPU_DX12_COMPILER) {
             Ok(value) => {
-                log::info!("Using `DENO_WEBGPU_DX12_COMPILER` = {value:?} from environment")
+                log::info!("Using `{DENO_WEBGPU_DX12_COMPILER}` = {value:?} from environment")
             }
             Err(_) => {
-                shell.set_var("DENO_WEBGPU_DX12_COMPILER", DEFAULT_DX12_COMPILER);
-                log::info!("Using default `DENO_WEBGPU_DX12_COMPILER` = {DEFAULT_DX12_COMPILER:?}");
+                shell.set_var(DENO_WEBGPU_DX12_COMPILER, DEFAULT_DX12_COMPILER);
+                log::info!(
+                    "Using default `{DENO_WEBGPU_DX12_COMPILER}` = {DEFAULT_DX12_COMPILER:?}"
+                );
             }
         }
     }
