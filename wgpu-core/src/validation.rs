@@ -1507,7 +1507,7 @@ impl Interface {
         if shader_stage.to_naga().compute_like() {
             let total = match shader_stage.to_naga() {
                 naga::ShaderStage::Compute => WorkgroupSizeCheck {
-                    sizes: &entry_point.workgroup_size,
+                    dimensions: &entry_point.workgroup_size,
                     per_dimension_limits: &[
                         self.limits.max_compute_workgroup_size_x,
                         self.limits.max_compute_workgroup_size_y,
@@ -1520,7 +1520,7 @@ impl Interface {
                 }
                 .check_and_compute_total_invocations()?,
                 naga::ShaderStage::Task => WorkgroupSizeCheck {
-                    sizes: &entry_point.workgroup_size,
+                    dimensions: &entry_point.workgroup_size,
                     per_dimension_limits: &[self.limits.max_task_invocations_per_dimension; 3],
                     per_dimension_limits_desc: "max_task_invocations_per_dimension",
 
@@ -1529,7 +1529,7 @@ impl Interface {
                 }
                 .check_and_compute_total_invocations()?,
                 naga::ShaderStage::Mesh => WorkgroupSizeCheck {
-                    sizes: &entry_point.workgroup_size,
+                    dimensions: &entry_point.workgroup_size,
                     per_dimension_limits: &[self.limits.max_mesh_invocations_per_dimension; 3],
                     per_dimension_limits_desc: "max_mesh_invocations_per_dimension",
 
@@ -1970,7 +1970,7 @@ pub enum InvalidWorkgroupSizeError {
 /// [`Self::check_and_compute_total_invocations`].
 #[derive(Clone, Debug)]
 pub(crate) struct WorkgroupSizeCheck<'a> {
-    pub sizes: &'a [u32; 3],
+    pub dimensions: &'a [u32; 3],
     pub per_dimension_limits: &'a [u32; 3],
     pub per_dimension_limits_desc: &'static str,
     pub total_limit: u32,
@@ -1987,27 +1987,27 @@ impl WorkgroupSizeCheck<'_> {
         self,
     ) -> Result<u32, InvalidWorkgroupSizeError> {
         let Self {
-            sizes,
+            dimensions,
             per_dimension_limits,
             per_dimension_limits_desc,
             total_limit,
             total_limit_desc,
         } = self;
 
-        let total = sizes
+        let total = dimensions
             .iter()
             .fold(1u32, |total, &dim| total.saturating_mul(dim));
 
         let invalid_total_invocations = total > total_limit;
 
-        let dimension_too_large = sizes
+        let dimension_too_large = dimensions
             .iter()
             .zip(per_dimension_limits.iter())
             .any(|(dim, limit)| dim > limit);
 
         if invalid_total_invocations || dimension_too_large {
             Err(InvalidWorkgroupSizeError::LimitExceeded {
-                dimensions: *sizes,
+                dimensions: *dimensions,
                 per_dimension_limits: *per_dimension_limits,
                 per_dimension_limits_desc,
                 total,

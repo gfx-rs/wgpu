@@ -3100,7 +3100,7 @@ fn draw_mesh_tasks(
     };
 
     let total_count = WorkgroupSizeCheck {
-        sizes: &[group_count_x, group_count_y, group_count_z],
+        dimensions: &[group_count_x, group_count_y, group_count_z],
         per_dimension_limits: &[groups_size_limit, groups_size_limit, groups_size_limit],
         per_dimension_limits_desc: "max_task_mesh_workgroups_per_dimension",
 
