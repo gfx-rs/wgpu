@@ -27,6 +27,10 @@ pub fn cts_runner_exe_path() -> PathBuf {
 fn exec_cts_runner(script_file: impl AsRef<OsStr>) -> Output {
     Command::new(cts_runner_exe_path())
         .arg(script_file)
+        // NOTE: Because `cts_runner` inits `env_logger` to info-level severity by default, we can
+        // get unstable output that isn't super useful for snapshot tests. Just work with
+        // error-level logs instead.
+        .env("RUST_LOG", "error")
         .output()
         .unwrap()
 }
