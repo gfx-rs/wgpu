@@ -1505,7 +1505,7 @@ impl Interface {
 
         // check workgroup size limits
         if shader_stage.to_naga().compute_like() {
-            let total = match shader_stage.to_naga() {
+            let workgroup_size_check = match shader_stage.to_naga() {
                 naga::ShaderStage::Compute => WorkgroupSizeCheck {
                     dimensions: &entry_point.workgroup_size,
                     per_dimension_limits: &[
@@ -1517,8 +1517,7 @@ impl Interface {
 
                     total_limit: self.limits.max_compute_invocations_per_workgroup,
                     total_limit_desc: "max_compute_invocations_per_workgroup",
-                }
-                .check_and_compute_total_invocations()?,
+                },
                 naga::ShaderStage::Task => WorkgroupSizeCheck {
                     dimensions: &entry_point.workgroup_size,
                     per_dimension_limits: &[self.limits.max_task_invocations_per_dimension; 3],
@@ -1526,8 +1525,7 @@ impl Interface {
 
                     total_limit: self.limits.max_task_invocations_per_workgroup,
                     total_limit_desc: "max_task_invocations_per_workgroup",
-                }
-                .check_and_compute_total_invocations()?,
+                },
                 naga::ShaderStage::Mesh => WorkgroupSizeCheck {
                     dimensions: &entry_point.workgroup_size,
                     per_dimension_limits: &[self.limits.max_mesh_invocations_per_dimension; 3],
@@ -1535,10 +1533,10 @@ impl Interface {
 
                     total_limit: self.limits.max_mesh_invocations_per_workgroup,
                     total_limit_desc: "max_mesh_invocations_per_workgroup",
-                }
-                .check_and_compute_total_invocations()?,
+                },
                 _ => unreachable!(),
             };
+            let total = workgroup_size_check.check_and_compute_total_invocations()?;
             if total == 0 {
                 return Err(StageError::InvalidWorkgroupSize(
                     InvalidWorkgroupSizeError::Zero {
