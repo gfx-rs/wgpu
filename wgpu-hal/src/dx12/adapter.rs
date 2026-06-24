@@ -1386,29 +1386,6 @@ impl crate::Adapter for super::Adapter {
         })
     }
 
-    unsafe fn surface_display_hdr_info(
-        &self,
-        surface: &super::Surface,
-    ) -> Option<wgt::DisplayHdrInfo> {
-        // Only an HWND-bearing window resolves to a monitor; composition /
-        // SwapChainPanel / surface-handle targets have no output identity.
-        let wnd_handle = match surface.target {
-            SurfaceTarget::WndHandle(wnd_handle)
-            | SurfaceTarget::VisualFromWndHandle {
-                handle: wnd_handle, ..
-            } => wnd_handle,
-            SurfaceTarget::Visual(_)
-            | SurfaceTarget::SurfaceHandle(_)
-            | SurfaceTarget::SwapChainPanel(_) => return None,
-        };
-        let desc1 = auxil::dxgi::hdr::output_desc1_for_window(wnd_handle)?;
-        let sdr_white_nits = auxil::dxgi::hdr::sdr_white_nits_for_monitor(desc1.Monitor);
-        Some(auxil::dxgi::hdr::display_hdr_info_from_desc1(
-            &desc1,
-            sdr_white_nits,
-        ))
-    }
-
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         wgt::PresentationTimestamp(self.presentation_timer.get_timestamp_ns())
     }

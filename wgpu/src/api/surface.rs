@@ -56,31 +56,6 @@ impl Surface<'_> {
         self.inner.get_capabilities(&adapter.inner)
     }
 
-    /// Returns the current HDR and luminance characteristics
-    /// of the display currently backing this surface on `adapter`: peak and SDR
-    /// luminance, EDR headroom, primaries, and a coarse dynamic-range/gamut bucket.
-    ///
-    /// This is the read-only, query side of HDR output. Use it for the live
-    /// tone-map target ([`DisplayHdrInfo::tone_map_headroom`]); *whether* to
-    /// configure an HDR [`SurfaceColorSpace`] is a separate, capability question
-    /// answered by [`Surface::get_capabilities`], not by this value. See
-    /// [`DisplayHdrInfo`] for what the
-    /// fields mean, how complete they are per platform, and how to read them (it
-    /// is an advisory poll, not a stream). A returned [`DisplayHdrInfo::default`]
-    /// (all fields `None`) means "nothing known here", **not** "this is an SDR
-    /// display". Never panics, including on wasm.
-    ///
-    /// # Threading
-    ///
-    /// On Apple platforms the display's HDR characteristics live on
-    /// main-thread-only AppKit objects (`NSScreen` / `NSWindow`), so query this
-    /// from the main thread; called from any other thread it logs a one-time
-    /// warning and returns [`DisplayHdrInfo::default`]. Other backends (Windows,
-    /// Vulkan, DX12) have no such requirement.
-    pub fn display_hdr_info(&self, adapter: &Adapter) -> DisplayHdrInfo {
-        self.inner.display_hdr_info(&adapter.inner)
-    }
-
     /// Return a default `SurfaceConfiguration` from width and height to use for the [`Surface`] with this adapter.
     ///
     /// The returned configuration requests the surface's preferred format and

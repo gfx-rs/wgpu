@@ -9,9 +9,7 @@ use parking_lot::{Mutex, MutexGuard};
 use crate::vulkan::{
     conv, map_host_device_oom_and_lost_err,
     semaphore_list::SemaphoreType,
-    swapchain::{
-        Surface, SurfaceTextureMetadata, Swapchain, SwapchainSubmissionSemaphoreGuard, WindowHandle,
-    },
+    swapchain::{Surface, SurfaceTextureMetadata, Swapchain, SwapchainSubmissionSemaphoreGuard},
     DeviceShared, InstanceShared,
 };
 
@@ -19,24 +17,15 @@ pub(crate) struct NativeSurface {
     raw: vk::SurfaceKHR,
     functor: khr::surface::Instance,
     instance: Arc<InstanceShared>,
-    /// The window this surface was created from, kept only for the DXGI HDR query
-    /// on Windows. `None` for non-Win32 surfaces. See [`WindowHandle`].
-    #[cfg_attr(not(windows), allow(dead_code))]
-    hwnd: Option<WindowHandle>,
 }
 
 impl NativeSurface {
-    pub fn from_vk_surface_khr(
-        instance: &crate::vulkan::Instance,
-        raw: vk::SurfaceKHR,
-        hwnd: Option<WindowHandle>,
-    ) -> Self {
+    pub fn from_vk_surface_khr(instance: &crate::vulkan::Instance, raw: vk::SurfaceKHR) -> Self {
         let functor = khr::surface::Instance::new(&instance.shared.entry, &instance.shared.raw);
         Self {
             raw,
             functor,
             instance: Arc::clone(&instance.shared),
-            hwnd,
         }
     }
 
@@ -288,13 +277,6 @@ impl Surface for NativeSurface {
             present_semaphores,
             next_present_time: None,
         }))
-    }
-
-    // Only ever called on Windows (to drive the DXGI display-HDR query); the
-    // borrowed `HWND` is meaningless to the other platforms' Vulkan surfaces.
-    #[cfg_attr(not(windows), allow(dead_code))]
-    fn raw_window_hwnd(&self) -> Option<WindowHandle> {
-        self.hwnd
     }
 
     fn as_any(&self) -> &dyn Any {

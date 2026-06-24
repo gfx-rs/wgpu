@@ -110,7 +110,7 @@
 //!   wrong image with no error.
 //!
 //! wgpu does **not** tone-map or gamut-map for you. It gives you the surface
-//! and, through [`DisplayHdrInfo`], the display's advisory capabilities;
+//! and, through `DisplayHdrInfo`, the display's advisory capabilities;
 //! *choosing* and *applying* a tone curve is your application's job.
 //!
 //! ### The practical path
@@ -123,9 +123,9 @@
 //!    [`SurfaceCapabilities::color_spaces`] is a convenience lookup for one
 //!    format.
 //! 2. **Optionally query the display.** Call `Surface::display_hdr_info` for the
-//!    current [`DisplayHdrInfo`] (peak and SDR-white nits, EDR headroom,
+//!    current `DisplayHdrInfo` (peak and SDR-white nits, EDR headroom,
 //!    primaries, and a coarse dynamic-range/gamut bucket). Use it to pick a
-//!    tone-map target ([`DisplayHdrInfo::tone_map_headroom`]); *whether* HDR is
+//!    tone-map target (`DisplayHdrInfo::tone_map_headroom`); *whether* HDR is
 //!    worthwhile is the capability question from step 1, not this live value.
 //!    Every field is advisory and optional; `None` means "cannot tell here",
 //!    never "SDR".
@@ -193,7 +193,7 @@
 //!   panel's peak so highlights have room above it.
 //! * **Headroom (EDR)** --- how much brighter than current SDR white the display
 //!   can go right now, as a multiplier (`1.0` means none). Dynamic; see
-//!   [`DisplayHdrInfo::tone_map_headroom`].
+//!   `DisplayHdrInfo::tone_map_headroom`.
 //! * **PQ / HLG** --- the two HDR transfer functions: [PQ] (SMPTE ST 2084,
 //!   HDR10) encodes absolute luminance, [HLG] (BT.2100) encodes relative
 //!   luminance.
@@ -277,9 +277,8 @@ pub use wgt::{
     BufferTransition, BufferUsages, BufferUses, Color, ColorTargetState, ColorWrites,
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, CooperativeMatrixProperties,
     CooperativeScalarType, CopyExternalImageDestInfo, CoreCounters, DepthBiasState,
-    DepthStencilState, DeviceLostReason, DeviceType, DisplayChromaticity, DisplayCoarseRange,
-    DisplayGamut, DisplayHdrInfo, DisplayHeadroom, DisplayLuminance, DownlevelCapabilities,
-    DownlevelFlags, DownlevelLimits, Dx12BackendOptions, Dx12Compiler, Dx12SwapchainKind,
+    DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags,
+    DownlevelLimits, Dx12BackendOptions, Dx12Compiler, Dx12SwapchainKind,
     Dx12UseFrameLatencyWaitableObject, DxcShaderModel, DynamicOffset, ExperimentalFeatures,
     Extent3d, ExternalTextureFormat, ExternalTextureTransferFunction, Face, Features, FeaturesWGPU,
     FeaturesWebGPU, FilterMode, ForceShaderModelToken, FrontFace, GlBackendOptions, GlDebugFns,

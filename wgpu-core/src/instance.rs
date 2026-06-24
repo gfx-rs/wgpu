@@ -673,28 +673,6 @@ impl Surface {
         Ok(caps)
     }
 
-    /// Returns the current HDR / luminance characteristics of the display
-    /// currently backing this surface on `adapter`.
-    ///
-    /// If the information is not available (because the surface is not present
-    /// on `adapter`'s backend, or the backend reports nothing), returns
-    /// [`wgt::DisplayHdrInfo::default`] (all fields `None`).
-    pub fn display_hdr_info(&self, adapter: &Adapter) -> wgt::DisplayHdrInfo {
-        self.display_hdr_info_with_raw(&adapter.raw)
-    }
-
-    pub fn display_hdr_info_with_raw(
-        &self,
-        adapter: &hal::DynExposedAdapter,
-    ) -> wgt::DisplayHdrInfo {
-        let backend = adapter.backend();
-        let Some(suf) = self.raw(backend) else {
-            return wgt::DisplayHdrInfo::default();
-        };
-        profiling::scope!("surface_display_hdr_info");
-        unsafe { adapter.adapter.surface_display_hdr_info(suf) }.unwrap_or_default()
-    }
-
     pub fn raw(&self, backend: Backend) -> Option<&dyn hal::DynSurface> {
         self.surface_per_backend
             .get(&backend)
