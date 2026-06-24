@@ -451,6 +451,14 @@ impl Instance {
                         self.adjust_limits_for_indirect_validation(&mut raw.capabilities.limits);
                         raw
                     })
+                    .map(|mut raw| {
+                        filter_features_and_limits(
+                            self.flags,
+                            &mut raw.features,
+                            &mut raw.capabilities.limits,
+                        );
+                        raw
+                    })
                     .filter(|raw| self.adapter_allowed(raw))
                     .filter_map(|raw| {
                         if apply_limit_buckets {
@@ -541,6 +549,14 @@ impl Instance {
                 .into_iter()
                 .map(|mut raw| {
                     self.adjust_limits_for_indirect_validation(&mut raw.capabilities.limits);
+                    raw
+                })
+                .map(|mut raw| {
+                    filter_features_and_limits(
+                        self.flags,
+                        &mut raw.features,
+                        &mut raw.capabilities.limits,
+                    );
                     raw
                 })
                 .filter(|raw| self.adapter_allowed(raw));
@@ -874,6 +890,13 @@ impl Adapter {
         desc: &DeviceDescriptor,
         instance_flags: InstanceFlags,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
+        let mut desc = desc.clone();
+        filter_features_and_limits(
+            instance_flags,
+            &mut desc.required_features,
+            &mut desc.required_limits,
+        );
+
         // Verify all features were exposed by the adapter
         if !self.raw.features.contains(desc.required_features) {
             return Err(RequestDeviceError::UnsupportedFeature(
@@ -927,7 +950,7 @@ impl Adapter {
         }
         .map_err(DeviceError::from_hal)?;
 
-        self.create_device_and_queue_from_hal(open, desc, instance_flags)
+        self.create_device_and_queue_from_hal(open, &desc, instance_flags)
     }
 }
 
@@ -1328,7 +1351,9 @@ fn adapter_allowed(
     }
 
     // Check "All supported limits must be either the default value or better."
-    let failed_limits = check_limits(&wgt::Limits::defaults(), limits);
+    let mut min_limits = wgt::Limits::defaults();
+    min_limits.zero_native_only();
+    let failed_limits = check_limits(&min_limits, limits);
     if !failed_limits.is_empty() {
         log::debug!(
             "Adapter {:?} is not WebGPU compliant due to limits: {:?}",
@@ -1349,6 +1374,17 @@ fn adapter_allowed(
     }
 
     true
+}
+
+fn filter_features_and_limits(
+    flags: InstanceFlags,
+    features: &mut wgt::Features,
+    limits: &mut wgt::Limits,
+) {
+    if flags.contains(InstanceFlags::STRICT_WEBGPU_COMPLIANCE) {
+        *features &= wgt::Features::all_webgpu_mask() | limits::EXEMPT_FEATURES;
+        limits.zero_native_only();
+    }
 }
 
 #[cfg(test)]

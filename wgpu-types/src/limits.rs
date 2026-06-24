@@ -945,6 +945,94 @@ impl Limits {
 
         self
     }
+
+    /// Sets all native-only limits to zero, except for `max_non_sampler_bindings`.
+    pub fn zero_native_only(&mut self) {
+        let Self {
+            max_texture_dimension_1d: _,
+            max_texture_dimension_2d: _,
+            max_texture_dimension_3d: _,
+            max_texture_array_layers: _,
+            max_bind_groups: _,
+            max_bind_groups_plus_vertex_buffers: _,
+            max_bindings_per_bind_group: _,
+            max_dynamic_uniform_buffers_per_pipeline_layout: _,
+            max_dynamic_storage_buffers_per_pipeline_layout: _,
+            max_sampled_textures_per_shader_stage: _,
+            max_samplers_per_shader_stage: _,
+            max_storage_buffers_per_shader_stage: _,
+            max_storage_textures_per_shader_stage: _,
+            max_uniform_buffers_per_shader_stage: _,
+            max_uniform_buffer_binding_size: _,
+            max_storage_buffer_binding_size: _,
+            max_vertex_buffers: _,
+            max_buffer_size: _,
+            max_vertex_attributes: _,
+            max_vertex_buffer_array_stride: _,
+            max_inter_stage_shader_variables: _,
+            min_uniform_buffer_offset_alignment: _,
+            min_storage_buffer_offset_alignment: _,
+            max_color_attachments: _,
+            max_color_attachment_bytes_per_sample: _,
+            max_compute_workgroup_storage_size: _,
+            max_compute_invocations_per_workgroup: _,
+            max_compute_workgroup_size_x: _,
+            max_compute_workgroup_size_y: _,
+            max_compute_workgroup_size_z: _,
+            max_compute_workgroups_per_dimension: _,
+            max_immediate_size: _,
+            max_non_sampler_bindings: _, // This is more of an internal setting rather than a limit and it can't be 0.
+
+            max_binding_array_elements_per_shader_stage,
+            max_binding_array_acceleration_structure_elements_per_shader_stage,
+            max_binding_array_sampler_elements_per_shader_stage,
+            max_task_workgroup_total_count,
+            max_task_workgroups_per_dimension,
+            max_mesh_workgroup_total_count,
+            max_mesh_workgroups_per_dimension,
+            max_task_invocations_per_workgroup,
+            max_task_invocations_per_dimension,
+            max_mesh_invocations_per_workgroup,
+            max_mesh_invocations_per_dimension,
+            max_task_payload_size,
+            max_mesh_output_vertices,
+            max_mesh_output_primitives,
+            max_mesh_output_layers,
+            max_mesh_multiview_view_count,
+            max_blas_primitive_count,
+            max_blas_geometry_count,
+            max_tlas_instance_count,
+            max_acceleration_structures_per_shader_stage,
+            max_buffers_and_acceleration_structures_per_shader_stage,
+            max_multiview_view_count,
+            max_ray_dispatch_count,
+            max_ray_recursion_depth,
+        } = self;
+        *max_binding_array_elements_per_shader_stage = 0;
+        *max_binding_array_acceleration_structure_elements_per_shader_stage = 0;
+        *max_binding_array_sampler_elements_per_shader_stage = 0;
+        *max_task_workgroup_total_count = 0;
+        *max_task_workgroups_per_dimension = 0;
+        *max_mesh_workgroup_total_count = 0;
+        *max_mesh_workgroups_per_dimension = 0;
+        *max_task_invocations_per_workgroup = 0;
+        *max_task_invocations_per_dimension = 0;
+        *max_mesh_invocations_per_workgroup = 0;
+        *max_mesh_invocations_per_dimension = 0;
+        *max_task_payload_size = 0;
+        *max_mesh_output_vertices = 0;
+        *max_mesh_output_primitives = 0;
+        *max_mesh_output_layers = 0;
+        *max_mesh_multiview_view_count = 0;
+        *max_blas_primitive_count = 0;
+        *max_blas_geometry_count = 0;
+        *max_tlas_instance_count = 0;
+        *max_acceleration_structures_per_shader_stage = 0;
+        *max_buffers_and_acceleration_structures_per_shader_stage = 0;
+        *max_multiview_view_count = 0;
+        *max_ray_dispatch_count = 0;
+        *max_ray_recursion_depth = 0;
+    }
 }
 
 /// Represents the sets of additional limits on an adapter,

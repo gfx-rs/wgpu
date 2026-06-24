@@ -244,7 +244,7 @@ pub fn apply_limit_buckets(mut raw: hal::DynExposedAdapter) -> Option<hal::DynEx
 /// at that point neither excluding the tier1 formats from WebIDL entirely nor allowing
 /// content to use them on a device that doesn't have the feature enabled will be
 /// acceptable. See <https://github.com/gfx-rs/wgpu/issues/8122>.
-const EXEMPT_FEATURES: Features = Features::EXTERNAL_TEXTURE
+pub(crate) const EXEMPT_FEATURES: Features = Features::EXTERNAL_TEXTURE
     .union(Features::TEXTURE_FORMAT_NV12)
     .union(Features::TEXTURE_FORMAT_P010)
     .union(Features::TEXTURE_FORMAT_16BIT_NORM);
