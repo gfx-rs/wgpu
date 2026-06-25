@@ -18,6 +18,7 @@ pub use command::CommandBuffer;
 #[derive(Clone, Debug)]
 pub struct Api;
 
+#[derive(Debug)]
 pub struct Context {
     options: Arc<wgt::NoopBackendOptions>,
 }

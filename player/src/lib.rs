@@ -17,6 +17,7 @@ use wgc::{
     id::{Marker, PointerId},
 };
 
+#[derive(Debug)]
 pub struct Player {
     pipeline_layouts: HashMap<
         wgc::id::PointerId<wgc::id::markers::PipelineLayout>,

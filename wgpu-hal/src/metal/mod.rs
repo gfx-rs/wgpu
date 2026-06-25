@@ -134,6 +134,7 @@ impl OsFeatures {
     }
 }
 
+#[derive(Debug)]
 pub struct Instance {}
 
 impl Instance {
@@ -384,6 +385,7 @@ impl Default for Settings {
     }
 }
 
+#[derive(Debug)]
 struct AdapterShared {
     device: Retained<ProtocolObject<dyn MTLDevice>>,
     disabilities: PrivateDisabilities,
@@ -443,6 +445,7 @@ impl AdapterShared {
     }
 }
 
+#[derive(Debug)]
 pub struct Adapter {
     shared: Arc<AdapterShared>,
 }
@@ -450,6 +453,7 @@ pub struct Adapter {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Adapter: Send, Sync);
 
+#[derive(Debug)]
 pub struct Queue {
     shared: Arc<QueueShared>,
     timestamp_period: f32,
@@ -617,6 +621,7 @@ pub struct QueueShared {
     relay: OnceLock<Relay>,
 }
 
+#[derive(Debug)]
 pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
@@ -624,6 +629,7 @@ pub struct Device {
     limits: wgt::Limits,
 }
 
+#[derive(Debug)]
 pub struct Surface {
     render_layer: Mutex<Retained<CAMetalLayer>>,
     swapchain_format: RwLock<Option<wgt::TextureFormat>>,

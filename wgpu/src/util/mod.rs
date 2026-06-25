@@ -35,6 +35,7 @@ pub(crate) use panicking::is_panicking;
 use crate::dispatch;
 
 /// CPU accessible buffer used to download data back from the GPU.
+#[derive(Debug)]
 pub struct DownloadBuffer {
     _gpu_buffer: super::Buffer,
     mapped_range: dispatch::DispatchBufferMappedRange,

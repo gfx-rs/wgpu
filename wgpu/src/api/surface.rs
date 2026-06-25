@@ -311,6 +311,21 @@ pub enum SurfaceTarget<'window> {
     OffscreenCanvas(web_sys::OffscreenCanvas),
 }
 
+impl fmt::Debug for SurfaceTarget<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::DisplayAndWindow(_) => f.debug_tuple("DisplayAndWindow").finish_non_exhaustive(),
+            Self::Window(_) => f.debug_tuple("Window").finish_non_exhaustive(),
+            #[cfg(web)]
+            Self::Canvas(canvas) => f.debug_tuple("Canvas").field(canvas).finish(),
+            #[cfg(web)]
+            Self::OffscreenCanvas(canvas) => {
+                f.debug_tuple("OffscreenCanvas").field(canvas).finish()
+            }
+        }
+    }
+}
+
 impl<'a> SurfaceTarget<'a> {
     /// Constructor for [`Self::Window`] without consuming a display handle
     pub fn from_window_without_display(window: impl WindowHandle + 'a) -> Self {
@@ -335,6 +350,7 @@ where
 ///
 /// See also [`SurfaceTarget`] for safe variants.
 #[non_exhaustive]
+#[derive(Debug)]
 pub enum SurfaceTargetUnsafe {
     /// Raw window & display handle.
     ///

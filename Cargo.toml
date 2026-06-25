@@ -56,6 +56,11 @@ default-members = [
     "xtask",
 ]
 
+# NOTE: many packages have non-inherited [lints] sections (Cargo does not support combining
+# workspace inheritance with customization) and must be updated separately.
+[workspace.lints.rust]
+missing_debug_implementations = "warn"
+
 [workspace.lints.clippy]
 ref_as_ptr = "warn"
 # NOTE: clippy configuration values (disallowed-types and
