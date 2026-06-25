@@ -335,6 +335,16 @@ pub enum CooperativeScalarType {
     I32,
     /// 32-bit unsigned integer.
     U32,
+    /// 8-bit signed integer.
+    ///
+    /// Requires `EXPERIMENTAL_COOPERATIVE_MATRIX` and a device that advertises
+    /// `shaderInt8` + `storageBuffer8BitAccess` (i.e. `VK_KHR_8bit_storage`).
+    I8,
+    /// 8-bit unsigned integer.
+    ///
+    /// Requires `EXPERIMENTAL_COOPERATIVE_MATRIX` and a device that advertises
+    /// `shaderInt8` + `storageBuffer8BitAccess` (i.e. `VK_KHR_8bit_storage`).
+    U8,
 }
 
 /// Describes a supported cooperative matrix configuration.

@@ -514,7 +514,11 @@ pub(super) enum WrappedFunction {
         columns: crate::CooperativeSize,
         rows: crate::CooperativeSize,
         intermediate: crate::CooperativeSize,
-        scalar: crate::Scalar,
+        /// Scalar type of A and B (the multiplied operands).
+        input_scalar: crate::Scalar,
+        /// Scalar type of C and the result (the accumulator). May differ from
+        /// `input_scalar` for mixed-precision (e.g. f16 inputs, f32 accumulator).
+        accumulator_scalar: crate::Scalar,
     },
     RayQueryGetIntersection {
         committed: bool,
@@ -548,6 +552,14 @@ impl crate::Scalar {
                 kind: Sk::Float,
                 width: 2,
             } => "half",
+            Self {
+                kind: Sk::Sint,
+                width: 1,
+            } => "char",
+            Self {
+                kind: Sk::Uint,
+                width: 1,
+            } => "uchar",
             Self {
                 kind: Sk::Sint,
                 width: 2,
@@ -2916,6 +2928,22 @@ impl<W: Write> Writer<W> {
                 if context.lang_version < (2, 3) {
                     return Err(Error::UnsupportedCooperativeMatrix);
                 }
+                // Metal simdgroup_matrix only supports floating-point types.
+                {
+                    let ptr_ty = context.resolve_type(data.pointer);
+                    let scalar = ptr_ty
+                        .pointer_base_type()
+                        .and_then(|tr| tr.inner_with(&context.module.types).scalar());
+                    if !matches!(
+                        scalar,
+                        Some(crate::Scalar {
+                            kind: crate::ScalarKind::Float,
+                            ..
+                        })
+                    ) {
+                        return Err(Error::UnsupportedCooperativeMatrix);
+                    }
+                }
                 write!(self.out, "{COOPERATIVE_LOAD_FUNCTION}(")?;
                 write!(self.out, "&")?;
                 self.put_access_chain(data.pointer, context.policies.index, context)?;
@@ -2933,7 +2961,33 @@ impl<W: Write> Writer<W> {
                 if context.lang_version < (2, 3) {
                     return Err(Error::UnsupportedCooperativeMatrix);
                 }
-                write!(self.out, "{COOPERATIVE_MULTIPLY_ADD_FUNCTION}(")?;
+                // Metal simdgroup_matrix only supports floating-point types.
+                let (in_name, acc_name) = {
+                    let a_scalar = context.resolve_type(a).scalar();
+                    let c_scalar = context.resolve_type(c).scalar();
+                    match (a_scalar, c_scalar) {
+                        (
+                            Some(crate::Scalar {
+                                kind: crate::ScalarKind::Float,
+                                ..
+                            }),
+                            Some(crate::Scalar {
+                                kind: crate::ScalarKind::Float,
+                                ..
+                            }),
+                        ) => (
+                            a_scalar.unwrap().to_msl_name(),
+                            c_scalar.unwrap().to_msl_name(),
+                        ),
+                        _ => return Err(Error::UnsupportedCooperativeMatrix),
+                    }
+                };
+                let fn_suffix = if in_name == acc_name {
+                    String::new()
+                } else {
+                    format!("_{in_name}_{acc_name}")
+                };
+                write!(self.out, "{COOPERATIVE_MULTIPLY_ADD_FUNCTION}{fn_suffix}(")?;
                 self.put_expression(a, context, true)?;
                 write!(self.out, ", ")?;
                 self.put_expression(b, context, true)?;
@@ -6445,6 +6499,14 @@ template <typename A>
         Ok(())
     }
 
+    /// NOTE: this generator does not itself reject non-float scalar types. Metal's
+    /// `simdgroup_matrix` only exists for `float`/`half`, so emitting a wrapper for
+    /// e.g. `simdgroup_char32x16` would produce invalid MSL. The float-only check
+    /// lives at the use site in `put_expression` for `CooperativeMultiplyAdd`,
+    /// which fails the whole compilation before the consumer ever reads the
+    /// emitted output. If we ever start writing wrappers in a context where
+    /// `put_expression` cannot bail (e.g. emitting a stub library), mirror that
+    /// check here.
     fn write_wrapped_cooperative_multiply_add(
         &mut self,
         module: &crate::Module,
@@ -6452,9 +6514,10 @@ template <typename A>
         space: crate::AddressSpace,
         a: Handle<crate::Expression>,
         b: Handle<crate::Expression>,
+        c: Handle<crate::Expression>,
     ) -> BackendResult {
         let space_name = space.to_msl_name().unwrap_or_default();
-        let (a_c, a_r, scalar) = match *func_ctx.resolve_type(a, &module.types) {
+        let (a_c, a_r, input_scalar) = match *func_ctx.resolve_type(a, &module.types) {
             crate::TypeInner::CooperativeMatrix {
                 columns,
                 rows,
@@ -6467,26 +6530,39 @@ template <typename A>
             crate::TypeInner::CooperativeMatrix { columns, rows, .. } => (columns, rows),
             _ => unreachable!(),
         };
+        let accumulator_scalar = match *func_ctx.resolve_type(c, &module.types) {
+            crate::TypeInner::CooperativeMatrix { scalar, .. } => scalar,
+            _ => unreachable!(),
+        };
         let wrapped = WrappedFunction::CooperativeMultiplyAdd {
             space_name,
             columns: b_c,
             rows: a_r,
             intermediate: a_c,
-            scalar,
+            input_scalar,
+            accumulator_scalar,
         };
         if !self.wrapped_functions.insert(wrapped) {
             return Ok(());
         }
-        let scalar_name = scalar.to_msl_name();
+        let in_name = input_scalar.to_msl_name();
+        let acc_name = accumulator_scalar.to_msl_name();
+        // When input and accumulator types differ we need a disambiguated name
+        // so two combos (e.g. f16→f32 and f32→f32) can coexist in one module.
+        let fn_suffix = if in_name == acc_name {
+            String::new()
+        } else {
+            format!("_{in_name}_{acc_name}")
+        };
         writeln!(
             self.out,
-            "{NAMESPACE}::simdgroup_{scalar_name}{}x{} {COOPERATIVE_MULTIPLY_ADD_FUNCTION}(const {space_name} {NAMESPACE}::simdgroup_{scalar_name}{}x{}& a, const {space_name} {NAMESPACE}::simdgroup_{scalar_name}{}x{}& b, const {space_name} {NAMESPACE}::simdgroup_{scalar_name}{}x{}& c) {{",
+            "{NAMESPACE}::simdgroup_{acc_name}{}x{} {COOPERATIVE_MULTIPLY_ADD_FUNCTION}{fn_suffix}(const {space_name} {NAMESPACE}::simdgroup_{in_name}{}x{}& a, const {space_name} {NAMESPACE}::simdgroup_{in_name}{}x{}& b, const {space_name} {NAMESPACE}::simdgroup_{acc_name}{}x{}& c) {{",
             b_c as u32, a_r as u32, a_c as u32, a_r as u32, b_c as u32, b_r as u32, b_c as u32, a_r as u32,
         )?;
         let l1 = back::Level(1);
         writeln!(
             self.out,
-            "{l1}{NAMESPACE}::simdgroup_{scalar_name}{}x{} d;",
+            "{l1}{NAMESPACE}::simdgroup_{acc_name}{}x{} d;",
             b_c as u32, a_r as u32
         )?;
         writeln!(self.out, "{l1}simdgroup_multiply_accumulate(d,a,b,c);")?;
@@ -6584,9 +6660,9 @@ template <typename A>
                         data.pointer,
                     )?;
                 }
-                crate::Expression::CooperativeMultiplyAdd { a, b, c: _ } => {
+                crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
                     let space = crate::AddressSpace::Private;
-                    self.write_wrapped_cooperative_multiply_add(module, func_ctx, space, a, b)?;
+                    self.write_wrapped_cooperative_multiply_add(module, func_ctx, space, a, b, c)?;
                 }
                 crate::Expression::RayQueryGetIntersection { committed, .. } => {
                     self.write_rq_get_intersection_function(module, committed)?;

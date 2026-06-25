@@ -70,6 +70,12 @@ pub struct PhysicalDeviceFeatures {
     /// Features provided by `VK_KHR_16bit_storage`, promoted to Vulkan 1.1
     _16bit_storage: Option<vk::PhysicalDevice16BitStorageFeatures<'static>>,
 
+    /// Features provided by `VK_KHR_8bit_storage`, promoted to Vulkan 1.2.
+    ///
+    /// Required to use 8-bit integers in `StorageBuffer` address space (e.g.
+    /// `array<i8>` storage buffers for cooperative matrix loads/stores).
+    _8bit_storage: Option<vk::PhysicalDevice8BitStorageFeatures<'static>>,
+
     /// Features provided by `VK_KHR_acceleration_structure`.
     acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructureFeaturesKHR<'static>>,
 
@@ -220,6 +226,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.portability_subset {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self._8bit_storage {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.cooperative_matrix {
@@ -444,6 +453,20 @@ impl PhysicalDeviceFeatures {
                         .storage_buffer16_bit_access(true)
                         .storage_input_output16(phd_features.supports_storage_input_output_16())
                         .uniform_and_storage_buffer16_bit_access(true),
+                )
+            } else {
+                None
+            },
+            _8bit_storage: if requested_features
+                .contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX)
+                && private_caps.shader_int8
+                && private_caps.storage_buffer_8bit_access
+                && enabled_extensions.contains(&khr::_8bit_storage::NAME)
+            {
+                Some(
+                    vk::PhysicalDevice8BitStorageFeatures::default()
+                        .storage_buffer8_bit_access(true)
+                        .uniform_and_storage_buffer8_bit_access(true),
                 )
             } else {
                 None
@@ -1395,6 +1418,16 @@ impl PhysicalDeviceProperties {
             extensions.push(khr::cooperative_matrix::NAME);
         }
 
+        // Optionally require `VK_KHR_8bit_storage` when cooperative matrix is requested and
+        // the device supports it.  Needed for 8-bit integer storage buffers used with i8/u8
+        // cooperative matrix loads and stores.  This is a no-op on Vulkan 1.2+.
+        if requested_features.contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX)
+            && self.device_api_version < vk::API_VERSION_1_2
+            && self.supports_extension(khr::_8bit_storage::NAME)
+        {
+            extensions.push(khr::_8bit_storage::NAME);
+        }
+
         extensions
     }
 
@@ -2013,6 +2046,16 @@ impl super::InstanceShared {
                     .insert(vk::PhysicalDevice16BitStorageFeaturesKHR::default());
                 features2 = features2.push_next(next);
             }
+
+            // `VK_KHR_8bit_storage` is promoted to Vulkan 1.2
+            if capabilities.device_api_version >= vk::API_VERSION_1_2
+                || capabilities.supports_extension(khr::_8bit_storage::NAME)
+            {
+                let next = features
+                    ._8bit_storage
+                    .insert(vk::PhysicalDevice8BitStorageFeaturesKHR::default());
+                features2 = features2.push_next(next);
+            }
             if capabilities.supports_extension(khr::acceleration_structure::NAME) {
                 let next = features
                     .acceleration_structure
@@ -2350,6 +2393,9 @@ impl super::Instance {
             shader_int8: phd_features
                 .shader_float16_int8
                 .is_some_and(|features| features.shader_int8 != 0),
+            storage_buffer_8bit_access: phd_features
+                ._8bit_storage
+                .is_some_and(|f| f.storage_buffer8_bit_access != 0),
             multiview_instance_index_limit: phd_capabilities
                 .multiview
                 .map(|a| a.max_multiview_instance_index)
@@ -2705,6 +2751,12 @@ impl super::Adapter {
             if self.private_caps.shader_int8 {
                 // See <https://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDeviceShaderFloat16Int8Features.html#extension-features-shaderInt8>.
                 capabilities.extend(&[spv::Capability::Int8]);
+            }
+            if self.private_caps.storage_buffer_8bit_access {
+                capabilities.extend(&[
+                    spv::Capability::StorageBuffer8BitAccess,
+                    spv::Capability::UniformAndStorageBuffer8BitAccess,
+                ]);
             }
             spv::Options {
                 lang_version: match self.phd_capabilities.device_api_version {
@@ -3309,6 +3361,8 @@ fn map_vk_component_type(ty: vk::ComponentTypeKHR) -> Option<wgt::CooperativeSca
         vk::ComponentTypeKHR::FLOAT32 => Some(wgt::CooperativeScalarType::F32),
         vk::ComponentTypeKHR::SINT32 => Some(wgt::CooperativeScalarType::I32),
         vk::ComponentTypeKHR::UINT32 => Some(wgt::CooperativeScalarType::U32),
+        vk::ComponentTypeKHR::SINT8 => Some(wgt::CooperativeScalarType::I8),
+        vk::ComponentTypeKHR::UINT8 => Some(wgt::CooperativeScalarType::U8),
         _ => None,
     }
 }
@@ -3316,7 +3370,7 @@ fn map_vk_component_type(ty: vk::ComponentTypeKHR) -> Option<wgt::CooperativeSca
 /// Convert Vulkan matrix size.
 fn map_vk_cooperative_size(size: u32) -> Option<u32> {
     match size {
-        8 | 16 => Some(size),
+        8 | 16 | 32 => Some(size),
         _ => None,
     }
 }

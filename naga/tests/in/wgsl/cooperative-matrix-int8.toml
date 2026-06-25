@@ -1,0 +1,6 @@
+targets = "SPIRV | WGSL"
+capabilities = "COOPERATIVE_MATRIX | SHADER_INT8"
+
+[spv]
+debug = false
+version = [1, 4]

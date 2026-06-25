@@ -1326,14 +1326,23 @@ impl super::Instruction {
         instruction.add_operand(stride_id);
         instruction
     }
-    pub(super) fn coop_mul_add(result_type_id: Word, id: Word, a: Word, b: Word, c: Word) -> Self {
+    pub(super) fn coop_mul_add(
+        result_type_id: Word,
+        id: Word,
+        a: Word,
+        b: Word,
+        c: Word,
+        matrix_operands: Option<spirv::CooperativeMatrixOperands>,
+    ) -> Self {
         let mut instruction = Self::new(Op::CooperativeMatrixMulAddKHR);
         instruction.set_type(result_type_id);
         instruction.set_result(id);
         instruction.add_operand(a);
         instruction.add_operand(b);
         instruction.add_operand(c);
-
+        if let Some(operands) = matrix_operands {
+            instruction.add_operand(operands.bits());
+        }
         instruction
     }
 }

@@ -534,6 +534,7 @@ impl From<VectorSize> for u32 {
 pub enum CooperativeSize {
     Eight = 8,
     Sixteen = 16,
+    ThirtyTwo = 32,
 }
 
 /// Primitive type for a scalar.

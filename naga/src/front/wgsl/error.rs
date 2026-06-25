@@ -1499,7 +1499,7 @@ impl<'a> Error<'a> {
             Error::UnderspecifiedCooperativeMatrix => ParseError {
                 message: "cooperative matrix constructor is underspecified".into(),
                 labels: vec![],
-                notes: vec![format!("must be F32")],
+                notes: vec![format!("scalar type must be one of: f16, f32, i32, u32, i8, u8")],
             },
             Error::InvalidCooperativeLoadType(span) => ParseError {
                 message: "cooperative load should have a generic type for coop_mat".into(),
@@ -1509,7 +1509,7 @@ impl<'a> Error<'a> {
             Error::UnsupportedCooperativeScalar(span) => ParseError {
                 message: "cooperative scalar type is not supported".into(),
                 labels: vec![(span, "type needs the scalar type specified".into())],
-                notes: vec![format!("must be F32")],
+                notes: vec![format!("scalar type must be one of: f16, f32, i32, u32, i8, u8")],
             },
             Error::UnexpectedIdentForEnumerant(ident_span) => ParseError {
                 message: format!(

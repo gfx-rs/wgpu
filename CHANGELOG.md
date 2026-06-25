@@ -165,6 +165,8 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
   - DRM support by @rectalogic in [#9182](https://github.com/gfx-rs/wgpu/pull/9182).
   - Conditional compilation by @jimblandy in [#9390](https://github.com/gfx-rs/wgpu/pull/9390)
 - Add `wgpu_hal::vulkan::Buffer::raw_handle()` for retrieving the underlying `vk::Buffer` resource. By @WillowGriffiths in [#9459](https://github.com/gfx-rs/wgpu/pull/9459).
+- `EXPERIMENTAL_COOPERATIVE_MATRIX` now supports integer scalar types (`i32`, `u32`, `i8`, `u8`) in addition to the existing `f16`/`f32` support. The `i8`/`u8` types require device support for `shaderInt8` and `storageBuffer8BitAccess` (part of Vulkan 1.2 or `VK_KHR_8bit_storage`). New WGSL predeclared types `coop_mat8x16`, `coop_mat16x8`, `coop_mat8x32`, `coop_mat32x8`, `coop_mat16x32`, and `coop_mat32x16` are available behind `enable wgpu_cooperative_matrix;` for the asymmetric matrix shapes that integer multiplies typically require. By @ruihe774.
+- `coopMultiplyAdd` now supports mixed-precision accumulation: `i8`/`u8` input matrices can use `i32`/`u32` accumulators, and `f16` input matrices can use `f32` accumulators (e.g. `coopMultiplyAdd(a_i8, b_i8, c_i32)`). By @ruihe774.
 
 #### naga
 

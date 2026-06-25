@@ -374,6 +374,12 @@ struct PrivateCapabilities {
     /// [see spec]: https://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDeviceShaderFloat16Int8Features.html#extension-features-shaderInt8
     shader_int8: bool,
 
+    /// True if the device supports `storageBuffer8BitAccess` from
+    /// `VK_KHR_8bit_storage` (promoted to Vulkan 1.2).
+    ///
+    /// Required to use 8-bit integers in `StorageBuffer` address space.
+    storage_buffer_8bit_access: bool,
+
     /// This is done to panic before undefined behavior, and is imperfect.
     /// Basically, to allow implementations to emulate mv using instancing, if you
     /// want to draw `n` instances to VR, you must draw `2n` instances, but you

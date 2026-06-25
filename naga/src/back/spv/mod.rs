@@ -1224,4 +1224,5 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::DRAW_INDEX
         | Caps::MEMORY_DECORATION_COHERENT
         | Caps::MEMORY_DECORATION_VOLATILE
+        | Caps::SHADER_INT8
 }

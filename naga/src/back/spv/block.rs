@@ -1076,7 +1076,12 @@ impl BlockContext<'_> {
                                 self.cached[expr_handle] = id;
                                 return Ok(());
                             }
-                            crate::TypeInner::CooperativeMatrix { .. } => spirv::Op::FAdd,
+                            crate::TypeInner::CooperativeMatrix { scalar, .. } => {
+                                match scalar.kind {
+                                    crate::ScalarKind::Float => spirv::Op::FAdd,
+                                    _ => spirv::Op::IAdd,
+                                }
+                            }
                             _ => unimplemented!(),
                         },
                         crate::BinaryOperator::Subtract => match *left_ty_inner {
@@ -1105,7 +1110,12 @@ impl BlockContext<'_> {
                                 self.cached[expr_handle] = id;
                                 return Ok(());
                             }
-                            crate::TypeInner::CooperativeMatrix { .. } => spirv::Op::FSub,
+                            crate::TypeInner::CooperativeMatrix { scalar, .. } => {
+                                match scalar.kind {
+                                    crate::ScalarKind::Float => spirv::Op::FSub,
+                                    _ => spirv::Op::ISub,
+                                }
+                            }
                             _ => unimplemented!(),
                         },
                         crate::BinaryOperator::Multiply => {
@@ -2181,12 +2191,49 @@ impl BlockContext<'_> {
                 let b_id = self.cached[b];
                 let c_id = self.cached[c];
                 let id = self.gen_id();
+
+                // Build the CooperativeMatrixOperands word. SPIR-V requires this
+                // operand whenever any matrix has signed-integer components; for
+                // all-float operands we omit it (NONE_KHR == 0 is equivalent but
+                // adds a word, and skipping it keeps the float golden tests stable).
+                let matrix_operands = {
+                    use crate::ScalarKind::{Float, Sint};
+                    use spirv::CooperativeMatrixOperands as Cmo;
+                    let scalar_for = |h: Handle<crate::Expression>| match *self.fun_info[h]
+                        .ty
+                        .inner_with(&self.ir_module.types)
+                    {
+                        crate::TypeInner::CooperativeMatrix { scalar, .. } => scalar,
+                        _ => unreachable!("validated as CooperativeMatrix"),
+                    };
+                    let a_scalar = scalar_for(a);
+                    let b_scalar = scalar_for(b);
+                    let c_scalar = scalar_for(c);
+                    if a_scalar.kind != Float || b_scalar.kind != Float || c_scalar.kind != Float {
+                        let mut ops = Cmo::NONE_KHR;
+                        if a_scalar.kind == Sint {
+                            ops |= Cmo::MATRIX_A_SIGNED_COMPONENTS_KHR;
+                        }
+                        if b_scalar.kind == Sint {
+                            ops |= Cmo::MATRIX_B_SIGNED_COMPONENTS_KHR;
+                        }
+                        if c_scalar.kind == Sint {
+                            ops |= Cmo::MATRIX_C_SIGNED_COMPONENTS_KHR;
+                            ops |= Cmo::MATRIX_RESULT_SIGNED_COMPONENTS_KHR;
+                        }
+                        Some(ops)
+                    } else {
+                        None
+                    }
+                };
+
                 block.body.push(Instruction::coop_mul_add(
                     result_type_id,
                     id,
                     a_id,
                     b_id,
                     c_id,
+                    matrix_operands,
                 ));
                 id
             }

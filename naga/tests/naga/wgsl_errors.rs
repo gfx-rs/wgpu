@@ -5224,6 +5224,110 @@ fn cooperative_matrix_enable_extension() {
     }
 }
 
+/// Tests that cooperative matrices reject unsupported scalar types.
+#[test]
+fn cooperative_matrix_scalar_unsupported() {
+    use naga::valid::{Capabilities, TypeError};
+
+    // bool is never a valid cooperative matrix element type
+    check_one_validation!(
+        r#"enable wgpu_cooperative_matrix;
+var<private> a: coop_mat8x8<bool, A>;
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: TypeError::CooperativeMatrixScalarUnsupported { .. },
+            ..
+        }),
+        Capabilities::COOPERATIVE_MATRIX
+    );
+
+    // f64 is never a valid cooperative matrix element type
+    check_one_validation!(
+        r#"enable wgpu_cooperative_matrix;
+var<private> a: coop_mat8x8<f64, A>;
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: TypeError::CooperativeMatrixScalarUnsupported { .. },
+            ..
+        }),
+        Capabilities::COOPERATIVE_MATRIX | Capabilities::FLOAT64
+    );
+}
+
+/// Tests that cooperative matrix `coopMultiplyAdd` rejects invalid mixed-precision
+/// combinations.
+#[test]
+fn cooperative_matrix_invalid_mixed_precision() {
+    use naga::valid::{Capabilities, ExpressionError};
+
+    // A and B have different scalar types — always invalid.
+    check_one_validation!(
+        r#"enable wgpu_cooperative_matrix;
+var<private> a: coop_mat16x16<i8, A>;
+var<private> b: coop_mat16x16<u8, B>;
+@compute @workgroup_size(8, 8, 1)
+fn main() {
+    var c: coop_mat16x16<i32, C>;
+    var d = coopMultiplyAdd(a, b, c);
+}"#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::Expression {
+                    source: ExpressionError::InvalidCooperativeMixedInputs { .. },
+                    ..
+                }
+            ),
+            ..
+        }),
+        Capabilities::COOPERATIVE_MATRIX | Capabilities::SHADER_INT8
+    );
+
+    // i8 × i8 with f32 accumulator — not a valid widened accumulator for i8.
+    check_one_validation!(
+        r#"enable wgpu_cooperative_matrix;
+var<private> a: coop_mat16x16<i8, A>;
+var<private> b: coop_mat16x16<i8, B>;
+@compute @workgroup_size(8, 8, 1)
+fn main() {
+    var c: coop_mat16x16<f32, C>;
+    var d = coopMultiplyAdd(a, b, c);
+}"#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::Expression {
+                    source: ExpressionError::InvalidCooperativeAccumulator { .. },
+                    ..
+                }
+            ),
+            ..
+        }),
+        Capabilities::COOPERATIVE_MATRIX | Capabilities::SHADER_INT8
+    );
+
+    // f16 × f16 with i32 accumulator — not a valid widened accumulator for f16.
+    check_one_validation!(
+        r#"enable wgpu_cooperative_matrix;
+enable f16;
+var<private> a: coop_mat16x16<f16, A>;
+var<private> b: coop_mat16x16<f16, B>;
+@compute @workgroup_size(8, 8, 1)
+fn main() {
+    var c: coop_mat16x16<i32, C>;
+    var d = coopMultiplyAdd(a, b, c);
+}"#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::Expression {
+                    source: ExpressionError::InvalidCooperativeAccumulator { .. },
+                    ..
+                }
+            ),
+            ..
+        }),
+        Capabilities::COOPERATIVE_MATRIX | Capabilities::SHADER_FLOAT16
+    );
+}
+
 /// Tests for mesh shader extension validation via WGSL parsing.
 ///
 /// Some mesh shader features can only be tested at parse-level in WGSL due to

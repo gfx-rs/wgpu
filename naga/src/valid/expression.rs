@@ -151,6 +151,16 @@ pub enum ExpressionError {
     UnsupportedWidth(crate::MathFunction, crate::ScalarKind, crate::Bytes),
     #[error("Invalid operand for cooperative op")]
     InvalidCooperativeOperand(Handle<crate::Expression>),
+    #[error(
+        "Cooperative matrix `coopMultiplyAdd` requires A and B to share a scalar type, \
+         got A: {a:?}, B: {b:?}"
+    )]
+    InvalidCooperativeMixedInputs { a: crate::Scalar, b: crate::Scalar },
+    #[error(
+        "Invalid accumulator type for coopMultiplyAdd: A/B use {ab:?} but C uses {c:?}; \
+         allowed widened accumulators are f16→f32, i8→i32, u8→u32"
+    )]
+    InvalidCooperativeAccumulator { ab: crate::Scalar, c: crate::Scalar },
     #[error("Shift amount exceeds the bit width of {lhs_type:?}")]
     ShiftAmountTooLarge {
         lhs_type: crate::TypeInner,
@@ -1418,6 +1428,61 @@ impl super::Validator {
                             return Err(ExpressionError::InvalidCooperativeOperand(a));
                         }
                     }
+                }
+                // Validate that the shapes are compatible: A[rows×cols_a] * B[rows_b×cols] +
+                // C[rows×cols] requires cols_a == rows_b, plus consistent outer dimensions.
+                let (a_rows, a_cols) = match resolver[a] {
+                    Ti::CooperativeMatrix { rows, columns, .. } => (rows, columns),
+                    _ => unreachable!(),
+                };
+                let (b_rows, b_cols) = match resolver[b] {
+                    Ti::CooperativeMatrix { rows, columns, .. } => (rows, columns),
+                    _ => unreachable!(),
+                };
+                let (c_rows, c_cols) = match resolver[c] {
+                    Ti::CooperativeMatrix { rows, columns, .. } => (rows, columns),
+                    _ => unreachable!(),
+                };
+                if a_cols != b_rows || a_rows != c_rows || b_cols != c_cols {
+                    return Err(ExpressionError::InvalidCooperativeOperand(a));
+                }
+                // A and B must have the same scalar type. C (the accumulator)
+                // may be the same type or a canonical wider type for
+                // mixed-precision GEMM: f16→f32, i8→i32, u8→u32.
+                let a_scalar = match resolver[a] {
+                    Ti::CooperativeMatrix { scalar, .. } => scalar,
+                    _ => unreachable!(),
+                };
+                let b_scalar = match resolver[b] {
+                    Ti::CooperativeMatrix { scalar, .. } => scalar,
+                    _ => unreachable!(),
+                };
+                let c_scalar = match resolver[c] {
+                    Ti::CooperativeMatrix { scalar, .. } => scalar,
+                    _ => unreachable!(),
+                };
+                if a_scalar != b_scalar {
+                    return Err(ExpressionError::InvalidCooperativeMixedInputs {
+                        a: a_scalar,
+                        b: b_scalar,
+                    });
+                }
+                // Same-type accumulators are allowed for every scalar so that the
+                // codegen path is exercised uniformly. The runtime
+                // (`vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR`) is what
+                // ultimately rejects unrealistic combos like `i8 × i8 → i8`.
+                let valid_accumulator = c_scalar == a_scalar
+                    || matches!(
+                        (a_scalar, c_scalar),
+                        (crate::Scalar::F16, crate::Scalar::F32)
+                            | (crate::Scalar::I8, crate::Scalar::I32)
+                            | (crate::Scalar::U8, crate::Scalar::U32)
+                    );
+                if !valid_accumulator {
+                    return Err(ExpressionError::InvalidCooperativeAccumulator {
+                        ab: a_scalar,
+                        c: c_scalar,
+                    });
                 }
                 ShaderStages::COMPUTE
             }
