@@ -96,7 +96,8 @@ use crate::snatch::SnatchGuard;
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::ray_tracing::{AsAction, BuildAccelerationStructureError};
 use crate::resource::{
-    DestroyedResourceError, Fallible, InvalidResourceError, Labeled, ParentDevice as _, QuerySet,
+    DestroyedResourceError, Fallible, InvalidOrDestroyedResourceError, InvalidResourceError,
+    Labeled, ParentDevice as _, QuerySet,
 };
 use crate::storage::Storage;
 use crate::track::{DeviceTracker, ResourceUsageCompatibilityError, Tracker, UsageScope};
@@ -1617,6 +1618,15 @@ pub enum CommandEncoderError {
     RenderPass(#[from] RenderPassError),
 }
 
+impl From<InvalidOrDestroyedResourceError> for CommandEncoderError {
+    fn from(err: InvalidOrDestroyedResourceError) -> Self {
+        match err {
+            InvalidOrDestroyedResourceError::InvalidResource(e) => Self::InvalidResource(e),
+            InvalidOrDestroyedResourceError::DestroyedResource(e) => Self::DestroyedResource(e),
+        }
+    }
+}
+
 impl CommandEncoderError {
     fn is_destroyed_error(&self) -> bool {
         matches!(
@@ -1716,8 +1726,8 @@ impl Global {
     fn resolve_texture_id(
         &self,
         texture_id: Id<id::markers::Texture>,
-    ) -> Result<Arc<crate::resource::Texture>, InvalidResourceError> {
-        self.hub.textures.get(texture_id).get()
+    ) -> Arc<crate::resource::Texture> {
+        self.hub.textures.get(texture_id)
     }
 
     fn resolve_query_set(

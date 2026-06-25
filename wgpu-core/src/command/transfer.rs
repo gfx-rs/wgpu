@@ -866,16 +866,19 @@ impl Global {
         );
 
         let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
+
         let mut cmd_buf_data = cmd_enc.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
+            let texture = self.resolve_texture_id(destination.texture);
+            texture.check_valid(&cmd_enc.device.snatchable_lock.read())?;
             Ok(ArcCommand::CopyBufferToTexture {
                 src: wgt::TexelCopyBufferInfo::<Arc<Buffer>> {
                     buffer: self.resolve_buffer_id(source.buffer)?,
                     layout: source.layout,
                 },
                 dst: wgt::TexelCopyTextureInfo::<Arc<Texture>> {
-                    texture: self.resolve_texture_id(destination.texture)?,
+                    texture,
                     mip_level: destination.mip_level,
                     origin: destination.origin,
                     aspect: destination.aspect,
@@ -900,12 +903,15 @@ impl Global {
         );
 
         let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
+
         let mut cmd_buf_data = cmd_enc.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
+            let texture = self.resolve_texture_id(source.texture);
+            texture.check_valid(&cmd_enc.device.snatchable_lock.read())?;
             Ok(ArcCommand::CopyTextureToBuffer {
                 src: wgt::TexelCopyTextureInfo::<Arc<Texture>> {
-                    texture: self.resolve_texture_id(source.texture)?,
+                    texture,
                     mip_level: source.mip_level,
                     origin: source.origin,
                     aspect: source.aspect,
@@ -934,18 +940,26 @@ impl Global {
         );
 
         let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
+
         let mut cmd_buf_data = cmd_enc.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
+            let src_texture = self.resolve_texture_id(source.texture);
+            let dst_texture = self.resolve_texture_id(destination.texture);
+            {
+                let snatch_guard = cmd_enc.device.snatchable_lock.read();
+                src_texture.check_valid(&snatch_guard)?;
+                dst_texture.check_valid(&snatch_guard)?;
+            }
             Ok(ArcCommand::CopyTextureToTexture {
                 src: wgt::TexelCopyTextureInfo {
-                    texture: self.resolve_texture_id(source.texture)?,
+                    texture: src_texture,
                     mip_level: source.mip_level,
                     origin: source.origin,
                     aspect: source.aspect,
                 },
                 dst: wgt::TexelCopyTextureInfo {
-                    texture: self.resolve_texture_id(destination.texture)?,
+                    texture: dst_texture,
                     mip_level: destination.mip_level,
                     origin: destination.origin,
                     aspect: destination.aspect,
@@ -1140,7 +1154,7 @@ pub(super) fn copy_buffer_to_texture(
         .check_usage(BufferUsages::COPY_SRC)
         .map_err(TransferError::MissingBufferUsage)?;
 
-    let dst_raw = dst_texture.try_raw(state.snatch_guard)?;
+    let dst_raw = dst_texture.try_inner(state.snatch_guard)?.raw();
     dst_texture
         .check_usage(TextureUsages::COPY_DST)
         .map_err(TransferError::MissingTextureUsage)?;
@@ -1249,7 +1263,7 @@ pub(super) fn copy_texture_to_buffer(
 
     let (src_range, src_base) = extract_texture_selector(source, copy_size, src_texture)?;
 
-    let src_raw = src_texture.try_raw(state.snatch_guard)?;
+    let src_raw = src_texture.try_inner(state.snatch_guard)?.raw();
     src_texture
         .check_usage(TextureUsages::COPY_SRC)
         .map_err(TransferError::MissingTextureUsage)?;
@@ -1471,11 +1485,11 @@ pub(super) fn copy_texture_to_texture(
         .into());
     }
 
-    let src_raw = src_texture.try_raw(state.snatch_guard)?;
+    let src_raw = src_texture.try_inner(state.snatch_guard)?.raw();
     src_texture
         .check_usage(TextureUsages::COPY_SRC)
         .map_err(TransferError::MissingTextureUsage)?;
-    let dst_raw = dst_texture.try_raw(state.snatch_guard)?;
+    let dst_raw = dst_texture.try_inner(state.snatch_guard)?.raw();
     dst_texture
         .check_usage(TextureUsages::COPY_DST)
         .map_err(TransferError::MissingTextureUsage)?;

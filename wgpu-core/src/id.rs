@@ -60,27 +60,8 @@ impl RawId {
 ///
 /// An `Id<T>` value identifies a value stored in a [`Global`]'s [`Hub`].
 ///
-/// ## Note on `Id` typing
-///
-/// You might assume that an `Id<T>` can only be used to retrieve a resource of
-/// type `T`, but that is not quite the case. The id types in `wgpu-core`'s
-/// public API ([`TextureId`], for example) can refer to resources belonging to
-/// any backend, but the corresponding resource types ([`Texture<A>`], for
-/// example) are always parameterized by a specific backend `A`.
-///
-/// So the `T` in `Id<T>` is usually a resource type like `Texture<Noop>`,
-/// where [`Noop`] is the `wgpu_hal` dummy back end. These empty types are
-/// never actually used, beyond just making sure you access each `Storage` with
-/// the right kind of identifier. The members of [`Hub<A>`] pair up each
-/// `X<Noop>` type with the resource type `X<A>`, for some specific backend
-/// `A`.
-///
 /// [`Global`]: crate::global::Global
 /// [`Hub`]: crate::hub::Hub
-/// [`Hub<A>`]: crate::hub::Hub
-/// [`Texture<A>`]: crate::resource::Texture
-/// [`Registry`]: crate::registry::Registry
-/// [`Noop`]: hal::api::Noop
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
@@ -229,7 +210,7 @@ where
 {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         let (index, epoch) = self.unzip();
-        write!(formatter, "Id({index},{epoch})")?;
+        write!(formatter, "{}Id({index},{epoch})", T::TYPE)?;
         Ok(())
     }
 }
@@ -280,14 +261,18 @@ where
 ///
 /// For example, `Device<A>` will have the same type of identifier as
 /// `Device<B>` because `Device<T>` for any `T` defines the same maker type.
-pub trait Marker: 'static + WasmNotSendSync {}
+pub trait Marker: 'static + WasmNotSendSync {
+    const TYPE: &'static str;
+}
 
 // This allows `()` to be used as a marker type for tests.
 //
 // We don't want these in production code, since they essentially remove type
 // safety, like how identifiers across different types can be compared.
 #[cfg(test)]
-impl Marker for () {}
+impl Marker for () {
+    const TYPE: &'static str = "Untyped";
+}
 
 /// Define identifiers for each resource.
 macro_rules! ids {
@@ -300,7 +285,9 @@ macro_rules! ids {
             $(
                 #[derive(Debug)]
                 pub enum $marker {}
-                impl super::Marker for $marker {}
+                impl super::Marker for $marker {
+                    const TYPE: &'static str = stringify!($marker);
+                }
             )*
         }
 

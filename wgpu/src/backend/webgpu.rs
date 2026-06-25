@@ -4028,6 +4028,10 @@ impl dispatch::SurfaceOutputDetailInterface for WebSurfaceOutputDetail {
     fn texture_discard(&self) {
         // Can't really discard the texture on the web.
     }
+
+    fn texture_release(&self) {
+        // Can't really discard the texture on the web, so there's no point of releasing too
+    }
 }
 impl Drop for WebSurfaceOutputDetail {
     fn drop(&mut self) {

@@ -331,7 +331,10 @@ impl Queue {
         let device = &self.device;
 
         let mut exclusive_snatch_guard = device.snatchable_lock.write();
-        let inner = texture.inner.snatch(&mut exclusive_snatch_guard);
+        let inner = texture
+            .inner
+            .snatch(&mut exclusive_snatch_guard)
+            .maybe_valid();
         drop(exclusive_snatch_guard);
 
         let result = match inner {
@@ -387,7 +390,10 @@ impl Surface {
             .ok_or(SurfaceError::NothingToPresent)?;
 
         let mut exclusive_snatch_guard = device.snatchable_lock.write();
-        let inner = texture.inner.snatch(&mut exclusive_snatch_guard);
+        let inner = texture
+            .inner
+            .snatch(&mut exclusive_snatch_guard)
+            .maybe_valid();
         drop(exclusive_snatch_guard);
 
         match inner {
@@ -398,6 +404,28 @@ impl Surface {
             }
             _ => unreachable!(),
         }
+
+        Ok(())
+    }
+
+    /// Like `discard`, drops the inner texture reference, but skips the
+    /// HAL `discard_texture` call. Safe to call during unwinding
+    pub fn release(&self) -> Result<(), SurfaceError> {
+        profiling::scope!("Surface::release");
+
+        let mut presentation = self.presentation.lock();
+        let Some(present) = presentation.as_mut() else {
+            return Err(SurfaceError::NotConfigured);
+        };
+
+        // `texture` is dropped here, decrementing the refcount of
+        // Arc<SwapchainAcquireSemaphore>. If this was the last Arc, the Texture
+        // is freed, which drops NativeSurfaceTextureMetadata and
+        // its Arc<SwapchainAcquireSemaphore>.
+        _ = present
+            .acquired_texture
+            .take()
+            .ok_or(SurfaceError::NothingToPresent)?;
 
         Ok(())
     }
@@ -428,9 +456,7 @@ impl Global {
         }
 
         let status = output.status;
-        let texture_id = output
-            .texture
-            .map(|texture| fid.assign(resource::Fallible::Valid(texture)));
+        let texture_id = output.texture.map(|texture| fid.assign(texture));
 
         Ok(SurfaceOutput {
             status,
@@ -462,5 +488,18 @@ impl Global {
         }
 
         surface.discard()
+    }
+
+    pub fn surface_texture_release(&self, surface_id: id::SurfaceId) -> Result<(), SurfaceError> {
+        let surface = self.surfaces.get(surface_id);
+
+        #[cfg(feature = "trace")]
+        if let Some(present) = surface.presentation.lock().as_ref() {
+            if let Some(ref mut trace) = *present.device.trace.lock() {
+                trace.add(Action::ReleaseSurfaceTexture(surface.to_trace()));
+            }
+        }
+
+        surface.release()
     }
 }

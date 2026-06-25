@@ -11,8 +11,9 @@ use crate::{
     id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{
-        Buffer, DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
-        ParentDevice, RawResourceAccess, ResourceErrorIdent, Texture, TextureClearMode,
+        Buffer, DestroyedResourceError, InvalidOrDestroyedResourceError, InvalidResourceError,
+        Labeled, MissingBufferUsageError, ParentDevice, RawResourceAccess, ResourceErrorIdent,
+        Texture, TextureClearMode,
     },
     snatch::SnatchGuard,
     track::TextureTrackerSetSingle,
@@ -79,6 +80,15 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
     InvalidResource(#[from] InvalidResourceError),
 }
 
+impl From<InvalidOrDestroyedResourceError> for ClearError {
+    fn from(value: InvalidOrDestroyedResourceError) -> Self {
+        match value {
+            InvalidOrDestroyedResourceError::InvalidResource(e) => Self::InvalidResource(e),
+            InvalidOrDestroyedResourceError::DestroyedResource(e) => Self::DestroyedResource(e),
+        }
+    }
+}
+
 impl WebGpuError for ClearError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
@@ -137,11 +147,14 @@ impl Global {
         let hub = &self.hub;
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
+
         let mut cmd_buf_data = cmd_enc.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, ClearError> {
+            let texture = self.resolve_texture_id(dst);
+            texture.check_valid(&cmd_enc.device.snatchable_lock.read())?;
             Ok(ArcCommand::ClearTexture {
-                dst: self.resolve_texture_id(dst)?,
+                dst: texture,
                 subresource_range: *subresource_range,
             })
         })
@@ -297,7 +310,7 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
     snatch_guard: &SnatchGuard<'_>,
     instance_flags: wgt::InstanceFlags,
 ) -> Result<(), ClearError> {
-    let dst_raw = dst_texture.try_raw(snatch_guard)?;
+    let dst_raw = dst_texture.try_inner(snatch_guard)?.raw();
 
     // Issue the right barrier.
     let clear_usage = match *dst_texture.clear_mode.read() {

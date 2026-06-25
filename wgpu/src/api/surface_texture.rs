@@ -28,8 +28,15 @@ impl SurfaceTexture {
 
 impl Drop for SurfaceTexture {
     fn drop(&mut self) {
-        if !self.presented && !thread_panicking() {
-            self.detail.texture_discard();
+        if !self.presented {
+            if thread_panicking() {
+                // Best effort: release reference to `SwapchainAcquireSemaphore`
+                // This fixes <https://github.com/gfx-rs/wgpu/issues/8243>
+                // `Trying to destroy a SwapchainAcquireSemaphore that is still in use by a SurfaceTexture`
+                self.detail.texture_release();
+            } else {
+                self.detail.texture_discard();
+            }
         }
     }
 }

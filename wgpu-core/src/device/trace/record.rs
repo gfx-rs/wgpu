@@ -1,5 +1,5 @@
 use alloc::{borrow::Cow, string::ToString, sync::Arc, vec::Vec};
-use core::{any::Any, convert::Infallible};
+use core::{any::Any, convert::Infallible, marker::PhantomData};
 use std::io::Write as _;
 
 use crate::{
@@ -173,6 +173,15 @@ impl<T: StorageItem> IntoTrace for Arc<T> {
     fn to_trace(&self) -> Self::Output {
         PointerId::from(self)
     }
+}
+
+/// This will work as expected on heap-allocated types that are not moved around.
+pub(crate) unsafe fn to_trace<T: StorageItem>(t: &T) -> PointerId<T::Marker> {
+    PointerId::PointerId(
+        #[expect(trivial_casts)]
+        core::num::NonZeroUsize::new(t as *const T as usize).unwrap(),
+        PhantomData,
+    )
 }
 
 impl IntoTrace for ArcCommand {
@@ -905,6 +914,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         A::GetSurfaceTexture { id, parent } => A::GetSurfaceTexture { id, parent },
         A::Present(surface) => A::Present(surface),
         A::DiscardSurfaceTexture(surface) => A::DiscardSurfaceTexture(surface),
+        A::ReleaseSurfaceTexture(surface) => A::ReleaseSurfaceTexture(surface),
         A::DropBindGroupLayout(layout) => A::DropBindGroupLayout(layout),
         A::GetRenderPipelineBindGroupLayout {
             id,
@@ -970,8 +980,9 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         A::DropBlas(blas) => A::DropBlas(blas),
         A::DropTlas(tlas) => A::DropTlas(tlas),
 
-        A::CreateTexture(..)
-        | A::CreateTextureView { .. }
+        A::CreateTexture(id, desc) => A::CreateTexture(id, desc.map_label(owned_label)),
+        A::CreateTextureError(id, desc) => A::CreateTextureError(id, desc.map_label(owned_label)),
+        A::CreateTextureView { .. }
         | A::CreateExternalTexture { .. }
         | A::CreateSampler(..)
         | A::CreateBindGroupLayout(..)
@@ -987,4 +998,8 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         | A::CreateBlas { .. }
         | A::CreateTlas { .. } => panic!("Unsupported action for tracing: {action:?}"),
     }
+}
+
+fn owned_label(l: &Option<Cow<'_, str>>) -> Option<Cow<'static, str>> {
+    l.as_ref().map(|l| Cow::Owned(l.to_string()))
 }

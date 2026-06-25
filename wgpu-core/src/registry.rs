@@ -142,7 +142,9 @@ mod tests {
 
     struct TestData;
     struct TestDataId;
-    impl Marker for TestDataId {}
+    impl Marker for TestDataId {
+        const TYPE: &'static str = "TestData";
+    }
 
     impl ResourceType for TestData {
         const TYPE: &'static str = "TestData";

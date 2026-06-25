@@ -1373,7 +1373,7 @@ impl Device {
         }
     }
 
-    pub fn create_texture(
+    fn create_texture_inner(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
@@ -1748,6 +1748,52 @@ impl Device {
         Ok(texture)
     }
 
+    pub fn create_texture(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+    ) -> (Arc<Texture>, Option<resource::CreateTextureError>) {
+        let (texture, error) = match self.create_texture_inner(desc) {
+            Ok(texture) => (texture, None),
+            Err(e) => {
+                let texture = Texture::invalid(self, desc);
+                (Arc::new(texture), Some(e))
+            }
+        };
+        api_log!(
+            "Device::create_texture({desc:?}) -> {:?}",
+            Arc::as_ptr(&texture)
+        );
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace::IntoTrace as _;
+
+            trace.add(trace::Action::CreateTexture(
+                texture.to_trace(),
+                desc.clone(),
+            ));
+        }
+        (texture, error)
+    }
+
+    /// Creates a texture that is guaranteed to be invalid
+    pub fn create_texture_error(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+    ) -> Arc<Texture> {
+        let texture = Arc::new(Texture::invalid(self, desc));
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace::IntoTrace as _;
+
+            trace.add(trace::Action::CreateTextureError(
+                texture.to_trace(),
+                desc.clone(),
+            ));
+        }
+        texture
+    }
+
     pub fn create_texture_view(
         self: &Arc<Self>,
         texture: &Arc<Texture>,
@@ -1757,7 +1803,7 @@ impl Device {
 
         let snatch_guard = texture.device.snatchable_lock.read();
 
-        let texture_raw = texture.try_raw(&snatch_guard)?;
+        let texture_raw = texture.try_inner(&snatch_guard)?.raw();
 
         // resolve TextureViewDescriptor defaults
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureviewdescriptor-defaults
