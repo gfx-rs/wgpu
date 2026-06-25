@@ -27,10 +27,7 @@ use crate::{
     lock::{rank, Mutex, RwLock},
     ray_tracing::{BlasCompactReadyPendingClosure, BlasPrepareCompactError},
     resource_log,
-    snatch::{
-        DestructibleResourceState, InvalidOrDestroyedResourceError, SnatchGuard, Snatchable,
-        Snatchable2,
-    },
+    snatch::{SnatchGuard, Snatchable, Snatchable2},
     timestamp_normalization::TimestampNormalizationBindGroup,
     track::{SharedTrackerIndexAllocator, TrackerIndex},
     weak_vec::WeakVec,
@@ -91,6 +88,44 @@ pub struct ResourceErrorIdent {
 impl fmt::Display for ResourceErrorIdent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "{} with '{}' label", self.r#type, self.label)
+    }
+}
+
+pub enum DestructibleResourceState<T> {
+    Valid(T),
+    Invalid,
+    Destroyed,
+}
+
+impl<T> DestructibleResourceState<T> {
+    pub fn as_ref(&self) -> DestructibleResourceState<&T> {
+        match self {
+            DestructibleResourceState::Valid(v) => DestructibleResourceState::Valid(v),
+            DestructibleResourceState::Invalid => DestructibleResourceState::Invalid,
+            DestructibleResourceState::Destroyed => DestructibleResourceState::Destroyed,
+        }
+    }
+
+    pub fn take(&mut self) -> DestructibleResourceState<T> {
+        mem::replace(self, DestructibleResourceState::Destroyed)
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum InvalidOrDestroyedResourceError {
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
+}
+
+impl<T> DestructibleResourceState<T> {
+    pub fn maybe_valid(self) -> Option<T> {
+        match self {
+            DestructibleResourceState::Valid(t) => Some(t),
+            DestructibleResourceState::Invalid => None,
+            DestructibleResourceState::Destroyed => None,
+        }
     }
 }
 

@@ -35,12 +35,13 @@ use crate::{
     resource::{
         Blas, BlasCompactState, Buffer, BufferAccessError, BufferMapState, DestroyedBuffer,
         DestroyedQuerySet, DestroyedResourceError, DestroyedTexture, Fallible,
-        FlushedStagingBuffer, InvalidResourceError, Labeled, ParentDevice, ResourceErrorIdent,
-        StagingBuffer, Texture, TextureInner, Trackable, TrackingData,
+        FlushedStagingBuffer, InvalidOrDestroyedResourceError, InvalidResourceError, Labeled,
+        ParentDevice, ResourceErrorIdent, StagingBuffer, Texture, TextureInner, Trackable,
+        TrackingData,
     },
     resource_log,
     scratch::ScratchBuffer,
-    snatch::{InvalidOrDestroyedResourceError, SnatchGuard, Snatchable},
+    snatch::{SnatchGuard, Snatchable},
     track::{self, Tracker, TrackerIndex},
     FastHashMap, SubmissionIndex,
 };

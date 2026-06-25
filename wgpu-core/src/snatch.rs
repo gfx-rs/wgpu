@@ -1,7 +1,7 @@
-use core::mem::replace;
 use core::{cell::UnsafeCell, fmt, mem::ManuallyDrop};
 
 use crate::lock::{rank, RankData, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use crate::resource::DestructibleResourceState;
 
 /// A guard that provides read access to snatchable data.
 pub struct SnatchGuard<'a>(RwLockReadGuard<'a, ()>);
@@ -62,44 +62,6 @@ impl<T> fmt::Debug for SnatchableInner<T> {
 }
 
 unsafe impl<T> Sync for SnatchableInner<T> {}
-
-pub enum DestructibleResourceState<T> {
-    Valid(T),
-    Invalid,
-    Destroyed,
-}
-
-impl<T> DestructibleResourceState<T> {
-    pub fn as_ref(&self) -> DestructibleResourceState<&T> {
-        match self {
-            DestructibleResourceState::Valid(v) => DestructibleResourceState::Valid(v),
-            DestructibleResourceState::Invalid => DestructibleResourceState::Invalid,
-            DestructibleResourceState::Destroyed => DestructibleResourceState::Destroyed,
-        }
-    }
-
-    pub fn take(&mut self) -> DestructibleResourceState<T> {
-        replace(self, DestructibleResourceState::Destroyed)
-    }
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum InvalidOrDestroyedResourceError {
-    #[error(transparent)]
-    InvalidResource(#[from] crate::resource::InvalidResourceError),
-    #[error(transparent)]
-    DestroyedResource(#[from] crate::resource::DestroyedResourceError),
-}
-
-impl<T> DestructibleResourceState<T> {
-    pub fn maybe_valid(self) -> Option<T> {
-        match self {
-            DestructibleResourceState::Valid(t) => Some(t),
-            DestructibleResourceState::Invalid => None,
-            DestructibleResourceState::Destroyed => None,
-        }
-    }
-}
 
 /// A value that is mostly immutable but can be "snatched" if we need to destroy
 /// it early.

@@ -91,12 +91,13 @@ use crate::device::queue::TempResource;
 use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::id::Id;
 use crate::lock::{rank, Mutex};
-use crate::snatch::{InvalidOrDestroyedResourceError, SnatchGuard};
+use crate::snatch::SnatchGuard;
 
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::ray_tracing::{AsAction, BuildAccelerationStructureError};
 use crate::resource::{
-    DestroyedResourceError, Fallible, InvalidResourceError, Labeled, ParentDevice as _, QuerySet,
+    DestroyedResourceError, Fallible, InvalidOrDestroyedResourceError, InvalidResourceError,
+    Labeled, ParentDevice as _, QuerySet,
 };
 use crate::storage::Storage;
 use crate::track::{DeviceTracker, ResourceUsageCompatibilityError, Tracker, UsageScope};

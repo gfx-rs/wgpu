@@ -11,10 +11,11 @@ use crate::{
     id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{
-        Buffer, DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
-        ParentDevice, RawResourceAccess, ResourceErrorIdent, Texture, TextureClearMode,
+        Buffer, DestroyedResourceError, InvalidOrDestroyedResourceError, InvalidResourceError,
+        Labeled, MissingBufferUsageError, ParentDevice, RawResourceAccess, ResourceErrorIdent,
+        Texture, TextureClearMode,
     },
-    snatch::{InvalidOrDestroyedResourceError, SnatchGuard},
+    snatch::SnatchGuard,
     track::TextureTrackerSetSingle,
 };
 
