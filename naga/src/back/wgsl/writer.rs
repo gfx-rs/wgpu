@@ -283,6 +283,38 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Returns `true` if a `debugPrintf` is found anywhere within this statement, `false` otherwise.
+    ///
+    /// Does not traverse into function calls.
+    fn find_debug_printf(stmt: &crate::Statement) -> bool {
+        match *stmt {
+            crate::Statement::DebugPrintf { .. } => true,
+            crate::Statement::Block(ref b) => b.iter().any(Self::find_debug_printf),
+            crate::Statement::If {
+                ref accept,
+                ref reject,
+                ..
+            } => {
+                accept.iter().any(Self::find_debug_printf)
+                    || reject.iter().any(Self::find_debug_printf)
+            }
+            crate::Statement::Loop {
+                ref body,
+                ref continuing,
+                ..
+            } => {
+                body.iter().any(Self::find_debug_printf)
+                    || continuing.iter().any(Self::find_debug_printf)
+            }
+            crate::Statement::Switch { ref cases, .. } => cases
+                .iter()
+                .any(|c| c.body.iter().any(Self::find_debug_printf)),
+            // Note: does not match on function `Call`s to look inside function bodies recursively.
+            // This is fine because this is called on all functions and entrypoints in a module to check for `debugPrintf` usage.
+            _ => false,
+        }
+    }
+
     /// Helper method which writes all the `enable` declarations
     /// needed for a module.
     fn write_enable_declarations(&mut self, module: &Module) -> BackendResult {
@@ -299,6 +331,7 @@ impl<W: Write> Writer<W> {
             ray_tracing_pipeline: bool,
             per_vertex: bool,
             binding_array: bool,
+            debug_printf: bool,
         }
         let mut needed = RequiredEnabled {
             mesh_shaders: module.uses_mesh_shaders(),
@@ -429,6 +462,19 @@ impl<W: Write> Writer<W> {
             needed.ray_tracing_pipeline = true;
         }
 
+        // search for debugPrintf statements in all functions and entry points
+        let mut functions_to_check = module.functions.iter().map(|(_, f)| f).collect::<Vec<_>>();
+        functions_to_check.extend(module.entry_points.iter().map(|ep| &ep.function));
+
+        'outer: for func in functions_to_check {
+            for stmt in func.body.iter() {
+                if Self::find_debug_printf(stmt) {
+                    needed.debug_printf = true;
+                    break 'outer;
+                }
+            }
+        }
+
         // Write required declarations
         let mut any_written = false;
         if needed.f16 {
@@ -473,6 +519,10 @@ impl<W: Write> Writer<W> {
         }
         if needed.per_vertex {
             writeln!(self.out, "enable wgpu_per_vertex;")?;
+            any_written = true;
+        }
+        if needed.debug_printf {
+            writeln!(self.out, "enable wgpu_debug_printf;")?;
             any_written = true;
         }
         if any_written {
@@ -1216,6 +1266,17 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, ");")?
                 }
             },
+            Statement::DebugPrintf {
+                ref format,
+                ref arguments,
+            } => {
+                write!(self.out, "{level}debugPrintf(\"{}\"", format)?;
+                for &arg in arguments {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, arg, func_ctx)?;
+                }
+                writeln!(self.out, ");")?;
+            }
         }
 
         Ok(())

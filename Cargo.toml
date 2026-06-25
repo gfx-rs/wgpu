@@ -256,6 +256,7 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "MTLAccelerationStructureTypes",
     "MTLAccelerationStructureCommandEncoder",
     "MTLResidencySet",
+    "MTLLogState",
 ] }
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
     "std",

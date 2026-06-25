@@ -324,6 +324,7 @@ struct CapabilitiesQuery {
     supports_raytracing: bool,
     shader_per_vertex: bool,
     supports_multisample_array: bool,
+    supports_debug_printf: bool,
 }
 
 #[derive(Debug)]
@@ -335,6 +336,7 @@ struct PrivateCapabilities {
     timestamp_query_support: TimestampQuerySupport,
     supports_memoryless_storage: bool,
     mesh_shaders: bool,
+    supports_debug_printf: bool,
 }
 
 #[derive(Debug)]
@@ -391,6 +393,7 @@ struct AdapterShared {
     private_texture_format_caps: PrivateTextureFormatCapabilities,
     settings: Settings,
     presentation_timer: time::PresentationTimer,
+    use_debug_printf: atomic::AtomicBool,
 }
 
 #[cfg(send_sync)]
@@ -413,6 +416,7 @@ impl AdapterShared {
             device,
             settings: Settings::default(),
             presentation_timer: time::PresentationTimer::new(),
+            use_debug_printf: atomic::AtomicBool::new(false),
         }
     }
 

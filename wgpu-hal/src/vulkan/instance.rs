@@ -79,6 +79,16 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         return vk::FALSE;
     }
 
+    const VUID_DEBUG_PRINTF: i32 = 0x4fe1fef9;
+    if cd.message_id_number == VUID_DEBUG_PRINTF {
+        let message =
+            unsafe { cd.message_as_c_str() }.map_or(Cow::Borrowed(""), CStr::to_string_lossy);
+
+        log::warn!("[debugPrintf] {}", message);
+
+        return vk::FALSE;
+    }
+
     let level = match message_severity {
         // We intentionally suppress info messages down to debug
         // so that users are not innundated with info messages from the runtime.
@@ -801,7 +811,7 @@ impl super::Instance {
 
             // Enable explicit validation features if available
             let mut validation_features;
-            let mut validation_feature_list: ArrayVec<_, 3>;
+            let mut validation_feature_list: ArrayVec<_, 4>;
             if validation_features_are_enabled {
                 validation_feature_list = ArrayVec::new();
 
@@ -810,10 +820,13 @@ impl super::Instance {
                     .push(vk::ValidationFeatureEnableEXT::SYNCHRONIZATION_VALIDATION);
 
                 // Only enable GPU assisted validation if requested.
+                // DEBUG_PRINTF and GPU_ASSISTED are mutually exclusive.
                 if should_enable_gpu_based_validation {
                     validation_feature_list.push(vk::ValidationFeatureEnableEXT::GPU_ASSISTED);
                     validation_feature_list
                         .push(vk::ValidationFeatureEnableEXT::GPU_ASSISTED_RESERVE_BINDING_SLOT);
+                } else {
+                    validation_feature_list.push(vk::ValidationFeatureEnableEXT::DEBUG_PRINTF);
                 }
 
                 validation_features = vk::ValidationFeaturesEXT::default()

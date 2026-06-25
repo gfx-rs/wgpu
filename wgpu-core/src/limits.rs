@@ -563,7 +563,8 @@ mod tests {
                 .union(Features::PRIMITIVE_INDEX)
                 //.union(Features::TEXTURE_COMPONENT_SWIZZLE) not implemented
                 // Standard-track features not in official spec
-                .union(Features::IMMEDIATES),
+                .union(Features::IMMEDIATES)
+                .union(Features::DEBUG_PRINTF),
         );
         assert!(
             difference.is_empty(),

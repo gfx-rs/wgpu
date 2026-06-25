@@ -197,15 +197,32 @@ fn try_push_job(jobs: &mut Vec<Job>, f: impl FnOnce(&mut Vec<Job>) -> anyhow::Re
 }
 
 fn validate_spirv(path: &Path, spirv_as: &str, spirv_val: &str) -> anyhow::Result<()> {
-    let second_line = {
+    const DEBUG_PRINTF_IMPORT: &str = "OpExtInstImport \"NonSemantic.DebugPrintf\"";
+
+    let (second_line, normalize_debug_printf) = {
         let mut file = BufReader::new(open_file(path)?);
-        let mut buf = String::new();
-        file.read_line(&mut buf)
+        let mut first_line = String::new();
+        file.read_line(&mut first_line)
             .with_context(|| format!("failed to read first line from {path:?}"))?;
-        buf.clear();
-        file.read_line(&mut buf)
+        let mut second_line = String::new();
+        file.read_line(&mut second_line)
             .with_context(|| format!("failed to read second line from {path:?}"))?;
-        buf
+
+        let mut normalize_debug_printf =
+            first_line.contains(DEBUG_PRINTF_IMPORT) || second_line.contains(DEBUG_PRINTF_IMPORT);
+        let mut line = String::new();
+        while !normalize_debug_printf {
+            let bytes_read = file
+                .read_line(&mut line)
+                .with_context(|| format!("failed to read {path:?}"))?;
+            if bytes_read == 0 {
+                break;
+            }
+            normalize_debug_printf = line.contains(DEBUG_PRINTF_IMPORT);
+            line.clear();
+        }
+
+        (second_line, normalize_debug_printf)
     };
     let expected_header_prefix = "; Version: ";
     let Some(version) = second_line
@@ -215,14 +232,49 @@ fn validate_spirv(path: &Path, spirv_as: &str, spirv_val: &str) -> anyhow::Resul
         bail!("no {expected_header_prefix:?} header found in {path:?}");
     };
     let mut spirv_as_cmd = EasyCommand::new(spirv_as, |cmd| {
-        cmd.stdout(Stdio::piped())
+        let cmd = cmd
+            .stdout(Stdio::piped())
             .arg("--target-env")
-            .arg(format!("spv{version}"))
-            .args([path.to_str().unwrap(), "-o", "-"])
+            .arg(format!("spv{version}"));
+
+        if normalize_debug_printf {
+            cmd.stdin(Stdio::piped()).args(["-o", "-", "-"])
+        } else {
+            cmd.args([path.to_str().unwrap(), "-o", "-"])
+        }
     });
-    let assembled_spirv = spirv_as_cmd
-        .output()
-        .with_context(|| format!("Failed to run {spirv_as_cmd}"))?;
+    let assembled_spirv = if normalize_debug_printf {
+        let mut spirv_as_process = spirv_as_cmd
+            .spawn()
+            .with_context(|| format!("Failed to run {spirv_as_cmd}"))?;
+        let mut file = BufReader::new(open_file(path)?);
+        let mut line = String::new();
+        let spirv_as_stdin = spirv_as_process.stdin.as_mut().unwrap();
+        loop {
+            let bytes_read = file
+                .read_line(&mut line)
+                .with_context(|| format!("failed to read {path:?}"))?;
+            if bytes_read == 0 {
+                break;
+            }
+
+            if line.contains(" OpExtInst ") {
+                let normalized_line = line.replace(" DebugPrintf ", " 1 ");
+                spirv_as_stdin.write_all(normalized_line.as_bytes())?;
+            } else {
+                spirv_as_stdin.write_all(line.as_bytes())?;
+            }
+
+            line.clear();
+        }
+        spirv_as_process
+            .wait_with_output()
+            .with_context(|| format!("Failed to wait for {spirv_as_cmd}"))?
+    } else {
+        spirv_as_cmd
+            .output()
+            .with_context(|| format!("Failed to run {spirv_as_cmd}"))?
+    };
 
     if !assembled_spirv.status.success() {
         bail!(

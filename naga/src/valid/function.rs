@@ -236,6 +236,14 @@ pub enum FunctionError {
     MismatchedPayloadType(Handle<crate::Type>, Handle<crate::Type>),
     #[error("The payload passed to `traceRay` must be a pointer directly to a global variable")]
     PayloadPointerNotGlobal,
+    #[error("Expression {0:?} is used before it is defined/emitted")]
+    InvalidExpression(Handle<crate::Expression>),
+    #[error("Argument {0:?} for `debugPrintf` must be a supported scalar type")]
+    InvalidDebugPrintfArgument(Handle<crate::Expression>),
+    #[error("Invalid format specifier %{0} for `debugPrintf`")]
+    InvalidDebugPrintfSpecifier(String),
+    #[error("Number of `debugPrintf` arguments ({0}) does not match number of specifiers ({1})")]
+    WrongDebugPrintfArgumentCount(usize, usize),
 }
 
 bitflags::bitflags! {
@@ -1771,6 +1779,110 @@ impl super::Validator {
                         }
                     }
                 },
+
+                S::DebugPrintf {
+                    ref format,
+                    ref arguments,
+                } => {
+                    if !self
+                        .capabilities
+                        .contains(super::Capabilities::DEBUG_PRINTF)
+                    {
+                        return Err(FunctionError::MissingCapability(
+                            super::Capabilities::DEBUG_PRINTF,
+                        )
+                        .with_span_static(
+                            span,
+                            "`debugPrintf` requires the DEBUG_PRINTF capability",
+                        ));
+                    }
+
+                    let mut specifiers = alloc::vec::Vec::new();
+                    let mut chars = format.chars();
+                    while let Some(chr) = chars.next() {
+                        if chr != '%' {
+                            continue;
+                        }
+
+                        specifiers.push(match chars.next() {
+                            Some('d' | 'i') => crate::Scalar {
+                                kind: crate::ScalarKind::Sint,
+                                width: 4,
+                            },
+                            Some('o' | 'u' | 'x' | 'X') => crate::Scalar {
+                                kind: crate::ScalarKind::Uint,
+                                width: 4,
+                            },
+                            Some('f' | 'F' | 'e' | 'E' | 'g' | 'G') => crate::Scalar {
+                                kind: crate::ScalarKind::Float,
+                                width: 4, // XXX In C, this would be double => 8. Not sure how this works in Vulkan yet.
+                            },
+                            Some('l') => match chars.next() {
+                                Some('u' | 'x') => crate::Scalar {
+                                    kind: crate::ScalarKind::Uint,
+                                    width: 8,
+                                },
+                                Some(chr) => {
+                                    return Err(FunctionError::InvalidDebugPrintfSpecifier(
+                                        format!("l{}", chr),
+                                    )
+                                    .with_span_static(span, "debugPrintf format string"))
+                                }
+                                None => {
+                                    return Err(FunctionError::InvalidDebugPrintfSpecifier(
+                                        "l".into(),
+                                    )
+                                    .with_span_static(span, "debugPrintf format string"))
+                                }
+                            },
+                            Some('%') => continue,
+                            // https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/main/docs/debug_printf.md
+                            // claims support for %ul, which just seems like someone allowing for typos with %lu.
+                            // I think we can/should be stricter, especially because the format string needs to work on Metal (untested).
+                            Some(chr) => {
+                                return Err(FunctionError::InvalidDebugPrintfSpecifier(chr.into())
+                                    .with_span_static(span, "debugPrintf format string"))
+                            }
+                            None => {
+                                return Err(FunctionError::InvalidDebugPrintfSpecifier("".into())
+                                    .with_span_static(span, "debugPrintf format string"))
+                            }
+                        });
+                    }
+
+                    if arguments.len() != specifiers.len() {
+                        return Err(FunctionError::WrongDebugPrintfArgumentCount(
+                            arguments.len(),
+                            specifiers.len(),
+                        )
+                        .with_span_static(span, "debugPrintf format string"));
+                    }
+
+                    for (&argument, expected_type) in arguments.iter().zip(specifiers) {
+                         let ty =
+                             context.resolve_type_inner(argument, &self.valid_expression_set)?;
+                        match (ty, expected_type) {
+                            (Ti::Scalar(actual_type), expected_type)
+                                if *actual_type == expected_type => {}
+                            // Allow formatting of unsigned as signed and vice versa.
+                            (
+                                Ti::Scalar(crate::Scalar {
+                                    kind: crate::ScalarKind::Uint | crate::ScalarKind::Sint,
+                                    width: actual_width,
+                                }),
+                                crate::Scalar {
+                                    kind: crate::ScalarKind::Uint | crate::ScalarKind::Sint,
+                                    width: expected_width,
+                                },
+                            ) if *actual_width == expected_width => {}
+                            // XXX what about float vs double?
+                            _ => {
+                                return Err(FunctionError::InvalidDebugPrintfArgument(argument)
+                                    .with_span_handle(argument, context.expressions));
+                            }
+                        }
+                    }
+                }
             }
         }
         Ok(BlockInfo { stages })

@@ -398,6 +398,10 @@ pub(crate) enum Error<'a> {
     FunctionMustUseReturnsVoid(Span, Span),
     FunctionMustUseOnNonFunction(Span),
     InvalidWorkGroupUniformLoad(Span),
+    InvalidStringLiteral {
+        span: Span,
+        description: &'static str,
+    },
     Internal(&'static str),
     ExpectedConstExprConcreteIntegerScalar(Span),
     ExpectedNonNegative(Span),
@@ -538,6 +542,7 @@ impl<'a> Error<'a> {
                         Token::Attribute => "@".to_string(),
                         Token::Number(_) => "number".to_string(),
                         Token::Word(s) => s.to_string(),
+                        Token::String(_) => "string literal".to_string(),
                         Token::Operation(c) => format!("operation (`{c}`)"),
                         Token::LogicalOperation(c) => format!("logical operation (`{c}`)"),
                         Token::ShiftOperation(c) => format!("bitshift (`{c}{c}`)"),
@@ -1126,6 +1131,11 @@ impl<'a> Error<'a> {
                 message: "incorrect type passed to workgroupUniformLoad".into(),
                 labels: vec![(span, "".into())],
                 notes: vec!["passed type must be a workgroup pointer".into()],
+            },
+            Error::InvalidStringLiteral { span, description } => ParseError {
+                message: description.to_string(),
+                labels: vec![(span, "invalid string literal".into())],
+                notes: vec![],
             },
             Error::Internal(message) => ParseError {
                 message: "internal WGSL front end error".to_string(),

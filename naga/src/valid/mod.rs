@@ -218,6 +218,8 @@ bitflags::bitflags! {
         const MEMORY_DECORATION_VOLATILE = 1 << 42;
         /// Support for 16-bit integer types.
         const SHADER_INT16 = 1 << 43;
+        /// Support for debugPrintf.
+        const DEBUG_PRINTF = 1 << 44;
     }
 }
 
@@ -251,6 +253,7 @@ impl Capabilities {
             | Self::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING => {
                 Some(Ext::WgpuBindingArray)
             }
+            Self::DEBUG_PRINTF => Some(Ext::WgpuDebugPrintf),
             _ => None,
         }
     }

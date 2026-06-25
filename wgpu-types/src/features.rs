@@ -867,6 +867,17 @@ bitflags_array! {
         /// This is a native only feature.
         #[name("wgpu-partially-bound-binding-array", "partially-bound-binding-array")]
         const PARTIALLY_BOUND_BINDING_ARRAY = 1 << 13;
+
+        /// Allows the user to print debug messages from shaders using `debugPrintf()`.
+        ///
+        /// Supported platforms:
+        /// - Metal (3.2+)
+        /// - Vulkan (1.1+)
+        ///
+        /// This is a native only feature.
+        #[name("wgpu-debug-printf")]
+        const DEBUG_PRINTF = 1 << 14;
+
         /// Allows the user to call [`RenderPass::multi_draw_indirect_count`] and [`RenderPass::multi_draw_indexed_indirect_count`].
         ///
         /// This allows the use of a buffer containing the actual number of draw calls. This feature being present also implies
@@ -1824,6 +1835,7 @@ bitflags_array! {
         /// remain compatible with previous wgpu behavior.
         #[name("primitive-index", "shader-primitive-index")]
         const PRIMITIVE_INDEX = WEBGPU_FEATURE_PRIMITIVE_INDEX;
+
     }
 }
 
