@@ -979,9 +979,9 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         A::DropBlas(blas) => A::DropBlas(blas),
         A::DropTlas(tlas) => A::DropTlas(tlas),
 
-        A::CreateTexture(..)
-        | A::CreateTextureError(..)
-        | A::CreateTextureView { .. }
+        A::CreateTexture(id, desc) => A::CreateTexture(id, desc.map_label(owned_label)),
+        A::CreateTextureError(id, desc) => A::CreateTextureError(id, desc.map_label(owned_label)),
+        A::CreateTextureView { .. }
         | A::CreateExternalTexture { .. }
         | A::CreateSampler(..)
         | A::CreateBindGroupLayout(..)
@@ -997,4 +997,8 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         | A::CreateBlas { .. }
         | A::CreateTlas { .. } => panic!("Unsupported action for tracing: {action:?}"),
     }
+}
+
+fn owned_label(l: &Option<Cow<'_, str>>) -> Option<Cow<'static, str>> {
+    l.as_ref().map(|l| Cow::Owned(l.to_string()))
 }

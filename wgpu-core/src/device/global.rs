@@ -204,11 +204,11 @@ impl Global {
         device_id: DeviceId,
         id_in: Option<id::TextureId>,
         desc: &resource::TextureDescriptor,
-    ) {
+    ) -> id::TextureId {
         let fid = self.hub.textures.prepare(id_in);
         let device = self.hub.devices.get(device_id);
         let texture = device.create_texture_error(desc);
-        fid.assign(texture);
+        fid.assign(texture)
     }
 
     /// Assign `id_in` an error with the given `label`.

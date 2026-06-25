@@ -187,3 +187,86 @@ fn trace_failed_commands() {
 fn trace_failed_submit() {
     trace_test(TestType::FailedSubmit);
 }
+
+#[test]
+fn trace_texture_test() {
+    let global = wgc::global::Global::new(
+        "test",
+        wgt::instance::InstanceDescriptor {
+            backends: wgt::Backends::NOOP,
+            backend_options: wgt::BackendOptions {
+                noop: wgt::NoopBackendOptions::enabled(),
+                ..Default::default()
+            },
+            ..wgt::instance::InstanceDescriptor::new_without_display_handle()
+        },
+        None,
+    );
+    let adapter_id = global
+        .request_adapter(
+            &wgt::RequestAdapterOptions::default(),
+            wgt::Backends::NOOP,
+            None,
+        )
+        .unwrap();
+    let (device_id, _) = global
+        .adapter_request_device(
+            adapter_id,
+            &wgt::DeviceDescriptor {
+                trace: wgt::Trace::Memory,
+                ..Default::default()
+            },
+            None,
+            None,
+        )
+        .unwrap();
+
+    let desc = wgt::TextureDescriptor {
+        label: None,
+        size: wgt::Extent3d {
+            width: 1024,
+            height: 1024,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgt::TextureDimension::D2,
+        format: wgt::TextureFormat::Rgba8Unorm,
+        usage: wgt::TextureUsages::COPY_DST | wgt::TextureUsages::TEXTURE_BINDING,
+        view_formats: Vec::new(),
+    };
+
+    let (texture_id, error) = global.device_create_texture(device_id, &desc, None);
+
+    assert!(error.is_none());
+
+    let texture_error_id = global.create_texture_error(device_id, None, &desc);
+
+    global.texture_drop(texture_id);
+    global.texture_drop(texture_error_id);
+
+    let trace = global.device_take_trace(device_id).unwrap();
+    let trace = (trace.as_ref() as &dyn Any)
+        .downcast_ref::<wgc::device::trace::MemoryTrace>()
+        .unwrap();
+    let actions = trace.actions();
+    // first one is init
+    let actions = &actions[1..];
+
+    assert_eq!(actions.len(), 4);
+
+    let Action::CreateTexture(texture, ..) = actions[0] else {
+        panic!("expected first action to be CreateTexture");
+    };
+    let Action::CreateTextureError(texture_error, ..) = actions[1] else {
+        panic!("expected second action to be CreateTextureError");
+    };
+    let Action::DropTexture(texture_drop) = actions[2] else {
+        panic!("expected third action to be DropTexture");
+    };
+    assert_eq!(texture, texture_drop);
+    let Action::DropTexture(texture_error_drop) = actions[3] else {
+        panic!("expected fourth action to be DropTexture");
+    };
+    assert_eq!(texture_error, texture_error_drop);
+}
