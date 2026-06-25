@@ -1019,10 +1019,7 @@ impl PhysicalDeviceFeatures {
                     vk::FormatFeatureFlags::SAMPLED_IMAGE
                         | vk::FormatFeatureFlags::TRANSFER_SRC
                         | vk::FormatFeatureFlags::TRANSFER_DST,
-                ) && !caps
-                    .driver
-                    .map(|driver| driver.driver_id == vk::DriverId::MOLTENVK)
-                    .unwrap_or_default(),
+                ) && !caps.is_driver(vk::DriverId::MOLTENVK),
             );
         }
 
@@ -1037,10 +1034,7 @@ impl PhysicalDeviceFeatures {
                     vk::FormatFeatureFlags::SAMPLED_IMAGE
                         | vk::FormatFeatureFlags::TRANSFER_SRC
                         | vk::FormatFeatureFlags::TRANSFER_DST,
-                ) && !caps
-                    .driver
-                    .map(|driver| driver.driver_id == vk::DriverId::MOLTENVK)
-                    .unwrap_or_default(),
+                ) && !caps.is_driver(vk::DriverId::MOLTENVK),
             );
         }
 
@@ -1200,6 +1194,10 @@ impl PhysicalDeviceProperties {
         self.supported_extensions
             .iter()
             .any(|ep| ep.extension_name_as_c_str() == Ok(extension))
+    }
+
+    pub fn is_driver(&self, id: vk::DriverId) -> bool {
+        self.driver.is_some_and(|driver| driver.driver_id == id)
     }
 
     /// Map `requested_features` to the list of Vulkan extension strings required to create the logical device.
@@ -1550,10 +1548,8 @@ impl PhysicalDeviceProperties {
             crate::auxil::db::imgtec::VENDOR,
         ]
         .contains(&self.properties.vendor_id);
-        let ignore_max_fragment_combined_output_resources_by_driver = self
-            .driver
-            .map(|driver| [vk::DriverId::MESA_AGXV].contains(&driver.driver_id))
-            .unwrap_or_default();
+        let ignore_max_fragment_combined_output_resources_by_driver =
+            self.is_driver(vk::DriverId::MESA_AGXV);
         let ignore_max_fragment_combined_output_resources =
             ignore_max_fragment_combined_output_resources_by_device
                 || ignore_max_fragment_combined_output_resources_by_driver;
@@ -1976,10 +1972,7 @@ impl super::InstanceShared {
                         query_cooperative_matrix_properties(&coop_matrix, phd);
                 }
 
-                if is_intel_igpu_outdated_for_robustness2(
-                    capabilities.properties,
-                    capabilities.driver,
-                ) {
+                if is_intel_igpu_outdated_for_robustness2(&capabilities) {
                     capabilities
                         .supported_extensions
                         .retain(|&x| x.extension_name_as_c_str() != Ok(ext::robustness2::NAME));
@@ -2337,7 +2330,7 @@ impl super::Instance {
             queue_family_properties,
         );
 
-        if info.driver == "llvmpipe" {
+        if phd_capabilities.is_driver(vk::DriverId::MESA_LLVMPIPE) {
             // The `F16_IN_F32` instructions do not normally require native `F16` support, but on
             // llvmpipe, they do.
             downlevel_flags.set(
@@ -3370,18 +3363,15 @@ fn supports_bgra8unorm_storage(
 // For https://github.com/gfx-rs/wgpu/issues/4599
 // Intel iGPUs with outdated drivers can break rendering if `VK_EXT_robustness2` is used.
 // Driver version 31.0.101.2115 works, but there's probably an earlier functional version.
-fn is_intel_igpu_outdated_for_robustness2(
-    props: vk::PhysicalDeviceProperties,
-    driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
-) -> bool {
+fn is_intel_igpu_outdated_for_robustness2(capabilities: &PhysicalDeviceProperties) -> bool {
     const DRIVER_VERSION_WORKING: u32 = (101 << 14) | 2115; // X.X.101.2115
+
+    let props = &capabilities.properties;
 
     let is_outdated = props.vendor_id == crate::auxil::db::intel::VENDOR
         && props.device_type == vk::PhysicalDeviceType::INTEGRATED_GPU
         && props.driver_version < DRIVER_VERSION_WORKING
-        && driver
-            .map(|driver| driver.driver_id == vk::DriverId::INTEL_PROPRIETARY_WINDOWS)
-            .unwrap_or_default();
+        && capabilities.is_driver(vk::DriverId::INTEL_PROPRIETARY_WINDOWS);
 
     if is_outdated {
         log::debug!(
