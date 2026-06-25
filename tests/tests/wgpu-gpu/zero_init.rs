@@ -145,9 +145,12 @@ impl<'ctx> DiscardTestCase<'ctx> {
 
         let texture = ctx.device.create_texture(&TextureDescriptor {
             label: Some("RenderTarget"),
+            // Non-square so a width/height swap in the row-stride math is caught.
+            // `width` is a multiple of `COPY_BYTES_PER_ROW_ALIGNMENT` so
+            // `bytes_per_row` stays aligned for every tested format.
             size: Extent3d {
                 width: COPY_BYTES_PER_ROW_ALIGNMENT,
-                height: COPY_BYTES_PER_ROW_ALIGNMENT,
+                height: COPY_BYTES_PER_ROW_ALIGNMENT / 2,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -387,9 +390,10 @@ static WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH24PLUS_STENCIL8: GpuTestCo
                 .limits(Limits::downlevel_defaults()),
         )
         .run_async(|ctx| async move {
+            // Non-square so a width/height swap is caught.
             let size = Extent3d {
                 width: 256,
-                height: 256,
+                height: 192,
                 depth_or_array_layers: 1,
             };
 
@@ -596,9 +600,10 @@ async fn check_depth_stencil_write_leaves_other_uninit(
     write_aspect: TextureAspect,
     method: WriteMethod,
 ) {
+    // Non-square so a width/height swap is caught.
     let size = Extent3d {
         width: 256,
-        height: 256,
+        height: 192,
         depth_or_array_layers: 1,
     };
     let (write_bpp, read_aspect, read_bpp) = match write_aspect {
@@ -633,14 +638,15 @@ async fn check_plane_write_leaves_other_plane_uninit(
     method: WriteMethod,
 ) {
     // Plane 1 of NV12/P010 is half resolution in each dimension.
+    // Non-square so a width/height swap is caught.
     let full_size = Extent3d {
         width: 256,
-        height: 256,
+        height: 192,
         depth_or_array_layers: 1,
     };
     let half_size = Extent3d {
         width: 128,
-        height: 128,
+        height: 96,
         depth_or_array_layers: 1,
     };
     let (write_size, write_bpp, read_aspect, read_size, read_bpp) = match write_plane {
@@ -687,9 +693,10 @@ async fn check_write_aspect_leaves_other_uninit(
 ) {
     let texture = ctx.device.create_texture(&TextureDescriptor {
         label: Some("aspect-init test"),
+        // Must match the full-plane / full-aspect size used by the callers.
         size: Extent3d {
             width: 256,
-            height: 256,
+            height: 192,
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,

@@ -1,6 +1,6 @@
 use super::{InitTracker, MemoryInitKind};
 use crate::resource::Texture;
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 use arrayvec::ArrayVec;
 use core::ops::Range;
 use wgt::TextureSelector;
@@ -18,7 +18,7 @@ pub(crate) struct TextureInitRange {
 pub(crate) fn has_copy_partial_init_tracker_coverage<T>(
     copy_size: &wgt::Extent3d,
     copy_info: &wgt::TexelCopyTextureInfo<T>,
-    desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
+    desc: &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
 ) -> bool {
     let target_size = desc.mip_level_size(copy_info.mip_level).unwrap();
     copy_size.width != target_size.width

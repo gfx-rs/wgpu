@@ -126,7 +126,8 @@ impl Player {
             }
             Action::ConfigureSurface { .. }
             | Action::Present(_)
-            | Action::DiscardSurfaceTexture(_) => {
+            | Action::DiscardSurfaceTexture(_)
+            | Action::ReleaseSurfaceTexture(_) => {
                 panic!("Unexpected Surface action: winit feature is not enabled")
             }
             Action::CreateBuffer(id, desc) => {

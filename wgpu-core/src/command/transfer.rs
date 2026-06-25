@@ -451,7 +451,7 @@ pub(crate) fn validate_texture_copy_dst_format(
 pub(crate) fn validate_texture_buffer_copy<T>(
     texture_copy_view: &wgt::TexelCopyTextureInfo<T>,
     aspect: hal::FormatAspects,
-    desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
+    desc: &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
     layout: &wgt::TexelCopyBufferLayout,
     aligned: bool,
 ) -> Result<(), TransferError> {
@@ -502,7 +502,7 @@ pub(crate) fn validate_texture_buffer_copy<T>(
 /// [vtcr]: https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-texture-copy-range
 pub(crate) fn validate_texture_copy_range<T>(
     texture_copy_view: &wgt::TexelCopyTextureInfo<T>,
-    desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
+    desc: &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
     texture_side: CopySide,
     copy_size: &Extent3d,
 ) -> Result<(hal::CopyExtent, u32), TransferError> {

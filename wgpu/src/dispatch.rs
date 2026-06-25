@@ -609,6 +609,7 @@ pub trait SurfaceInterface: CommonTraits {
 
 pub trait SurfaceOutputDetailInterface: CommonTraits {
     fn texture_discard(&self);
+    fn texture_release(&self);
 }
 
 pub trait QueueWriteBufferInterface: CommonTraits {
