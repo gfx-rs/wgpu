@@ -1972,11 +1972,21 @@ impl super::InstanceShared {
                         query_cooperative_matrix_properties(&coop_matrix, phd);
                 }
 
+                // Suppress some capabilities to avoid known problems
                 if is_intel_igpu_outdated_for_robustness2(&capabilities) {
                     capabilities
                         .supported_extensions
                         .retain(|&x| x.extension_name_as_c_str() != Ok(ext::robustness2::NAME));
                     capabilities.robustness2 = None;
+                }
+
+                // Due to https://gitlab.freedesktop.org/mesa/mesa/-/work_items/15725
+                // TODO(https://github.com/gfx-rs/wgpu/issues/9742): enable on
+                // fixed driver versions, when available
+                if capabilities.is_driver(vk::DriverId::MESA_RADV) {
+                    capabilities
+                        .supported_extensions
+                        .retain(|&x| x.extension_name_as_c_str() != Ok(ext::memory_budget::NAME));
                 }
             };
             capabilities
