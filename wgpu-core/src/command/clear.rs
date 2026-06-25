@@ -14,7 +14,7 @@ use crate::{
         Buffer, DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
         ParentDevice, RawResourceAccess, ResourceErrorIdent, Texture, TextureClearMode,
     },
-    snatch::SnatchGuard,
+    snatch::{InvalidOrDestroyedResourceError, SnatchGuard},
     track::TextureTrackerSetSingle,
 };
 
@@ -77,6 +77,15 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
     EncoderState(#[from] EncoderStateError),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+}
+
+impl From<InvalidOrDestroyedResourceError> for ClearError {
+    fn from(value: InvalidOrDestroyedResourceError) -> Self {
+        match value {
+            InvalidOrDestroyedResourceError::InvalidResource(e) => Self::InvalidResource(e),
+            InvalidOrDestroyedResourceError::DestroyedResource(e) => Self::DestroyedResource(e),
+        }
+    }
 }
 
 impl WebGpuError for ClearError {
@@ -300,7 +309,7 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
     snatch_guard: &SnatchGuard<'_>,
     instance_flags: wgt::InstanceFlags,
 ) -> Result<(), ClearError> {
-    let dst_raw = dst_texture.try_raw(snatch_guard)?;
+    let dst_raw = dst_texture.try_inner(snatch_guard)?.raw();
 
     // Issue the right barrier.
     let clear_usage = match *dst_texture.clear_mode.read() {

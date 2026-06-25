@@ -1489,7 +1489,6 @@ impl Drop for Texture {
 impl RawResourceAccess for Texture {
     type DynResource = dyn hal::DynTexture;
 
-    // TODO: this one is bad
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
         self.inner.get(guard).maybe_valid().map(|t| t.raw())
     }

@@ -198,8 +198,8 @@ impl Queue {
         // Emit the transition barriers to PRESENT.
         {
             let raw_texture = texture
-                .try_raw(&submission.snatch_guard)
-                .map_err(|_| DeviceError::Lost)?;
+                .raw(&submission.snatch_guard)
+                .ok_or(DeviceError::Lost)?;
             let barriers: Vec<hal::TextureBarrier<'_, dyn hal::DynTexture>> = pending
                 .into_iter()
                 .map(|pt| pt.into_hal(raw_texture))
@@ -530,6 +530,15 @@ pub enum QueueWriteError {
     DestroyedResource(#[from] DestroyedResourceError),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+}
+
+impl From<InvalidOrDestroyedResourceError> for QueueWriteError {
+    fn from(e: InvalidOrDestroyedResourceError) -> Self {
+        match e {
+            InvalidOrDestroyedResourceError::InvalidResource(e) => Self::InvalidResource(e),
+            InvalidOrDestroyedResourceError::DestroyedResource(e) => Self::DestroyedResource(e),
+        }
+    }
 }
 
 impl WebGpuError for QueueWriteError {
@@ -902,7 +911,7 @@ impl Queue {
 
         let snatch_guard = self.device.snatchable_lock.read();
 
-        let dst_raw = dst.try_raw(&snatch_guard)?;
+        let dst_raw = dst.try_inner(&snatch_guard)?.raw();
 
         // This must happen after parameter validation (so that errors are reported
         // as required by the spec), but before any side effects.
