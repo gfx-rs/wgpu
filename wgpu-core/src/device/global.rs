@@ -207,16 +207,7 @@ impl Global {
     ) {
         let fid = self.hub.textures.prepare(id_in);
         let device = self.hub.devices.get(device_id);
-        let texture = Arc::new(resource::Texture::invalid(&device, desc));
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *device.trace.lock() {
-            use crate::device::trace::IntoTrace as _;
-
-            trace.add(trace::Action::CreateTexture(
-                texture.to_trace(),
-                desc.clone(),
-            ));
-        }
+        let texture = device.create_texture_error(desc);
         fid.assign(texture);
     }
 
