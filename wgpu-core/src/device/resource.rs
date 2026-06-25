@@ -1771,6 +1771,11 @@ impl Device {
                 (Arc::new(texture), Some(e))
             }
         };
+        api_log!(
+            "Device::create_texture({desc:?}) -> {:?}",
+            Arc::as_ptr(&texture)
+        );
+
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use crate::device::trace::IntoTrace as _;
@@ -1793,7 +1798,7 @@ impl Device {
         if let Some(ref mut trace) = *self.trace.lock() {
             use crate::device::trace::IntoTrace as _;
 
-            trace.add(trace::Action::CreateTexture(
+            trace.add(trace::Action::CreateTextureError(
                 texture.to_trace(),
                 desc.clone(),
             ));

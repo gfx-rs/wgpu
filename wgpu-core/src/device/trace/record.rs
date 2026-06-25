@@ -971,6 +971,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         A::DropTlas(tlas) => A::DropTlas(tlas),
 
         A::CreateTexture(..)
+        | A::CreateTextureError(..)
         | A::CreateTextureView { .. }
         | A::CreateExternalTexture { .. }
         | A::CreateSampler(..)

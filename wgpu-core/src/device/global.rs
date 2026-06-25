@@ -299,7 +299,6 @@ impl Global {
         let (texture, error) = device.create_texture(desc);
 
         let id = fid.assign(texture);
-        api_log!("Device::create_texture({desc:?}) -> {id:?}");
 
         (id, error)
     }

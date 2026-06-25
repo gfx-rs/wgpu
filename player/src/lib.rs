@@ -146,6 +146,11 @@ impl Player {
 
                 self.textures.insert(id, texture);
             }
+            Action::CreateTextureError(id, desc) => {
+                let texture = device.create_texture_error(&desc);
+
+                self.textures.insert(id, texture);
+            }
             Action::DestroyTexture(id) => {
                 let texture = self.textures.get(&id).expect("invalid texture");
                 texture.destroy();
