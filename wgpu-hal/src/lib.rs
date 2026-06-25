@@ -3044,6 +3044,7 @@ pub struct Telemetry {
     ),
 }
 
+#[derive(Debug)]
 pub struct PipelineGroupData<'a, B: DynBuffer + ?Sized> {
     pub buffer: &'a B,
     pub offset: wgt::BufferAddress,
