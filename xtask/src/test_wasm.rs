@@ -1,10 +1,17 @@
-use std::{ffi::OsString, process::Child, thread::sleep, time::Duration};
+use std::{
+    ffi::OsString,
+    process::Child,
+    thread::sleep,
+    time::{Duration, Instant},
+};
 
 use anyhow::{bail, Context};
 use pico_args::Arguments;
 use xshell::Shell;
 
 use crate::util::flatten_args;
+
+const SERVER_STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
 
 struct WasmTestServer(Child);
 
@@ -65,12 +72,21 @@ pub fn run_wasm_tests(
     let debug = args.contains("--debug");
     let list = args.contains("--list");
 
+    // By default, limit number of threads since each test creates
+    // a browser context, which can be resource-intensive
+    let test_threads = args
+        .opt_value_from_str::<_, String>("--test-threads")?
+        .map_or_else(
+            || (std::thread::available_parallelism().unwrap().get() / 2).max(4),
+            |arg| arg.parse::<usize>().unwrap(),
+        );
+
     let cargo_args = flatten_args(args, passthrough_args);
 
     if list {
         list_tests(shell, cargo_args)
     } else {
-        run_tests(shell, show, debug, cargo_args)
+        run_tests(shell, show, debug, test_threads, cargo_args)
     }
 }
 
@@ -89,6 +105,7 @@ fn run_tests(
     shell: Shell,
     show: bool,
     debug: bool,
+    test_threads: usize,
     cargo_args: Vec<OsString>,
 ) -> anyhow::Result<()> {
     let bins = [
@@ -150,10 +167,15 @@ fn run_tests(
             .context("Failed to start wasm test server")?,
     );
 
+    let start = Instant::now();
     loop {
         if ureq::get("http://127.0.0.1:3000/").call().is_ok() {
             break;
         };
+
+        if Instant::now().duration_since(start) > SERVER_STARTUP_TIMEOUT {
+            panic!("Timeout while starting wasm test server");
+        }
 
         sleep(Duration::from_millis(100));
     }
@@ -191,7 +213,14 @@ fn run_tests(
 
         shell
             .cmd("cargo")
-            .args(["nextest", "run", "--profile", "wasm"])
+            .args([
+                "nextest",
+                "run",
+                "--profile",
+                "wasm",
+                "--test-threads",
+                &test_threads.to_string(),
+            ])
             .args(cargo_args)
             .env("RUSTFLAGS", "--cfg wasm_test")
             .run()?;

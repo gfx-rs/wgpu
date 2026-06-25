@@ -67,15 +67,18 @@ Commands:
   test-wasm
     Run wasm tests in a browser
 
-    --list      List all of the tests and their executables without running them
-    --retries   Number of times to retry failing tests
-    --show      Show each test's browser window instead of running headless.
-    --debug     Instead of running tests, just start the test server and keep it
-                running. Tests can then be debugged individually in a browser by visiting
-                the test URL with the test's package name for the `wasm` param
-                and the test's name for the `name` param, for example:
-                http://127.0.0.1:3000/?wasm=wgpu-test&name=wgpu_gpu::buffer_usages::buffer_usage
-                When you run a test this way, check the browser's console for output.
+    --list          List all of the tests and their executables without running them
+    --retries       Number of times to retry failing tests
+    --show          Show each test's browser window instead of running headless.
+    --test-threads  Number of threads nextest will use. This corresponds to the number 
+                    of browser pages that can be open at once. If not specified,
+                    a default is chosen based on available parallelism.
+    --debug         Instead of running tests, just start the test server and keep it
+                    running. Tests can then be debugged individually in a browser by visiting
+                    the test URL with the test's package name for the `wasm` param
+                    and the test's name for the `name` param, for example:
+                    http://127.0.0.1:3000/?wasm=wgpu-test&name=wgpu_gpu::buffer_usages::buffer_usage
+                    When you run a test this way, check the browser's console for output.
 
     All extra arguments will be forwarded to cargo-nextest (NOT wgpu-info)
 
