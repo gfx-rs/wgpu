@@ -1373,398 +1373,386 @@ impl Device {
         }
     }
 
-    pub fn create_texture(
+    fn create_texture_inner(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
-    ) -> (Arc<Texture>, Option<resource::CreateTextureError>) {
-        fn create(
-            device: &Arc<Device>,
-            desc: &resource::TextureDescriptor,
-        ) -> Result<Arc<Texture>, resource::CreateTextureError> {
-            use resource::{CreateTextureError, TextureDimensionError};
+    ) -> Result<Arc<Texture>, resource::CreateTextureError> {
+        use resource::{CreateTextureError, TextureDimensionError};
 
-            device.check_is_valid()?;
+        self.check_is_valid()?;
 
-            if desc.usage.is_empty() || desc.usage.contains_unknown_bits() {
-                return Err(CreateTextureError::InvalidUsage(desc.usage));
+        if desc.usage.is_empty() || desc.usage.contains_unknown_bits() {
+            return Err(CreateTextureError::InvalidUsage(desc.usage));
+        }
+
+        conv::check_texture_dimension_size(
+            desc.dimension,
+            desc.size,
+            desc.sample_count,
+            &self.limits,
+        )?;
+
+        if desc.dimension != wgt::TextureDimension::D2 {
+            // Depth textures can only be 2D
+            if desc.format.is_depth_stencil_format() {
+                return Err(CreateTextureError::InvalidDepthDimension(
+                    desc.dimension,
+                    desc.format,
+                ));
             }
-
-            conv::check_texture_dimension_size(
-                desc.dimension,
-                desc.size,
-                desc.sample_count,
-                &device.limits,
-            )?;
-
-            if desc.dimension != wgt::TextureDimension::D2 {
-                // Depth textures can only be 2D
-                if desc.format.is_depth_stencil_format() {
-                    return Err(CreateTextureError::InvalidDepthDimension(
-                        desc.dimension,
-                        desc.format,
-                    ));
-                }
-                // Transient textures can only be 2D
-                if desc
-                    .usage
-                    .contains(wgt::TextureUsages::TRANSIENT_ATTACHMENT)
-                {
-                    return Err(CreateTextureError::InvalidDimensionUsages(
-                        wgt::TextureUsages::TRANSIENT_ATTACHMENT,
-                        desc.dimension,
-                    ));
-                }
-            }
-
-            if desc.dimension != wgt::TextureDimension::D2
-                && desc.dimension != wgt::TextureDimension::D3
+            // Transient textures can only be 2D
+            if desc
+                .usage
+                .contains(wgt::TextureUsages::TRANSIENT_ATTACHMENT)
             {
-                // Compressed textures can only be 2D or 3D
-                if desc.format.is_compressed() {
+                return Err(CreateTextureError::InvalidDimensionUsages(
+                    wgt::TextureUsages::TRANSIENT_ATTACHMENT,
+                    desc.dimension,
+                ));
+            }
+        }
+
+        if desc.dimension != wgt::TextureDimension::D2
+            && desc.dimension != wgt::TextureDimension::D3
+        {
+            // Compressed textures can only be 2D or 3D
+            if desc.format.is_compressed() {
+                return Err(CreateTextureError::InvalidCompressedDimension(
+                    desc.dimension,
+                    desc.format,
+                ));
+            }
+
+            // Renderable textures can only be 2D or 3D
+            if desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                return Err(CreateTextureError::InvalidDimensionUsages(
+                    wgt::TextureUsages::RENDER_ATTACHMENT,
+                    desc.dimension,
+                ));
+            }
+        }
+
+        if desc.format.is_compressed() {
+            let (block_width, block_height) = desc.format.block_dimensions();
+
+            if !desc.size.width.is_multiple_of(block_width) {
+                return Err(CreateTextureError::InvalidDimension(
+                    TextureDimensionError::NotMultipleOfBlockWidth {
+                        width: desc.size.width,
+                        block_width,
+                        format: desc.format,
+                    },
+                ));
+            }
+
+            if !desc.size.height.is_multiple_of(block_height) {
+                return Err(CreateTextureError::InvalidDimension(
+                    TextureDimensionError::NotMultipleOfBlockHeight {
+                        height: desc.size.height,
+                        block_height,
+                        format: desc.format,
+                    },
+                ));
+            }
+
+            if desc.dimension == wgt::TextureDimension::D3 {
+                // Only BCn formats with Sliced 3D feature can be used for 3D textures
+                if desc.format.is_bcn() {
+                    self.require_features(wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D)
+                        .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+                } else if desc.format.is_astc() {
+                    self.require_features(wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D)
+                        .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+                } else {
                     return Err(CreateTextureError::InvalidCompressedDimension(
                         desc.dimension,
                         desc.format,
                     ));
                 }
+            }
+        }
 
-                // Renderable textures can only be 2D or 3D
-                if desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
-                    return Err(CreateTextureError::InvalidDimensionUsages(
-                        wgt::TextureUsages::RENDER_ATTACHMENT,
-                        desc.dimension,
-                    ));
-                }
+        let mips = desc.mip_level_count;
+        let max_levels_allowed = desc.size.max_mips(desc.dimension).min(hal::MAX_MIP_LEVELS);
+        if mips == 0 || mips > max_levels_allowed {
+            return Err(CreateTextureError::InvalidMipLevelCount {
+                requested: mips,
+                maximum: max_levels_allowed,
+            });
+        }
+
+        {
+            let (mut width_multiple, mut height_multiple) = desc.format.size_multiple_requirement();
+
+            if desc.format.is_multi_planar_format() {
+                // TODO(https://github.com/gfx-rs/wgpu/issues/8491): fix
+                // `mip_level_size` calculation for these formats and relax this
+                // restriction.
+                width_multiple <<= desc.mip_level_count.saturating_sub(1);
+                height_multiple <<= desc.mip_level_count.saturating_sub(1);
             }
 
-            if desc.format.is_compressed() {
-                let (block_width, block_height) = desc.format.block_dimensions();
-
-                if !desc.size.width.is_multiple_of(block_width) {
-                    return Err(CreateTextureError::InvalidDimension(
-                        TextureDimensionError::NotMultipleOfBlockWidth {
-                            width: desc.size.width,
-                            block_width,
-                            format: desc.format,
-                        },
-                    ));
-                }
-
-                if !desc.size.height.is_multiple_of(block_height) {
-                    return Err(CreateTextureError::InvalidDimension(
-                        TextureDimensionError::NotMultipleOfBlockHeight {
-                            height: desc.size.height,
-                            block_height,
-                            format: desc.format,
-                        },
-                    ));
-                }
-
-                if desc.dimension == wgt::TextureDimension::D3 {
-                    // Only BCn formats with Sliced 3D feature can be used for 3D textures
-                    if desc.format.is_bcn() {
-                        device
-                            .require_features(wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D)
-                            .map_err(|error| {
-                                CreateTextureError::MissingFeatures(desc.format, error)
-                            })?;
-                    } else if desc.format.is_astc() {
-                        device
-                            .require_features(wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D)
-                            .map_err(|error| {
-                                CreateTextureError::MissingFeatures(desc.format, error)
-                            })?;
-                    } else {
-                        return Err(CreateTextureError::InvalidCompressedDimension(
-                            desc.dimension,
-                            desc.format,
-                        ));
-                    }
-                }
-            }
-
-            let mips = desc.mip_level_count;
-            let max_levels_allowed = desc.size.max_mips(desc.dimension).min(hal::MAX_MIP_LEVELS);
-            if mips == 0 || mips > max_levels_allowed {
-                return Err(CreateTextureError::InvalidMipLevelCount {
-                    requested: mips,
-                    maximum: max_levels_allowed,
-                });
-            }
-
-            {
-                let (mut width_multiple, mut height_multiple) =
-                    desc.format.size_multiple_requirement();
-
-                if desc.format.is_multi_planar_format() {
-                    // TODO(https://github.com/gfx-rs/wgpu/issues/8491): fix
-                    // `mip_level_size` calculation for these formats and relax this
-                    // restriction.
-                    width_multiple <<= desc.mip_level_count.saturating_sub(1);
-                    height_multiple <<= desc.mip_level_count.saturating_sub(1);
-                }
-
-                if !desc.size.width.is_multiple_of(width_multiple) {
-                    return Err(CreateTextureError::InvalidDimension(
-                        TextureDimensionError::WidthNotMultipleOf {
-                            width: desc.size.width,
-                            multiple: width_multiple,
-                            format: desc.format,
-                        },
-                    ));
-                }
-
-                if !desc.size.height.is_multiple_of(height_multiple) {
-                    return Err(CreateTextureError::InvalidDimension(
-                        TextureDimensionError::HeightNotMultipleOf {
-                            height: desc.size.height,
-                            multiple: height_multiple,
-                            format: desc.format,
-                        },
-                    ));
-                }
-            }
-
-            if desc
-                .usage
-                .contains(wgt::TextureUsages::TRANSIENT_ATTACHMENT)
-            {
-                if desc.usage
-                    != (wgt::TextureUsages::TRANSIENT_ATTACHMENT
-                        | wgt::TextureUsages::RENDER_ATTACHMENT)
-                {
-                    return Err(CreateTextureError::InvalidTransientTextureUsage(desc.usage));
-                }
-
-                if desc.mip_level_count != 1 {
-                    return Err(CreateTextureError::InvalidTransientTextureMipLevelCount(
-                        desc.mip_level_count,
-                    ));
-                }
-
-                if desc.size.depth_or_array_layers != 1 {
-                    return Err(CreateTextureError::InvalidTransientTextureLayerCount(
-                        desc.size.depth_or_array_layers,
-                    ));
-                }
-
-                if !desc.view_formats.is_empty() {
-                    return Err(CreateTextureError::InvalidTransientTextureViewFormats);
-                }
-            }
-
-            let format_features = device
-                .describe_format_features(desc.format)
-                .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
-
-            if desc.sample_count > 1 {
-                // <https://www.w3.org/TR/2025/CRD-webgpu-20251120/#:~:text=If%20descriptor%2EsampleCount%20%3E%201>
-                //
-                // Note that there are also some checks related to the sample count
-                // in [`conv::check_texture_dimension_size`].
-
-                if desc.mip_level_count != 1 {
-                    return Err(CreateTextureError::InvalidMipLevelCount {
-                        requested: desc.mip_level_count,
-                        maximum: 1,
-                    });
-                }
-
-                if desc.size.depth_or_array_layers != 1
-                    && !device.features.contains(wgt::Features::MULTISAMPLE_ARRAY)
-                {
-                    return Err(CreateTextureError::InvalidDimension(
-                        TextureDimensionError::MultisampledDepthOrArrayLayer(
-                            desc.size.depth_or_array_layers,
-                        ),
-                    ));
-                }
-
-                if desc.usage.contains(wgt::TextureUsages::STORAGE_BINDING) {
-                    return Err(CreateTextureError::InvalidMultisampledStorageBinding);
-                }
-
-                if !desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
-                    return Err(CreateTextureError::MultisampledNotRenderAttachment);
-                }
-
-                if !format_features.flags.intersects(
-                    wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4
-                        | wgt::TextureFormatFeatureFlags::MULTISAMPLE_X2
-                        | wgt::TextureFormatFeatureFlags::MULTISAMPLE_X8
-                        | wgt::TextureFormatFeatureFlags::MULTISAMPLE_X16,
-                ) {
-                    return Err(CreateTextureError::InvalidMultisampledFormat(desc.format));
-                }
-
-                if !format_features
-                    .flags
-                    .sample_count_supported(desc.sample_count)
-                {
-                    return Err(CreateTextureError::InvalidSampleCount(
-                        desc.sample_count,
-                        desc.format,
-                        desc.format
-                            .guaranteed_format_features(device.features)
-                            .flags
-                            .supported_sample_counts(),
-                        device
-                            .adapter
-                            .get_texture_format_features(desc.format)
-                            .flags
-                            .supported_sample_counts(),
-                    ));
-                };
-            }
-
-            let missing_allowed_usages = match desc.format.planes() {
-                Some(planes) => {
-                    let mut planes_usages = wgt::TextureUsages::all();
-                    for plane in 0..planes {
-                        let aspect = wgt::TextureAspect::from_plane(plane).unwrap();
-                        let format = desc.format.aspect_specific_format(aspect).unwrap();
-                        let format_features =
-                            device.describe_format_features(format).map_err(|error| {
-                                CreateTextureError::MissingFeatures(desc.format, error)
-                            })?;
-
-                        planes_usages &= format_features.allowed_usages;
-                    }
-
-                    desc.usage - planes_usages
-                }
-                None => desc.usage - format_features.allowed_usages,
-            };
-
-            if !missing_allowed_usages.is_empty() {
-                // detect downlevel incompatibilities
-                let wgpu_allowed_usages = desc
-                    .format
-                    .guaranteed_format_features(device.features)
-                    .allowed_usages;
-                let wgpu_missing_usages = desc.usage - wgpu_allowed_usages;
-                return Err(CreateTextureError::InvalidFormatUsages(
-                    missing_allowed_usages,
-                    desc.format,
-                    wgpu_missing_usages.is_empty(),
+            if !desc.size.width.is_multiple_of(width_multiple) {
+                return Err(CreateTextureError::InvalidDimension(
+                    TextureDimensionError::WidthNotMultipleOf {
+                        width: desc.size.width,
+                        multiple: width_multiple,
+                        format: desc.format,
+                    },
                 ));
             }
 
-            let mut hal_view_formats = Vec::new();
-            for format in desc.view_formats.iter() {
-                if desc.format == *format {
-                    continue;
-                }
-                if desc.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
-                    return Err(CreateTextureError::InvalidViewFormat(*format, desc.format));
-                }
-                hal_view_formats.push(*format);
+            if !desc.size.height.is_multiple_of(height_multiple) {
+                return Err(CreateTextureError::InvalidDimension(
+                    TextureDimensionError::HeightNotMultipleOf {
+                        height: desc.size.height,
+                        multiple: height_multiple,
+                        format: desc.format,
+                    },
+                ));
             }
-            if !hal_view_formats.is_empty() {
-                device.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
-            }
-
-            let hal_usage = conv::map_texture_usage_for_texture(desc, &format_features);
-
-            let hal_desc = hal::TextureDescriptor {
-                label: desc.label.to_hal(device.instance_flags),
-                size: desc.size,
-                mip_level_count: desc.mip_level_count,
-                sample_count: desc.sample_count,
-                dimension: desc.dimension,
-                format: desc.format,
-                usage: hal_usage,
-                memory_flags: hal::MemoryFlags::empty(),
-                view_formats: hal_view_formats,
-            };
-
-            let raw_texture = unsafe { device.raw().create_texture(&hal_desc) }
-                .map_err(|e| device.handle_hal_error_with_nonfatal_oom(e))?;
-
-            let clear_mode = if hal_usage
-                .intersects(wgt::TextureUses::DEPTH_STENCIL_WRITE | wgt::TextureUses::COLOR_TARGET)
-                && desc.dimension == wgt::TextureDimension::D2
-            {
-                let (is_color, usage) = if desc.format.is_depth_stencil_format() {
-                    (false, wgt::TextureUses::DEPTH_STENCIL_WRITE)
-                } else {
-                    (true, wgt::TextureUses::COLOR_TARGET)
-                };
-
-                let clear_label = hal_label(
-                    Some("(wgpu internal) clear texture view"),
-                    device.instance_flags,
-                );
-
-                let mut clear_views = SmallVec::new();
-                for mip_level in 0..desc.mip_level_count {
-                    for array_layer in 0..desc.size.depth_or_array_layers {
-                        macro_rules! push_clear_view {
-                            ($format:expr, $aspect:expr) => {
-                                let desc = hal::TextureViewDescriptor {
-                                    label: clear_label,
-                                    format: $format,
-                                    dimension: TextureViewDimension::D2,
-                                    usage,
-                                    range: wgt::ImageSubresourceRange {
-                                        aspect: $aspect,
-                                        base_mip_level: mip_level,
-                                        mip_level_count: Some(1),
-                                        base_array_layer: array_layer,
-                                        array_layer_count: Some(1),
-                                    },
-                                };
-                                clear_views.push(ManuallyDrop::new(
-                                    unsafe {
-                                        device
-                                            .raw()
-                                            .create_texture_view(raw_texture.as_ref(), &desc)
-                                    }
-                                    .map_err(|e| device.handle_hal_error(e))?,
-                                ));
-                            };
-                        }
-
-                        if let Some(planes) = desc.format.planes() {
-                            for plane in 0..planes {
-                                let aspect = wgt::TextureAspect::from_plane(plane).unwrap();
-                                let format = desc.format.aspect_specific_format(aspect).unwrap();
-                                push_clear_view!(format, aspect);
-                            }
-                        } else {
-                            push_clear_view!(desc.format, wgt::TextureAspect::All);
-                        }
-                    }
-                }
-                resource::TextureClearMode::RenderPass {
-                    clear_views,
-                    is_color,
-                }
-            } else {
-                resource::TextureClearMode::BufferCopy
-            };
-
-            let texture = Texture::new(
-                device,
-                resource::TextureInner::Native { raw: raw_texture },
-                hal_usage,
-                desc,
-                format_features,
-                clear_mode,
-                true,
-            );
-
-            let texture = Arc::new(texture);
-
-            device
-                .trackers
-                .lock()
-                .textures
-                .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
-
-            Ok(texture)
         }
 
-        let (texture, error) = match create(self, desc) {
+        if desc
+            .usage
+            .contains(wgt::TextureUsages::TRANSIENT_ATTACHMENT)
+        {
+            if desc.usage
+                != (wgt::TextureUsages::TRANSIENT_ATTACHMENT
+                    | wgt::TextureUsages::RENDER_ATTACHMENT)
+            {
+                return Err(CreateTextureError::InvalidTransientTextureUsage(desc.usage));
+            }
+
+            if desc.mip_level_count != 1 {
+                return Err(CreateTextureError::InvalidTransientTextureMipLevelCount(
+                    desc.mip_level_count,
+                ));
+            }
+
+            if desc.size.depth_or_array_layers != 1 {
+                return Err(CreateTextureError::InvalidTransientTextureLayerCount(
+                    desc.size.depth_or_array_layers,
+                ));
+            }
+
+            if !desc.view_formats.is_empty() {
+                return Err(CreateTextureError::InvalidTransientTextureViewFormats);
+            }
+        }
+
+        let format_features = self
+            .describe_format_features(desc.format)
+            .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+
+        if desc.sample_count > 1 {
+            // <https://www.w3.org/TR/2025/CRD-webgpu-20251120/#:~:text=If%20descriptor%2EsampleCount%20%3E%201>
+            //
+            // Note that there are also some checks related to the sample count
+            // in [`conv::check_texture_dimension_size`].
+
+            if desc.mip_level_count != 1 {
+                return Err(CreateTextureError::InvalidMipLevelCount {
+                    requested: desc.mip_level_count,
+                    maximum: 1,
+                });
+            }
+
+            if desc.size.depth_or_array_layers != 1
+                && !self.features.contains(wgt::Features::MULTISAMPLE_ARRAY)
+            {
+                return Err(CreateTextureError::InvalidDimension(
+                    TextureDimensionError::MultisampledDepthOrArrayLayer(
+                        desc.size.depth_or_array_layers,
+                    ),
+                ));
+            }
+
+            if desc.usage.contains(wgt::TextureUsages::STORAGE_BINDING) {
+                return Err(CreateTextureError::InvalidMultisampledStorageBinding);
+            }
+
+            if !desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                return Err(CreateTextureError::MultisampledNotRenderAttachment);
+            }
+
+            if !format_features.flags.intersects(
+                wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4
+                    | wgt::TextureFormatFeatureFlags::MULTISAMPLE_X2
+                    | wgt::TextureFormatFeatureFlags::MULTISAMPLE_X8
+                    | wgt::TextureFormatFeatureFlags::MULTISAMPLE_X16,
+            ) {
+                return Err(CreateTextureError::InvalidMultisampledFormat(desc.format));
+            }
+
+            if !format_features
+                .flags
+                .sample_count_supported(desc.sample_count)
+            {
+                return Err(CreateTextureError::InvalidSampleCount(
+                    desc.sample_count,
+                    desc.format,
+                    desc.format
+                        .guaranteed_format_features(self.features)
+                        .flags
+                        .supported_sample_counts(),
+                    self.adapter
+                        .get_texture_format_features(desc.format)
+                        .flags
+                        .supported_sample_counts(),
+                ));
+            };
+        }
+
+        let missing_allowed_usages = match desc.format.planes() {
+            Some(planes) => {
+                let mut planes_usages = wgt::TextureUsages::all();
+                for plane in 0..planes {
+                    let aspect = wgt::TextureAspect::from_plane(plane).unwrap();
+                    let format = desc.format.aspect_specific_format(aspect).unwrap();
+                    let format_features = self
+                        .describe_format_features(format)
+                        .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+
+                    planes_usages &= format_features.allowed_usages;
+                }
+
+                desc.usage - planes_usages
+            }
+            None => desc.usage - format_features.allowed_usages,
+        };
+
+        if !missing_allowed_usages.is_empty() {
+            // detect downlevel incompatibilities
+            let wgpu_allowed_usages = desc
+                .format
+                .guaranteed_format_features(self.features)
+                .allowed_usages;
+            let wgpu_missing_usages = desc.usage - wgpu_allowed_usages;
+            return Err(CreateTextureError::InvalidFormatUsages(
+                missing_allowed_usages,
+                desc.format,
+                wgpu_missing_usages.is_empty(),
+            ));
+        }
+
+        let mut hal_view_formats = Vec::new();
+        for format in desc.view_formats.iter() {
+            if desc.format == *format {
+                continue;
+            }
+            if desc.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
+                return Err(CreateTextureError::InvalidViewFormat(*format, desc.format));
+            }
+            hal_view_formats.push(*format);
+        }
+        if !hal_view_formats.is_empty() {
+            self.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
+        }
+
+        let hal_usage = conv::map_texture_usage_for_texture(desc, &format_features);
+
+        let hal_desc = hal::TextureDescriptor {
+            label: desc.label.to_hal(self.instance_flags),
+            size: desc.size,
+            mip_level_count: desc.mip_level_count,
+            sample_count: desc.sample_count,
+            dimension: desc.dimension,
+            format: desc.format,
+            usage: hal_usage,
+            memory_flags: hal::MemoryFlags::empty(),
+            view_formats: hal_view_formats,
+        };
+
+        let raw_texture = unsafe { self.raw().create_texture(&hal_desc) }
+            .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
+
+        let clear_mode = if hal_usage
+            .intersects(wgt::TextureUses::DEPTH_STENCIL_WRITE | wgt::TextureUses::COLOR_TARGET)
+            && desc.dimension == wgt::TextureDimension::D2
+        {
+            let (is_color, usage) = if desc.format.is_depth_stencil_format() {
+                (false, wgt::TextureUses::DEPTH_STENCIL_WRITE)
+            } else {
+                (true, wgt::TextureUses::COLOR_TARGET)
+            };
+
+            let clear_label = hal_label(
+                Some("(wgpu internal) clear texture view"),
+                self.instance_flags,
+            );
+
+            let mut clear_views = SmallVec::new();
+            for mip_level in 0..desc.mip_level_count {
+                for array_layer in 0..desc.size.depth_or_array_layers {
+                    macro_rules! push_clear_view {
+                        ($format:expr, $aspect:expr) => {
+                            let desc = hal::TextureViewDescriptor {
+                                label: clear_label,
+                                format: $format,
+                                dimension: TextureViewDimension::D2,
+                                usage,
+                                range: wgt::ImageSubresourceRange {
+                                    aspect: $aspect,
+                                    base_mip_level: mip_level,
+                                    mip_level_count: Some(1),
+                                    base_array_layer: array_layer,
+                                    array_layer_count: Some(1),
+                                },
+                            };
+                            clear_views.push(ManuallyDrop::new(
+                                unsafe {
+                                    self.raw().create_texture_view(raw_texture.as_ref(), &desc)
+                                }
+                                .map_err(|e| self.handle_hal_error(e))?,
+                            ));
+                        };
+                    }
+
+                    if let Some(planes) = desc.format.planes() {
+                        for plane in 0..planes {
+                            let aspect = wgt::TextureAspect::from_plane(plane).unwrap();
+                            let format = desc.format.aspect_specific_format(aspect).unwrap();
+                            push_clear_view!(format, aspect);
+                        }
+                    } else {
+                        push_clear_view!(desc.format, wgt::TextureAspect::All);
+                    }
+                }
+            }
+            resource::TextureClearMode::RenderPass {
+                clear_views,
+                is_color,
+            }
+        } else {
+            resource::TextureClearMode::BufferCopy
+        };
+
+        let texture = Texture::new(
+            self,
+            resource::TextureInner::Native { raw: raw_texture },
+            hal_usage,
+            desc,
+            format_features,
+            clear_mode,
+            true,
+        );
+
+        let texture = Arc::new(texture);
+
+        self.trackers
+            .lock()
+            .textures
+            .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
+
+        Ok(texture)
+    }
+
+    pub fn create_texture(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+    ) -> (Arc<Texture>, Option<resource::CreateTextureError>) {
+        let (texture, error) = match self.create_texture_inner(desc) {
             Ok(texture) => (texture, None),
             Err(e) => {
                 let texture = Texture::invalid(self, desc);
