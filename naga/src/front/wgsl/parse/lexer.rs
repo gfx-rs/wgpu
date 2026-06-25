@@ -106,6 +106,20 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
     input.split_at(pos)
 }
 
+fn find_string_literal_end(input: &str) -> Option<usize> {
+    let mut escaped = false;
+    for (index, c) in input.char_indices() {
+        if escaped {
+            escaped = false;
+        } else if c == '\\' {
+            escaped = true;
+        } else if c == '"' {
+            return Some(index);
+        }
+    }
+    None
+}
+
 struct UnclosedCandidate {
     index: usize,
     depth: usize,
@@ -273,17 +287,14 @@ fn consume_token(
         None => return (Token::End, ""),
     };
     match cur {
-        '"' => {
-            // Find the next quote in the remaining string
-            match chars.as_str().find('"') {
-                Some(len) => {
-                    let content = &chars.as_str()[..len];
-                    let rest = &chars.as_str()[len + 1..];
-                    (Token::String(content), rest)
-                }
-                None => (Token::Unknown('"'), chars.as_str()),
+        '"' => match find_string_literal_end(chars.as_str()) {
+            Some(len) => {
+                let content = &chars.as_str()[..len];
+                let rest = &chars.as_str()[len + 1..];
+                (Token::String(content), rest)
             }
-        }
+            None => (Token::Unknown('"'), chars.as_str()),
+        },
         ':' | ';' | ',' => (Token::Separator(cur), chars.as_str()),
         '.' => {
             let og_chars = chars.as_str();
@@ -978,6 +989,22 @@ fn test_tokens() {
     sub_test("No¾", &[Token::Word("No"), Token::Unknown('¾')]);
     sub_test("No好", &[Token::Word("No好")]);
     sub_test("_No", &[Token::Word("_No")]);
+    sub_test(
+        r#""debug \"value\": %d", next"#,
+        &[
+            Token::String(r#"debug \"value\": %d"#),
+            Token::Separator(','),
+            Token::Word("next"),
+        ],
+    );
+    sub_test(
+        r#""debug\\", next"#,
+        &[
+            Token::String(r#"debug\\"#),
+            Token::Separator(','),
+            Token::Word("next"),
+        ],
+    );
 
     sub_test_with_and_without_doc_comments(
         "*/*/***/*//=/*****//",

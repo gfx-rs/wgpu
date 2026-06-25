@@ -236,8 +236,6 @@ pub enum FunctionError {
     MismatchedPayloadType(Handle<crate::Type>, Handle<crate::Type>),
     #[error("The payload passed to `traceRay` must be a pointer directly to a global variable")]
     PayloadPointerNotGlobal,
-    #[error("Expression {0:?} is used before it is defined/emitted")]
-    InvalidExpression(Handle<crate::Expression>),
     #[error("Argument {0:?} for `debugPrintf` must be a supported scalar type")]
     InvalidDebugPrintfArgument(Handle<crate::Expression>),
 }

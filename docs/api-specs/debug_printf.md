@@ -12,6 +12,12 @@ This is a debugging extension and is not part of core WebGPU.
   - Vulkan with `VK_KHR_shader_non_semantic_info` support.
 
 On Vulkan, `debugPrintf` output is produced through the validation layer debug-printf path. It is not enabled when GPU-assisted validation is enabled, because the two validation features are mutually exclusive.
+To receive Vulkan `debugPrintf` output:
+
+- Install the Vulkan SDK.
+- Request `InstanceFlags::VALIDATION`.
+- Do not request `InstanceFlags::GPU_ASSISTED_VALIDATION`.
+- Listen for log messages at the `Info` level.
 
 ## WGSL Syntax
 

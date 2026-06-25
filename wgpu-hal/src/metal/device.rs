@@ -1,5 +1,5 @@
 use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
-use core::{mem::align_of, ptr::NonNull};
+use core::{mem::align_of, ptr::NonNull, sync::atomic};
 
 use bytemuck::TransparentWrapper;
 use objc2::{

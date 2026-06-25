@@ -74,11 +74,6 @@ impl crate::Adapter for super::Adapter {
         _memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         autoreleasepool(|_| {
-            let queue = self
-                .shared
-                .device
-                .newCommandQueueWithMaxCommandBufferCount(MAX_COMMAND_BUFFERS)
-                .unwrap();
             let device = &self.shared.device;
 
             let cq_desc = MTLCommandQueueDescriptor::new();
@@ -115,6 +110,8 @@ impl crate::Adapter for super::Adapter {
                     unsafe { log_state.addLogHandler(&handler) };
                 }
             }
+
+            let queue = device.newCommandQueueWithDescriptor(&cq_desc).unwrap();
 
             // Acquiring the meaning of timestamp ticks is hard with Metal!
             // The only thing there is a method correlating cpu & gpu timestamps (`device.sample_timestamps`).

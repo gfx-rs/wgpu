@@ -33,9 +33,8 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use std::sync::OnceLock;
-
 use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
+use std::sync::OnceLock;
 
 use bitflags::bitflags;
 use hashbrown::HashMap;
