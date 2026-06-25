@@ -2,20 +2,29 @@ import { chromium } from "playwright";
 import express from "express";
 import path from "path";
 
+const PORT = 3000;
+const TIMEOUT = 10000;
+const BASE_URL = `http://127.0.0.1:${PORT}`;
+
 const app = express();
-const port = 3000;
 
-const browser = await chromium.launch({
-  headless: process.argv.includes("--headless"),
-  // Playwright >=1.59 sets this flag automatically, but listing
-  // it since when this flag is not passed, it causes confusing errors
-  args: ["--enable-unsafe-swiftshader"],
-});
+async function init() {
+  const browser = await chromium.launch({
+    headless: process.argv.includes("--headless"),
+    // Playwright >=1.59 sets this flag automatically, but listing
+    // it since when this flag is not passed, it causes confusing errors
+    args: ["--enable-unsafe-swiftshader"],
+  });
 
-const BASE_URL = "http://127.0.0.1:3000";
+  let context = await browser.newContext();
+  context.setDefaultTimeout(TIMEOUT);
+  return context;
+}
+
+let context = await init();
 
 app.get("/gpu_report", async (req, res) => {
-  const page = await browser.newPage();
+  const page = await context.newPage();
   let params = new URL(req.url, BASE_URL).searchParams;
   let wasm = params.get("wasm");
 
@@ -34,10 +43,12 @@ app.get("/gpu_report", async (req, res) => {
     .then((report) => {
       res.status(200).send(report.toString());
     });
+
+  await page.close();
 });
 
 app.get("/run_test", async (req, res) => {
-  const page = await browser.newPage();
+  const page = await context.newPage();
   let params = new URL(req.url, BASE_URL).searchParams;
   let wasm = params.get("wasm");
   let name = params.get("name");
@@ -68,6 +79,6 @@ app.get("/run_test", async (req, res) => {
 
 app.use("/", express.static(path.join(import.meta.dirname, "../dist")));
 
-app.listen(port, () => {
+app.listen(PORT, () => {
   console.log(`WASM test server running at http://127.0.0.1:3000`);
 });
