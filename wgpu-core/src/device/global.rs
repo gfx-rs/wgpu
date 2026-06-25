@@ -207,7 +207,17 @@ impl Global {
     ) {
         let fid = self.hub.textures.prepare(id_in);
         let device = self.hub.devices.get(device_id);
-        fid.assign(Arc::new(resource::Texture::dummy(&device, desc)));
+        let texture = Arc::new(resource::Texture::invalid(&device, desc));
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *device.trace.lock() {
+            use crate::device::trace::IntoTrace as _;
+
+            trace.add(trace::Action::CreateTexture(
+                texture.to_trace(),
+                desc.clone(),
+            ));
+        }
+        fid.assign(texture);
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -297,18 +307,6 @@ impl Global {
 
         let (texture, error) = device.create_texture(desc);
 
-        // TODO: we should probably move this inside the function
-        // also we are now tracing also invalid textures
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *device.trace.lock() {
-            use crate::device::trace::IntoTrace as _;
-
-            trace.add(trace::Action::CreateTexture(
-                texture.to_trace(),
-                desc.clone(),
-            ));
-        }
-
         let id = fid.assign(texture);
         api_log!("Device::create_texture({desc:?}) -> {id:?}");
 
@@ -360,7 +358,7 @@ impl Global {
             return (id, None);
         };
 
-        let id = fid.assign(Arc::new(resource::Texture::dummy(&device, desc)));
+        let id = fid.assign(Arc::new(resource::Texture::invalid(&device, desc)));
         (id, Some(error))
     }
 

@@ -1373,7 +1373,7 @@ impl Device {
         }
     }
 
-    pub fn create_texture_inner(
+    fn create_texture_inner(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
@@ -1752,13 +1752,23 @@ impl Device {
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
     ) -> (Arc<Texture>, Option<resource::CreateTextureError>) {
-        match self.create_texture_inner(desc) {
+        let (texture, error) = match self.create_texture_inner(desc) {
             Ok(texture) => (texture, None),
             Err(e) => {
-                let texture = Texture::dummy(self, desc);
+                let texture = Texture::invalid(self, desc);
                 (Arc::new(texture), Some(e))
             }
+        };
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace::IntoTrace as _;
+
+            trace.add(trace::Action::CreateTexture(
+                texture.to_trace(),
+                desc.clone(),
+            ));
         }
+        (texture, error)
     }
 
     pub fn create_texture_view(

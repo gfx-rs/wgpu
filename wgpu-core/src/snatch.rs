@@ -122,13 +122,6 @@ impl<T> Snatchable2<T> {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn empty() -> Self {
-        SnatchableInner {
-            value: UnsafeCell::new(DestructibleResourceState::Destroyed),
-        }
-    }
-
     /// Get read access to the value. Requires a the snatchable lock's read guard.
     pub fn get<'a>(&'a self, _guard: &'a SnatchGuard) -> DestructibleResourceState<&'a T> {
         unsafe { (*self.value.get()).as_ref() }

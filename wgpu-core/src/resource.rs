@@ -1407,7 +1407,7 @@ impl Texture {
         }
     }
 
-    pub(crate) fn dummy(device: &Arc<Device>, desc: &TextureDescriptor) -> Self {
+    pub(crate) fn invalid(device: &Arc<Device>, desc: &TextureDescriptor) -> Self {
         Texture {
             inner: Snatchable2::invalid(),
             device: device.clone(),
