@@ -3094,10 +3094,7 @@ impl crate::Adapter for super::Adapter {
         // on mac, so this is fine.
         #[cfg(unix)]
         {
-            let mut timespec = libc::timespec {
-                tv_sec: 0,
-                tv_nsec: 0,
-            };
+            let mut timespec = libc::timespec::default();
             unsafe {
                 libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut timespec);
             }

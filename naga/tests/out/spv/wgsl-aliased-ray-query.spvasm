@@ -213,7 +213,7 @@ OpStore %163 %153
 OpStore %165 %154
 %166 = OpIEqual  %10  %143 %30
 OpSelectionMerge %168 None
-OpBranchConditional %145 %167 %168
+OpBranchConditional %166 %167 %168
 %167 = OpLabel
 %169 = OpRayQueryGetIntersectionTKHR  %5  %127 %35
 %170 = OpAccessChain  %36  %131 %30

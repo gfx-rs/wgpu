@@ -1259,6 +1259,8 @@ impl Queue {
             );
         }
 
+        pending_writes.insert_texture(&dst);
+
         Ok(())
     }
 
