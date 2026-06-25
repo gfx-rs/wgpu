@@ -187,8 +187,8 @@ pub fn map_vk_color_space(color_space: vk::ColorSpaceKHR) -> Option<wgt::Surface
         vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT => Scs::ExtendedSrgbLinear,
         vk::ColorSpaceKHR::EXTENDED_SRGB_NONLINEAR_EXT => Scs::ExtendedSrgb,
         vk::ColorSpaceKHR::DISPLAY_P3_NONLINEAR_EXT => Scs::DisplayP3,
-        vk::ColorSpaceKHR::HDR10_ST2084_EXT => Scs::Hdr10,
-        vk::ColorSpaceKHR::HDR10_HLG_EXT => Scs::Hlg,
+        vk::ColorSpaceKHR::HDR10_ST2084_EXT => Scs::Bt2100Pq,
+        vk::ColorSpaceKHR::HDR10_HLG_EXT => Scs::Bt2100Hlg,
         _ => return None,
     })
 }
@@ -201,8 +201,8 @@ pub fn map_surface_color_space(color_space: wgt::SurfaceColorSpace) -> vk::Color
         Scs::ExtendedSrgbLinear => vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT,
         Scs::ExtendedSrgb => vk::ColorSpaceKHR::EXTENDED_SRGB_NONLINEAR_EXT,
         Scs::DisplayP3 => vk::ColorSpaceKHR::DISPLAY_P3_NONLINEAR_EXT,
-        Scs::Hdr10 => vk::ColorSpaceKHR::HDR10_ST2084_EXT,
-        Scs::Hlg => vk::ColorSpaceKHR::HDR10_HLG_EXT,
+        Scs::Bt2100Pq => vk::ColorSpaceKHR::HDR10_ST2084_EXT,
+        Scs::Bt2100Hlg => vk::ColorSpaceKHR::HDR10_HLG_EXT,
         Scs::ExtendedDisplayP3 => {
             unreachable!("`ExtendedDisplayP3` is never reported in the Vulkan surface capabilities")
         }
@@ -1109,6 +1109,6 @@ mod tests {
         })
         .unwrap();
         assert_eq!(format, wgt::TextureFormat::Rgb10a2Unorm);
-        assert_eq!(color_space, wgt::SurfaceColorSpace::Hdr10);
+        assert_eq!(color_space, wgt::SurfaceColorSpace::Bt2100Pq);
     }
 }

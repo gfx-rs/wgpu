@@ -1435,8 +1435,12 @@ fn map_surface_color_space(
     match color_space {
         Scs::Srgb => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709,
         Scs::ExtendedSrgbLinear => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709,
-        Scs::Hdr10 => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020,
-        Scs::Auto | Scs::DisplayP3 | Scs::Hlg | Scs::ExtendedSrgb | Scs::ExtendedDisplayP3 => {
+        Scs::Bt2100Pq => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020,
+        Scs::Auto
+        | Scs::DisplayP3
+        | Scs::Bt2100Hlg
+        | Scs::ExtendedSrgb
+        | Scs::ExtendedDisplayP3 => {
             unreachable!("`{color_space:?}` is never reported in the DX12 surface capabilities")
         }
     }
@@ -1627,16 +1631,23 @@ impl crate::Surface for Surface {
             crate::SurfaceError::Other("IDXGISwapChain3::CheckColorSpaceSupport")
         })?;
         // The binding hands back the flags as a raw `u32`; wrap it so we can check
-        // by name. `_PRESENT` means the current display can show this color space:
+        // by name. `_PRESENT` means the current display can show this color space
+        // directly. A missing flag is *not* a failure: Windows composites in scRGB
+        // and tone-maps the color space down to the output, so `SetColorSpace1`
+        // still presents correctly (the MS docs note `CheckColorSpaceSupport` may
+        // return false in this case). Warn instead of rejecting, so an app can
+        // configure e.g. BT.2100 PQ on an SDR output and let the compositor map it:
         // https://learn.microsoft.com/windows/win32/api/dxgi1_4/nf-dxgi1_4-idxgiswapchain3-checkcolorspacesupport
         let support = Dxgi::DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG(support as i32);
         if !support.contains(Dxgi::DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT) {
-            return Err(crate::SurfaceError::Other(
-                "swapchain does not support the requested color space",
-            ));
+            log::warn!(
+                "Swapchain reports color space {:?} is not directly presentable on the \
+                 current output; configuring it anyway (the compositor will tone-map).",
+                config.color_space
+            );
         }
         // SAFETY: `swap_chain` is a live `IDXGISwapChain3`; `color_space` is a
-        // valid `DXGI_COLOR_SPACE_TYPE` whose support was confirmed just above.
+        // valid `DXGI_COLOR_SPACE_TYPE`.
         unsafe { swap_chain.SetColorSpace1(color_space) }.map_err(|err| {
             log::error!("SetColorSpace1 failed: {err}");
             crate::SurfaceError::Other("IDXGISwapChain3::SetColorSpace1")

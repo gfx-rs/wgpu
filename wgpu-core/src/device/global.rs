@@ -31,7 +31,7 @@ use crate::{
 
 use wgt::{BufferAddress, TextureFormat};
 
-use super::UserClosures;
+use super::{surface_config, UserClosures};
 
 impl Global {
     pub fn adapter_is_surface_supported(
@@ -57,18 +57,19 @@ impl Global {
 
             let usages = conv::map_texture_usage_from_hal(hal_caps.usage);
 
-            // To allow color-space-unaware applications to function correctly,
-            // `SurfaceCapabilities::formats` must consist of formats which can
-            // accept sRGB color (either encoded or linear). Therefore, we filter
-            // out all formats which support only color spaces that are not
-            // sRGB's color space (e.g. HDR10).
-            let auto_configurable =
-                wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR;
+            // `SurfaceCapabilities::formats` lists only the formats a
+            // color-space-unaware application can configure via
+            // `SurfaceColorSpace::Auto`, i.e. those for which `Auto` resolves to a
+            // concrete color space. (The full `format_capabilities` still reports
+            // every color space, including HDR ones, for explicit opt-in.)
             Ok(wgt::SurfaceCapabilities {
                 formats: hal_caps
                     .formats
                     .iter()
-                    .filter(|fc| fc.color_spaces.intersects(auto_configurable))
+                    .filter(|fc| {
+                        surface_config::resolve_auto_color_space(fc.format, fc.color_spaces)
+                            .is_some()
+                    })
                     .map(|fc| fc.format)
                     .collect(),
                 format_capabilities: hal_caps.formats,

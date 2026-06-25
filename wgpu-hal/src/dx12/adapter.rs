@@ -11,7 +11,7 @@ use windows::{
             SetupDiGetDeviceRegistryPropertyW, DIGCF_PRESENT, GUID_DEVCLASS_DISPLAY, HDEVINFO,
             SPDRP_ADDRESS, SPDRP_BUSNUMBER, SPDRP_HARDWAREID, SP_DEVINFO_DATA,
         },
-        Foundation::{GetLastError, ERROR_NO_MORE_ITEMS, HWND},
+        Foundation::{GetLastError, ERROR_NO_MORE_ITEMS},
         Graphics::{Direct3D, Direct3D12, Dxgi},
         UI::WindowsAndMessaging,
     },
@@ -1041,19 +1041,6 @@ impl super::Adapter {
             },
         })
     }
-
-    /// Returns whether the output (monitor) that `wnd_handle` is currently on
-    /// has HDR enabled, i.e. its advanced color mode is HDR10 (PQ / BT.2020).
-    ///
-    /// Returns `false` if the output cannot be identified or queried. The DXGI
-    /// output is located via [`auxil::dxgi::hdr::output_desc1_for_window`].
-    fn is_hdr_output_for_window(wnd_handle: HWND) -> bool {
-        auxil::dxgi::hdr::output_desc1_for_window(wnd_handle)
-            .map(|desc1| {
-                desc1.ColorSpace == Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
-            })
-            .unwrap_or(false)
-    }
 }
 
 impl crate::Adapter for super::Adapter {
@@ -1322,26 +1309,21 @@ impl crate::Adapter for super::Adapter {
             present_modes.push(wgt::PresentMode::Immediate);
         }
 
-        let hdr_active = match surface.target {
-            SurfaceTarget::WndHandle(wnd_handle)
-            | SurfaceTarget::VisualFromWndHandle {
-                handle: wnd_handle, ..
-            } => Self::is_hdr_output_for_window(wnd_handle),
-            // Composition targets have no monitor identity, so there is no
-            // output whose HDR state we could query.
-            SurfaceTarget::Visual(_)
-            | SurfaceTarget::SurfaceHandle(_)
-            | SurfaceTarget::SwapChainPanel(_) => false,
-        };
-
         Some(crate::SurfaceCapabilities {
             // `Surface::configure` applies the requested color space with
             // `IDXGISwapChain3::SetColorSpace1`. fp16 buffers keep DXGI's
             // scRGB interpretation (`DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709`)
-            // and `Rgb10a2Unorm` additionally supports HDR10 (PQ) when the
-            // window's output has HDR enabled. Display-P3 and HLG are never
-            // reported: DXGI has no RGB HLG swapchain color space, and P3
-            // isn't a DXGI swapchain color space.
+            // and `Rgb10a2Unorm` additionally supports BT.2100 PQ (HDR10).
+            //
+            // These color spaces are advertised unconditionally, not gated on
+            // whether the output is currently in HDR mode: Windows always
+            // composites in scRGB and tone-maps PQ down to an SDR output, so the
+            // color space is configurable regardless, and `CheckColorSpaceSupport`
+            // returning false does not mean it won't present. Whether HDR is
+            // actually *visible* is a separate, live question (the upcoming
+            // display-HDR query, #9739), not a configuration gate. Display-P3 and
+            // HLG are never reported: DXGI has no RGB HLG swapchain color space,
+            // and P3 isn't a DXGI swapchain color space.
             formats: [
                 wgt::TextureFormat::Bgra8UnormSrgb,
                 wgt::TextureFormat::Bgra8Unorm,
@@ -1356,8 +1338,8 @@ impl crate::Adapter for super::Adapter {
                     wgt::TextureFormat::Rgba16Float => {
                         wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR
                     }
-                    wgt::TextureFormat::Rgb10a2Unorm if hdr_active => {
-                        wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::HDR10
+                    wgt::TextureFormat::Rgb10a2Unorm => {
+                        wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::BT2100_PQ
                     }
                     _ => wgt::SurfaceColorSpaces::SRGB,
                 },

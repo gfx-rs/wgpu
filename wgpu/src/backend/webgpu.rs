@@ -4151,11 +4151,11 @@ impl dispatch::SurfaceInterface for WebSurface {
                 mapped.set_tone_mapping(&tone_mapping);
             }
             cs @ (wgt::SurfaceColorSpace::ExtendedSrgbLinear
-            | wgt::SurfaceColorSpace::Hdr10
-            | wgt::SurfaceColorSpace::Hlg) => {
+            | wgt::SurfaceColorSpace::Bt2100Pq
+            | wgt::SurfaceColorSpace::Bt2100Hlg) => {
                 // Not representable on a WebGPU canvas: `ExtendedSrgbLinear`
                 // needs a linear-transfer canvas (WebGPU has none), and
-                // `Hdr10`/`Hlg` need PQ/HLG canvas signaling (browsers expose
+                // `Bt2100Pq`/`Bt2100Hlg` need PQ/HLG canvas signaling (browsers expose
                 // none). `get_capabilities` never advertises these, but an app
                 // may still request one without checking; record the failure and
                 // report the surface as lost (as for a rejected `configure`)

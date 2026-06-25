@@ -132,13 +132,13 @@ impl crate::Surface for super::Surface {
             wgt::SurfaceColorSpace::DisplayP3 => {
                 Some(unsafe { objc2_core_graphics::kCGColorSpaceDisplayP3 })
             }
-            wgt::SurfaceColorSpace::Hdr10 | wgt::SurfaceColorSpace::Hlg => {
+            wgt::SurfaceColorSpace::Bt2100Pq | wgt::SurfaceColorSpace::Bt2100Hlg => {
                 // The ITUR_2100 color space constants require macOS 11.0/iOS 14.0;
-                // `surface_capabilities` only reports HDR10/HLG on those OS versions.
+                // `surface_capabilities` only reports BT.2100 PQ/HLG on those OS versions.
                 if !available!(macos = 11.0, ios = 14.0, tvos = 14.0, visionos = 1.0) {
-                    unreachable!("HDR10/HLG color spaces are only reported on macOS 11.0+/iOS 14.0+/tvOS 14.0+");
+                    unreachable!("BT.2100 PQ/HLG color spaces are only reported on macOS 11.0+/iOS 14.0+/tvOS 14.0+");
                 }
-                Some(if config.color_space == wgt::SurfaceColorSpace::Hdr10 {
+                Some(if config.color_space == wgt::SurfaceColorSpace::Bt2100Pq {
                     unsafe { objc2_core_graphics::kCGColorSpaceITUR_2100_PQ }
                 } else {
                     unsafe { objc2_core_graphics::kCGColorSpaceITUR_2100_HLG }

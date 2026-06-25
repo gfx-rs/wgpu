@@ -433,7 +433,8 @@ impl crate::Adapter for super::Adapter {
                 wgt::TextureFormat::Rgba16Float | wgt::TextureFormat::Rgb10a2Unorm
             ) && available!(macos = 11.0, ios = 14.0, tvos = 14.0, visionos = 1.0)
             {
-                color_spaces |= wgt::SurfaceColorSpaces::HDR10 | wgt::SurfaceColorSpaces::HLG;
+                color_spaces |=
+                    wgt::SurfaceColorSpaces::BT2100_PQ | wgt::SurfaceColorSpaces::BT2100_HLG;
             }
             wgt::SurfaceFormatCapabilities {
                 format,

@@ -185,15 +185,15 @@ pub enum CompositeAlphaMode {
 /// *The primaries of each color space form a triangle on the CIE 1931
 /// chromaticity diagram; colors inside it are expressible, colors outside are
 /// not. [`Srgb`](Self::Srgb) uses the [BT.709] gamut;
-/// [`DisplayP3`](Self::DisplayP3) and [`Hdr10`](Self::Hdr10)'s [BT.2020] are
-/// progressively wider. All share the [D65] white point.*
+/// [`DisplayP3`](Self::DisplayP3) and [`Bt2100Pq`](Self::Bt2100Pq)'s [BT.2020]
+/// are progressively wider. All share the [D65] white point.*
 ///
 #[doc = include_str!("sdr_hdr_range.svg")]
 ///
 /// *`0.0` is black and `1.0` is SDR reference white. [`Srgb`](Self::Srgb) and
 /// [`DisplayP3`](Self::DisplayP3) clamp above `1.0`; the extended-range and HDR
 /// color spaces drive values above `1.0` as brighter-than-SDR output, up to the
-/// display's headroom (query it via `DisplayHdrInfo::tone_map_headroom`).*
+/// display's headroom.*
 ///
 /// # Extended-range variants: linear vs encoded
 ///
@@ -218,8 +218,8 @@ pub enum CompositeAlphaMode {
 /// [`ExtendedDisplayP3`](Self::ExtendedDisplayP3) with extended tone mapping.
 /// There is no linear-transfer canvas color space, so
 /// [`ExtendedSrgbLinear`](Self::ExtendedSrgbLinear) (scRGB) is native-only, and
-/// [`Hdr10`](Self::Hdr10) and [`Hlg`](Self::Hlg) are unavailable (browsers
-/// expose no PQ or HLG canvas signaling).
+/// [`Bt2100Pq`](Self::Bt2100Pq) and [`Bt2100Hlg`](Self::Bt2100Hlg) are
+/// unavailable (browsers expose no PQ or HLG canvas signaling).
 ///
 /// [CSS predefined color spaces]: https://www.w3.org/TR/css-color-4/#predefined
 /// [`VkColorSpaceKHR`]: https://registry.khronos.org/vulkan/specs/latest/man/html/VkColorSpaceKHR.html
@@ -324,31 +324,43 @@ pub enum SurfaceColorSpace {
     /// [Display P3]: https://en.wikipedia.org/wiki/DCI-P3#Display_P3
     DisplayP3 = 3,
 
-    /// HDR10: BT.2020 primaries, D65 white point, SMPTE ST 2084 perceptual
-    /// quantizer ([PQ]) transfer function, high dynamic range.
+    /// BT.2100 perceptual quantization (HDR10): BT.2020/2100 primaries, D65 white
+    /// point, SMPTE ST 2084 perceptual quantizer ([PQ]) transfer function, high
+    /// dynamic range.
     ///
-    /// Texel values are interpreted as a PQ-encoded signal whose encoded range
-    /// maps to absolute luminance from 0 to 10,000 nits. The values your shader
-    /// writes to the surface texture must already carry the PQ encoding and the
-    /// BT.709 to BT.2020 gamut conversion; the [HDR surface example] implements
-    /// both. The format is non-sRGB, typically [`TextureFormat::Rgb10a2Unorm`].
+    /// Texel values are interpreted as a PQ-encoded signal whose encoded range,
+    /// `0.0..=1.0`, maps to absolute luminance from 0 to 10,000 nits. The values
+    /// your shader writes to the surface texture must already be in the BT.2020
+    /// gamut and PQ-encoded into that `0.0..=1.0` range; the [HDR surface example]
+    /// shows how. The format is non-sRGB, typically
+    /// [`TextureFormat::Rgb10a2Unorm`].
+    ///
+    /// Commonly known as **HDR10** — though that term additionally implies static
+    /// ST 2086 / MaxCLL mastering metadata, which wgpu does not set; this
+    /// configures only the PQ color space.
     ///
     /// * **Supported on**: Vulkan (where the driver exposes it), DX12 (on
-    ///   `Rgb10a2Unorm` when the output has HDR enabled), and Metal. Unavailable
-    ///   on the browser WebGPU backend (no PQ canvas signaling).
+    ///   `Rgb10a2Unorm`), and Metal. Unavailable on the browser WebGPU backend
+    ///   (no PQ canvas signaling).
     ///
     /// [PQ]: https://en.wikipedia.org/wiki/Perceptual_quantizer
     /// [HDR surface example]: https://github.com/gfx-rs/wgpu/tree/trunk/examples/standalone/03_hdr_surface
-    Hdr10 = 4,
+    Bt2100Pq = 4,
 
-    /// BT.2100 hybrid log-gamma: BT.2020 primaries, D65 white point, [HLG]
+    /// BT.2100 hybrid log-gamma: BT.2020/2100 primaries, D65 white point, [HLG]
     /// (ARIB STD-B67) transfer function, high dynamic range.
     ///
-    /// A relative-luminance HDR signal, primarily used for broadcast content.
-    /// The values your shader writes to the surface texture must already carry
-    /// the HLG OETF and the BT.709 to BT.2020 gamut conversion; the [HDR surface
-    /// example] implements both. The format is non-sRGB, typically
+    /// A relative-luminance HDR signal, primarily used for broadcast content. The
+    /// values your shader writes to the surface texture must already be in the
+    /// BT.2020 gamut and HLG-encoded into `0.0..=1.0`; the [HDR surface example]
+    /// shows how. The format is non-sRGB, typically
     /// [`TextureFormat::Rgb10a2Unorm`].
+    ///
+    /// Unlike [`Bt2100Pq`](Self::Bt2100Pq)'s PQ, the HLG signal is *relative*:
+    /// `1.0` maps to the display's nominal peak luminance rather than a fixed
+    /// absolute level. BT.2100 defines its reference OOTF at a nominal peak of
+    /// 1000 cd/m² (system gamma 1.2); the [HDR surface example] normalizes its
+    /// absolute-nit test pattern onto that 1000-nit nominal peak.
     ///
     /// * **Supported on**: Vulkan (where the driver exposes it) and Metal.
     ///   Unavailable on DX12 and the browser WebGPU backend (no HLG canvas
@@ -356,7 +368,7 @@ pub enum SurfaceColorSpace {
     ///
     /// [HLG]: https://www.itu.int/rec/R-REC-BT.2100
     /// [HDR surface example]: https://github.com/gfx-rs/wgpu/tree/trunk/examples/standalone/03_hdr_surface
-    Hlg = 5,
+    Bt2100Hlg = 5,
 
     /// Extended-range sRGB (encoded): BT.709 primaries, D65 white point, the
     /// **nonlinear sRGB transfer function extended beyond 0.0..=1.0**,
@@ -412,8 +424,8 @@ impl SurfaceColorSpace {
             Self::Srgb => Some(SurfaceColorSpaces::SRGB),
             Self::ExtendedSrgbLinear => Some(SurfaceColorSpaces::EXTENDED_SRGB_LINEAR),
             Self::DisplayP3 => Some(SurfaceColorSpaces::DISPLAY_P3),
-            Self::Hdr10 => Some(SurfaceColorSpaces::HDR10),
-            Self::Hlg => Some(SurfaceColorSpaces::HLG),
+            Self::Bt2100Pq => Some(SurfaceColorSpaces::BT2100_PQ),
+            Self::Bt2100Hlg => Some(SurfaceColorSpaces::BT2100_HLG),
             Self::ExtendedSrgb => Some(SurfaceColorSpaces::EXTENDED_SRGB),
             Self::ExtendedDisplayP3 => Some(SurfaceColorSpaces::EXTENDED_DISPLAY_P3),
         }
@@ -429,16 +441,16 @@ impl SurfaceColorSpace {
     /// space if you need certainty.
     ///
     /// Use this to branch after picking a color space from
-    /// [`SurfaceCapabilities`]: an HDR result is the one whose highlights you
-    /// scale by `DisplayHdrInfo::tone_map_headroom`.
+    /// [`SurfaceCapabilities`]: only an HDR result drives highlights above SDR
+    /// white (`1.0`).
     #[must_use]
     pub fn is_hdr(self) -> bool {
         match self {
             Self::ExtendedSrgbLinear
             | Self::ExtendedSrgb
             | Self::ExtendedDisplayP3
-            | Self::Hdr10
-            | Self::Hlg => true,
+            | Self::Bt2100Pq
+            | Self::Bt2100Hlg => true,
             Self::Auto | Self::Srgb | Self::DisplayP3 => false,
         }
     }
@@ -461,10 +473,10 @@ bitflags::bitflags! {
         const EXTENDED_SRGB_LINEAR = 1 << 1;
         /// [`SurfaceColorSpace::DisplayP3`] is supported.
         const DISPLAY_P3 = 1 << 2;
-        /// [`SurfaceColorSpace::Hdr10`] is supported.
-        const HDR10 = 1 << 3;
-        /// [`SurfaceColorSpace::Hlg`] is supported.
-        const HLG = 1 << 4;
+        /// [`SurfaceColorSpace::Bt2100Pq`] is supported.
+        const BT2100_PQ = 1 << 3;
+        /// [`SurfaceColorSpace::Bt2100Hlg`] is supported.
+        const BT2100_HLG = 1 << 4;
         /// [`SurfaceColorSpace::ExtendedSrgb`] is supported.
         const EXTENDED_SRGB = 1 << 5;
         /// [`SurfaceColorSpace::ExtendedDisplayP3`] is supported.
@@ -482,8 +494,7 @@ pub struct SurfaceFormatCapabilities {
     /// The set of color spaces the surface supports for this format.
     ///
     /// This reports which color spaces the surface can be *configured* with; it
-    /// does not reflect whether the display is currently in HDR mode. For the
-    /// display's live HDR state, see `DisplayHdrInfo`.
+    /// does not reflect whether the display is currently in HDR mode.
     ///
     /// Guaranteed to be non-empty.
     pub color_spaces: SurfaceColorSpaces,
