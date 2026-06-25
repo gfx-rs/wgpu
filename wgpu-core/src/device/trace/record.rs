@@ -1,5 +1,5 @@
 use alloc::{borrow::Cow, string::ToString, sync::Arc, vec::Vec};
-use core::{any::Any, convert::Infallible};
+use core::{any::Any, convert::Infallible, marker::PhantomData};
 use std::io::Write as _;
 
 use crate::{
@@ -173,6 +173,15 @@ impl<T: StorageItem> IntoTrace for Arc<T> {
     fn to_trace(&self) -> Self::Output {
         PointerId::from(self)
     }
+}
+
+/// This will work as expected on heap-allocated types that are not moved around.
+pub(crate) unsafe fn to_trace<T: StorageItem>(t: &T) -> PointerId<T::Marker> {
+    PointerId::PointerId(
+        #[expect(trivial_casts)]
+        core::num::NonZeroUsize::new(t as *const T as usize).unwrap(),
+        PhantomData,
+    )
 }
 
 impl IntoTrace for ArcCommand {

@@ -414,14 +414,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _texture = hub.textures.remove(texture_id);
-        #[cfg(feature = "trace")]
-        {
-            let mut t = _texture.device.trace.lock();
-            if let Some(t) = t.as_mut() {
-                t.add(trace::Action::DropTexture(_texture.to_trace()));
-            }
-        }
+        hub.textures.remove(texture_id);
     }
 
     pub fn texture_create_view(

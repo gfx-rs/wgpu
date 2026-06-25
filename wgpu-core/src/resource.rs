@@ -1487,6 +1487,16 @@ impl Texture {
 
 impl Drop for Texture {
     fn drop(&mut self) {
+        #[cfg(feature = "trace")]
+        {
+            let mut t = self.device.trace.lock();
+            if let Some(t) = t.as_mut() {
+                use crate::device::trace::to_trace;
+
+                // SAFETY: All textures are constructed in Arc => are heap allocated
+                t.add(trace::Action::DropTexture(unsafe { to_trace(self) }));
+            }
+        }
         match *self.clear_mode.write() {
             TextureClearMode::Surface {
                 ref mut clear_view, ..
