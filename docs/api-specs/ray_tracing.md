@@ -55,7 +55,7 @@ This happens on the GPU and can be encoded using [`CommandEncoder::build_acceler
 For [`Blas`]es with triangle geometry, this will copy the triangles out of the vertex buffer (using indexing if
 provided), multiply them by the geometry transform matrix (if provided), and store a representation of this
 somewhere in the structure to be traced against (and computes surrounding objects for sets of triangles, repeating
-the process for opjects of the surrounding objects ect. if the implementation uses a tree-like structure).
+the process for objects of the surrounding objects etc. if the implementation uses a tree-like structure).
 
 For [`Blas`]es with AABB geometry, this will construct object(s) in such a way that all possible rays will generate
 a candidate intersection that would have generated a candidate intersection with the AABBs. Note that this may be
@@ -70,7 +70,7 @@ the underlying functions (e.g. by using `as_hal` functions), you are responsible
 
 Some memory is allocated when building to be "scratch" data (a temporary buffer used by the GPU to store data during
 the build) and instance staging memory (to copy the instances to the GPU). The some of this can be reused for between
-the [`Blas`] and [`Tlas`] builds so in general it is advisable to try and intergrate the builds together. Because
+the [`Blas`] and [`Tlas`] builds so in general it is advisable to try and integrate the builds together. Because
 building is slow, it should be done as few times as possible. For moving geometry (players, particles, etc.), use
 [`PREFER_FAST_BUILD`](https://wgpu.rs/doc/wgpu_hal/struct.AccelerationStructureBuildFlags.html#associatedconstant.PREFER_FAST_BUILD)
 to speed up builds. Updating (performing a partial rebuild) is currently unsupported, but may be implemented in the
@@ -178,7 +178,7 @@ rayQueryTerminate(rq: ptr<function, ray_query>)
 //
 // Depending on what type is hit, different fields will be populated. `RayIntersection::kind` is always populated
 // with the kind of hit.
-// - The following fields are polulated if the closest hit was any object.
+// - The following fields are populated if the closest hit was any object.
 //    - t
 //    - instance_custom_data
 //    - instance_index
@@ -198,7 +198,7 @@ rayQueryGetCommittedIntersection(rq: ptr<function, ray_query<vertex_return>>) ->
 //
 // Depending on what type is hit, different fields will be populated. `RayIntersection::kind` is always populated
 // with the kind of hit.
-// - The following fields are polulated if the closest hit was any object.
+// - The following fields are populated if the closest hit was any object.
 //    - instance_custom_data
 //    - instance_index
 //    - sbt_record_offset
