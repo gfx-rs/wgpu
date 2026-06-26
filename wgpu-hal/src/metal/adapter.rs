@@ -1454,6 +1454,9 @@ impl super::CapabilitiesQuery {
             max_mesh_output_primitives: 256,
             max_mesh_output_layers: self.max_texture_layers as u32,
             max_mesh_multiview_view_count: 0,
+            // unimplemented
+            max_ray_dispatch_count: 0,
+            max_ray_recursion_depth: 0,
         });
 
         crate::Capabilities {
@@ -1470,6 +1473,10 @@ impl super::CapabilitiesQuery {
                 >())
                 .unwrap(),
                 ray_tracing_scratch_buffer_alignment: 1,
+                // Not yet supported
+                ray_tracing_pipeline_group_data_size: 0,
+                ray_tracing_pipeline_group_data_alignment: 0,
+                ray_tracing_pipeline_data_offset_alignment: 0,
             },
             downlevel,
             cooperative_matrix_properties: self.cooperative_matrix_properties(),

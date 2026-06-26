@@ -288,8 +288,9 @@ pub use dynamic::{
     DynAccelerationStructure, DynAcquiredSurfaceTexture, DynAdapter, DynBindGroup,
     DynBindGroupLayout, DynBuffer, DynCommandBuffer, DynCommandEncoder, DynComputePipeline,
     DynDevice, DynExposedAdapter, DynFence, DynInstance, DynOpenDevice, DynPipelineCache,
-    DynPipelineLayout, DynQuerySet, DynQueue, DynRenderPipeline, DynResource, DynSampler,
-    DynShaderModule, DynSurface, DynSurfaceTexture, DynTexture, DynTextureView,
+    DynPipelineLayout, DynQuerySet, DynQueue, DynRayTracingPipeline, DynRenderPipeline,
+    DynResource, DynSampler, DynShaderModule, DynSurface, DynSurfaceTexture, DynTexture,
+    DynTextureView,
 };
 
 #[allow(unused)]
@@ -647,6 +648,7 @@ pub trait Api: Clone + fmt::Debug + Sized + WasmNotSendSync + 'static {
     type ShaderModule: DynShaderModule;
     type RenderPipeline: DynRenderPipeline;
     type ComputePipeline: DynComputePipeline;
+    type RayTracingPipeline: DynRayTracingPipeline;
     type PipelineCache: DynPipelineCache;
 
     type AccelerationStructure: DynAccelerationStructure + 'static;
@@ -1072,6 +1074,24 @@ pub trait Device: WasmNotSendSync {
         >,
     ) -> Result<<Self::A as Api>::ComputePipeline, PipelineError>;
     unsafe fn destroy_compute_pipeline(&self, pipeline: <Self::A as Api>::ComputePipeline);
+
+    #[allow(clippy::type_complexity)]
+    unsafe fn create_ray_tracing_pipeline(
+        &self,
+        desc: &RayTracingPipelineDescriptor<
+            <Self::A as Api>::PipelineLayout,
+            <Self::A as Api>::ShaderModule,
+            <Self::A as Api>::PipelineCache,
+        >,
+    ) -> Result<<Self::A as Api>::RayTracingPipeline, PipelineError>;
+    unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: <Self::A as Api>::RayTracingPipeline);
+    /// Obtain the opaque data from each group, behaves as if group 0 is the ray generation, group 1
+    /// is the miss shader, and group 2.. are the intersection groups.
+    unsafe fn get_raytracing_pipeline_group_data(
+        &self,
+        pipeline: &<Self::A as Api>::RayTracingPipeline,
+        groups: Range<u32>,
+    ) -> Result<Vec<u8>, DeviceError>;
 
     unsafe fn create_pipeline_cache(
         &self,
@@ -1590,10 +1610,15 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// - All prior calls to [`begin_compute_pass`] on this [`CommandEncoder`] must have been followed
     ///   by a call to [`end_compute_pass`].
     ///
+    /// - All prior calls to [`begin_ray_tracing_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_ray_tracing_pass`].
+    ///
     /// [`begin_render_pass`]: CommandEncoder::begin_render_pass
     /// [`begin_compute_pass`]: CommandEncoder::begin_compute_pass
+    /// [`begin_ray_tracing_pass`]: CommandEncoder::begin_ray_tracing_pass
     /// [`end_render_pass`]: CommandEncoder::end_render_pass
     /// [`end_compute_pass`]: CommandEncoder::end_compute_pass
+    /// [`end_ray_tracing_pass`]: CommandEncoder::end_ray_tracing_pass
     unsafe fn begin_render_pass(
         &mut self,
         desc: &RenderPassDescriptor<<Self::A as Api>::QuerySet, <Self::A as Api>::TextureView>,
@@ -1710,10 +1735,15 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// - All prior calls to [`begin_compute_pass`] on this [`CommandEncoder`] must have been followed
     ///   by a call to [`end_compute_pass`].
     ///
+    /// - All prior calls to [`begin_ray_tracing_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_ray_tracing_pass`].
+    ///
     /// [`begin_render_pass`]: CommandEncoder::begin_render_pass
     /// [`begin_compute_pass`]: CommandEncoder::begin_compute_pass
+    /// [`begin_ray_tracing_pass`]: CommandEncoder::begin_ray_tracing_pass
     /// [`end_render_pass`]: CommandEncoder::end_render_pass
     /// [`end_compute_pass`]: CommandEncoder::end_compute_pass
+    /// [`end_ray_tracing_pass`]: CommandEncoder::end_ray_tracing_pass
     unsafe fn begin_compute_pass(
         &mut self,
         desc: &ComputePassDescriptor<<Self::A as Api>::QuerySet>,
@@ -1737,6 +1767,58 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         &mut self,
         buffer: &<Self::A as Api>::Buffer,
         offset: wgt::BufferAddress,
+    );
+
+    /// Begin a new ray tracing pass, clearing all active bindings.
+    ///
+    /// This clears any bindings established by the following calls:
+    ///
+    /// - [`set_bind_group`](CommandEncoder::set_bind_group)
+    /// - [`set_immediates`](CommandEncoder::set_immediates)
+    /// - [`begin_query`](CommandEncoder::begin_query)
+    /// - [`set_ray_tracing_pipeline`](CommandEncoder::set_compute_pipeline)
+    ///
+    /// # Safety
+    ///
+    /// - All prior calls to [`begin_render_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_render_pass`].
+    ///
+    /// - All prior calls to [`begin_compute_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_compute_pass`].
+    ///
+    /// - All prior calls to [`begin_ray_tracing_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_ray_tracing_pass`].
+    ///
+    /// [`begin_render_pass`]: CommandEncoder::begin_render_pass
+    /// [`begin_compute_pass`]: CommandEncoder::begin_compute_pass
+    /// [`begin_ray_tracing_pass`]: CommandEncoder::begin_ray_tracing_pass
+    /// [`end_render_pass`]: CommandEncoder::end_render_pass
+    /// [`end_compute_pass`]: CommandEncoder::end_compute_pass
+    /// [`end_ray_tracing_pass`]: CommandEncoder::end_ray_tracing_pass
+    unsafe fn begin_ray_tracing_pass(&mut self, desc: &RayTracingPassDescriptor);
+
+    /// End the current compute pass.
+    ///
+    /// # Safety
+    ///
+    /// - There must have been a prior call to [`begin_ray_tracing_pass`] on this [`CommandEncoder`]
+    ///   that has not been followed by a call to [`end_ray_tracing_pass`].
+    ///
+    /// [`begin_ray_tracing_pass`]: CommandEncoder::begin_ray_tracing_pass
+    /// [`end_ray_tracing_pass`]: CommandEncoder::end_ray_tracing_pass
+    unsafe fn end_ray_tracing_pass(&mut self);
+
+    /// # Safety
+    ///
+    /// - Pipeline must not be destroyed
+    unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &<Self::A as Api>::RayTracingPipeline);
+
+    unsafe fn trace_rays<'a>(
+        &mut self,
+        count: [u32; 3],
+        ray_generation_group_data: PipelineGroupData<'a, <Self::A as Api>::Buffer>,
+        miss_group_data: PipelineGroupData<'a, <Self::A as Api>::Buffer>,
+        intersection_group_data: PipelineGroupData<'a, <Self::A as Api>::Buffer>,
     );
 
     /// To get the required sizes for the buffer allocations use `get_acceleration_structure_build_sizes` per descriptor
@@ -1978,6 +2060,20 @@ pub struct Alignments {
 
     /// What the scratch buffer for building an acceleration structure must be aligned to
     pub ray_tracing_scratch_buffer_alignment: u32,
+
+    /// How large a single piece of group data is. That is, how large the vector returned
+    /// from `device.get_raytracing_pipeline_group_data(&pipeline, n..(n+1))` is.
+    ///
+    /// If ray tracing pipelines are implemented, this must be non zero.
+    pub ray_tracing_pipeline_group_data_size: u32,
+
+    /// If ray tracing pipelines are implemented, this must be a power of two (and non zero).
+    pub ray_tracing_pipeline_group_data_alignment: u32,
+
+    /// If ray tracing pipelines are implemented, this must be a power of two (and non zero).
+    ///
+    /// The offset within `PipelineGroupData` must be a multiple of this
+    pub ray_tracing_pipeline_data_offset_alignment: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -2432,6 +2528,23 @@ pub enum ShaderInput<'a> {
     },
 }
 
+impl fmt::Debug for ShaderInput<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            // Don't include the entire shader source, especially for binary formats, because it
+            // would be spammy.
+            Self::Naga { .. } => f.debug_tuple("Naga").finish_non_exhaustive(),
+            Self::MetalLib { .. } => f.debug_tuple("MetalLib").finish_non_exhaustive(),
+            Self::Msl { .. } => f.debug_tuple("Msl").finish_non_exhaustive(),
+            Self::SpirV { .. } => f.debug_tuple("SpirV").finish_non_exhaustive(),
+            Self::Dxil { .. } => f.debug_tuple("Dxil").finish_non_exhaustive(),
+            Self::Hlsl { .. } => f.debug_tuple("Hlsl").finish_non_exhaustive(),
+            Self::Glsl { .. } => f.debug_tuple("Glsl").finish_non_exhaustive(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
 
@@ -2494,6 +2607,7 @@ pub struct ComputePipelineDescriptor<
     pub cache: Option<&'a Pc>,
 }
 
+#[derive(Debug)]
 pub struct PipelineCacheDescriptor<'a> {
     pub label: Label<'a>,
     pub data: Option<&'a [u8]>,
@@ -2550,6 +2664,35 @@ pub struct RenderPipelineDescriptor<
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview_mask: Option<NonZeroU32>,
+    /// The cache which will be used and filled when compiling this pipeline
+    pub cache: Option<&'a Pc>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RayObjectIntersectionState<'a, M: DynShaderModule + ?Sized> {
+    pub closest_hit: ProgrammableStage<'a, M>,
+    pub any_hit: Option<ProgrammableStage<'a, M>>,
+}
+
+/// Describes a ray tracing pipeline.
+#[derive(Clone, Debug)]
+pub struct RayTracingPipelineDescriptor<
+    'a,
+    Pl: DynPipelineLayout + ?Sized,
+    M: DynShaderModule + ?Sized,
+    Pc: DynPipelineCache + ?Sized,
+> {
+    pub label: Label<'a>,
+    /// The layout of bind groups for this pipeline.
+    pub layout: &'a Pl,
+    /// The ray generation stage.
+    pub ray_generation: ProgrammableStage<'a, M>,
+    /// The miss stage.
+    pub miss: ProgrammableStage<'a, M>,
+    /// All the object intersection stages.
+    pub intersection: &'a [RayObjectIntersectionState<'a, M>],
+    /// The maximum recursion depth allowed for the ray tracing (ray_generation shader counts as depth 0).
+    pub max_recursion_depth: u32,
     /// The cache which will be used and filled when compiling this pipeline
     pub cache: Option<&'a Pc>,
 }
@@ -2726,6 +2869,11 @@ pub struct ComputePassDescriptor<'a, Q: DynQuerySet + ?Sized> {
     pub timestamp_writes: Option<PassTimestampWrites<'a, Q>>,
 }
 
+#[derive(Clone, Debug)]
+pub struct RayTracingPassDescriptor<'a> {
+    pub label: Label<'a>,
+}
+
 #[test]
 fn test_default_limits() {
     let limits = wgt::Limits::default();
@@ -2824,6 +2972,7 @@ pub struct AccelerationStructureAABBs<'a, B: DynBuffer + ?Sized> {
     pub flags: AccelerationStructureGeometryFlags,
 }
 
+#[derive(Clone, Debug)]
 pub struct AccelerationStructureCopy {
     pub copy_flags: wgt::AccelerationStructureCopy,
     pub type_flags: wgt::AccelerationStructureType,
@@ -2885,9 +3034,13 @@ pub struct TlasInstance {
     pub custom_data: u32,
     pub mask: u8,
     pub blas_address: u64,
+    /// The offset for the index into the intersection hit
+    /// group calculation. Number is in hit groups.
+    pub pipeline_intersection_data_offset: u32,
 }
 
 #[cfg(dx12)]
+#[derive(Debug)]
 pub enum D3D12ExposeAdapterResult {
     CreateDeviceError(dx12::CreateDeviceError),
     UnknownFeatureLevel(i32),
@@ -2905,4 +3058,12 @@ pub struct Telemetry {
         driver_version: Result<[u16; 4], windows_core::HRESULT>,
         result: D3D12ExposeAdapterResult,
     ),
+}
+
+#[derive(Debug)]
+pub struct PipelineGroupData<'a, B: DynBuffer + ?Sized> {
+    pub buffer: &'a B,
+    pub offset: wgt::BufferAddress,
+    pub stride: u64,
+    pub count: u64,
 }

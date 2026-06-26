@@ -1793,6 +1793,29 @@ impl crate::Device for super::Device {
         self.counters.compute_pipelines.sub(1);
     }
 
+    unsafe fn create_ray_tracing_pipeline(
+        &self,
+        _desc: &crate::RayTracingPipelineDescriptor<
+            super::PipelineLayout,
+            super::ShaderModule,
+            super::PipelineCache,
+        >,
+    ) -> Result<super::RayTracingPipeline, crate::PipelineError> {
+        unimplemented!("Ray tracing pipelines are unsupported on Metal")
+    }
+
+    unsafe fn destroy_ray_tracing_pipeline(&self, _pipeline: super::RayTracingPipeline) {
+        unimplemented!("Ray tracing pipelines are unsupported on Metal")
+    }
+
+    unsafe fn get_raytracing_pipeline_group_data(
+        &self,
+        _pipeline: &super::RayTracingPipeline,
+        _groups: core::ops::Range<u32>,
+    ) -> Result<Vec<u8>, crate::DeviceError> {
+        unimplemented!("Ray tracing pipelines are unsupported on Metal")
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         _desc: &crate::PipelineCacheDescriptor<'_>,
@@ -2036,7 +2059,7 @@ impl crate::Device for super::Device {
             },
             options: MTLAccelerationStructureInstanceOptions::None,
             mask: instance.mask as u32,
-            intersectionFunctionTableOffset: 0,
+            intersectionFunctionTableOffset: instance.pipeline_intersection_data_offset,
             userID: instance.custom_data,
             accelerationStructureID: unsafe { MTLResourceID::from_raw(instance.blas_address) },
         };

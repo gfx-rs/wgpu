@@ -593,6 +593,10 @@ pub fn map_buffer_usage(usage: wgt::BufferUses) -> vk::BufferUsageFlags {
     if usage.intersects(wgt::BufferUses::ACCELERATION_STRUCTURE_QUERY) {
         flags |= vk::BufferUsageFlags::TRANSFER_DST;
     }
+    if usage.intersects(wgt::BufferUses::RAY_TRACING_PIPELINE_SHADER_DATA) {
+        flags |= vk::BufferUsageFlags::SHADER_BINDING_TABLE_KHR
+            | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+    }
     flags
 }
 
@@ -792,6 +796,18 @@ pub fn map_shader_stage(stage: wgt::ShaderStages) -> vk::ShaderStageFlags {
     }
     if stage.contains(wgt::ShaderStages::MESH) {
         flags |= vk::ShaderStageFlags::MESH_EXT;
+    }
+    if stage.contains(wgt::ShaderStages::RAY_GENERATION) {
+        flags |= vk::ShaderStageFlags::RAYGEN_KHR;
+    }
+    if stage.contains(wgt::ShaderStages::MISS) {
+        flags |= vk::ShaderStageFlags::MISS_KHR;
+    }
+    if stage.contains(wgt::ShaderStages::ANY_HIT) {
+        flags |= vk::ShaderStageFlags::ANY_HIT_KHR;
+    }
+    if stage.contains(wgt::ShaderStages::CLOSEST_HIT) {
+        flags |= vk::ShaderStageFlags::CLOSEST_HIT_KHR;
     }
     flags
 }
@@ -1048,6 +1064,12 @@ pub fn map_acceleration_structure_usage_to_barrier(
         stages |= vk::PipelineStageFlags::VERTEX_SHADER
             | vk::PipelineStageFlags::FRAGMENT_SHADER
             | vk::PipelineStageFlags::COMPUTE_SHADER;
+        access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
+    }
+    if usage.contains(crate::AccelerationStructureUses::SHADER_INPUT)
+        && features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+    {
+        stages |= vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR;
         access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
     }
     if usage.contains(crate::AccelerationStructureUses::COPY_SRC) {

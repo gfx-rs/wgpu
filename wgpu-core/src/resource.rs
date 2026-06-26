@@ -27,7 +27,7 @@ use crate::{
     lock::{rank, Mutex, RwLock},
     ray_tracing::{BlasCompactReadyPendingClosure, BlasPrepareCompactError},
     resource_log,
-    snatch::{SnatchGuard, Snatchable},
+    snatch::{SnatchGuard, Snatchable, Snatchable2},
     timestamp_normalization::TimestampNormalizationBindGroup,
     track::{SharedTrackerIndexAllocator, TrackerIndex},
     weak_vec::WeakVec,
@@ -88,6 +88,44 @@ pub struct ResourceErrorIdent {
 impl fmt::Display for ResourceErrorIdent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "{} with '{}' label", self.r#type, self.label)
+    }
+}
+
+pub enum DestructibleResourceState<T> {
+    Valid(T),
+    Invalid,
+    Destroyed,
+}
+
+impl<T> DestructibleResourceState<T> {
+    pub fn as_ref(&self) -> DestructibleResourceState<&T> {
+        match self {
+            DestructibleResourceState::Valid(v) => DestructibleResourceState::Valid(v),
+            DestructibleResourceState::Invalid => DestructibleResourceState::Invalid,
+            DestructibleResourceState::Destroyed => DestructibleResourceState::Destroyed,
+        }
+    }
+
+    pub fn take(&mut self) -> DestructibleResourceState<T> {
+        mem::replace(self, DestructibleResourceState::Destroyed)
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum InvalidOrDestroyedResourceError {
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
+}
+
+impl<T> DestructibleResourceState<T> {
+    pub fn maybe_valid(self) -> Option<T> {
+        match self {
+            DestructibleResourceState::Valid(t) => Some(t),
+            DestructibleResourceState::Invalid => None,
+            DestructibleResourceState::Destroyed => None,
+        }
     }
 }
 
@@ -1355,7 +1393,7 @@ pub enum TextureClearMode {
 
 #[derive(Debug)]
 pub struct Texture {
-    pub(crate) inner: Snatchable<TextureInner>,
+    pub(crate) inner: Snatchable2<TextureInner>,
     pub(crate) device: Arc<Device>,
     pub(crate) desc: wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
     pub(crate) _hal_usage: wgt::TextureUses,
@@ -1380,7 +1418,7 @@ impl Texture {
         init: bool,
     ) -> Self {
         Texture {
-            inner: Snatchable::new(inner),
+            inner: Snatchable2::new(inner),
             device: device.clone(),
             desc: desc.map_label(|label| label.to_string()),
             _hal_usage: hal_usage,
@@ -1399,6 +1437,31 @@ impl Texture {
             },
             tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
             clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
+            views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
+            bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
+        }
+    }
+
+    pub(crate) fn invalid(device: &Arc<Device>, desc: &TextureDescriptor) -> Self {
+        Texture {
+            inner: Snatchable2::invalid(),
+            device: device.clone(),
+            desc: desc.map_label(|label| label.to_string()),
+            _hal_usage: wgt::TextureUses::empty(),
+            format_features: wgt::TextureFormatFeatures {
+                allowed_usages: wgt::TextureUsages::empty(),
+                flags: wgt::TextureFormatFeatureFlags::empty(),
+            },
+            initialization_status: RwLock::new(
+                rank::TEXTURE_INITIALIZATION_STATUS,
+                TextureInitTracker::new(0, 0),
+            ),
+            full_range: TextureSelector {
+                mips: 0..desc.mip_level_count,
+                layers: 0..desc.array_layer_count(),
+            },
+            tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
+            clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, TextureClearMode::None),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
         }
@@ -1424,6 +1487,16 @@ impl Texture {
 
 impl Drop for Texture {
     fn drop(&mut self) {
+        #[cfg(feature = "trace")]
+        {
+            let mut t = self.device.trace.lock();
+            if let Some(t) = t.as_mut() {
+                use crate::device::trace::to_trace;
+
+                // SAFETY: All textures are constructed in Arc => are heap allocated
+                t.add(trace::Action::DropTexture(unsafe { to_trace(self) }));
+            }
+        }
         match *self.clear_mode.write() {
             TextureClearMode::Surface {
                 ref mut clear_view, ..
@@ -1449,7 +1522,7 @@ impl Drop for Texture {
             _ => {}
         };
 
-        if let Some(TextureInner::Native { raw }) = self.inner.take() {
+        if let Some(TextureInner::Native { raw }) = self.inner.take().maybe_valid() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
                 self.device.raw().destroy_texture(raw);
@@ -1462,7 +1535,7 @@ impl RawResourceAccess for Texture {
     type DynResource = dyn hal::DynTexture;
 
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
-        self.inner.get(guard).map(|t| t.raw())
+        self.inner.get(guard).maybe_valid().map(|t| t.raw())
     }
 }
 
@@ -1470,20 +1543,39 @@ impl Texture {
     pub(crate) fn try_inner<'a>(
         &'a self,
         guard: &'a SnatchGuard,
-    ) -> Result<&'a TextureInner, DestroyedResourceError> {
-        self.inner
-            .get(guard)
-            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+    ) -> Result<&'a TextureInner, InvalidOrDestroyedResourceError> {
+        match self.inner.get(guard) {
+            DestructibleResourceState::Valid(t) => Ok(t),
+            DestructibleResourceState::Invalid => {
+                Err(InvalidOrDestroyedResourceError::InvalidResource(
+                    InvalidResourceError(self.error_ident()),
+                ))
+            }
+            DestructibleResourceState::Destroyed => {
+                Err(InvalidOrDestroyedResourceError::DestroyedResource(
+                    DestroyedResourceError(self.error_ident()),
+                ))
+            }
+        }
     }
 
     pub(crate) fn check_destroyed(
         &self,
         guard: &SnatchGuard,
     ) -> Result<(), DestroyedResourceError> {
-        self.inner
-            .get(guard)
-            .map(|_| ())
-            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+        match self.inner.get(guard) {
+            DestructibleResourceState::Valid(_) => Ok(()),
+            DestructibleResourceState::Invalid => Ok(()),
+            DestructibleResourceState::Destroyed => Err(DestroyedResourceError(self.error_ident())),
+        }
+    }
+
+    pub(crate) fn check_valid(&self, guard: &SnatchGuard) -> Result<(), InvalidResourceError> {
+        match self.inner.get(guard) {
+            DestructibleResourceState::Valid(_) => Ok(()),
+            DestructibleResourceState::Invalid => Err(InvalidResourceError(self.error_ident())),
+            DestructibleResourceState::Destroyed => Ok(()),
+        }
     }
 
     pub(crate) fn get_clear_view<'a>(
@@ -1519,7 +1611,11 @@ impl Texture {
         let device = &self.device;
 
         let temp = {
-            let raw = match self.inner.snatch(&mut device.snatchable_lock.write()) {
+            let raw = match self
+                .inner
+                .snatch(&mut device.snatchable_lock.write())
+                .maybe_valid()
+            {
                 Some(TextureInner::Native { raw }) => raw,
                 Some(TextureInner::Surface { .. }) => {
                     return;
@@ -1977,6 +2073,15 @@ pub enum CreateTextureViewError {
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+}
+
+impl From<InvalidOrDestroyedResourceError> for CreateTextureViewError {
+    fn from(value: InvalidOrDestroyedResourceError) -> Self {
+        match value {
+            InvalidOrDestroyedResourceError::InvalidResource(e) => Self::InvalidResource(e),
+            InvalidOrDestroyedResourceError::DestroyedResource(e) => Self::DestroyedResource(e),
+        }
+    }
 }
 
 impl WebGpuError for CreateTextureViewError {

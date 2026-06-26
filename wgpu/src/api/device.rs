@@ -916,3 +916,19 @@ impl Drop for ErrorScopeGuard {
         }
     }
 }
+
+impl fmt::Debug for ErrorScopeGuard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let ErrorScopeGuard {
+            device,
+            index,
+            popped,
+            _phantom: _,
+        } = self;
+        f.debug_struct("ErrorScopeGuard")
+            .field("device", device)
+            .field("index", index)
+            .field("popped", popped)
+            .finish()
+    }
+}

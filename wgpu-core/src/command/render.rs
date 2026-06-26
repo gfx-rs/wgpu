@@ -45,7 +45,7 @@ use crate::{
     },
     snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker, UsageScope},
-    validation::{self, check_workgroup_sizes},
+    validation::{self, WorkgroupSizeCheck},
     Label,
 };
 
@@ -3099,13 +3099,15 @@ fn draw_mesh_tasks(
         )
     };
 
-    let total_count = check_workgroup_sizes(
-        &[group_count_x, group_count_y, group_count_z],
-        &[groups_size_limit, groups_size_limit, groups_size_limit],
-        "max_task_mesh_workgroups_per_dimension",
-        max_groups,
-        "max_task_mesh_workgroup_total_count",
-    )
+    let total_count = WorkgroupSizeCheck {
+        dimensions: &[group_count_x, group_count_y, group_count_z],
+        per_dimension_limits: &[groups_size_limit, groups_size_limit, groups_size_limit],
+        per_dimension_limits_desc: "max_task_mesh_workgroups_per_dimension",
+
+        total_limit: max_groups,
+        total_limit_desc: "max_task_mesh_workgroup_total_count",
+    }
+    .check_and_compute_total_invocations()
     .map_err(|err| RenderPassErrorInner::Draw(err.into()))?;
 
     unsafe {

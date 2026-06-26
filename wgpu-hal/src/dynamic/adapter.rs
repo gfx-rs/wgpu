@@ -6,6 +6,7 @@ use crate::{
 
 use super::{DynDevice, DynQueue, DynResource, DynResourceExt, DynSurface};
 
+#[expect(missing_debug_implementations, reason = "dyn")]
 pub struct DynOpenDevice {
     pub device: Box<dyn DynDevice>,
     pub queue: Box<dyn DynQueue>,

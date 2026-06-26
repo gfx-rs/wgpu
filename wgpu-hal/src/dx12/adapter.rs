@@ -1016,6 +1016,10 @@ impl super::Adapter {
                     max_binding_array_acceleration_structure_elements_per_shader_stage:
                         max_acceleration_structures_per_shader_stage,
                     max_multiview_view_count,
+
+                    // not yet implemented
+                    max_ray_dispatch_count: 0,
+                    max_ray_recursion_depth: 0,
                 }),
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(
@@ -1035,6 +1039,10 @@ impl super::Adapter {
                     .unwrap(),
                     ray_tracing_scratch_buffer_alignment:
                         Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT,
+                    // Not yet implemented
+                    ray_tracing_pipeline_group_data_size: 0,
+                    ray_tracing_pipeline_group_data_alignment: 0,
+                    ray_tracing_pipeline_data_offset_alignment: 0,
                 },
                 downlevel,
                 cooperative_matrix_properties: Vec::new(),

@@ -906,6 +906,9 @@ impl super::Adapter {
             max_acceleration_structures_per_shader_stage: 0,
 
             max_multiview_view_count: 0,
+
+            max_ray_dispatch_count: 0,
+            max_ray_recursion_depth: 0,
         });
 
         let mut workarounds = super::Workarounds::empty();
@@ -980,6 +983,9 @@ impl super::Adapter {
                     uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
                     raw_tlas_instance_size: 0,
                     ray_tracing_scratch_buffer_alignment: 0,
+                    ray_tracing_pipeline_group_data_size: 0,
+                    ray_tracing_pipeline_group_data_alignment: 0,
+                    ray_tracing_pipeline_data_offset_alignment: 0,
                 },
                 cooperative_matrix_properties: Vec::new(),
             },

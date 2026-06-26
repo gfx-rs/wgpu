@@ -200,7 +200,7 @@ pub struct Hub {
     pub(crate) query_sets: Registry<Fallible<QuerySet>>,
     pub(crate) buffers: Registry<Fallible<Buffer>>,
     pub(crate) staging_buffers: Registry<StagingBuffer>,
-    pub(crate) textures: Registry<Fallible<Texture>>,
+    pub(crate) textures: Registry<Arc<Texture>>,
     pub(crate) texture_views: Registry<Fallible<TextureView>>,
     pub(crate) external_textures: Registry<Fallible<ExternalTexture>>,
     pub(crate) samplers: Registry<Fallible<Sampler>>,

@@ -521,6 +521,7 @@ pub(super) enum WrappedFunction {
     },
 }
 
+#[expect(missing_debug_implementations, reason = "would be way too verbose?")]
 pub struct Writer<W> {
     pub(super) out: W,
     pub(super) names: FastHashMap<NameKey, String>,

@@ -72,6 +72,11 @@ Otherwise, we pass a range corresponding only to the current bind group.
 
 !*/
 
+#![expect(
+    missing_debug_implementations,
+    reason = "TODO: someone developing on Windows add Debug impls where possible"
+)]
+
 mod adapter;
 mod command;
 mod conv;
@@ -150,7 +155,7 @@ struct D3D12Lib {
     lib: DynLib,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum CreateDeviceError {
     GetProcAddress,
     D3D12CreateDevice(windows_core::HRESULT),
@@ -478,6 +483,7 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+    type RayTracingPipeline = RayTracingPipeline;
     type PipelineCache = PipelineCache;
 
     type AccelerationStructure = AccelerationStructure;
@@ -499,6 +505,7 @@ crate::impl_dyn_resource!(
     PipelineLayout,
     QuerySet,
     Queue,
+    RayTracingPipeline,
     RenderPipeline,
     Sampler,
     ShaderModule,
@@ -1381,6 +1388,11 @@ unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
 
 #[derive(Debug)]
+pub struct RayTracingPipeline {}
+
+impl crate::DynRayTracingPipeline for RayTracingPipeline {}
+
+#[derive(Debug)]
 pub struct PipelineCache;
 
 impl crate::DynPipelineCache for PipelineCache {}
@@ -1878,7 +1890,7 @@ pub enum ShaderModuleSource {
     HlslPassthrough(HlslPassthroughShader),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FeatureLevel {
     V11_0,
     V11_1,
@@ -1887,7 +1899,7 @@ pub enum FeatureLevel {
     V12_2,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ShaderModel {
     V5_1,
     V6_0,

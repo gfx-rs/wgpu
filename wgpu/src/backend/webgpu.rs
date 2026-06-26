@@ -878,6 +878,9 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
             .max_acceleration_structures_per_shader_stage,
 
         max_multiview_view_count: wgt::Limits::default().max_multiview_view_count,
+
+        max_ray_dispatch_count: wgt::Limits::default().max_ray_dispatch_count,
+        max_ray_recursion_depth: wgt::Limits::default().max_ray_recursion_depth,
     }
 }
 

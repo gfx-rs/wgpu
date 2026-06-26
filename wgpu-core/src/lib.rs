@@ -40,6 +40,7 @@
     // `wgpu-core` isn't entirely user-facing, so it's useful to document internal items.
     rustdoc::private_intra_doc_links,
 )]
+#![expect(missing_debug_implementations, reason = "TODO")]
 #![warn(
     clippy::alloc_instead_of_core,
     clippy::ptr_as_ptr,
