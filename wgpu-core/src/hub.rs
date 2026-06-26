@@ -194,7 +194,7 @@ pub struct Hub {
     pub(crate) command_encoders: Registry<Arc<CommandEncoder>>,
     pub(crate) command_buffers: Registry<Arc<CommandBuffer>>,
     pub(crate) render_bundles: Registry<Fallible<RenderBundle>>,
-    pub(crate) render_pipelines: Registry<Fallible<RenderPipeline>>,
+    pub(crate) render_pipelines: Registry<Arc<RenderPipeline>>,
     pub(crate) compute_pipelines: Registry<Fallible<ComputePipeline>>,
     pub(crate) pipeline_caches: Registry<Fallible<PipelineCache>>,
     pub(crate) query_sets: Registry<Fallible<QuerySet>>,

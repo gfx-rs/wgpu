@@ -2704,7 +2704,7 @@ fn set_pipeline(
             .pass
             .base
             .raw_encoder
-            .set_render_pipeline(pipeline.raw());
+            .set_render_pipeline(pipeline.raw()?);
     }
 
     if pipeline.flags.contains(PipelineFlags::STENCIL_REFERENCE) {
@@ -2720,7 +2720,7 @@ fn set_pipeline(
     // Rebind resource
     pass::change_pipeline_layout::<RenderPassErrorInner, _>(
         &mut state.pass,
-        &pipeline.layout,
+        pipeline.layout()?,
         &pipeline.late_sized_buffer_groups,
         || {},
     )?;
@@ -3597,7 +3597,8 @@ impl Global {
         }
 
         let hub = &self.hub;
-        let pipeline = pass_try!(base, scope, hub.render_pipelines.get(pipeline_id).get());
+        let pipeline = hub.render_pipelines.get(pipeline_id);
+        pass_try!(base, scope, pipeline.check_valid());
 
         base.commands.push(ArcRenderCommand::SetPipeline(pipeline));
 

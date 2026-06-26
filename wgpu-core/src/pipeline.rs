@@ -19,9 +19,12 @@ use crate::{
         GetBindGroupLayoutError, PipelineLayout,
     },
     command::ColorAttachmentError,
-    device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
+    device::{
+        AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
+        RenderPassContext,
+    },
     id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
-    resource::{InvalidResourceError, Labeled, TrackingData},
+    resource::{InvalidResourceError, Labeled, ResourceState, TrackingData},
     resource_log,
     validation::{self, ShaderMetaData},
     Label,
@@ -834,10 +837,15 @@ impl Default for VertexStep {
 }
 
 #[derive(Debug)]
-pub struct RenderPipeline {
+pub(crate) struct RenderPipelineState {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynRenderPipeline>>,
-    pub(crate) device: Arc<Device>,
     pub(crate) layout: Arc<PipelineLayout>,
+}
+
+#[derive(Debug)]
+pub struct RenderPipeline {
+    pub(crate) state: ResourceState<RenderPipelineState>,
+    pub(crate) device: Arc<Device>,
     pub(crate) _shader_modules: ArrayVec<Arc<ShaderModule>, { hal::MAX_CONCURRENT_SHADER_STAGES }>,
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
@@ -857,8 +865,20 @@ pub struct RenderPipeline {
 impl Drop for RenderPipeline {
     fn drop(&mut self) {
         resource_log!("Destroy raw {}", self.error_ident());
+        #[cfg(feature = "trace")]
+        {
+            use crate::device::trace;
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DropRenderPipeline(unsafe {
+                    trace::to_trace(self)
+                }));
+            }
+        }
+        let ResourceState::Valid(state) = &mut self.state else {
+            return;
+        };
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        let raw = unsafe { ManuallyDrop::take(&mut state.raw) };
         unsafe {
             self.device.raw().destroy_render_pipeline(raw);
         }
@@ -872,14 +892,58 @@ crate::impl_storage_item!(RenderPipeline);
 crate::impl_trackable!(RenderPipeline);
 
 impl RenderPipeline {
-    pub(crate) fn raw(&self) -> &dyn hal::DynRenderPipeline {
-        self.raw.as_ref()
+    pub(crate) fn raw(&self) -> Result<&dyn hal::DynRenderPipeline, InvalidResourceError> {
+        let ResourceState::Valid(state) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        Ok(state.raw.as_ref())
+    }
+
+    pub(crate) fn layout(&self) -> Result<&Arc<PipelineLayout>, InvalidResourceError> {
+        let ResourceState::Valid(state) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        Ok(&state.layout)
+    }
+
+    pub(crate) fn check_valid(&self) -> Result<(), InvalidResourceError> {
+        let ResourceState::Valid(_) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        Ok(())
+    }
+
+    pub(crate) fn invalid(device: Arc<Device>, label: String) -> Arc<Self> {
+        Arc::new(Self {
+            tracking_data: TrackingData::new(device.tracker_indices.render_pipelines.clone()),
+            state: ResourceState::Invalid,
+            device,
+            _shader_modules: ArrayVec::new(),
+            pass_context: RenderPassContext {
+                attachments: AttachmentData {
+                    colors: ArrayVec::new(),
+                    resolves: ArrayVec::new(),
+                    depth_stencil: None,
+                },
+                sample_count: 0,
+                multiview_mask: None,
+            },
+            flags: PipelineFlags::empty(),
+            topology: wgt::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            vertex_steps: Vec::new(),
+            late_sized_buffer_groups: ArrayVec::new(),
+            immediate_slots_required: naga::valid::ImmediateSlots::default(),
+            label,
+            is_mesh: false,
+            has_task_shader: false,
+        })
     }
 
     pub fn get_bind_group_layout(
         self: &Arc<Self>,
         index: u32,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
-        self.layout.get_bind_group_layout(index, self.into())
+        self.layout()?.get_bind_group_layout(index, self.into())
     }
 }

@@ -773,13 +773,13 @@ fn set_bind_group(
 
 fn set_pipeline(
     state: &mut State,
-    pipeline_guard: &crate::storage::Storage<Fallible<RenderPipeline>>,
+    pipeline_guard: &crate::storage::Storage<Arc<RenderPipeline>>,
     context: &RenderPassContext,
     is_depth_read_only: bool,
     is_stencil_read_only: bool,
     pipeline_id: id::Id<id::markers::RenderPipeline>,
 ) -> Result<(), RenderBundleErrorInner> {
-    let pipeline = pipeline_guard.get(pipeline_id).get()?;
+    let pipeline = pipeline_guard.get(pipeline_id);
 
     pipeline.same_device(&state.device)?;
 
@@ -802,7 +802,7 @@ fn set_pipeline(
 
     state
         .binder
-        .change_pipeline_layout(&pipeline.layout, &pipeline.late_sized_buffer_groups);
+        .change_pipeline_layout(pipeline.layout()?, &pipeline.late_sized_buffer_groups);
 
     state.vertex.update_limits(&pipeline.vertex_steps);
 
@@ -938,7 +938,7 @@ fn set_immediates(
         .ok_or(DrawError::MissingPipeline(pass::MissingPipeline))?;
 
     pipeline
-        .layout
+        .layout()?
         .validate_immediates_ranges(offset, size_bytes)?;
 
     state.commands.push(ArcRenderCommand::SetImmediate {
@@ -1259,9 +1259,20 @@ impl RenderBundle {
                     offsets = &offsets[*num_dynamic_offsets..];
                 }
                 Cmd::SetPipeline(pipeline) => {
-                    unsafe { raw.set_render_pipeline(pipeline.raw()) };
+                    unsafe {
+                        raw.set_render_pipeline(
+                            pipeline
+                                .raw()
+                                .expect("RenderPipeline should be valid when executing bundle"),
+                        )
+                    };
 
-                    pipeline_layout = Some(pipeline.layout.clone());
+                    pipeline_layout = Some(
+                        pipeline
+                            .layout()
+                            .expect("PipelineLayout should be valid when executing bundle")
+                            .clone(),
+                    );
                 }
                 Cmd::SetIndexBuffer {
                     buffer,
