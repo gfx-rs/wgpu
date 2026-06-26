@@ -9,18 +9,18 @@ When this texture is presented, we remove it from the device tracker as well as
 extract it from the hub.
 !*/
 
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::mem::ManuallyDrop;
 
 #[cfg(feature = "trace")]
 use crate::device::trace::{Action, IntoTrace};
 use crate::{
     conv,
-    device::{Device, DeviceError, MissingDownlevelFlags, WaitIdleError},
+    device::{queue::Queue, Device, DeviceError, MissingDownlevelFlags, WaitIdleError},
     global::Global,
     hal_label, id,
     instance::Surface,
-    resource,
+    resource::{self, Labeled},
 };
 
 use thiserror::Error;
@@ -49,6 +49,8 @@ pub enum SurfaceError {
     Device(#[from] DeviceError),
     #[error("Surface image is already acquired")]
     AlreadyAcquired,
+    #[error("No surface image is currently acquired to present")]
+    NothingToPresent,
     #[error("Texture has been destroyed")]
     TextureDestroyed,
 }
@@ -60,6 +62,7 @@ impl WebGpuError for SurfaceError {
             Self::Invalid
             | Self::NotConfigured
             | Self::AlreadyAcquired
+            | Self::NothingToPresent
             | Self::TextureDestroyed => ErrorType::Validation,
         }
     }
@@ -94,6 +97,12 @@ pub enum ConfigureSurfaceError {
     UnsupportedFormat {
         requested: wgt::TextureFormat,
         available: Vec<wgt::TextureFormat>,
+    },
+    #[error("Requested color space {requested:?} is not in the list of color spaces supported for format {format:?}: {available:?}")]
+    UnsupportedColorSpace {
+        requested: wgt::SurfaceColorSpace,
+        format: wgt::TextureFormat,
+        available: wgt::SurfaceColorSpaces,
     },
     #[error("Requested present mode {requested:?} is not in the list of supported present modes: {available:?}")]
     UnsupportedPresentMode {
@@ -135,6 +144,7 @@ impl WebGpuError for ConfigureSurfaceError {
             | Self::TooLarge { .. }
             | Self::UnsupportedQueueFamily
             | Self::UnsupportedFormat { .. }
+            | Self::UnsupportedColorSpace { .. }
             | Self::UnsupportedPresentMode { .. }
             | Self::UnsupportedAlphaMode { .. }
             | Self::UnsupportedUsage { .. } => ErrorType::Validation,
@@ -162,18 +172,14 @@ impl Surface {
             return Err(SurfaceError::NotConfigured);
         };
 
-        let fence = device.fence.read();
-
         let suf = self.raw(device.backend()).unwrap();
         let (texture, status) = match unsafe {
             suf.acquire_texture(
                 Some(core::time::Duration::from_millis(FRAME_TIMEOUT_MS as u64)),
-                fence.as_ref(),
+                device.fence.as_ref(),
             )
         } {
             Ok(ast) => {
-                drop(fence);
-
                 let texture_desc = wgt::TextureDescriptor {
                     label: hal_label(
                         Some(alloc::borrow::Cow::Borrowed("<Surface Texture>")),
@@ -276,32 +282,77 @@ impl Surface {
     pub fn present(&self) -> Result<Status, SurfaceError> {
         profiling::scope!("Surface::present");
 
-        let mut presentation = self.presentation.lock();
-        let present = match presentation.as_mut() {
+        let presentation = self.presentation.lock();
+        let present = match presentation.as_ref() {
             Some(present) => present,
             None => return Err(SurfaceError::NotConfigured),
         };
 
-        let device = &present.device;
+        present.device.check_is_valid()?;
+        let queue = present
+            .device
+            .get_queue()
+            .ok_or(SurfaceError::Device(DeviceError::Lost))?;
+        drop(presentation);
 
-        device.check_is_valid()?;
-        let queue = device.get_queue().unwrap();
+        queue.present(self)
+    }
+}
 
-        let texture = present
-            .acquired_texture
-            .take()
-            .ok_or(SurfaceError::AlreadyAcquired)?;
+impl Queue {
+    pub fn present(&self, surface: &Surface) -> Result<Status, SurfaceError> {
+        profiling::scope!("Queue::present");
+
+        let texture = {
+            let mut presentation = surface.presentation.lock();
+            let present = match presentation.as_mut() {
+                Some(present) => present,
+                None => return Err(SurfaceError::NotConfigured),
+            };
+
+            let device = &self.device;
+
+            // Check the surface is configured for this device.
+            if !Arc::ptr_eq(&present.device, device) {
+                return Err(SurfaceError::Device(DeviceError::DeviceMismatch(Box::new(
+                    crate::device::DeviceMismatch {
+                        res: self.error_ident(),
+                        res_device: device.error_ident(),
+                        target: None,
+                        target_device: present.device.error_ident(),
+                    },
+                ))));
+            }
+
+            present
+                .acquired_texture
+                .take()
+                .ok_or(SurfaceError::NothingToPresent)?
+        };
+
+        // If the texture was never rendered to, clear it and transition to
+        // PRESENT state before presenting.
+        // Fixes <https://github.com/gfx-rs/wgpu/issues/6748>
+        self.prepare_surface_texture_for_present(&texture)?;
+
+        let device = &self.device;
 
         let mut exclusive_snatch_guard = device.snatchable_lock.write();
-        let inner = texture.inner.snatch(&mut exclusive_snatch_guard);
+        let inner = texture
+            .inner
+            .snatch(&mut exclusive_snatch_guard)
+            .maybe_valid();
         drop(exclusive_snatch_guard);
 
         let result = match inner {
             None => return Err(SurfaceError::TextureDestroyed),
             Some(resource::TextureInner::Surface { raw }) => {
-                let raw_surface = self.raw(device.backend()).unwrap();
-                let raw_queue = queue.raw();
-                let _fence_lock = device.fence.write();
+                let raw_surface = surface.raw(device.backend()).unwrap();
+                let raw_queue = self.raw();
+                // [`wgpu_hal::Queue::present`] requires the queue to be synchronized with submit calls and
+                // other present calls. Locking command indices prevents submits which must increment the
+                // submission index, and by `write`ing prevents other present calls.
+                let _command_indices = device.command_indices.write();
                 unsafe { raw_queue.present(raw_surface, raw) }
             }
             _ => unreachable!(),
@@ -324,7 +375,9 @@ impl Surface {
             },
         }
     }
+}
 
+impl Surface {
     pub fn discard(&self) -> Result<(), SurfaceError> {
         profiling::scope!("Surface::discard");
 
@@ -341,10 +394,13 @@ impl Surface {
         let texture = present
             .acquired_texture
             .take()
-            .ok_or(SurfaceError::AlreadyAcquired)?;
+            .ok_or(SurfaceError::NothingToPresent)?;
 
         let mut exclusive_snatch_guard = device.snatchable_lock.write();
-        let inner = texture.inner.snatch(&mut exclusive_snatch_guard);
+        let inner = texture
+            .inner
+            .snatch(&mut exclusive_snatch_guard)
+            .maybe_valid();
         drop(exclusive_snatch_guard);
 
         match inner {
@@ -355,6 +411,28 @@ impl Surface {
             }
             _ => unreachable!(),
         }
+
+        Ok(())
+    }
+
+    /// Like `discard`, drops the inner texture reference, but skips the
+    /// HAL `discard_texture` call. Safe to call during unwinding
+    pub fn release(&self) -> Result<(), SurfaceError> {
+        profiling::scope!("Surface::release");
+
+        let mut presentation = self.presentation.lock();
+        let Some(present) = presentation.as_mut() else {
+            return Err(SurfaceError::NotConfigured);
+        };
+
+        // `texture` is dropped here, decrementing the refcount of
+        // Arc<SwapchainAcquireSemaphore>. If this was the last Arc, the Texture
+        // is freed, which drops NativeSurfaceTextureMetadata and
+        // its Arc<SwapchainAcquireSemaphore>.
+        _ = present
+            .acquired_texture
+            .take()
+            .ok_or(SurfaceError::NothingToPresent)?;
 
         Ok(())
     }
@@ -385,9 +463,7 @@ impl Global {
         }
 
         let status = output.status;
-        let texture_id = output
-            .texture
-            .map(|texture| fid.assign(resource::Fallible::Valid(texture)));
+        let texture_id = output.texture.map(|texture| fid.assign(texture));
 
         Ok(SurfaceOutput {
             status,
@@ -419,5 +495,18 @@ impl Global {
         }
 
         surface.discard()
+    }
+
+    pub fn surface_texture_release(&self, surface_id: id::SurfaceId) -> Result<(), SurfaceError> {
+        let surface = self.surfaces.get(surface_id);
+
+        #[cfg(feature = "trace")]
+        if let Some(present) = surface.presentation.lock().as_ref() {
+            if let Some(ref mut trace) = *present.device.trace.lock() {
+                trace.add(Action::ReleaseSurfaceTexture(surface.to_trace()));
+            }
+        }
+
+        surface.release()
     }
 }

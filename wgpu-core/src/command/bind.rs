@@ -48,6 +48,10 @@ mod compat {
             }
         }
 
+        fn is_assigned(&self) -> bool {
+            self.assigned.is_some()
+        }
+
         fn is_active(&self) -> bool {
             self.assigned.is_some() && self.expected.is_some()
         }
@@ -250,6 +254,13 @@ mod compat {
             self.entries[index].assigned = None;
         }
 
+        pub fn list_assigned(&self) -> impl Iterator<Item = usize> + '_ {
+            self.entries
+                .iter()
+                .enumerate()
+                .filter_map(|(i, e)| if e.is_assigned() { Some(i) } else { None })
+        }
+
         pub fn list_active(&self) -> impl Iterator<Item = usize> + '_ {
             self.entries
                 .iter()
@@ -437,6 +448,10 @@ impl Binder {
                     payloads[index].dynamic_offsets.as_slice(),
                 )
             })
+    }
+
+    pub(super) fn last_assigned_index(&self) -> Option<usize> {
+        self.manager.list_assigned().last()
     }
 
     pub(super) fn list_active(&self) -> impl Iterator<Item = &Arc<BindGroup>> + '_ {

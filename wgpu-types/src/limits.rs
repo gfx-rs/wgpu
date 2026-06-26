@@ -22,6 +22,7 @@ macro_rules! with_limits {
         $macro_name!(max_texture_dimension_3d, Ordering::Less);
         $macro_name!(max_texture_array_layers, Ordering::Less);
         $macro_name!(max_bind_groups, Ordering::Less);
+        $macro_name!(max_bind_groups_plus_vertex_buffers, Ordering::Less);
         $macro_name!(max_bindings_per_bind_group, Ordering::Less);
         $macro_name!(
             max_dynamic_uniform_buffers_per_pipeline_layout,
@@ -88,6 +89,9 @@ macro_rules! with_limits {
         $macro_name!(max_acceleration_structures_per_shader_stage, Ordering::Less);
 
         $macro_name!(max_multiview_view_count, Ordering::Less);
+
+        $macro_name!(max_ray_dispatch_count, Ordering::Less);
+        $macro_name!(max_ray_recursion_depth, Ordering::Less);
     };
 }
 
@@ -95,7 +99,7 @@ macro_rules! with_limits {
 ///
 /// We provide three different defaults.
 /// - [`Limits::downlevel_defaults()`]. This is a set of limits that is guaranteed to work on almost
-///   all backends, including "downlevel" backends such as OpenGL and D3D11, other than WebGL. For
+///   all backends, including the "downlevel" OpenGL backend, but excluding WebGL2. For
 ///   most applications we recommend using these limits, assuming they are high enough for your
 ///   application, and you do not intend to support WebGL.
 /// - [`Limits::downlevel_webgl2_defaults()`] This is a set of limits that is lower even than the
@@ -146,6 +150,9 @@ pub struct Limits {
     pub max_texture_array_layers: u32,
     /// Amount of bind groups that can be attached to a pipeline at the same time. Defaults to 4. Higher is "better".
     pub max_bind_groups: u32,
+    /// The maximum number of bind group and vertex buffer slots used simultaneously, counting any empty slots below the highest index.
+    /// Defaults to 24. Higher is "better".
+    pub max_bind_groups_plus_vertex_buffers: u32,
     /// Maximum binding index allowed in `create_bind_group_layout`. Defaults to 1000. Higher is "better".
     pub max_bindings_per_bind_group: u32,
     /// Amount of uniform buffer bindings that can be dynamic in a single pipeline. Defaults to 8. Higher is "better".
@@ -312,6 +319,19 @@ pub struct Limits {
 
     /// The maximum number of views that can be used in multiview rendering
     pub max_multiview_view_count: u32,
+
+    /// The maximum total number (`x*y*z`) of rays able to be dispatched by a trace rays call in a ray
+    /// tracing pass. Requesting more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`]
+    /// is enabled.
+    ///
+    /// Currently only affects wgpu-hal
+    pub max_ray_dispatch_count: u32,
+    /// The maximum number that one can pass into a ray tracing pipeline creation to be the maximum ray
+    /// recursion depth. (the maximum of the max ray recursion depth) Requesting more than 0 during device
+    /// creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`] is enabled.
+    ///
+    /// Currently only affects wgpu-hal
+    pub max_ray_recursion_depth: u32,
 }
 
 impl Default for Limits {
@@ -321,7 +341,7 @@ impl Default for Limits {
 }
 
 impl Limits {
-    /// These default limits are guaranteed to to work on all modern
+    /// These default limits are guaranteed to work on all modern
     /// backends and guaranteed to be supported by WebGPU
     ///
     /// Those limits are as follows:
@@ -333,6 +353,7 @@ impl Limits {
     ///     max_texture_dimension_3d: 2048,
     ///     max_texture_array_layers: 256,
     ///     max_bind_groups: 4,
+    ///     max_bind_groups_plus_vertex_buffers: 24,
     ///     max_bindings_per_bind_group: 1000,
     ///     max_dynamic_uniform_buffers_per_pipeline_layout: 8,
     ///     max_dynamic_storage_buffers_per_pipeline_layout: 4,
@@ -381,6 +402,8 @@ impl Limits {
     ///     max_tlas_instance_count: 0,
     ///     max_acceleration_structures_per_shader_stage: 0,
     ///     max_multiview_view_count: 0,
+    ///     max_ray_dispatch_count: 0,
+    ///     max_ray_recursion_depth: 0,
     /// });
     /// ```
     ///
@@ -394,6 +417,7 @@ impl Limits {
             max_texture_dimension_3d: 2048,
             max_texture_array_layers: 256,
             max_bind_groups: 4,
+            max_bind_groups_plus_vertex_buffers: 24,
             max_bindings_per_bind_group: 1000,
             max_dynamic_uniform_buffers_per_pipeline_layout: 8,
             max_dynamic_storage_buffers_per_pipeline_layout: 4,
@@ -445,10 +469,13 @@ impl Limits {
             max_acceleration_structures_per_shader_stage: 0,
 
             max_multiview_view_count: 0,
+
+            max_ray_dispatch_count: 0,
+            max_ray_recursion_depth: 0,
         }
     }
 
-    /// These default limits are guaranteed to be compatible with GLES-3.1, and D3D11
+    /// These default limits are guaranteed to be compatible with GLES-3.1.
     ///
     /// Those limits are as follows (different from default are marked with *):
     /// ```rust
@@ -459,6 +486,7 @@ impl Limits {
     ///     max_texture_dimension_3d: 256, // *
     ///     max_texture_array_layers: 256,
     ///     max_bind_groups: 4,
+    ///     max_bind_groups_plus_vertex_buffers: 24,
     ///     max_bindings_per_bind_group: 1000,
     ///     max_dynamic_uniform_buffers_per_pipeline_layout: 8,
     ///     max_dynamic_storage_buffers_per_pipeline_layout: 4,
@@ -510,6 +538,9 @@ impl Limits {
     ///     max_acceleration_structures_per_shader_stage: 0,
     ///
     ///     max_multiview_view_count: 0,
+    ///
+    ///     max_ray_dispatch_count: 0,
+    ///     max_ray_recursion_depth: 0,
     /// });
     /// ```
     #[must_use]
@@ -528,7 +559,7 @@ impl Limits {
         }
     }
 
-    /// These default limits are guaranteed to be compatible with GLES-3.0, and D3D11, and WebGL2
+    /// These default limits are guaranteed to be compatible with GLES-3.0 and WebGL2
     ///
     /// Those limits are as follows (different from `downlevel_defaults` are marked with +,
     /// *'s from `downlevel_defaults` shown as well.):
@@ -540,6 +571,7 @@ impl Limits {
     ///     max_texture_dimension_3d: 256, // *
     ///     max_texture_array_layers: 256,
     ///     max_bind_groups: 4,
+    ///     max_bind_groups_plus_vertex_buffers: 24,
     ///     max_bindings_per_bind_group: 1000,
     ///     max_dynamic_uniform_buffers_per_pipeline_layout: 8,
     ///     max_dynamic_storage_buffers_per_pipeline_layout: 0, // +
@@ -591,6 +623,9 @@ impl Limits {
     ///     max_acceleration_structures_per_shader_stage: 0,
     ///
     ///     max_multiview_view_count: 0,
+    ///
+    ///     max_ray_dispatch_count: 0,
+    ///     max_ray_recursion_depth: 0,
     /// });
     /// ```
     #[must_use]
@@ -637,6 +672,7 @@ impl Limits {
             max_texture_dimension_3d: ALLOC_MAX_U32,
             max_texture_array_layers: ALLOC_MAX_U32,
             max_bind_groups: ALLOC_MAX_U32,
+            max_bind_groups_plus_vertex_buffers: ALLOC_MAX_U32,
             max_bindings_per_bind_group: ALLOC_MAX_U32,
             max_dynamic_uniform_buffers_per_pipeline_layout: ALLOC_MAX_U32,
             max_dynamic_storage_buffers_per_pipeline_layout: ALLOC_MAX_U32,
@@ -688,6 +724,8 @@ impl Limits {
             max_acceleration_structures_per_shader_stage: ALLOC_MAX_U32,
 
             max_multiview_view_count: ALLOC_MAX_U32,
+            max_ray_dispatch_count: ALLOC_MAX_U32,
+            max_ray_recursion_depth: ALLOC_MAX_U32,
         }
     }
 
@@ -741,6 +779,17 @@ impl Limits {
             max_blas_primitive_count: other.max_blas_primitive_count,
             max_acceleration_structures_per_shader_stage: other
                 .max_acceleration_structures_per_shader_stage,
+            ..self
+        }
+    }
+
+    /// The minimum guaranteed limits for acceleration structures if you enable [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`]
+    /// These may change in the future (including downwards).
+    #[must_use]
+    pub const fn using_minimum_supported_ray_tracing_pipeline_values(self) -> Self {
+        Self {
+            max_ray_dispatch_count: 1 << 30,
+            max_ray_recursion_depth: 1,
             ..self
         }
     }
@@ -1073,6 +1122,12 @@ bitflags::bitflags! {
 
         /// Supports features introduced in MSL 2.1.
         const MSL2_1 = 1 << 24;
+
+        /// The adapter supports the WebGPU texture compression requirement:
+        /// BC || (ETC2 && ASTC).
+        ///
+        /// See <https://www.w3.org/TR/webgpu/#adapter-capability-guarantees>.
+        const TEXTURE_COMPRESSION = 1 << 25;
     }
 }
 

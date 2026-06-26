@@ -11,6 +11,7 @@ use deno_core::op2;
 use deno_core::v8;
 use deno_core::GarbageCollected;
 use deno_core::OpState;
+use deno_error::JsErrorBox;
 use serde::de::IntoDeserializer;
 use serde::Deserialize as _;
 pub use wgpu_core;
@@ -307,4 +308,131 @@ fn transform_label<'a>(label: String) -> Option<std::borrow::Cow<'a, str>> {
   } else {
     Some(std::borrow::Cow::Owned(label))
   }
+}
+
+fn operation_error(
+  message: impl Into<std::borrow::Cow<'static, str>>,
+) -> JsErrorBox {
+  JsErrorBox::new("DOMExceptionOperationError", message)
+}
+
+/// Validate the input data (AllowSharedBufferSource) and return the slice that applied the offset and size,
+/// or return `Err` if validation fails.
+///
+/// See also the content timeline requirements of <https://gpuweb.github.io/gpuweb/#dom-gpuqueue-writebuffer>
+/// and <https://gpuweb.github.io/gpuweb/#dom-gpubindingcommandsmixin-setimmediates>
+fn get_data_slice<'a>(
+  scope: &mut v8::HandleScope,
+  data_arg: v8::Local<'a, v8::Value>,
+  data_offset: u64,
+  data_size: Option<u64>,
+) -> Result<&'a [u8], JsErrorBox> {
+  const EMPTY: &[u8] = &[];
+  // Per the WebGPU spec, dataOffset and size are in elements (not bytes)
+  // when data is a TypedArray, and in bytes otherwise.
+  let (buf, bytes_per_element) = if let Ok(typed_array) =
+    v8::Local::<v8::TypedArray>::try_from(data_arg)
+  {
+    let len = typed_array.length();
+    // Avoid panicking as data of zero length array is `None`.
+    if len == 0 {
+      (EMPTY, 1)
+    } else {
+      let bpe = typed_array.byte_length() / len;
+      let byte_offset = typed_array.byte_offset();
+      let byte_len = typed_array.byte_length();
+      let ab = typed_array.buffer(scope).unwrap();
+      // SAFETY: Pointer is non-null, and V8 guarantees that the
+      // byte_offset is within the buffer backing store.
+      let ptr = unsafe { ab.data().unwrap().as_ptr().add(byte_offset) };
+      let buf =
+          // SAFETY: the slice is within the bounds of the backing store
+          unsafe { std::slice::from_raw_parts(ptr as *const u8, byte_len) };
+      (buf, bpe)
+    }
+  } else if let Ok(ab) = v8::Local::<v8::ArrayBuffer>::try_from(data_arg) {
+    let byte_len = ab.byte_length();
+    // Avoid panicking as data of zero length array is `None`.
+    if byte_len == 0 {
+      (EMPTY, 1)
+    } else {
+      let ptr = ab.data().unwrap().as_ptr();
+      let buf =
+        // SAFETY: Pointer is non-null and byte_len is within the backing store.
+        unsafe { std::slice::from_raw_parts(ptr as *const u8, byte_len) };
+      (buf, 1)
+    }
+  } else if let Ok(ab) = v8::Local::<v8::SharedArrayBuffer>::try_from(data_arg)
+  {
+    let byte_len = ab.byte_length();
+    // Avoid panicking as data of zero length array is `None`.
+    if byte_len == 0 {
+      (EMPTY, 1)
+    } else {
+      let ptr = ab.get_backing_store().data().unwrap().as_ptr();
+      let buf =
+        // SAFETY: Pointer is non-null and byte_len is within the backing store.
+        unsafe { std::slice::from_raw_parts(ptr as *const u8, byte_len) };
+      (buf, 1)
+    }
+  } else if let Ok(view) = v8::Local::<v8::ArrayBufferView>::try_from(data_arg)
+  {
+    let byte_offset = view.byte_offset();
+    let byte_len = view.byte_length();
+    if byte_len == 0 {
+      (EMPTY, 1)
+    } else {
+      let ab = view.buffer(scope).unwrap();
+      // SAFETY: Pointer is non-null, and V8 guarantees that the
+      // byte_offset is within the buffer backing store.
+      let ptr = unsafe { ab.data().unwrap().as_ptr().add(byte_offset) };
+      // SAFETY: the slice is within the bounds of the backing store
+      let buf =
+        unsafe { std::slice::from_raw_parts(ptr as *const u8, byte_len) };
+      (buf, 1)
+    }
+  } else {
+    return Err(JsErrorBox::type_error(
+      "data must be an ArrayBuffer, SharedArrayBuffer or ArrayBufferView",
+    ));
+  };
+
+  let data_offset_bytes = data_offset
+    .checked_mul(bytes_per_element as u64)
+    .ok_or(operation_error("data offset in bytes overflows a `u64`"))?;
+
+  let content_size_bytes = if let Some(data_size) = data_size {
+    let data_size_bytes = data_size
+      .checked_mul(bytes_per_element as u64)
+      .ok_or(operation_error("data size in bytes overflows a `u64`"))?;
+    if data_offset_bytes
+      .checked_add(data_size_bytes)
+      .ok_or(operation_error("data size + offset overflows a `u64`"))?
+      > buf.len() as u64
+    {
+      return Err(operation_error("data size + offset is out of bounds"));
+    }
+    data_size_bytes
+  } else {
+    (buf.len() as u64)
+      .checked_sub(data_offset_bytes)
+      .ok_or(operation_error("data offset is out of bounds"))?
+  };
+
+  // Both `Queue::write_buffer` and `set_immediates` require content size to be a multiple of 4
+  const {
+    assert!(wgpu_types::COPY_BUFFER_ALIGNMENT == 4);
+    assert!(wgpu_types::IMMEDIATE_DATA_ALIGNMENT == 4);
+  }
+  if !content_size_bytes.is_multiple_of(4) {
+    return Err(operation_error(
+      "content size in bytes is not a multiple of 4",
+    ));
+  }
+
+  // We have validated data offset and content size are within the bounds.
+  let data = &buf[(data_offset_bytes as usize)
+    ..((data_offset_bytes + content_size_bytes) as usize)];
+
+  Ok(data)
 }

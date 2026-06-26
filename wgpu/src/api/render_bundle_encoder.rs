@@ -58,7 +58,7 @@ impl<'a> RenderBundleEncoder<'a> {
             #[cfg(webgpu)]
             dispatch::DispatchRenderBundleEncoder::WebGPU(b) => b.finish(desc),
             #[cfg(custom)]
-            dispatch::DispatchRenderBundleEncoder::Custom(_) => unimplemented!(),
+            dispatch::DispatchRenderBundleEncoder::Custom(b) => b.finish_boxed(desc),
         };
 
         RenderBundle { inner: bundle }
@@ -88,12 +88,17 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// Subsequent calls to [`draw_indexed`](RenderBundleEncoder::draw_indexed) on this [`RenderBundleEncoder`] will
     /// use `buffer` as the source index buffer.
+    ///
+    /// # Panics
+    ///
+    /// - If the buffer slice length is 0.
     pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) {
         self.inner.set_index_buffer(
             &buffer_slice.buffer.inner,
             index_format,
             buffer_slice.offset,
-            Some(buffer_slice.size),
+            // TODO(https://github.com/gfx-rs/wgpu/issues/3170): Empty slices should be supported here
+            Some(buffer_slice.size_expect_nonzero()),
         );
     }
 
@@ -107,13 +112,26 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// [`draw`]: RenderBundleEncoder::draw
     /// [`draw_indexed`]: RenderBundleEncoder::draw_indexed
-    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
-        self.inner.set_vertex_buffer(
-            slot,
-            &buffer_slice.buffer.inner,
-            buffer_slice.offset,
-            Some(buffer_slice.size),
-        );
+    ///
+    /// # Panics
+    ///
+    /// - If the buffer slice length is 0.
+    pub fn set_vertex_buffer<'b, B>(&mut self, slot: u32, buffer_slice: B)
+    where
+        Option<BufferSlice<'b>>: From<B>,
+    {
+        let buffer_slice: Option<BufferSlice<'b>> = buffer_slice.into();
+        if let Some(buffer_slice) = buffer_slice {
+            self.inner.set_vertex_buffer(
+                slot,
+                Some(&buffer_slice.buffer.inner),
+                buffer_slice.offset,
+                // TODO(https://github.com/gfx-rs/wgpu/issues/3170): Empty slices should be supported here
+                Some(buffer_slice.size_expect_nonzero()),
+            );
+        } else {
+            self.inner.set_vertex_buffer(slot, None, 0, None);
+        }
     }
 
     /// Draws primitives from the active vertex buffer(s).

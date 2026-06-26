@@ -422,7 +422,7 @@ pub struct VertexState<'a, SM = ShaderModuleId> {
     /// The compiled vertex stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a, SM>,
     /// The format of any vertex buffers used with this pipeline.
-    pub buffers: Cow<'a, [VertexBufferLayout<'a>]>,
+    pub buffers: Cow<'a, [Option<VertexBufferLayout<'a>>]>,
 }
 
 /// cbindgen:ignore
@@ -698,6 +698,8 @@ pub enum CreateRenderPipelineError {
     InvalidSampleCount(u32),
     #[error("The number of vertex buffers {given} exceeds the limit {limit}")]
     TooManyVertexBuffers { given: u32, limit: u32 },
+    #[error("The number of bind groups + vertex buffers {given} exceeds the limit {limit}")]
+    TooManyBindGroupsPlusVertexBuffers { given: u32, limit: u32 },
     #[error("The total number of vertex attributes {given} exceeds the limit {limit}")]
     TooManyVertexAttributes { given: u32, limit: u32 },
     #[error("Vertex attribute location {given} must be less than limit {limit}")]
@@ -778,6 +780,7 @@ impl WebGpuError for CreateRenderPipelineError {
             | Self::DepthStencilState(_)
             | Self::InvalidSampleCount(_)
             | Self::TooManyVertexBuffers { .. }
+            | Self::TooManyBindGroupsPlusVertexBuffers { .. }
             | Self::TooManyVertexAttributes { .. }
             | Self::VertexAttributeLocationTooLarge { .. }
             | Self::VertexStrideTooLarge { .. }
@@ -840,7 +843,7 @@ pub struct RenderPipeline {
     pub(crate) flags: PipelineFlags,
     pub(crate) topology: wgt::PrimitiveTopology,
     pub(crate) strip_index_format: Option<wgt::IndexFormat>,
-    pub(crate) vertex_steps: Vec<VertexStep>,
+    pub(crate) vertex_steps: Vec<Option<VertexStep>>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
     pub(crate) immediate_slots_required: naga::valid::ImmediateSlots,
     /// The `label` from the descriptor used to create the resource.

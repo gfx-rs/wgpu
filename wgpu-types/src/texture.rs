@@ -37,6 +37,7 @@ pub enum TextureDimension {
 
 /// Order in which texture data is laid out in memory.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TextureDataOrder {
     /// The texture is laid out densely in memory as:
     ///
@@ -185,8 +186,18 @@ bitflags::bitflags! {
         const STORAGE_BINDING = 1 << 3;
         /// Allows a texture to be an output attachment of a render pass.
         ///
-        /// Consider adding [`TextureUsages::TRANSIENT`] if the contents are not reused.
+        /// Consider adding [`TextureUsages::TRANSIENT_ATTACHMENT`] if the contents are not reused.
         const RENDER_ATTACHMENT = 1 << 4;
+
+        /// Specifies the contents of this texture will not be used in another pass to potentially reduce memory usage and bandwidth.
+        ///
+        /// No-op on platforms on platforms that do not benefit from transient textures.
+        /// Generally mobile and Apple chips care about this.
+        ///
+        /// Incompatible with ALL other usages except [`TextureUsages::RENDER_ATTACHMENT`] and requires it.
+        ///
+        /// Requires [`LoadOp::Clear`] or [`LoadOp::DontCare`] (if it is available) and [`StoreOp::Discard`].
+        const TRANSIENT_ATTACHMENT = 1 << 5;
 
         //
         // ---- Restart Numbering for Native Features ---
@@ -195,15 +206,6 @@ bitflags::bitflags! {
         //
         /// Allows a texture to be used with image atomics. Requires [`Features::TEXTURE_ATOMIC`].
         const STORAGE_ATOMIC = 1 << 16;
-        /// Specifies the contents of this texture will not be used in another pass to potentially reduce memory usage and bandwidth.
-        ///
-        /// No-op on platforms on platforms that do not benefit from transient textures.
-        /// Generally mobile and Apple chips care about this.
-        ///
-        /// Incompatible with ALL other usages except [`TextureUsages::RENDER_ATTACHMENT`] and requires it.
-        ///
-        /// Requires [`StoreOp::Discard`].
-        const TRANSIENT = 1 << 17;
     }
 }
 
@@ -447,6 +449,7 @@ pub enum StorageTextureAccess {
 #[doc = link_to_wgpu_item!(struct TextureView)]
 #[doc = link_to_wgpu_docs!(["`Texture::create_view()`"]: "struct.Texture.html#method.create_view")]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TextureViewDescriptor<L> {
     /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
     pub label: L,
@@ -473,6 +476,24 @@ pub struct TextureViewDescriptor<L> {
     /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
     /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
     pub array_layer_count: Option<u32>,
+}
+
+impl<L> TextureViewDescriptor<L> {
+    /// Takes a closure and maps the label of the texture view descriptor into another.
+    #[must_use]
+    pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> TextureViewDescriptor<K> {
+        TextureViewDescriptor {
+            label: fun(&self.label),
+            format: self.format,
+            dimension: self.dimension,
+            usage: self.usage,
+            aspect: self.aspect,
+            base_mip_level: self.base_mip_level,
+            mip_level_count: self.mip_level_count,
+            base_array_layer: self.base_array_layer,
+            array_layer_count: self.array_layer_count,
+        }
+    }
 }
 
 /// Describes a [`Texture`](../wgpu/struct.Texture.html).
@@ -510,7 +531,7 @@ pub struct TextureDescriptor<L, V> {
 impl<L, V> TextureDescriptor<L, V> {
     /// Takes a closure and maps the label of the texture descriptor into another.
     #[must_use]
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K, V>
+    pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> TextureDescriptor<K, V>
     where
         V: Clone,
     {
@@ -528,14 +549,11 @@ impl<L, V> TextureDescriptor<L, V> {
 
     /// Maps the label and view formats of the texture descriptor into another.
     #[must_use]
-    pub fn map_label_and_view_formats<K, M>(
-        &self,
-        l_fun: impl FnOnce(&L) -> K,
-        v_fun: impl FnOnce(V) -> M,
-    ) -> TextureDescriptor<K, M>
-    where
-        V: Clone,
-    {
+    pub fn map_label_and_view_formats<'a, K, M>(
+        &'a self,
+        l_fun: impl FnOnce(&'a L) -> K,
+        v_fun: impl FnOnce(&'a V) -> M,
+    ) -> TextureDescriptor<K, M> {
         TextureDescriptor {
             label: l_fun(&self.label),
             size: self.size,
@@ -544,7 +562,7 @@ impl<L, V> TextureDescriptor<L, V> {
             dimension: self.dimension,
             format: self.format,
             usage: self.usage,
-            view_formats: v_fun(self.view_formats.clone()),
+            view_formats: v_fun(&self.view_formats),
         }
     }
 
@@ -679,6 +697,27 @@ impl<L: Default> Default for SamplerDescriptor<L> {
             compare: None,
             anisotropy_clamp: 1,
             border_color: None,
+        }
+    }
+}
+
+impl<L> SamplerDescriptor<L> {
+    /// Takes a closure and maps the label of the sampler descriptor into another.
+    #[must_use]
+    pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> SamplerDescriptor<K> {
+        SamplerDescriptor {
+            label: fun(&self.label),
+            address_mode_u: self.address_mode_u,
+            address_mode_v: self.address_mode_v,
+            address_mode_w: self.address_mode_w,
+            mag_filter: self.mag_filter,
+            min_filter: self.min_filter,
+            mipmap_filter: self.mipmap_filter,
+            lod_min_clamp: self.lod_min_clamp,
+            lod_max_clamp: self.lod_max_clamp,
+            compare: self.compare,
+            anisotropy_clamp: self.anisotropy_clamp,
+            border_color: self.border_color,
         }
     }
 }

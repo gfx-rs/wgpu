@@ -18,8 +18,6 @@ pub use init::initialize_html_canvas;
 
 pub use self::image::ComparisonType;
 pub use config::{GpuTestConfiguration, GpuTestInitializer};
-#[doc(hidden)]
-pub use ctor;
 pub use expectations::{FailureApplicationReasons, FailureBehavior, FailureCase, FailureReason};
 pub use init::{initialize_adapter, initialize_device, initialize_instance};
 pub use params::TestParameters;

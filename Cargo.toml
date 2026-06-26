@@ -12,6 +12,7 @@ members = [
     "lock-analyzer",
     "naga-cli",
     "naga-test",
+    "naga-types",
     "naga",
     "naga/fuzz",
     "naga/hlsl-snapshots",
@@ -37,6 +38,7 @@ default-members = [
     "lock-analyzer",
     "naga-cli",
     "naga-test",
+    "naga-types",
     "naga",
     "naga/fuzz",
     "naga/hlsl-snapshots",
@@ -53,6 +55,11 @@ default-members = [
     "wgpu",
     "xtask",
 ]
+
+# NOTE: many packages have non-inherited [lints] sections (Cargo does not support combining
+# workspace inheritance with customization) and must be updated separately.
+[workspace.lints.rust]
+missing_debug_implementations = "warn"
 
 [workspace.lints.clippy]
 ref_as_ptr = "warn"
@@ -72,6 +79,7 @@ authors = ["gfx-rs developers"]
 [workspace.dependencies]
 naga = { version = "29.0.0", path = "./naga" }
 naga-test = { path = "./naga-test" }
+naga-types = { version = "29.0.0", path = "./naga-types" }
 wgpu = { version = "29.0.0", path = "./wgpu", default-features = false, features = [
     "std",
     "serde",
@@ -83,7 +91,6 @@ wgpu = { version = "29.0.0", path = "./wgpu", default-features = false, features
     "vulkan-portability",
     "angle",
     "static-dxc",
-    "noop",               # This should be removed if we ever have non-test crates that depend on wgpu
 ] }
 wgpu-core = { version = "29.0.0", path = "./wgpu-core" }
 wgpu-hal = { version = "29.0.0", path = "./wgpu-hal" }
@@ -119,7 +126,6 @@ cargo_metadata = "0.23"
 cfg_aliases = "0.2.1"
 cfg-if = "1"
 codespan-reporting = { version = "0.13", default-features = false }
-ctor = "0.8"
 diff = "0.1"
 document-features = "0.2.10"
 encase = "0.12"
@@ -128,10 +134,10 @@ exhaust = "0.2"
 fern = "0.7"
 flume = "0.12"
 futures-lite = "2"
-glam = "0.32.0"
+glam = "0.33.0"
 glob = "0.3"
 half = { version = "2.5", default-features = false } # We require 2.5 to have `Arbitrary` support.
-hashbrown = { version = "0.16", default-features = false, features = [
+hashbrown = { version = "0.17", default-features = false, features = [
     "default-hasher",
     "inline-more",
 ] }
@@ -141,8 +147,8 @@ indexmap = { version = "2.11.4", default-features = false }
 indicatif = "0.18"
 itertools = { version = "0.14" }
 jobserver = "0.1"
-ktx2 = "0.4"
-libc = { version = "0.2.172", default-features = false }
+ktx2 = "0.5"
+libc = { version = "0.2.183", default-features = false }
 # See https://github.com/rust-fuzz/libfuzzer/issues/126
 libfuzzer-sys = ">0.4.0,<=0.4.7"
 libloading = "0.8"
@@ -192,7 +198,7 @@ shell-words = "1"
 smallvec = "1.14"
 spirv = "0.4"
 static_assertions = "1.1"
-strum = { version = "0.27.1", default-features = false, features = ["derive"] }
+strum = { version = "0.28", default-features = false, features = ["derive"] }
 syn = "2.0.98"
 tempfile = "3"
 toml = "1.0.0"
@@ -211,6 +217,10 @@ objc2 = "0.6.3"
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
     "CFCGTypes",
+] }
+objc2-core-graphics = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "CGColorSpace",
 ] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
@@ -260,6 +270,7 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
     "std",
     "objc2-core-foundation",
+    "objc2-core-graphics",
     "CALayer",
     "CAMetalLayer",
     "objc2-metal",
@@ -269,7 +280,6 @@ raw-window-metal = "1.0"
 # Vulkan dependencies
 android_system_properties = "0.1.1"
 ash = "0.38"
-gpu-descriptor = "0.3.2"
 
 # DX12 dependencies
 range-alloc = "0.1"

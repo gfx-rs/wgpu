@@ -451,7 +451,7 @@ pub(crate) fn validate_texture_copy_dst_format(
 pub(crate) fn validate_texture_buffer_copy<T>(
     texture_copy_view: &wgt::TexelCopyTextureInfo<T>,
     aspect: hal::FormatAspects,
-    desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
+    desc: &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
     layout: &wgt::TexelCopyBufferLayout,
     aligned: bool,
 ) -> Result<(), TransferError> {
@@ -502,7 +502,7 @@ pub(crate) fn validate_texture_buffer_copy<T>(
 /// [vtcr]: https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-texture-copy-range
 pub(crate) fn validate_texture_copy_range<T>(
     texture_copy_view: &wgt::TexelCopyTextureInfo<T>,
-    desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
+    desc: &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
     texture_side: CopySide,
     copy_size: &Extent3d,
 ) -> Result<(hal::CopyExtent, u32), TransferError> {
@@ -725,15 +725,12 @@ fn handle_dst_texture_init(
     // clear first since we don't track subrects. This means that in rare cases
     // even a *destination* texture of a transfer may need an immediate texture
     // init.
-    let dst_init_kind = if has_copy_partial_init_tracker_coverage(
-        copy_size,
-        destination.mip_level,
-        &texture.desc,
-    ) {
-        MemoryInitKind::NeedsInitializedMemory
-    } else {
-        MemoryInitKind::ImplicitlyInitialized
-    };
+    let dst_init_kind =
+        if has_copy_partial_init_tracker_coverage(copy_size, destination, &texture.desc) {
+            MemoryInitKind::NeedsInitializedMemory
+        } else {
+            MemoryInitKind::ImplicitlyInitialized
+        };
 
     handle_texture_init(state, dst_init_kind, destination, copy_size, texture)?;
     Ok(())
@@ -869,16 +866,19 @@ impl Global {
         );
 
         let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
+
         let mut cmd_buf_data = cmd_enc.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
+            let texture = self.resolve_texture_id(destination.texture);
+            texture.check_valid(&cmd_enc.device.snatchable_lock.read())?;
             Ok(ArcCommand::CopyBufferToTexture {
                 src: wgt::TexelCopyBufferInfo::<Arc<Buffer>> {
                     buffer: self.resolve_buffer_id(source.buffer)?,
                     layout: source.layout,
                 },
                 dst: wgt::TexelCopyTextureInfo::<Arc<Texture>> {
-                    texture: self.resolve_texture_id(destination.texture)?,
+                    texture,
                     mip_level: destination.mip_level,
                     origin: destination.origin,
                     aspect: destination.aspect,
@@ -903,12 +903,15 @@ impl Global {
         );
 
         let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
+
         let mut cmd_buf_data = cmd_enc.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
+            let texture = self.resolve_texture_id(source.texture);
+            texture.check_valid(&cmd_enc.device.snatchable_lock.read())?;
             Ok(ArcCommand::CopyTextureToBuffer {
                 src: wgt::TexelCopyTextureInfo::<Arc<Texture>> {
-                    texture: self.resolve_texture_id(source.texture)?,
+                    texture,
                     mip_level: source.mip_level,
                     origin: source.origin,
                     aspect: source.aspect,
@@ -937,18 +940,26 @@ impl Global {
         );
 
         let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
+
         let mut cmd_buf_data = cmd_enc.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
+            let src_texture = self.resolve_texture_id(source.texture);
+            let dst_texture = self.resolve_texture_id(destination.texture);
+            {
+                let snatch_guard = cmd_enc.device.snatchable_lock.read();
+                src_texture.check_valid(&snatch_guard)?;
+                dst_texture.check_valid(&snatch_guard)?;
+            }
             Ok(ArcCommand::CopyTextureToTexture {
                 src: wgt::TexelCopyTextureInfo {
-                    texture: self.resolve_texture_id(source.texture)?,
+                    texture: src_texture,
                     mip_level: source.mip_level,
                     origin: source.origin,
                     aspect: source.aspect,
                 },
                 dst: wgt::TexelCopyTextureInfo {
-                    texture: self.resolve_texture_id(destination.texture)?,
+                    texture: dst_texture,
                     mip_level: destination.mip_level,
                     origin: destination.origin,
                     aspect: destination.aspect,
@@ -1143,7 +1154,7 @@ pub(super) fn copy_buffer_to_texture(
         .check_usage(BufferUsages::COPY_SRC)
         .map_err(TransferError::MissingBufferUsage)?;
 
-    let dst_raw = dst_texture.try_raw(state.snatch_guard)?;
+    let dst_raw = dst_texture.try_inner(state.snatch_guard)?.raw();
     dst_texture
         .check_usage(TextureUsages::COPY_DST)
         .map_err(TransferError::MissingTextureUsage)?;
@@ -1252,7 +1263,7 @@ pub(super) fn copy_texture_to_buffer(
 
     let (src_range, src_base) = extract_texture_selector(source, copy_size, src_texture)?;
 
-    let src_raw = src_texture.try_raw(state.snatch_guard)?;
+    let src_raw = src_texture.try_inner(state.snatch_guard)?.raw();
     src_texture
         .check_usage(TextureUsages::COPY_SRC)
         .map_err(TransferError::MissingTextureUsage)?;
@@ -1373,9 +1384,23 @@ pub(super) fn copy_texture_to_texture(
     dst_texture.same_device(state.device)?;
 
     // src and dst texture format must be copy-compatible
-    // https://gpuweb.github.io/gpuweb/#copy-compatible
-    if src_texture.desc.format.remove_srgb_suffix() != dst_texture.desc.format.remove_srgb_suffix()
-    {
+    // (https://gpuweb.github.io/gpuweb/#copy-compatible), with an
+    // extension allowing one plane of a planar source to be copied
+    // into a single-plane destination of the matching format
+    // (e.g. NV12 Plane0 -> R8Unorm, NV12 Plane1 -> Rg8Unorm).
+    //
+    // When taking this path, `copy_size` and `source.origin` are
+    // interpreted in *plane* texels, not luma texels: copying NV12
+    // Plane1 into an Rg8Unorm of size (W/2, H/2) requires
+    // `copy_size = (W/2, H/2)`. The plane-extent check further down
+    // enforces this against the subsampled plane extent, so a caller
+    // passing luma-sized values gets a source-side error pointing at
+    // the actual mistake rather than an opaque destination overrun.
+    let src_fmt_no_srgb = src_texture.desc.format.remove_srgb_suffix();
+    let dst_fmt_no_srgb = dst_texture.desc.format.remove_srgb_suffix();
+    let planar_split_ok = src_fmt_no_srgb.is_multi_planar_format()
+        && src_fmt_no_srgb.aspect_specific_format(source.aspect) == Some(dst_fmt_no_srgb);
+    if src_fmt_no_srgb != dst_fmt_no_srgb && !planar_split_ok {
         return Err(TransferError::TextureFormatsNotCopyCompatible {
             src_format: src_texture.desc.format,
             dst_format: dst_texture.desc.format,
@@ -1392,6 +1417,45 @@ pub(super) fn copy_texture_to_texture(
         copy_size,
     )?;
 
+    // For planar -> single-plane copies, re-check the source extent
+    // in plane coordinates. `validate_texture_copy_range` above used
+    // the full luma extent of the planar source, so it does not
+    // catch a caller treating `copy_size` / `origin` as luma-sized
+    // when targeting a subsampled plane (NV12/P010 plane 1).
+    if planar_split_ok {
+        // `planar_split_ok` implies `aspect_specific_format(source.aspect)`
+        // returned `Some`, which is only true for `Plane{0,1,2}`.
+        let plane = source.aspect.to_plane().expect("planar_split_ok aspect");
+        let plane_extent = src_texture
+            .desc
+            .compute_render_extent(source.mip_level, Some(plane));
+        let check = |dimension, start: u32, size: u32, plane_size: u32| {
+            if start > plane_size || plane_size - start < size {
+                Err(TransferError::TextureOverrun {
+                    start_offset: start,
+                    end_offset: start.wrapping_add(size),
+                    texture_size: plane_size,
+                    dimension,
+                    side: CopySide::Source,
+                })
+            } else {
+                Ok(())
+            }
+        };
+        check(
+            TextureErrorDimension::X,
+            source.origin.x,
+            copy_size.width,
+            plane_extent.width,
+        )?;
+        check(
+            TextureErrorDimension::Y,
+            source.origin.y,
+            copy_size.height,
+            plane_extent.height,
+        )?;
+    }
+
     if Arc::as_ptr(src_texture) == Arc::as_ptr(dst_texture) {
         validate_copy_within_same_texture(
             source,
@@ -1405,7 +1469,8 @@ pub(super) fn copy_texture_to_texture(
     let (dst_range, dst_tex_base) = extract_texture_selector(destination, copy_size, dst_texture)?;
     let src_texture_aspects = hal::FormatAspects::from(src_texture.desc.format);
     let dst_texture_aspects = hal::FormatAspects::from(dst_texture.desc.format);
-    if src_tex_base.aspect != src_texture_aspects {
+    // `planar_split_ok` already constrains `source.aspect` to a single plane.
+    if src_tex_base.aspect != src_texture_aspects && !planar_split_ok {
         return Err(TransferError::CopySrcMissingAspects.into());
     }
     if dst_tex_base.aspect != dst_texture_aspects {
@@ -1420,11 +1485,11 @@ pub(super) fn copy_texture_to_texture(
         .into());
     }
 
-    let src_raw = src_texture.try_raw(state.snatch_guard)?;
+    let src_raw = src_texture.try_inner(state.snatch_guard)?.raw();
     src_texture
         .check_usage(TextureUsages::COPY_SRC)
         .map_err(TransferError::MissingTextureUsage)?;
-    let dst_raw = dst_texture.try_raw(state.snatch_guard)?;
+    let dst_raw = dst_texture.try_inner(state.snatch_guard)?.raw();
     dst_texture
         .check_usage(TextureUsages::COPY_DST)
         .map_err(TransferError::MissingTextureUsage)?;

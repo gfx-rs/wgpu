@@ -192,7 +192,8 @@ impl Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
             label: None,
             view_formats: &[],
         });
@@ -438,11 +439,11 @@ impl crate::framework::Example for Example {
         });
 
         let vertex_attr = wgpu::vertex_attr_array![0 => Sint8x4, 1 => Sint8x4];
-        let vb_desc = wgpu::VertexBufferLayout {
+        let vertex_buffers = [Some(wgpu::VertexBufferLayout {
             array_stride: vertex_size as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &vertex_attr,
-        };
+        })];
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
@@ -494,7 +495,7 @@ impl crate::framework::Example for Example {
                     module: &shader,
                     entry_point: Some("vs_bake"),
                     compilation_options: Default::default(),
-                    buffers: std::slice::from_ref(&vb_desc),
+                    buffers: &vertex_buffers,
                 },
                 fragment: None,
                 primitive: wgpu::PrimitiveState {
@@ -628,7 +629,7 @@ impl crate::framework::Example for Example {
                     module: &shader,
                     entry_point: Some("vs_main"),
                     compilation_options: Default::default(),
-                    buffers: &[vb_desc],
+                    buffers: &vertex_buffers,
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,

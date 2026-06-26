@@ -753,8 +753,8 @@ fn inject_standard_builtins(
             let fun = match name {
                 "packSnorm4x8" => MathFunction::Pack4x8snorm,
                 "packUnorm4x8" => MathFunction::Pack4x8unorm,
-                "packSnorm2x16" => MathFunction::Pack2x16unorm,
-                "packUnorm2x16" => MathFunction::Pack2x16snorm,
+                "packSnorm2x16" => MathFunction::Pack2x16snorm,
+                "packUnorm2x16" => MathFunction::Pack2x16unorm,
                 "packHalf2x16" => MathFunction::Pack2x16float,
                 _ => unreachable!(),
             };

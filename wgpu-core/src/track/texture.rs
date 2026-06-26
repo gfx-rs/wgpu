@@ -160,6 +160,12 @@ impl TextureViewBindGroupState {
     pub fn insert_single(&mut self, view: Arc<TextureView>, usage: TextureUses) {
         self.views.push((view, usage));
     }
+
+    /// Returns an iterator over the parent textures of the tracked views. May contain
+    /// duplicates.
+    pub fn used_textures(&self) -> impl Iterator<Item = &Arc<Texture>> {
+        self.views.iter().map(|(v, _)| &v.parent)
+    }
 }
 
 /// Container for corresponding simple and complex texture states.
@@ -483,7 +489,7 @@ impl TextureTracker {
             .drain(..)
             .inspect(|pending| {
                 let tex = unsafe { self.metadata.get_resource_unchecked(pending.id as _) };
-                textures.push(tex.inner.get(snatch_guard));
+                textures.push(tex.inner.get(snatch_guard).maybe_valid());
             })
             .collect();
         (transitions, textures)

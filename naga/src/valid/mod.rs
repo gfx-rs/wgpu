@@ -216,6 +216,8 @@ bitflags::bitflags! {
         const MEMORY_DECORATION_COHERENT = 1 << 41;
         /// Support for the `@volatile` memory decoration on storage buffers.
         const MEMORY_DECORATION_VOLATILE = 1 << 42;
+        /// Support for 16-bit integer types.
+        const SHADER_INT16 = 1 << 43;
     }
 }
 
@@ -231,13 +233,14 @@ impl Capabilities {
             Self::DUAL_SOURCE_BLENDING => Some(Ext::DualSourceBlending),
             // NOTE: `SHADER_FLOAT16_IN_FLOAT32` _does not_ require the `f16` extension
             Self::SHADER_FLOAT16 => Some(Ext::F16),
+            Self::SHADER_INT16 => Some(Ext::WgpuInt16),
             Self::CLIP_DISTANCES => Some(Ext::ClipDistances),
             Self::MESH_SHADER => Some(Ext::WgpuMeshShader),
             Self::RAY_QUERY => Some(Ext::WgpuRayQuery),
             Self::RAY_HIT_VERTEX_POSITION => Some(Ext::WgpuRayQueryVertexReturn),
             Self::COOPERATIVE_MATRIX => Some(Ext::WgpuCooperativeMatrix),
             Self::RAY_TRACING_PIPELINE => Some(Ext::WgpuRayTracingPipeline),
-            Self::PER_VERTEX => Some(Ext::PerVertex),
+            Self::PER_VERTEX => Some(Ext::WgpuPerVertex),
             Self::BUFFER_BINDING_ARRAY
             | Self::BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
             | Self::STORAGE_BUFFER_BINDING_ARRAY
@@ -704,6 +707,8 @@ impl Validator {
         match gctx.types[o.ty].inner {
             crate::TypeInner::Scalar(
                 crate::Scalar::BOOL
+                | crate::Scalar::I16
+                | crate::Scalar::U16
                 | crate::Scalar::I32
                 | crate::Scalar::U32
                 | crate::Scalar::F16

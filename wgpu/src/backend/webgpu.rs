@@ -20,6 +20,7 @@ use core::{
     future::Future,
     ops::Range,
     pin::Pin,
+    sync::atomic::{AtomicU8, Ordering},
     task::{self, Poll},
 };
 use wgt::Backends;
@@ -622,7 +623,7 @@ fn map_buffer_copy_view(
     if let Some(rows_per_image) = view.layout.rows_per_image {
         mapped.set_rows_per_image(rows_per_image);
     }
-    mapped.set_offset(view.layout.offset as f64);
+    mapped.set_offset_f64(view.layout.offset as f64);
     mapped
 }
 
@@ -632,7 +633,7 @@ fn map_texture_copy_view(
     let texture = view.texture.inner.as_webgpu();
     let mapped = webgpu_sys::GpuTexelCopyTextureInfo::new(&texture.inner);
     mapped.set_mip_level(view.mip_level);
-    mapped.set_origin(&map_origin_3d(view.origin));
+    mapped.set_origin_gpu_origin_3d_dict(&map_origin_3d(view.origin));
     mapped.set_aspect(map_texture_aspect(view.aspect));
     mapped
 }
@@ -643,7 +644,7 @@ fn map_tagged_texture_copy_view(
     let texture = view.texture.inner.as_webgpu();
     let mapped = webgpu_sys::GpuCopyExternalImageDestInfo::new(&texture.inner);
     mapped.set_mip_level(view.mip_level);
-    mapped.set_origin(&map_origin_3d(view.origin));
+    mapped.set_origin_gpu_origin_3d_dict(&map_origin_3d(view.origin));
     mapped.set_aspect(map_texture_aspect(view.aspect));
     // mapped.set_color_space(map_color_space(view.color_space));
     mapped.set_premultiplied_alpha(view.premultiplied_alpha);
@@ -653,8 +654,30 @@ fn map_tagged_texture_copy_view(
 fn map_external_texture_copy_view(
     view: &crate::CopyExternalImageSourceInfo,
 ) -> webgpu_sys::GpuCopyExternalImageSourceInfo {
-    let mapped = webgpu_sys::GpuCopyExternalImageSourceInfo::new(&view.source);
-    mapped.set_origin(&map_origin_2d(view.origin));
+    let mapped = match &view.source {
+        crate::ExternalImageSource::ImageBitmap(bitmap) => {
+            webgpu_sys::GpuCopyExternalImageSourceInfo::new(bitmap)
+        }
+        crate::ExternalImageSource::HTMLImageElement(image) => {
+            webgpu_sys::GpuCopyExternalImageSourceInfo::new_with_html_image_element(image)
+        }
+        crate::ExternalImageSource::HTMLVideoElement(video) => {
+            webgpu_sys::GpuCopyExternalImageSourceInfo::new_with_html_video_element(video)
+        }
+        crate::ExternalImageSource::ImageData(image_data) => {
+            webgpu_sys::GpuCopyExternalImageSourceInfo::new_with_image_data(image_data)
+        }
+        crate::ExternalImageSource::HTMLCanvasElement(canvas) => {
+            webgpu_sys::GpuCopyExternalImageSourceInfo::new_with_html_canvas_element(canvas)
+        }
+        crate::ExternalImageSource::OffscreenCanvas(offscreen_canvas) => {
+            webgpu_sys::GpuCopyExternalImageSourceInfo::new_with_offscreen_canvas(offscreen_canvas)
+        }
+        crate::ExternalImageSource::VideoFrame(video_frame) => {
+            webgpu_sys::GpuCopyExternalImageSourceInfo::new_with_video_frame(video_frame)
+        }
+    };
+    mapped.set_origin_gpu_origin_2d_dict(&map_origin_2d(view.origin));
     mapped.set_flip_y(view.flip_y);
     mapped
 }
@@ -796,6 +819,7 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_texture_dimension_3d: limits.max_texture_dimension_3d(),
         max_texture_array_layers: limits.max_texture_array_layers(),
         max_bind_groups: limits.max_bind_groups(),
+        max_bind_groups_plus_vertex_buffers: limits.max_bind_groups_plus_vertex_buffers(),
         max_bindings_per_bind_group: limits.max_bindings_per_bind_group(),
         max_dynamic_uniform_buffers_per_pipeline_layout: limits
             .max_dynamic_uniform_buffers_per_pipeline_layout(),
@@ -854,6 +878,9 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
             .max_acceleration_structures_per_shader_stage,
 
         max_multiview_view_count: wgt::Limits::default().max_multiview_view_count,
+
+        max_ray_dispatch_count: wgt::Limits::default().max_ray_dispatch_count,
+        max_ray_recursion_depth: wgt::Limits::default().max_ray_recursion_depth,
     }
 }
 
@@ -863,20 +890,24 @@ fn map_adapter_info(adapter_info: &webgpu_sys::GpuAdapterInfo) -> wgt::AdapterIn
         name: adapter_info.description().to_string(),
         vendor: 0,
         device: 0,
-        device_type: wgt::DeviceType::Other,
+        device_type: if adapter_info.is_fallback_adapter() {
+            wgt::DeviceType::Cpu
+        } else {
+            wgt::DeviceType::Other
+        },
         device_pci_bus_id: String::new(),
         driver: String::new(),
         driver_info: String::new(),
         backend: wgt::Backend::BrowserWebGpu,
-        subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
-        subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
-        transient_saves_memory: false,
+        subgroup_min_size: adapter_info.subgroup_min_size(),
+        subgroup_max_size: adapter_info.subgroup_max_size(),
+        transient_saves_memory: None,
         limit_bucket: None,
     }
 }
 
-fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
-    let object = js_sys::Object::new();
+fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object<js_sys::Number> {
+    let object = js_sys::Object::<js_sys::Number>::new_typed();
 
     macro_rules! set_properties {
         (($from:expr) => ($on:expr) : $(($js_ident:ident, $rs_ident:ident)),* $(,)?) => {
@@ -903,7 +934,7 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
         (maxTextureDimension3D, max_texture_dimension_3d),
         (maxTextureArrayLayers, max_texture_array_layers),
         (maxBindGroups, max_bind_groups),
-        // TODO: (maxBindGroupsPlusVertexBuffers, max_bind_groups_plus_vertex_buffers),
+        (maxBindGroupsPlusVertexBuffers, max_bind_groups_plus_vertex_buffers),
         (maxBindingsPerBindGroup, max_bindings_per_bind_group),
         (maxDynamicUniformBuffersPerPipelineLayout, max_dynamic_uniform_buffers_per_pipeline_layout),
         (maxDynamicStorageBuffersPerPipelineLayout, max_dynamic_storage_buffers_per_pipeline_layout),
@@ -934,23 +965,20 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
     object
 }
 
-type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
-
 fn future_request_adapter(
-    result: JsFutureResult,
+    result: Result<js_sys::JsOption<webgpu_sys::GpuAdapter>, wasm_bindgen::JsValue>,
     requested_backends: Backends,
 ) -> Result<dispatch::DispatchAdapter, wgt::RequestAdapterError> {
-    let web_adapter: Option<webgpu_sys::GpuAdapter> =
-        result.and_then(wasm_bindgen::JsCast::dyn_into).ok();
-    web_adapter
-        .map(|adapter| {
-            WebAdapter {
+    result
+        .map_err(|_| request_adapter_null_error(requested_backends))
+        .and_then(|adapter| match adapter.into_option() {
+            Some(adapter) => Ok(WebAdapter {
                 inner: adapter,
                 ident: crate::cmp::Identifier::create(),
             }
-            .into()
+            .into()),
+            None => Err(request_adapter_null_error(requested_backends)),
         })
-        .ok_or_else(|| request_adapter_null_error(requested_backends))
 }
 
 // Translate WebGPU’s null return into our error.
@@ -968,12 +996,17 @@ fn request_adapter_null_error(requested_backends: Backends) -> wgt::RequestAdapt
 }
 
 fn future_request_device(
-    result: JsFutureResult,
+    result: Result<webgpu_sys::GpuDevice, wasm_bindgen::JsValue>,
 ) -> Result<(dispatch::DispatchDevice, dispatch::DispatchQueue), crate::RequestDeviceError> {
     result
-        .map(|js_value| {
-            let device = webgpu_sys::GpuDevice::from(js_value);
+        .map(|device| {
             let queue = device.queue();
+
+            // A `GPUDevice` is the first point at which we can empirically probe
+            // which canvas formats this browser actually supports (see
+            // `probe_rgba16float_canvas_support`). Run it once here so that
+            // `Surface::get_capabilities` can report `Rgba16Float` truthfully.
+            rgba16float_probe::probe_rgba16float_canvas_support(&device);
 
             (
                 WebDevice {
@@ -995,18 +1028,14 @@ fn future_request_device(
         })
 }
 
-fn future_pop_error_scope(result: JsFutureResult) -> Option<crate::Error> {
-    match result {
-        Ok(js_value) if js_value.is_object() => {
-            let js_error = wasm_bindgen::JsCast::dyn_into(js_value).unwrap();
-            Some(crate::Error::from_js(js_error))
-        }
-        _ => None,
-    }
+fn future_pop_error_scope(
+    result: Result<js_sys::JsOption<webgpu_sys::GpuError>, wasm_bindgen::JsValue>,
+) -> Option<crate::Error> {
+    Some(crate::Error::from_js(result.ok()?.into_option()?.into()))
 }
 
 fn future_compilation_info(
-    result: JsFutureResult,
+    result: Result<webgpu_sys::GpuCompilationInfo, wasm_bindgen::JsValue>,
     base_compilation_info: &WebShaderCompilationInfo,
 ) -> crate::CompilationInfo {
     let base_messages = match base_compilation_info {
@@ -1016,34 +1045,33 @@ fn future_compilation_info(
         _ => [].iter().cloned(),
     };
 
-    let messages = match result {
-        Ok(js_value) => {
-            let info = webgpu_sys::GpuCompilationInfo::from(js_value);
-            base_messages
+    let messages =
+        match result {
+            Ok(info) => base_messages
                 .chain(info.messages().into_iter().map(|message| {
-                    crate::CompilationMessage::from_js(
-                        webgpu_sys::GpuCompilationMessage::from(message),
-                        base_compilation_info,
-                    )
+                    crate::CompilationMessage::from_js(message, base_compilation_info)
                 }))
-                .collect()
-        }
-        Err(_v) => base_messages
-            .chain(core::iter::once(crate::CompilationMessage {
-                message: "Getting compilation info failed".to_string(),
-                message_type: crate::CompilationMessageType::Error,
-                location: None,
-            }))
-            .collect(),
-    };
+                .collect(),
+            Err(_v) => base_messages
+                .chain(core::iter::once(crate::CompilationMessage {
+                    message: "Getting compilation info failed".to_string(),
+                    message_type: crate::CompilationMessageType::Error,
+                    location: None,
+                }))
+                .collect(),
+        };
 
     crate::CompilationInfo { messages }
 }
 
 /// Calls `callback(success_value)` when the promise completes successfully, calls `callback(failure_value)`
 /// when the promise completes unsuccessfully.
-fn register_then_closures<F, T>(promise: &Promise, callback: F, success_value: T, failure_value: T)
-where
+fn register_then_closures<F, T>(
+    promise: &Promise<js_sys::Undefined>,
+    callback: F,
+    success_value: T,
+    failure_value: T,
+) where
     F: FnOnce(T) + 'static,
     T: 'static,
 {
@@ -1060,12 +1088,14 @@ where
 
     let rc_callback_clone1 = rc_callback.clone();
     let rc_callback_clone2 = rc_callback.clone();
+
     let closure_success = wasm_bindgen::closure::Closure::once(move |_| {
         let (success_closure, rejection_closure, callback) =
             rc_callback_clone1.borrow_mut().take().unwrap();
         callback(success_value);
         // drop the closures, including ourselves, which will free any captured memory.
         drop((success_closure, rejection_closure));
+        Ok(())
     });
     let closure_rejected = wasm_bindgen::closure::Closure::once(move |_| {
         let (success_closure, rejection_closure, callback) =
@@ -1073,11 +1103,12 @@ where
         callback(failure_value);
         // drop the closures, including ourselves, which will free any captured memory.
         drop((success_closure, rejection_closure));
+        Ok(())
     });
 
     // Calling then before setting the value in the Rc seems like a race, but it isn't
     // because the promise callback will run on this thread, so there is no race.
-    let _ = promise.then2(&closure_success, &closure_rejected);
+    let _ = promise.then_with_reject(&closure_success, &closure_rejected);
 
     *rc_callback.borrow_mut() = Some((closure_success, closure_rejected, callback));
 }
@@ -1120,24 +1151,19 @@ impl ContextWebGpu {
             }
         };
 
-        // An error here indicated that WebGPU is disabled in the browser.
-        let context: webgpu_sys::GpuCanvasContext =
-            context
-                .dyn_into()
-                .map_err(|actual| crate::CreateSurfaceError {
-                    inner: crate::CreateSurfaceErrorKind::Web(format!(
-                        "`canvas.getContext()` returned a value that did not coerce to \
-                        `GPUCanvasContext`. \
-                        This is likely because WebGPU is disabled in this browser. \
-                        Expected: `GPUCanvasContext`, Actual: `{}`",
-                        actual.to_string()
-                    )),
-                })?;
+        /* Use unchecked_into instead of dyn_into: the instanceof check that dyn_into
+         * performs for GpuCanvasContext fails in some wasm-bindgen configurations even
+         * when the object is correct (e.g. certain browser extensions or cross-realm
+         * scenarios interfere with the JS prototype chain). getContext("webgpu") already
+         * guarantees the returned object is a GPUCanvasContext when it succeeds, so the
+         * instanceof check is redundant and only causes spurious surface creation errors. */
+        let context: webgpu_sys::GpuCanvasContext = context.unchecked_into();
 
         Ok(WebSurface {
             gpu: self.gpu.clone(),
             context,
             canvas,
+            configure_failed: Cell::new(false),
             ident: crate::cmp::Identifier::create(),
         }
         .into())
@@ -1424,6 +1450,15 @@ pub struct WebSurface {
     gpu: Option<DefinedNonNullJsValue<webgpu_sys::Gpu>>,
     canvas: Canvas,
     context: webgpu_sys::GpuCanvasContext,
+    /// Set when the most recent [`configure`](Self::configure) call failed, e.g.
+    /// because the browser rejected the requested canvas format. While set,
+    /// `get_current_texture` reports [`SurfaceStatus::Lost`] instead of letting
+    /// the JS exception turn into a panic — there is no `catch_unwind` on wasm,
+    /// so a panic would be an uncatchable abort the application cannot recover
+    /// from.
+    ///
+    /// [`SurfaceStatus::Lost`]: crate::SurfaceStatus::Lost
+    configure_failed: Cell<bool>,
     /// Unique identifier for this Surface.
     ident: crate::cmp::Identifier,
 }
@@ -1708,12 +1743,16 @@ impl dispatch::AdapterInterface for WebAdapter {
             .copied()
             .flat_map(|(flag, value)| {
                 if desc.required_features.contains(flag) {
-                    Some(JsValue::from(value))
+                    Some(
+                        wasm_bindgen::JsValue::from(value)
+                            .dyn_into::<js_sys::JsString>()
+                            .unwrap(),
+                    )
                 } else {
                     None
                 }
             })
-            .collect::<js_sys::Array>();
+            .collect::<Vec<js_sys::JsString>>();
         mapped_desc.set_required_features(&required_features);
 
         if let Some(label) = desc.label {
@@ -1985,7 +2024,7 @@ impl dispatch::DeviceInterface for WebDevice {
                         let buffer = webgpu_sys::GpuBufferBindingLayout::new();
                         buffer.set_has_dynamic_offset(has_dynamic_offset);
                         if let Some(size) = min_binding_size {
-                            buffer.set_min_binding_size(size.get() as f64);
+                            buffer.set_min_binding_size_f64(size.get() as f64);
                         }
                         buffer.set_type(match ty {
                             wgt::BufferBindingType::Uniform => {
@@ -2064,7 +2103,7 @@ impl dispatch::DeviceInterface for WebDevice {
 
                 mapped_entry
             })
-            .collect::<js_sys::Array>();
+            .collect::<Vec<webgpu_sys::GpuBindGroupLayoutEntry>>();
 
         let mapped_desc = webgpu_sys::GpuBindGroupLayoutDescriptor::new(&mapped_bindings);
         if let Some(label) = desc.label {
@@ -2086,53 +2125,55 @@ impl dispatch::DeviceInterface for WebDevice {
         let mapped_entries = desc
             .entries
             .iter()
-            .map(|binding| {
-                let mapped_resource = match binding.resource {
-                    crate::BindingResource::Buffer(crate::BufferBinding {
-                        buffer,
-                        offset,
-                        size,
-                    }) => {
-                        let buffer = buffer.inner.as_webgpu();
-                        let mapped_buffer_binding =
-                            webgpu_sys::GpuBufferBinding::new(&buffer.inner);
-                        mapped_buffer_binding.set_offset(offset as f64);
-                        if let Some(s) = size {
-                            mapped_buffer_binding.set_size(s.get() as f64);
-                        }
-                        JsValue::from(mapped_buffer_binding)
+            .map(|binding| match binding.resource {
+                crate::BindingResource::Buffer(crate::BufferBinding {
+                    buffer,
+                    offset,
+                    size,
+                }) => {
+                    let buffer = buffer.inner.as_webgpu();
+                    let mapped_buffer_binding = webgpu_sys::GpuBufferBinding::new(&buffer.inner);
+                    mapped_buffer_binding.set_offset_f64(offset as f64);
+                    if let Some(s) = size {
+                        mapped_buffer_binding.set_size_f64(s.get() as f64);
                     }
-                    crate::BindingResource::BufferArray(..) => {
-                        panic!("Web backend does not support arrays of buffers")
-                    }
-                    crate::BindingResource::Sampler(sampler) => {
-                        let sampler = &sampler.inner.as_webgpu().inner;
-                        JsValue::from(sampler)
-                    }
-                    crate::BindingResource::SamplerArray(..) => {
-                        panic!("Web backend does not support arrays of samplers")
-                    }
-                    crate::BindingResource::TextureView(texture_view) => {
-                        let texture_view = &texture_view.inner.as_webgpu().inner;
-                        JsValue::from(texture_view)
-                    }
-                    crate::BindingResource::TextureViewArray(..) => {
-                        panic!("Web backend does not support BINDING_INDEXING extension")
-                    }
-                    crate::BindingResource::AccelerationStructure(_) => {
-                        unimplemented!("Raytracing not implemented for web")
-                    }
-                    crate::BindingResource::AccelerationStructureArray(_) => {
-                        unimplemented!("Raytracing not implemented for web")
-                    }
-                    crate::BindingResource::ExternalTexture(_) => {
-                        unimplemented!("ExternalTexture not implemented for web")
-                    }
-                };
 
-                webgpu_sys::GpuBindGroupEntry::new(binding.binding, &mapped_resource)
+                    webgpu_sys::GpuBindGroupEntry::new_with_gpu_buffer_binding(
+                        binding.binding,
+                        &mapped_buffer_binding,
+                    )
+                }
+                crate::BindingResource::BufferArray(..) => {
+                    panic!("Web backend does not support arrays of buffers")
+                }
+                crate::BindingResource::Sampler(sampler) => {
+                    let sampler = &sampler.inner.as_webgpu().inner;
+                    webgpu_sys::GpuBindGroupEntry::new(binding.binding, sampler)
+                }
+                crate::BindingResource::SamplerArray(..) => {
+                    panic!("Web backend does not support arrays of samplers")
+                }
+                crate::BindingResource::TextureView(texture_view) => {
+                    let texture_view = &texture_view.inner.as_webgpu().inner;
+                    webgpu_sys::GpuBindGroupEntry::new_with_gpu_texture_view(
+                        binding.binding,
+                        texture_view,
+                    )
+                }
+                crate::BindingResource::TextureViewArray(..) => {
+                    panic!("Web backend does not support BINDING_INDEXING extension")
+                }
+                crate::BindingResource::AccelerationStructure(_) => {
+                    unimplemented!("Raytracing not implemented for web")
+                }
+                crate::BindingResource::AccelerationStructureArray(_) => {
+                    unimplemented!("Raytracing not implemented for web")
+                }
+                crate::BindingResource::ExternalTexture(_) => {
+                    unimplemented!("ExternalTexture not implemented for web")
+                }
             })
-            .collect::<js_sys::Array>();
+            .collect::<Vec<webgpu_sys::GpuBindGroupEntry>>();
 
         let bgl = &desc.layout.inner.as_webgpu().inner;
         let mapped_desc = webgpu_sys::GpuBindGroupDescriptor::new(&mapped_entries, bgl);
@@ -2152,15 +2193,14 @@ impl dispatch::DeviceInterface for WebDevice {
         &self,
         desc: &crate::PipelineLayoutDescriptor<'_>,
     ) -> dispatch::DispatchPipelineLayout {
-        let null = wasm_bindgen::JsValue::NULL;
         let temp_layouts = desc
             .bind_group_layouts
             .iter()
             .map(|bgl| match bgl {
-                Some(bgl) => bgl.inner.as_webgpu().inner.as_ref(),
-                None => &null,
+                Some(bgl) => js_sys::JsOption::wrap(bgl.inner.as_webgpu().inner.clone()),
+                None => js_sys::JsOption::new(),
             })
-            .collect::<js_sys::Array>();
+            .collect::<Vec<js_sys::JsOption<webgpu_sys::GpuBindGroupLayout>>>();
         let mapped_desc = webgpu_sys::GpuPipelineLayoutDescriptor::new(&temp_layouts);
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
@@ -2193,41 +2233,43 @@ impl dispatch::DeviceInterface for WebDevice {
             .vertex
             .buffers
             .iter()
-            .map(|vbuf| {
-                let mapped_attributes = vbuf
-                    .attributes
-                    .iter()
-                    .map(|attr| {
-                        webgpu_sys::GpuVertexAttribute::new(
-                            map_vertex_format(attr.format),
-                            attr.offset as f64,
-                            attr.shader_location,
-                        )
-                    })
-                    .collect::<js_sys::Array>();
+            .map(|vbuf| match vbuf {
+                Some(vbuf) => {
+                    let mapped_attributes = vbuf
+                        .attributes
+                        .iter()
+                        .map(|attr| {
+                            webgpu_sys::GpuVertexAttribute::new_with_f64(
+                                map_vertex_format(attr.format),
+                                attr.offset as f64,
+                                attr.shader_location,
+                            )
+                        })
+                        .collect::<Vec<webgpu_sys::GpuVertexAttribute>>();
 
-                let mapped_vbuf = webgpu_sys::GpuVertexBufferLayout::new(
-                    vbuf.array_stride as f64,
-                    &mapped_attributes,
-                );
-                mapped_vbuf.set_step_mode(map_vertex_step_mode(vbuf.step_mode));
-                mapped_vbuf
+                    let mapped_vbuf = webgpu_sys::GpuVertexBufferLayout::new_with_f64(
+                        vbuf.array_stride as f64,
+                        &mapped_attributes,
+                    );
+                    mapped_vbuf.set_step_mode(map_vertex_step_mode(vbuf.step_mode));
+                    js_sys::JsOption::wrap(mapped_vbuf)
+                }
+                None => js_sys::JsOption::new(),
             })
-            .collect::<js_sys::Array>();
+            .collect::<Vec<js_sys::JsOption<webgpu_sys::GpuVertexBufferLayout>>>();
 
         mapped_vertex_state.set_buffers(&buffers);
 
-        let auto_layout = wasm_bindgen::JsValue::from(webgpu_sys::GpuAutoLayoutMode::Auto);
-        let mapped_desc = webgpu_sys::GpuRenderPipelineDescriptor::new(
-            &match desc.layout {
-                Some(layout) => {
-                    let layout = &layout.inner.as_webgpu().inner;
-                    JsValue::from(layout)
-                }
-                None => auto_layout,
-            },
-            &mapped_vertex_state,
-        );
+        let mapped_desc = match desc.layout {
+            Some(layout) => webgpu_sys::GpuRenderPipelineDescriptor::new(
+                &layout.inner.as_webgpu().inner,
+                &mapped_vertex_state,
+            ),
+            None => webgpu_sys::GpuRenderPipelineDescriptor::new_with_gpu_auto_layout_mode(
+                webgpu_sys::GpuAutoLayoutMode::Auto,
+                &mapped_vertex_state,
+            ),
+        };
 
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
@@ -2253,11 +2295,11 @@ impl dispatch::DeviceInterface for WebDevice {
                             mapped_color_state.set_blend(&mapped_blend_state);
                         }
                         mapped_color_state.set_write_mask(target.write_mask.bits());
-                        wasm_bindgen::JsValue::from(mapped_color_state)
+                        js_sys::JsOption::wrap(mapped_color_state)
                     }
-                    None => wasm_bindgen::JsValue::null(),
+                    None => js_sys::JsOption::new(),
                 })
-                .collect::<js_sys::Array>();
+                .collect::<Vec<js_sys::JsOption<webgpu_sys::GpuColorTargetState>>>();
             let module = frag.module.inner.as_webgpu();
             let mapped_fragment_desc = webgpu_sys::GpuFragmentState::new(&module.module, &targets);
             insert_constants_map(&mapped_fragment_desc, frag.compilation_options.constants);
@@ -2303,17 +2345,17 @@ impl dispatch::DeviceInterface for WebDevice {
         if let Some(ep) = desc.entry_point {
             mapped_compute_stage.set_entry_point(ep);
         }
-        let auto_layout = wasm_bindgen::JsValue::from(webgpu_sys::GpuAutoLayoutMode::Auto);
-        let mapped_desc = webgpu_sys::GpuComputePipelineDescriptor::new(
-            &match desc.layout {
-                Some(layout) => {
-                    let layout = &layout.inner.as_webgpu().inner;
-                    JsValue::from(layout)
-                }
-                None => auto_layout,
-            },
-            &mapped_compute_stage,
-        );
+        let mapped_desc = match desc.layout {
+            Some(layout) => webgpu_sys::GpuComputePipelineDescriptor::new(
+                &layout.inner.as_webgpu().inner,
+                &mapped_compute_stage,
+            ),
+            None => webgpu_sys::GpuComputePipelineDescriptor::new_with_gpu_auto_layout_mode(
+                webgpu_sys::GpuAutoLayoutMode::Auto,
+                &mapped_compute_stage,
+            ),
+        };
+
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
         }
@@ -2338,7 +2380,8 @@ impl dispatch::DeviceInterface for WebDevice {
     }
 
     fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> dispatch::DispatchBuffer {
-        let mapped_desc = webgpu_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
+        let mapped_desc =
+            webgpu_sys::GpuBufferDescriptor::new_with_f64(desc.size as f64, desc.usage.bits());
         mapped_desc.set_mapped_at_creation(desc.mapped_at_creation);
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
@@ -2347,10 +2390,10 @@ impl dispatch::DeviceInterface for WebDevice {
     }
 
     fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> dispatch::DispatchTexture {
-        let mapped_desc = webgpu_sys::GpuTextureDescriptor::new(
+        let mapped_desc = webgpu_sys::GpuTextureDescriptor::new_with_gpu_extent_3d_dict(
             map_texture_format(desc.format),
             &map_extent_3d(desc.size),
-            (desc.usage - crate::TextureUsages::TRANSIENT).bits(),
+            desc.usage.bits(),
         );
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
@@ -2361,8 +2404,12 @@ impl dispatch::DeviceInterface for WebDevice {
         let mapped_view_formats = desc
             .view_formats
             .iter()
-            .map(|format| JsValue::from(map_texture_format(*format)))
-            .collect::<js_sys::Array>();
+            .map(|format| {
+                wasm_bindgen::JsValue::from(map_texture_format(*format))
+                    .dyn_into::<js_sys::JsString>()
+                    .unwrap()
+            })
+            .collect::<Vec<js_sys::JsString>>();
         mapped_desc.set_view_formats(&mapped_view_formats);
 
         let texture = self.inner.create_texture(&mapped_desc).unwrap();
@@ -2468,10 +2515,14 @@ impl dispatch::DeviceInterface for WebDevice {
             .color_formats
             .iter()
             .map(|cf| match cf {
-                Some(cf) => wasm_bindgen::JsValue::from(map_texture_format(*cf)),
-                None => wasm_bindgen::JsValue::null(),
+                Some(cf) => js_sys::JsOption::wrap(
+                    wasm_bindgen::JsValue::from(map_texture_format(*cf))
+                        .dyn_into::<js_sys::JsString>()
+                        .unwrap(),
+                ),
+                None => js_sys::JsOption::new(),
             })
-            .collect::<js_sys::Array>();
+            .collect::<Vec<js_sys::JsOption<js_sys::JsString>>>();
         let mapped_desc = webgpu_sys::GpuRenderBundleEncoderDescriptor::new(&mapped_color_formats);
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
@@ -2496,8 +2547,7 @@ impl dispatch::DeviceInterface for WebDevice {
     }
 
     fn set_device_lost_callback(&self, device_lost_callback: dispatch::BoxDeviceLostCallback) {
-        let closure = Closure::once(move |info: JsValue| {
-            let info = info.dyn_into::<webgpu_sys::GpuDeviceLostInfo>().unwrap();
+        let closure = Closure::once(move |info: webgpu_sys::GpuDeviceLostInfo| {
             device_lost_callback(
                 match info.reason() {
                     webgpu_sys::GpuDeviceLostReason::Destroyed => {
@@ -2685,7 +2735,7 @@ impl dispatch::QueueInterface for WebQueue {
         if let Some(rows_per_image) = data_layout.rows_per_image {
             mapped_data_layout.set_rows_per_image(rows_per_image);
         }
-        mapped_data_layout.set_offset(data_layout.offset as f64);
+        mapped_data_layout.set_offset_f64(data_layout.offset as f64);
 
         self.inner
             .write_texture_with_u8_slice_and_gpu_extent_3d_dict(
@@ -2720,8 +2770,8 @@ impl dispatch::QueueInterface for WebQueue {
 
         let array = temp_command_buffers
             .iter()
-            .map(|buffer| &buffer.as_webgpu().inner)
-            .collect::<js_sys::Array>();
+            .map(|buffer| buffer.as_webgpu().inner.clone())
+            .collect::<Vec<webgpu_sys::GpuCommandBuffer>>();
 
         self.inner.submit(&array);
 
@@ -2751,6 +2801,10 @@ impl dispatch::QueueInterface for WebQueue {
         _blas: &dispatch::DispatchBlas,
     ) -> (Option<u64>, dispatch::DispatchBlas) {
         unimplemented!("Raytracing not implemented for web")
+    }
+
+    fn present(&self, _detail: &dispatch::DispatchSurfaceOutputDetail) {
+        // Swapchain is presented automatically on the web.
     }
 }
 impl Drop for WebQueue {
@@ -2930,7 +2984,12 @@ impl Drop for WebTlas {
     }
 }
 
-impl dispatch::QuerySetInterface for WebQuerySet {}
+impl dispatch::QuerySetInterface for WebQuerySet {
+    fn destroy(&self) {
+        self.inner.destroy();
+    }
+}
+
 impl Drop for WebQuerySet {
     fn drop(&mut self) {
         // no-op
@@ -3096,43 +3155,44 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
             .iter()
             .map(|attachment| match attachment {
                 Some(ca) => {
-                    let mut clear_value: Option<wasm_bindgen::JsValue> = None;
-                    let load_value = match ca.ops.load {
+                    let (load_op, clear_value) = match ca.ops.load {
                         crate::LoadOp::Clear(color) => {
-                            clear_value = Some(wasm_bindgen::JsValue::from(map_color(color)));
-                            webgpu_sys::GpuLoadOp::Clear
+                            (webgpu_sys::GpuLoadOp::Clear, Some(map_color(color)))
                         }
                         crate::LoadOp::DontCare(_token) => {
                             // WebGPU can't safely have a ClearOp::DontCare, so we clear to black
                             // which is ideal for most GPUs.
-                            clear_value =
-                                Some(wasm_bindgen::JsValue::from(map_color(crate::Color::BLACK)));
-                            webgpu_sys::GpuLoadOp::Clear
+                            (
+                                webgpu_sys::GpuLoadOp::Clear,
+                                Some(map_color(crate::Color::BLACK)),
+                            )
                         }
-                        crate::LoadOp::Load => webgpu_sys::GpuLoadOp::Load,
+                        crate::LoadOp::Load => (webgpu_sys::GpuLoadOp::Load, None),
                     };
 
                     let view = &ca.view.inner.as_webgpu().inner;
 
-                    let mapped_color_attachment = webgpu_sys::GpuRenderPassColorAttachment::new(
-                        load_value,
-                        map_store_op(ca.ops.store),
-                        view,
-                    );
+                    let mapped_color_attachment =
+                        webgpu_sys::GpuRenderPassColorAttachment::new_with_gpu_texture_view(
+                            load_op,
+                            map_store_op(ca.ops.store),
+                            view,
+                        );
                     if let Some(cv) = clear_value {
-                        mapped_color_attachment.set_clear_value(&cv);
+                        mapped_color_attachment.set_clear_value_gpu_color_dict(&cv);
                     }
                     if let Some(rt) = ca.resolve_target {
                         let resolve_target_view = &rt.inner.as_webgpu().inner;
-                        mapped_color_attachment.set_resolve_target(resolve_target_view);
+                        mapped_color_attachment
+                            .set_resolve_target_gpu_texture_view(resolve_target_view);
                     }
                     mapped_color_attachment.set_store_op(map_store_op(ca.ops.store));
 
-                    wasm_bindgen::JsValue::from(mapped_color_attachment)
+                    js_sys::JsOption::wrap(mapped_color_attachment)
                 }
-                None => wasm_bindgen::JsValue::null(),
+                None => js_sys::JsOption::new(),
             })
-            .collect::<js_sys::Array>();
+            .collect::<Vec<js_sys::JsOption<webgpu_sys::GpuRenderPassColorAttachment>>>();
 
         let mapped_desc = webgpu_sys::GpuRenderPassDescriptor::new(&mapped_color_attachments);
 
@@ -3143,7 +3203,9 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         if let Some(dsa) = &desc.depth_stencil_attachment {
             let depth_stencil_attachment = &dsa.view.inner.as_webgpu().inner;
             let mapped_depth_stencil_attachment =
-                webgpu_sys::GpuRenderPassDepthStencilAttachment::new(depth_stencil_attachment);
+                webgpu_sys::GpuRenderPassDepthStencilAttachment::new_with_gpu_texture_view(
+                    depth_stencil_attachment,
+                );
             if let Some(ref ops) = dsa.depth_ops {
                 let load_op = match ops.load {
                     crate::LoadOp::Clear(v) => {
@@ -3481,22 +3543,22 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &dispatch::DispatchBuffer,
+        buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     ) {
-        let buffer = buffer.as_webgpu();
+        let buffer = buffer.map(|buffer| &buffer.as_webgpu().inner);
 
         if let Some(size) = size {
             self.inner.set_vertex_buffer_with_f64_and_f64(
                 slot,
-                Some(&buffer.inner),
+                buffer,
                 offset as f64,
                 size.get() as f64,
             );
         } else {
             self.inner
-                .set_vertex_buffer_with_f64(slot, Some(&buffer.inner), offset as f64);
+                .set_vertex_buffer_with_f64(slot, buffer, offset as f64);
         }
     }
 
@@ -3699,8 +3761,8 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         render_bundles: &mut dyn Iterator<Item = &dispatch::DispatchRenderBundle>,
     ) {
         let mapped = render_bundles
-            .map(|bundle| &bundle.as_webgpu().inner)
-            .collect::<js_sys::Array>();
+            .map(|bundle| bundle.as_webgpu().inner.clone())
+            .collect::<Vec<webgpu_sys::GpuRenderBundle>>();
         self.inner.execute_bundles(&mapped);
     }
 }
@@ -3772,22 +3834,22 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &dispatch::DispatchBuffer,
+        buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     ) {
-        let buffer = buffer.as_webgpu();
+        let buffer = buffer.map(|buffer| &buffer.as_webgpu().inner);
 
         if let Some(size) = size {
             self.inner.set_vertex_buffer_with_f64_and_f64(
                 slot,
-                Some(&buffer.inner),
+                buffer,
                 offset as f64,
                 size.get() as f64,
             );
         } else {
             self.inner
-                .set_vertex_buffer_with_f64(slot, Some(&buffer.inner), offset as f64);
+                .set_vertex_buffer_with_f64(slot, buffer, offset as f64);
         }
     }
 
@@ -3855,6 +3917,14 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         }
         .into()
     }
+
+    #[cfg(custom)]
+    fn finish_boxed(
+        self: Box<Self>,
+        desc: &crate::RenderBundleDescriptor<'_>,
+    ) -> dispatch::DispatchRenderBundle {
+        (*self).finish(desc)
+    }
 }
 impl Drop for WebRenderBundleEncoder {
     fn drop(&mut self) {
@@ -3869,13 +3939,93 @@ impl Drop for WebRenderBundle {
     }
 }
 
+/// Probing and caching of whether this browser can configure an `rgba16float`
+/// WebGPU canvas. Only the reader functions are visible outside this module; the
+/// cached state and the probe machinery are private to it.
+mod rgba16float_probe {
+    use super::*;
+
+    /// Cached result of probing whether this browser can configure a WebGPU canvas
+    /// with the `rgba16float` format: [`PROBE_UNKNOWN`] until first probed,
+    /// otherwise [`PROBE_SUPPORTED`]/[`PROBE_UNSUPPORTED`].
+    ///
+    /// Canvas-format support is process-wide and immutable at runtime, so a single
+    /// probe suffices. The probe (see [`probe_rgba16float_canvas_support`]) is
+    /// empirical (it actually calls `configure()` rather than checking a
+    /// browser/version), so it starts reporting supported automatically once a
+    /// browser (e.g. Firefox, <https://bugzilla.mozilla.org/show_bug.cgi?id=1834395>)
+    /// adds support, with no wgpu change required.
+    static RGBA16FLOAT_CANVAS_SUPPORT: AtomicU8 = AtomicU8::new(PROBE_UNKNOWN);
+    const PROBE_UNKNOWN: u8 = 0;
+    const PROBE_UNSUPPORTED: u8 = 1;
+    const PROBE_SUPPORTED: u8 = 2;
+
+    /// Whether `Surface::get_capabilities` should advertise `Rgba16Float`.
+    ///
+    /// Optimistic (advertised) until the probe has determined it is unsupported:
+    /// the no-panic handling in [`WebSurface::configure`]/
+    /// [`WebSurface::get_current_texture`] recovers if an app selects it before a
+    /// device exists on a browser that rejects it.
+    pub(super) fn rgba16float_canvas_supported() -> bool {
+        RGBA16FLOAT_CANVAS_SUPPORT.load(Ordering::Relaxed) != PROBE_UNSUPPORTED
+    }
+
+    /// Probe (once, then cache) whether this browser can configure a `rgba16float`
+    /// WebGPU canvas, by actually configuring a throwaway 1x1 `OffscreenCanvas`.
+    ///
+    /// Some browsers list `rgba16float` as a context format but throw from
+    /// `configure` (current Firefox), which on wasm would otherwise be an
+    /// uncatchable panic. Detecting it empirically (instead of sniffing the user
+    /// agent) means the result self-corrects when the browser ships support.
+    pub(super) fn probe_rgba16float_canvas_support(device: &webgpu_sys::GpuDevice) {
+        if RGBA16FLOAT_CANVAS_SUPPORT.load(Ordering::Relaxed) != PROBE_UNKNOWN {
+            return;
+        }
+        // If the probe can't run (e.g. no `OffscreenCanvas`), leave the support
+        // state unknown so we keep advertising the format optimistically.
+        let Some(supported) = try_configure_rgba16float_canvas(device) else {
+            return;
+        };
+        RGBA16FLOAT_CANVAS_SUPPORT.store(
+            if supported {
+                PROBE_SUPPORTED
+            } else {
+                PROBE_UNSUPPORTED
+            },
+            Ordering::Relaxed,
+        );
+    }
+
+    /// Returns `Some(true)`/`Some(false)` if a `rgba16float` canvas could/couldn't
+    /// be configured, or `None` if the probe itself couldn't be set up.
+    fn try_configure_rgba16float_canvas(device: &webgpu_sys::GpuDevice) -> Option<bool> {
+        let canvas = web_sys::OffscreenCanvas::new(1, 1).ok()?;
+        let context = canvas.get_context("webgpu").ok()??;
+        let context: webgpu_sys::GpuCanvasContext = context.unchecked_into();
+        let config = webgpu_sys::GpuCanvasConfiguration::new(
+            device,
+            map_texture_format(wgt::TextureFormat::Rgba16Float),
+        );
+        let supported = context.configure(&config).is_ok();
+        if supported {
+            // Leave the throwaway context unconfigured before it's dropped.
+            context.unconfigure();
+        }
+        Some(supported)
+    }
+}
+
 impl dispatch::SurfaceInterface for WebSurface {
     fn get_capabilities(&self, _adapter: &dispatch::DispatchAdapter) -> wgt::SurfaceCapabilities {
         let mut formats = vec![
             wgt::TextureFormat::Rgba8Unorm,
             wgt::TextureFormat::Bgra8Unorm,
-            wgt::TextureFormat::Rgba16Float,
         ];
+        // Only advertise `Rgba16Float` where the browser can actually configure
+        // it as a canvas (some, e.g. current Firefox, throw from `configure`).
+        if rgba16float_probe::rgba16float_canvas_supported() {
+            formats.push(wgt::TextureFormat::Rgba16Float);
+        }
         let mut mapped_formats = formats.iter().map(|format| map_texture_format(*format));
         // Preferred canvas format will only be either "rgba8unorm" or "bgra8unorm".
         // https://www.w3.org/TR/webgpu/#dom-gpu-getpreferredcanvasformat
@@ -3889,6 +4039,38 @@ impl dispatch::SurfaceInterface for WebSurface {
         }
 
         wgt::SurfaceCapabilities {
+            format_capabilities: formats
+                .iter()
+                .map(|&format| {
+                    // Every WebGPU implementation supports the "srgb" and
+                    // "display-p3" canvas color spaces.
+                    // https://gpuweb.github.io/gpuweb/#canvas-configuration
+                    let mut color_spaces =
+                        wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::DISPLAY_P3;
+                    // An fp16 canvas with "extended" tone mapping holds
+                    // encoded extended-range values (the nonlinear sRGB OETF,
+                    // continued beyond [0, 1]). "extended" tone mapping is a
+                    // configuration the canvas always accepts on an fp16 surface,
+                    // independent of the display: an SDR display clamps the
+                    // out-of-range values rather than rejecting the config (and
+                    // `configure` here never gates on display HDR state either).
+                    // So these spaces are gated on fp16-canvas support alone —
+                    // the same condition that puts `Rgba16Float` in `formats` —
+                    // not on whether the display is currently HDR. WebGPU has no
+                    // linear canvas color space, so the web backend advertises
+                    // the encoded `ExtendedSrgb` and, for the "display-p3"
+                    // canvas, the wide-gamut `ExtendedDisplayP3` — not the
+                    // linear `ExtendedSrgbLinear`.
+                    if format == wgt::TextureFormat::Rgba16Float {
+                        color_spaces |= wgt::SurfaceColorSpaces::EXTENDED_SRGB
+                            | wgt::SurfaceColorSpaces::EXTENDED_DISPLAY_P3;
+                    }
+                    wgt::SurfaceFormatCapabilities {
+                        format,
+                        color_spaces,
+                    }
+                })
+                .collect(),
             // https://gpuweb.github.io/gpuweb/#supported-context-formats
             formats,
             // Doesn't really have meaning on the web.
@@ -3931,13 +4113,98 @@ impl dispatch::SurfaceInterface for WebSurface {
         );
         mapped.set_usage(config.usage.bits());
         mapped.set_alpha_mode(alpha_mode);
+        match config.color_space {
+            // `Auto` intentionally keeps the browser defaults (colorSpace
+            // "srgb", standard tone mapping) even for fp16 formats, matching
+            // wgpu's historical behavior on the web.
+            wgt::SurfaceColorSpace::Auto | wgt::SurfaceColorSpace::Srgb => {}
+            wgt::SurfaceColorSpace::DisplayP3 => {
+                // The vendored bindings have no `colorSpace` setter, so set
+                // the dictionary member by reflection.
+                js_sys::Reflect::set(
+                    &mapped,
+                    &JsValue::from_str("colorSpace"),
+                    &JsValue::from_str("display-p3"),
+                )
+                .expect("Setting the canvas configuration color space should never fail");
+            }
+            wgt::SurfaceColorSpace::ExtendedSrgb => {
+                // The canvas keeps the default "srgb" color space; "extended"
+                // tone mapping disables clamping to [0, 1], so an fp16 canvas
+                // holds sRGB-encoded extended-range values (the nonlinear sRGB
+                // OETF, continued beyond [0, 1]). This is the W3C HDR-canvas
+                // mechanism shipped in Chrome 129+.
+                let tone_mapping = webgpu_sys::GpuCanvasToneMapping::new();
+                tone_mapping.set_mode(webgpu_sys::GpuCanvasToneMappingMode::Extended);
+                mapped.set_tone_mapping(&tone_mapping);
+            }
+            wgt::SurfaceColorSpace::ExtendedDisplayP3 => {
+                // Wide-gamut HDR: the "display-p3" canvas color space combined
+                // with "extended" tone mapping holds Display-P3-encoded
+                // extended-range values. Set both dictionary members (colorSpace
+                // by reflection, as for `DisplayP3`).
+                js_sys::Reflect::set(
+                    &mapped,
+                    &JsValue::from_str("colorSpace"),
+                    &JsValue::from_str("display-p3"),
+                )
+                .expect("Setting the canvas configuration color space should never fail");
+                let tone_mapping = webgpu_sys::GpuCanvasToneMapping::new();
+                tone_mapping.set_mode(webgpu_sys::GpuCanvasToneMappingMode::Extended);
+                mapped.set_tone_mapping(&tone_mapping);
+            }
+            cs @ (wgt::SurfaceColorSpace::ExtendedSrgbLinear
+            | wgt::SurfaceColorSpace::Bt2100Pq
+            | wgt::SurfaceColorSpace::Bt2100Hlg) => {
+                // Not representable on a WebGPU canvas: `ExtendedSrgbLinear`
+                // needs a linear-transfer canvas (WebGPU has none), and
+                // `Bt2100Pq`/`Bt2100Hlg` need PQ/HLG canvas signaling (browsers expose
+                // none). `get_capabilities` never advertises these, but an app
+                // may still request one without checking; record the failure and
+                // report the surface as lost (as for a rejected `configure`)
+                // rather than panicking, since there is no `catch_unwind` on
+                // wasm to recover an abort.
+                self.configure_failed.set(true);
+                log::error!(
+                    "Surface color space {cs:?} is not supported on the WebGPU backend; \
+                     the surface will report as lost. Check `get_capabilities` before \
+                     configuring."
+                );
+                return;
+            }
+        }
         let mapped_view_formats = config
             .view_formats
             .iter()
-            .map(|format| JsValue::from(map_texture_format(*format)))
-            .collect::<js_sys::Array>();
+            .map(|format| {
+                wasm_bindgen::JsValue::from(map_texture_format(*format))
+                    .dyn_into::<js_sys::JsString>()
+                    .unwrap()
+            })
+            .collect::<Vec<js_sys::JsString>>();
         mapped.set_view_formats(&mapped_view_formats);
-        self.context.configure(&mapped).unwrap();
+        // `configure` can throw (e.g. the browser doesn't support the requested
+        // canvas format). There is no `catch_unwind` on wasm, so unwrapping here
+        // would be an uncatchable abort. Instead, record the failure and report
+        // the surface as lost from `get_current_texture`, which the application
+        // can already handle and recover from (e.g. by selecting a different
+        // format reported by `get_capabilities`).
+        //
+        // This isn't WebGPU behavior we have to support forever: some browsers
+        // (current Firefox) list a context format and then reject it from
+        // `configure`. Once they stop doing that, this handling can go away.
+        match self.context.configure(&mapped) {
+            Ok(()) => self.configure_failed.set(false),
+            Err(err) => {
+                self.configure_failed.set(true);
+                log::error!(
+                    "Surface configuration failed: {err:?}. The browser may not support \
+                     this canvas format (for example, Firefox does not yet support \
+                     `rgba16float` canvases). The surface will report as lost until it \
+                     is successfully reconfigured."
+                );
+            }
+        }
     }
 
     fn get_current_texture(
@@ -3947,7 +4214,23 @@ impl dispatch::SurfaceInterface for WebSurface {
         crate::SurfaceStatus,
         dispatch::DispatchSurfaceOutputDetail,
     ) {
-        let surface_texture = self.context.get_current_texture().unwrap();
+        let detail = WebSurfaceOutputDetail {
+            ident: crate::cmp::Identifier::create(),
+        };
+
+        // If the last `configure` failed, the context is not usable; report the
+        // surface as lost rather than panicking (see `configure`).
+        if self.configure_failed.get() {
+            return (None, crate::SurfaceStatus::Lost, detail.into());
+        }
+
+        let surface_texture = match self.context.get_current_texture() {
+            Ok(surface_texture) => surface_texture,
+            Err(err) => {
+                log::error!("`getCurrentTexture` failed: {err:?}");
+                return (None, crate::SurfaceStatus::Lost, detail.into());
+            }
+        };
 
         let web_surface_texture = WebTexture {
             inner: surface_texture,
@@ -3957,10 +4240,7 @@ impl dispatch::SurfaceInterface for WebSurface {
         (
             Some(web_surface_texture.into()),
             crate::SurfaceStatus::Good,
-            WebSurfaceOutputDetail {
-                ident: crate::cmp::Identifier::create(),
-            }
-            .into(),
+            detail.into(),
         )
     }
 }
@@ -3971,12 +4251,12 @@ impl Drop for WebSurface {
 }
 
 impl dispatch::SurfaceOutputDetailInterface for WebSurfaceOutputDetail {
-    fn present(&self) {
-        // Swapchain is presented automatically on the web.
-    }
-
     fn texture_discard(&self) {
         // Can't really discard the texture on the web.
+    }
+
+    fn texture_release(&self) {
+        // Can't really discard the texture on the web, so there's no point of releasing too
     }
 }
 impl Drop for WebSurfaceOutputDetail {

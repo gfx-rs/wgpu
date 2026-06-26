@@ -14,8 +14,8 @@ use num_traits::real::Real as _;
 use half::f16;
 
 use super::{
-    sampler as sm, Error, LocationMode, Options, PipelineOptions, TranslationInfo, NAMESPACE,
-    WRAPPED_ARRAY_FIELD,
+    ray::RT_NAMESPACE, sampler as sm, Error, LocationMode, Options, PipelineOptions,
+    TranslationInfo, NAMESPACE, WRAPPED_ARRAY_FIELD,
 };
 use crate::{
     arena::{Handle, HandleSet},
@@ -33,21 +33,10 @@ use crate::{
     valid, FastHashMap, FastHashSet,
 };
 
-#[cfg(test)]
-use core::ptr;
-
 // This is a hack: we need to pass a pointer to an atomic,
 // but generally the backend isn't putting "&" in front of every pointer.
 // Some more general handling of pointers is needed to be implemented here.
 const ATOMIC_REFERENCE: &str = "&";
-
-const RT_NAMESPACE: &str = "metal::raytracing";
-const RAY_QUERY_TYPE: &str = "_RayQuery";
-const RAY_QUERY_FIELD_INTERSECTOR: &str = "intersector";
-const RAY_QUERY_FIELD_INTERSECTION: &str = "intersection";
-const RAY_QUERY_MODERN_SUPPORT: bool = false; //TODO
-const RAY_QUERY_FIELD_READY: &str = "ready";
-const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
 
 pub(crate) const ATOMIC_COMP_EXCH_FUNCTION: &str = "naga_atomic_compare_exchange_weak_explicit";
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
@@ -378,7 +367,7 @@ impl Display for TypeContext<'_> {
                 if vertex_return {
                     unimplemented!("metal does not support vertex ray hit return")
                 }
-                write!(out, "{RAY_QUERY_TYPE}")
+                write!(out, "{}", super::ray::metal_intersector_ty())
             }
             crate::TypeInner::BindingArray { base, .. } => {
                 let base_inner = &self.gctx.types[base].inner;
@@ -544,26 +533,28 @@ pub(super) enum WrappedFunction {
         columns: crate::CooperativeSize,
         rows: crate::CooperativeSize,
         intermediate: crate::CooperativeSize,
-        scalar: crate::Scalar,
+        ab_scalar: crate::Scalar,
+        c_scalar: crate::Scalar,
+    },
+    RayQueryGetIntersection {
+        committed: bool,
     },
 }
 
+#[expect(missing_debug_implementations, reason = "would be way too verbose?")]
 pub struct Writer<W> {
     pub(super) out: W,
     pub(super) names: FastHashMap<NameKey, String>,
     pub(super) named_expressions: crate::NamedExpressions,
     /// Set of expressions that need to be baked to avoid unnecessary repetition in output
-    pub(super) need_bake_expressions: back::NeedBakeExpressions,
+    need_bake_expressions: back::NeedBakeExpressions,
     pub(super) namer: proc::Namer,
     pub(super) wrapped_functions: FastHashSet<WrappedFunction>,
-    #[cfg(test)]
-    pub(super) put_expression_stack_pointers: FastHashSet<*const ()>,
-    #[cfg(test)]
-    pub(super) put_block_stack_pointers: FastHashSet<*const ()>,
+    emit_int_div_checks: bool,
     /// Set of (struct type, struct field index) denoting which fields require
     /// padding inserted **before** them (i.e. between fields at index - 1 and index)
-    pub(super) struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
-    pub(super) needs_object_memory_barriers: bool,
+    struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
+    needs_object_memory_barriers: bool,
 }
 
 impl crate::Scalar {
@@ -578,6 +569,14 @@ impl crate::Scalar {
                 kind: Sk::Float,
                 width: 2,
             } => "half",
+            Self {
+                kind: Sk::Sint,
+                width: 2,
+            } => "short",
+            Self {
+                kind: Sk::Uint,
+                width: 2,
+            } => "ushort",
             Self {
                 kind: Sk::Sint,
                 width: 4,
@@ -779,21 +778,23 @@ struct TexelAddress {
 }
 
 pub(super) struct ExpressionContext<'a> {
-    function: &'a crate::Function,
+    pub(super) function: &'a crate::Function,
     origin: FunctionOrigin,
-    info: &'a valid::FunctionInfo,
-    module: &'a crate::Module,
-    mod_info: &'a valid::ModuleInfo,
-    pipeline_options: &'a PipelineOptions,
-    lang_version: (u8, u8),
-    policies: index::BoundsCheckPolicies,
+    pub(super) info: &'a valid::FunctionInfo,
+    pub(super) module: &'a crate::Module,
+    pub(super) mod_info: &'a valid::ModuleInfo,
+    pub(super) pipeline_options: &'a PipelineOptions,
+    pub(super) lang_version: (u8, u8),
+    pub(super) policies: index::BoundsCheckPolicies,
 
     /// The set of expressions used as indices in `ReadZeroSkipWrite`-policy
     /// accesses. These may need to be cached in temporary variables. See
     /// `index::find_checked_indexes` for details.
-    guarded_indices: HandleSet<crate::Expression>,
+    pub(super) guarded_indices: HandleSet<crate::Expression>,
     /// See [`Writer::gen_force_bounded_loop_statements`] for details.
-    force_loop_bounding: bool,
+    pub(super) force_loop_bounding: bool,
+    /// Whether to emit safety checks for integer division/modulo.
+    emit_int_div_checks: bool,
 }
 
 impl<'a> ExpressionContext<'a> {
@@ -936,9 +937,9 @@ impl<'a> ExpressionContext<'a> {
     }
 }
 
-struct StatementContext<'a> {
-    expression: ExpressionContext<'a>,
-    result_struct: Option<&'a str>,
+pub(super) struct StatementContext<'a> {
+    pub(super) expression: ExpressionContext<'a>,
+    pub(super) result_struct: Option<&'a str>,
 }
 
 impl<W: Write> Writer<W> {
@@ -951,10 +952,7 @@ impl<W: Write> Writer<W> {
             need_bake_expressions: Default::default(),
             namer: proc::Namer::default(),
             wrapped_functions: FastHashSet::default(),
-            #[cfg(test)]
-            put_expression_stack_pointers: Default::default(),
-            #[cfg(test)]
-            put_block_stack_pointers: Default::default(),
+            emit_int_div_checks: true,
             struct_member_pads: FastHashSet::default(),
             needs_object_memory_barriers: false,
         }
@@ -1908,6 +1906,12 @@ impl<W: Write> Writer<W> {
                     write!(self.out, "{value}{suffix}")?;
                 }
             }
+            crate::Literal::U16(value) => {
+                write!(self.out, "static_cast<ushort>({value})")?;
+            }
+            crate::Literal::I16(value) => {
+                write!(self.out, "static_cast<short>({value})")?;
+            }
             crate::Literal::U32(value) => {
                 write!(self.out, "{value}u")?;
             }
@@ -2079,11 +2083,6 @@ impl<W: Write> Writer<W> {
         context: &ExpressionContext,
         is_scoped: bool,
     ) -> BackendResult {
-        // Add to the set in order to track the stack size.
-        #[cfg(test)]
-        self.put_expression_stack_pointers
-            .insert(ptr::from_ref(&expr_handle).cast());
-
         if let Some(name) = self.named_expressions.get(&expr_handle) {
             write!(self.out, "{name}")?;
             return Ok(());
@@ -2353,6 +2352,7 @@ impl<W: Write> Writer<W> {
 
                 if op == crate::BinaryOperator::Divide
                     && (kind == crate::ScalarKind::Sint || kind == crate::ScalarKind::Uint)
+                    && context.emit_int_div_checks
                 {
                     write!(self.out, "{DIV_FUNCTION}(")?;
                     self.put_expression(left, context, true)?;
@@ -2361,6 +2361,7 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ")")?;
                 } else if op == crate::BinaryOperator::Modulo
                     && (kind == crate::ScalarKind::Sint || kind == crate::ScalarKind::Uint)
+                    && context.emit_int_div_checks
                 {
                     write!(self.out, "{MOD_FUNCTION}(")?;
                     self.put_expression(left, context, true)?;
@@ -2995,42 +2996,18 @@ impl<W: Write> Writer<W> {
             crate::Expression::RayQueryVertexPositions { .. } => {
                 unimplemented!()
             }
-            crate::Expression::RayQueryGetIntersection {
-                query,
-                committed: _,
-            } => {
+            crate::Expression::RayQueryGetIntersection { query, committed } => {
                 if context.lang_version < (2, 4) {
                     return Err(Error::UnsupportedRayTracing);
                 }
 
-                let ty = context.module.special_types.ray_intersection.unwrap();
-                let type_name = &self.names[&NameKey::Type(ty)];
-                write!(self.out, "{type_name} {{{RAY_QUERY_FUN_MAP_INTERSECTION}(")?;
+                write!(
+                    self.out,
+                    "{}_{committed}(",
+                    super::ray::INTERSECTION_FUNCTION_NAME
+                )?;
                 self.put_expression(query, context, true)?;
-                write!(self.out, ".{RAY_QUERY_FIELD_INTERSECTION}.type)")?;
-                let fields = [
-                    "distance",
-                    "user_instance_id", // req Metal 2.4
-                    "instance_id",
-                    "", // SBT offset
-                    "geometry_id",
-                    "primitive_id",
-                    "triangle_barycentric_coord",
-                    "triangle_front_facing",
-                    "",                          // padding
-                    "object_to_world_transform", // req Metal 2.4
-                    "world_to_object_transform", // req Metal 2.4
-                ];
-                for field in fields {
-                    write!(self.out, ", ")?;
-                    if field.is_empty() {
-                        write!(self.out, "{{}}")?;
-                    } else {
-                        self.put_expression(query, context, true)?;
-                        write!(self.out, ".{RAY_QUERY_FIELD_INTERSECTION}.{field}")?;
-                    }
-                }
-                write!(self.out, "}}")?;
+                write!(self.out, ")")?;
             }
             crate::Expression::CooperativeLoad { ref data, .. } => {
                 if context.lang_version < (2, 3) {
@@ -3041,7 +3018,13 @@ impl<W: Write> Writer<W> {
                 self.put_access_chain(data.pointer, context.policies.index, context)?;
                 write!(self.out, ", ")?;
                 self.put_expression(data.stride, context, true)?;
-                write!(self.out, ", {})", data.row_major)?;
+                // Metal's `simdgroup_load` treats its `transpose` flag as
+                // "memory is transposed from the simdgroup_matrix's canonical
+                // layout". On Apple GPUs that canonical layout is row-major,
+                // so `transpose=false` loads from row-major memory. WGSL's
+                // `coopLoadT` (row_major=true) = row-major memory, so it must
+                // map to `transpose=false`. Hence the negation.
+                write!(self.out, ", {})", !data.row_major)?;
             }
             crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
                 if context.lang_version < (2, 3) {
@@ -3153,6 +3136,16 @@ impl<W: Write> Writer<W> {
     where
         F: Fn(&mut Self, &ExpressionContext, bool) -> BackendResult,
     {
+        // For sub-32-bit types, C++ integer promotion can widen the inner
+        // expression (e.g. `ushort + ushort` promotes to `int`), making a
+        // direct `as_type<short>(int_expr)` invalid due to size mismatch.
+        // We wrap with `static_cast` to truncate back before the bitcast.
+        let needs_truncation = match *cast_to {
+            crate::TypeInner::Scalar(scalar) => scalar.width < 4,
+            crate::TypeInner::Vector { scalar, .. } => scalar.width < 4,
+            _ => false,
+        };
+
         write!(self.out, "as_type<")?;
         match *cast_to {
             crate::TypeInner::Scalar(scalar) => put_numeric_type(&mut self.out, scalar, &[])?,
@@ -3163,6 +3156,32 @@ impl<W: Write> Writer<W> {
         };
         write!(self.out, ">(")?;
 
+        if needs_truncation {
+            write!(self.out, "static_cast<")?;
+            // Cast to the unsigned version of the target type to truncate
+            let unsigned_scalar = match *cast_to {
+                crate::TypeInner::Scalar(scalar) => crate::Scalar {
+                    kind: crate::ScalarKind::Uint,
+                    ..scalar
+                },
+                crate::TypeInner::Vector { scalar, .. } => crate::Scalar {
+                    kind: crate::ScalarKind::Uint,
+                    ..scalar
+                },
+                _ => unreachable!(),
+            };
+            match *cast_to {
+                crate::TypeInner::Scalar(_) => {
+                    put_numeric_type(&mut self.out, unsigned_scalar, &[])?
+                }
+                crate::TypeInner::Vector { size, .. } => {
+                    put_numeric_type(&mut self.out, unsigned_scalar, &[size])?
+                }
+                _ => unreachable!(),
+            };
+            write!(self.out, ">(")?;
+        }
+
         // if it's packed, we must unpack it (e.g., float3(val)) before the bitcast.
         if let Some(scalar) = context.get_packed_vec_kind(inner_expr) {
             put_numeric_type(&mut self.out, scalar, &[crate::VectorSize::Tri])?;
@@ -3171,6 +3190,10 @@ impl<W: Write> Writer<W> {
             write!(self.out, ")")?;
         } else {
             put_expression(self, context, true)?;
+        }
+
+        if needs_truncation {
+            write!(self.out, ")")?;
         }
 
         write!(self.out, ")")?;
@@ -3513,7 +3536,7 @@ impl<W: Write> Writer<W> {
                 let result_ty = context.function.result.as_ref().unwrap().ty;
                 match context.module.types[result_ty].inner {
                     crate::TypeInner::Struct { ref members, .. } => {
-                        let tmp = "_tmp";
+                        let tmp = self.namer.call("_tmp");
                         write!(self.out, "{level}const auto {tmp} = ")?;
                         self.put_expression(expr_handle, context, true)?;
                         writeln!(self.out, ";")?;
@@ -3675,7 +3698,7 @@ impl<W: Write> Writer<W> {
         }
     }
 
-    fn start_baking_expression(
+    pub(super) fn start_baking_expression(
         &mut self,
         handle: Handle<crate::Expression>,
         context: &ExpressionContext,
@@ -3815,11 +3838,6 @@ impl<W: Write> Writer<W> {
         statements: &[crate::Statement],
         context: &StatementContext,
     ) -> BackendResult {
-        // Add to the set in order to track the stack size.
-        #[cfg(test)]
-        self.put_block_stack_pointers
-            .insert(ptr::from_ref(&level).cast());
-
         for statement in statements {
             log::trace!("statement[{}] {:?}", level.0, statement);
             match *statement {
@@ -4199,127 +4217,7 @@ impl<W: Write> Writer<W> {
                     self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
                 }
                 crate::Statement::RayQuery { query, ref fun } => {
-                    if context.expression.lang_version < (2, 4) {
-                        return Err(Error::UnsupportedRayTracing);
-                    }
-
-                    match *fun {
-                        crate::RayQueryFunction::Initialize {
-                            acceleration_structure,
-                            descriptor,
-                        } => {
-                            //TODO: how to deal with winding?
-                            write!(self.out, "{level}")?;
-                            self.put_expression(query, &context.expression, true)?;
-                            writeln!(self.out, ".{RAY_QUERY_FIELD_INTERSECTOR}.assume_geometry_type({RT_NAMESPACE}::geometry_type::triangle);")?;
-                            {
-                                let f_opaque = back::RayFlag::CULL_OPAQUE.bits();
-                                let f_no_opaque = back::RayFlag::CULL_NO_OPAQUE.bits();
-                                write!(self.out, "{level}")?;
-                                self.put_expression(query, &context.expression, true)?;
-                                write!(
-                                    self.out,
-                                    ".{RAY_QUERY_FIELD_INTERSECTOR}.set_opacity_cull_mode(("
-                                )?;
-                                self.put_expression(descriptor, &context.expression, true)?;
-                                write!(self.out, ".flags & {f_opaque}) != 0 ? {RT_NAMESPACE}::opacity_cull_mode::opaque : (")?;
-                                self.put_expression(descriptor, &context.expression, true)?;
-                                write!(self.out, ".flags & {f_no_opaque}) != 0 ? {RT_NAMESPACE}::opacity_cull_mode::non_opaque : ")?;
-                                writeln!(self.out, "{RT_NAMESPACE}::opacity_cull_mode::none);")?;
-                            }
-                            {
-                                let f_opaque = back::RayFlag::OPAQUE.bits();
-                                let f_no_opaque = back::RayFlag::NO_OPAQUE.bits();
-                                write!(self.out, "{level}")?;
-                                self.put_expression(query, &context.expression, true)?;
-                                write!(self.out, ".{RAY_QUERY_FIELD_INTERSECTOR}.force_opacity((")?;
-                                self.put_expression(descriptor, &context.expression, true)?;
-                                write!(self.out, ".flags & {f_opaque}) != 0 ? {RT_NAMESPACE}::forced_opacity::opaque : (")?;
-                                self.put_expression(descriptor, &context.expression, true)?;
-                                write!(self.out, ".flags & {f_no_opaque}) != 0 ? {RT_NAMESPACE}::forced_opacity::non_opaque : ")?;
-                                writeln!(self.out, "{RT_NAMESPACE}::forced_opacity::none);")?;
-                            }
-                            {
-                                let flag = back::RayFlag::TERMINATE_ON_FIRST_HIT.bits();
-                                write!(self.out, "{level}")?;
-                                self.put_expression(query, &context.expression, true)?;
-                                write!(
-                                    self.out,
-                                    ".{RAY_QUERY_FIELD_INTERSECTOR}.accept_any_intersection(("
-                                )?;
-                                self.put_expression(descriptor, &context.expression, true)?;
-                                writeln!(self.out, ".flags & {flag}) != 0);")?;
-                            }
-
-                            write!(self.out, "{level}")?;
-                            self.put_expression(query, &context.expression, true)?;
-                            write!(self.out, ".{RAY_QUERY_FIELD_INTERSECTION} = ")?;
-                            self.put_expression(query, &context.expression, true)?;
-                            write!(
-                                self.out,
-                                ".{RAY_QUERY_FIELD_INTERSECTOR}.intersect({RT_NAMESPACE}::ray("
-                            )?;
-                            self.put_expression(descriptor, &context.expression, true)?;
-                            write!(self.out, ".origin, ")?;
-                            self.put_expression(descriptor, &context.expression, true)?;
-                            write!(self.out, ".dir, ")?;
-                            self.put_expression(descriptor, &context.expression, true)?;
-                            write!(self.out, ".tmin, ")?;
-                            self.put_expression(descriptor, &context.expression, true)?;
-                            write!(self.out, ".tmax), ")?;
-                            self.put_expression(acceleration_structure, &context.expression, true)?;
-                            write!(self.out, ", ")?;
-                            self.put_expression(descriptor, &context.expression, true)?;
-                            write!(self.out, ".cull_mask);")?;
-
-                            write!(self.out, "{level}")?;
-                            self.put_expression(query, &context.expression, true)?;
-                            writeln!(self.out, ".{RAY_QUERY_FIELD_READY} = true;")?;
-                        }
-                        crate::RayQueryFunction::Proceed { result } => {
-                            write!(self.out, "{level}")?;
-                            let name = Baked(result).to_string();
-                            self.start_baking_expression(result, &context.expression, &name)?;
-                            self.named_expressions.insert(result, name);
-                            self.put_expression(query, &context.expression, true)?;
-                            writeln!(self.out, ".{RAY_QUERY_FIELD_READY};")?;
-                            if RAY_QUERY_MODERN_SUPPORT {
-                                write!(self.out, "{level}")?;
-                                self.put_expression(query, &context.expression, true)?;
-                                writeln!(self.out, ".?.next();")?;
-                            }
-                        }
-                        crate::RayQueryFunction::GenerateIntersection { hit_t } => {
-                            if RAY_QUERY_MODERN_SUPPORT {
-                                write!(self.out, "{level}")?;
-                                self.put_expression(query, &context.expression, true)?;
-                                write!(self.out, ".?.commit_bounding_box_intersection(")?;
-                                self.put_expression(hit_t, &context.expression, true)?;
-                                writeln!(self.out, ");")?;
-                            } else {
-                                log::warn!("Ray Query GenerateIntersection is not yet supported");
-                            }
-                        }
-                        crate::RayQueryFunction::ConfirmIntersection => {
-                            if RAY_QUERY_MODERN_SUPPORT {
-                                write!(self.out, "{level}")?;
-                                self.put_expression(query, &context.expression, true)?;
-                                writeln!(self.out, ".?.commit_triangle_intersection();")?;
-                            } else {
-                                log::warn!("Ray Query ConfirmIntersection is not yet supported");
-                            }
-                        }
-                        crate::RayQueryFunction::Terminate => {
-                            if RAY_QUERY_MODERN_SUPPORT {
-                                write!(self.out, "{level}")?;
-                                self.put_expression(query, &context.expression, true)?;
-                                writeln!(self.out, ".?.abort();")?;
-                            }
-                            write!(self.out, "{level}")?;
-                            self.put_expression(query, &context.expression, true)?;
-                            writeln!(self.out, ".{RAY_QUERY_FIELD_READY} = false;")?;
-                        }
-                    }
+                    self.write_ray_query_stmt(level, context, query, fun)?;
                 }
                 crate::Statement::SubgroupBallot { result, predicate } => {
                     write!(self.out, "{level}")?;
@@ -4471,7 +4369,11 @@ impl<W: Write> Writer<W> {
                     )?;
                     write!(self.out, ", ")?;
                     self.put_expression(data.stride, &context.expression, true)?;
-                    if data.row_major {
+                    // See the comment in `CooperativeLoad` above: WGSL's
+                    // row_major flag is negated when emitting Metal's
+                    // `transpose` flag, so a col-major store (row_major=false)
+                    // must use `transpose=true`.
+                    if !data.row_major {
                         let matrix_origin = "0";
                         let transpose = true;
                         write!(self.out, ", {matrix_origin}, {transpose}")?;
@@ -4555,13 +4457,17 @@ impl<W: Write> Writer<W> {
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
+        self.emit_int_div_checks = options.emit_int_div_checks;
         self.names.clear();
         self.namer.reset(
             module,
             &super::keywords::RESERVED_SET,
             proc::KeywordSet::empty(),
             proc::CaseInsensitiveKeywordSet::empty(),
-            &[CLAMPED_LOD_LOAD_PREFIX],
+            &[
+                CLAMPED_LOD_LOAD_PREFIX,
+                super::ray::INTERSECTION_FUNCTION_NAME,
+            ],
             &mut self.names,
         );
         self.wrapped_functions.clear();
@@ -4586,34 +4492,12 @@ impl<W: Write> Writer<W> {
             .iter()
             .any(|e| e.stage == crate::ShaderStage::Task && e.task_payload.is_some());
 
-        let mut uses_ray_query = false;
-        for (_, ty) in module.types.iter() {
-            match ty.inner {
-                crate::TypeInner::AccelerationStructure { .. } => {
-                    if options.lang_version < (2, 4) {
-                        return Err(Error::UnsupportedRayTracing);
-                    }
-                }
-                crate::TypeInner::RayQuery { .. } => {
-                    if options.lang_version < (2, 4) {
-                        return Err(Error::UnsupportedRayTracing);
-                    }
-                    uses_ray_query = true;
-                }
-                _ => (),
-            }
-        }
-
         if module.special_types.ray_desc.is_some()
             || module.special_types.ray_intersection.is_some()
         {
             if options.lang_version < (2, 4) {
                 return Err(Error::UnsupportedRayTracing);
             }
-        }
-
-        if uses_ray_query {
-            self.put_ray_query_type()?;
         }
 
         if options
@@ -4711,32 +4595,6 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "{tab}{tab}return T {{}};")?;
         writeln!(self.out, "{tab}}}")?;
         writeln!(self.out, "}};")?;
-        Ok(())
-    }
-
-    fn put_ray_query_type(&mut self) -> BackendResult {
-        let tab = back::INDENT;
-        writeln!(self.out, "struct {RAY_QUERY_TYPE} {{")?;
-        let full_type = format!("{RT_NAMESPACE}::intersector<{RT_NAMESPACE}::instancing, {RT_NAMESPACE}::triangle_data, {RT_NAMESPACE}::world_space_data>");
-        writeln!(self.out, "{tab}{full_type} {RAY_QUERY_FIELD_INTERSECTOR};")?;
-        writeln!(
-            self.out,
-            "{tab}{full_type}::result_type {RAY_QUERY_FIELD_INTERSECTION};"
-        )?;
-        writeln!(self.out, "{tab}bool {RAY_QUERY_FIELD_READY} = false;")?;
-        writeln!(self.out, "}};")?;
-        writeln!(self.out, "constexpr {NAMESPACE}::uint {RAY_QUERY_FUN_MAP_INTERSECTION}(const {RT_NAMESPACE}::intersection_type ty) {{")?;
-        let v_triangle = back::RayIntersectionType::Triangle as u32;
-        let v_bbox = back::RayIntersectionType::BoundingBox as u32;
-        writeln!(
-            self.out,
-            "{tab}return ty=={RT_NAMESPACE}::intersection_type::triangle ? {v_triangle} : "
-        )?;
-        writeln!(
-            self.out,
-            "{tab}{tab}ty=={RT_NAMESPACE}::intersection_type::bounding_box ? {v_bbox} : 0;"
-        )?;
-        writeln!(self.out, "}}")?;
         Ok(())
     }
 
@@ -5093,10 +4951,10 @@ template <typename A>
 
     fn write_unpacking_function(
         &mut self,
-        format: back::msl::VertexFormat,
+        format: nt::VertexFormat,
     ) -> Result<(String, u32, Option<crate::VectorSize>, crate::Scalar), Error> {
         use crate::{Scalar, VectorSize};
-        use back::msl::VertexFormat::*;
+        use nt::VertexFormat::*;
         match format {
             Uint8 => {
                 let name = self.namer.call("unpackUint8");
@@ -5894,6 +5752,7 @@ template <typename A>
                 writeln!(self.out, "}}")?;
                 Ok((name, 4, Some(VectorSize::Quad), Scalar::F32))
             }
+            Float64 | Float64x2 | Float64x3 | Float64x4 => unreachable!(),
         }
     }
 
@@ -5945,10 +5804,20 @@ template <typename A>
 
                 writeln!(self.out, "{type_name} {NEG_FUNCTION}({type_name} val) {{")?;
                 let level = back::Level(1);
-                writeln!(
-                    self.out,
-                    "{level}return as_type<{type_name}>(-as_type<{unsigned_type_name}>(val));"
-                )?;
+                // For sub-32-bit types, C++ integer promotion widens
+                // `-as_type<ushort>(val)` to `int`, so we need static_cast
+                // to truncate back before the outer as_type bitcast.
+                if scalar.width < 4 {
+                    writeln!(
+                        self.out,
+                        "{level}return as_type<{type_name}>(static_cast<{unsigned_type_name}>(-as_type<{unsigned_type_name}>(val)));"
+                    )?;
+                } else {
+                    writeln!(
+                        self.out,
+                        "{level}return as_type<{type_name}>(-as_type<{unsigned_type_name}>(val));"
+                    )?;
+                }
                 writeln!(self.out, "}}")?;
                 writeln!(self.out)?;
             }
@@ -5979,7 +5848,7 @@ template <typename A>
             (
                 crate::BinaryOperator::Divide,
                 Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint),
-            ) => {
+            ) if self.emit_int_div_checks => {
                 let Some(left_wrapped_ty) = left_ty.vector_size_and_scalar() else {
                     return Ok(());
                 };
@@ -6008,9 +5877,18 @@ template <typename A>
                     "{type_name} {DIV_FUNCTION}({type_name} lhs, {type_name} rhs) {{"
                 )?;
                 let level = back::Level(1);
+                // Sub-32-bit types need typed literal wrappers (e.g. `short(1)`)
+                // to avoid ambiguous metal::select overloads. For >= 32-bit,
+                // bare literals like `1`, `-1`, `0` are unambiguous.
+                let (lp, rp) = if scalar.width < 4 {
+                    (format!("{type_name}("), ")".to_string())
+                } else {
+                    (String::new(), String::new())
+                };
                 match scalar.kind {
                     crate::ScalarKind::Sint => {
                         let min_val = match scalar.width {
+                            2 => crate::Literal::I16(i16::MIN),
                             4 => crate::Literal::I32(i32::MIN),
                             8 => crate::Literal::I64(i64::MIN),
                             _ => {
@@ -6021,15 +5899,18 @@ template <typename A>
                         };
                         write!(
                             self.out,
-                            "{level}return lhs / metal::select(rhs, 1, (lhs == "
+                            "{level}return lhs / metal::select(rhs, {lp}1{rp}, (lhs == "
                         )?;
                         self.put_literal(min_val)?;
-                        writeln!(self.out, " & rhs == -1) | (rhs == 0));")?
+                        writeln!(self.out, " & rhs == {lp}-1{rp}) | (rhs == {lp}0{rp}));")?
                     }
-                    crate::ScalarKind::Uint => writeln!(
-                        self.out,
-                        "{level}return lhs / metal::select(rhs, 1u, rhs == 0u);"
-                    )?,
+                    crate::ScalarKind::Uint => {
+                        let suffix = if scalar.width < 4 { "" } else { "u" };
+                        writeln!(
+                            self.out,
+                            "{level}return lhs / metal::select(rhs, {lp}1{suffix}{rp}, rhs == {lp}0{suffix}{rp});"
+                        )?
+                    }
                     _ => unreachable!(),
                 }
                 writeln!(self.out, "}}")?;
@@ -6050,7 +5931,7 @@ template <typename A>
             (
                 crate::BinaryOperator::Modulo,
                 Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint),
-            ) => {
+            ) if self.emit_int_div_checks => {
                 let Some(left_wrapped_ty) = left_ty.vector_size_and_scalar() else {
                     return Ok(());
                 };
@@ -6086,9 +5967,15 @@ template <typename A>
                     "{type_name} {MOD_FUNCTION}({type_name} lhs, {type_name} rhs) {{"
                 )?;
                 let level = back::Level(1);
+                let (lp, rp) = if scalar.width < 4 {
+                    (format!("{type_name}("), ")".to_string())
+                } else {
+                    (String::new(), String::new())
+                };
                 match scalar.kind {
                     crate::ScalarKind::Sint => {
                         let min_val = match scalar.width {
+                            2 => crate::Literal::I16(i16::MIN),
                             4 => crate::Literal::I32(i32::MIN),
                             8 => crate::Literal::I64(i64::MIN),
                             _ => {
@@ -6099,16 +5986,19 @@ template <typename A>
                         };
                         write!(
                             self.out,
-                            "{level}{rhs_type_name} divisor = metal::select(rhs, 1, (lhs == "
+                            "{level}{rhs_type_name} divisor = metal::select(rhs, {lp}1{rp}, (lhs == "
                         )?;
                         self.put_literal(min_val)?;
-                        writeln!(self.out, " & rhs == -1) | (rhs == 0));")?;
+                        writeln!(self.out, " & rhs == {lp}-1{rp}) | (rhs == {lp}0{rp}));")?;
                         writeln!(self.out, "{level}return lhs - (lhs / divisor) * divisor;")?
                     }
-                    crate::ScalarKind::Uint => writeln!(
-                        self.out,
-                        "{level}return lhs % metal::select(rhs, 1u, rhs == 0u);"
-                    )?,
+                    crate::ScalarKind::Uint => {
+                        let suffix = if scalar.width < 4 { "" } else { "u" };
+                        writeln!(
+                            self.out,
+                            "{level}return lhs % metal::select(rhs, {lp}1{suffix}{rp}, rhs == {lp}0{suffix}{rp});"
+                        )?
+                    }
                     _ => unreachable!(),
                 }
                 writeln!(self.out, "}}")?;
@@ -6188,7 +6078,19 @@ template <typename A>
 
                 writeln!(self.out, "{type_name} {ABS_FUNCTION}({type_name} val) {{")?;
                 let level = back::Level(1);
-                writeln!(self.out, "{level}return metal::select(as_type<{type_name}>(-as_type<{unsigned_type_name}>(val)), val, val >= 0);")?;
+                let zero = if scalar.width < 4 {
+                    format!("{type_name}(0)")
+                } else {
+                    "0".to_string()
+                };
+                let neg_expr = if scalar.width < 4 {
+                    format!(
+                        "static_cast<{unsigned_type_name}>(-as_type<{unsigned_type_name}>(val))"
+                    )
+                } else {
+                    format!("-as_type<{unsigned_type_name}>(val)")
+                };
+                writeln!(self.out, "{level}return metal::select(as_type<{type_name}>({neg_expr}), val, val >= {zero});")?;
                 writeln!(self.out, "}}")?;
                 writeln!(self.out)?;
             }
@@ -6684,9 +6586,10 @@ template <typename A>
         space: crate::AddressSpace,
         a: Handle<crate::Expression>,
         b: Handle<crate::Expression>,
+        c: Handle<crate::Expression>,
     ) -> BackendResult {
         let space_name = space.to_msl_name().unwrap_or_default();
-        let (a_c, a_r, scalar) = match *func_ctx.resolve_type(a, &module.types) {
+        let (a_c, a_r, ab_scalar) = match *func_ctx.resolve_type(a, &module.types) {
             crate::TypeInner::CooperativeMatrix {
                 columns,
                 rows,
@@ -6699,26 +6602,32 @@ template <typename A>
             crate::TypeInner::CooperativeMatrix { columns, rows, .. } => (columns, rows),
             _ => unreachable!(),
         };
+        let c_scalar = match *func_ctx.resolve_type(c, &module.types) {
+            crate::TypeInner::CooperativeMatrix { scalar, .. } => scalar,
+            _ => unreachable!(),
+        };
         let wrapped = WrappedFunction::CooperativeMultiplyAdd {
             space_name,
             columns: b_c,
             rows: a_r,
             intermediate: a_c,
-            scalar,
+            ab_scalar,
+            c_scalar,
         };
         if !self.wrapped_functions.insert(wrapped) {
             return Ok(());
         }
-        let scalar_name = scalar.to_msl_name();
+        let ab_scalar_name = ab_scalar.to_msl_name();
+        let c_scalar_name = c_scalar.to_msl_name();
         writeln!(
             self.out,
-            "{NAMESPACE}::simdgroup_{scalar_name}{}x{} {COOPERATIVE_MULTIPLY_ADD_FUNCTION}(const {space_name} {NAMESPACE}::simdgroup_{scalar_name}{}x{}& a, const {space_name} {NAMESPACE}::simdgroup_{scalar_name}{}x{}& b, const {space_name} {NAMESPACE}::simdgroup_{scalar_name}{}x{}& c) {{",
+            "{NAMESPACE}::simdgroup_{c_scalar_name}{}x{} {COOPERATIVE_MULTIPLY_ADD_FUNCTION}(const {space_name} {NAMESPACE}::simdgroup_{ab_scalar_name}{}x{}& a, const {space_name} {NAMESPACE}::simdgroup_{ab_scalar_name}{}x{}& b, const {space_name} {NAMESPACE}::simdgroup_{c_scalar_name}{}x{}& c) {{",
             b_c as u32, a_r as u32, a_c as u32, a_r as u32, b_c as u32, b_r as u32, b_c as u32, a_r as u32,
         )?;
         let l1 = back::Level(1);
         writeln!(
             self.out,
-            "{l1}{NAMESPACE}::simdgroup_{scalar_name}{}x{} d;",
+            "{l1}{NAMESPACE}::simdgroup_{c_scalar_name}{}x{} d;",
             b_c as u32, a_r as u32
         )?;
         writeln!(self.out, "{l1}simdgroup_multiply_accumulate(d,a,b,c);")?;
@@ -6816,9 +6725,12 @@ template <typename A>
                         data.pointer,
                     )?;
                 }
-                crate::Expression::CooperativeMultiplyAdd { a, b, c: _ } => {
+                crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
                     let space = crate::AddressSpace::Private;
-                    self.write_wrapped_cooperative_multiply_add(module, func_ctx, space, a, b)?;
+                    self.write_wrapped_cooperative_multiply_add(module, func_ctx, space, a, b, c)?;
+                }
+                crate::Expression::RayQueryGetIntersection { committed, .. } => {
+                    self.write_rq_get_intersection_function(module, committed)?;
                 }
                 _ => {}
             }
@@ -6835,7 +6747,7 @@ template <typename A>
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
-        use back::msl::VertexFormat;
+        use nt::VertexFormat;
 
         // Define structs to hold resolved/generated data for vertex buffers and
         // their attributes.
@@ -7051,6 +6963,7 @@ template <typename A>
                     mod_info,
                     pipeline_options,
                     force_loop_bounding: options.force_loop_bounding,
+                    emit_int_div_checks: options.emit_int_div_checks,
                 },
                 result_struct: None,
             };
@@ -8273,6 +8186,7 @@ template <typename A>
                     mod_info,
                     pipeline_options,
                     force_loop_bounding: options.force_loop_bounding,
+                    emit_int_div_checks: options.emit_int_div_checks,
                 },
                 result_struct: if ep.stage == crate::ShaderStage::Task {
                     None

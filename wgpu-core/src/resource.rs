@@ -27,7 +27,7 @@ use crate::{
     lock::{rank, Mutex, RwLock},
     ray_tracing::{BlasCompactReadyPendingClosure, BlasPrepareCompactError},
     resource_log,
-    snatch::{SnatchGuard, Snatchable},
+    snatch::{SnatchGuard, Snatchable, Snatchable2},
     timestamp_normalization::TimestampNormalizationBindGroup,
     track::{SharedTrackerIndexAllocator, TrackerIndex},
     weak_vec::WeakVec,
@@ -88,6 +88,44 @@ pub struct ResourceErrorIdent {
 impl fmt::Display for ResourceErrorIdent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "{} with '{}' label", self.r#type, self.label)
+    }
+}
+
+pub enum DestructibleResourceState<T> {
+    Valid(T),
+    Invalid,
+    Destroyed,
+}
+
+impl<T> DestructibleResourceState<T> {
+    pub fn as_ref(&self) -> DestructibleResourceState<&T> {
+        match self {
+            DestructibleResourceState::Valid(v) => DestructibleResourceState::Valid(v),
+            DestructibleResourceState::Invalid => DestructibleResourceState::Invalid,
+            DestructibleResourceState::Destroyed => DestructibleResourceState::Destroyed,
+        }
+    }
+
+    pub fn take(&mut self) -> DestructibleResourceState<T> {
+        mem::replace(self, DestructibleResourceState::Destroyed)
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum InvalidOrDestroyedResourceError {
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
+}
+
+impl<T> DestructibleResourceState<T> {
+    pub fn maybe_valid(self) -> Option<T> {
+        match self {
+            DestructibleResourceState::Valid(t) => Some(t),
+            DestructibleResourceState::Invalid => None,
+            DestructibleResourceState::Destroyed => None,
+        }
     }
 }
 
@@ -455,6 +493,7 @@ pub struct Buffer {
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) map_state: Mutex<BufferMapState>,
+    // Bind groups that reference this buffer. May contain duplicates.
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
     pub(crate) timestamp_normalization_bind_group: Snatchable<TimestampNormalizationBindGroup>,
     pub(crate) indirect_validation_bind_groups: Snatchable<crate::indirect_validation::BindGroups>,
@@ -591,9 +630,47 @@ impl Buffer {
         ))
     }
 
-    /// Returns the mapping callback in case of error so that the callback can be fired outside
-    /// of the locks that are held in this function.
+    /// Schedule buffer mapping.
+    ///
+    /// `op.callback` is guaranteed to be called, regardless of the outcome.
     pub fn map_async(
+        self: &Arc<Self>,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferAddress>,
+        op: BufferMapOperation,
+    ) -> Result<SubmissionIndex, BufferAccessError> {
+        self.try_map_async(offset, size, op)
+            .map_err(|(mut operation, err)| {
+                if let Some(callback) = operation.callback.take() {
+                    callback(Err(err.clone()));
+                }
+                err
+            })
+    }
+
+    /// Try to schedule buffer mapping.
+    ///
+    /// The outcome of this function is one of the following:
+    /// - If there is a queue, and nothing pending in the queue that uses the
+    ///   buffer in question, the buffer is added to `Queue::ready_to_map`, and
+    ///   will be mapped the next time `Device::maintain` is called. The
+    ///   queue assumes responsibility for calling the callback, and this
+    ///   function returns `Ok(0)`, but the buffer has not yet been mapped.
+    /// - If there is a queue, and something is pending in the queue that uses
+    ///   the buffer in question, the buffer is scheduled for mapping after that
+    ///   submission completes. The queue assumes responsibility for calling the
+    ///   callback, and this function returns `Ok(index)` with the index of the
+    ///   submission that must complete. The buffer has not yet been mapped.
+    /// - If there is no queue, the buffer is mapped and the callback is called
+    ///   immediately. The return value is `Ok(0)`.
+    /// - Regardless of the queue state, if there is an error that terminates
+    ///   the buffer mapping attempt, this function returns the callback along
+    ///   with the error, and the caller is responsible for calling the
+    ///   callback.
+    ///
+    /// A return value of `Ok(0)` means that mapping does not need to wait on the queue, but
+    /// it does not mean that the buffer has already been mapped.
+    fn try_map_async(
         self: &Arc<Self>,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
@@ -654,50 +731,79 @@ impl Buffer {
             return Err((op, e.into()));
         }
 
-        {
+        let submit_index = {
             let snatch_guard = device.snatchable_lock.read();
             if let Err(e) = self.check_destroyed(&snatch_guard) {
                 return Err((op, e.into()));
             }
-        }
 
-        {
-            let map_state = &mut *self.map_state.lock();
-            *map_state = match *map_state {
-                BufferMapState::Init { .. } | BufferMapState::Active { .. } => {
-                    return Err((op, BufferAccessError::AlreadyMapped));
-                }
-                BufferMapState::Waiting(_) => {
-                    return Err((op, BufferAccessError::MapAlreadyPending));
-                }
-                BufferMapState::Idle => BufferMapState::Waiting(BufferPendingMapping {
-                    range: offset..end_offset,
-                    op,
-                    _parent_buffer: self.clone(),
-                }),
-            };
-        }
+            {
+                let map_state = &mut *self.map_state.lock();
+                *map_state = match *map_state {
+                    BufferMapState::Init { .. } | BufferMapState::Active { .. } => {
+                        return Err((op, BufferAccessError::AlreadyMapped));
+                    }
+                    BufferMapState::Waiting(_) => {
+                        return Err((op, BufferAccessError::MapAlreadyPending));
+                    }
+                    BufferMapState::Idle => BufferMapState::Waiting(BufferPendingMapping {
+                        range: offset..end_offset,
+                        op,
+                        _parent_buffer: self.clone(),
+                    }),
+                };
+            }
 
-        // TODO: we are ignoring the transition here, I think we need to add a barrier
-        // at the end of the submission
+            if let Some(queue) = device.get_queue().as_ref() {
+                match queue.flush_writes_for_buffer(self, snatch_guard) {
+                    Err(err) => {
+                        let state = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
+                        let BufferMapState::Waiting(BufferPendingMapping { op, .. }) = state else {
+                            unreachable!();
+                        };
+                        return Err((op, err));
+                    }
+                    Ok(()) => {
+                        // Schedule the buffer map in the  lifetime tracker.
+                        //
+                        // This call searches for use of the buffer by pending submissions.
+                        // If we just flushed pending writes, that search is redundant; we
+                        // already know that mapping needs to wait for the latest submission
+                        // and could implement a special case to directly attach it to that
+                        // submission. However, the queue is searched in reverse, so finding
+                        // that the buffer is used by the latest submission will be fast.
+                        Some(queue.lock_life().map(self).unwrap_or(0))
+                    }
+                }
+            } else {
+                None
+            }
+        };
+
+        // At this point, `submit_index` is:
+        // - `Some(index)`, if there is a submission the mapping operation must wait for.
+        // - `Some(0)`, if we have a queue and there is no submission to wait for.
+        // - `None`, if we don't have a queue.
+        //
+        // TODO(https://github.com/gfx-rs/wgpu/issues/9306): we are ignoring the transition
+        // here, I think we need to add a barrier at the end of the submission
         device
             .trackers
             .lock()
             .buffers
             .set_single(self, internal_use);
 
-        let submit_index = if let Some(queue) = device.get_queue() {
-            queue.lock_life().map(self).unwrap_or(0) // '0' means no wait is necessary
+        if let Some(index) = submit_index {
+            Ok(index)
         } else {
+            // We don't have a queue, so go ahead and map the buffer.
             // We can safely unwrap below since we just set the `map_state` to `BufferMapState::Waiting`.
             let (mut operation, status) = self.map(&device.snatchable_lock.read()).unwrap();
             if let Some(callback) = operation.callback.take() {
                 callback(status);
             }
-            0
-        };
-
-        Ok(submit_index)
+            Ok(0)
+        }
     }
 
     pub fn get_mapped_range(
@@ -781,6 +887,7 @@ impl Buffer {
         }
     }
     /// This function returns [`None`] only if [`Self::map_state`] is not [`BufferMapState::Waiting`].
+    /// Other errors are returned within `BufferMapPendingClosure`.
     #[must_use]
     pub(crate) fn map(&self, snatch_guard: &SnatchGuard) -> Option<BufferMapPendingClosure> {
         // This _cannot_ be inlined into the match. If it is, the lock will be held
@@ -848,7 +955,8 @@ impl Buffer {
         let device = &self.device;
         let snatch_guard = device.snatchable_lock.read();
         let raw_buf = self.try_raw(&snatch_guard)?;
-        match mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle) {
+        let map_state = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
+        match map_state {
             BufferMapState::Init { staging_buffer } => {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
@@ -980,17 +1088,22 @@ impl Buffer {
             })
         };
 
-        if let Some(queue) = device.get_queue() {
+        let Some(queue) = device.get_queue() else {
+            return;
+        };
+
+        {
             let mut pending_writes = queue.pending_writes.lock();
             if pending_writes.contains_buffer(self) {
                 pending_writes.consume_temp(temp);
-            } else {
-                let mut life_lock = queue.lock_life();
-                let last_submit_index = life_lock.get_buffer_latest_submission_index(self);
-                if let Some(last_submit_index) = last_submit_index {
-                    life_lock.schedule_resource_destruction(temp, last_submit_index);
-                }
+                return;
             }
+        }
+
+        let mut life_lock = queue.lock_life();
+        let last_submit_index = life_lock.get_buffer_latest_submission_index(self);
+        if let Some(last_submit_index) = last_submit_index {
+            life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
     }
 }
@@ -1280,18 +1393,17 @@ pub enum TextureClearMode {
 
 #[derive(Debug)]
 pub struct Texture {
-    pub(crate) inner: Snatchable<TextureInner>,
+    pub(crate) inner: Snatchable2<TextureInner>,
     pub(crate) device: Arc<Device>,
-    pub(crate) desc: wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
+    pub(crate) desc: wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
     pub(crate) _hal_usage: wgt::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) initialization_status: RwLock<TextureInitTracker>,
     pub(crate) full_range: TextureSelector,
-    /// The `label` from the descriptor used to create the resource.
-    pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) clear_mode: RwLock<TextureClearMode>,
     pub(crate) views: Mutex<WeakVec<TextureView>>,
+    // Bind groups that reference this texture. May contain duplicates.
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
 }
 
@@ -1306,9 +1418,9 @@ impl Texture {
         init: bool,
     ) -> Self {
         Texture {
-            inner: Snatchable::new(inner),
+            inner: Snatchable2::new(inner),
             device: device.clone(),
-            desc: desc.map_label(|_| ()),
+            desc: desc.map_label(|label| label.to_string()),
             _hal_usage: hal_usage,
             format_features,
             initialization_status: RwLock::new(
@@ -1323,9 +1435,33 @@ impl Texture {
                 mips: 0..desc.mip_level_count,
                 layers: 0..desc.array_layer_count(),
             },
-            label: desc.label.to_string(),
             tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
             clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
+            views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
+            bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
+        }
+    }
+
+    pub(crate) fn invalid(device: &Arc<Device>, desc: &TextureDescriptor) -> Self {
+        Texture {
+            inner: Snatchable2::invalid(),
+            device: device.clone(),
+            desc: desc.map_label(|label| label.to_string()),
+            _hal_usage: wgt::TextureUses::empty(),
+            format_features: wgt::TextureFormatFeatures {
+                allowed_usages: wgt::TextureUsages::empty(),
+                flags: wgt::TextureFormatFeatureFlags::empty(),
+            },
+            initialization_status: RwLock::new(
+                rank::TEXTURE_INITIALIZATION_STATUS,
+                TextureInitTracker::new(0, 0),
+            ),
+            full_range: TextureSelector {
+                mips: 0..desc.mip_level_count,
+                layers: 0..desc.array_layer_count(),
+            },
+            tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
+            clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, TextureClearMode::None),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
         }
@@ -1351,6 +1487,16 @@ impl Texture {
 
 impl Drop for Texture {
     fn drop(&mut self) {
+        #[cfg(feature = "trace")]
+        {
+            let mut t = self.device.trace.lock();
+            if let Some(t) = t.as_mut() {
+                use crate::device::trace::to_trace;
+
+                // SAFETY: All textures are constructed in Arc => are heap allocated
+                t.add(trace::Action::DropTexture(unsafe { to_trace(self) }));
+            }
+        }
         match *self.clear_mode.write() {
             TextureClearMode::Surface {
                 ref mut clear_view, ..
@@ -1376,7 +1522,7 @@ impl Drop for Texture {
             _ => {}
         };
 
-        if let Some(TextureInner::Native { raw }) = self.inner.take() {
+        if let Some(TextureInner::Native { raw }) = self.inner.take().maybe_valid() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
                 self.device.raw().destroy_texture(raw);
@@ -1389,7 +1535,7 @@ impl RawResourceAccess for Texture {
     type DynResource = dyn hal::DynTexture;
 
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
-        self.inner.get(guard).map(|t| t.raw())
+        self.inner.get(guard).maybe_valid().map(|t| t.raw())
     }
 }
 
@@ -1397,25 +1543,44 @@ impl Texture {
     pub(crate) fn try_inner<'a>(
         &'a self,
         guard: &'a SnatchGuard,
-    ) -> Result<&'a TextureInner, DestroyedResourceError> {
-        self.inner
-            .get(guard)
-            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+    ) -> Result<&'a TextureInner, InvalidOrDestroyedResourceError> {
+        match self.inner.get(guard) {
+            DestructibleResourceState::Valid(t) => Ok(t),
+            DestructibleResourceState::Invalid => {
+                Err(InvalidOrDestroyedResourceError::InvalidResource(
+                    InvalidResourceError(self.error_ident()),
+                ))
+            }
+            DestructibleResourceState::Destroyed => {
+                Err(InvalidOrDestroyedResourceError::DestroyedResource(
+                    DestroyedResourceError(self.error_ident()),
+                ))
+            }
+        }
     }
 
     pub(crate) fn check_destroyed(
         &self,
         guard: &SnatchGuard,
     ) -> Result<(), DestroyedResourceError> {
-        self.inner
-            .get(guard)
-            .map(|_| ())
-            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+        match self.inner.get(guard) {
+            DestructibleResourceState::Valid(_) => Ok(()),
+            DestructibleResourceState::Invalid => Ok(()),
+            DestructibleResourceState::Destroyed => Err(DestroyedResourceError(self.error_ident())),
+        }
+    }
+
+    pub(crate) fn check_valid(&self, guard: &SnatchGuard) -> Result<(), InvalidResourceError> {
+        match self.inner.get(guard) {
+            DestructibleResourceState::Valid(_) => Ok(()),
+            DestructibleResourceState::Invalid => Err(InvalidResourceError(self.error_ident())),
+            DestructibleResourceState::Destroyed => Ok(()),
+        }
     }
 
     pub(crate) fn get_clear_view<'a>(
         clear_mode: &'a TextureClearMode,
-        desc: &'a wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
+        desc: &'a wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
         mip_level: u32,
         depth_or_layer: u32,
     ) -> &'a dyn hal::DynTextureView {
@@ -1446,7 +1611,11 @@ impl Texture {
         let device = &self.device;
 
         let temp = {
-            let raw = match self.inner.snatch(&mut device.snatchable_lock.write()) {
+            let raw = match self
+                .inner
+                .snatch(&mut device.snatchable_lock.write())
+                .maybe_valid()
+            {
                 Some(TextureInner::Native { raw }) => raw,
                 Some(TextureInner::Surface { .. }) => {
                     return;
@@ -1477,17 +1646,22 @@ impl Texture {
             })
         };
 
-        if let Some(queue) = device.get_queue() {
+        let Some(queue) = device.get_queue() else {
+            return;
+        };
+
+        {
             let mut pending_writes = queue.pending_writes.lock();
             if pending_writes.contains_texture(self) {
                 pending_writes.consume_temp(temp);
-            } else {
-                let mut life_lock = queue.lock_life();
-                let last_submit_index = life_lock.get_texture_latest_submission_index(self);
-                if let Some(last_submit_index) = last_submit_index {
-                    life_lock.schedule_resource_destruction(temp, last_submit_index);
-                }
+                return;
             }
+        }
+
+        let mut life_lock = queue.lock_life();
+        let last_submit_index = life_lock.get_texture_latest_submission_index(self);
+        if let Some(last_submit_index) = last_submit_index {
+            life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
     }
 }
@@ -1608,8 +1782,6 @@ pub enum CreateTextureError {
     CreateTextureView(#[from] CreateTextureViewError),
     #[error("Invalid usage flags {0:?}")]
     InvalidUsage(wgt::TextureUsages),
-    #[error("Texture usage {0:?} is not compatible with texture usage {1:?}")]
-    IncompatibleUsage(wgt::TextureUsages, wgt::TextureUsages),
     #[error(transparent)]
     InvalidDimension(#[from] TextureDimensionError),
     #[error("Depth texture ({1:?}) can't be created as {0:?}")]
@@ -1627,6 +1799,10 @@ pub enum CreateTextureError {
     InvalidFormatUsages(wgt::TextureUsages, wgt::TextureFormat, bool),
     #[error("The view format {0:?} is not compatible with texture format {1:?}, only changing srgb-ness is allowed.")]
     InvalidViewFormat(wgt::TextureFormat, wgt::TextureFormat),
+    #[error("Transient texture usage must be equal to `TRANSIENT_ATTACHMENT | RENDER_ATTACHMENT`, but got `{0:?}`")]
+    InvalidTransientTextureUsage(wgt::TextureUsages),
+    #[error("Transient texture view formats must be empty")]
+    InvalidTransientTextureViewFormats,
     #[error("Texture usages {0:?} are not allowed on a texture of dimensions {1:?}")]
     InvalidDimensionUsages(wgt::TextureUsages, wgt::TextureDimension),
     #[error("Texture usage STORAGE_BINDING is not allowed for multisampled textures")]
@@ -1637,6 +1813,10 @@ pub enum CreateTextureError {
     InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
     #[error("Multisampled textures must have RENDER_ATTACHMENT usage")]
     MultisampledNotRenderAttachment,
+    #[error("Transient texture mip level count ({0}) must be 1")]
+    InvalidTransientTextureMipLevelCount(u32),
+    #[error("Transient texture layer count ({0}) must be 1")]
+    InvalidTransientTextureLayerCount(u32),
     #[error("Texture format {0:?} can't be used due to missing features")]
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
     #[error(transparent)]
@@ -1644,7 +1824,11 @@ pub enum CreateTextureError {
 }
 
 crate::impl_resource_type!(Texture);
-crate::impl_labeled!(Texture);
+impl Labeled for Texture {
+    fn label(&self) -> &str {
+        &self.desc.label
+    }
+}
 crate::impl_parent_device!(Texture);
 crate::impl_storage_item!(Texture);
 crate::impl_trackable!(Texture);
@@ -1665,7 +1849,6 @@ impl WebGpuError for CreateTextureError {
             Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
 
             Self::InvalidUsage(_)
-            | Self::IncompatibleUsage(_, _)
             | Self::InvalidDepthDimension(_, _)
             | Self::InvalidCompressedDimension(_, _)
             | Self::InvalidMipLevelCount { .. }
@@ -1675,6 +1858,10 @@ impl WebGpuError for CreateTextureError {
             | Self::InvalidMultisampledStorageBinding
             | Self::InvalidMultisampledFormat(_)
             | Self::InvalidSampleCount(..)
+            | Self::InvalidTransientTextureUsage(_)
+            | Self::InvalidTransientTextureMipLevelCount(_)
+            | Self::InvalidTransientTextureLayerCount(_)
+            | Self::InvalidTransientTextureViewFormats
             | Self::MultisampledNotRenderAttachment => ErrorType::Validation,
         }
     }
@@ -1875,10 +2062,26 @@ pub enum CreateTextureViewError {
         texture: wgt::TextureFormat,
         view: wgt::TextureFormat,
     },
+    #[error(
+        "The texture view (`{view:?}`) from transient texture (`{texture:?}`) must have the same usage"
+    )]
+    InvalidTransientTextureViewUsage {
+        texture: wgt::TextureUsages,
+        view: wgt::TextureUsages,
+    },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+}
+
+impl From<InvalidOrDestroyedResourceError> for CreateTextureViewError {
+    fn from(value: InvalidOrDestroyedResourceError) -> Self {
+        match value {
+            InvalidOrDestroyedResourceError::InvalidResource(e) => Self::InvalidResource(e),
+            InvalidOrDestroyedResourceError::DestroyedResource(e) => Self::DestroyedResource(e),
+        }
+    }
 }
 
 impl WebGpuError for CreateTextureViewError {
@@ -1903,6 +2106,7 @@ impl WebGpuError for CreateTextureViewError {
             | Self::TextureViewFormatNotRenderable(_)
             | Self::TextureViewFormatNotStorage(_)
             | Self::InvalidTextureViewUsage { .. }
+            | Self::InvalidTransientTextureViewUsage { .. }
             | Self::MissingFeatures(_) => ErrorType::Validation,
         }
     }
@@ -2159,21 +2363,67 @@ pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 
 #[derive(Debug)]
 pub struct QuerySet {
-    pub(crate) raw: ManuallyDrop<Box<dyn hal::DynQuerySet>>,
+    pub(crate) raw: Snatchable<Box<dyn hal::DynQuerySet>>,
     pub(crate) device: Arc<Device>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) desc: wgt::QuerySetDescriptor<()>,
+    pub(crate) initialized_slots: Mutex<bit_vec::BitVec>,
+}
+
+impl RawResourceAccess for QuerySet {
+    type DynResource = dyn hal::DynQuerySet;
+
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
+        self.raw.get(guard).map(|b| b.as_ref())
+    }
+}
+
+impl QuerySet {
+    pub fn destroy(self: &Arc<Self>) {
+        let device = &self.device;
+
+        let temp = {
+            let mut snatch_guard = self.device.snatchable_lock.write();
+
+            let raw = match self.raw.snatch(&mut snatch_guard) {
+                Some(raw) => raw,
+                None => {
+                    // Per spec, it is valid to call `destroy` multiple times.
+                    return;
+                }
+            };
+
+            drop(snatch_guard);
+
+            queue::TempResource::DestroyedQuerySet(DestroyedQuerySet {
+                raw: ManuallyDrop::new(raw),
+                device: Arc::clone(&self.device),
+                label: self.label().to_owned(),
+            })
+        };
+
+        let Some(queue) = device.get_queue() else {
+            return;
+        };
+
+        let mut life_lock = queue.lock_life();
+        let last_submit_index = life_lock.get_query_set_latest_submission_index(self);
+        if let Some(last_submit_index) = last_submit_index {
+            life_lock.schedule_resource_destruction(temp, last_submit_index);
+        }
+    }
 }
 
 impl Drop for QuerySet {
     fn drop(&mut self) {
         resource_log!("Destroy raw {}", self.error_ident());
-        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
-        unsafe {
-            self.device.raw().destroy_query_set(raw);
+        if let Some(raw) = self.raw.take() {
+            // SAFETY: We are in the Drop impl and we don't use raw anymore after this point.
+            unsafe {
+                self.device.raw().destroy_query_set(raw);
+            }
         }
     }
 }
@@ -2184,9 +2434,28 @@ crate::impl_parent_device!(QuerySet);
 crate::impl_storage_item!(QuerySet);
 crate::impl_trackable!(QuerySet);
 
-impl QuerySet {
-    pub(crate) fn raw(&self) -> &dyn hal::DynQuerySet {
-        self.raw.as_ref()
+/// A query set that has been marked as destroyed and is staged for actual deletion soon
+#[derive(Debug)]
+pub struct DestroyedQuerySet {
+    raw: ManuallyDrop<Box<dyn hal::DynQuerySet>>,
+    device: Arc<Device>,
+    label: String,
+}
+
+impl DestroyedQuerySet {
+    pub fn label(&self) -> &dyn fmt::Debug {
+        &self.label
+    }
+}
+
+impl Drop for DestroyedQuerySet {
+    fn drop(&mut self) {
+        resource_log!("Destroy raw QuerySet (destroyed) {:?}", self.label());
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            hal::DynDevice::destroy_query_set(self.device.raw(), raw);
+        }
     }
 }
 

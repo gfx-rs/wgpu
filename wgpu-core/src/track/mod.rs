@@ -98,6 +98,7 @@ Device <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.
 mod blas;
 mod buffer;
 mod metadata;
+mod query_set;
 mod range;
 mod stateless;
 mod texture;
@@ -106,7 +107,7 @@ use crate::{
     binding_model, command,
     lock::{rank, Mutex},
     pipeline,
-    resource::{self, Labeled, RawResourceAccess, ResourceErrorIdent},
+    resource::{self, Labeled, RawResourceAccess, ResourceErrorIdent, Trackable},
     snatch::SnatchGuard,
     track::blas::BlasTracker,
 };
@@ -117,6 +118,7 @@ use core::{fmt, mem, ops};
 
 use thiserror::Error;
 
+pub(crate) use crate::track::query_set::QuerySetTracker;
 pub(crate) use buffer::{
     BufferBindGroupState, BufferTracker, BufferUsageScope, DeviceBufferTracker,
 };
@@ -647,7 +649,7 @@ pub(crate) struct Tracker {
     pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline>,
     pub render_pipelines: StatelessTracker<pipeline::RenderPipeline>,
     pub bundles: StatelessTracker<command::RenderBundle>,
-    pub query_sets: StatelessTracker<resource::QuerySet>,
+    pub query_sets: QuerySetTracker,
 }
 
 impl Tracker {
@@ -665,7 +667,7 @@ impl Tracker {
             compute_pipelines: StatelessTracker::new(),
             render_pipelines: StatelessTracker::new(),
             bundles: StatelessTracker::new(),
-            query_sets: StatelessTracker::new(),
+            query_sets: QuerySetTracker::new(),
         }
     }
 
@@ -697,7 +699,10 @@ impl Tracker {
     ) {
         self.buffers.set_and_remove_from_usage_scope_sparse(
             &mut scope.buffers,
-            bind_group.buffers.used_tracker_indices(),
+            bind_group
+                .buffers
+                .used_resources()
+                .map(|b| b.tracker_index()),
         );
         self.textures
             .set_and_remove_from_usage_scope_sparse(&mut scope.textures, &bind_group.views);

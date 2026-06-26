@@ -122,7 +122,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t           Driver Info: {}", print_empty_string(driver_info))?;
     writeln!(output, "\t     Subgroup Min Size: {subgroup_min_size}")?;
     writeln!(output, "\t     Subgroup Max Size: {subgroup_max_size}")?;
-    writeln!(output, "\tTransient Saves Memory: {transient_saves_memory}")?;
+    writeln!(output, "\tTransient Saves Memory: {transient_saves_memory:?}")?;
     writeln!(output, "\t          Limit Bucket: {}", limit_bucket.as_ref().map_or("<disabled>", |b| &b.name))?;
     writeln!(output, "\t      WebGPU Compliant: {:?}", downlevel.is_webgpu_compliant())?;
 
@@ -151,6 +151,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_texture_dimension_3d,
         max_texture_array_layers,
         max_bind_groups,
+        max_bind_groups_plus_vertex_buffers,
         max_bindings_per_bind_group,
         max_dynamic_uniform_buffers_per_pipeline_layout,
         max_dynamic_storage_buffers_per_pipeline_layout,
@@ -202,12 +203,16 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_acceleration_structures_per_shader_stage,
 
         max_multiview_view_count,
+
+        max_ray_dispatch_count,
+        max_ray_recursion_depth,
     } = limits;
     writeln!(output, "\t\t                           Max Texture Dimension 1d: {max_texture_dimension_1d}")?;
     writeln!(output, "\t\t                           Max Texture Dimension 2d: {max_texture_dimension_2d}")?;
     writeln!(output, "\t\t                           Max Texture Dimension 3d: {max_texture_dimension_3d}")?;
     writeln!(output, "\t\t                           Max Texture Array Layers: {max_texture_array_layers}")?;
     writeln!(output, "\t\t                                    Max Bind Groups: {max_bind_groups}")?;
+    writeln!(output, "\t\t                Max Bind Groups Plus Vertex Buffers: {max_bind_groups_plus_vertex_buffers}")?;
     writeln!(output, "\t\t                        Max Bindings Per Bind Group: {max_bindings_per_bind_group}")?;
     writeln!(output, "\t\t    Max Dynamic Uniform Buffers Per Pipeline Layout: {max_dynamic_uniform_buffers_per_pipeline_layout}")?;
     writeln!(output, "\t\t    Max Dynamic Storage Buffers Per Pipeline Layout: {max_dynamic_storage_buffers_per_pipeline_layout}")?;
@@ -259,6 +264,8 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t       Max Acceleration Structures Per Shader Stage: {max_acceleration_structures_per_shader_stage}")?;
 
     writeln!(output, "\t\t                           Max Multiview View Count: {max_multiview_view_count}")?;
+    writeln!(output, "\t\t                             Max Ray Dispatch Count: {max_ray_dispatch_count}")?;
+    writeln!(output, "\t\t                            Max Ray Recursion Depth: {max_ray_recursion_depth}")?;
     // This one reflects more of a wgpu implementation limitations than a hardware limit
     // so don't show it here.
     let _ = max_non_sampler_bindings;

@@ -145,7 +145,7 @@ pub fn process_overrides<'a>(
 
     // An iterator through the original overrides table, consumed in
     // approximate tandem with the global expressions.
-    let mut overrides = mem::take(&mut module.overrides);
+    let mut overrides = module.overrides.take();
     let mut override_iter = overrides.iter_mut_span();
 
     // Do two things in tandem:
@@ -264,7 +264,7 @@ pub fn process_overrides<'a>(
         }
     }
 
-    let mut functions = mem::take(&mut module.functions);
+    let mut functions = module.functions.take();
     for (_, function) in functions.iter_mut() {
         process_function(&mut module, &override_map, &mut layouter, function)?;
     }
@@ -424,7 +424,7 @@ fn process_function(
 
     let mut local_expression_kind_tracker = crate::proc::ExpressionKindTracker::new();
 
-    let mut expressions = mem::take(&mut function.expressions);
+    let mut expressions = function.expressions.take();
 
     // Dummy `emitter` and `block` for the constant evaluator.
     // We can ignore the concept of emitting expressions here since
@@ -1025,6 +1025,32 @@ fn map_value_to_literal(value: f64, scalar: Scalar) -> Result<Literal, PipelineC
             // https://webidl.spec.whatwg.org/#js-boolean
             let value = value != 0.0 && !value.is_nan();
             Ok(Literal::Bool(value))
+        }
+        Scalar::I16 => {
+            if !value.is_finite() {
+                return Err(PipelineConstantError::SrcNeedsToBeFinite);
+            }
+
+            let value = value.trunc();
+            if value < f64::from(i16::MIN) || value > f64::from(i16::MAX) {
+                return Err(PipelineConstantError::DstRangeTooSmall);
+            }
+
+            let value = value as i16;
+            Ok(Literal::I16(value))
+        }
+        Scalar::U16 => {
+            if !value.is_finite() {
+                return Err(PipelineConstantError::SrcNeedsToBeFinite);
+            }
+
+            let value = value.trunc();
+            if value < f64::from(u16::MIN) || value > f64::from(u16::MAX) {
+                return Err(PipelineConstantError::DstRangeTooSmall);
+            }
+
+            let value = value as u16;
+            Ok(Literal::U16(value))
         }
         Scalar::I32 => {
             // https://webidl.spec.whatwg.org/#js-long

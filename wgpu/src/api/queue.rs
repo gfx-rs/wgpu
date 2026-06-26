@@ -1,5 +1,6 @@
 use alloc::boxed::Box;
-use core::ops::{Deref, RangeBounds};
+use core::fmt;
+use core::ops::RangeBounds;
 
 use crate::{api::DeferredCommandBufferActions, *};
 
@@ -70,6 +71,15 @@ impl QueueWriteBufferView {
     /// Returns custom implementation of QueueWriteBufferView (if custom backend and is internally T)
     pub fn as_custom<T: custom::QueueWriteBufferInterface>(&self) -> Option<&T> {
         self.inner.as_custom()
+    }
+}
+
+impl fmt::Debug for QueueWriteBufferView {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("QueueWriteBufferView")
+            .field("buffer", &self.buffer)
+            .field("offset", &self.offset)
+            .finish_non_exhaustive()
     }
 }
 
@@ -338,9 +348,24 @@ impl Queue {
     #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: hal::Api>(
         &self,
-    ) -> Option<impl Deref<Target = A::Queue> + WasmNotSendSync> {
+    ) -> Option<impl core::ops::Deref<Target = A::Queue> + WasmNotSendSync> {
         let queue = self.inner.as_core_opt()?;
         unsafe { queue.context.queue_as_hal::<A>(queue) }
+    }
+
+    /// Schedule a surface texture to be presented on the owning surface.
+    ///
+    /// Should be called after any work on the texture is submitted via [`Queue::submit`].
+    /// If no work was submitted, the texture will be cleared automatically before presenting.
+    ///
+    /// # Platform dependent behavior
+    ///
+    /// On Wayland, `present` will attach a `wl_buffer` to the underlying `wl_surface` and commit the new surface
+    /// state. If it is desired to do things such as request a frame callback, scale the surface using the viewporter
+    /// or synchronize other double buffered state, then these operations should be done before the call to `present`.
+    pub fn present(&self, mut surface_texture: SurfaceTexture) {
+        surface_texture.presented = true;
+        self.inner.present(&surface_texture.detail);
     }
 
     /// Compact a BLAS, it must have had [`Blas::prepare_compaction_async`] called on it and had the

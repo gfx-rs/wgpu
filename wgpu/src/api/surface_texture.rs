@@ -19,20 +19,6 @@ static_assertions::assert_impl_all!(SurfaceTexture: Send, Sync);
 crate::cmp::impl_eq_ord_hash_proxy!(SurfaceTexture => .texture.inner);
 
 impl SurfaceTexture {
-    /// Schedule this texture to be presented on the owning surface.
-    ///
-    /// Needs to be called after any work on the texture is scheduled via [`Queue::submit`].
-    ///
-    /// # Platform dependent behavior
-    ///
-    /// On Wayland, `present` will attach a `wl_buffer` to the underlying `wl_surface` and commit the new surface
-    /// state. If it is desired to do things such as request a frame callback, scale the surface using the viewporter
-    /// or synchronize other double buffered state, then these operations should be done before the call to `present`.
-    pub fn present(mut self) {
-        self.presented = true;
-        self.detail.present();
-    }
-
     #[cfg(custom)]
     /// Returns custom implementation of SurfaceTexture (if custom backend and is internally T)
     pub fn as_custom<T: crate::custom::SurfaceOutputDetailInterface>(&self) -> Option<&T> {
@@ -42,8 +28,15 @@ impl SurfaceTexture {
 
 impl Drop for SurfaceTexture {
     fn drop(&mut self) {
-        if !self.presented && !thread_panicking() {
-            self.detail.texture_discard();
+        if !self.presented {
+            if thread_panicking() {
+                // Best effort: release reference to `SwapchainAcquireSemaphore`
+                // This fixes <https://github.com/gfx-rs/wgpu/issues/8243>
+                // `Trying to destroy a SwapchainAcquireSemaphore that is still in use by a SurfaceTexture`
+                self.detail.texture_release();
+            } else {
+                self.detail.texture_discard();
+            }
         }
     }
 }

@@ -268,7 +268,8 @@ impl Device {
         let instance_buffer_size = self
             .alignments
             .raw_tlas_instance_size
-            .saturating_mul(desc.max_instances.max(1));
+            .checked_mul(desc.max_instances.max(1))
+            .expect("max_tlas_instance_count should not allow excessive buffer size");
         let instance_buffer = unsafe {
             self.raw().create_buffer(&hal::BufferDescriptor {
                 label: hal_label(Some("(wgpu-core) instances_buffer"), self.instance_flags),
@@ -384,7 +385,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(blas) = _blas.get() {
             if let Some(t) = blas.device.trace.lock().as_mut() {
-                t.add(Action::DestroyBlas(blas.to_trace()));
+                t.add(Action::DropBlas(blas.to_trace()));
             }
         }
     }
@@ -398,7 +399,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(tlas) = _tlas.get() {
             if let Some(t) = tlas.device.trace.lock().as_mut() {
-                t.add(Action::DestroyTlas(tlas.to_trace()));
+                t.add(Action::DropTlas(tlas.to_trace()));
             }
         }
     }

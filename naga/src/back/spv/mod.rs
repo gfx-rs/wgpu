@@ -110,6 +110,8 @@ mod selection;
 mod subgroup;
 mod writer;
 
+pub use nt::spv::*;
+
 pub use mesh_shader::{MeshReturnInfo, MeshReturnMember};
 pub use spirv::{Capability, SourceLanguage};
 
@@ -593,6 +595,14 @@ enum LookupRayQueryFunction {
     Terminate,
 }
 
+// Just one supported function right now, more in the future.
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
+enum LookupRaytracingFunction {
+    TraceRay {
+        payload: Handle<crate::GlobalVariable>,
+    },
+}
+
 #[derive(Debug)]
 enum Dimension {
     Scalar,
@@ -898,6 +908,7 @@ impl BlockContext<'_> {
 /// type `type_id`, and the result of any `Load` will be immediately converted
 /// to the base type. This is used for matrices with 2 rows, as well as any
 /// arrays or structs containing such matrices.
+#[derive(Debug)]
 pub struct Std140CompatTypeInfo {
     /// ID of the std140 compatible type declaration.
     type_id: Word,
@@ -906,6 +917,7 @@ pub struct Std140CompatTypeInfo {
     member_indices: Vec<u32>,
 }
 
+#[expect(missing_debug_implementations, reason = "would be way too verbose?")]
 pub struct Writer {
     physical_layout: PhysicalLayout,
     logical_layout: LogicalLayout,
@@ -933,6 +945,7 @@ pub struct Writer {
     zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode,
     force_loop_bounding: bool,
     use_storage_input_output_16: bool,
+    emit_int_div_checks: bool,
     void_type: Word,
     tuple_of_u32s_ty_id: Option<Word>,
     //TODO: convert most of these into vectors, addressable by handle indices
@@ -962,6 +975,10 @@ pub struct Writer {
 
     ray_query_functions: crate::FastHashMap<LookupRayQueryFunction, Word>,
 
+    ray_tracing_functions: crate::FastHashMap<LookupRaytracingFunction, Word>,
+
+    has_ray_tracing_pipeline: bool,
+
     /// F16 I/O polyfill manager for handling `f16` input/output variables
     /// when `StorageInputOutput16` capability is not available.
     io_f16_polyfills: f16_polyfill::F16IoPolyfill,
@@ -969,6 +986,9 @@ pub struct Writer {
     /// Non semantic debug printf extension `OpExtInstImport`
     debug_printf: Option<Word>,
     pub(crate) ray_query_initialization_tracking: bool,
+
+    /// Whether the arguments to trace ray should be validated
+    pub(crate) trace_ray_argument_validation: bool,
 
     /// See docs in [`Options`]
     task_dispatch_limits: Option<TaskDispatchLimits>,
@@ -1012,21 +1032,15 @@ bitflags::bitflags! {
         /// Note: VK_KHR_shader_non_semantic_info must be enabled. This will have no
         /// effect if `options.ray_query_initialization_tracking` is set to false.
         const PRINT_ON_RAY_QUERY_INITIALIZATION_FAIL = 0x20;
+
+        /// Instead of silently failing if the arguments to `traceRays` are
+        /// invalid, uses debug printf extension to print to the command line
+        ///
+        /// Note: VK_KHR_shader_non_semantic_info must be enabled. This will have no
+        /// effect if `options.trace_ray_argument_validation` is set to false.
+        const PRINT_ON_TRACE_RAYS_FAIL = 0x40;
     }
 }
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct BindingInfo {
-    pub descriptor_set: u32,
-    pub binding: u32,
-    /// If the binding is an unsized binding array, this overrides the size.
-    pub binding_array_size: Option<u32>,
-}
-
-// Using `BTreeMap` instead of `HashMap` so that we can hash itself.
-pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindingInfo>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZeroInitializeWorkgroupMemoryMode {
@@ -1073,6 +1087,9 @@ pub struct Options<'a> {
     /// misuse.
     pub ray_query_initialization_tracking: bool,
 
+    /// If set, arguments to `traceRays` calls will be validated.
+    pub trace_ray_argument_validation: bool,
+
     /// Whether to use the `StorageInputOutput16` capability for `f16` shader I/O.
     /// When false, `f16` I/O is polyfilled using `f32` types with conversions.
     pub use_storage_input_output_16: bool,
@@ -1089,6 +1106,17 @@ pub struct Options<'a> {
     ///
     /// Currently this validation is unimplemented.
     pub mesh_shader_primitive_indices_clamp: bool,
+
+    /// If true (the default), integer division and modulo operations emit
+    /// wrapper functions that replace a zero divisor with one, and for signed
+    /// integers also guard against `INT_MIN / -1` overflow. This matches the
+    /// WGSL spec's requirement that these cases produce defined results.
+    ///
+    /// Set to `false` to emit raw `OpSDiv`/`OpUDiv`/`OpSRem`/`OpUMod`
+    /// instructions without checks. This is faster but produces
+    /// implementation-defined results when the divisor is zero. Appropriate
+    /// for compute shaders where the developer guarantees non-zero divisors.
+    pub emit_int_div_checks: bool,
 }
 
 impl Default for Options<'_> {
@@ -1109,10 +1137,12 @@ impl Default for Options<'_> {
             zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode::Polyfill,
             force_loop_bounding: true,
             ray_query_initialization_tracking: true,
+            trace_ray_argument_validation: true,
             use_storage_input_output_16: true,
             debug_info: None,
             task_dispatch_limits: None,
             mesh_shader_primitive_indices_clamp: true,
+            emit_int_div_checks: true,
         }
     }
 }
@@ -1180,6 +1210,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::TEXTURE_INT64_ATOMIC
         | Caps::RAY_HIT_VERTEX_POSITION
         | Caps::SHADER_FLOAT16
+        | Caps::SHADER_INT16
         // No TEXTURE_EXTERNAL
         | Caps::SHADER_FLOAT16_IN_FLOAT32
         | Caps::SHADER_BARYCENTRICS
@@ -1191,7 +1222,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
         | Caps::COOPERATIVE_MATRIX
         | Caps::PER_VERTEX
-        // No RAY_TRACING_PIPELINE
+        | Caps::RAY_TRACING_PIPELINE
         | Caps::DRAW_INDEX
         | Caps::MEMORY_DECORATION_COHERENT
         | Caps::MEMORY_DECORATION_VOLATILE

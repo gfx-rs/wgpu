@@ -27,7 +27,7 @@ pub enum DrawError {
     #[error("Currently set {pipeline} requires vertex buffer {index} to be set")]
     MissingVertexBuffer {
         pipeline: ResourceErrorIdent,
-        index: u32,
+        index: usize,
     },
     #[error("Index buffer must be set")]
     MissingIndexBuffer,
@@ -74,6 +74,8 @@ pub enum DrawError {
     MissingImmediateData {
         missing: naga::valid::ImmediateSlots,
     },
+    #[error("The number of bind groups + vertex buffers {given} exceeds the limit {limit}")]
+    TooManyBindGroupsPlusVertexBuffers { given: u32, limit: u32 },
 }
 
 impl WebGpuError for DrawError {

@@ -271,8 +271,7 @@ ObjectDefineProperty(GPUSupportedLimitsPrototype, privateCustomInspect, {
           "maxTextureDimension3D",
           "maxTextureArrayLayers",
           "maxBindGroups",
-          // TODO(@crowlKats): support max_bind_groups_plus_vertex_buffers
-          // "maxBindGroupsPlusVertexBuffers",
+          "maxBindGroupsPlusVertexBuffers",
           "maxBindingsPerBindGroup",
           "maxDynamicUniformBuffersPerPipelineLayout",
           "maxDynamicStorageBuffersPerPipelineLayout",
@@ -482,6 +481,9 @@ class GPUTextureUsage {
   }
   static get RENDER_ATTACHMENT() {
     return 0x10;
+  }
+  static get TRANSIENT_ATTACHMENT() {
+    return 0x20;
   }
 }
 

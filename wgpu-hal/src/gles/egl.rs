@@ -193,6 +193,7 @@ impl EglContext {
 
 /// A wrapper around a [`glow::Context`] and the required EGL context that uses locking to guarantee
 /// exclusive access when shared with multiple threads.
+#[derive(Debug)]
 pub struct AdapterContext {
     glow: Mutex<ManuallyDrop<glow::Context>>,
     egl: Option<EglContext>,
@@ -266,6 +267,7 @@ struct EglContextLock<'a> {
 }
 
 /// A guard containing a lock to an [`AdapterContext`], while the GL context is kept current.
+#[expect(missing_debug_implementations)]
 pub struct AdapterContextLock<'a> {
     glow: MutexGuard<'a, ManuallyDrop<glow::Context>>,
     egl: Option<EglContextLock<'a>>,
@@ -343,6 +345,11 @@ struct Inner {
     /// Method by which the framebuffer should support srgb
     srgb_kind: SrgbFrameBufferKind,
 }
+
+#[cfg(send_sync)]
+unsafe impl Send for Inner {}
+#[cfg(send_sync)]
+unsafe impl Sync for Inner {}
 
 // Different calls to `eglGetPlatformDisplay` may return the same `Display`, making it a global
 // state of all our `EglContext`s. This forces us to track the number of such context to prevent
@@ -675,6 +682,7 @@ struct WindowSystemInterface {
     kind: WindowKind,
 }
 
+#[derive(Debug)]
 pub struct Instance {
     wsi: WindowSystemInterface,
     flags: wgt::InstanceFlags,
@@ -707,8 +715,8 @@ impl Instance {
     }
 }
 
-unsafe impl Send for Instance {}
-unsafe impl Sync for Instance {}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(Instance: Send, Sync);
 
 impl crate::Instance for Instance {
     type A = super::Api;

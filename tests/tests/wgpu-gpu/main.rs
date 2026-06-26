@@ -10,8 +10,10 @@ mod regression {
     pub mod issue_6317;
     pub mod issue_6467;
     pub mod issue_6827;
+    pub mod issue_9115;
 }
 
+mod adapter;
 mod bgra8unorm_storage;
 mod bind_group_layout_dedup;
 mod bind_groups;
@@ -58,6 +60,7 @@ mod queue_transfer;
 mod ray_tracing;
 mod render_pass_ownership;
 mod render_target;
+mod resolve_query_set_init;
 mod resource_descriptor_accessor;
 mod resource_error;
 mod samplers;
@@ -80,11 +83,12 @@ mod vertex_formats;
 mod vertex_indices;
 mod vertex_state;
 mod write_texture;
-mod zero_init_texture_after_discard;
+mod zero_init;
 
 fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     let mut tests = Vec::new();
 
+    adapter::all_tests(&mut tests);
     bgra8unorm_storage::all_tests(&mut tests);
     bind_group_layout_dedup::all_tests(&mut tests);
     bind_groups::all_tests(&mut tests);
@@ -123,6 +127,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     primitive_index::all_tests(&mut tests);
     immediates::all_tests(&mut tests);
     query_set::all_tests(&mut tests);
+    resolve_query_set_init::all_tests(&mut tests);
     queue_transfer::all_tests(&mut tests);
     ray_tracing::all_tests(&mut tests);
     regression::issue_3349::all_tests(&mut tests);
@@ -136,6 +141,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     regression::issue_6317::all_tests(&mut tests);
     regression::issue_6467::all_tests(&mut tests);
     regression::issue_6827::all_tests(&mut tests);
+    regression::issue_9115::all_tests(&mut tests);
     render_pass_ownership::all_tests(&mut tests);
     render_target::all_tests(&mut tests);
     resource_descriptor_accessor::all_tests(&mut tests);
@@ -161,7 +167,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     vertex_indices::all_tests(&mut tests);
     vertex_state::all_tests(&mut tests);
     write_texture::all_tests(&mut tests);
-    zero_init_texture_after_discard::all_tests(&mut tests);
+    zero_init::all_tests(&mut tests);
     naga_capabilities::all_tests(&mut tests);
 
     tests

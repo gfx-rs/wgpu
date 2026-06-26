@@ -3,15 +3,6 @@
 #include <simd/simd.h>
 
 using metal::uint;
-struct _RayQuery {
-    metal::raytracing::intersector<metal::raytracing::instancing, metal::raytracing::triangle_data, metal::raytracing::world_space_data> intersector;
-    metal::raytracing::intersector<metal::raytracing::instancing, metal::raytracing::triangle_data, metal::raytracing::world_space_data>::result_type intersection;
-    bool ready = false;
-};
-constexpr metal::uint _map_intersection_type(const metal::raytracing::intersection_type ty) {
-    return ty==metal::raytracing::intersection_type::triangle ? 1 : 
-        ty==metal::raytracing::intersection_type::bounding_box ? 4 : 0;
-}
 
 struct RayDesc {
     uint flags;
@@ -35,27 +26,62 @@ struct RayIntersection {
     metal::float4x3 object_to_world;
     metal::float4x3 world_to_object;
 };
+RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector) {
+    RayIntersection intersection = RayIntersection {};
+    metal::raytracing::intersection_type ty = intersector.get_candidate_intersection_type();
+    if (ty == metal::raytracing::intersection_type::triangle) {
+        intersection.kind = 1;
+        intersection.t = intersector.get_candidate_triangle_distance();
+        intersection.barycentrics = intersector.get_candidate_triangle_barycentric_coord();
+        intersection.front_face = intersector.is_candidate_triangle_front_facing();
+    } else if (ty == metal::raytracing::intersection_type::bounding_box) {
+        intersection.kind = 3;
+    }
+    if (ty != metal::raytracing::intersection_type::none) {
+        intersection.instance_custom_data = intersector.get_candidate_user_instance_id();
+        intersection.instance_index = intersector.get_candidate_instance_id();
+        intersection.geometry_index = intersector.get_candidate_geometry_id();
+        intersection.primitive_index = intersector.get_candidate_primitive_id();
+        intersection.object_to_world = intersector.get_candidate_object_to_world_transform();
+        intersection.world_to_object = intersector.get_candidate_world_to_object_transform();
+    }
+    return intersection;
+}
 
 [[max_total_threads_per_threadgroup(1)]] kernel void main_candidate(
   metal::raytracing::instance_acceleration_structure acc_struct [[user(fake0)]]
 ) {
-    _RayQuery rq_1 = {};
+    metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> rq_1 = {};
     metal::float3 pos = metal::float3(0.0);
     metal::float3 dir = metal::float3(0.0, 1.0, 0.0);
     RayDesc _e12 = RayDesc {4u, 255u, 0.1, 100.0, pos, dir};
-    rq_1.intersector.assume_geometry_type(metal::raytracing::geometry_type::triangle);
-    rq_1.intersector.set_opacity_cull_mode((_e12.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (_e12.flags & 128) != 0 ? metal::raytracing::opacity_cull_mode::non_opaque : metal::raytracing::opacity_cull_mode::none);
-    rq_1.intersector.force_opacity((_e12.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (_e12.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none);
-    rq_1.intersector.accept_any_intersection((_e12.flags & 4) != 0);
-    rq_1.intersection = rq_1.intersector.intersect(metal::raytracing::ray(_e12.origin, _e12.dir, _e12.tmin, _e12.tmax), acc_struct, _e12.cull_mask);    rq_1.ready = true;
-    RayIntersection intersection = RayIntersection {_map_intersection_type(rq_1.intersection.type), rq_1.intersection.distance, rq_1.intersection.user_instance_id, rq_1.intersection.instance_id, {}, rq_1.intersection.geometry_id, rq_1.intersection.primitive_id, rq_1.intersection.triangle_barycentric_coord, rq_1.intersection.triangle_front_facing, {}, rq_1.intersection.object_to_world_transform, rq_1.intersection.world_to_object_transform};
+    {
+        RayDesc desc = _e12;
+        metal::raytracing::intersection_params params;
+        params.set_opacity_cull_mode(
+            (desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (
+                (desc.flags & 128) != 0 ? metal::raytracing::opacity_cull_mode::non_opaque : metal::raytracing::opacity_cull_mode::none
+            )
+        );
+        params.force_opacity(
+            (desc.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (
+                (desc.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none
+            )
+        );
+        params.accept_any_intersection((desc.flags & 4) != 0);
+        metal::raytracing::ray ray = metal::raytracing::ray(desc.origin, desc.dir, desc.tmin, desc.tmax);
+        rq_1.reset(ray,acc_struct, desc.cull_mask, params);
+    }
+    RayIntersection intersection = ray_query_get_intersection_false(rq_1);
     if (intersection.kind == 3u) {
+        rq_1.commit_bounding_box_intersection(10.0);
         return;
     } else {
         if (intersection.kind == 1u) {
+            rq_1.commit_triangle_intersection();
             return;
         } else {
-            rq_1.ready = false;
+            rq_1.abort();
             return;
         }
     }

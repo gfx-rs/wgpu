@@ -1,3 +1,4 @@
+use objc2::rc::autoreleasepool;
 use objc2::runtime::{AnyObject, ProtocolObject, Sel};
 use objc2::{available, sel};
 use objc2_foundation::{NSOperatingSystemVersion, NSProcessInfo};
@@ -10,6 +11,8 @@ use wgt::{AstcBlock, AstcChannel};
 
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
 use core::sync::atomic;
+use parking_lot::Mutex;
+use std::sync::OnceLock;
 
 use crate::metal::QueueShared;
 
@@ -61,12 +64,12 @@ const MAX_ACCELERATION_STRUCTURES_PER_SHADER_STAGE: u32 = 1;
 // Use the end of the range for vertex buffers.
 pub const VERTEX_BUFFER_SLOT_START: u32 = 31 - 8;
 
-unsafe impl Send for super::Adapter {}
-unsafe impl Sync for super::Adapter {}
-
 impl super::Adapter {
     pub(super) fn new(shared: Arc<super::AdapterShared>) -> Self {
         Self { shared }
+    }
+    pub fn raw_device(&self) -> &ProtocolObject<dyn MTLDevice> {
+        &self.shared.device
     }
 }
 
@@ -79,52 +82,57 @@ impl crate::Adapter for super::Adapter {
         limits: &wgt::Limits,
         _memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let queue = self
-            .shared
-            .device
-            .newCommandQueueWithMaxCommandBufferCount(MAX_COMMAND_BUFFERS)
-            .unwrap();
+        autoreleasepool(|_| {
+            let queue = self
+                .shared
+                .device
+                .newCommandQueueWithMaxCommandBufferCount(MAX_COMMAND_BUFFERS)
+                .unwrap();
 
-        // Acquiring the meaning of timestamp ticks is hard with Metal!
-        // The only thing there is a method correlating cpu & gpu timestamps (`device.sample_timestamps`).
-        // Users are supposed to call this method twice and calculate the difference,
-        // see "Converting GPU Timestamps into CPU Time":
-        // https://developer.apple.com/documentation/metal/gpu_counters_and_counter_sample_buffers/converting_gpu_timestamps_into_cpu_time
-        // Not only does this mean we get an approximate value, this is as also *very slow*!
-        // Chromium opted to solve this using a linear regression that they stop at some point
-        // https://source.chromium.org/chromium/chromium/src/+/refs/heads/main:third_party/dawn/src/dawn/native/metal/DeviceMTL.mm;drc=76be2f9f117654f3fe4faa477b0445114fccedda;bpv=0;bpt=1;l=46
-        // Generally, the assumption is that timestamp values aren't changing over time, after all all other APIs provide stable values.
-        //
-        // We should do as Chromium does for the general case, but this requires quite some state tracking
-        // and doesn't even provide perfectly accurate values, especially at the start of the application when
-        // we didn't have the chance to sample a lot of values just yet.
-        //
-        // So instead, we're doing the dangerous but easy thing and use our "knowledge" of timestamps
-        // conversions on different devices, after all Metal isn't supported on that many ;)
-        // Based on:
-        // * https://github.com/gfx-rs/wgpu/pull/2528
-        // * https://github.com/gpuweb/gpuweb/issues/1325#issuecomment-761041326
-        let timestamp_period = if self.shared.device.name().to_string().starts_with("Intel") {
-            83.333
-        } else {
-            // Known for Apple Silicon (at least M1 & M2, iPad Pro 2018) and AMD GPUs.
-            1.0
-        };
+            // Acquiring the meaning of timestamp ticks is hard with Metal!
+            // The only thing there is a method correlating cpu & gpu timestamps (`device.sample_timestamps`).
+            // Users are supposed to call this method twice and calculate the difference,
+            // see "Converting GPU Timestamps into CPU Time":
+            // https://developer.apple.com/documentation/metal/gpu_counters_and_counter_sample_buffers/converting_gpu_timestamps_into_cpu_time
+            // Not only does this mean we get an approximate value, this is as also *very slow*!
+            // Chromium opted to solve this using a linear regression that they stop at some point
+            // https://source.chromium.org/chromium/chromium/src/+/refs/heads/main:third_party/dawn/src/dawn/native/metal/DeviceMTL.mm;drc=76be2f9f117654f3fe4faa477b0445114fccedda;bpv=0;bpt=1;l=46
+            // Generally, the assumption is that timestamp values aren't changing over time, after all all other APIs provide stable values.
+            //
+            // We should do as Chromium does for the general case, but this requires quite some state tracking
+            // and doesn't even provide perfectly accurate values, especially at the start of the application when
+            // we didn't have the chance to sample a lot of values just yet.
+            //
+            // So instead, we're doing the dangerous but easy thing and use our "knowledge" of timestamps
+            // conversions on different devices, after all Metal isn't supported on that many ;)
+            // Based on:
+            // * https://github.com/gfx-rs/wgpu/pull/2528
+            // * https://github.com/gpuweb/gpuweb/issues/1325#issuecomment-761041326
+            let timestamp_period = if self.shared.device.name().to_string().starts_with("Intel") {
+                83.333
+            } else {
+                // Known for Apple Silicon (at least M1 & M2, iPad Pro 2018) and AMD GPUs.
+                1.0
+            };
 
-        Ok(crate::OpenDevice {
-            device: super::Device {
-                shared: Arc::clone(&self.shared),
-                features,
-                counters: Default::default(),
-                limits: limits.clone(),
-            },
-            queue: super::Queue {
-                shared: Arc::new(QueueShared {
-                    raw: queue,
-                    command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
-                }),
-                timestamp_period,
-            },
+            Ok(crate::OpenDevice {
+                device: super::Device {
+                    shared: Arc::clone(&self.shared),
+                    features,
+                    counters: Default::default(),
+                    limits: limits.clone(),
+                },
+                queue: super::Queue {
+                    shared: Arc::new(QueueShared {
+                        raw: queue,
+                        command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
+                        pending_waits: Mutex::new(Vec::new()),
+                        pending_signals: Mutex::new(Vec::new()),
+                        relay: OnceLock::new(),
+                    }),
+                    timestamp_period,
+                },
+            })
         })
     }
 
@@ -402,17 +410,48 @@ impl crate::Adapter for super::Adapter {
         &self,
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
+        // `CAMetalLayer` color-matches layer contents to whatever display the
+        // window is on, with the compositor tone-mapping where needed, so
+        // Display-P3 and HDR (PQ/HLG) color spaces work regardless of the
+        // physical display's gamut and are not gated on it here.
+        let format_caps = |format: wgt::TextureFormat| {
+            let mut color_spaces =
+                wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::DISPLAY_P3;
+            if format == wgt::TextureFormat::Rgba16Float {
+                // `Rgba16Float` enables Metal's extended dynamic range, in both
+                // linear (scRGB) and encoded (extended nonlinear sRGB) form,
+                // for the BT.709 and Display-P3 gamuts.
+                color_spaces |= wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR
+                    | wgt::SurfaceColorSpaces::EXTENDED_SRGB
+                    | wgt::SurfaceColorSpaces::EXTENDED_DISPLAY_P3;
+            }
+            // PQ/HLG only on the >=10-bit formats: 8-bit PQ would result in unusable
+            // banding. The ITUR_2100 color space constants require
+            // macOS 11.0/iOS 14.0.
+            if matches!(
+                format,
+                wgt::TextureFormat::Rgba16Float | wgt::TextureFormat::Rgb10a2Unorm
+            ) && available!(macos = 11.0, ios = 14.0, tvos = 14.0, visionos = 1.0)
+            {
+                color_spaces |=
+                    wgt::SurfaceColorSpaces::BT2100_PQ | wgt::SurfaceColorSpaces::BT2100_HLG;
+            }
+            wgt::SurfaceFormatCapabilities {
+                format,
+                color_spaces,
+            }
+        };
         let mut formats = vec![
-            wgt::TextureFormat::Bgra8Unorm,
-            wgt::TextureFormat::Bgra8UnormSrgb,
-            wgt::TextureFormat::Rgba16Float,
+            format_caps(wgt::TextureFormat::Bgra8Unorm),
+            format_caps(wgt::TextureFormat::Bgra8UnormSrgb),
+            format_caps(wgt::TextureFormat::Rgba16Float),
         ];
         if self
             .shared
             .private_texture_format_caps
             .format_rgb10a2_unorm_all
         {
-            formats.push(wgt::TextureFormat::Rgb10a2Unorm);
+            formats.push(format_caps(wgt::TextureFormat::Rgb10a2Unorm));
         }
 
         Some(crate::SurfaceCapabilities {
@@ -742,7 +781,10 @@ impl super::CapabilitiesQuery {
                 1
             },
             format_b5: os_type != super::OsType::Macos,
-            format_bc: os_type == super::OsType::Macos,
+            format_bc: os_type == super::OsType::Macos
+                || (available!(macos = 11.0, ios = 16.4, tvos = 16.4, visionos = 1.0)
+                    && device_class_responds_to(device, sel!(supportsBCTextureCompression))
+                    && device.supportsBCTextureCompression()),
             format_eac_etc: os_type != super::OsType::Macos
                 // M1 in macOS supports EAC/ETC2
                 || (family_check && device.supportsFamily(MTLGPUFamily::Apple7)),
@@ -1064,6 +1106,10 @@ impl super::CapabilitiesQuery {
                     && (device.supportsFamily(MTLGPUFamily::Apple7)
                         || device.supportsFamily(MTLGPUFamily::Mac2)))
                 || (available!(macos = 10.15, ios = 14.0, tvos = 16.0, visionos = 1.0)
+                    && device_class_responds_to(
+                        device,
+                        sel!(supportsShaderBarycentricCoordinates),
+                    )
                     && device.supportsShaderBarycentricCoordinates()),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             // See https://github.com/gfx-rs/wgpu/pull/8725 for more details
@@ -1159,6 +1205,7 @@ impl super::CapabilitiesQuery {
             | F::CLEAR_TEXTURE
             | F::TEXTURE_FORMAT_16BIT_NORM
             | F::SHADER_F16
+            | F::SHADER_I16
             | F::DEPTH32FLOAT_STENCIL8
             | F::BGRA8UNORM_STORAGE
             | F::PASSTHROUGH_SHADERS
@@ -1168,9 +1215,14 @@ impl super::CapabilitiesQuery {
         features.set(F::FLOAT32_BLENDABLE, true);
         features.set(F::INDIRECT_FIRST_INSTANCE, self.indirect_draw_dispatch);
         features.set(
-            F::TIMESTAMP_QUERY | F::TIMESTAMP_QUERY_INSIDE_ENCODERS,
+            F::TIMESTAMP_QUERY,
             self.timestamp_query_support
                 .contains(TimestampQuerySupport::STAGE_BOUNDARIES),
+        );
+        features.set(
+            F::TIMESTAMP_QUERY_INSIDE_ENCODERS,
+            self.timestamp_query_support
+                .contains(TimestampQuerySupport::ON_BLIT_ENCODER),
         );
         features.set(
             F::TIMESTAMP_QUERY_INSIDE_PASSES,
@@ -1324,6 +1376,10 @@ impl super::CapabilitiesQuery {
             wgt::DownlevelFlags::MSL2_1,
             self.msl_version >= MTLLanguageVersion::Version2_1,
         );
+        downlevel.flags.set(
+            wgt::DownlevelFlags::TEXTURE_COMPRESSION,
+            self.format_bc || (self.format_eac_etc && self.format_astc),
+        );
 
         let limits = crate::auxil::adjust_raw_limits(wgt::Limits {
             //
@@ -1334,9 +1390,11 @@ impl super::CapabilitiesQuery {
             max_texture_dimension_2d: self.max_texture_size as u32,
             max_texture_dimension_3d: self.max_texture_3d_size as u32,
             max_texture_array_layers: self.max_texture_layers as u32,
-            // No real limit.
-            max_bind_groups: 8,
-            // No real limit.
+            // No limit.
+            max_bind_groups: u32::MAX,
+            // No limit. Once we start using argument buffers we should set this appropriately.
+            max_bind_groups_plus_vertex_buffers: u32::MAX,
+            // No limit.
             max_bindings_per_bind_group: u32::MAX,
             // No limit, use maxUniformBuffersPerShaderStage.
             max_dynamic_uniform_buffers_per_pipeline_layout: MAX_UNIFORM_BUFFERS_PER_SHADER_STAGE,
@@ -1414,6 +1472,9 @@ impl super::CapabilitiesQuery {
             max_mesh_output_primitives: 256,
             max_mesh_output_layers: self.max_texture_layers as u32,
             max_mesh_multiview_view_count: 0,
+            // unimplemented
+            max_ray_dispatch_count: 0,
+            max_ray_recursion_depth: 0,
         });
 
         crate::Capabilities {
@@ -1430,6 +1491,10 @@ impl super::CapabilitiesQuery {
                 >())
                 .unwrap(),
                 ray_tracing_scratch_buffer_alignment: 1,
+                // Not yet supported
+                ray_tracing_pipeline_group_data_size: 0,
+                ray_tracing_pipeline_group_data_alignment: 0,
+                ray_tracing_pipeline_data_offset_alignment: 0,
             },
             downlevel,
             cooperative_matrix_properties: self.cooperative_matrix_properties(),

@@ -12,6 +12,7 @@ struct MetadataEntry {
     vertex_or_index_limit: u32,
     instance_limit: u32,
 }
+const OFFSET_MASK: u32 = 0x3FFFFFFF;
 
 struct MetadataRange {
     start: u32,
@@ -38,16 +39,16 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u) {
     var failed = false;
 
     let is_indexed = is_bit_set(metadata.src_offset, 31);
-    let src_base_offset = ((metadata.src_offset << 2) >> 2);
-    let dst_base_offset = ((metadata.dst_offset << 2) >> 2);
+    let src_base_offset = metadata.src_offset & OFFSET_MASK;
+    let dst_base_offset = metadata.dst_offset & OFFSET_MASK;
 
     let first_vertex_or_index = src[src_base_offset + 2];
     let vertex_or_index_count = src[src_base_offset + 0];
 
     {
-        let can_overflow = is_bit_set(metadata.dst_offset, 30);
+        let overflow_permitted = is_bit_set(metadata.dst_offset, 30);
         let sub_overflows = metadata.vertex_or_index_limit < first_vertex_or_index;
-        failed |= sub_overflows && !can_overflow;
+        failed |= sub_overflows && !overflow_permitted;
         let vertex_or_index_limit = metadata.vertex_or_index_limit - first_vertex_or_index;
         failed |= vertex_or_index_limit < vertex_or_index_count;
     }
@@ -56,9 +57,9 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u) {
     let instance_count = src[src_base_offset + 1];
 
     {
-        let can_overflow = is_bit_set(metadata.dst_offset, 31);
+        let overflow_permitted = is_bit_set(metadata.dst_offset, 31);
         let sub_overflows = metadata.instance_limit < first_instance;
-        failed |= sub_overflows && !can_overflow;
+        failed |= sub_overflows && !overflow_permitted;
         let instance_limit = metadata.instance_limit - first_instance;
         failed |= instance_limit < instance_count;
     }

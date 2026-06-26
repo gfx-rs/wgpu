@@ -4,6 +4,9 @@
   "dependencyDashboard": true,
   "prConcurrentLimit": 20,
   "prHourlyLimit": 200,
+  "minimumReleaseAge": "1 week",
+  "prCreation": "not-pending",
+  "internalChecksFilter": "strict",
   "labels": ["dependencies"],
   "lockFileMaintenance": {
     "enabled": true,
@@ -80,7 +83,13 @@
       "description": "CTS revision is pinned to a Git SHA.",
       "matchPackageNames": ["https://github.com/gpuweb/cts"],
       "changelogUrl": "https://github.com/gpuweb/cts/commits/main",
-      "versioning": "git"
+      "versioning": "git",
+      "minimumReleaseAge": "0"
+    },
+    {
+      "description": "Rust toolchain should be stable - 3 in accordance with maximum-MSRV policy.",
+      "matchManagers": ["rust-toolchain"],
+      "minimumReleaseAge": "18 weeks"
     }
   ],
   "customManagers": [

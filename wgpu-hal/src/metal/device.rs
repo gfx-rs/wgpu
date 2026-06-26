@@ -1,6 +1,5 @@
 use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
-use core::{ptr::NonNull, sync::atomic};
-use std::{thread, time};
+use core::ptr::NonNull;
 
 use bytemuck::TransparentWrapper;
 use objc2::{
@@ -11,11 +10,11 @@ use objc2::{
 use objc2_foundation::{ns_string, NSError, NSRange, NSString, NSUInteger};
 use objc2_metal::{
     MTLAccelerationStructure, MTLAccelerationStructureInstanceOptions, MTLBuffer,
-    MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer, MTLCommandBufferStatus,
-    MTLCompileOptions, MTLComputePipelineDescriptor, MTLComputePipelineState,
-    MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode, MTLDepthStencilDescriptor,
-    MTLDevice, MTLFunction, MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion,
-    MTLLibrary, MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
+    MTLCaptureManager, MTLCaptureScope, MTLCompileOptions, MTLComputePipelineDescriptor,
+    MTLComputePipelineState, MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode,
+    MTLDepthStencilDescriptor, MTLDevice, MTLFunction,
+    MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion, MTLLibrary,
+    MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
     MTLPipelineBufferDescriptorArray, MTLPipelineOption, MTLPixelFormat, MTLPrimitiveTopologyClass,
     MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
     MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
@@ -23,11 +22,20 @@ use objc2_metal::{
     MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTriangleFillMode, MTLVertexDescriptor,
     MTLVertexStepFunction,
 };
+use parking_lot::{Condvar, Mutex, RwLock};
 
 use super::{adapter::VERTEX_BUFFER_SLOT_START, conv, PassthroughShader, ShaderModuleSource};
-use crate::{auxil::map_naga_stage, TlasInstance};
+use crate::{auxil::map_naga_stage, DropCallback, DropGuard, TlasInstance};
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
+
+/// True on arm64_32 (watchOS ILP32) targets.
+///
+/// There are no Apple OSes that support both 32-bit applications and Metal,
+/// so `target_pointer_width = "32"` is a reliable proxy for ILP32 watchOS
+/// devices (Apple Watch S4–S9, SE, Ultra). Several AGXMetalS4 driver bugs
+/// require workarounds gated on this flag.
+const IS_WATCHOS_ILP32: bool = cfg!(target_pointer_width = "32");
 
 struct CompiledShader {
     library: Retained<ProtocolObject<dyn MTLLibrary>>,
@@ -93,49 +101,49 @@ fn bindless_id_table_mut(
     core::ptr::slice_from_raw_parts_mut(ptr, count as usize)
 }
 
-const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> naga::back::msl::VertexFormat {
+const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> nt::VertexFormat {
     match format {
-        wgt::VertexFormat::Uint8 => naga::back::msl::VertexFormat::Uint8,
-        wgt::VertexFormat::Uint8x2 => naga::back::msl::VertexFormat::Uint8x2,
-        wgt::VertexFormat::Uint8x4 => naga::back::msl::VertexFormat::Uint8x4,
-        wgt::VertexFormat::Sint8 => naga::back::msl::VertexFormat::Sint8,
-        wgt::VertexFormat::Sint8x2 => naga::back::msl::VertexFormat::Sint8x2,
-        wgt::VertexFormat::Sint8x4 => naga::back::msl::VertexFormat::Sint8x4,
-        wgt::VertexFormat::Unorm8 => naga::back::msl::VertexFormat::Unorm8,
-        wgt::VertexFormat::Unorm8x2 => naga::back::msl::VertexFormat::Unorm8x2,
-        wgt::VertexFormat::Unorm8x4 => naga::back::msl::VertexFormat::Unorm8x4,
-        wgt::VertexFormat::Snorm8 => naga::back::msl::VertexFormat::Snorm8,
-        wgt::VertexFormat::Snorm8x2 => naga::back::msl::VertexFormat::Snorm8x2,
-        wgt::VertexFormat::Snorm8x4 => naga::back::msl::VertexFormat::Snorm8x4,
-        wgt::VertexFormat::Uint16 => naga::back::msl::VertexFormat::Uint16,
-        wgt::VertexFormat::Uint16x2 => naga::back::msl::VertexFormat::Uint16x2,
-        wgt::VertexFormat::Uint16x4 => naga::back::msl::VertexFormat::Uint16x4,
-        wgt::VertexFormat::Sint16 => naga::back::msl::VertexFormat::Sint16,
-        wgt::VertexFormat::Sint16x2 => naga::back::msl::VertexFormat::Sint16x2,
-        wgt::VertexFormat::Sint16x4 => naga::back::msl::VertexFormat::Sint16x4,
-        wgt::VertexFormat::Unorm16 => naga::back::msl::VertexFormat::Unorm16,
-        wgt::VertexFormat::Unorm16x2 => naga::back::msl::VertexFormat::Unorm16x2,
-        wgt::VertexFormat::Unorm16x4 => naga::back::msl::VertexFormat::Unorm16x4,
-        wgt::VertexFormat::Snorm16 => naga::back::msl::VertexFormat::Snorm16,
-        wgt::VertexFormat::Snorm16x2 => naga::back::msl::VertexFormat::Snorm16x2,
-        wgt::VertexFormat::Snorm16x4 => naga::back::msl::VertexFormat::Snorm16x4,
-        wgt::VertexFormat::Float16 => naga::back::msl::VertexFormat::Float16,
-        wgt::VertexFormat::Float16x2 => naga::back::msl::VertexFormat::Float16x2,
-        wgt::VertexFormat::Float16x4 => naga::back::msl::VertexFormat::Float16x4,
-        wgt::VertexFormat::Float32 => naga::back::msl::VertexFormat::Float32,
-        wgt::VertexFormat::Float32x2 => naga::back::msl::VertexFormat::Float32x2,
-        wgt::VertexFormat::Float32x3 => naga::back::msl::VertexFormat::Float32x3,
-        wgt::VertexFormat::Float32x4 => naga::back::msl::VertexFormat::Float32x4,
-        wgt::VertexFormat::Uint32 => naga::back::msl::VertexFormat::Uint32,
-        wgt::VertexFormat::Uint32x2 => naga::back::msl::VertexFormat::Uint32x2,
-        wgt::VertexFormat::Uint32x3 => naga::back::msl::VertexFormat::Uint32x3,
-        wgt::VertexFormat::Uint32x4 => naga::back::msl::VertexFormat::Uint32x4,
-        wgt::VertexFormat::Sint32 => naga::back::msl::VertexFormat::Sint32,
-        wgt::VertexFormat::Sint32x2 => naga::back::msl::VertexFormat::Sint32x2,
-        wgt::VertexFormat::Sint32x3 => naga::back::msl::VertexFormat::Sint32x3,
-        wgt::VertexFormat::Sint32x4 => naga::back::msl::VertexFormat::Sint32x4,
-        wgt::VertexFormat::Unorm10_10_10_2 => naga::back::msl::VertexFormat::Unorm10_10_10_2,
-        wgt::VertexFormat::Unorm8x4Bgra => naga::back::msl::VertexFormat::Unorm8x4Bgra,
+        wgt::VertexFormat::Uint8 => nt::VertexFormat::Uint8,
+        wgt::VertexFormat::Uint8x2 => nt::VertexFormat::Uint8x2,
+        wgt::VertexFormat::Uint8x4 => nt::VertexFormat::Uint8x4,
+        wgt::VertexFormat::Sint8 => nt::VertexFormat::Sint8,
+        wgt::VertexFormat::Sint8x2 => nt::VertexFormat::Sint8x2,
+        wgt::VertexFormat::Sint8x4 => nt::VertexFormat::Sint8x4,
+        wgt::VertexFormat::Unorm8 => nt::VertexFormat::Unorm8,
+        wgt::VertexFormat::Unorm8x2 => nt::VertexFormat::Unorm8x2,
+        wgt::VertexFormat::Unorm8x4 => nt::VertexFormat::Unorm8x4,
+        wgt::VertexFormat::Snorm8 => nt::VertexFormat::Snorm8,
+        wgt::VertexFormat::Snorm8x2 => nt::VertexFormat::Snorm8x2,
+        wgt::VertexFormat::Snorm8x4 => nt::VertexFormat::Snorm8x4,
+        wgt::VertexFormat::Uint16 => nt::VertexFormat::Uint16,
+        wgt::VertexFormat::Uint16x2 => nt::VertexFormat::Uint16x2,
+        wgt::VertexFormat::Uint16x4 => nt::VertexFormat::Uint16x4,
+        wgt::VertexFormat::Sint16 => nt::VertexFormat::Sint16,
+        wgt::VertexFormat::Sint16x2 => nt::VertexFormat::Sint16x2,
+        wgt::VertexFormat::Sint16x4 => nt::VertexFormat::Sint16x4,
+        wgt::VertexFormat::Unorm16 => nt::VertexFormat::Unorm16,
+        wgt::VertexFormat::Unorm16x2 => nt::VertexFormat::Unorm16x2,
+        wgt::VertexFormat::Unorm16x4 => nt::VertexFormat::Unorm16x4,
+        wgt::VertexFormat::Snorm16 => nt::VertexFormat::Snorm16,
+        wgt::VertexFormat::Snorm16x2 => nt::VertexFormat::Snorm16x2,
+        wgt::VertexFormat::Snorm16x4 => nt::VertexFormat::Snorm16x4,
+        wgt::VertexFormat::Float16 => nt::VertexFormat::Float16,
+        wgt::VertexFormat::Float16x2 => nt::VertexFormat::Float16x2,
+        wgt::VertexFormat::Float16x4 => nt::VertexFormat::Float16x4,
+        wgt::VertexFormat::Float32 => nt::VertexFormat::Float32,
+        wgt::VertexFormat::Float32x2 => nt::VertexFormat::Float32x2,
+        wgt::VertexFormat::Float32x3 => nt::VertexFormat::Float32x3,
+        wgt::VertexFormat::Float32x4 => nt::VertexFormat::Float32x4,
+        wgt::VertexFormat::Uint32 => nt::VertexFormat::Uint32,
+        wgt::VertexFormat::Uint32x2 => nt::VertexFormat::Uint32x2,
+        wgt::VertexFormat::Uint32x3 => nt::VertexFormat::Uint32x3,
+        wgt::VertexFormat::Uint32x4 => nt::VertexFormat::Uint32x4,
+        wgt::VertexFormat::Sint32 => nt::VertexFormat::Sint32,
+        wgt::VertexFormat::Sint32x2 => nt::VertexFormat::Sint32x2,
+        wgt::VertexFormat::Sint32x3 => nt::VertexFormat::Sint32x3,
+        wgt::VertexFormat::Sint32x4 => nt::VertexFormat::Sint32x4,
+        wgt::VertexFormat::Unorm10_10_10_2 => nt::VertexFormat::Unorm10_10_10_2,
+        wgt::VertexFormat::Unorm8x4Bgra => nt::VertexFormat::Unorm8x4Bgra,
 
         wgt::VertexFormat::Float64
         | wgt::VertexFormat::Float64x2
@@ -224,6 +232,7 @@ impl super::Device {
                         .module
                         .runtime_checks
                         .mesh_shader_primitive_indices_clamp,
+                    emit_int_div_checks: stage.module.runtime_checks.int_div_checks,
                 };
 
                 let pipeline_options = naga::back::msl::PipelineOptions {
@@ -402,6 +411,7 @@ impl super::Device {
         array_layers: u32,
         mip_levels: u32,
         copy_size: crate::CopyExtent,
+        drop_callback: Option<DropCallback>,
     ) -> super::Texture {
         super::Texture {
             raw,
@@ -410,6 +420,7 @@ impl super::Device {
             array_layers,
             mip_levels,
             copy_size,
+            _drop_guard: DropGuard::from_option(drop_callback),
         }
     }
 
@@ -543,6 +554,14 @@ impl crate::Device for super::Device {
                 && self.shared.private_caps.supports_memoryless_storage
             {
                 MTLStorageMode::Memoryless
+            } else if IS_WATCHOS_ILP32 {
+                // The AGXMetalS4 driver (A13/S6 GPU) crashes in
+                // copyFromTexture:toBuffer: on Private textures — null deref at
+                // offset 0x50 in the driver's internal texture state. Use Shared
+                // storage which works correctly on Apple's unified memory
+                // architecture and matches what native Swift Metal code uses on
+                // these devices.
+                MTLStorageMode::Shared
             } else {
                 MTLStorageMode::Private
             };
@@ -573,6 +592,7 @@ impl crate::Device for super::Device {
                 mip_levels: desc.mip_level_count,
                 array_layers: desc.array_layer_count(),
                 copy_size: desc.copy_extent(),
+                _drop_guard: None,
             })
         })
     }
@@ -1356,8 +1376,11 @@ impl crate::Device for super::Device {
             }
 
             // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
-            let supports_mutability =
-                available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0);
+            // Disabled on watchOS ILP32: the AGXMetalS4 driver exhibits instability
+            // when mutability hints are combined with Shared storage mode textures.
+            // Conservative disable until broader device coverage.
+            let supports_mutability = !IS_WATCHOS_ILP32
+                && available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0);
 
             let (primitive_class, raw_primitive_type) =
                 conv::map_primitive_topology(desc.primitive.topology);
@@ -1382,6 +1405,9 @@ impl crate::Device for super::Device {
                     let mut vertex_buffer_mappings =
                         Vec::<naga::back::msl::VertexBufferMapping>::new();
                     for (i, vbl) in vertex_buffers.iter().enumerate() {
+                        let Some(vbl) = vbl else {
+                            continue;
+                        };
                         let mut attributes = Vec::<naga::back::msl::AttributeMapping>::new();
                         for attribute in vbl.attributes.iter() {
                             attributes.push(naga::back::msl::AttributeMapping {
@@ -1456,6 +1482,10 @@ impl crate::Device for super::Device {
                     if !vertex_buffers.is_empty() {
                         let vertex_descriptor = MTLVertexDescriptor::new();
                         for (i, vb) in vertex_buffers.iter().enumerate() {
+                            let Some(vb) = vb else {
+                                continue;
+                            };
+
                             let buffer_index = VERTEX_BUFFER_SLOT_START as usize + i;
                             let buffer_desc = unsafe {
                                 vertex_descriptor
@@ -1474,7 +1504,10 @@ impl crate::Device for super::Device {
                                     .max()
                                     .unwrap_or(0);
                                 unsafe {
-                                    buffer_desc.setStride(wgt::math::align_to(stride as _, 4))
+                                    buffer_desc.setStride(wgt::math::align_to(
+                                        NSUInteger::try_from(stride).unwrap(),
+                                        4,
+                                    ))
                                 };
                                 buffer_desc.setStepFunction(MTLVertexStepFunction::Constant);
                                 unsafe { buffer_desc.setStepRate(0) };
@@ -1844,6 +1877,29 @@ impl crate::Device for super::Device {
         self.counters.compute_pipelines.sub(1);
     }
 
+    unsafe fn create_ray_tracing_pipeline(
+        &self,
+        _desc: &crate::RayTracingPipelineDescriptor<
+            super::PipelineLayout,
+            super::ShaderModule,
+            super::PipelineCache,
+        >,
+    ) -> Result<super::RayTracingPipeline, crate::PipelineError> {
+        unimplemented!("Ray tracing pipelines are unsupported on Metal")
+    }
+
+    unsafe fn destroy_ray_tracing_pipeline(&self, _pipeline: super::RayTracingPipeline) {
+        unimplemented!("Ray tracing pipelines are unsupported on Metal")
+    }
+
+    unsafe fn get_raytracing_pipeline_group_data(
+        &self,
+        _pipeline: &super::RayTracingPipeline,
+        _groups: core::ops::Range<u32>,
+    ) -> Result<Vec<u8>, crate::DeviceError> {
+        unimplemented!("Ray tracing pipelines are unsupported on Metal")
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         _desc: &crate::PipelineCacheDescriptor<'_>,
@@ -1935,13 +1991,13 @@ impl crate::Device for super::Device {
         self.counters.fences.add(1);
         // https://developer.apple.com/documentation/metal/mtlsharedevent
         let shared_event = if available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0) {
-            Some(self.shared.device.newSharedEvent().unwrap())
+            self.shared.device.newSharedEvent() // This should be supported on said devices, but some sandbox environments may still restrict it, making it return `None`.
         } else {
             None
         };
         Ok(super::Fence {
-            completed_value: Arc::new(atomic::AtomicU64::new(0)),
-            pending_command_buffers: Vec::new(),
+            sync: Arc::new((Mutex::new(0), Condvar::new())),
+            pending_command_buffers: RwLock::new(Vec::new()),
             shared_event,
         })
     }
@@ -1951,13 +2007,7 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn get_fence_value(&self, fence: &super::Fence) -> DeviceResult<crate::FenceValue> {
-        let mut max_value = fence.completed_value.load(atomic::Ordering::Acquire);
-        for &(value, ref cmd_buf) in fence.pending_command_buffers.iter() {
-            if cmd_buf.status() == MTLCommandBufferStatus::Completed {
-                max_value = value;
-            }
-        }
-        Ok(max_value)
+        Ok(fence.get_latest())
     }
     unsafe fn wait(
         &self,
@@ -1965,34 +2015,34 @@ impl crate::Device for super::Device {
         wait_value: crate::FenceValue,
         timeout: Option<core::time::Duration>,
     ) -> DeviceResult<bool> {
-        if wait_value <= fence.completed_value.load(atomic::Ordering::Acquire) {
+        let (ref mutex, ref condvar) = *fence.sync;
+        let mut lock = mutex.lock();
+
+        if wait_value <= *lock {
             return Ok(true);
         }
 
-        let cmd_buf = match fence
-            .pending_command_buffers
-            .iter()
-            .find(|&&(value, _)| value >= wait_value)
         {
-            Some((_, cmd_buf)) => cmd_buf,
-            None => {
+            let pending_command_buffers = fence.pending_command_buffers.read();
+            if !pending_command_buffers
+                .iter()
+                .any(|&(value, _)| value >= wait_value)
+            {
                 log::error!("No active command buffers for fence value {wait_value}");
                 return Err(crate::DeviceError::Lost);
             }
-        };
-
-        let start = time::Instant::now();
-        loop {
-            if let MTLCommandBufferStatus::Completed = cmd_buf.status() {
-                return Ok(true);
-            }
-            if let Some(timeout) = timeout {
-                if start.elapsed() >= timeout {
-                    return Ok(false);
-                }
-            }
-            thread::sleep(core::time::Duration::from_millis(1));
         }
+
+        if let Some(timeout) = timeout {
+            let result = condvar.wait_while_for(&mut lock, |value| *value < wait_value, timeout);
+            if result.timed_out() {
+                return Ok(*lock >= wait_value);
+            }
+        } else {
+            condvar.wait_while(&mut lock, |value| *value < wait_value);
+        }
+
+        Ok(true)
     }
 
     unsafe fn start_graphics_debugger_capture(&self) -> bool {
@@ -2093,7 +2143,7 @@ impl crate::Device for super::Device {
             },
             options: MTLAccelerationStructureInstanceOptions::None,
             mask: instance.mask as u32,
-            intersectionFunctionTableOffset: 0,
+            intersectionFunctionTableOffset: instance.pipeline_intersection_data_offset,
             userID: instance.custom_data,
             accelerationStructureID: unsafe { MTLResourceID::from_raw(instance.blas_address) },
         };

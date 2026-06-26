@@ -470,7 +470,7 @@ pub enum IndexFormat {
 
 impl IndexFormat {
     /// Returns the size in bytes of the index format
-    pub fn byte_size(&self) -> usize {
+    pub fn byte_size(&self) -> u32 {
         match self {
             IndexFormat::Uint16 => 2,
             IndexFormat::Uint32 => 4,
@@ -739,7 +739,8 @@ pub enum LoadOp<V> {
     ///
     /// - All pixels in the render target must be written to before
     ///   any read or a [`StoreOp::Store`] occurs.
-    DontCare(#[cfg_attr(feature = "serde", serde(skip))] LoadOpDontCare) = 2,
+    #[cfg_attr(feature = "serde", serde(skip))] // unsafe to use, so cannot be (de)serialized
+    DontCare(LoadOpDontCare) = 2,
 }
 
 impl<V> LoadOp<V> {
@@ -928,7 +929,7 @@ pub struct RenderBundleDescriptor<L> {
 impl<L> RenderBundleDescriptor<L> {
     /// Takes a closure and maps the label of the render bundle descriptor into another.
     #[must_use]
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> RenderBundleDescriptor<K> {
+    pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> RenderBundleDescriptor<K> {
         RenderBundleDescriptor {
             label: fun(&self.label),
         }

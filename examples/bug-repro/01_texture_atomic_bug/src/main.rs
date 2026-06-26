@@ -127,6 +127,7 @@ impl State {
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
+            color_space: wgpu::SurfaceColorSpace::Auto,
             width,
             height,
             present_mode: wgpu::PresentMode::AutoVsync,
@@ -340,6 +341,6 @@ impl State {
         }
 
         self.queue.submit([enc.finish()]);
-        frame.present();
+        self.queue.present(frame);
     }
 }

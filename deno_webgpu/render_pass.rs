@@ -17,9 +17,11 @@ use deno_core::webidl::WebIdlConverter;
 use deno_core::webidl::WebIdlError;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
+use deno_error::JsErrorBox;
 
 use crate::buffer::GPUBuffer;
 use crate::error::GPUGenericError;
+use crate::get_data_slice;
 use crate::render_bundle::GPURenderBundle;
 use crate::texture::GPUTexture;
 use crate::texture::GPUTextureView;
@@ -347,7 +349,7 @@ impl GPURenderPassEncoder {
   fn set_vertex_buffer(
     &self,
     #[webidl(options(enforce_range = true))] slot: u32,
-    #[webidl] buffer: Ptr<GPUBuffer>, // TODO(wgpu): support nullable buffer
+    #[webidl] buffer: Nullable<Ptr<GPUBuffer>>,
     #[webidl(default = 0, options(enforce_range = true))] offset: u64,
     #[webidl(options(enforce_range = true))] size: Option<u64>,
   ) {
@@ -356,7 +358,7 @@ impl GPURenderPassEncoder {
       .render_pass_set_vertex_buffer(
         &mut self.render_pass.borrow_mut(),
         slot,
-        buffer.id,
+        buffer.into_option().map(|buffer| buffer.id),
         offset,
         size.and_then(NonZeroU64::new),
       )
@@ -444,6 +446,30 @@ impl GPURenderPassEncoder {
       )
       .err();
     self.error_handler.push_error(err);
+  }
+
+  #[required(2)]
+  #[undefined]
+  fn set_immediates<'a>(
+    &self,
+    scope: &mut v8::HandleScope<'a>,
+    #[webidl(options(enforce_range = true))] offset: u32,
+    data_arg: v8::Local<'a, v8::Value>,
+    #[webidl(default = 0, options(enforce_range = true))] data_offset: u64,
+    #[webidl(options(enforce_range = true))] data_size: Option<u64>,
+  ) -> Result<(), JsErrorBox> {
+    let data = get_data_slice(scope, data_arg, data_offset, data_size)?;
+
+    let err = self
+      .instance
+      .render_pass_set_immediates(
+        &mut self.render_pass.borrow_mut(),
+        offset,
+        data,
+      )
+      .err();
+    self.error_handler.push_error(err);
+    Ok(())
   }
 }
 

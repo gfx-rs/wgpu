@@ -8,6 +8,7 @@ use super::TextureFormatDesc;
 
 /// A wrapper around a [`glow::Context`] to provide a fake `lock()` api that makes it compatible
 /// with the `AdapterContext` API from the EGL implementation.
+#[derive(Debug)]
 pub struct AdapterContext {
     pub glow_context: glow::Context,
     pub webgl2_context: web_sys::WebGl2RenderingContext,
@@ -107,9 +108,7 @@ impl Instance {
 }
 
 #[cfg(send_sync)]
-unsafe impl Sync for Instance {}
-#[cfg(send_sync)]
-unsafe impl Send for Instance {}
+static_assertions::assert_impl_all!(Instance: Send, Sync);
 
 impl crate::Instance for Instance {
     type A = super::Api;
@@ -176,6 +175,44 @@ impl crate::Instance for Instance {
         };
 
         self.create_surface_from_canvas(canvas)
+    }
+}
+
+impl super::Adapter {
+    /// Creates a new external adapter from an existing WebGL2 rendering context.
+    ///
+    /// # Safety
+    ///
+    /// - The underlying WebGL2 context must be valid (not lost).
+    /// - The underlying WebGL2 context must be valid when interfacing with any objects returned by
+    ///   wgpu-hal from this adapter.
+    /// - The underlying WebGL2 context must be valid when dropping this adapter and when
+    ///   dropping any objects returned from this adapter.
+    pub unsafe fn new_external(
+        webgl2_context: web_sys::WebGl2RenderingContext,
+        options: wgt::GlBackendOptions,
+    ) -> Option<crate::ExposedAdapter<super::Api>> {
+        let glow_context = glow::Context::from_webgl2_context(webgl2_context.clone());
+        unsafe {
+            Self::expose(
+                AdapterContext {
+                    glow_context,
+                    webgl2_context,
+                },
+                options,
+            )
+        }
+    }
+
+    pub fn adapter_context(&self) -> &AdapterContext {
+        &self.shared.context
+    }
+}
+
+impl super::Device {
+    /// Returns the underlying WebGL2 `AdapterContext`.
+    pub fn context(&self) -> &AdapterContext {
+        &self.shared.context
     }
 }
 

@@ -90,6 +90,8 @@ pub enum HashableLiteral {
     F64(u64),
     F32(u32),
     F16(u16),
+    U16(u16),
+    I16(i16),
     U32(u32),
     I32(i32),
     U64(u64),
@@ -105,6 +107,8 @@ impl From<crate::Literal> for HashableLiteral {
             crate::Literal::F64(v) => Self::F64(v.to_bits()),
             crate::Literal::F32(v) => Self::F32(v.to_bits()),
             crate::Literal::F16(v) => Self::F16(v.to_bits()),
+            crate::Literal::U16(v) => Self::U16(v),
+            crate::Literal::I16(v) => Self::I16(v),
             crate::Literal::U32(v) => Self::U32(v),
             crate::Literal::I32(v) => Self::I32(v),
             crate::Literal::U64(v) => Self::U64(v),
@@ -124,6 +128,8 @@ impl crate::Literal {
             (value, crate::ScalarKind::Float, 2) => {
                 Some(Self::F16(half::f16::from_f32_const(value as _)))
             }
+            (value, crate::ScalarKind::Uint, 2) => Some(Self::U16(value as _)),
+            (value, crate::ScalarKind::Sint, 2) => Some(Self::I16(value as _)),
             (value, crate::ScalarKind::Uint, 4) => Some(Self::U32(value as _)),
             (value, crate::ScalarKind::Sint, 4) => Some(Self::I32(value as _)),
             (value, crate::ScalarKind::Uint, 8) => Some(Self::U64(value as _)),
@@ -151,6 +157,7 @@ impl crate::Literal {
             (crate::ScalarKind::Float, 2) => Some(Self::F16(half::f16::from_f32_const(-1.0))),
             (crate::ScalarKind::Sint, 8) => Some(Self::I64(-1)),
             (crate::ScalarKind::Sint, 4) => Some(Self::I32(-1)),
+            (crate::ScalarKind::Sint, 2) => Some(Self::I16(-1)),
             (crate::ScalarKind::AbstractInt, 8) => Some(Self::AbstractInt(-1)),
             _ => None,
         }
@@ -160,7 +167,7 @@ impl crate::Literal {
         match *self {
             Self::F64(_) | Self::I64(_) | Self::U64(_) => 8,
             Self::F32(_) | Self::U32(_) | Self::I32(_) => 4,
-            Self::F16(_) => 2,
+            Self::F16(_) | Self::U16(_) | Self::I16(_) => 2,
             Self::Bool(_) => crate::BOOL_WIDTH,
             Self::AbstractInt(_) | Self::AbstractFloat(_) => crate::ABSTRACT_WIDTH,
         }
@@ -170,6 +177,8 @@ impl crate::Literal {
             Self::F64(_) => crate::Scalar::F64,
             Self::F32(_) => crate::Scalar::F32,
             Self::F16(_) => crate::Scalar::F16,
+            Self::U16(_) => crate::Scalar::U16,
+            Self::I16(_) => crate::Scalar::I16,
             Self::U32(_) => crate::Scalar::U32,
             Self::I32(_) => crate::Scalar::I32,
             Self::U64(_) => crate::Scalar::U64,
@@ -192,6 +201,8 @@ impl TryFrom<crate::Literal> for u32 {
 
     fn try_from(value: crate::Literal) -> Result<Self, Self::Error> {
         match value {
+            crate::Literal::U16(value) => Ok(value as u32),
+            crate::Literal::I16(value) => value.try_into().map_err(|_| ConstValueError::Negative),
             crate::Literal::U32(value) => Ok(value),
             crate::Literal::I32(value) => value.try_into().map_err(|_| ConstValueError::Negative),
             _ => Err(ConstValueError::InvalidType),
@@ -478,7 +489,7 @@ impl From<core::convert::Infallible> for ConstValueError {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct GlobalCtx<'a> {
     pub types: &'a crate::UniqueArena<crate::Type>,
     pub constants: &'a crate::Arena<crate::Constant>,
@@ -675,24 +686,6 @@ pub fn flatten_compose<'arenas>(
         .flat_map(move |component| flatten_compose(component, is_vector, expressions))
         .flat_map(move |component| flatten_splat(component, is_vector, expressions))
         .take(size)
-}
-
-impl super::ShaderStage {
-    pub const fn compute_like(self) -> bool {
-        match self {
-            Self::Vertex | Self::Fragment => false,
-            Self::Compute | Self::Task | Self::Mesh => true,
-            Self::RayGeneration | Self::AnyHit | Self::ClosestHit | Self::Miss => false,
-        }
-    }
-
-    /// Mesh or task shader
-    pub const fn mesh_like(self) -> bool {
-        match self {
-            Self::Task | Self::Mesh => true,
-            _ => false,
-        }
-    }
 }
 
 #[test]
@@ -948,6 +941,55 @@ impl crate::Module {
         }
         false
     }
+
+    pub fn uses_ray_tracing(&self, ep_index: Option<usize>) -> RayTracingUses {
+        let mut uses = RayTracingUses::default();
+        // Whether this uses ray tracing (unknown whether the usage is pipelines or ray queries).
+        let mut uses_ray_tracing = self.special_types.ray_desc.is_some();
+
+        uses.queries |= self.special_types.ray_intersection.is_some();
+
+        for (_, &crate::Type { ref inner, .. }) in self.types.iter() {
+            // Backends do not know whether these have vertex return - that is done by us
+            match *inner {
+                crate::TypeInner::AccelerationStructure { .. } => {
+                    uses_ray_tracing = true;
+                }
+                crate::TypeInner::RayQuery { .. } => uses.queries = true,
+                _ => {}
+            }
+        }
+
+        for (index, ep) in self.entry_points.iter().enumerate() {
+            if ep_index.is_some() && ep_index != Some(index) {
+                continue;
+            }
+
+            // if we have a ray tracing pipeline shader we are definitely using
+            // pipelines, otherwise, if we have a ray tracing type, we might
+            // be using it in the shader (which would require ray queries),
+            // so we should use queries.
+            if matches!(
+                ep.stage,
+                crate::ShaderStage::RayGeneration
+                    | crate::ShaderStage::AnyHit
+                    | crate::ShaderStage::ClosestHit
+                    | crate::ShaderStage::Miss
+            ) {
+                uses.pipelines = true;
+            } else {
+                uses.queries |= uses_ray_tracing;
+            }
+        }
+
+        uses
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct RayTracingUses {
+    pub pipelines: bool,
+    pub queries: bool,
 }
 
 impl crate::MeshOutputTopology {
@@ -963,5 +1005,64 @@ impl crate::MeshOutputTopology {
 impl crate::AddressSpace {
     pub const fn is_workgroup_like(self) -> bool {
         matches!(self, Self::WorkGroup | Self::TaskPayload)
+    }
+}
+
+impl TryFrom<crate::ScalarKind> for nt::glsl::GlslScalarKind {
+    type Error = ();
+
+    fn try_from(value: crate::ScalarKind) -> Result<Self, Self::Error> {
+        Ok(match value {
+            crate::ScalarKind::Sint => nt::glsl::GlslScalarKind::Sint,
+            crate::ScalarKind::Uint => nt::glsl::GlslScalarKind::Uint,
+            crate::ScalarKind::Float => nt::glsl::GlslScalarKind::Float,
+            _ => return Err(()),
+        })
+    }
+}
+
+impl From<crate::VectorSize> for nt::glsl::GlslVectorSize {
+    fn from(val: crate::VectorSize) -> Self {
+        match val {
+            crate::VectorSize::Bi => nt::glsl::GlslVectorSize::Bi,
+            crate::VectorSize::Tri => nt::glsl::GlslVectorSize::Tri,
+            crate::VectorSize::Quad => nt::glsl::GlslVectorSize::Quad,
+        }
+    }
+}
+
+impl TryFrom<crate::Scalar> for nt::glsl::GlslScalar {
+    type Error = ();
+
+    fn try_from(value: crate::Scalar) -> Result<Self, Self::Error> {
+        Ok(nt::glsl::GlslScalar {
+            kind: value.kind.try_into()?,
+            width: value.width,
+        })
+    }
+}
+
+impl TryFrom<&crate::TypeInner> for nt::glsl::GlslUniformType {
+    type Error = ();
+    fn try_from(value: &crate::TypeInner) -> Result<Self, Self::Error> {
+        match *value {
+            crate::TypeInner::Scalar(scalar) => {
+                Ok(nt::glsl::GlslUniformType::Scalar(scalar.try_into()?))
+            }
+            crate::TypeInner::Vector { size, scalar } => Ok(nt::glsl::GlslUniformType::Vector {
+                size: size.into(),
+                scalar: scalar.try_into()?,
+            }),
+            crate::TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => Ok(nt::glsl::GlslUniformType::Matrix {
+                columns: columns.into(),
+                rows: rows.into(),
+                scalar: scalar.try_into()?,
+            }),
+            _ => Err(()),
+        }
     }
 }

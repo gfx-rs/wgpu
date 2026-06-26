@@ -30,6 +30,7 @@ targets = [
 ignored = ["cfg_aliases"]
 
 [lints.rust]
+missing_debug_implementations = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wgpu_validate_locks)'] }
 
 [lib]
@@ -161,15 +162,19 @@ noop = []
 # from getting confused by seeing them in the list of crates.
 [target.'cfg(target_vendor = "apple")'.dependencies]
 wgpu-core-deps-apple = { workspace = true, optional = true }
+
 [target.'cfg(target_os = "emscripten")'.dependencies]
 wgpu-core-deps-emscripten = { workspace = true, optional = true }
+
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wgpu-core-deps-wasm = { workspace = true, optional = true }
+
 [target.'cfg(any(windows, target_os = "linux", target_os = "android", target_os = "freebsd"))'.dependencies]
 wgpu-core-deps-windows-linux-android = { workspace = true, optional = true }
 
 [dependencies]
 naga.workspace = true
+naga-types.workspace = true
 wgpu-naga-bridge.workspace = true
 wgpu-hal.workspace = true
 wgpu-types.workspace = true

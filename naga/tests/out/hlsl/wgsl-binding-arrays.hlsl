@@ -34,7 +34,7 @@ uint NagaNumLayers2DArray(Texture2DArray<float4> tex)
 {
     uint4 ret;
     tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
-    return ret.w;
+    return ret.z;
 }
 
 uint NagaNumLevels2D(Texture2D<float4> tex)

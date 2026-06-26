@@ -34,13 +34,15 @@ impl NativeSurface {
     }
 }
 
-impl Surface for NativeSurface {
-    unsafe fn delete_surface(self: Box<Self>) {
+impl Drop for NativeSurface {
+    fn drop(&mut self) {
         unsafe {
             self.functor.destroy_surface(self.raw, None);
         }
     }
+}
 
+impl Surface for NativeSurface {
     fn surface_capabilities(
         &self,
         adapter: &crate::vulkan::Adapter,
@@ -130,10 +132,22 @@ impl Surface for NativeSurface {
             }
         };
 
-        let formats = raw_surface_formats
+        // Group the driver's (format, color space) pairs into one entry per
+        // format, preserving the driver's format order.
+        let mut formats: Vec<wgt::SurfaceFormatCapabilities> = Vec::new();
+        for (format, color_space) in raw_surface_formats
             .into_iter()
             .filter_map(conv::map_vk_surface_formats)
-            .collect();
+        {
+            let color_spaces = color_space.to_color_spaces().unwrap();
+            match formats.iter_mut().find(|fc| fc.format == format) {
+                Some(fc) => fc.color_spaces |= color_spaces,
+                None => formats.push(wgt::SurfaceFormatCapabilities {
+                    format,
+                    color_spaces,
+                }),
+            }
+        }
         Some(crate::SurfaceCapabilities {
             formats,
             // TODO: Right now we're always truncating the swap chain
@@ -160,18 +174,12 @@ impl Surface for NativeSurface {
         profiling::scope!("Device::create_swapchain");
         let functor = khr::swapchain::Device::new(&self.instance.raw, &device.shared.raw);
 
-        let old_swapchain = match provided_old_swapchain {
-            Some(osc) => osc.as_any().downcast_ref::<NativeSwapchain>().unwrap().raw,
-            None => vk::SwapchainKHR::null(),
-        };
+        let old_swapchain = provided_old_swapchain
+            .as_ref()
+            .map(|osc| osc.as_any().downcast_ref::<NativeSwapchain>().unwrap().raw)
+            .unwrap_or(vk::SwapchainKHR::null());
 
-        let color_space = if config.format == wgt::TextureFormat::Rgba16Float {
-            // Enable wide color gamut mode
-            // Vulkan swapchain for Android only supports DISPLAY_P3_NONLINEAR_EXT and EXTENDED_SRGB_LINEAR_EXT
-            vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT
-        } else {
-            vk::ColorSpaceKHR::SRGB_NONLINEAR
-        };
+        let color_space = conv::map_surface_color_space(config.color_space);
 
         let original_format = device.shared.private_caps.map_texture_format(config.format);
         let mut raw_flags = vk::SwapchainCreateFlagsKHR::empty();
@@ -215,11 +223,6 @@ impl Surface for NativeSurface {
             profiling::scope!("vkCreateSwapchainKHR");
             unsafe { functor.create_swapchain(&info, None) }
         };
-
-        // doing this before bailing out with error
-        if old_swapchain != vk::SwapchainKHR::null() {
-            unsafe { functor.destroy_swapchain(old_swapchain, None) }
-        }
 
         let raw = match result {
             Ok(swapchain) => swapchain,
@@ -336,6 +339,14 @@ pub(crate) struct NativeSwapchain {
     next_present_time: Option<vk::PresentTimeGOOGLE>,
 }
 
+impl Drop for NativeSwapchain {
+    fn drop(&mut self) {
+        unsafe {
+            self.functor.destroy_swapchain(self.raw, None);
+        }
+    }
+}
+
 impl Swapchain for NativeSwapchain {
     unsafe fn release_resources(&mut self, device: &crate::vulkan::Device) {
         profiling::scope!("Swapchain::release_resources");
@@ -372,10 +383,6 @@ impl Swapchain for NativeSwapchain {
 
             unsafe { mutex_removed.destroy(&device.shared.raw) };
         }
-    }
-
-    unsafe fn delete_swapchain(self: Box<Self>) {
-        unsafe { self.functor.destroy_swapchain(self.raw, None) };
     }
 
     unsafe fn acquire(
@@ -465,10 +472,7 @@ impl Swapchain for NativeSwapchain {
         // Windows where the Vulkan driver is using a DXGI swapchain. See
         // https://github.com/gfx-rs/wgpu/issues/8310 and
         // https://github.com/gfx-rs/wgpu/issues/8354 for more details.
-        //
-        // On other platforms, this wait may serve to slightly decrease frame
-        // latency, depending on how the platform implements waiting within
-        // acquire.
+        #[cfg(target_os = "windows")]
         unsafe {
             // The `wait_all` argument must be `true` to avoid crash on some Android devices. See https://github.com/gfx-rs/wgpu/pull/8769
             self.device

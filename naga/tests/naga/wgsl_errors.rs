@@ -984,6 +984,28 @@ fn matrix_constructor_inferred() {
     );
 }
 
+#[test]
+fn recursion_depth_expression() {
+    check(
+        include_str!("deep-expression.wgsl"),
+        r#"error: internal WGSL front end error
+ = note: Parser recursion limit exceeded
+
+"#,
+    );
+}
+
+#[test]
+fn recursion_depth_template() {
+    check(
+        include_str!("deep-template.wgsl"),
+        r#"error: internal WGSL front end error
+ = note: Parser recursion limit exceeded
+
+"#,
+    );
+}
+
 /// Check the result of validating a WGSL program against a pattern.
 ///
 /// Unless you are generating code programmatically, the
@@ -1389,6 +1411,147 @@ fn float16_capability_and_enable() {
             },
             ..
         })
+    }
+}
+
+#[test]
+fn int16_capability_and_enable() {
+    // A zero value expression
+    check_extension_validation! {
+        Capabilities::SHADER_INT16,
+        r#"fn foo() {
+            let a = u16();
+        }
+        "#,
+        r#"error: the `wgpu_int16` enable extension is not enabled
+  ┌─ wgsl:2:21
+  │
+2 │             let a = u16();
+  │                     ^^^ the `wgpu_int16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int16;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "SHADER_INT16", .. }),
+            ..
+        })
+    }
+
+    // Literals (via constructor)
+    check_extension_validation! {
+        Capabilities::SHADER_INT16,
+        r#"fn foo() {
+            let a = u16(1);
+        }
+        "#,
+        r#"error: the `wgpu_int16` enable extension is not enabled
+  ┌─ wgsl:2:21
+  │
+2 │             let a = u16(1);
+  │                     ^^^ the `wgpu_int16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int16;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::Expression {
+                source: naga::valid::ExpressionError::Literal(
+                    naga::valid::LiteralError::Width(
+                        naga::valid::WidthError::MissingCapability { flag: "SHADER_INT16", .. }
+                    )
+                ),
+                ..
+            },
+            ..
+        })
+    }
+
+    // `u16`-typed declarations
+    check_extension_validation! {
+        Capabilities::SHADER_INT16,
+        "var input: u16;",
+        r#"error: the `wgpu_int16` enable extension is not enabled
+  ┌─ wgsl:1:12
+  │
+1 │ var input: u16;
+  │            ^^^ the `wgpu_int16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int16;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "SHADER_INT16", .. }),
+            ..
+        })
+    }
+
+    // `i16`-typed declarations
+    check_extension_validation! {
+        Capabilities::SHADER_INT16,
+        "var input: i16;",
+        r#"error: the `wgpu_int16` enable extension is not enabled
+  ┌─ wgsl:1:12
+  │
+1 │ var input: i16;
+  │            ^^^ the `wgpu_int16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int16;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "SHADER_INT16", .. }),
+            ..
+        })
+    }
+}
+
+#[test]
+fn int16_in_atomic() {
+    check_validation! {
+        "enable wgpu_int16; @group(0) @binding(0) var<storage> a: atomic<u16>;",
+        "enable wgpu_int16; @group(0) @binding(0) var<storage> a: atomic<i16>;":
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::InvalidAtomicWidth(_, 2),
+            ..
+        }),
+        naga::valid::Capabilities::SHADER_INT16
+    }
+}
+
+#[test]
+fn int16_subgroup_bitwise_rejected() {
+    check_validation! {
+        "enable wgpu_int16; @compute @workgroup_size(1) fn main() { var v = i16(1); v = subgroupAnd(v); }",
+        "enable wgpu_int16; @compute @workgroup_size(1) fn main() { var v = i16(1); v = subgroupOr(v); }",
+        "enable wgpu_int16; @compute @workgroup_size(1) fn main() { var v = i16(1); v = subgroupXor(v); }",
+        "enable wgpu_int16; @compute @workgroup_size(1) fn main() { var v = u16(1); v = subgroupAnd(v); }":
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::InvalidSubgroup(
+                    naga::valid::SubgroupError::InvalidOperand(_),
+                ),
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::SHADER_INT16 | naga::valid::Capabilities::SUBGROUP
+    }
+}
+
+#[test]
+fn int16_in_immediate() {
+    check_validation! {
+        "enable wgpu_int16; var<immediate> input: i16;",
+        "enable wgpu_int16; var<immediate> input: u16;",
+        "enable wgpu_int16; var<immediate> input: vec2<i16>;",
+        "enable wgpu_int16; struct S { a: u16 }; var<immediate> input: S;":
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::InvalidImmediateType(
+                naga::valid::ImmediateError::InvalidScalar(_)
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::SHADER_INT16 | naga::valid::Capabilities::IMMEDIATES
     }
 }
 
@@ -4549,6 +4712,50 @@ fn max_type_size_array_of_structs() {
                 }
         ))
     }
+}
+
+#[test]
+fn max_type_size_array_constructor_with_oversize_type() {
+    // An `array(...)` constructor expression invokes the layouter to compute
+    // the stride of the constructed array. If a previously declared type is
+    // oversize, the layouter encounters it and the error must be reported
+    // rather than panicking.
+    //
+    // Regression test for <https://github.com/gfx-rs/wgpu/issues/9440>.
+    check(
+        r#"
+            var<workgroup> big: array<u32, 1 << 29>;
+            const A = array(1);
+        "#,
+        r#"error: type is too large
+ = note: the maximum size is 2147483647 bytes
+
+"#,
+    );
+}
+
+#[test]
+fn max_type_size_concretize_with_oversize_type() {
+    // Concretizing an abstract array (here, indexing it with a non-constant
+    // index forces concretization to a concrete element type) invokes the
+    // layouter to compute the new array's stride. If a previously declared
+    // type is oversize, the layouter encounters it and the error must be
+    // reported rather than panicking.
+    //
+    // Regression test for <https://github.com/gfx-rs/wgpu/issues/9440>.
+    check(
+        r#"
+            const a = array(0.);
+            var<workgroup> big: array<u32, 1 << 29>;
+            fn main(i: u32) {
+                let x = a[i];
+            }
+        "#,
+        r#"error: type is too large
+ = note: the maximum size is 2147483647 bytes
+
+"#,
+    );
 }
 
 #[test]
