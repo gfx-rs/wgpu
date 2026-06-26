@@ -29,7 +29,7 @@ env:
   # Runtime configuration
   #
 
-  LVP_POISON_MEMORY: true
+  LVP_POISON_MEMORY: true # to test memory init; see docs/testing.md
   # cts_runner uses dxc by default
 
 # Every time a PR is pushed to, cancel any previous jobs. This

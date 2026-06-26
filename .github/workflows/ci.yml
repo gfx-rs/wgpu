@@ -49,7 +49,7 @@ env:
   # Runtime configuration
   #
 
-  LVP_POISON_MEMORY: true
+  LVP_POISON_MEMORY: true # to test memory init; see docs/testing.md
   WGPU_DX12_COMPILER: dxc
 
 # Every time a PR is pushed to, cancel any previous jobs. This

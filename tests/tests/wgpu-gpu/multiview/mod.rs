@@ -44,14 +44,15 @@ static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration
             max_multiview_view_count: 4,
             ..Limits::defaults()
         },
-        // https://github.com/gfx-rs/wgpu/issues/9184 and https://github.com/gfx-rs/wgpu/issues/9187
         failures: {
             let mut failures = Vec::new();
+            // https://github.com/gfx-rs/wgpu/issues/9620
             failures.push(FailureCase::lvp_poison_memory(
                 "assertion `left == right` failed: Expected 0\n  \
                  left: Some(128)\n \
                  right: None",
             ));
+            // https://github.com/gfx-rs/wgpu/issues/9184 and https://github.com/gfx-rs/wgpu/issues/9187
             failures.append(&mut FailureCase::mac_vulkan(|case| {
                 case.panic(
                     "assertion `left == right` failed: Expected 0\n  left: Some(255)\n right: None",
