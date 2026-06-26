@@ -1652,28 +1652,23 @@ impl<W: Write> Writer<W> {
         context: &ExpressionContext,
     ) -> BackendResult {
         let global = &context.module.global_variables[handle];
-        let element_struct_members = |ty: Handle<crate::Type>| match context.module.types[ty].inner
-        {
-            crate::TypeInner::Struct { ref members, .. } => Some(members.as_slice()),
-            _ => None,
-        };
         let (offset, array_ty) = match context.module.types[global.ty].inner {
             crate::TypeInner::Struct { ref members, .. } => match members.last() {
                 Some(&crate::StructMember { offset, ty, .. }) => (offset, ty),
                 None => return Err(Error::GenericValidation("Struct has no members".into())),
             },
-            crate::TypeInner::BindingArray { base, .. } => {
-                let Some(members) = element_struct_members(base) else {
+            crate::TypeInner::BindingArray { base, .. } => match context.module.types[base].inner {
+                crate::TypeInner::Struct { ref members, .. } => match members.last() {
+                    Some(&crate::StructMember { offset, ty, .. }) => (offset, ty),
+                    None => return Err(Error::GenericValidation("Struct has no members".into())),
+                },
+                _ => {
                     return Err(Error::GenericValidation(
                         "binding_array element must be a struct with a runtime-sized array field"
                             .into(),
-                    ));
-                };
-                match members.last() {
-                    Some(&crate::StructMember { offset, ty, .. }) => (offset, ty),
-                    None => return Err(Error::GenericValidation("Struct has no members".into())),
+                    ))
                 }
-            }
+            },
             crate::TypeInner::Array {
                 size: crate::ArraySize::Dynamic,
                 ..
