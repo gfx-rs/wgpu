@@ -4984,6 +4984,7 @@ name = "wgpu-xtask"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cfg-if",
  "env_logger",
  "log",
  "pico-args",

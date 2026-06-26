@@ -27,6 +27,16 @@ pub struct Bin<'a> {
     pub build_args: Vec<&'a str>,
 }
 
+cfg_if::cfg_if! {
+  if #[cfg(target_os = "windows")] {
+    const NPM_COMMAND: &str = "npm.cmd";
+    const NPX_COMMAND: &str = "npx.cmd";
+  } else {
+    const NPM_COMMAND: &str = "npm";
+    const NPX_COMMAND: &str = "npx";
+  }
+}
+
 fn parse_wasm_list(list_output: String) -> Option<String> {
     let list_output: serde_json::Value = serde_json::from_str(&list_output).ok()?;
 
@@ -55,9 +65,9 @@ pub fn run_wasm_tests(
 ) -> anyhow::Result<()> {
     let runner_shell = Shell::new()?;
     runner_shell.change_dir(shell.current_dir().join("tests/wasm/runner"));
-    runner_shell.cmd("npm").arg("install").run()?;
+    runner_shell.cmd(NPM_COMMAND).arg("install").run()?;
     runner_shell
-        .cmd("npx")
+        .cmd(NPX_COMMAND)
         .args(["playwright", "install", "chromium", "--with-deps"])
         .run()?;
 
