@@ -7,8 +7,15 @@ struct Inner {
     y: u32,
 }
 struct Foo { x: u32, nested: Inner, far: array<i32> }
+
+struct PlainData {
+    values: array<u32>,
+}
+
 @group(0) @binding(0)
-var<storage, read> storage_array: binding_array<Foo, 1>;
+var<storage, read> storage_array: binding_array<Foo>;
+@group(0) @binding(1)
+var<storage, read> plain_storage: PlainData;
 @group(0) @binding(10)
 var<uniform> uni: UniformIndex;
 
@@ -34,6 +41,9 @@ fn main(fragment_in: FragmentIn) -> @location(0) u32 {
     u1 += arrayLength(&storage_array[0].far);
     u1 += arrayLength(&storage_array[uniform_index].far);
     u1 += arrayLength(&storage_array[non_uniform_index].far);
+
+    u1 += plain_storage.values[0];
+    u1 += arrayLength(&plain_storage.values);
 
     return u1;
 }

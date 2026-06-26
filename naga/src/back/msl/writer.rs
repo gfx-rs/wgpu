@@ -1645,6 +1645,27 @@ impl<W: Write> Writer<W> {
     /// `chain_expr` sits on the pointer path from an inner access, such as the
     /// value passed to array length, back toward this global. For storage binding
     /// arrays, that path tells us which element index to use in `_buffer_sizes`.
+    fn binding_array_layout_count(
+        module: &crate::Module,
+        pipeline_options: &PipelineOptions,
+        global: Handle<crate::GlobalVariable>,
+    ) -> u32 {
+        let var = &module.global_variables[global];
+        let crate::TypeInner::BindingArray { size, .. } = module.types[var.ty].inner else {
+            unreachable!("binding_array_layout_count called on non-binding-array global");
+        };
+        let from_shader = match size {
+            crate::ArraySize::Constant(n) => n.get(),
+            crate::ArraySize::Pending(_) | crate::ArraySize::Dynamic => 0,
+        };
+        let from_layout = var
+            .binding
+            .and_then(|br| pipeline_options.binding_array_length_map.get(&br))
+            .copied()
+            .unwrap_or(0);
+        from_shader.max(from_layout).max(1)
+    }
+
     fn put_dynamic_array_max_index(
         &mut self,
         handle: Handle<crate::GlobalVariable>,
@@ -3276,8 +3297,23 @@ impl<W: Write> Writer<W> {
                     let global = context.function.originating_global(base).ok_or_else(|| {
                         Error::GenericValidation("Could not find originating global".into())
                     })?;
-                    write!(self.out, "1 + ")?;
-                    self.put_dynamic_array_max_index(global, base, context)?
+                    if matches!(
+                        context.module.types[context.module.global_variables[global].ty].inner,
+                        crate::TypeInner::BindingArray { .. }
+                    ) {
+                        write!(
+                            self.out,
+                            "{}",
+                            Self::binding_array_layout_count(
+                                context.module,
+                                context.pipeline_options,
+                                global,
+                            )
+                        )?;
+                    } else {
+                        write!(self.out, "1 + ")?;
+                        self.put_dynamic_array_max_index(global, base, context)?
+                    }
                 }
             }
         }
@@ -4529,17 +4565,9 @@ impl<W: Write> Writer<W> {
                     let var = &module.global_variables[global];
                     let var_ty = var.ty;
                     match module.types[var_ty].inner {
-                        crate::TypeInner::BindingArray { size, .. } => {
-                            let from_shader = match size {
-                                crate::ArraySize::Constant(n) => n.get(),
-                                crate::ArraySize::Pending(_) | crate::ArraySize::Dynamic => 0,
-                            };
-                            let from_layout = var
-                                .binding
-                                .and_then(|br| pipeline_options.binding_array_length_map.get(&br))
-                                .copied()
-                                .unwrap_or(0);
-                            let n = from_shader.max(from_layout).max(1);
+                        crate::TypeInner::BindingArray { .. } => {
+                            let n =
+                                Self::binding_array_layout_count(module, pipeline_options, global);
                             writeln!(
                                 self.out,
                                 "{}uint {}[{n}];",

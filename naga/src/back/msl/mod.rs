@@ -428,7 +428,35 @@ pub struct PipelineOptions {
     /// For each storage `binding_array` in the pipeline layout, the number of
     /// elements that layout declares, keyed by `ResourceBinding`.
     /// The MSL writer uses this to report the number of elements in an unbounded `binding_array`.
+    #[cfg_attr(
+        feature = "deserialize",
+        serde(deserialize_with = "deserialize_binding_array_length_map")
+    )]
     pub binding_array_length_map: crate::FastHashMap<crate::ResourceBinding, u32>,
+}
+
+#[cfg(feature = "deserialize")]
+#[derive(serde::Deserialize)]
+struct BindingArrayLengthMapSerialization {
+    resource_binding: crate::ResourceBinding,
+    count: u32,
+}
+
+#[cfg(feature = "deserialize")]
+fn deserialize_binding_array_length_map<'de, D>(
+    deserializer: D,
+) -> Result<crate::FastHashMap<crate::ResourceBinding, u32>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let vec = Vec::<BindingArrayLengthMapSerialization>::deserialize(deserializer)?;
+    let mut map = crate::FastHashMap::default();
+    for item in vec {
+        map.insert(item.resource_binding, item.count);
+    }
+    Ok(map)
 }
 
 impl Options {

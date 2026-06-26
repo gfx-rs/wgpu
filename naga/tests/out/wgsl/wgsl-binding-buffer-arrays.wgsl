@@ -14,12 +14,18 @@ struct Foo {
     far: array<i32>,
 }
 
+struct PlainData {
+    values: array<u32>,
+}
+
 struct FragmentIn {
     @location(0) @interpolate(flat) index: u32,
 }
 
 @group(0) @binding(0) 
-var<storage> storage_array: binding_array<Foo, 1>;
+var<storage> storage_array: binding_array<Foo>;
+@group(0) @binding(1) 
+var<storage> plain_storage: PlainData;
 @group(0) @binding(10) 
 var<uniform> uni: UniformIndex;
 
@@ -54,5 +60,10 @@ fn main(fragment_in: FragmentIn) -> @location(0) u32 {
     let _e58 = u1_;
     u1_ = (_e58 + arrayLength((&storage_array[non_uniform_index].far)));
     let _e64 = u1_;
-    return _e64;
+    let _e68 = plain_storage.values[0];
+    u1_ = (_e64 + _e68);
+    let _e70 = u1_;
+    u1_ = (_e70 + arrayLength((&plain_storage.values)));
+    let _e75 = u1_;
+    return _e75;
 }
