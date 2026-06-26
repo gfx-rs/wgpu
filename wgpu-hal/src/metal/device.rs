@@ -90,6 +90,10 @@ fn create_depth_stencil_desc(
     desc
 }
 
+#[allow(
+    clippy::mut_from_ref,
+    reason = "MTLBuffer shared contents are writable through `&MTLBuffer`"
+)]
 fn bindless_id_table_mut(
     buffer: &ProtocolObject<dyn MTLBuffer>,
     count: u32,
