@@ -514,7 +514,8 @@ pub(super) enum WrappedFunction {
         columns: crate::CooperativeSize,
         rows: crate::CooperativeSize,
         intermediate: crate::CooperativeSize,
-        scalar: crate::Scalar,
+        ab_scalar: crate::Scalar,
+        c_scalar: crate::Scalar,
     },
     RayQueryGetIntersection {
         committed: bool,
@@ -6453,9 +6454,10 @@ template <typename A>
         space: crate::AddressSpace,
         a: Handle<crate::Expression>,
         b: Handle<crate::Expression>,
+        c: Handle<crate::Expression>,
     ) -> BackendResult {
         let space_name = space.to_msl_name().unwrap_or_default();
-        let (a_c, a_r, scalar) = match *func_ctx.resolve_type(a, &module.types) {
+        let (a_c, a_r, ab_scalar) = match *func_ctx.resolve_type(a, &module.types) {
             crate::TypeInner::CooperativeMatrix {
                 columns,
                 rows,
@@ -6468,26 +6470,32 @@ template <typename A>
             crate::TypeInner::CooperativeMatrix { columns, rows, .. } => (columns, rows),
             _ => unreachable!(),
         };
+        let c_scalar = match *func_ctx.resolve_type(c, &module.types) {
+            crate::TypeInner::CooperativeMatrix { scalar, .. } => scalar,
+            _ => unreachable!(),
+        };
         let wrapped = WrappedFunction::CooperativeMultiplyAdd {
             space_name,
             columns: b_c,
             rows: a_r,
             intermediate: a_c,
-            scalar,
+            ab_scalar,
+            c_scalar,
         };
         if !self.wrapped_functions.insert(wrapped) {
             return Ok(());
         }
-        let scalar_name = scalar.to_msl_name();
+        let ab_scalar_name = ab_scalar.to_msl_name();
+        let c_scalar_name = c_scalar.to_msl_name();
         writeln!(
             self.out,
-            "{NAMESPACE}::simdgroup_{scalar_name}{}x{} {COOPERATIVE_MULTIPLY_ADD_FUNCTION}(const {space_name} {NAMESPACE}::simdgroup_{scalar_name}{}x{}& a, const {space_name} {NAMESPACE}::simdgroup_{scalar_name}{}x{}& b, const {space_name} {NAMESPACE}::simdgroup_{scalar_name}{}x{}& c) {{",
+            "{NAMESPACE}::simdgroup_{c_scalar_name}{}x{} {COOPERATIVE_MULTIPLY_ADD_FUNCTION}(const {space_name} {NAMESPACE}::simdgroup_{ab_scalar_name}{}x{}& a, const {space_name} {NAMESPACE}::simdgroup_{ab_scalar_name}{}x{}& b, const {space_name} {NAMESPACE}::simdgroup_{c_scalar_name}{}x{}& c) {{",
             b_c as u32, a_r as u32, a_c as u32, a_r as u32, b_c as u32, b_r as u32, b_c as u32, a_r as u32,
         )?;
         let l1 = back::Level(1);
         writeln!(
             self.out,
-            "{l1}{NAMESPACE}::simdgroup_{scalar_name}{}x{} d;",
+            "{l1}{NAMESPACE}::simdgroup_{c_scalar_name}{}x{} d;",
             b_c as u32, a_r as u32
         )?;
         writeln!(self.out, "{l1}simdgroup_multiply_accumulate(d,a,b,c);")?;
@@ -6585,9 +6593,9 @@ template <typename A>
                         data.pointer,
                     )?;
                 }
-                crate::Expression::CooperativeMultiplyAdd { a, b, c: _ } => {
+                crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
                     let space = crate::AddressSpace::Private;
-                    self.write_wrapped_cooperative_multiply_add(module, func_ctx, space, a, b)?;
+                    self.write_wrapped_cooperative_multiply_add(module, func_ctx, space, a, b, c)?;
                 }
                 crate::Expression::RayQueryGetIntersection { committed, .. } => {
                     self.write_rq_get_intersection_function(module, committed)?;
