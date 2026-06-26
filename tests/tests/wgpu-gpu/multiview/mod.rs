@@ -2,7 +2,7 @@ use std::num::NonZero;
 
 use wgpu::{Features, Limits};
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -45,11 +45,20 @@ static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration
             ..Limits::defaults()
         },
         // https://github.com/gfx-rs/wgpu/issues/9184 and https://github.com/gfx-rs/wgpu/issues/9187
-        failures: wgpu_test::FailureCase::mac_vulkan(|case| {
-            case.panic(
-                "assertion `left == right` failed: Expected 0\n  left: Some(255)\n right: None",
-            )
-        }),
+        failures: {
+            let mut failures = Vec::new();
+            failures.push(FailureCase::lvp_poison_memory(
+                "assertion `left == right` failed: Expected 0\n  \
+                 left: Some(128)\n \
+                 right: None",
+            ));
+            failures.append(&mut FailureCase::mac_vulkan(|case| {
+                case.panic(
+                    "assertion `left == right` failed: Expected 0\n  left: Some(255)\n right: None",
+                )
+            }));
+            failures
+        },
         ..Default::default()
     })
     .run_async(|ctx| run_test(ctx, 0b1001, 1));

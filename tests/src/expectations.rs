@@ -171,6 +171,19 @@ impl FailureCase {
         vec![f(FailureCase::molten_vk()), f(FailureCase::kosmic_krisp())]
     }
 
+    pub fn lvp_poison_memory(message: &'static str) -> Self {
+        if let Ok("true") = std::env::var("LVP_POISON_MEMORY").as_deref() {
+            FailureCase {
+                backends: Some(wgpu::Backends::VULKAN),
+                driver: Some("llvmpipe"),
+                reasons: vec![FailureReason::panic().with_message(message)],
+                ..FailureCase::default()
+            }
+        } else {
+            FailureCase::never()
+        }
+    }
+
     /// Return the reasons why this case should fail.
     pub fn reasons(&self) -> &[FailureReason] {
         if self.reasons.is_empty() {
