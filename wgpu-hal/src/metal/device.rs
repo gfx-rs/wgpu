@@ -1,5 +1,5 @@
 use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
-use core::ptr::NonNull;
+use core::{mem::align_of, ptr::NonNull};
 
 use bytemuck::TransparentWrapper;
 use objc2::{
@@ -43,14 +43,15 @@ struct CompiledShader {
     wg_size: MTLSize,
     wg_memory_sizes: Vec<u32>,
 
-    /// Bindings of WGSL `storage` globals that contain variable-sized arrays.
+    /// Bindings of WGSL `storage` globals that contain variable-sized arrays,
+    /// paired with a binding-array element index when applicable.
     ///
     /// In order to implement bounds checks and the `arrayLength` function for
     /// WGSL runtime-sized arrays, we pass the entry point a struct with a
-    /// member for each global variable that contains such an array. That member
-    /// is a `u32` holding the variable's total size in bytes---which is simply
-    /// the size of the `Buffer` supplying that variable's contents for the
-    /// draw call.
+    /// `u32` member for each such binding. For ordinary storage buffers the
+    /// element index is zero; for storage binding arrays there is one entry per
+    /// layout element. Each member holds that element's total size in bytes---
+    /// the size of the `Buffer` supplying its contents for the draw or dispatch.
     sized_bindings: Vec<(naga::ResourceBinding, u32)>,
 
     immutable_buffer_mask: usize,
@@ -92,13 +93,12 @@ fn create_depth_stencil_desc(
 fn bindless_id_table_mut(
     buffer: &ProtocolObject<dyn MTLBuffer>,
     count: u32,
-) -> *mut [MTLResourceID] {
-    let ptr = buffer
-        .contents()
-        .cast::<u8>()
-        .as_ptr()
-        .cast::<MTLResourceID>();
-    core::ptr::slice_from_raw_parts_mut(ptr, count as usize)
+) -> &mut [MTLResourceID] {
+    let ptr = buffer.contents().cast::<u8>().as_ptr();
+    // SAFETY: The buffer is aligned to the size of `MTLResourceID`.
+    assert_eq!(ptr as usize % align_of::<MTLResourceID>(), 0);
+    let ptr = ptr.cast::<MTLResourceID>();
+    unsafe { core::slice::from_raw_parts_mut(ptr, count as usize) }
 }
 
 const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> nt::VertexFormat {
@@ -1024,9 +1024,8 @@ impl crate::Device for super::Device {
                         match layout.ty {
                             wgt::BindingType::Texture { .. }
                             | wgt::BindingType::StorageTexture { .. } => {
-                                let resource_ids = unsafe {
-                                    &mut *bindless_id_table_mut(argument_buffer.as_ref(), count)
-                                };
+                                let resource_ids =
+                                    bindless_id_table_mut(argument_buffer.as_ref(), count);
                                 let start = entry.resource_index as usize;
                                 let end = start + count as usize;
                                 let textures = &desc.textures[start..end];
@@ -1045,9 +1044,8 @@ impl crate::Device for super::Device {
                                 }
                             }
                             wgt::BindingType::Sampler { .. } => {
-                                let resource_ids = unsafe {
-                                    &mut *bindless_id_table_mut(argument_buffer.as_ref(), count)
-                                };
+                                let resource_ids =
+                                    bindless_id_table_mut(argument_buffer.as_ref(), count);
                                 let start = entry.resource_index as usize;
                                 let end = start + count as usize;
                                 let samplers = &desc.samplers[start..end];
@@ -1089,9 +1087,8 @@ impl crate::Device for super::Device {
                                 }
                             }
                             wgt::BindingType::AccelerationStructure { .. } => {
-                                let resource_ids = unsafe {
-                                    &mut *bindless_id_table_mut(argument_buffer.as_ref(), count)
-                                };
+                                let resource_ids =
+                                    bindless_id_table_mut(argument_buffer.as_ref(), count);
                                 let start = entry.resource_index as usize;
                                 let end = start + count as usize;
                                 let acceleration_structures =
