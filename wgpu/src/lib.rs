@@ -110,7 +110,8 @@
 //!   the signal to the compositor unchanged; getting this wrong produces a
 //!   wrong image with no error.
 //!
-//! wgpu does **not** tonemap or gamut-map for you. It gives you the surface;
+//! wgpu does **not** tonemap or gamut-map for you. It gives you the surface
+//! and, through [`DisplayHdrInfo`], the display's advisory capabilities;
 //! *choosing* and *applying* a tone curve is your application's job.
 //!
 //! ### The practical path
@@ -122,24 +123,32 @@
 //!    with [`Auto`](SurfaceColorSpace::Auto), which never selects HDR.
 //!    [`SurfaceCapabilities::color_spaces`] is a convenience lookup for one
 //!    format.
-//! 2. **Choose a format and color space.** Intersect what you want with what
+//! 2. **Optionally query the display.** Call `Surface::display_hdr_info` for the
+//!    current [`DisplayHdrInfo`] (peak and SDR-white nits, EDR headroom,
+//!    primaries, and a coarse dynamic-range/gamut bucket). Use it to pick a
+//!    tone-map target ([`DisplayHdrInfo::tone_map_headroom`]); *whether* HDR is
+//!    worthwhile is the capability question from step 1, not this live value.
+//!    Every field is advisory and optional; `None` means "cannot tell here",
+//!    never "SDR".
+//! 3. **Choose a format and color space.** Intersect what you want with what
 //!    step 1 advertises, in your own preference order (for example HDR10, then
 //!    linear extended sRGB, then encoded extended sRGB, then SDR
 //!    [`Srgb`](SurfaceColorSpace::Srgb)). Keep an SDR fallback for when nothing
 //!    HDR is advertised, such as when OS HDR is off.
-//! 3. **Configure the surface.** Set [`SurfaceConfiguration::color_space`] and
+//! 4. **Configure the surface.** Set [`SurfaceConfiguration::color_space`] and
 //!    `format`. [`Auto`](SurfaceColorSpace::Auto) (the default) reproduces
 //!    wgpu's historical behavior and never picks HDR; any other value must be in
 //!    that format's advertised set or configuration fails validation.
-//! 4. **Encode what you write to the surface texture.** For an `*Srgb` format,
+//! 5. **Encode what you write to the surface texture.** For an `*Srgb` format,
 //!    output linear and the hardware encodes for you. Otherwise the values your
 //!    shader writes to the surface texture must already carry the encoding the
 //!    chosen color space expects (sRGB, extended sRGB, PQ, or HLG) **and** any
 //!    gamut conversion (for example outputting in the BT.2020 gamut for HDR10);
 //!    in a typical renderer you do this in a final tone-mapping or
 //!    post-processing pass. See the table below.
-//! 5. **Present** as usual. If OS HDR is toggled mid-run, re-query
-//!    `Surface::get_capabilities` and re-run the steps above.
+//! 6. **Present** as usual. If OS HDR is toggled mid-run, you'll see it on the
+//!    next `Surface::display_hdr_info` poll; re-query `Surface::get_capabilities`
+//!    and re-run the steps above.
 //!
 //! The standalone [HDR surface example] implements every step, including the
 //! encoding transfer function for each color space.
@@ -185,8 +194,8 @@
 //!   brightness of SDR plain white, set below the panel's peak so highlights have
 //!   room above it.
 //! * **Headroom (EDR)** --- how much brighter than current SDR white the display
-//!   can go right now, as a multiplier (`1.0` means none). A dynamic property of
-//!   the display.
+//!   can go right now, as a multiplier (`1.0` means none). Dynamic; see
+//!   [`DisplayHdrInfo::tone_map_headroom`].
 //! * **PQ / HLG** --- the two HDR transfer functions: [PQ] (SMPTE ST 2084,
 //!   HDR10) encodes absolute luminance, [HLG] (BT.2100) encodes relative
 //!   luminance.
@@ -270,8 +279,9 @@ pub use wgt::{
     BufferTransition, BufferUsages, BufferUses, Color, ColorTargetState, ColorWrites,
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, CooperativeMatrixProperties,
     CooperativeScalarType, CopyExternalImageDestInfo, CoreCounters, DepthBiasState,
-    DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags,
-    DownlevelLimits, Dx12BackendOptions, Dx12Compiler, Dx12SwapchainKind,
+    DepthStencilState, DeviceLostReason, DeviceType, DisplayChromaticity, DisplayCoarseRange,
+    DisplayGamut, DisplayHdrInfo, DisplayHeadroom, DisplayLuminance, DownlevelCapabilities,
+    DownlevelFlags, DownlevelLimits, Dx12BackendOptions, Dx12Compiler, Dx12SwapchainKind,
     Dx12UseFrameLatencyWaitableObject, DxcShaderModel, DynamicOffset, ExperimentalFeatures,
     Extent3d, ExternalTextureFormat, ExternalTextureTransferFunction, Face, Features, FeaturesWGPU,
     FeaturesWebGPU, FilterMode, ForceShaderModelToken, FrontFace, GlBackendOptions, GlDebugFns,

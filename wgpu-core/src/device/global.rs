@@ -80,6 +80,25 @@ impl Global {
         })
     }
 
+    /// Returns the **current** HDR / luminance characteristics of the display
+    /// currently backing `surface_id` on `adapter_id`.
+    ///
+    /// If the information is not available, returns
+    /// [`wgt::DisplayHdrInfo::default`].
+    ///
+    /// Unlike [`Self::surface_get_capabilities`] this does **not** filter by
+    /// color space; it returns the raw display facts as-is.
+    pub fn surface_display_hdr_info(
+        &self,
+        surface_id: SurfaceId,
+        adapter_id: AdapterId,
+    ) -> wgt::DisplayHdrInfo {
+        profiling::scope!("Surface::display_hdr_info");
+        self.fetch_adapter_and_surface(surface_id, adapter_id, |adapter, surface| {
+            surface.display_hdr_info(adapter)
+        })
+    }
+
     fn fetch_adapter_and_surface<F: FnOnce(&Adapter, &Surface) -> B, B>(
         &self,
         surface_id: SurfaceId,

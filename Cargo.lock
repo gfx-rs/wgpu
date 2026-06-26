@@ -2784,6 +2784,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
 dependencies = [
  "bitflags 2.13.0",
+ "block2 0.6.2",
+ "libc",
  "objc2 0.6.4",
  "objc2-core-foundation",
 ]
@@ -4782,8 +4784,11 @@ dependencies = [
 name = "wgpu-example-03-hdr-surface"
 version = "0.0.0"
 dependencies = [
+ "block2 0.6.2",
  "console_error_panic_hook",
  "env_logger",
+ "objc2 0.6.4",
+ "objc2-foundation 0.3.2",
  "pollster",
  "wasm-bindgen",
  "wasm-bindgen-futures",

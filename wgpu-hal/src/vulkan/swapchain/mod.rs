@@ -7,6 +7,27 @@ pub(super) use native::*;
 
 mod native;
 
+/// A Win32 `HWND` we keep so the DXGI display-HDR query can find the window's
+/// monitor (Windows only). It's borrowed from the app's window, so querying after
+/// that window is gone is the app's UB to avoid.
+///
+/// Using a newtype rather than a bare `isize` keeps the `Send`/`Sync` impls here,
+/// and being uninhabited off Windows means a non-Windows surface can't hold one.
+#[cfg(windows)]
+#[derive(Clone, Copy)]
+pub(crate) struct WindowHandle(pub(crate) windows::Win32::Foundation::HWND);
+
+#[cfg(not(windows))]
+#[derive(Clone, Copy)]
+pub(crate) enum WindowHandle {}
+
+// SAFETY: we only read the `HWND` to run a DXGI query (fine from any thread),
+// never to touch window state.
+#[cfg(windows)]
+unsafe impl Send for WindowHandle {}
+#[cfg(windows)]
+unsafe impl Sync for WindowHandle {}
+
 pub(super) trait Surface: Send + Sync + 'static {
     /// Returns the surface capabilities for the given adapter.
     ///
@@ -24,6 +45,17 @@ pub(super) trait Surface: Send + Sync + 'static {
         config: &crate::SurfaceConfiguration,
         provided_old_swapchain: Option<Box<dyn Swapchain>>,
     ) -> Result<Box<dyn Swapchain>, crate::SurfaceError>;
+
+    /// The [`WindowHandle`] this surface was created from, if any.
+    ///
+    /// Retained only to query display HDR info through DXGI on Windows (DXGI is
+    /// an OS service that needs no D3D device). `None` for non-Win32 surfaces
+    /// (Wayland / X11 / Android / Metal), which is also the default. Only called
+    /// on Windows, so it is dead code elsewhere.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    fn raw_window_hwnd(&self) -> Option<WindowHandle> {
+        None
+    }
 
     /// Allows downcasting to the concrete type.
     fn as_any(&self) -> &dyn Any;

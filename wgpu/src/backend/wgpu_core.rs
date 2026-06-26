@@ -3951,6 +3951,12 @@ impl dispatch::SurfaceInterface for CoreSurface {
             .unwrap_or_default()
     }
 
+    fn display_hdr_info(&self, adapter: &dispatch::DispatchAdapter) -> wgt::DisplayHdrInfo {
+        let adapter = adapter.as_core();
+
+        self.context.0.surface_display_hdr_info(self.id, adapter.id)
+    }
+
     fn configure(&self, device: &dispatch::DispatchDevice, config: &crate::SurfaceConfiguration) {
         let device = device.as_core();
 

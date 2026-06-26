@@ -36,6 +36,11 @@ pub trait DynAdapter: DynResource {
 
     unsafe fn surface_capabilities(&self, surface: &dyn DynSurface) -> Option<SurfaceCapabilities>;
 
+    unsafe fn surface_display_hdr_info(
+        &self,
+        surface: &dyn DynSurface,
+    ) -> Option<wgt::DisplayHdrInfo>;
+
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
 
     fn get_ordered_buffer_usages(&self) -> wgt::BufferUses;
@@ -66,6 +71,14 @@ impl<A: Adapter + DynResource> DynAdapter for A {
     unsafe fn surface_capabilities(&self, surface: &dyn DynSurface) -> Option<SurfaceCapabilities> {
         let surface = surface.expect_downcast_ref();
         unsafe { A::surface_capabilities(self, surface) }
+    }
+
+    unsafe fn surface_display_hdr_info(
+        &self,
+        surface: &dyn DynSurface,
+    ) -> Option<wgt::DisplayHdrInfo> {
+        let surface = surface.expect_downcast_ref();
+        unsafe { A::surface_display_hdr_info(self, surface) }
     }
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
