@@ -253,6 +253,22 @@ impl BlockContext<'_> {
         Ok(length_id)
     }
 
+    /// If `sequence` refers to an unbounded binding array global, return its
+    /// layout size from the SPIR-V binding map.
+    fn binding_array_layout_size(&self, sequence: Handle<crate::Expression>) -> Option<u32> {
+        let global_handle = match self.ir_function.expressions[sequence] {
+            crate::Expression::GlobalVariable(handle) => handle,
+            _ => self.ir_function.originating_global(sequence)?,
+        };
+        let global = &self.ir_module.global_variables[global_handle];
+        let crate::TypeInner::BindingArray { .. } = self.ir_module.types[global.ty].inner else {
+            return None;
+        };
+        let binding = global.binding?;
+        let bind_target = self.writer.resolve_resource_binding(&binding).ok()?;
+        bind_target.binding_array_size
+    }
+
     /// Compute the length of a subscriptable value.
     ///
     /// Given `sequence`, an expression referring to some indexable type, return
@@ -273,6 +289,9 @@ impl BlockContext<'_> {
                 Ok(MaybeKnown::Known(known_length))
             }
             Ok(crate::proc::IndexableLength::Dynamic) => {
+                if let Some(size) = self.binding_array_layout_size(sequence) {
+                    return Ok(MaybeKnown::Known(size));
+                }
                 let length_id = self.write_runtime_array_length(sequence, block)?;
                 Ok(MaybeKnown::Computed(length_id))
             }

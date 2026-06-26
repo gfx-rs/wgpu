@@ -11,75 +11,91 @@ struct _5
     uint _m0;
 };
 
-struct _11
+struct _12
 {
     uint _m0;
 };
 
-layout(set = 0, binding = 0, std430) readonly buffer _8_12
+layout(set = 0, binding = 0, std430) readonly buffer _8_13
 {
     uint _m0;
     _5 _m1;
     int _m2[];
-} _12[10];
+} _13[10];
 
-layout(set = 0, binding = 10, std140) uniform _17_16
+layout(set = 0, binding = 1, std430) readonly buffer _10_17
+{
+    uint _m0[];
+} _17;
+
+layout(set = 0, binding = 10, std140) uniform _20_19
 {
     _4 _m0;
-} _16;
+} _19;
 
-layout(location = 0) flat in uint _21;
-layout(location = 0) out uint _24;
+layout(location = 0) flat in uint _24;
+layout(location = 0) out uint _27;
 
 void main()
 {
-    uint _32 = 0u;
-    uint _38 = _11(_21)._m0;
-    _32 += _12[0u]._m0;
-    uint _53;
-    if (_16._m0._m0 < 1u)
+    uint _35 = 0u;
+    uint _41 = _12(_24)._m0;
+    _35 += _13[0u]._m0;
+    uint _56;
+    if (_19._m0._m0 < 10u)
     {
-        _53 = _12[_16._m0._m0]._m0;
+        _56 = _13[_19._m0._m0]._m0;
     }
     else
     {
-        _53 = 0u;
+        _56 = 0u;
     }
-    _32 += _53;
-    uint _61;
-    if (_38 < 1u)
+    _35 += _56;
+    uint _64;
+    if (_41 < 10u)
     {
-        _61 = _12[nonuniformEXT(_38)]._m0;
+        _64 = _13[nonuniformEXT(_41)]._m0;
     }
     else
     {
-        _61 = 0u;
+        _64 = 0u;
     }
-    _32 += _61;
-    _32 += _12[0u]._m1._m0;
-    uint _74;
-    if (_16._m0._m0 < 1u)
+    _35 += _64;
+    _35 += _13[0u]._m1._m0;
+    uint _78;
+    if (_19._m0._m0 < 10u)
     {
-        _74 = _12[_16._m0._m0]._m1._m0;
+        _78 = _13[_19._m0._m0]._m1._m0;
     }
     else
     {
-        _74 = 0u;
+        _78 = 0u;
     }
-    _32 += _74;
-    uint _82;
-    if (_38 < 1u)
+    _35 += _78;
+    uint _86;
+    if (_41 < 10u)
     {
-        _82 = _12[nonuniformEXT(_38)]._m1._m0;
+        _86 = _13[nonuniformEXT(_41)]._m1._m0;
     }
     else
     {
-        _82 = 0u;
+        _86 = 0u;
     }
-    _32 += _82;
-    _32 += uint(_12[0u]._m2.length());
-    _32 += uint(_12[_16._m0._m0]._m2.length());
-    _32 += uint(_12[_38]._m2.length());
-    _24 = _32;
+    _35 += _86;
+    _35 += uint(_13[0u]._m2.length());
+    _35 += uint(_13[_19._m0._m0]._m2.length());
+    _35 += uint(_13[_41]._m2.length());
+    uint _109;
+    if (0u < uint(_17._m0.length()))
+    {
+        _109 = _17._m0[0u];
+    }
+    else
+    {
+        _109 = 0u;
+    }
+    _35 += _109;
+    _35 += uint(_17._m0.length());
+    _27 = _35;
 }
 

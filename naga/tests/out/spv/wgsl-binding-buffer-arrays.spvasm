@@ -1,15 +1,15 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 98
+; Bound: 115
 OpCapability Shader
 OpCapability ShaderNonUniform
 OpExtension "SPV_KHR_storage_buffer_storage_class"
 OpExtension "SPV_EXT_descriptor_indexing"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Fragment %26 "main" %21 %24
-OpExecutionMode %26 OriginUpperLeft
+OpEntryPoint Fragment %29 "main" %24 %27
+OpExecutionMode %29 OriginUpperLeft
 OpMemberDecorate %4 0 Offset 0
 OpMemberDecorate %5 0 Offset 0
 OpDecorate %7 ArrayStride 4
@@ -17,19 +17,25 @@ OpMemberDecorate %8 0 Offset 0
 OpMemberDecorate %8 1 Offset 4
 OpMemberDecorate %8 2 Offset 8
 OpDecorate %8 Block
-OpMemberDecorate %11 0 Offset 0
-OpDecorate %12 NonWritable
-OpDecorate %12 DescriptorSet 0
-OpDecorate %12 Binding 0
-OpDecorate %16 DescriptorSet 0
-OpDecorate %16 Binding 10
-OpDecorate %17 Block
-OpMemberDecorate %17 0 Offset 0
-OpDecorate %21 Location 0
-OpDecorate %21 Flat
+OpDecorate %9 ArrayStride 4
+OpMemberDecorate %10 0 Offset 0
+OpDecorate %10 Block
+OpMemberDecorate %12 0 Offset 0
+OpDecorate %13 NonWritable
+OpDecorate %13 DescriptorSet 0
+OpDecorate %13 Binding 0
+OpDecorate %17 NonWritable
+OpDecorate %17 DescriptorSet 0
+OpDecorate %17 Binding 1
+OpDecorate %19 DescriptorSet 0
+OpDecorate %19 Binding 10
+OpDecorate %20 Block
+OpMemberDecorate %20 0 Offset 0
 OpDecorate %24 Location 0
-OpDecorate %57 NonUniform
-OpDecorate %78 NonUniform
+OpDecorate %24 Flat
+OpDecorate %27 Location 0
+OpDecorate %60 NonUniform
+OpDecorate %82 NonUniform
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 0
 %4 = OpTypeStruct %3
@@ -37,117 +43,139 @@ OpDecorate %78 NonUniform
 %6 = OpTypeInt 32 1
 %7 = OpTypeRuntimeArray %6
 %8 = OpTypeStruct %3 %5 %7
-%10 = OpConstant  %3  1
-%9 = OpTypeArray %8 %10
-%11 = OpTypeStruct %3
-%14 = OpConstant  %3  10
-%13 = OpTypeArray %8 %14
-%15 = OpTypePointer StorageBuffer %13
-%12 = OpVariable  %15  StorageBuffer
-%17 = OpTypeStruct %4
-%18 = OpTypePointer Uniform %17
-%16 = OpVariable  %18  Uniform
-%22 = OpTypePointer Input %3
-%21 = OpVariable  %22  Input
-%25 = OpTypePointer Output %3
-%24 = OpVariable  %25  Output
-%27 = OpTypeFunction %2
-%28 = OpTypePointer Uniform %4
-%29 = OpConstant  %3  0
-%31 = OpTypePointer StorageBuffer %9
-%33 = OpTypePointer Function %3
-%35 = OpTypePointer Uniform %3
-%40 = OpTypePointer StorageBuffer %8
-%41 = OpTypePointer StorageBuffer %3
-%47 = OpTypeBool
-%49 = OpConstantNull  %3
-%64 = OpTypePointer StorageBuffer %5
-%85 = OpTypePointer StorageBuffer %7
-%26 = OpFunction  %2  None %27
-%19 = OpLabel
-%32 = OpVariable  %33  Function %29
-%23 = OpLoad  %3  %21
-%20 = OpCompositeConstruct  %11  %23
-%30 = OpAccessChain  %28  %16 %29
-OpBranch %34
-%34 = OpLabel
-%36 = OpAccessChain  %35  %30 %29
-%37 = OpLoad  %3  %36
-%38 = OpCompositeExtract  %3  %20 0
-%39 = OpLoad  %3  %32
-%42 = OpAccessChain  %41  %12 %29 %29
-%43 = OpLoad  %3  %42
-%44 = OpIAdd  %3  %39 %43
-OpStore %32 %44
-%45 = OpLoad  %3  %32
-%46 = OpULessThan  %47  %37 %10
-OpSelectionMerge %50 None
-OpBranchConditional %46 %51 %50
-%51 = OpLabel
-%48 = OpAccessChain  %41  %12 %37 %29
-%52 = OpLoad  %3  %48
-OpBranch %50
-%50 = OpLabel
-%53 = OpPhi  %3  %49 %34 %52 %51
-%54 = OpIAdd  %3  %45 %53
-OpStore %32 %54
-%55 = OpLoad  %3  %32
-%56 = OpULessThan  %47  %38 %10
-OpSelectionMerge %58 None
-OpBranchConditional %56 %59 %58
-%59 = OpLabel
-%57 = OpAccessChain  %41  %12 %38 %29
-%60 = OpLoad  %3  %57
-OpBranch %58
-%58 = OpLabel
-%61 = OpPhi  %3  %49 %50 %60 %59
-%62 = OpIAdd  %3  %55 %61
-OpStore %32 %62
-%63 = OpLoad  %3  %32
-%65 = OpAccessChain  %41  %12 %29 %10 %29
-%66 = OpLoad  %3  %65
-%67 = OpIAdd  %3  %63 %66
-OpStore %32 %67
-%68 = OpLoad  %3  %32
-%69 = OpULessThan  %47  %37 %10
-OpSelectionMerge %71 None
-OpBranchConditional %69 %72 %71
-%72 = OpLabel
-%70 = OpAccessChain  %41  %12 %37 %10 %29
-%73 = OpLoad  %3  %70
-OpBranch %71
-%71 = OpLabel
-%74 = OpPhi  %3  %49 %58 %73 %72
-%75 = OpIAdd  %3  %68 %74
-OpStore %32 %75
-%76 = OpLoad  %3  %32
-%77 = OpULessThan  %47  %38 %10
-OpSelectionMerge %79 None
-OpBranchConditional %77 %80 %79
-%80 = OpLabel
-%78 = OpAccessChain  %41  %12 %38 %10 %29
-%81 = OpLoad  %3  %78
-OpBranch %79
-%79 = OpLabel
-%82 = OpPhi  %3  %49 %71 %81 %80
-%83 = OpIAdd  %3  %76 %82
-OpStore %32 %83
-%84 = OpLoad  %3  %32
-%86 = OpAccessChain  %40  %12 %29
-%87 = OpArrayLength  %3  %86 2
-%88 = OpIAdd  %3  %84 %87
-OpStore %32 %88
-%89 = OpLoad  %3  %32
-%90 = OpAccessChain  %40  %12 %37
+%9 = OpTypeRuntimeArray %3
+%10 = OpTypeStruct %9
+%11 = OpTypeRuntimeArray %8
+%12 = OpTypeStruct %3
+%15 = OpConstant  %3  10
+%14 = OpTypeArray %8 %15
+%16 = OpTypePointer StorageBuffer %14
+%13 = OpVariable  %16  StorageBuffer
+%18 = OpTypePointer StorageBuffer %10
+%17 = OpVariable  %18  StorageBuffer
+%20 = OpTypeStruct %4
+%21 = OpTypePointer Uniform %20
+%19 = OpVariable  %21  Uniform
+%25 = OpTypePointer Input %3
+%24 = OpVariable  %25  Input
+%28 = OpTypePointer Output %3
+%27 = OpVariable  %28  Output
+%30 = OpTypeFunction %2
+%31 = OpTypePointer Uniform %4
+%32 = OpConstant  %3  0
+%34 = OpTypePointer StorageBuffer %11
+%36 = OpTypePointer Function %3
+%38 = OpTypePointer Uniform %3
+%43 = OpTypePointer StorageBuffer %8
+%44 = OpTypePointer StorageBuffer %3
+%50 = OpTypeBool
+%52 = OpConstantNull  %3
+%67 = OpTypePointer StorageBuffer %5
+%68 = OpConstant  %3  1
+%89 = OpTypePointer StorageBuffer %7
+%102 = OpTypePointer StorageBuffer %9
+%29 = OpFunction  %2  None %30
+%22 = OpLabel
+%35 = OpVariable  %36  Function %32
+%26 = OpLoad  %3  %24
+%23 = OpCompositeConstruct  %12  %26
+%33 = OpAccessChain  %31  %19 %32
+OpBranch %37
+%37 = OpLabel
+%39 = OpAccessChain  %38  %33 %32
+%40 = OpLoad  %3  %39
+%41 = OpCompositeExtract  %3  %23 0
+%42 = OpLoad  %3  %35
+%45 = OpAccessChain  %44  %13 %32 %32
+%46 = OpLoad  %3  %45
+%47 = OpIAdd  %3  %42 %46
+OpStore %35 %47
+%48 = OpLoad  %3  %35
+%49 = OpULessThan  %50  %40 %15
+OpSelectionMerge %53 None
+OpBranchConditional %49 %54 %53
+%54 = OpLabel
+%51 = OpAccessChain  %44  %13 %40 %32
+%55 = OpLoad  %3  %51
+OpBranch %53
+%53 = OpLabel
+%56 = OpPhi  %3  %52 %37 %55 %54
+%57 = OpIAdd  %3  %48 %56
+OpStore %35 %57
+%58 = OpLoad  %3  %35
+%59 = OpULessThan  %50  %41 %15
+OpSelectionMerge %61 None
+OpBranchConditional %59 %62 %61
+%62 = OpLabel
+%60 = OpAccessChain  %44  %13 %41 %32
+%63 = OpLoad  %3  %60
+OpBranch %61
+%61 = OpLabel
+%64 = OpPhi  %3  %52 %53 %63 %62
+%65 = OpIAdd  %3  %58 %64
+OpStore %35 %65
+%66 = OpLoad  %3  %35
+%69 = OpAccessChain  %44  %13 %32 %68 %32
+%70 = OpLoad  %3  %69
+%71 = OpIAdd  %3  %66 %70
+OpStore %35 %71
+%72 = OpLoad  %3  %35
+%73 = OpULessThan  %50  %40 %15
+OpSelectionMerge %75 None
+OpBranchConditional %73 %76 %75
+%76 = OpLabel
+%74 = OpAccessChain  %44  %13 %40 %68 %32
+%77 = OpLoad  %3  %74
+OpBranch %75
+%75 = OpLabel
+%78 = OpPhi  %3  %52 %61 %77 %76
+%79 = OpIAdd  %3  %72 %78
+OpStore %35 %79
+%80 = OpLoad  %3  %35
+%81 = OpULessThan  %50  %41 %15
+OpSelectionMerge %83 None
+OpBranchConditional %81 %84 %83
+%84 = OpLabel
+%82 = OpAccessChain  %44  %13 %41 %68 %32
+%85 = OpLoad  %3  %82
+OpBranch %83
+%83 = OpLabel
+%86 = OpPhi  %3  %52 %75 %85 %84
+%87 = OpIAdd  %3  %80 %86
+OpStore %35 %87
+%88 = OpLoad  %3  %35
+%90 = OpAccessChain  %43  %13 %32
 %91 = OpArrayLength  %3  %90 2
-%92 = OpIAdd  %3  %89 %91
-OpStore %32 %92
-%93 = OpLoad  %3  %32
-%94 = OpAccessChain  %40  %12 %38
+%92 = OpIAdd  %3  %88 %91
+OpStore %35 %92
+%93 = OpLoad  %3  %35
+%94 = OpAccessChain  %43  %13 %40
 %95 = OpArrayLength  %3  %94 2
 %96 = OpIAdd  %3  %93 %95
-OpStore %32 %96
-%97 = OpLoad  %3  %32
-OpStore %24 %97
+OpStore %35 %96
+%97 = OpLoad  %3  %35
+%98 = OpAccessChain  %43  %13 %41
+%99 = OpArrayLength  %3  %98 2
+%100 = OpIAdd  %3  %97 %99
+OpStore %35 %100
+%101 = OpLoad  %3  %35
+%103 = OpArrayLength  %3  %17 0
+%104 = OpULessThan  %50  %32 %103
+OpSelectionMerge %106 None
+OpBranchConditional %104 %107 %106
+%107 = OpLabel
+%105 = OpAccessChain  %44  %17 %32 %32
+%108 = OpLoad  %3  %105
+OpBranch %106
+%106 = OpLabel
+%109 = OpPhi  %3  %52 %83 %108 %107
+%110 = OpIAdd  %3  %101 %109
+OpStore %35 %110
+%111 = OpLoad  %3  %35
+%112 = OpArrayLength  %3  %17 0
+%113 = OpIAdd  %3  %111 %112
+OpStore %35 %113
+%114 = OpLoad  %3  %35
+OpStore %27 %114
 OpReturn
 OpFunctionEnd
