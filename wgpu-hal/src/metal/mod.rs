@@ -1288,6 +1288,8 @@ struct Temp {
     binding_sizes: Vec<u32>,
 }
 
+// Any state in this struct that may be dirty after an abandoned encoding must
+// be reset in `discard_encoding` for possible encoder reuse.
 struct CommandState {
     blit: Option<Retained<ProtocolObject<dyn MTLBlitCommandEncoder>>>,
     acceleration_structure_builder:
@@ -1327,6 +1329,8 @@ struct CommandState {
     pending_timer_queries: Vec<(QuerySet, u32)>,
 }
 
+// Any state in this struct that may be dirty after an abandoned encoding must
+// be reset in `discard_encoding` for possible encoder reuse.
 pub struct CommandEncoder {
     shared: Arc<AdapterShared>,
     queue_shared: Arc<QueueShared>,
