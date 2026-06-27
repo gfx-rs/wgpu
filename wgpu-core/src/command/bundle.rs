@@ -634,10 +634,15 @@ impl RenderBundleEncoder {
         });
     }
 
-    pub fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+    pub fn set_immediates(&mut self, offset: u32, data_bytes: &[u8]) {
+        assert!(data_bytes.len().is_multiple_of(4));
+        // `bytemuck::cast_slice` panics when input is empty.
+        if data_bytes.is_empty() {
+            return;
+        }
         self.base.commands.push(RenderCommand::SetImmediate {
             offset,
-            data: data.to_vec(),
+            data: bytemuck::cast_slice(data_bytes).to_vec(),
         });
     }
 
@@ -917,13 +922,13 @@ fn set_vertex_buffer(
 fn set_immediates(
     state: &mut State,
     offset: u32,
-    data_bytes: &[u8],
+    data: &[u32],
 ) -> Result<(), ImmediateUploadError> {
-    validate_immediates_alignment(offset, data_bytes.len())?;
+    validate_immediates_alignment(offset, size_of_val(data))?;
 
     state
         .immediate_state
-        .set_immediates::<ImmediateUploadError>(&state.device.limits, offset, data_bytes)?;
+        .set_immediates::<ImmediateUploadError>(&state.device.limits, offset, data)?;
     Ok(())
 }
 
@@ -1272,13 +1277,7 @@ impl RenderBundle {
                     let pipeline_layout = pipeline_layout.as_ref().unwrap();
 
                     // SAFETY: The range of immediates written was validated in `is_ready` before each `flush_immediates`.
-                    unsafe {
-                        raw.set_immediates(
-                            pipeline_layout.raw(),
-                            *offset,
-                            bytemuck::cast_slice(data),
-                        )
-                    }
+                    unsafe { raw.set_immediates(pipeline_layout.raw(), *offset, data) }
                 }
                 Cmd::Draw {
                     vertex_count,
@@ -1531,7 +1530,7 @@ impl State {
         if !self.immediate_state.immediates.is_empty() && self.immediate_state.immediates_dirty {
             self.commands.push(ArcRenderCommand::SetImmediate {
                 offset: 0,
-                data: bytemuck::cast_slice(&self.immediate_state.immediates).to_vec(),
+                data: self.immediate_state.immediates.clone(),
             });
             self.immediate_state.immediates_dirty = false;
         }

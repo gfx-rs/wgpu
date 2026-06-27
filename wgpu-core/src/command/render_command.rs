@@ -51,7 +51,7 @@ pub enum RenderCommand<R: ReferenceType> {
         offset: u32,
 
         /// The immediate data to be written.
-        data: Vec<u8>,
+        data: Vec<u32>,
     },
     Draw {
         vertex_count: u32,

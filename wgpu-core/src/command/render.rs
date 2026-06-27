@@ -3733,7 +3733,7 @@ impl Global {
         &self,
         pass: &mut RenderPass,
         offset: u32,
-        data: &[u8],
+        data_bytes: &[u8],
     ) -> Result<(), PassStateError> {
         let scope = PassErrorScope::SetImmediate;
         let base = pass_base!(pass, scope);
@@ -3741,12 +3741,16 @@ impl Global {
         pass_try!(
             base,
             scope,
-            pass::validate_immediates_alignment(offset, data.len())
+            pass::validate_immediates_alignment(offset, data_bytes.len())
         );
 
+        // `bytemuck::cast_slice` panics when input is empty.
+        if data_bytes.is_empty() {
+            return Ok(());
+        }
         base.commands.push(ArcRenderCommand::SetImmediate {
             offset,
-            data: data.to_vec(),
+            data: bytemuck::cast_slice(data_bytes).to_vec(),
         });
 
         Ok(())

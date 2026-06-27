@@ -26,7 +26,7 @@ pub enum ComputeCommand<R: ReferenceType> {
         offset: u32,
 
         /// The immediate data to be written.
-        data: Vec<u8>,
+        data: Vec<u32>,
     },
 
     DispatchWorkgroups([u32; 3]),

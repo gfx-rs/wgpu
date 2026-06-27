@@ -741,10 +741,7 @@ pub(super) fn encode_compute_pass(
                 let scope = PassErrorScope::SetPipelineCompute;
                 set_pipeline(&mut state, device, pipeline).map_pass_err(scope)?;
             }
-            ArcComputeCommand::SetImmediate {
-                offset,
-                data: data_bytes,
-            } => {
+            ArcComputeCommand::SetImmediate { offset, data } => {
                 let scope = PassErrorScope::SetImmediate;
                 state
                     .pass
@@ -752,7 +749,7 @@ pub(super) fn encode_compute_pass(
                     .set_immediates::<ComputePassErrorInner>(
                         &state.pass.base.device.limits,
                         offset,
-                        &data_bytes,
+                        &data,
                     )
                     .map_pass_err(scope)?;
             }
@@ -1216,7 +1213,7 @@ impl Global {
         &self,
         pass: &mut ComputePass,
         offset: u32,
-        data: &[u8],
+        data_bytes: &[u8],
     ) -> Result<(), PassStateError> {
         let scope = PassErrorScope::SetImmediate;
         let base = pass_base!(pass, scope);
@@ -1224,12 +1221,16 @@ impl Global {
         pass_try!(
             base,
             scope,
-            pass::validate_immediates_alignment(offset, data.len())
+            pass::validate_immediates_alignment(offset, data_bytes.len())
         );
 
+        // `bytemuck::cast_slice` panics when input is empty.
+        if data_bytes.is_empty() {
+            return Ok(());
+        }
         base.commands.push(ArcComputeCommand::SetImmediate {
             offset,
-            data: data.to_vec(),
+            data: bytemuck::cast_slice(data_bytes).to_vec(),
         });
 
         Ok(())

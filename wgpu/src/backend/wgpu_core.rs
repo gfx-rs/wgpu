@@ -3852,6 +3852,19 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     }
 
     fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        if !data
+            .len()
+            .is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
+        {
+            self.context.handle_error(
+                &self.error_sink,
+                wgc::binding_model::ImmediateUploadError::SizeUnaligned(data.len()),
+                self.encoder.label(),
+                "RenderBundleEncoder::set_immediates",
+            );
+            return;
+        }
+
         self.context
             .0
             .render_bundle_encoder_set_immediates(&mut self.encoder, offset, data);

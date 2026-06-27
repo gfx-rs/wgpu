@@ -44,7 +44,7 @@ impl ImmediateState {
         &mut self,
         limits: &wgt::Limits,
         offset_bytes: u32,
-        data_bytes: &[u8],
+        data: &[u32],
     ) -> Result<(), E>
     where
         E: From<ImmediateUploadError>,
@@ -52,28 +52,31 @@ impl ImmediateState {
         // Alignment has been validated when pushing `SetImmediate` commands.
 
         let offset_bytes_usize = offset_bytes as usize;
-        if data_bytes
+        let end_offset_beyond_limit_error = ImmediateUploadError::EndOffsetBeyondLimit {
+            start_offset: offset_bytes,
+            slots: data.len(),
+            limit: limits.max_immediate_size,
+        };
+        let data_bytes = data
             .len()
+            .checked_mul(size_of::<u32>())
+            .ok_or(end_offset_beyond_limit_error.clone())?;
+        if data_bytes
             .checked_add(offset_bytes_usize)
             .is_none_or(|end_offset| end_offset > limits.max_immediate_size as usize)
         {
-            return Err(ImmediateUploadError::EndOffsetBeyondLimit {
-                start_offset: offset_bytes,
-                size: data_bytes.len(),
-                limit: limits.max_immediate_size,
-            }
-            .into());
+            return Err(end_offset_beyond_limit_error.into());
         }
 
-        let end_offset_bytes = offset_bytes_usize + data_bytes.len();
+        let end_offset_bytes = offset_bytes_usize + data_bytes;
         let size_per_elem = size_of::<u32>();
         if self.immediates.len() < end_offset_bytes / size_per_elem {
             self.immediates.resize(end_offset_bytes / size_per_elem, 0);
         }
         self.immediates[offset_bytes_usize / size_per_elem..end_offset_bytes / size_per_elem]
-            .copy_from_slice(bytemuck::cast_slice(data_bytes));
+            .copy_from_slice(data);
         self.immediate_slots_set |=
-            naga::valid::ImmediateSlots::from_range(offset_bytes, data_bytes.len() as u32);
+            naga::valid::ImmediateSlots::from_range(offset_bytes, data_bytes as u32);
         self.immediates_dirty = true;
 
         Ok(())
