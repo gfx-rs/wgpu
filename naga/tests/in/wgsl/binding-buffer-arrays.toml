@@ -8,6 +8,7 @@ capabilities = """
 index = "ReadZeroSkipWrite"
 buffer = "ReadZeroSkipWrite"
 image = "ReadZeroSkipWrite"
+binding_array = "ReadZeroSkipWrite"
 
 [msl]
 fake_missing_bindings = true

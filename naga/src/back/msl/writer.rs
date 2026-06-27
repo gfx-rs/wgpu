@@ -1666,6 +1666,22 @@ impl<W: Write> Writer<W> {
         from_shader.max(from_layout).max(1)
     }
 
+    fn put_binding_array_size_member_index(
+        &mut self,
+        index: index::GuardedIndex,
+        context: &ExpressionContext,
+    ) -> BackendResult {
+        match index {
+            index::GuardedIndex::Expression(expr) => {
+                write!(self.out, "unsigned(")?;
+                self.put_expression(expr, context, true)?;
+                write!(self.out, ")")?;
+            }
+            index::GuardedIndex::Known(value) => write!(self.out, "{value}u")?,
+        }
+        Ok(())
+    }
+
     fn put_dynamic_array_max_index(
         &mut self,
         handle: Handle<crate::GlobalVariable>,
@@ -3303,13 +3319,16 @@ impl<W: Write> Writer<W> {
                     ) {
                         write!(
                             self.out,
-                            "{}",
+                            "{} && _buffer_sizes.{}[",
                             Self::binding_array_layout_count(
                                 context.module,
                                 context.pipeline_options,
                                 global,
-                            )
+                            ),
+                            ArraySizeMember(global),
                         )?;
+                        self.put_binding_array_size_member_index(index, context)?;
+                        write!(self.out, "] != 0u")?;
                     } else {
                         write!(self.out, "1 + ")?;
                         self.put_dynamic_array_max_index(global, base, context)?
