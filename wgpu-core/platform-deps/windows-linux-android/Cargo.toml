@@ -28,3 +28,6 @@ drm = ["wgpu-hal/drm"]
 # Depend on wgpu-hal conditionally, so that the above features only apply to wgpu-hal on this set of platforms.
 [target.'cfg(any(windows, target_os = "linux", target_os = "android", target_os = "freebsd", target_os = "netbsd"))'.dependencies]
 wgpu-hal.workspace = true
+
+[lints]
+workspace = true

@@ -410,17 +410,48 @@ impl crate::Adapter for super::Adapter {
         &self,
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
+        // `CAMetalLayer` color-matches layer contents to whatever display the
+        // window is on, with the compositor tone-mapping where needed, so
+        // Display-P3 and HDR (PQ/HLG) color spaces work regardless of the
+        // physical display's gamut and are not gated on it here.
+        let format_caps = |format: wgt::TextureFormat| {
+            let mut color_spaces =
+                wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::DISPLAY_P3;
+            if format == wgt::TextureFormat::Rgba16Float {
+                // `Rgba16Float` enables Metal's extended dynamic range, in both
+                // linear (scRGB) and encoded (extended nonlinear sRGB) form,
+                // for the BT.709 and Display-P3 gamuts.
+                color_spaces |= wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR
+                    | wgt::SurfaceColorSpaces::EXTENDED_SRGB
+                    | wgt::SurfaceColorSpaces::EXTENDED_DISPLAY_P3;
+            }
+            // PQ/HLG only on the >=10-bit formats: 8-bit PQ would result in unusable
+            // banding. The ITUR_2100 color space constants require
+            // macOS 11.0/iOS 14.0.
+            if matches!(
+                format,
+                wgt::TextureFormat::Rgba16Float | wgt::TextureFormat::Rgb10a2Unorm
+            ) && available!(macos = 11.0, ios = 14.0, tvos = 14.0, visionos = 1.0)
+            {
+                color_spaces |=
+                    wgt::SurfaceColorSpaces::BT2100_PQ | wgt::SurfaceColorSpaces::BT2100_HLG;
+            }
+            wgt::SurfaceFormatCapabilities {
+                format,
+                color_spaces,
+            }
+        };
         let mut formats = vec![
-            wgt::TextureFormat::Bgra8Unorm,
-            wgt::TextureFormat::Bgra8UnormSrgb,
-            wgt::TextureFormat::Rgba16Float,
+            format_caps(wgt::TextureFormat::Bgra8Unorm),
+            format_caps(wgt::TextureFormat::Bgra8UnormSrgb),
+            format_caps(wgt::TextureFormat::Rgba16Float),
         ];
         if self
             .shared
             .private_texture_format_caps
             .format_rgb10a2_unorm_all
         {
-            formats.push(wgt::TextureFormat::Rgb10a2Unorm);
+            formats.push(format_caps(wgt::TextureFormat::Rgb10a2Unorm));
         }
 
         Some(crate::SurfaceCapabilities {
@@ -1423,6 +1454,9 @@ impl super::CapabilitiesQuery {
             max_mesh_output_primitives: 256,
             max_mesh_output_layers: self.max_texture_layers as u32,
             max_mesh_multiview_view_count: 0,
+            // unimplemented
+            max_ray_dispatch_count: 0,
+            max_ray_recursion_depth: 0,
         });
 
         crate::Capabilities {
@@ -1439,6 +1473,10 @@ impl super::CapabilitiesQuery {
                 >())
                 .unwrap(),
                 ray_tracing_scratch_buffer_alignment: 1,
+                // Not yet supported
+                ray_tracing_pipeline_group_data_size: 0,
+                ray_tracing_pipeline_group_data_alignment: 0,
+                ray_tracing_pipeline_data_offset_alignment: 0,
             },
             downlevel,
             cooperative_matrix_properties: self.cooperative_matrix_properties(),

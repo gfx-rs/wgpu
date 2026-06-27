@@ -2193,6 +2193,29 @@ impl crate::Device for super::Device {
         self.counters.compute_pipelines.sub(1);
     }
 
+    unsafe fn create_ray_tracing_pipeline(
+        &self,
+        _desc: &crate::RayTracingPipelineDescriptor<
+            super::PipelineLayout,
+            super::ShaderModule,
+            super::PipelineCache,
+        >,
+    ) -> Result<<Self::A as crate::Api>::RayTracingPipeline, crate::PipelineError> {
+        unreachable!("ray tracing pipelines not yet implemented")
+    }
+
+    unsafe fn destroy_ray_tracing_pipeline(&self, _pipeline: super::RayTracingPipeline) {
+        unreachable!("ray tracing pipelines not yet implemented")
+    }
+
+    unsafe fn get_raytracing_pipeline_group_data(
+        &self,
+        _pipeline: &super::RayTracingPipeline,
+        _groups: core::ops::Range<u32>,
+    ) -> Result<Vec<u8>, crate::DeviceError> {
+        unimplemented!("ray tracing pipelines not yet implemented")
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         _desc: &crate::PipelineCacheDescriptor<'_>,
@@ -2576,7 +2599,7 @@ impl crate::Device for super::Device {
         let temp = Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC {
             Transform: instance.transform,
             _bitfield1: (instance.custom_data & MAX_U24) | (u32::from(instance.mask) << 24),
-            _bitfield2: 0,
+            _bitfield2: (instance.pipeline_intersection_data_offset & MAX_U24),
             AccelerationStructure: instance.blas_address,
         };
 

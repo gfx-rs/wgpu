@@ -279,3 +279,6 @@ bytemuck.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
+
+[lints]
+workspace = true

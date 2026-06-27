@@ -58,6 +58,11 @@ impl Surface<'_> {
 
     /// Return a default `SurfaceConfiguration` from width and height to use for the [`Surface`] with this adapter.
     ///
+    /// The returned configuration requests the surface's preferred format and
+    /// [`SurfaceColorSpace::Auto`], reproducing wgpu's historical SDR / standard
+    /// behavior. Set the `color_space` field to opt into wide-gamut or HDR
+    /// output; see [`SurfaceColorSpace`] for what each color space means.
+    ///
     /// Returns None if the surface isn't supported by this adapter
     pub fn get_default_config(
         &self,
@@ -69,6 +74,7 @@ impl Surface<'_> {
         Some(SurfaceConfiguration {
             usage: wgt::TextureUsages::RENDER_ATTACHMENT,
             format: *caps.formats.first()?,
+            color_space: wgt::SurfaceColorSpace::Auto,
             width,
             height,
             desired_maximum_frame_latency: 2,
@@ -91,6 +97,8 @@ impl Surface<'_> {
     ///
     /// - An old [`SurfaceTexture`] is still alive referencing an old surface.
     /// - Texture format requested is unsupported on the surface.
+    /// - The requested color space is unsupported for the requested format
+    ///   (see [`SurfaceCapabilities::format_capabilities`]).
     /// - `config.width` or `config.height` is zero.
     pub fn configure(&self, device: &Device, config: &SurfaceConfiguration) {
         self.inner.configure(&device.inner, config);
@@ -102,6 +110,11 @@ impl Surface<'_> {
     /// Returns the current configuration of [`Surface`], if configured.
     ///
     /// This is similar to [WebGPU `GPUcCanvasContext::getConfiguration`](https://gpuweb.github.io/gpuweb/#dom-gpucanvascontext-getconfiguration).
+    ///
+    /// Note that this returns the configuration as passed to
+    /// [`Surface::configure`]: automatic values such as
+    /// [`SurfaceColorSpace::Auto`] are returned as-is, not as the concrete
+    /// values they resolved to.
     pub fn get_configuration(&self) -> Option<SurfaceConfiguration> {
         self.config.lock().clone()
     }
@@ -311,6 +324,21 @@ pub enum SurfaceTarget<'window> {
     OffscreenCanvas(web_sys::OffscreenCanvas),
 }
 
+impl fmt::Debug for SurfaceTarget<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::DisplayAndWindow(_) => f.debug_tuple("DisplayAndWindow").finish_non_exhaustive(),
+            Self::Window(_) => f.debug_tuple("Window").finish_non_exhaustive(),
+            #[cfg(web)]
+            Self::Canvas(canvas) => f.debug_tuple("Canvas").field(canvas).finish(),
+            #[cfg(web)]
+            Self::OffscreenCanvas(canvas) => {
+                f.debug_tuple("OffscreenCanvas").field(canvas).finish()
+            }
+        }
+    }
+}
+
 impl<'a> SurfaceTarget<'a> {
     /// Constructor for [`Self::Window`] without consuming a display handle
     pub fn from_window_without_display(window: impl WindowHandle + 'a) -> Self {
@@ -335,6 +363,7 @@ where
 ///
 /// See also [`SurfaceTarget`] for safe variants.
 #[non_exhaustive]
+#[derive(Debug)]
 pub enum SurfaceTargetUnsafe {
     /// Raw window & display handle.
     ///

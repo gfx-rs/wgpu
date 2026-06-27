@@ -17,6 +17,7 @@ be cloned out of the repository to serve as a starting point for your own projec
 | ---                                              | Introductory Examples                                                                                         | ---         |
 | [1. hello compute](standalone/01_hello_compute/) | Simplest example and shows how to run a compute shader on a given set of input data and get the results back. | Native-Only |
 | [2. hello window](standalone/02_hello_window/)   | Shows how to create a window and render into it.                                                              | Native-Only |
+| [3. hdr surface](standalone/03_hdr_surface/)     | Prints a surface's (format, color space) capabilities and renders an HDR luminance test pattern.              | All         |
 | ---                                              | Special Examples                                                                                              | ---         |
 | [custom backend](standalone/custom_backend/)     | Shows how to implement and use custom wgpu context                                                            | All         |
 

@@ -36,6 +36,46 @@ Before a [`Tlas`] is used in a shader it must
 - have all [`Blas`]es that it was last built with to have last been built in either the same build as
   this [`Tlas`] or an earlier build call.
 
+### [`Blas`]es and [`Tlas`]es
+
+Both acceleration structures are opaque objects. These objects typically (but are not guaranteed to)
+contain a tree-like structure of objects that are quick to be intersected with rays (as of 2026, these
+are usually axis-aligned bounding boxes) and contain two or more "branches" (these objects) and "leaves".
+For a [`Tlas`] these "leaves" are references to the [`Blas`] (not copies, hence a [`Tlas`] must be rebuild after
+any [`Blas`] it is storing is modified). For a [`Blas`] with triangle geometry the "leaves" are triangles. For
+a [`Blas`] with AABBs, the "leaves" might not exist or might contain only a small amount of information. This is
+because there is no requirement to store the AABBs as this might require a third intersection type. However,
+the "branches" will probably be fairly closely approximating the AABBs to maintain fairly good trace performance.
+
+#### Building
+
+Building an acceleration structure is a slow operation as it is likely to require building a tree-like structure.
+This happens on the GPU and can be encoded using [`CommandEncoder::build_acceleration_structures`].
+
+For [`Blas`]es with triangle geometry, this will copy the triangles out of the vertex buffer (using indexing if
+provided), multiply them by the geometry transform matrix (if provided), and store a representation of this
+somewhere in the structure to be traced against (and computes surrounding objects for sets of triangles, repeating
+the process for objects of the surrounding objects etc. if the implementation uses a tree-like structure).
+
+For [`Blas`]es with AABB geometry, this will construct object(s) in such a way that all possible rays will generate
+a candidate intersection that would have generated a candidate intersection with the AABBs. Note that this may be
+(though is very unlikely to be) a volume containing all space. (These may then have objects constructed around them
+if the implementation has a tree-like structure.)
+
+For [`Tlas`]es, these will store references to the [`Blas`]es within the [`TlasInstance`]s as well as transforms,
+masks, and any other information required. (These [`Blas`]es then may have objects constructed around their transformed
+positions if the implementation uses a tree-like structure.) `wgpu` will store references to the [`Blas`]es to keep
+them within device memory and alive while the [`Tlas`] uses them. However, if you use functions to build it using
+the underlying functions (e.g. by using `as_hal` functions), you are responsible for keeping the [`Blas`]es alive.
+
+Some memory is allocated when building to be "scratch" data (a temporary buffer used by the GPU to store data during
+the build) and instance staging memory (to copy the instances to the GPU). The some of this can be reused for between
+the [`Blas`] and [`Tlas`] builds so in general it is advisable to try and integrate the builds together. Because
+building is slow, it should be done as few times as possible. For moving geometry (players, particles, etc.), use
+[`PREFER_FAST_BUILD`](https://wgpu.rs/doc/wgpu_hal/struct.AccelerationStructureBuildFlags.html#associatedconstant.PREFER_FAST_BUILD)
+to speed up builds. Updating (performing a partial rebuild) is currently unsupported, but may be implemented in the
+future. You should compact any geometry which will not change (e.g. static level geometry) once it has been built.
+
 ### [`Blas`] compaction
 
 Once a [`Blas`] has been built, it can be compacted. Acceleration structures are allocated conservatively, without
@@ -85,6 +125,7 @@ fn render(/*whatever args you need to render*/) {
 ```
 
 [`Device::create_blas`]: https://wgpu.rs/doc/wgpu/struct.Device.html#method.create_blas
+[`CommandEncoder::build_acceleration_structures`]: https://wgpu.rs/doc/wgpu/struct.CommandEncoder.html#method.build_acceleration_structures
 [`Device::create_tlas`]: https://wgpu.rs/doc/wgpu/struct.Device.html#method.create_tlas
 [`Tlas`]: https://wgpu.rs/doc/wgpu/struct.Tlas.html
 [`Blas`]: https://wgpu.rs/doc/wgpu/struct.Blas.html
@@ -134,11 +175,44 @@ rayQueryConfirmIntersection()
 rayQueryTerminate(rq: ptr<function, ray_query>)
 
 // - Returns intersection details about a hit considered `Committed`.
+//
+// Depending on what type is hit, different fields will be populated. `RayIntersection::kind` is always populated
+// with the kind of hit.
+// - The following fields are populated if the closest hit was any object.
+//    - t
+//    - instance_custom_data
+//    - instance_index
+//    - sbt_record_offset
+//    - geometry_index
+//    - primitive_index
+//    - object_to_world
+//    - world_to_object
+// - The following fields are populated if the closest hit is was a triangle.
+//    - barycentrics
+//    - front_face
 rayQueryGetCommittedIntersection(rq: ptr<function, ray_query>) -> RayIntersection
 // Overload.
 rayQueryGetCommittedIntersection(rq: ptr<function, ray_query<vertex_return>>) -> RayIntersection
 
 // - Returns intersection details about a hit considered `Candidate`.
+//
+// Depending on what type is hit, different fields will be populated. `RayIntersection::kind` is always populated
+// with the kind of hit.
+// - The following fields are populated if the closest hit was any object.
+//    - instance_custom_data
+//    - instance_index
+//    - sbt_record_offset
+//    - geometry_index
+//    - primitive_index
+//    - object_to_world
+//    - world_to_object
+// - The following fields are populated if the closest hit is was a triangle.
+//    - t
+//    - barycentrics
+//    - front_face
+//
+// Note that `t` is *only* returned for a candidate triangle intersection. This is because
+// `RAY_QUERY_INTERSECTION_AABB` is an AABB which has a volume.
 rayQueryGetCandidateIntersection(rq: ptr<function, ray_query>) -> RayIntersection
 // Overload.
 rayQueryGetCandidateIntersection(rq: ptr<function, ray_query<vertex_return>>) -> RayIntersection

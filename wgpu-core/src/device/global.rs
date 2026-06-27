@@ -31,7 +31,7 @@ use crate::{
 
 use wgt::{BufferAddress, TextureFormat};
 
-use super::UserClosures;
+use super::{surface_config, UserClosures};
 
 impl Global {
     pub fn adapter_is_surface_supported(
@@ -53,12 +53,26 @@ impl Global {
         self.fetch_adapter_and_surface::<_, _>(surface_id, adapter_id, |adapter, surface| {
             let mut hal_caps = surface.get_capabilities(adapter)?;
 
-            hal_caps.formats.sort_by_key(|f| !f.is_srgb());
+            hal_caps.formats.sort_by_key(|fc| !fc.format.is_srgb());
 
             let usages = conv::map_texture_usage_from_hal(hal_caps.usage);
 
+            // `SurfaceCapabilities::formats` lists only the formats a
+            // color-space-unaware application can configure via
+            // `SurfaceColorSpace::Auto`, i.e. those for which `Auto` resolves to a
+            // concrete color space. (The full `format_capabilities` still reports
+            // every color space, including HDR ones, for explicit opt-in.)
             Ok(wgt::SurfaceCapabilities {
-                formats: hal_caps.formats,
+                formats: hal_caps
+                    .formats
+                    .iter()
+                    .filter(|fc| {
+                        surface_config::resolve_auto_color_space(fc.format, fc.color_spaces)
+                            .is_some()
+                    })
+                    .map(|fc| fc.format)
+                    .collect(),
+                format_capabilities: hal_caps.formats,
                 present_modes: hal_caps.present_modes,
                 alpha_modes: hal_caps.composite_alpha_modes,
                 usages,
@@ -201,11 +215,14 @@ impl Global {
     /// See [`Self::create_buffer_error`] for more context and explanation.
     pub fn create_texture_error(
         &self,
+        device_id: DeviceId,
         id_in: Option<id::TextureId>,
         desc: &resource::TextureDescriptor,
-    ) {
+    ) -> id::TextureId {
         let fid = self.hub.textures.prepare(id_in);
-        fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
+        let device = self.hub.devices.get(device_id);
+        let texture = device.create_texture_error(desc);
+        fid.assign(texture)
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -291,30 +308,13 @@ impl Global {
 
         let fid = hub.textures.prepare(id_in);
 
-        let error = 'error: {
-            let device = self.hub.devices.get(device_id);
+        let device = self.hub.devices.get(device_id);
 
-            let texture = match device.create_texture(desc) {
-                Ok(texture) => texture,
-                Err(error) => break 'error error,
-            };
+        let (texture, error) = device.create_texture(desc);
 
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateTexture(
-                    texture.to_trace(),
-                    desc.clone(),
-                ));
-            }
+        let id = fid.assign(texture);
 
-            let id = fid.assign(Fallible::Valid(texture));
-            api_log!("Device::create_texture({desc:?}) -> {id:?}");
-
-            return (id, None);
-        };
-
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-        (id, Some(error))
+        (id, error)
     }
 
     /// # Safety
@@ -338,9 +338,9 @@ impl Global {
 
         let fid = hub.textures.prepare(id_in);
 
-        let error = 'error: {
-            let device = self.hub.devices.get(device_id);
+        let device = self.hub.devices.get(device_id);
 
+        let error = 'error: {
             let texture = match device.create_texture_from_hal(hal_texture, desc, initial_state) {
                 Ok(texture) => texture,
                 Err(error) => break 'error error,
@@ -356,13 +356,13 @@ impl Global {
                 ));
             }
 
-            let id = fid.assign(Fallible::Valid(texture));
+            let id = fid.assign(texture);
             api_log!("Device::create_texture({desc:?}) -> {id:?}");
 
             return (id, None);
         };
 
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
+        let id = fid.assign(Arc::new(resource::Texture::invalid(&device, desc)));
         (id, Some(error))
     }
 
@@ -412,10 +412,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let Ok(texture) = hub.textures.get(texture_id).get() else {
-            // If the texture is already invalid, there's nothing to do.
-            return;
-        };
+        let texture = hub.textures.get(texture_id);
 
         #[cfg(feature = "trace")]
         if let Some(trace) = texture.device.trace.lock().as_mut() {
@@ -431,13 +428,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _texture = hub.textures.remove(texture_id);
-        #[cfg(feature = "trace")]
-        if let Ok(texture) = _texture.get() {
-            if let Some(t) = texture.device.trace.lock().as_mut() {
-                t.add(trace::Action::DropTexture(texture.to_trace()));
-            }
-        }
+        hub.textures.remove(texture_id);
     }
 
     pub fn texture_create_view(
@@ -453,10 +444,7 @@ impl Global {
         let fid = hub.texture_views.prepare(id_in);
 
         let error = 'error: {
-            let texture = match hub.textures.get(texture_id).get() {
-                Ok(texture) => texture,
-                Err(e) => break 'error e.into(),
-            };
+            let texture = hub.textures.get(texture_id);
             let device = &texture.device;
 
             let view = match device.create_texture_view(&texture, desc) {

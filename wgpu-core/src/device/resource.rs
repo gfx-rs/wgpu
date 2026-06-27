@@ -60,8 +60,8 @@ use crate::{
 };
 
 use super::{
-    queue::Queue, DeviceDescriptor, DeviceError, DeviceLostClosure, UserClosures,
-    ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
+    queue::Queue, surface_config::validate_surface_configuration, DeviceDescriptor, DeviceError,
+    DeviceLostClosure, UserClosures, ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
 };
 
 #[cfg(supports_64bit_atomics)]
@@ -1373,7 +1373,7 @@ impl Device {
         }
     }
 
-    pub fn create_texture(
+    fn create_texture_inner(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
@@ -1748,6 +1748,52 @@ impl Device {
         Ok(texture)
     }
 
+    pub fn create_texture(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+    ) -> (Arc<Texture>, Option<resource::CreateTextureError>) {
+        let (texture, error) = match self.create_texture_inner(desc) {
+            Ok(texture) => (texture, None),
+            Err(e) => {
+                let texture = Texture::invalid(self, desc);
+                (Arc::new(texture), Some(e))
+            }
+        };
+        api_log!(
+            "Device::create_texture({desc:?}) -> {:?}",
+            Arc::as_ptr(&texture)
+        );
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace::IntoTrace as _;
+
+            trace.add(trace::Action::CreateTexture(
+                texture.to_trace(),
+                desc.clone(),
+            ));
+        }
+        (texture, error)
+    }
+
+    /// Creates a texture that is guaranteed to be invalid
+    pub fn create_texture_error(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+    ) -> Arc<Texture> {
+        let texture = Arc::new(Texture::invalid(self, desc));
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace::IntoTrace as _;
+
+            trace.add(trace::Action::CreateTextureError(
+                texture.to_trace(),
+                desc.clone(),
+            ));
+        }
+        texture
+    }
+
     pub fn create_texture_view(
         self: &Arc<Self>,
         texture: &Arc<Texture>,
@@ -1757,7 +1803,7 @@ impl Device {
 
         let snatch_guard = texture.device.snatchable_lock.read();
 
-        let texture_raw = texture.try_raw(&snatch_guard)?;
+        let texture_raw = texture.try_inner(&snatch_guard)?.raw();
 
         // resolve TextureViewDescriptor defaults
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureviewdescriptor-defaults
@@ -5086,118 +5132,6 @@ impl Device {
         use present::ConfigureSurfaceError as E;
         profiling::scope!("surface_configure");
 
-        fn validate_surface_configuration(
-            config: &mut hal::SurfaceConfiguration,
-            caps: &hal::SurfaceCapabilities,
-            max_texture_dimension_2d: u32,
-        ) -> Result<(), E> {
-            let width = config.extent.width;
-            let height = config.extent.height;
-
-            if width > max_texture_dimension_2d || height > max_texture_dimension_2d {
-                return Err(E::TooLarge {
-                    width,
-                    height,
-                    max_texture_dimension_2d,
-                });
-            }
-
-            if !caps.present_modes.contains(&config.present_mode) {
-                // Automatic present mode checks.
-                //
-                // The "Automatic" modes are never supported by the backends.
-                let fallbacks = match config.present_mode {
-                    wgt::PresentMode::AutoVsync => {
-                        &[wgt::PresentMode::FifoRelaxed, wgt::PresentMode::Fifo][..]
-                    }
-                    // Always end in FIFO to make sure it's always supported
-                    wgt::PresentMode::AutoNoVsync => &[
-                        wgt::PresentMode::Immediate,
-                        wgt::PresentMode::Mailbox,
-                        wgt::PresentMode::Fifo,
-                    ][..],
-                    _ => {
-                        return Err(E::UnsupportedPresentMode {
-                            requested: config.present_mode,
-                            available: caps.present_modes.clone(),
-                        });
-                    }
-                };
-
-                let new_mode = fallbacks
-                    .iter()
-                    .copied()
-                    .find(|fallback| caps.present_modes.contains(fallback))
-                    .unwrap_or_else(|| {
-                        unreachable!(
-                            "Fallback system failed to choose present mode. \
-                            This is a bug. Mode: {:?}, Options: {:?}",
-                            config.present_mode, &caps.present_modes
-                        );
-                    });
-
-                api_log!(
-                    "Automatically choosing presentation mode by rule {:?}. Chose {new_mode:?}",
-                    config.present_mode
-                );
-                config.present_mode = new_mode;
-            }
-            if !caps.formats.contains(&config.format) {
-                return Err(E::UnsupportedFormat {
-                    requested: config.format,
-                    available: caps.formats.clone(),
-                });
-            }
-            if !caps
-                .composite_alpha_modes
-                .contains(&config.composite_alpha_mode)
-            {
-                let new_alpha_mode = 'alpha: {
-                    // Automatic alpha mode checks.
-                    let fallbacks = match config.composite_alpha_mode {
-                        wgt::CompositeAlphaMode::Auto => &[
-                            wgt::CompositeAlphaMode::Opaque,
-                            wgt::CompositeAlphaMode::Inherit,
-                        ][..],
-                        _ => {
-                            return Err(E::UnsupportedAlphaMode {
-                                requested: config.composite_alpha_mode,
-                                available: caps.composite_alpha_modes.clone(),
-                            });
-                        }
-                    };
-
-                    for &fallback in fallbacks {
-                        if caps.composite_alpha_modes.contains(&fallback) {
-                            break 'alpha fallback;
-                        }
-                    }
-
-                    unreachable!(
-                        "Fallback system failed to choose alpha mode. This is a bug. \
-                                  AlphaMode: {:?}, Options: {:?}",
-                        config.composite_alpha_mode, &caps.composite_alpha_modes
-                    );
-                };
-
-                api_log!(
-                    "Automatically choosing alpha mode by rule {:?}. Chose {new_alpha_mode:?}",
-                    config.composite_alpha_mode
-                );
-                config.composite_alpha_mode = new_alpha_mode;
-            }
-            if !caps.usage.contains(config.usage) {
-                return Err(E::UnsupportedUsage {
-                    requested: config.usage,
-                    available: caps.usage,
-                });
-            }
-            if width == 0 || height == 0 {
-                return Err(E::ZeroArea);
-            }
-            Ok(())
-        }
-
         log::debug!("configuring surface with {config:?}");
 
         let error = 'error: {
@@ -5218,10 +5152,10 @@ impl Device {
                     if *format == config.format {
                         continue;
                     }
-                    if !caps.formats.contains(&config.format) {
+                    if !caps.formats.iter().any(|fc| fc.format == config.format) {
                         break 'error E::UnsupportedFormat {
                             requested: config.format,
-                            available: caps.formats,
+                            available: caps.texture_formats().collect(),
                         };
                     }
                     if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
@@ -5247,6 +5181,7 @@ impl Device {
                     present_mode: config.present_mode,
                     composite_alpha_mode: config.alpha_mode,
                     format: config.format,
+                    color_space: config.color_space,
                     extent: wgt::Extent3d {
                         width: config.width,
                         height: config.height,

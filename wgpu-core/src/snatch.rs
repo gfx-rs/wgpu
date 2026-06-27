@@ -1,6 +1,7 @@
 use core::{cell::UnsafeCell, fmt, mem::ManuallyDrop};
 
 use crate::lock::{rank, RankData, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use crate::resource::DestructibleResourceState;
 
 /// A guard that provides read access to snatchable data.
 pub struct SnatchGuard<'a>(RwLockReadGuard<'a, ()>);
@@ -13,20 +14,22 @@ pub struct ExclusiveSnatchGuard<'a>(#[expect(dead_code)] RwLockWriteGuard<'a, ()
 /// In order to safely access the underlying data, the device's global snatchable
 /// lock must be taken. To guarantee it, methods take a read or write guard of that
 /// special lock.
-pub struct Snatchable<T> {
-    value: UnsafeCell<Option<T>>,
+pub struct SnatchableInner<T> {
+    value: UnsafeCell<T>,
 }
+
+pub type Snatchable<T> = SnatchableInner<Option<T>>;
 
 impl<T> Snatchable<T> {
     pub fn new(val: T) -> Self {
-        Snatchable {
+        SnatchableInner {
             value: UnsafeCell::new(Some(val)),
         }
     }
 
     #[allow(dead_code)]
     pub fn empty() -> Self {
-        Snatchable {
+        SnatchableInner {
             value: UnsafeCell::new(None),
         }
     }
@@ -52,13 +55,53 @@ impl<T> Snatchable<T> {
 
 // Can't safely print the contents of a snatchable object without holding
 // the lock.
-impl<T> fmt::Debug for Snatchable<T> {
+impl<T> fmt::Debug for SnatchableInner<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "<snatchable>")
     }
 }
 
-unsafe impl<T> Sync for Snatchable<T> {}
+unsafe impl<T> Sync for SnatchableInner<T> {}
+
+/// A value that is mostly immutable but can be "snatched" if we need to destroy
+/// it early.
+///
+/// In order to safely access the underlying data, the device's global snatchable
+/// lock must be taken. To guarantee it, methods take a read or write guard of that
+/// special lock.
+pub type Snatchable2<T> = SnatchableInner<DestructibleResourceState<T>>;
+
+impl<T> Snatchable2<T> {
+    pub fn new(val: T) -> Self {
+        SnatchableInner {
+            value: UnsafeCell::new(DestructibleResourceState::Valid(val)),
+        }
+    }
+
+    pub fn invalid() -> Self {
+        SnatchableInner {
+            value: UnsafeCell::new(DestructibleResourceState::Invalid),
+        }
+    }
+
+    /// Get read access to the value. Requires a the snatchable lock's read guard.
+    pub fn get<'a>(&'a self, _guard: &'a SnatchGuard) -> DestructibleResourceState<&'a T> {
+        unsafe { (*self.value.get()).as_ref() }
+    }
+
+    /// Take the value. Requires a the snatchable lock's write guard.
+    pub fn snatch(&self, _guard: &mut ExclusiveSnatchGuard) -> DestructibleResourceState<T> {
+        unsafe { (*self.value.get()).take() }
+    }
+
+    /// Take the value without a guard. This can only be used with exclusive access
+    /// to self, so it does not require locking.
+    ///
+    /// Typically useful in a drop implementation.
+    pub fn take(&mut self) -> DestructibleResourceState<T> {
+        self.value.get_mut().take()
+    }
+}
 
 use trace::LockTrace;
 #[cfg(all(debug_assertions, feature = "std"))]

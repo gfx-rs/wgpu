@@ -489,7 +489,7 @@ impl From<core::convert::Infallible> for ConstValueError {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct GlobalCtx<'a> {
     pub types: &'a crate::UniqueArena<crate::Type>,
     pub constants: &'a crate::Arena<crate::Constant>,
@@ -986,7 +986,7 @@ impl crate::Module {
     }
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct RayTracingUses {
     pub pipelines: bool,
     pub queries: bool,

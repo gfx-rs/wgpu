@@ -50,6 +50,10 @@ use core::fmt;
 /// definition is expanded to include some indication of the right
 /// source language to use, any use site that does not supply this
 /// indication will provoke a compile-time error.
+#[expect(
+    missing_debug_implementations,
+    reason = "use this type with `Display`, not `Debug`"
+)]
 pub struct DiagnosticDisplay<T>(pub T);
 
 impl fmt::Display for DiagnosticDisplay<(&TypeResolution, GlobalCtx<'_>)> {

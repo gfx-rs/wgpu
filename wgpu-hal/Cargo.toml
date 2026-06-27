@@ -34,6 +34,7 @@ targets = [
 ignored = ["cfg_aliases"]
 
 [lints.rust]
+missing_debug_implementations = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(feature, values("cargo-clippy"))', # objc's `msg_send` macro injects this in our code https://github.com/SSheldon/rust-objc/issues/125
     'cfg(web_sys_unstable_apis)', # web-sys uses this
@@ -75,9 +76,9 @@ metal = [
     "dep:arrayvec",
     "dep:block2",
     "dep:bytemuck",
-    "dep:libc",
     "dep:objc2",
     "dep:objc2-core-foundation",
+    "dep:objc2-core-graphics",
     "dep:objc2-foundation",
     "dep:objc2-metal",
     "dep:objc2-quartz-core",
@@ -150,6 +151,7 @@ dx12 = [
     "windows/Win32_Graphics_Direct3D12",
     "windows/Win32_Graphics_DirectComposition",
     "windows/Win32_Graphics_Dxgi_Common",
+    "windows/Win32_Graphics_Gdi",
     "windows/Win32_Security",
     "windows/Win32_System_Diagnostics_Debug",
     "windows/Win32_System_Kernel",
@@ -287,6 +289,7 @@ block2 = { workspace = true, optional = true }
 bytemuck = { workspace = true, optional = true }
 objc2 = { workspace = true, optional = true }
 objc2-core-foundation = { workspace = true, optional = true }
+objc2-core-graphics = { workspace = true, optional = true }
 objc2-foundation = { workspace = true, optional = true }
 objc2-metal = { workspace = true, optional = true }
 objc2-quartz-core = { workspace = true, optional = true }

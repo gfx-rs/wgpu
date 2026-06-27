@@ -181,7 +181,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let texture = hub.textures.get(id).get().ok()?;
+        let texture = hub.textures.get(id);
 
         SnatchableResourceGuard::new(texture)
     }

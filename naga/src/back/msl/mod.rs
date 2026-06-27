@@ -774,6 +774,7 @@ const WRAPPED_ARRAY_FIELD: &str = "inner";
 
 /// Information about a translated module that is required
 /// for the use of the result.
+#[derive(Debug)]
 pub struct TranslationInfo {
     /// Mapping of the entry point names. Each item in the array
     /// corresponds to an entry point index.

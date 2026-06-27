@@ -300,6 +300,25 @@ impl crate::CommandEncoder for CommandBuffer {
         dependencies: &[&Resource],
     ) {
     }
+
+    unsafe fn begin_ray_tracing_pass(&mut self, _desc: &crate::RayTracingPassDescriptor) {}
+
+    unsafe fn end_ray_tracing_pass(&mut self) {}
+
+    unsafe fn set_ray_tracing_pipeline(
+        &mut self,
+        _pipeline: &<Self::A as crate::Api>::RayTracingPipeline,
+    ) {
+    }
+
+    unsafe fn trace_rays(
+        &mut self,
+        _count: [u32; 3],
+        _ray_generation_group_data: crate::PipelineGroupData<Buffer>,
+        _miss_group_data: crate::PipelineGroupData<Buffer>,
+        _intersection_group_data: crate::PipelineGroupData<Buffer>,
+    ) {
+    }
 }
 
 impl Command {

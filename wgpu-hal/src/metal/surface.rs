@@ -6,13 +6,31 @@ use objc2::{
     runtime::ProtocolObject,
     ClassType, Message,
 };
-use objc2_core_foundation::CGSize;
+use objc2_core_foundation::{CFString, CGSize};
+use objc2_core_graphics::CGColorSpace;
 use objc2_foundation::NSObjectProtocol;
 use objc2_metal::MTLTextureType;
 use objc2_quartz_core::{CAMetalDrawable, CAMetalLayer};
 use parking_lot::{Mutex, RwLock};
 
 use super::OsFeatures;
+
+/// Walks up from `start` to the `NSWindow` hosting this layer: the first ancestor
+/// layer with a delegate is the backing `NSView`, and we return its `window`.
+/// `None` if no ancestor has a delegate.
+#[cfg(target_os = "macos")]
+fn hosting_window(
+    start: Retained<objc2_quartz_core::CALayer>,
+) -> Option<Retained<objc2::runtime::NSObject>> {
+    let mut current = Some(start);
+    while let Some(layer) = current {
+        if let Some(delegate) = layer.delegate() {
+            return unsafe { objc2::msg_send![&*delegate, window] };
+        }
+        current = layer.superlayer();
+    }
+    None
+}
 
 impl super::Surface {
     pub fn new(layer: Retained<CAMetalLayer>) -> Self {
@@ -89,12 +107,46 @@ impl crate::Surface for super::Surface {
         render_layer.setDevice(Some(device_raw));
         render_layer.setPixelFormat(caps.map_format(config.format));
         render_layer.setFramebufferOnly(framebuffer_only);
-        // opt-in to Metal EDR
-        // EDR potentially more power used in display and more bandwidth, memory footprint.
-        let wants_edr = config.format == wgt::TextureFormat::Rgba16Float;
+        // Opt into Metal EDR for the HDR color spaces (more display power, memory,
+        // and bandwidth). The HDR spaces are exactly those `is_hdr()` classifies.
+        let wants_edr = config.color_space.is_hdr();
         if wants_edr != render_layer.wantsExtendedDynamicRangeContent() {
             render_layer.setWantsExtendedDynamicRangeContent(wants_edr);
         }
+
+        let colorspace_name: Option<&'static CFString> = match config.color_space {
+            wgt::SurfaceColorSpace::Auto => {
+                unreachable!("wgpu-core resolves `Auto` before configuring the surface")
+            }
+            // Reset to the layer's default, which treats contents as sRGB.
+            wgt::SurfaceColorSpace::Srgb => None,
+            wgt::SurfaceColorSpace::ExtendedSrgbLinear => {
+                Some(unsafe { objc2_core_graphics::kCGColorSpaceExtendedLinearSRGB })
+            }
+            wgt::SurfaceColorSpace::ExtendedSrgb => {
+                Some(unsafe { objc2_core_graphics::kCGColorSpaceExtendedSRGB })
+            }
+            wgt::SurfaceColorSpace::ExtendedDisplayP3 => {
+                Some(unsafe { objc2_core_graphics::kCGColorSpaceExtendedDisplayP3 })
+            }
+            wgt::SurfaceColorSpace::DisplayP3 => {
+                Some(unsafe { objc2_core_graphics::kCGColorSpaceDisplayP3 })
+            }
+            wgt::SurfaceColorSpace::Bt2100Pq | wgt::SurfaceColorSpace::Bt2100Hlg => {
+                // The ITUR_2100 color space constants require macOS 11.0/iOS 14.0;
+                // `surface_capabilities` only reports BT.2100 PQ/HLG on those OS versions.
+                if !available!(macos = 11.0, ios = 14.0, tvos = 14.0, visionos = 1.0) {
+                    unreachable!("BT.2100 PQ/HLG color spaces are only reported on macOS 11.0+/iOS 14.0+/tvOS 14.0+");
+                }
+                Some(if config.color_space == wgt::SurfaceColorSpace::Bt2100Pq {
+                    unsafe { objc2_core_graphics::kCGColorSpaceITUR_2100_PQ }
+                } else {
+                    unsafe { objc2_core_graphics::kCGColorSpaceITUR_2100_HLG }
+                })
+            }
+        };
+        let colorspace = colorspace_name.and_then(|name| CGColorSpace::with_name(Some(name)));
+        render_layer.setColorspace(colorspace.as_deref());
 
         // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
         render_layer.setMaximumDrawableCount(config.maximum_frame_latency as usize + 1);
@@ -128,33 +180,15 @@ impl crate::Surface for super::Surface {
             // for vsync. Check the window's occlusion state and skip acquisition if
             // the window is not visible - this avoids a 1-second hang in nextDrawable().
             use objc2::rc::Retained;
-            use objc2::runtime::NSObject;
-            use objc2_quartz_core::CALayer;
 
-            // The CAMetalLayer is typically a sublayer, so we need to traverse up
-            // to find the root layer whose delegate is the NSView.
-            let mut current_layer: Option<Retained<CALayer>> =
-                Some(Retained::into_super(render_layer.clone()));
-
-            while let Some(layer) = current_layer {
-                if let Some(delegate) = layer.delegate() {
-                    // Found a layer with a delegate - this should be the NSView
-                    let window: Option<Retained<NSObject>> =
-                        unsafe { objc2::msg_send![&*delegate, window] };
-
-                    if let Some(window) = window {
-                        const NS_WINDOW_OCCLUSION_STATE_VISIBLE: usize = 1 << 1;
-                        let occlusion_state: usize =
-                            unsafe { objc2::msg_send![&*window, occlusionState] };
-                        let is_visible = (occlusion_state & NS_WINDOW_OCCLUSION_STATE_VISIBLE) != 0;
-
-                        if !is_visible {
-                            return Err(crate::SurfaceError::Occluded);
-                        }
-                    }
-                    break;
+            // The CAMetalLayer is typically a sublayer; find the hosting window
+            // and skip acquisition while it is occluded.
+            if let Some(window) = hosting_window(Retained::into_super(render_layer.clone())) {
+                const NS_WINDOW_OCCLUSION_STATE_VISIBLE: usize = 1 << 1;
+                let occlusion_state: usize = unsafe { objc2::msg_send![&*window, occlusionState] };
+                if occlusion_state & NS_WINDOW_OCCLUSION_STATE_VISIBLE == 0 {
+                    return Err(crate::SurfaceError::Occluded);
                 }
-                current_layer = layer.superlayer();
             }
         }
 

@@ -1,4 +1,5 @@
 use alloc::boxed::Box;
+use core::fmt;
 use core::ops::RangeBounds;
 
 use crate::{api::DeferredCommandBufferActions, *};
@@ -70,6 +71,15 @@ impl QueueWriteBufferView {
     /// Returns custom implementation of QueueWriteBufferView (if custom backend and is internally T)
     pub fn as_custom<T: custom::QueueWriteBufferInterface>(&self) -> Option<&T> {
         self.inner.as_custom()
+    }
+}
+
+impl fmt::Debug for QueueWriteBufferView {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("QueueWriteBufferView")
+            .field("buffer", &self.buffer)
+            .field("offset", &self.offset)
+            .finish_non_exhaustive()
     }
 }
 
