@@ -43,7 +43,7 @@ impl ImmediateState {
     pub(crate) fn set_immediates<E>(
         &mut self,
         limits: &wgt::Limits,
-        offset: u32,
+        offset_bytes: u32,
         data_bytes: &[u8],
     ) -> Result<(), E>
     where
@@ -51,28 +51,29 @@ impl ImmediateState {
     {
         // Alignment has been validated when pushing `SetImmediate` commands.
 
-        let offset_usize = offset as usize;
+        let offset_bytes_usize = offset_bytes as usize;
         if data_bytes
             .len()
-            .checked_add(offset_usize)
+            .checked_add(offset_bytes_usize)
             .is_none_or(|end_offset| end_offset > limits.max_immediate_size as usize)
         {
             return Err(ImmediateUploadError::EndOffsetBeyondLimit {
-                start_offset: offset,
+                start_offset: offset_bytes,
                 size: data_bytes.len(),
                 limit: limits.max_immediate_size,
             }
             .into());
         }
 
-        let end_offset = offset_usize + data_bytes.len();
-        if self.immediates.len() < end_offset {
-            self.immediates.resize(end_offset, 0);
+        let end_offset_bytes = offset_bytes_usize + data_bytes.len();
+        let size_per_elem = size_of::<u32>();
+        if self.immediates.len() < end_offset_bytes / size_per_elem {
+            self.immediates.resize(end_offset_bytes / size_per_elem, 0);
         }
-        let data = bytemuck::cast_slice(data_bytes);
-        self.immediates[offset_usize..end_offset].copy_from_slice(data);
+        self.immediates[offset_bytes_usize / size_per_elem..end_offset_bytes / size_per_elem]
+            .copy_from_slice(bytemuck::cast_slice(data_bytes));
         self.immediate_slots_set |=
-            naga::valid::ImmediateSlots::from_range(offset, data_bytes.len() as u32);
+            naga::valid::ImmediateSlots::from_range(offset_bytes, data_bytes.len() as u32);
         self.immediates_dirty = true;
 
         Ok(())
