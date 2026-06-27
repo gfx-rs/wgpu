@@ -28,6 +28,9 @@ use winit::{
     window::{Window, WindowId},
 };
 
+#[cfg(target_os = "macos")]
+mod macos;
+
 /// Print to stdout on native, the developer console on the web.
 fn report(msg: impl std::fmt::Display) {
     #[cfg(not(target_arch = "wasm32"))]
@@ -462,16 +465,10 @@ enum UserEvent {
     /// the event small (`State` is large).
     Initialized(Box<State>),
     /// macOS: the display configuration changed, so re-query the HDR info. See
-    /// [`observe_screen_parameter_changes`].
+    /// [`macos::observe_screen_parameter_changes`].
     #[cfg(target_os = "macos")]
     ScreenParametersChanged,
 }
-
-/// The opaque token returned when registering a notification observer; held for
-/// as long as the observer should stay live.
-#[cfg(target_os = "macos")]
-type ScreenObserver =
-    objc2::rc::Retained<objc2::runtime::ProtocolObject<dyn objc2::runtime::NSObjectProtocol>>;
 
 struct App {
     /// Taken on the first `resumed` call so initialization happens once.
@@ -480,7 +477,7 @@ struct App {
     /// macOS: holds the screen-change observer so it stays registered for the
     /// app's lifetime (dropping it removes the observer).
     #[cfg(target_os = "macos")]
-    screen_observer: Option<ScreenObserver>,
+    screen_observer: Option<macos::ScreenObserver>,
 }
 
 impl ApplicationHandler<UserEvent> for App {
@@ -495,7 +492,7 @@ impl ApplicationHandler<UserEvent> for App {
         // which moves the EDR headroom — and winit doesn't surface it.
         #[cfg(target_os = "macos")]
         {
-            self.screen_observer = Some(observe_screen_parameter_changes(proxy.clone()));
+            self.screen_observer = Some(macos::observe_screen_parameter_changes(proxy.clone()));
         }
 
         #[cfg_attr(
@@ -589,58 +586,6 @@ impl ApplicationHandler<UserEvent> for App {
             WindowEvent::RedrawRequested => state.render(),
             _ => {}
         }
-    }
-}
-
-/// macOS: register an observer for `NSApplicationDidChangeScreenParametersNotification`
-/// that bounces a [`UserEvent::ScreenParametersChanged`] back through the event
-/// loop, so the example re-queries the display's HDR info reactively.
-///
-/// This is Apple's documented way to track EDR headroom: AppKit posts this
-/// notification when the display configuration changes — resolution, arrangement,
-/// HDR mode toggled in System Settings, the window moving to another display, and
-/// the SDR brightness slider, which shifts SDR white and so changes the available
-/// EDR headroom. The handler just re-reads `NSScreen`'s EDR values (what
-/// `Surface::display_hdr_info` does on the Metal backend). winit doesn't expose
-/// this event, so we register our own observer; observers are additive, so this
-/// doesn't disturb winit's own.
-///
-/// The returned token must be kept alive (here, in `App::screen_observer`) for the
-/// observer to stay registered.
-///
-/// Note: ambient-light/auto-brightness drift and the gradual EDR ramp after an
-/// EDR layer first appears are continuous and may not post a notification for
-/// every step; an app that wants frame-accurate headroom re-reads it each frame
-/// in its render loop. The notification covers the discrete changes a user makes.
-#[cfg(target_os = "macos")]
-fn observe_screen_parameter_changes(proxy: EventLoopProxy<UserEvent>) -> ScreenObserver {
-    use core::ptr::NonNull;
-
-    use objc2_foundation::{NSNotification, NSNotificationCenter, NSOperationQueue, NSString};
-
-    // `NSApplicationDidChangeScreenParametersNotification` is a documented AppKit
-    // constant whose string value is the symbol name itself, so we build the
-    // `NSString` directly rather than pull in objc2-app-kit for one name.
-    let name = NSString::from_str("NSApplicationDidChangeScreenParametersNotification");
-
-    let block = block2::RcBlock::new(move |_note: NonNull<NSNotification>| {
-        // Delivered on the main thread (we pass the main queue below), so it is
-        // safe here to touch AppKit. Keep it cheap: just wake the loop; the
-        // re-query runs in `user_event`.
-        let _ = proxy.send_event(UserEvent::ScreenParametersChanged);
-    });
-
-    let center = NSNotificationCenter::defaultCenter();
-    let main_queue = NSOperationQueue::mainQueue();
-    // SAFETY: `name` and `main_queue` are valid for the call; the block is
-    // retained by the returned observer token, which the caller keeps alive.
-    unsafe {
-        center.addObserverForName_object_queue_usingBlock(
-            Some(&name),
-            None,
-            Some(&main_queue),
-            &block,
-        )
     }
 }
 

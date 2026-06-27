@@ -4112,11 +4112,14 @@ impl dispatch::SurfaceInterface for WebSurface {
         let high_dynamic_range = match_media_query("(dynamic-range: high)");
         let gamut = environment_color_gamut();
 
-        let coarse =
-            (high_dynamic_range.is_some() || gamut.is_some()).then_some(wgt::DisplayCoarseRange {
+        let coarse = if high_dynamic_range.is_some() || gamut.is_some() {
+            Some(wgt::DisplayCoarseRange {
                 high_dynamic_range,
                 gamut,
-            });
+            })
+        } else {
+            None
+        };
         wgt::DisplayHdrInfo {
             luminance: None,
             headroom: None,
