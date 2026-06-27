@@ -7,11 +7,13 @@ pub(super) use native::*;
 
 mod native;
 
-/// Win32 `HWND` kept for the DXGI display-HDR query (Windows only). Borrowed from
-/// the app's window; using it after that window is destroyed is undefined behavior.
+/// Win32 `HWND`, handed to a Win32 [`NativeSurface`] at construction so it can
+/// build its [`DxgiHdrSource`](crate::auxil::dxgi::hdr::DxgiHdrSource) for the
+/// display-HDR query. Borrowed from the app's window.
 ///
-/// A newtype rather than a bare `isize` so the `Send`/`Sync` impls live here; off
-/// Windows it is an uninhabited enum, so a non-Windows surface can't hold one.
+/// A newtype rather than a bare `isize` so the cfg lives in one place: off Windows
+/// it is an uninhabited enum, so the non-Windows surface paths can't construct one
+/// and the constructor signatures stay cfg-free.
 #[cfg(windows)]
 #[derive(Clone, Copy)]
 pub(crate) struct WindowHandle(pub(crate) windows::Win32::Foundation::HWND);
@@ -19,13 +21,6 @@ pub(crate) struct WindowHandle(pub(crate) windows::Win32::Foundation::HWND);
 #[cfg(not(windows))]
 #[derive(Clone, Copy)]
 pub(crate) enum WindowHandle {}
-
-// SAFETY: we only read the `HWND` to run a DXGI query (fine from any thread),
-// never to touch window state.
-#[cfg(windows)]
-unsafe impl Send for WindowHandle {}
-#[cfg(windows)]
-unsafe impl Sync for WindowHandle {}
 
 pub(super) trait Surface: Send + Sync + 'static {
     /// Returns the surface capabilities for the given adapter.
@@ -45,13 +40,11 @@ pub(super) trait Surface: Send + Sync + 'static {
         provided_old_swapchain: Option<Box<dyn Swapchain>>,
     ) -> Result<Box<dyn Swapchain>, crate::SurfaceError>;
 
-    /// The [`WindowHandle`] this surface was created from, if any.
+    /// This surface's current display HDR info, if it can report it.
     ///
-    /// Drives the DXGI display-HDR query on Windows; `None` for non-Win32 surfaces
-    /// (Wayland / X11 / Android / Metal), which is also the default. Only called on
-    /// Windows, so it is dead code elsewhere.
-    #[cfg_attr(not(windows), allow(dead_code))]
-    fn raw_window_hwnd(&self) -> Option<WindowHandle> {
+    /// `Some` only for Win32 surfaces (read through DXGI); `None` otherwise
+    /// (Wayland / X11 / Android / Metal), which is the default.
+    fn display_hdr_info(&self) -> Option<wgt::DisplayHdrInfo> {
         None
     }
 

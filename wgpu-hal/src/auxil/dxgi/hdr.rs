@@ -1,11 +1,10 @@
-//! Mapping a DXGI output description into the backend-agnostic
-//! [`wgt::DisplayHdrInfo`].
+//! Reading a window's [`wgt::DisplayHdrInfo`] through DXGI.
 //!
 //! Lives in `auxil/dxgi` so the DX12 and Vulkan-on-Windows backends share it:
-//! both call [`output_desc1_for_window`] to find the monitor and
-//! [`display_hdr_info_from_desc1`] to map it, so the same monitor reports
-//! identical numbers under either backend.
+//! both query through a [`DxgiHdrSource`], so the same monitor reports identical
+//! numbers under either backend.
 
+use parking_lot::Mutex;
 use windows::{
     core::Interface as _,
     Win32::{
@@ -63,7 +62,7 @@ fn classify_gamut(red: [f32; 2], green: [f32; 2], blue: [f32; 2]) -> Option<wgt:
 /// advisory (EDID-sourced); see [`wgt::DisplayLuminance`].
 ///
 /// [`IDXGIOutput6::GetDesc1`]: windows::Win32::Graphics::Dxgi::IDXGIOutput6::GetDesc1
-pub fn display_hdr_info_from_desc1(
+fn display_hdr_info_from_desc1(
     desc1: &Dxgi::DXGI_OUTPUT_DESC1,
     sdr_white_nits: Option<f32>,
 ) -> wgt::DisplayHdrInfo {
@@ -106,17 +105,84 @@ pub fn display_hdr_info_from_desc1(
     }
 }
 
-/// Returns the [`DXGI_OUTPUT_DESC1`] for the monitor backing `wnd_handle`, or
-/// `None` if it can't be identified or queried (a headless or composition window,
-/// a pre-Win10-1703 system without `IDXGIOutput6`, or a COM failure). Never
-/// panics.
+/// A window's display HDR info, read through DXGI.
 ///
-/// Walks every adapter's outputs via a fresh DXGI factory, not just the rendering
-/// adapter's, so the monitor is found even on hybrid-GPU systems where the window
-/// sits on a display wired to a different adapter.
+/// Bundles the window's `HWND` with the DXGI factory used to query it. The factory
+/// is built once and reused, rebuilt only when DXGI reports it stale; the monitor
+/// lookup and adapter/output walk still run every call, since the window can move
+/// between displays and the SDR white level changes at runtime.
+pub struct DxgiHdrSource {
+    hwnd: HWND,
+    factory: Mutex<Option<Dxgi::IDXGIFactory1>>,
+}
+
+// SAFETY: `HWND` and `IDXGIFactory1` are `!Send`/`!Sync` in windows-rs. The `HWND`
+// is only ever read to run a DXGI query (fine from any thread), and the factory is
+// free-threaded for the enumeration done here with the `Mutex` serializing access.
+// This mirrors the manual `Send`/`Sync` on `dx12::Surface`.
+unsafe impl Send for DxgiHdrSource {}
+unsafe impl Sync for DxgiHdrSource {}
+
+impl DxgiHdrSource {
+    /// Creates a source for the window identified by `hwnd`. The `HWND` is
+    /// borrowed; using the source after that window is destroyed is undefined
+    /// behavior.
+    pub fn new(hwnd: HWND) -> Self {
+        Self {
+            hwnd,
+            factory: Mutex::new(None),
+        }
+    }
+
+    /// Reads the window's [`wgt::DisplayHdrInfo`], or `None` if its monitor can't
+    /// be identified or queried (a headless or composition window, a
+    /// pre-Win10-1703 system without `IDXGIOutput6`, or a COM failure). Never
+    /// panics.
+    pub fn display_hdr_info(&self) -> Option<wgt::DisplayHdrInfo> {
+        let desc1 = self.output_desc1()?;
+        let sdr_white_nits = sdr_white_nits_for_monitor(desc1.Monitor);
+        Some(display_hdr_info_from_desc1(&desc1, sdr_white_nits))
+    }
+
+    /// The [`DXGI_OUTPUT_DESC1`] for the window's monitor, reusing the cached
+    /// factory unless DXGI reports it stale.
+    ///
+    /// [`DXGI_OUTPUT_DESC1`]: Dxgi::DXGI_OUTPUT_DESC1
+    fn output_desc1(&self) -> Option<Dxgi::DXGI_OUTPUT_DESC1> {
+        let mut factory = self.factory.lock();
+
+        // A factory only enumerates the adapter/output topology it saw at
+        // creation, so rebuild it once it reports `IsCurrent() == false` (a
+        // monitor or GPU was plugged or unplugged).
+        // SAFETY: a cached factory is live; `IsCurrent` takes no caller pointers.
+        let need_new = factory
+            .as_ref()
+            .is_none_or(|f| !unsafe { f.IsCurrent() }.as_bool());
+        if need_new {
+            // SAFETY: `CreateDXGIFactory1` takes no caller pointers; the `windows`
+            // binding fills the interface out-pointer itself.
+            match unsafe { Dxgi::CreateDXGIFactory1() } {
+                Ok(new) => *factory = Some(new),
+                Err(e) => {
+                    log::warn!("CreateDXGIFactory1 failed: {e}");
+                    return None;
+                }
+            }
+        }
+        output_desc1_from_factory(factory.as_ref()?, self.hwnd)
+    }
+}
+
+/// The [`DXGI_OUTPUT_DESC1`] for the monitor backing `wnd_handle`, found by
+/// walking every adapter's outputs on `factory` — not just the rendering
+/// adapter's, so the monitor is found on hybrid-GPU systems where the window sits
+/// on a display wired to a different adapter. `None` if none match.
 ///
 /// [`DXGI_OUTPUT_DESC1`]: Dxgi::DXGI_OUTPUT_DESC1
-pub fn output_desc1_for_window(wnd_handle: HWND) -> Option<Dxgi::DXGI_OUTPUT_DESC1> {
+fn output_desc1_from_factory(
+    factory: &Dxgi::IDXGIFactory1,
+    wnd_handle: HWND,
+) -> Option<Dxgi::DXGI_OUTPUT_DESC1> {
     // SAFETY: `MonitorFromWindow` is sound for any `HWND`; an invalid one yields
     // a null `HMONITOR`, checked below.
     let hmonitor = unsafe { Gdi::MonitorFromWindow(wnd_handle, Gdi::MONITOR_DEFAULTTONEAREST) };
@@ -124,18 +190,8 @@ pub fn output_desc1_for_window(wnd_handle: HWND) -> Option<Dxgi::DXGI_OUTPUT_DES
         log::warn!("MonitorFromWindow failed; cannot identify the window's output");
         return None;
     }
-    // SAFETY: `CreateDXGIFactory1` takes no caller pointers; the `windows`
-    // binding fills the interface out-pointer itself.
-    let factory: Dxgi::IDXGIFactory1 = match unsafe { Dxgi::CreateDXGIFactory1() } {
-        Ok(factory) => factory,
-        Err(e) => {
-            log::warn!("CreateDXGIFactory1 failed: {e}");
-            return None;
-        }
-    };
     for adapter_index in 0.. {
-        // SAFETY: `factory` is live (created above); `EnumAdapters1` takes only
-        // an index.
+        // SAFETY: `factory` is live; `EnumAdapters1` takes only an index.
         let adapter = match unsafe { factory.EnumAdapters1(adapter_index) } {
             Ok(adapter) => adapter,
             // End of the adapter list: the monitor matched none of them.
@@ -204,7 +260,7 @@ pub fn output_desc1_for_window(wnd_handle: HWND) -> Option<Dxgi::DXGI_OUTPUT_DES
 /// Returns `None` on any failure (no match, query error, or a `0` reading). Never
 /// panics. Pass [`Dxgi::DXGI_OUTPUT_DESC1::Monitor`] so the value matches the rest
 /// of the `DisplayHdrInfo`.
-pub fn sdr_white_nits_for_monitor(hmonitor: Gdi::HMONITOR) -> Option<f32> {
+fn sdr_white_nits_for_monitor(hmonitor: Gdi::HMONITOR) -> Option<f32> {
     use windows::Win32::{
         Devices::Display::{
             DisplayConfigGetDeviceInfo, GetDisplayConfigBufferSizes, QueryDisplayConfig,

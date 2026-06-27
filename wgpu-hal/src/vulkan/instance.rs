@@ -508,8 +508,8 @@ impl super::Instance {
             }
         };
 
-        // Keep the `HWND` for the DXGI HDR query on Windows. ash hands it to us as
-        // an `isize`; wrap it in the `Send` `WindowHandle` for storage.
+        // Wrap ash's `isize` `HWND` in `WindowHandle`; on Windows the
+        // `NativeSurface` builds its DXGI HDR source from it.
         #[cfg(windows)]
         let window_handle = Some(crate::vulkan::swapchain::WindowHandle(
             windows::Win32::Foundation::HWND(hwnd as *mut c_void),

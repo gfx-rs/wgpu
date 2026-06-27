@@ -19,10 +19,10 @@ pub(crate) struct NativeSurface {
     raw: vk::SurfaceKHR,
     functor: khr::surface::Instance,
     instance: Arc<InstanceShared>,
-    /// The window this surface was created from, kept only for the DXGI HDR query
-    /// on Windows. `None` for non-Win32 surfaces. See [`WindowHandle`].
-    #[cfg_attr(not(windows), allow(dead_code))]
-    hwnd: Option<WindowHandle>,
+    /// Built from the window's `HWND` (Windows only) to answer the display-HDR
+    /// query; `None` for non-Win32 surfaces.
+    #[cfg(windows)]
+    hdr_source: Option<crate::auxil::dxgi::hdr::DxgiHdrSource>,
 }
 
 impl NativeSurface {
@@ -31,12 +31,15 @@ impl NativeSurface {
         raw: vk::SurfaceKHR,
         hwnd: Option<WindowHandle>,
     ) -> Self {
+        #[cfg(not(windows))]
+        let _ = hwnd;
         let functor = khr::surface::Instance::new(&instance.shared.entry, &instance.shared.raw);
         Self {
             raw,
             functor,
             instance: Arc::clone(&instance.shared),
-            hwnd,
+            #[cfg(windows)]
+            hdr_source: hwnd.map(|wh| crate::auxil::dxgi::hdr::DxgiHdrSource::new(wh.0)),
         }
     }
 
@@ -290,9 +293,9 @@ impl Surface for NativeSurface {
         }))
     }
 
-    #[cfg_attr(not(windows), allow(dead_code))]
-    fn raw_window_hwnd(&self) -> Option<WindowHandle> {
-        self.hwnd
+    #[cfg(windows)]
+    fn display_hdr_info(&self) -> Option<wgt::DisplayHdrInfo> {
+        self.hdr_source.as_ref()?.display_hdr_info()
     }
 
     fn as_any(&self) -> &dyn Any {

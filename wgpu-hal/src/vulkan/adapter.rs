@@ -3185,19 +3185,9 @@ impl crate::Adapter for super::Adapter {
         &self,
         surface: &super::Surface,
     ) -> Option<wgt::DisplayHdrInfo> {
-        // Vulkan has no portable luminance query. On Windows the data lives in
-        // DXGI, reachable from the surface's `HWND` without a D3D device (see
-        // `dxgi::hdr`); surfaces without an `HWND` return `None`.
-        #[cfg(windows)]
-        {
-            let handle = surface.inner.raw_window_hwnd()?;
-            display_hdr_info_for_hwnd(handle)
-        }
-        #[cfg(not(windows))]
-        {
-            let _ = surface;
-            None
-        }
+        // Vulkan has no portable luminance query; the Win32 surface reads it
+        // through DXGI (see `dxgi::hdr`). Every other surface reports `None`.
+        surface.inner.display_hdr_info()
     }
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
@@ -3534,19 +3524,4 @@ fn query_cooperative_matrix_properties(
         result.len()
     );
     result
-}
-
-/// Reads the [`wgt::DisplayHdrInfo`] for the monitor backing `handle`, via the
-/// [`crate::auxil::dxgi::hdr`] helpers shared with the DX12 backend. Returns
-/// `None` when the monitor or its HDR data can't be queried.
-#[cfg(windows)]
-fn display_hdr_info_for_hwnd(
-    handle: crate::vulkan::swapchain::WindowHandle,
-) -> Option<wgt::DisplayHdrInfo> {
-    let desc1 = crate::auxil::dxgi::hdr::output_desc1_for_window(handle.0)?;
-    let sdr_white_nits = crate::auxil::dxgi::hdr::sdr_white_nits_for_monitor(desc1.Monitor);
-    Some(crate::auxil::dxgi::hdr::display_hdr_info_from_desc1(
-        &desc1,
-        sdr_white_nits,
-    ))
 }
