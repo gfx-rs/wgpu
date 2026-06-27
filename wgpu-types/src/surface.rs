@@ -418,7 +418,7 @@ impl SurfaceColorSpace {
     /// Returns the [`SurfaceColorSpaces`] flag set holding just this color space,
     /// or `None` for [`Auto`](Self::Auto) (which maps to no specific flag).
     #[must_use]
-    pub fn to_color_spaces(self) -> Option<SurfaceColorSpaces> {
+    pub const fn to_color_spaces(self) -> Option<SurfaceColorSpaces> {
         match self {
             Self::Auto => None,
             Self::Srgb => Some(SurfaceColorSpaces::SRGB),
@@ -444,7 +444,7 @@ impl SurfaceColorSpace {
     /// [`SurfaceCapabilities`]: only an HDR result drives highlights above SDR
     /// white (`1.0`).
     #[must_use]
-    pub fn is_hdr(self) -> bool {
+    pub const fn is_hdr(self) -> bool {
         match self {
             Self::ExtendedSrgbLinear
             | Self::ExtendedSrgb
