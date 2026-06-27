@@ -7,6 +7,7 @@ webgpu:api,validation,dispatch:* // linear indexing, https://github.com/gfx-rs/w
 webgpu:api,validation,gpu_external_texture_expiration:* // external texture
 webgpu:api,validation,queue,copyToTexture,CopyExternalImageToTexture:* // external texture
 
+webgpu:shader,validation,decl,immediate:* // WGSL language extension 'immediate_address_space' isn't added, https://github.com/gfx-rs/wgpu/issues/8556
 webgpu:shader,validation,expression,call,builtin,quadBroadcast:* // subgroups, https://github.com/gfx-rs/wgpu/issues/8722
 webgpu:shader,validation,expression,call,builtin,quadSwap:* // ibid.
 webgpu:shader,validation,expression,call,builtin,subgroupAdd:* // ibid.

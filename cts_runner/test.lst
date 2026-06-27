@@ -198,8 +198,7 @@ webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:command=
 webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:command="popDebugGroup"
 webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:command="pushDebugGroup"
 webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:command="setBindGroup"
-//FAIL: webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:command="setImmediates"
-// https://github.com/gfx-rs/wgpu/issues/8556
+webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:command="setImmediates"
 webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:command="setPipeline"
 webgpu:api,validation,encoding,encoder_open_state:non_pass_commands:*
 //FAIL: webgpu:api,validation,encoding,encoder_open_state:render_bundle_commands:*
@@ -218,8 +217,7 @@ webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="
 webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="pushDebugGroup"
 webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setBindGroup"
 webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setBlendConstant"
-//FAIL: webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setImmediates"
-// https://github.com/gfx-rs/wgpu/issues/8556
+webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setImmediates"
 webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setIndexBuffer"
 webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setPipeline"
 webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setScissorRect"
@@ -228,11 +226,13 @@ webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="
 webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setViewport"
 webgpu:api,validation,encoding,encoder_state:*
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:*
+// On dx12, Error: Unexpected internal error occurred: undefined
+// https://github.com/gfx-rs/wgpu/issues/8556
 fails-if(dx12) webgpu:api,validation,encoding,programmable,pipeline_immediate:overprovisioned_immediate_data:*
 fails-if(dx12) webgpu:api,validation,encoding,programmable,pipeline_immediate:render_bundle_execution_state_invalidation:*
 //FAIL: webgpu:api,validation,encoding,programmable,pipeline_immediate:required_slots_set:*
-// 97%, scenario="multiple_variables";usage="partial" fails.
-// https://github.com/gfx-rs/wgpu/issues/8556
+// Naga `immediate_slots_required` is not quite correct.
+// https://github.com/gfx-rs/wgpu/issues/9724
 fails-if(dx12) webgpu:api,validation,encoding,programmable,pipeline_immediate:unused_variable:*
 webgpu:api,validation,encoding,queries,begin_end:nesting:*
 webgpu:api,validation,encoding,queries,begin_end:occlusion_query,*
