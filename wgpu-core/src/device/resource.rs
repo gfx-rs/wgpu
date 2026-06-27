@@ -47,7 +47,7 @@ use crate::{
     present,
     resource::{
         self, Buffer, ExternalTexture, Fallible, Labeled, ParentDevice, QuerySet,
-        RawResourceAccess, Sampler, StagingBuffer, Texture, TextureView,
+        RawResourceAccess, ResourceState, Sampler, StagingBuffer, Texture, TextureView,
         TextureViewNotRenderableReason, Tlas, TrackingData,
     },
     resource_log,
@@ -3957,6 +3957,32 @@ impl Device {
     pub fn create_compute_pipeline(
         self: &Arc<Self>,
         desc: pipeline::ResolvedComputePipelineDescriptor,
+    ) -> (
+        Arc<pipeline::ComputePipeline>,
+        Option<pipeline::CreateComputePipelineError>,
+    ) {
+        let (compute_pipeline, error) = match self.create_compute_pipeline_inner(desc.clone()) {
+            Ok(compute_pipeline) => (compute_pipeline, None),
+            Err(error) => (
+                pipeline::ComputePipeline::invalid(self.clone(), desc.label.to_string()),
+                Some(error),
+            ),
+        };
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace;
+            use crate::device::trace::IntoTrace;
+            trace.add(trace::Action::CreateComputePipeline {
+                id: compute_pipeline.to_trace(),
+                desc: desc.to_trace(),
+            });
+        }
+        (compute_pipeline, error)
+    }
+
+    pub fn create_compute_pipeline_inner(
+        self: &Arc<Self>,
+        desc: pipeline::ResolvedComputePipelineDescriptor,
     ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
         self.check_is_valid()?;
 
@@ -4072,10 +4098,12 @@ impl Device {
                 });
 
         let pipeline = pipeline::ComputePipeline {
-            raw: ManuallyDrop::new(raw),
-            layout: pipeline_layout,
+            state: ResourceState::Valid(pipeline::ComputePipelineState {
+                raw: ManuallyDrop::new(raw),
+                layout: pipeline_layout.clone(),
+                _shader_module: shader_module,
+            }),
             device: self.clone(),
-            _shader_module: shader_module,
             late_sized_buffer_groups,
             immediate_slots_required,
             label: desc.label.to_string(),
@@ -4085,7 +4113,7 @@ impl Device {
         let pipeline = Arc::new(pipeline);
 
         if is_auto_layout {
-            for bgl in pipeline.layout.bind_group_layouts.iter() {
+            for bgl in pipeline_layout.bind_group_layouts.iter() {
                 let Some(bgl) = bgl else {
                     continue;
                 };
@@ -4953,7 +4981,7 @@ impl Device {
         };
 
         let pipeline = pipeline::RenderPipeline {
-            state: resource::ResourceState::Valid(pipeline::RenderPipelineState {
+            state: ResourceState::Valid(pipeline::RenderPipelineState {
                 raw: ManuallyDrop::new(raw),
                 layout: pipeline_layout.clone(),
             }),

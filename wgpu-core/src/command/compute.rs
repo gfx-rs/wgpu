@@ -915,22 +915,23 @@ fn set_pipeline(
             .pass
             .base
             .raw_encoder
-            .set_compute_pipeline(pipeline.raw());
+            .set_compute_pipeline(pipeline.raw()?);
     }
 
     // Rebind resources
+    let pipeline_layout = pipeline.layout()?;
     pass::change_pipeline_layout::<ComputePassErrorInner, _>(
         &mut state.pass,
-        &pipeline.layout,
+        pipeline_layout,
         &pipeline.late_sized_buffer_groups,
         || {
             // This only needs to be here for compute pipelines because they use immediates for
             // validating indirect draws.
             state.immediates.clear();
             // Note that can only be one range for each stage. See the `MoreThanOneImmediateRangePerStage` error.
-            if pipeline.layout.immediate_size != 0 {
+            if pipeline_layout.immediate_size != 0 {
                 // Note that non-0 range start doesn't work anyway https://github.com/gfx-rs/wgpu/issues/4502
-                let len = pipeline.layout.immediate_size as usize
+                let len = pipeline_layout.immediate_size as usize
                     / wgt::IMMEDIATE_DATA_ALIGNMENT as usize;
                 state.immediates.extend(core::iter::repeat_n(0, len));
             }
@@ -1097,13 +1098,15 @@ fn dispatch_workgroups_indirect(
                     .pass
                     .base
                     .raw_encoder
-                    .set_compute_pipeline(pipeline.raw());
+                    .set_compute_pipeline(pipeline.raw()?);
             }
+
+            let pipeline_layout = pipeline.layout()?;
 
             if !state.immediates.is_empty() {
                 unsafe {
                     state.pass.base.raw_encoder.set_immediates(
-                        pipeline.layout.raw(),
+                        pipeline_layout.raw(),
                         0,
                         &state.immediates,
                     );
@@ -1114,7 +1117,7 @@ fn dispatch_workgroups_indirect(
                 let raw_bg = group.try_raw(state.pass.base.snatch_guard)?;
                 unsafe {
                     state.pass.base.raw_encoder.set_bind_group(
-                        pipeline.layout.raw(),
+                        pipeline_layout.raw(),
                         i as u32,
                         raw_bg,
                         dynamic_offsets,
@@ -1234,9 +1237,11 @@ impl Global {
         }
 
         let hub = &self.hub;
-        let pipeline = pass_try!(base, scope, hub.compute_pipelines.get(pipeline_id).get());
+        let compute_pipeline = hub.compute_pipelines.get(pipeline_id);
+        pass_try!(base, scope, compute_pipeline.check_valid());
 
-        base.commands.push(ArcComputeCommand::SetPipeline(pipeline));
+        base.commands
+            .push(ArcComputeCommand::SetPipeline(compute_pipeline));
 
         Ok(())
     }

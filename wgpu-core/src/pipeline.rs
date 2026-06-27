@@ -301,11 +301,16 @@ impl WebGpuError for CreateComputePipelineError {
 }
 
 #[derive(Debug)]
-pub struct ComputePipeline {
+pub struct ComputePipelineState {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynComputePipeline>>,
     pub(crate) layout: Arc<PipelineLayout>,
-    pub(crate) device: Arc<Device>,
     pub(crate) _shader_module: Arc<ShaderModule>,
+}
+
+#[derive(Debug)]
+pub struct ComputePipeline {
+    pub(crate) state: ResourceState<ComputePipelineState>,
+    pub(crate) device: Arc<Device>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
     pub(crate) immediate_slots_required: naga::valid::ImmediateSlots,
     /// The `label` from the descriptor used to create the resource.
@@ -316,8 +321,20 @@ pub struct ComputePipeline {
 impl Drop for ComputePipeline {
     fn drop(&mut self) {
         resource_log!("Destroy raw {}", self.error_ident());
+        #[cfg(feature = "trace")]
+        {
+            use crate::device::trace;
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DropComputePipeline(unsafe {
+                    trace::to_trace(self)
+                }));
+            }
+        }
+        let ResourceState::Valid(state) = &mut self.state else {
+            return;
+        };
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        let raw = unsafe { ManuallyDrop::take(&mut state.raw) };
         unsafe {
             self.device.raw().destroy_compute_pipeline(raw);
         }
@@ -331,15 +348,43 @@ crate::impl_storage_item!(ComputePipeline);
 crate::impl_trackable!(ComputePipeline);
 
 impl ComputePipeline {
-    pub(crate) fn raw(&self) -> &dyn hal::DynComputePipeline {
-        self.raw.as_ref()
+    pub(crate) fn raw(&self) -> Result<&dyn hal::DynComputePipeline, InvalidResourceError> {
+        let ResourceState::Valid(state) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        Ok(state.raw.as_ref())
+    }
+
+    pub(crate) fn layout(&self) -> Result<&Arc<PipelineLayout>, InvalidResourceError> {
+        let ResourceState::Valid(state) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        Ok(&state.layout)
+    }
+
+    pub(crate) fn check_valid(&self) -> Result<(), InvalidResourceError> {
+        let ResourceState::Valid(_) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        Ok(())
+    }
+
+    pub(crate) fn invalid(device: Arc<Device>, label: String) -> Arc<Self> {
+        Arc::new(Self {
+            tracking_data: TrackingData::new(device.tracker_indices.compute_pipelines.clone()),
+            state: ResourceState::Invalid,
+            device,
+            late_sized_buffer_groups: ArrayVec::new(),
+            immediate_slots_required: naga::valid::ImmediateSlots::default(),
+            label,
+        })
     }
 
     pub fn get_bind_group_layout(
         self: &Arc<Self>,
         index: u32,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
-        self.layout.get_bind_group_layout(index, self.into())
+        self.layout()?.get_bind_group_layout(index, self.into())
     }
 }
 

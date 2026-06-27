@@ -14,7 +14,7 @@ use wgc::{
     binding_model::BindingResource,
     command::{ArcCommand, ArcReferences, BasePass, Command, PointerReferences},
     device::trace::{self, DataKind, DataLoader},
-    id::{Marker, PointerId},
+    id::PointerId,
 };
 
 #[derive(Debug)]
@@ -85,28 +85,6 @@ impl Default for Player {
             samplers: HashMap::new(),
             blas_s: HashMap::new(),
             tlas_s: HashMap::new(),
-        }
-    }
-}
-
-fn process_result<T: Marker, U>(
-    op: &str,
-    map: &mut HashMap<PointerId<T>, U>,
-    id: Option<PointerId<T>>,
-    value: Result<U, impl std::error::Error>,
-) {
-    match (id, value) {
-        (Some(id), Ok(value)) => {
-            map.insert(id, value);
-        }
-        (Some(_), Err(err)) => {
-            panic!("{op} succeeded when recording, but failed on playback: {err}");
-        }
-        (None, Ok(_)) => {
-            panic!("{op} failed when recording, but succeeded on playback");
-        }
-        (None, Err(err)) => {
-            panic!("{op} failed when recording, and failed on playback: {err}");
         }
     }
 }
@@ -353,13 +331,8 @@ impl Player {
             }
             Action::CreateComputePipeline { id, desc } => {
                 let resolved_desc = self.resolve_compute_pipeline_descriptor(desc);
-                let pipeline = device.create_compute_pipeline(resolved_desc);
-                process_result(
-                    "create_compute_pipeline",
-                    &mut self.compute_pipelines,
-                    id,
-                    pipeline,
-                );
+                let (pipeline, _error) = device.create_compute_pipeline(resolved_desc);
+                self.compute_pipelines.insert(id, pipeline);
             }
             Action::DropComputePipeline(id) => {
                 self.compute_pipelines
