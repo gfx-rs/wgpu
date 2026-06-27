@@ -29,11 +29,11 @@ Render passes are also isolated from the effects of bundles. After executing a
 render bundle, a render pass's pipeline, bind groups, and vertex and index
 buffers are are unset, so the bundle cannot affect later draw calls in the pass.
 
-A render pass is not fully isolated from a bundle's effects on immediate data
-values. Draw calls following a bundle's execution will see whatever values the
-bundle writes to immediate data storage. Setting a pipeline initializes any push
-constant storage it could access to zero, and this initialization may also be
-visible after bundle execution.
+A render pass is isolated from a bundle's effects on immediate data
+values. When encoding a render bundle, calls to `set_immediates` snapshot the immediate data
+content at encoding time, and the immediate values cannot be changed after `finish`.
+Before and after executing each individual bundle, all required immediate slots are cleared/reset,
+therefore immediate data must be set again.
 
 ## Render Bundle Lifecycle
 
