@@ -622,6 +622,11 @@ impl super::CapabilitiesQuery {
             .any(|x| raw.supportsFeatureSet(x))
     }
 
+    fn is_capture_mtl_device(device: &ProtocolObject<dyn MTLDevice>) -> bool {
+        let obj: &AnyObject = device.as_ref();
+        obj.class().name().to_string_lossy() == "CaptureMTLDevice"
+    }
+
     /// Query the capabilities of the device.
     pub fn new(device: &ProtocolObject<dyn MTLDevice>) -> Self {
         // There are four different OSes we can target: macOS, iOS, tvOS and
@@ -1164,10 +1169,15 @@ impl super::CapabilitiesQuery {
                 tvos = 18.0,
                 visionos = 2.0,
             ) {
-                device_class_responds_to(device, sel!(supportsRaytracing))
-                    && device.supportsRaytracing()
-                    && device_class_responds_to(device, sel!(supportsRaytracingFromRender))
-                    && device.supportsRaytracingFromRender()
+                // Special case for Xcode Capture, which misreports ray tracing support.
+                if Self::is_capture_mtl_device(device) {
+                    metal4 || (family_check && device.supportsFamily(MTLGPUFamily::Apple6))
+                } else {
+                    device_class_responds_to(device, sel!(supportsRaytracing))
+                        && device.supportsRaytracing()
+                        && device_class_responds_to(device, sel!(supportsRaytracingFromRender))
+                        && device.supportsRaytracingFromRender()
+                }
             } else {
                 false
             },
