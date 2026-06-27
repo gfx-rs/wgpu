@@ -50,23 +50,18 @@ impl super::Surface {
         &self.render_layer
     }
 
-    /// Reads the EDR headroom of the screen currently hosting this surface's
-    /// layer, as a [`wgt::DisplayHdrInfo`].
+    /// Returns the EDR headroom of the screen hosting this surface, as a
+    /// [`wgt::DisplayHdrInfo`].
     ///
-    /// Apple exposes a *relative* EDR multiplier (`1.0` == SDR white), no
-    /// absolute nits, and no discrete HDR-mode flag — so this fills the
-    /// `headroom` frame and *derives* the coarse `high_dynamic_range` bit from the
-    /// live `current` multiplier (`> 1.0`), not from `potential` (which is `> 1.0`
-    /// on nearly every Apple display and would conflate "capable" with "active").
+    /// macOS only. Returns `None` on other Apple platforms (iOS, tvOS, visionOS),
+    /// when the hosting screen can't be resolved (e.g. an off-screen window), or
+    /// when called off the main thread: `NSScreen` and `NSWindow` are
+    /// main-thread-only, and off-thread access is undefined behavior.
     ///
-    /// macOS only for now; it returns `None` on iOS, tvOS, and visionOS, and
-    /// whenever the hosting screen cannot be resolved.
-    ///
-    /// # Thread safety
-    ///
-    /// `NSScreen` and `NSWindow` may only be used from the main thread; reading
-    /// them off the main thread is undefined behavior.
-    /// Therefore, if this function is called on any other thread, it returns `None`.
+    /// Only `headroom` and the coarse `high_dynamic_range` bit are filled: Apple
+    /// exposes a relative EDR multiplier (`1.0` == SDR white), no absolute nits,
+    /// and no HDR-mode flag. `high_dynamic_range` tracks the live `current`
+    /// multiplier (`> 1.0`), so it reports HDR active, not merely capable.
     pub(super) fn display_hdr_info(&self) -> Option<wgt::DisplayHdrInfo> {
         #[cfg(target_os = "macos")]
         {
@@ -94,7 +89,7 @@ impl super::Surface {
                 return None;
             }
 
-            // Take an owned reference to the layer and drop the lock *before*
+            // Take an owned reference to the layer and drop the lock before
             // accessing the window and screen, so a main-thread AppKit callback
             // can never deadlock against this lock.
             let render_layer = {
@@ -112,7 +107,7 @@ impl super::Surface {
             // AppKit documents these EDR properties as finite multipliers
             // (`1.0` == SDR white), but guard against a non-finite read anyway so
             // the advisory values stay finite and the coarse `high_dynamic_range`
-            // bit reports *unknown* (`None`) rather than a false `Some(false)` —
+            // bit reports unknown (`None`) rather than a false `Some(false)`,
             // mirroring the `is_finite` discipline in
             // [`wgt::DisplayHdrInfo::tone_map_headroom`]. The EDR properties return
             // `CGFloat` (`f64` on 64-bit macOS).
@@ -126,7 +121,7 @@ impl super::Surface {
 
             // Apple exposes no discrete HDR-mode flag, so derive the coarse
             // dynamic-range bit from the live `current` EDR multiplier (`> 1.0`),
-            // *not* `potential` (which is `> 1.0` on nearly every Apple display and
+            // not `potential` (which is `> 1.0` on nearly every Apple display and
             // would conflate "capable" with "active").
             let high_dynamic_range = current.is_finite().then_some(current > 1.0);
 

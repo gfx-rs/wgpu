@@ -561,57 +561,25 @@ impl Default for SurfaceCapabilities {
     }
 }
 
-/// The HDR / luminance characteristics of the display currently backing a
-/// [`Surface`], as reported by the platform at the moment of the query.
+/// HDR and luminance characteristics of the display backing a [`Surface`], as
+/// reported by the platform at query time.
 ///
-/// This is the read-only, query side of HDR surface output: it describes what
-/// the panel can show *right now*, so an application can pick a tone-map target
-/// and decide whether requesting an HDR [`SurfaceColorSpace`] is worthwhile. It
-/// does **not** drive the display; the output color space is selected separately
-/// through [`SurfaceConfiguration::color_space`].
+/// This describes the display; it does not configure it. Set the output color
+/// space through [`SurfaceConfiguration::color_space`]; wgpu does not write HDR
+/// metadata (`vkSetHdrMetadataEXT` / DXGI `SetHDRMetaData`).
 ///
-/// It is also **not** content-mastering metadata (the write direction, e.g.
-/// `vkSetHdrMetadataEXT` / DXGI `SetHDRMetaData`), which this type does not
-/// cover.
+/// Use it for tone mapping, not to decide whether to enable HDR - that is a
+/// capability question for [`SurfaceCapabilities`], and holds even when the panel
+/// has no headroom right now. The live highlight multiplier is
+/// [`tone_map_headroom`](Self::tone_map_headroom).
 ///
-/// # Deciding what to do
+/// The values change as the display does, so re-query after the surface moves or
+/// resizes or the display configuration changes.
 ///
-/// Two separate questions, two separate signals — don't gate one on the other:
-///
-/// * **Should I configure an HDR surface, and which color space?** A capability
-///   question, answered by [`SurfaceCapabilities`]: pick from the color spaces it
-///   offers (those for which [`SurfaceColorSpace::is_hdr`] is `true` are the HDR
-///   ones). That answer is right even when the panel has no headroom this instant
-///   — a macOS display at full brightness still advertises HDR color spaces — so
-///   it is the gate, *not* the values here.
-/// * **How bright can highlights go right now?** A live question, answered by
-///   [`tone_map_headroom`](Self::tone_map_headroom): the multiplier to scale your
-///   highlights by this frame. It drifts moment to moment, so re-read it (see
-///   *Polling*); the raw fields below feed it if you roll your own tone curve.
-///
-/// # Polling
-///
-/// This is a poll, not a stream. wgpu only ever holds an opaque window handle
-/// and owns no event loop, so it cannot notify you when these values change (the
-/// brightness slider, ambient light, the window moving to another monitor, HDR
-/// toggled in OS settings). Re-query it when your windowing library signals that
-/// the surface may have moved or resized, or the display configuration changed.
-///
-/// # Coverage
-///
-/// No platform fills every field; every value is [`Option`]. `None` means "this
-/// platform or this moment cannot tell us", **never** zero, and **never** "this
-/// is an SDR display". The same monitor can report a full set of nits on Windows
-/// and only a headroom multiplier on macOS, so fall back to a sensible default
-/// rather than assuming the worst.
-///
-/// # Reliability
-///
-/// Numeric values are advisory: OS / EDID figures are frequently optimistic (a
-/// "DisplayHDR 400" panel claims 400 nits it cannot sustain), and a queried nit
-/// value is the panel's claim, not what survives the OS compositor's own
-/// tone-mapping and ambient adaptation. Treat them as tone-mapping hints, not
-/// contracts, and layer your own calibration or user override on top.
+/// Every field is [`Option`] and no platform reports them all; `None` means
+/// unknown, never zero and never SDR (Windows reports nits, macOS only a headroom
+/// multiplier). The numbers are advisory hints, not contracts: OS/EDID figures run
+/// optimistic and report the panel's claim, not what survives the compositor.
 ///
 #[doc = link_to_wgpu_item!(struct Surface)]
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -643,57 +611,39 @@ pub struct DisplayHdrInfo {
     pub bits_per_color: Option<u8>,
 }
 
-/// Absolute luminance levels in nits (cd/m²).
+/// Absolute luminance levels in nits (cd/m²). Populated only on Windows (via
+/// DXGI); `None` on every other platform.
 ///
-/// All values are advisory (OS / EDID figures are frequently optimistic; a
-/// "DisplayHDR 400" panel claims 400 nits it cannot sustain). Treat them as
-/// tone-mapping hints, never as guarantees. A `0.0` reported by the OS is passed
-/// through as `Some(0.0)`; absence is always `None`.
-///
-/// These are **achromatic**: the white / peak capability (luminance = CIE Y). A
-/// display cannot reach [`max_nits`](Self::max_nits) at a saturated chromaticity
-/// (peak luminance falls off toward the edges of the gamut), so this is **not** a
-/// per-color ceiling. Combine these scalars with [`DisplayChromaticity`] and let
-/// your tone-mapper gamut-map; a single nits value cannot, by itself, tell you
-/// how to avoid corner clipping and the hue shifts it causes.
+/// Advisory: OS/EDID figures run optimistic. A `0.0` from the OS stays
+/// `Some(0.0)`; absence is `None`. These are achromatic (luminance = CIE Y), not a
+/// per-color ceiling: a display can't reach [`max_nits`](Self::max_nits) at a
+/// saturated chromaticity. Pair them with [`DisplayChromaticity`] for gamut mapping.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DisplayLuminance {
     /// Peak luminance of a small patch, nits. DXGI `MaxLuminance`.
     pub max_nits: Option<f32>,
     /// Sustained full-white-frame luminance, nits: the ceiling for a fully-lit
-    /// frame, which a panel's power/thermal limits can hold below its small-patch
-    /// peak [`max_nits`](Self::max_nits). Advisory and OS/EDID-sourced, so it may
-    /// be optimistic (a panel can report a value it cannot actually sustain), and
-    /// may simply equal [`max_nits`](Self::max_nits) when the OS reports no
-    /// distinct full-frame limit. Don't derive it from `max_nits`; prefer it over
-    /// `max_nits` as the budget for large bright regions, but treat it as a hint.
-    /// DXGI `MaxFullFrameLuminance`.
+    /// frame, which power/thermal limits can hold below the small-patch peak
+    /// [`max_nits`](Self::max_nits). May equal `max_nits` if the OS reports no
+    /// distinct limit. Prefer it over `max_nits` for large bright regions; don't
+    /// derive it from `max_nits`. DXGI `MaxFullFrameLuminance`.
     pub max_full_frame_nits: Option<f32>,
     /// Minimum (black) luminance, nits. DXGI `MinLuminance`.
     pub min_nits: Option<f32>,
-    /// Luminance the OS maps SDR reference white to, nits. Dynamic with the
-    /// brightness slider. This is the value that converts between absolute nits
-    /// and relative EDR headroom (`max_nits / sdr_white_nits`); reference white
-    /// sits below the panel's peak on purpose, leaving that ratio as headroom for
-    /// highlights. Sourced separately from the other nits: it is not carried by
-    /// DXGI `GetDesc1` but by the `DISPLAYCONFIG_SDR_WHITE_LEVEL` query, performed
-    /// whenever the descriptor is read. Normally present alongside the other nits;
-    /// `None` only if that separate query fails (or on platforms that do not
-    /// report it).
+    /// Luminance the OS maps SDR reference white to, nits; moves with the
+    /// brightness slider. Converts between absolute nits and relative EDR headroom
+    /// (`max_nits / sdr_white_nits`). Read via the `DISPLAYCONFIG_SDR_WHITE_LEVEL`
+    /// query, separate from the other nits, so `None` only if that query fails.
     pub sdr_white_nits: Option<f32>,
 }
 
-/// Relative EDR headroom (Apple): unitless multipliers over *current* SDR white,
-/// where `1.0` means SDR white (no headroom).
+/// Relative EDR headroom (Apple): unitless multipliers over current SDR white,
+/// where `1.0` means no headroom. Moves with brightness, ambient light, battery,
+/// and which display the window is on. Apple exposes no absolute-nit equivalent,
+/// so this is separate from [`DisplayLuminance`] and can't be converted to nits.
 ///
-/// Dynamic with brightness, ambient light, battery, and which display the window
-/// is on. Apple exposes no public absolute-nit equivalent, so this is reported
-/// separately from [`DisplayLuminance`] and cannot be converted into nits.
-///
-/// Currently populated only on macOS. The iOS/tvOS/visionOS `UIScreen` EDR path
-/// is not yet implemented, so on those platforms `DisplayHdrInfo::headroom` is
-/// `None`.
+/// Populated only on macOS; `None` on iOS, tvOS, and visionOS.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DisplayHeadroom {

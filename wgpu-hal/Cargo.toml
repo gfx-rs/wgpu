@@ -103,9 +103,6 @@ vulkan = [
     "dep:windows",
     "gpu-allocator/vulkan",
     "windows/Win32",
-    # Vulkan-on-Windows reads display HDR info through DXGI + DisplayConfig
-    # (shared with the dx12 backend via `auxil::dxgi::hdr`). These only take
-    # effect on Windows targets, where the `windows` dependency is present.
     "windows/Win32_Devices_Display",
     "windows/Win32_Foundation",
     "windows/Win32_Graphics_Dxgi",

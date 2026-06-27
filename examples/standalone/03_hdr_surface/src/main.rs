@@ -397,49 +397,23 @@ impl State {
         self.surface.configure(&self.device, &self.config);
     }
 
-    /// Re-query the display HDR info and report it if it changed.
+    /// Re-query the display HDR info and log it if it changed.
     ///
-    /// wgpu does not push you a notification when the display changes, so you
-    /// call [`wgpu::Surface::display_hdr_info`] again whenever something might
-    /// have. Each call re-reads the OS, so re-querying *is* how you observe a
-    /// change. A real app would also re-pick its color space and refresh its
-    /// tone-map target from the new values; here we just log them.
+    /// `display_hdr_info` is a point-in-time read, so re-query when the display
+    /// might have changed. winit reports window changes (`Resized` / `Moved`);
+    /// this example also installs a macOS observer for the in-place changes winit
+    /// has no event for (HDR toggled, or the brightness slider that moves EDR
+    /// headroom). Other platforms' in-place triggers are left unwired.
     ///
-    /// Call this on the main thread: on the Metal backend `display_hdr_info`
-    /// reads main-thread-only `NSScreen`. The winit `Resized` / `Moved` events
-    /// and the macOS observer below all deliver here.
+    /// Call this on the main thread: on the Metal backend `display_hdr_info` reads
+    /// main-thread-only `NSScreen`, and all triggers deliver here.
     ///
-    /// This example re-queries on two triggers: the winit `Resized` / `Moved`
-    /// events (cross-platform, enough to catch the window being dragged to a
-    /// *different physical monitor*), and on macOS the
-    /// `NSApplicationDidChangeScreenParametersNotification` observer (see
-    /// `observe_screen_parameter_changes`), which catches the *in-place* changes
-    /// winit delivers no event for — HDR toggled in System Settings, or the SDR
-    /// brightness slider that moves the EDR headroom.
-    ///
-    /// The other platforms' in-place triggers are left unwired:
-    ///
-    /// * **Windows:** toggling HDR fires only the Win32 `WM_DISPLAYCHANGE`
-    ///   message (which winit does not forward), and the SDR-content brightness
-    ///   slider fires nothing at all — so an in-place change shows up only on the
-    ///   next `Resized` / `Moved`, or if you poll. Each `display_hdr_info` call
-    ///   re-reads DXGI and the OS display config, so the value is fresh once you
-    ///   do re-query.
-    /// * **Wayland:** `Moved` never fires (per the winit docs); the per-surface
-    ///   "preferred image description changed" event that would replace it is not
-    ///   bound by wgpu or winit yet, so `display_hdr_info` is `None` here today
-    ///   regardless.
-    /// * **Web / X11:** nothing to re-query for (web exposes no usable signal;
-    ///   X11 has no HDR).
-    ///
-    /// macOS EDR headroom also drifts continuously and ramps over ~1-2 s, so apps
-    /// that feed it into tone mapping tend to re-read it every frame rather than
-    /// only on the notification. Most other apps query once at startup, since
-    /// every value except that headroom is advisory.
+    /// macOS EDR headroom drifts and ramps over ~1-2 s, so apps that tone-map from
+    /// it tend to re-read every frame; otherwise a query at startup is enough,
+    /// since every value but that headroom is advisory.
     fn requery_display_hdr_info(&mut self, source: &str) {
         let info = self.surface.display_hdr_info(&self.adapter);
-        // Change-gated, so a printed line means this `source` actually changed
-        // something.
+        // Change-gated: a printed line means this `source` changed something.
         if info != self.last_hdr_info {
             report_display_hdr_info(source, &info);
             self.last_hdr_info = info;

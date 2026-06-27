@@ -673,12 +673,11 @@ impl Surface {
         Ok(caps)
     }
 
-    /// Returns the current HDR / luminance characteristics of the display
-    /// currently backing this surface on `adapter`.
+    /// Returns the HDR / luminance characteristics of the display backing this
+    /// surface on `adapter`.
     ///
-    /// If the information is not available (because the surface is not present
-    /// on `adapter`'s backend, or the backend reports nothing), returns
-    /// [`wgt::DisplayHdrInfo::default`] (all fields `None`).
+    /// Falls back to [`wgt::DisplayHdrInfo::default`] (all fields `None`) when the
+    /// surface is not on `adapter`'s backend or the backend reports nothing.
     pub fn display_hdr_info(&self, adapter: &Adapter) -> wgt::DisplayHdrInfo {
         self.display_hdr_info_with_raw(&adapter.raw)
     }

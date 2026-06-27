@@ -1,6 +1,6 @@
-// The bulk of this module is DX12-only. Only `hdr` (the pure
-// `DXGI_OUTPUT_DESC1` → `DisplayHdrInfo` mapping) is shared with the
-// Vulkan-on-Windows backend, so the rest stays gated behind `dx12`.
+// Every module here is gated behind `dx12` except `hdr` (the
+// `DXGI_OUTPUT_DESC1` -> `DisplayHdrInfo` mapping), which the
+// Vulkan-on-Windows backend also uses.
 #[cfg(dx12)]
 pub mod conv;
 #[cfg(dx12)]

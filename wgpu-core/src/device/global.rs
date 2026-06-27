@@ -80,14 +80,15 @@ impl Global {
         })
     }
 
-    /// Returns the **current** HDR / luminance characteristics of the display
-    /// currently backing `surface_id` on `adapter_id`.
+    /// Returns the HDR and luminance characteristics of the display backing
+    /// `surface_id` on `adapter_id`.
     ///
-    /// If the information is not available, returns
-    /// [`wgt::DisplayHdrInfo::default`].
-    ///
-    /// Unlike [`Self::surface_get_capabilities`] this does **not** filter by
-    /// color space; it returns the raw display facts as-is.
+    /// Reports the raw display state, independent of the surface's configured
+    /// color space; see [`wgt::DisplayHdrInfo`] for per-field platform coverage.
+    /// Returns [`wgt::DisplayHdrInfo::default`] (all fields `None`) when nothing
+    /// is known: the surface is not on `adapter_id`'s backend, the backend has
+    /// no display-query path, or the Metal backend is queried off the main
+    /// thread.
     pub fn surface_display_hdr_info(
         &self,
         surface_id: SurfaceId,

@@ -3185,12 +3185,9 @@ impl crate::Adapter for super::Adapter {
         &self,
         surface: &super::Surface,
     ) -> Option<wgt::DisplayHdrInfo> {
-        // Vulkan has no portable luminance query of its own. On Windows the
-        // display facts live in DXGI — an OS service reachable from the window's
-        // `HWND` with no D3D device — so a Win32 Vulkan surface reads the same
-        // `DXGI_OUTPUT_DESC1` as the DX12 backend (see `dxgi::hdr`). Every other
-        // Vulkan surface (Wayland / X11 / Android / Metal / headless) carries no
-        // `HWND` and returns `None`.
+        // Vulkan has no portable luminance query. On Windows the data lives in
+        // DXGI, reachable from the surface's `HWND` without a D3D device (see
+        // `dxgi::hdr`); surfaces without an `HWND` return `None`.
         #[cfg(windows)]
         {
             let handle = surface.inner.raw_window_hwnd()?;
@@ -3539,16 +3536,9 @@ fn query_cooperative_matrix_properties(
     result
 }
 
-/// Reads the [`wgt::DisplayHdrInfo`] for the monitor backing `handle` through DXGI.
-///
-/// DXGI needs no D3D device and its `windows`-crate bindings can be called from
-/// any thread, so it is reachable from the Vulkan backend. The DXGI output walk and the
-/// `DXGI_OUTPUT_DESC1` → [`wgt::DisplayHdrInfo`] mapping are both shared with the
-/// DX12 backend via [`crate::auxil::dxgi::hdr`], so a Vulkan-on-Windows surface
-/// reports numbers identical to DX12 for the same monitor.
-///
-/// Returns `None` on any failure (no `IDXGIOutput6` / pre-Win10-1703, no matching
-/// monitor, transient COM error). Never panics.
+/// Reads the [`wgt::DisplayHdrInfo`] for the monitor backing `handle`, via the
+/// [`crate::auxil::dxgi::hdr`] helpers shared with the DX12 backend. Returns
+/// `None` when the monitor or its HDR data can't be queried.
 #[cfg(windows)]
 fn display_hdr_info_for_hwnd(
     handle: crate::vulkan::swapchain::WindowHandle,

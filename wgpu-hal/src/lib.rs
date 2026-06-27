@@ -801,17 +801,15 @@ pub trait Adapter: WasmNotSendSync {
         surface: &<Self::A as Api>::Surface,
     ) -> Option<SurfaceCapabilities>;
 
-    /// Returns the current HDR / luminance characteristics
-    /// of the display currently backing `surface`, as reported by the platform's
-    /// windowing or display layer.
+    /// Returns the HDR / luminance characteristics of the display backing
+    /// `surface`, queried from the OS on each call.
     ///
-    /// The backend re-queries the OS on every call and never caches. `None` means the backend synthesizes nothing for this
-    /// surface (the default for backends without a display-query path); wgpu-core
-    /// collapses that to [`wgt::DisplayHdrInfo::default`]. Backends **must** never
-    /// panic here; any OS-call failure **must** degrade to `None` or `Default`.
+    /// `None` means no information is available; wgpu-core maps it to
+    /// [`wgt::DisplayHdrInfo::default`]. Implementors must not panic; degrade any
+    /// OS-query failure to `None`. The default implementation returns `None`.
     ///
-    /// The default implementation returns `None`, so backends with no luminance
-    /// source (GLES, noop, Vulkan on non-Windows) need not override it.
+    /// Implemented by Metal (macOS only, and only from the main thread), DX12, and
+    /// Vulkan (Win32 `HWND` surfaces only); GLES and noop keep the default `None`.
     unsafe fn surface_display_hdr_info(
         &self,
         surface: &<Self::A as Api>::Surface,

@@ -290,8 +290,6 @@ impl Surface for NativeSurface {
         }))
     }
 
-    // Only ever called on Windows (to drive the DXGI display-HDR query); the
-    // borrowed `HWND` is meaningless to the other platforms' Vulkan surfaces.
     #[cfg_attr(not(windows), allow(dead_code))]
     fn raw_window_hwnd(&self) -> Option<WindowHandle> {
         self.hwnd

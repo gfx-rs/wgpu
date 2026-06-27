@@ -599,9 +599,8 @@ pub trait SurfaceInterface: CommonTraits {
 
     /// The backing display's current HDR / luminance characteristics.
     ///
-    /// Defaults to [`crate::DisplayHdrInfo::default`] (all fields `None`) so a
-    /// custom backend that does not implement a display query is not required to
-    /// override it.
+    /// Defaults to [`crate::DisplayHdrInfo::default`] (all fields `None`) so
+    /// custom backends without a display query need not override it.
     fn display_hdr_info(&self, adapter: &DispatchAdapter) -> crate::DisplayHdrInfo {
         let _ = adapter;
         crate::DisplayHdrInfo::default()

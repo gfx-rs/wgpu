@@ -3939,9 +3939,8 @@ impl Drop for WebRenderBundle {
     }
 }
 
-/// Evaluates a CSS media query, or returns `None` when there is no
-/// [`web_sys::Window`] (e.g. a Worker / `OffscreenCanvas` context, where
-/// `matchMedia` is absent). Never panics.
+/// Evaluates a CSS media query, or `None` if there is no [`web_sys::Window`]
+/// (Worker / `OffscreenCanvas` contexts, where `matchMedia` is absent).
 fn match_media_query(query: &str) -> Option<bool> {
     let list = web_sys::window()?.match_media(query).ok().flatten()?;
     Some(list.matches())
@@ -4078,8 +4077,8 @@ impl dispatch::SurfaceInterface for WebSurface {
                     // `configure` here never gates on display HDR state either).
                     // So these spaces are gated on fp16-canvas support alone —
                     // the same condition that puts `Rgba16Float` in `formats` —
-                    // not on whether the display is currently HDR; that signal
-                    // belongs to `display_hdr_info`. WebGPU has no linear canvas
+                    // not on whether the display is currently HDR, which is what
+                    // `display_hdr_info` reports. WebGPU has no linear canvas
                     // color space, so the web backend advertises the encoded
                     // `ExtendedSrgb` and, for the "display-p3" canvas, the
                     // wide-gamut `ExtendedDisplayP3` — not the linear
@@ -4105,11 +4104,11 @@ impl dispatch::SurfaceInterface for WebSurface {
     }
 
     fn display_hdr_info(&self, _adapter: &dispatch::DispatchAdapter) -> wgt::DisplayHdrInfo {
-        // The web exposes only coarse, boolean dynamic-range + gamut buckets
-        // (CSS media queries) and no numeric luminance — `(dynamic-range: high)`
-        // is "capable", not "active" — so every numeric field stays `None`.
-        // Worker / `OffscreenCanvas` contexts have no `Window` (hence no
-        // `matchMedia`), so this degrades to `default()`; never panics.
+        // The web exposes only coarse boolean dynamic-range + gamut buckets (CSS
+        // media queries), no numeric luminance, so every numeric field stays
+        // `None`. `(dynamic-range: high)` reports capability, not whether HDR is
+        // active. Worker / `OffscreenCanvas` contexts have no `Window` (no
+        // `matchMedia`), so this falls back to `default()`.
         let high_dynamic_range = match_media_query("(dynamic-range: high)");
         let gamut = environment_color_gamut();
 

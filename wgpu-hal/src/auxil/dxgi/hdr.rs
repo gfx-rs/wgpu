@@ -1,13 +1,10 @@
 //! Mapping a DXGI output description into the backend-agnostic
 //! [`wgt::DisplayHdrInfo`].
 //!
-//! This lives in `auxil/dxgi` so the DX12 and Vulkan-on-Windows backends share
-//! one mapping and the same monitor reports identical numbers under either
-//! backend. The per-backend monitor *walk* differs (DX12 enumerates its own
-//! `IDXGIAdapter`'s outputs; the Vulkan path creates its own DXGI factory), but
-//! both feed the resulting [`DXGI_OUTPUT_DESC1`] through this one function.
-//!
-//! [`DXGI_OUTPUT_DESC1`]: windows::Win32::Graphics::Dxgi::DXGI_OUTPUT_DESC1
+//! Lives in `auxil/dxgi` so the DX12 and Vulkan-on-Windows backends share it:
+//! both call [`output_desc1_for_window`] to find the monitor and
+//! [`display_hdr_info_from_desc1`] to map it, so the same monitor reports
+//! identical numbers under either backend.
 
 use windows::{
     core::Interface as _,
@@ -58,13 +55,12 @@ fn classify_gamut(red: [f32; 2], green: [f32; 2], blue: [f32; 2]) -> Option<wgt:
     .map(|(gamut, _)| gamut)
 }
 
-/// Maps an [`IDXGIOutput6::GetDesc1`] result, plus the SDR white level (obtained
-/// from [`sdr_white_nits_for_monitor`]), into the backend-agnostic
+/// Maps an [`IDXGIOutput6::GetDesc1`] result and the SDR white level (from
+/// [`sdr_white_nits_for_monitor`]) into the backend-agnostic
 /// [`wgt::DisplayHdrInfo`].
 ///
-/// This function is pure (it makes no system calls) and infallible; it only
-/// interprets the data it is given. All numeric values are advisory
-/// (EDID-sourced); see [`wgt::DisplayLuminance`].
+/// Pure: it interprets `desc1` without any system call. Numeric values are
+/// advisory (EDID-sourced); see [`wgt::DisplayLuminance`].
 ///
 /// [`IDXGIOutput6::GetDesc1`]: windows::Win32::Graphics::Dxgi::IDXGIOutput6::GetDesc1
 pub fn display_hdr_info_from_desc1(
@@ -110,19 +106,14 @@ pub fn display_hdr_info_from_desc1(
     }
 }
 
-/// Finds the [`DXGI_OUTPUT_DESC1`] for the monitor that currently backs
-/// `wnd_handle`, walking *every* adapter's outputs via a fresh DXGI factory.
+/// Returns the [`DXGI_OUTPUT_DESC1`] for the monitor backing `wnd_handle`, or
+/// `None` if it can't be identified or queried (a headless or composition window,
+/// a pre-Win10-1703 system without `IDXGIOutput6`, or a COM failure). Never
+/// panics.
 ///
-/// DXGI is an OS service that needs no D3D device, so this is reachable from both
-/// the DX12 and Vulkan backends, which call it identically — the same monitor
-/// reports the same descriptor under either backend. Enumerating *all* adapters
-/// (rather than only the rendering adapter's) means the monitor is found even on
-/// hybrid-GPU systems where the window sits on a display wired to a different
-/// adapter.
-///
-/// Returns `None` if the output cannot be identified or queried: a headless or
-/// composition window, a pre-Win10-1703 system without `IDXGIOutput6`, or a COM
-/// failure. Never panics.
+/// Walks every adapter's outputs via a fresh DXGI factory, not just the rendering
+/// adapter's, so the monitor is found even on hybrid-GPU systems where the window
+/// sits on a display wired to a different adapter.
 ///
 /// [`DXGI_OUTPUT_DESC1`]: Dxgi::DXGI_OUTPUT_DESC1
 pub fn output_desc1_for_window(wnd_handle: HWND) -> Option<Dxgi::DXGI_OUTPUT_DESC1> {
@@ -203,19 +194,16 @@ pub fn output_desc1_for_window(wnd_handle: HWND) -> Option<Dxgi::DXGI_OUTPUT_DES
     None
 }
 
-/// Best-effort SDR white level in nits for the monitor `hmonitor`, via the
-/// Windows DisplayConfig API.
+/// Best-effort SDR white level in nits for `hmonitor`, via the Windows
+/// DisplayConfig API. Tracks the brightness slider, so it changes at runtime.
 ///
-/// This is the value that bridges the absolute and relative luminance frames
-/// (and the only [`wgt::DisplayLuminance`] field not carried by `GetDesc1`). It
-/// lives in `DISPLAYCONFIG_SDR_WHITE_LEVEL`, a different subsystem than DXGI, so
-/// it needs its own walk: resolve `hmonitor` to its GDI device name, find the
-/// active DisplayConfig path whose *source* has that name, then read its
-/// *target*'s SDR white level. Dynamic with the brightness slider.
+/// This is the only [`wgt::DisplayLuminance`] field `GetDesc1` doesn't carry; it
+/// bridges absolute nits and relative headroom. It lives in
+/// `DISPLAYCONFIG_SDR_WHITE_LEVEL`, outside DXGI, so it needs its own query.
 ///
-/// Returns `None` on any failure (no match, query error, or a nonsensical `0` value).
-/// Never panics. Pass [`Dxgi::DXGI_OUTPUT_DESC1::Monitor`] (the same monitor the
-/// descriptor came from) so the value matches the rest of the `DisplayHdrInfo`.
+/// Returns `None` on any failure (no match, query error, or a `0` reading). Never
+/// panics. Pass [`Dxgi::DXGI_OUTPUT_DESC1::Monitor`] so the value matches the rest
+/// of the `DisplayHdrInfo`.
 pub fn sdr_white_nits_for_monitor(hmonitor: Gdi::HMONITOR) -> Option<f32> {
     use windows::Win32::{
         Devices::Display::{
@@ -229,7 +217,7 @@ pub fn sdr_white_nits_for_monitor(hmonitor: Gdi::HMONITOR) -> Option<f32> {
         Graphics::Gdi::{GetMonitorInfoW, MONITORINFO, MONITORINFOEXW},
     };
 
-    // 1. HMONITOR → GDI device name (e.g. `\\.\DISPLAY1`).
+    // 1. HMONITOR -> GDI device name (e.g. `\\.\DISPLAY1`).
     let mut monitor_info = MONITORINFOEXW::default();
     monitor_info.monitorInfo.cbSize = size_of::<MONITORINFOEXW>() as u32;
     // `GetMonitorInfoW` takes a `*mut MONITORINFO`; the `EXW` variant is
