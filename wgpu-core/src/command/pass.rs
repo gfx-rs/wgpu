@@ -30,6 +30,68 @@ pub struct BindGroupIndexOutOfRange {
 #[error("Pipeline must be set")]
 pub struct MissingPipeline;
 
+#[derive(Debug, Default)]
+pub(crate) struct ImmediateState {
+    pub(crate) immediates: Vec<u32>,
+    pub(crate) immediates_dirty: bool,
+    /// A bitmask, tracking which 4-byte slots have been written via `set_immediates`.
+    /// Checked against the pipeline's required slots before each draw call.
+    pub(crate) immediate_slots_set: naga::valid::ImmediateSlots,
+}
+
+impl ImmediateState {
+    pub(crate) fn set_immediates<E>(
+        &mut self,
+        limits: &wgt::Limits,
+        offset: u32,
+        data_bytes: &[u8],
+    ) -> Result<(), E>
+    where
+        E: From<ImmediateUploadError>,
+    {
+        // Alignment has been validated when pushing `SetImmediate` commands.
+
+        let offset_usize = offset as usize;
+        if data_bytes
+            .len()
+            .checked_add(offset_usize)
+            .is_none_or(|end_offset| end_offset > limits.max_immediate_size as usize)
+        {
+            return Err(ImmediateUploadError::EndOffsetBeyondLimit {
+                start_offset: offset,
+                size: data_bytes.len(),
+                limit: limits.max_immediate_size,
+            }
+            .into());
+        }
+
+        let end_offset = offset_usize + data_bytes.len();
+        if self.immediates.len() < end_offset {
+            self.immediates.resize(end_offset, 0);
+        }
+        let data = bytemuck::cast_slice(data_bytes);
+        self.immediates[offset_usize..end_offset].copy_from_slice(data);
+        self.immediate_slots_set |=
+            naga::valid::ImmediateSlots::from_range(offset, data_bytes.len() as u32);
+        self.immediates_dirty = true;
+
+        Ok(())
+    }
+
+    pub(crate) unsafe fn flush_immediates(
+        &mut self,
+        raw_layout: &dyn hal::DynPipelineLayout,
+        raw_encoder: &mut dyn hal::DynCommandEncoder,
+    ) {
+        if !self.immediates.is_empty() && self.immediates_dirty {
+            unsafe {
+                raw_encoder.set_immediates(raw_layout, 0, &self.immediates);
+            }
+            self.immediates_dirty = false;
+        }
+    }
+}
+
 pub(crate) struct PassState<'scope, 'snatch_guard, 'cmd_enc> {
     pub(crate) base: EncodingState<'snatch_guard, 'cmd_enc>,
 
@@ -47,13 +109,7 @@ pub(crate) struct PassState<'scope, 'snatch_guard, 'cmd_enc> {
 
     pub(crate) string_offset: usize,
 
-    pub(crate) immediates: Vec<u8>,
-
-    pub(crate) immediates_dirty: bool,
-
-    /// A bitmask, tracking which 4-byte slots have been written via `set_immediates`.
-    /// Checked against the pipeline's required slots before each draw call.
-    pub(crate) immediate_slots_set: naga::valid::ImmediateSlots,
+    pub(crate) immediate_state: ImmediateState,
 }
 
 pub(crate) fn set_bind_group<E>(
@@ -184,11 +240,10 @@ pub(super) fn flush_bindings_helper(state: &mut PassState) -> Result<(), Destroy
     Ok(())
 }
 
-pub(super) fn change_pipeline_layout<E, F: FnOnce()>(
+pub(super) fn change_pipeline_layout<E>(
     state: &mut PassState,
     pipeline_layout: &Arc<binding_model::PipelineLayout>,
     late_sized_buffer_groups: &[LateSizedBufferGroup],
-    f: F,
 ) -> Result<(), E>
 where
     E: From<DestroyedResourceError>,
@@ -197,8 +252,7 @@ where
         .binder
         .change_pipeline_layout(pipeline_layout, late_sized_buffer_groups)
     {
-        state.immediates_dirty = true;
-        f();
+        state.immediate_state.immediates_dirty = true;
     }
     Ok(())
 }
@@ -214,40 +268,6 @@ pub(crate) fn validate_immediates_alignment(
     if !size_bytes.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT as usize) {
         return Err(ImmediateUploadError::SizeUnaligned(size_bytes));
     }
-
-    Ok(())
-}
-
-pub(crate) fn set_immediates<E>(state: &mut PassState, offset: u32, data: &[u8]) -> Result<(), E>
-where
-    E: From<ImmediateUploadError>,
-{
-    api_log!("Pass::set_immediates");
-
-    // Alignment has been validated when pushing `SetImmediate` commands.
-
-    let limit = state.base.device.limits.max_immediate_size;
-    let beyond_limit_err = ImmediateUploadError::EndOffsetBeyondLimit {
-        start_offset: offset,
-        size: data.len(),
-        limit,
-    };
-    if data
-        .len()
-        .checked_add(offset as usize)
-        .ok_or(beyond_limit_err.clone())?
-        > limit as usize
-    {
-        return Err(beyond_limit_err.into());
-    }
-
-    let end_offset = offset as usize + data.len();
-    if state.immediates.len() < end_offset {
-        state.immediates.resize(end_offset, 0);
-    }
-    state.immediates[(offset as usize)..][..data.len()].copy_from_slice(data);
-    state.immediate_slots_set |= naga::valid::ImmediateSlots::from_range(offset, data.len() as u32);
-    state.immediates_dirty = true;
 
     Ok(())
 }

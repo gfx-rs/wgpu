@@ -16,7 +16,7 @@ use crate::{
     command::{
         bind::Binder,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState, TextureSurfaceDiscard},
-        pass::{self, flush_bindings_helper},
+        pass::{self, flush_bindings_helper, ImmediateState},
         pass_base, pass_try,
         query::{
             end_occlusion_query, end_pipeline_statistics_query, record_pass_timestamp_writes,
@@ -698,13 +698,14 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
             }
             if !self
                 .pass
+                .immediate_state
                 .immediate_slots_set
                 .contains(pipeline.immediate_slots_required)
             {
                 return Err(DrawError::MissingImmediateData {
                     missing: pipeline
                         .immediate_slots_required
-                        .difference(self.pass.immediate_slots_set),
+                        .difference(self.pass.immediate_state.immediate_slots_set),
                 });
             }
             Ok(())
@@ -713,17 +714,13 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         }
     }
 
-    unsafe fn flush_immediates(&mut self) {
-        if !self.pass.immediates.is_empty() && self.pass.immediates_dirty {
-            let layout = &self.pipeline.as_ref().unwrap().layout;
-            unsafe {
-                self.pass.base.raw_encoder.set_immediates(
-                    layout.raw(),
-                    0,
-                    bytemuck::cast_slice(&self.pass.immediates),
-                );
-            }
-            self.pass.immediates_dirty = false;
+    fn flush_immediates(&mut self) {
+        // SAFETY: The range of immediates written was validated in `is_ready`.
+        unsafe {
+            self.pass.immediate_state.flush_immediates(
+                self.pipeline.as_ref().unwrap().layout.raw(),
+                self.pass.base.raw_encoder,
+            );
         }
     }
 
@@ -742,7 +739,7 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         self.pipeline = None;
         self.index.reset();
         self.vertex = Default::default();
-        self.pass.immediate_slots_set = Default::default();
+        self.pass.immediate_state.immediate_slots_set = Default::default();
     }
 
     /// Flush dirty vertex buffer slots to the HAL encoder in preparation for a draw call.
@@ -2286,9 +2283,7 @@ pub(super) fn encode_render_pass(
 
                 string_offset: 0,
 
-                immediates: Vec::new(),
-                immediates_dirty: false,
-                immediate_slots_set: Default::default(),
+                immediate_state: ImmediateState::default(),
             },
 
             active_occlusion_query: None,
@@ -2352,9 +2347,19 @@ pub(super) fn encode_render_pass(
                     let scope = PassErrorScope::SetViewport;
                     set_viewport(&mut state, rect, depth_min, depth_max).map_pass_err(scope)?;
                 }
-                ArcRenderCommand::SetImmediate { offset, data } => {
+                ArcRenderCommand::SetImmediate {
+                    offset,
+                    data: data_bytes,
+                } => {
                     let scope = PassErrorScope::SetImmediate;
-                    pass::set_immediates::<RenderPassErrorInner>(&mut state.pass, offset, &data)
+                    state
+                        .pass
+                        .immediate_state
+                        .set_immediates::<RenderPassErrorInner>(
+                            &state.pass.base.device.limits,
+                            offset,
+                            &data_bytes,
+                        )
                         .map_pass_err(scope)?;
                 }
                 ArcRenderCommand::SetScissor(rect) => {
@@ -2714,11 +2719,10 @@ fn set_pipeline(
     }
 
     // Rebind resource
-    pass::change_pipeline_layout::<RenderPassErrorInner, _>(
+    pass::change_pipeline_layout::<RenderPassErrorInner>(
         &mut state.pass,
         &pipeline.layout,
         &pipeline.late_sized_buffer_groups,
-        || {},
     )?;
 
     // Update vertex buffer limits.
@@ -3004,7 +3008,7 @@ fn draw(
     state.is_ready(DrawCommandFamily::Draw)?;
     state.flush_vertex_buffers()?;
     state.flush_bindings()?;
-    unsafe { state.flush_immediates() };
+    state.flush_immediates();
 
     state
         .vertex
@@ -3041,7 +3045,7 @@ fn draw_indexed(
     state.is_ready(DrawCommandFamily::DrawIndexed)?;
     state.flush_vertex_buffers()?;
     state.flush_bindings()?;
-    unsafe { state.flush_immediates() };
+    state.flush_immediates();
 
     let last_index = first_index as u64 + index_count as u64;
     let index_limit = state.index.limit;
@@ -3082,8 +3086,8 @@ fn draw_mesh_tasks(
     state.is_ready(DrawCommandFamily::DrawMeshTasks)?;
 
     state.flush_bindings()?;
+    state.flush_immediates();
     validate_mesh_draw_multiview(state)?;
-    unsafe { state.flush_immediates() };
 
     let limits = &state.pass.base.device.limits;
     let (groups_size_limit, max_groups) = if state.pipeline.as_ref().unwrap().has_task_shader {
@@ -3136,7 +3140,7 @@ fn multi_draw_indirect(
     state.is_ready(family)?;
     state.flush_vertex_buffers()?;
     state.flush_bindings()?;
-    unsafe { state.flush_immediates() };
+    state.flush_immediates();
 
     if family == DrawCommandFamily::DrawMeshTasks {
         validate_mesh_draw_multiview(state)?;
@@ -3332,7 +3336,7 @@ fn multi_draw_indirect_count(
     state.is_ready(family)?;
     state.flush_vertex_buffers()?;
     state.flush_bindings()?;
-    unsafe { state.flush_immediates() };
+    state.flush_immediates();
 
     if family == DrawCommandFamily::DrawMeshTasks {
         validate_mesh_draw_multiview(state)?;

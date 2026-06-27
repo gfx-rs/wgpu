@@ -15,7 +15,7 @@ use crate::{
         compute_command::ArcComputeCommand,
         encoder::EncodingState,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
-        pass::{self, flush_bindings_helper},
+        pass::{self, flush_bindings_helper, ImmediateState},
         pass_base, pass_try,
         query::{
             end_pipeline_statistics_query, record_pass_timestamp_writes,
@@ -268,13 +268,14 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
             self.pass.binder.check_late_buffer_bindings()?;
             if !self
                 .pass
+                .immediate_state
                 .immediate_slots_set
                 .contains(pipeline.immediate_slots_required)
             {
                 return Err(DispatchError::MissingImmediateData {
                     missing: pipeline
                         .immediate_slots_required
-                        .difference(self.pass.immediate_slots_set),
+                        .difference(self.pass.immediate_state.immediate_slots_set),
                 });
             }
             Ok(())
@@ -283,17 +284,13 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         }
     }
 
-    unsafe fn flush_immediates(&mut self) {
-        if !self.pass.immediates.is_empty() && self.pass.immediates_dirty {
-            let layout = &self.pipeline.as_ref().unwrap().layout;
-            unsafe {
-                self.pass.base.raw_encoder.set_immediates(
-                    layout.raw(),
-                    0,
-                    bytemuck::cast_slice(&self.pass.immediates),
-                );
-            }
-            self.pass.immediates_dirty = false;
+    fn flush_immediates(&mut self) {
+        // SAFETY: The range of immediates written was validated in `is_ready`.
+        unsafe {
+            self.pass.immediate_state.flush_immediates(
+                self.pipeline.as_ref().unwrap().layout.raw(),
+                self.pass.base.raw_encoder,
+            );
         }
     }
 
@@ -640,9 +637,7 @@ pub(super) fn encode_compute_pass(
             pending_discard_init_fixups: SurfacesInDiscardState::new(),
             scope: device.new_usage_scope(),
             string_offset: 0,
-            immediates: Vec::new(),
-            immediates_dirty: false,
-            immediate_slots_set: Default::default(),
+            immediate_state: ImmediateState::default(),
         },
         active_query: None,
 
@@ -746,9 +741,19 @@ pub(super) fn encode_compute_pass(
                 let scope = PassErrorScope::SetPipelineCompute;
                 set_pipeline(&mut state, device, pipeline).map_pass_err(scope)?;
             }
-            ArcComputeCommand::SetImmediate { offset, data } => {
+            ArcComputeCommand::SetImmediate {
+                offset,
+                data: data_bytes,
+            } => {
                 let scope = PassErrorScope::SetImmediate;
-                pass::set_immediates::<ComputePassErrorInner>(&mut state.pass, offset, &data)
+                state
+                    .pass
+                    .immediate_state
+                    .set_immediates::<ComputePassErrorInner>(
+                        &state.pass.base.device.limits,
+                        offset,
+                        &data_bytes,
+                    )
                     .map_pass_err(scope)?;
             }
             ArcComputeCommand::DispatchWorkgroups(groups) => {
@@ -904,11 +909,10 @@ fn set_pipeline(
     }
 
     // Rebind resources
-    pass::change_pipeline_layout::<ComputePassErrorInner, _>(
+    pass::change_pipeline_layout::<ComputePassErrorInner>(
         &mut state.pass,
         &pipeline.layout,
         &pipeline.late_sized_buffer_groups,
-        || {},
     )
 }
 
@@ -918,7 +922,7 @@ fn dispatch_workgroups(state: &mut State, groups: [u32; 3]) -> Result<(), Comput
     state.is_ready()?;
 
     state.flush_bindings(None, false)?;
-    unsafe { state.flush_immediates() };
+    state.flush_immediates();
 
     let groups_size_limit = state
         .pass
@@ -1073,9 +1077,9 @@ fn dispatch_workgroups_indirect(
                     .set_compute_pipeline(state.pipeline.as_ref().unwrap().raw());
             }
 
-            // Immediates is always dirty because state is reset.
-            state.pass.immediates_dirty = true;
-            unsafe { state.flush_immediates() };
+            // Immediates are dirty because we used them for the validation pipeline
+            state.pass.immediate_state.immediates_dirty = true;
+            state.flush_immediates();
 
             for (i, group, dynamic_offsets) in state.pass.binder.list_valid() {
                 let raw_bg = group.try_raw(state.pass.base.snatch_guard)?;
@@ -1114,7 +1118,7 @@ fn dispatch_workgroups_indirect(
         }
     } else {
         state.flush_bindings(Some(&buffer), true)?;
-        unsafe { state.flush_immediates() };
+        state.flush_immediates();
         let buf_raw = buffer.try_raw(state.pass.base.snatch_guard)?;
         unsafe {
             state

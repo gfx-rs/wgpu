@@ -101,9 +101,10 @@ use crate::command::ArcReferences;
 use crate::{
     binding_model::{BindError, BindGroup, ImmediateUploadError, PipelineLayout},
     command::{
-        bind::Binder, pass::validate_immediates_alignment, BasePass, BindGroupStateChange,
-        ColorAttachmentError, DrawError, IdReferences, MapPassErr, PassErrorScope, RenderCommand,
-        RenderCommandError, StateChange,
+        bind::Binder,
+        pass::{validate_immediates_alignment, ImmediateState},
+        BasePass, BindGroupStateChange, ColorAttachmentError, DrawError, IdReferences, MapPassErr,
+        PassErrorScope, RenderCommand, RenderCommandError, StateChange,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
@@ -362,9 +363,7 @@ impl RenderBundleEncoder {
             texture_memory_init_actions: Vec::new(),
             next_dynamic_offset: 0,
             binder: Binder::new(),
-            immediates: Vec::new(),
-            immediate_dirty: false,
-            immediate_slots_set: Default::default(),
+            immediate_state: ImmediateState::default(),
         };
 
         let indices = &state.device.tracker_indices;
@@ -793,31 +792,16 @@ fn set_vertex_buffer(
     Ok(())
 }
 
-fn set_immediates(state: &mut State, offset: u32, data: &[u8]) -> Result<(), ImmediateUploadError> {
-    validate_immediates_alignment(offset, data.len())?;
+fn set_immediates(
+    state: &mut State,
+    offset: u32,
+    data_bytes: &[u8],
+) -> Result<(), ImmediateUploadError> {
+    validate_immediates_alignment(offset, data_bytes.len())?;
 
-    let limit = state.device.limits.max_immediate_size;
-    let beyond_limit_err = ImmediateUploadError::EndOffsetBeyondLimit {
-        start_offset: offset,
-        size: data.len(),
-        limit,
-    };
-    if data
-        .len()
-        .checked_add(offset as usize)
-        .ok_or(beyond_limit_err.clone())?
-        > limit as usize
-    {
-        return Err(beyond_limit_err);
-    }
-
-    let end_offset = offset as usize + data.len();
-    if state.immediates.len() < end_offset {
-        state.immediates.resize(end_offset, 0);
-    }
-    state.immediates[(offset as usize)..][..data.len()].copy_from_slice(data);
-    state.immediate_slots_set |= naga::valid::ImmediateSlots::from_range(offset, data.len() as u32);
-    state.immediate_dirty = true;
+    state
+        .immediate_state
+        .set_immediates::<ImmediateUploadError>(&state.device.limits, offset, data_bytes)?;
     Ok(())
 }
 
@@ -1163,6 +1147,7 @@ impl RenderBundle {
                 Cmd::SetImmediate { offset, data } => {
                     let pipeline_layout = pipeline_layout.as_ref().unwrap();
 
+                    // SAFETY: The range of immediates written was validated in `is_ready` before each `flush_immediates`.
                     unsafe {
                         raw.set_immediates(
                             pipeline_layout.raw(),
@@ -1388,11 +1373,7 @@ struct State {
     texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     next_dynamic_offset: usize,
     binder: Binder,
-    immediates: Vec<u8>,
-    immediate_dirty: bool,
-    /// A bitmask, tracking which 4-byte slots have been written via `set_immediates`.
-    /// Checked against the pipeline's required slots before each draw call.
-    immediate_slots_set: naga::valid::ImmediateSlots,
+    immediate_state: ImmediateState,
 }
 
 impl State {
@@ -1423,12 +1404,12 @@ impl State {
     }
 
     fn flush_immediates(&mut self) {
-        if !self.immediates.is_empty() && self.immediate_dirty {
+        if !self.immediate_state.immediates.is_empty() && self.immediate_state.immediates_dirty {
             self.commands.push(ArcRenderCommand::SetImmediate {
                 offset: 0,
-                data: self.immediates.clone(),
+                data: bytemuck::cast_slice(&self.immediate_state.immediates).to_vec(),
             });
-            self.immediate_dirty = false;
+            self.immediate_state.immediates_dirty = false;
         }
     }
 
@@ -1479,13 +1460,14 @@ impl State {
             }
 
             if !self
+                .immediate_state
                 .immediate_slots_set
                 .contains(pipeline.immediate_slots_required)
             {
                 return Err(DrawError::MissingImmediateData {
                     missing: pipeline
                         .immediate_slots_required
-                        .difference(self.immediate_slots_set),
+                        .difference(self.immediate_state.immediate_slots_set),
                 });
             }
 
