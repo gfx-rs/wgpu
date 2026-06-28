@@ -1,7 +1,9 @@
 // Everything here is shared between DX12 and the Windows Vulkan backend's
 // DXGI presentation path, so cfgs are used to include the appropriate bits for each backend.
 pub mod conv;
+pub mod d3d12_lib;
 pub mod dcomp;
+pub mod device_factory;
 pub mod dxgi_lib;
 #[cfg(dx12)]
 pub mod exception;
