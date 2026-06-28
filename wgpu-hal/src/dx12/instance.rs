@@ -6,9 +6,9 @@ use windows::Win32::Foundation;
 use crate::{
     auxil::{
         self,
-        dxgi::{dcomp::DCompLib, swapchain::SurfaceTarget},
+        dxgi::{dcomp::DCompLib, device_factory::DeviceFactory, swapchain::SurfaceTarget},
     },
-    dx12::{device_creation::DeviceFactory, shader_compilation::CompilerContainer, D3D12Lib},
+    dx12::{shader_compilation::CompilerContainer, D3D12Lib},
 };
 
 impl crate::Instance for super::Instance {
