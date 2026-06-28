@@ -120,9 +120,8 @@ pub fn map_texture_format_nosrgb(format: wgt::TextureFormat) -> Dxgi::Common::DX
 /// The typeless DXGI format family for `format`, for the color formats wgpu may view as both their
 /// sRGB and non-sRGB form. Returns `None` for formats with no such castable typeless family.
 ///
-/// Shared by the DX12 resource-creation path ([`map_texture_format_for_resource`]) and the Windows
-/// Vulkan DXGI interop swapchain, which creates its shared interop textures typeless so the imported
-/// Vulkan image can be viewed through either form.
+/// Used by the DX12 resource-creation path ([`map_texture_format_for_resource`]).
+#[cfg(dx12)]
 pub fn map_texture_format_typeless(
     format: wgt::TextureFormat,
 ) -> Option<Dxgi::Common::DXGI_FORMAT> {
