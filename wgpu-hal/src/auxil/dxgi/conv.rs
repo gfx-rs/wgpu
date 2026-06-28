@@ -119,6 +119,7 @@ pub fn map_texture_format_nosrgb(format: wgt::TextureFormat) -> Dxgi::Common::DX
 
 // SRV and UAV can't use the depth or typeless formats
 // see https://microsoft.github.io/DirectX-Specs/d3d/PlanarDepthStencilDDISpec.html#view-creation
+#[cfg(dx12)]
 pub fn map_texture_format_for_srv_uav(
     format: wgt::TextureFormat,
     aspect: crate::FormatAspects,
@@ -155,6 +156,7 @@ pub fn map_texture_format_for_srv_uav(
 }
 
 // see https://microsoft.github.io/DirectX-Specs/d3d/PlanarDepthStencilDDISpec.html#planar-layout-for-staging-from-buffer
+#[cfg(dx12)]
 pub fn map_texture_format_for_copy(
     format: wgt::TextureFormat,
     aspect: crate::FormatAspects,
@@ -187,6 +189,7 @@ pub fn map_texture_format_for_copy(
     })
 }
 
+#[cfg(dx12)]
 pub fn map_texture_format_for_resource(
     format: wgt::TextureFormat,
     usage: wgt::TextureUses,
@@ -232,6 +235,7 @@ pub fn map_texture_format_for_resource(
     }
 }
 
+#[cfg(dx12)]
 pub fn map_index_format(format: wgt::IndexFormat) -> Dxgi::Common::DXGI_FORMAT {
     match format {
         wgt::IndexFormat::Uint16 => Dxgi::Common::DXGI_FORMAT_R16_UINT,
@@ -239,6 +243,7 @@ pub fn map_index_format(format: wgt::IndexFormat) -> Dxgi::Common::DXGI_FORMAT {
     }
 }
 
+#[cfg(dx12)]
 pub fn map_vertex_format(format: wgt::VertexFormat) -> Dxgi::Common::DXGI_FORMAT {
     use wgt::VertexFormat as Vf;
     use Dxgi::Common::*;
