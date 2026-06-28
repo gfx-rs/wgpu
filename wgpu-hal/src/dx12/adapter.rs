@@ -20,9 +20,11 @@ use super::D3D12Lib;
 use crate::{
     auxil::{
         self,
-        dxgi::{dcomp::DCompLib, factory::DxgiAdapter, result::HResult},
+        dxgi::{
+            dcomp::DCompLib, device_factory::DeviceFactory, factory::DxgiAdapter, result::HResult,
+        },
     },
-    dx12::{device_creation::DeviceFactory, shader_compilation, FeatureLevel, ShaderModel},
+    dx12::{shader_compilation, FeatureLevel, ShaderModel},
 };
 
 impl Drop for super::Adapter {
