@@ -117,6 +117,28 @@ pub fn map_texture_format_nosrgb(format: wgt::TextureFormat) -> Dxgi::Common::DX
     }
 }
 
+/// The typeless DXGI format family for `format`, for the color formats wgpu may view as both their
+/// sRGB and non-sRGB form. Returns `None` for formats with no such castable typeless family.
+///
+/// Shared by the DX12 resource-creation path ([`map_texture_format_for_resource`]) and the Windows
+/// Vulkan DXGI interop swapchain, which creates its shared interop textures typeless so the imported
+/// Vulkan image can be viewed through either form.
+pub fn map_texture_format_typeless(
+    format: wgt::TextureFormat,
+) -> Option<Dxgi::Common::DXGI_FORMAT> {
+    use wgt::TextureFormat as Tf;
+    use Dxgi::Common::*;
+    Some(match format {
+        Tf::Rgba8Unorm | Tf::Rgba8UnormSrgb => DXGI_FORMAT_R8G8B8A8_TYPELESS,
+        Tf::Bgra8Unorm | Tf::Bgra8UnormSrgb => DXGI_FORMAT_B8G8R8A8_TYPELESS,
+        Tf::Bc1RgbaUnorm | Tf::Bc1RgbaUnormSrgb => DXGI_FORMAT_BC1_TYPELESS,
+        Tf::Bc2RgbaUnorm | Tf::Bc2RgbaUnormSrgb => DXGI_FORMAT_BC2_TYPELESS,
+        Tf::Bc3RgbaUnorm | Tf::Bc3RgbaUnormSrgb => DXGI_FORMAT_BC3_TYPELESS,
+        Tf::Bc7RgbaUnorm | Tf::Bc7RgbaUnormSrgb => DXGI_FORMAT_BC7_TYPELESS,
+        _ => return None,
+    })
+}
+
 // SRV and UAV can't use the depth or typeless formats
 // see https://microsoft.github.io/DirectX-Specs/d3d/PlanarDepthStencilDDISpec.html#view-creation
 #[cfg(dx12)]
@@ -204,15 +226,7 @@ pub fn map_texture_format_for_resource(
 
     // We might view this resource as srgb or non-srgb
     } else if has_view_formats {
-        match format {
-            Tf::Rgba8Unorm | Tf::Rgba8UnormSrgb => DXGI_FORMAT_R8G8B8A8_TYPELESS,
-            Tf::Bgra8Unorm | Tf::Bgra8UnormSrgb => DXGI_FORMAT_B8G8R8A8_TYPELESS,
-            Tf::Bc1RgbaUnorm | Tf::Bc1RgbaUnormSrgb => DXGI_FORMAT_BC1_TYPELESS,
-            Tf::Bc2RgbaUnorm | Tf::Bc2RgbaUnormSrgb => DXGI_FORMAT_BC2_TYPELESS,
-            Tf::Bc3RgbaUnorm | Tf::Bc3RgbaUnormSrgb => DXGI_FORMAT_BC3_TYPELESS,
-            Tf::Bc7RgbaUnorm | Tf::Bc7RgbaUnormSrgb => DXGI_FORMAT_BC7_TYPELESS,
-            format => map_texture_format(format),
-        }
+        map_texture_format_typeless(format).unwrap_or_else(|| map_texture_format(format))
 
     // We might view this resource as SRV/UAV but also as DSV
     } else if format.is_depth_stencil_format()
