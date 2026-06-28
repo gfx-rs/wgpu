@@ -187,6 +187,12 @@ pub struct InstanceShared {
     /// except for a `VkPhysicalDevice` and its children.
     instance_api_version: u32,
 
+    /// The kind of swapchain used by surfaces created by this instance.
+    ///
+    /// Resolved at instance creation from `VulkanBackendOptions`; a requested DXGI kind is
+    /// downgraded to `Native` if DXGI is unavailable.
+    swapchain_kind: wgt::VulkanSwapchainKind,
+
     // The `drop_guard` field must be the last field of this struct so it is dropped last.
     // Do not add new fields after it.
     drop_guard: Option<crate::DropGuard>,
@@ -205,6 +211,7 @@ impl fmt::Debug for InstanceShared {
             has_nv_optimus,
             android_sdk_version,
             instance_api_version,
+            swapchain_kind,
             drop_guard: _,
         } = self;
         f.debug_struct("InstanceShared")
@@ -214,6 +221,7 @@ impl fmt::Debug for InstanceShared {
             .field("has_nv_optimus", has_nv_optimus)
             .field("android_sdk_version", android_sdk_version)
             .field("instance_api_version", instance_api_version)
+            .field("swapchain_kind", swapchain_kind)
             .finish_non_exhaustive()
     }
 }
