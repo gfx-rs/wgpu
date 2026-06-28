@@ -8,6 +8,8 @@ pub mod dxgi_lib;
 #[cfg(dx12)]
 pub mod exception;
 pub mod factory;
+#[cfg(vulkan)]
+pub mod handles;
 pub mod hdr;
 #[cfg(dx12)]
 pub mod name;

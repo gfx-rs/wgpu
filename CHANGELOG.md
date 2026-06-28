@@ -71,6 +71,29 @@ Error is raised if for provided texture formats required features are not enable
 
 By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
 
+#### DXGI swapchain for Vulkan on Windows
+
+The Vulkan backend can now present via a D3D12 swapchain on Windows. D3D12 swapchains generally perform more consistently, give more control over frame pacing, and may use optimizations that are not available to native vulkan swapchains. For now this is default-off feature, though in the future it may be enabled by default.
+
+Turn it on at instance creation, or if your program is using wgpu environment variables set `WGPU_VULKAN_SWAPCHAIN_KIND` to `native`, `dxgi-hwnd`, or `dxgi-visual`:
+
+```diff
+  let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+      backends: wgpu::Backends::VULKAN,
++     backend_options: wgpu::BackendOptions {
++         vulkan: wgpu::VulkanBackendOptions {
++             swapchain_kind: wgpu::VulkanSwapchainKind::DxgiFromHwnd,
++         },
++         ..Default::default()
++     },
+      ..Default::default()
+  });
+```
+
+While all graphics debuggers still broadly function, Nsight and Radeon GPU Profiler work as expected, but RenderDoc will only capture the D3D12 work, unless you explicitly use `Device::start_graphics_debugger_capture` on the wgpu device which will capture the vulkan work. The interop D3D12 device honors the same Agility SDK configuration as the DX12 backend, via `VulkanBackendOptions::agility_sdk`.
+
+By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
+
 ### Added/New Features
 
 #### General
