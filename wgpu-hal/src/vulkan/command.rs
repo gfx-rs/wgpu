@@ -7,6 +7,17 @@ use hashbrown::hash_map::Entry;
 const ALLOCATION_GRANULARITY: u32 = 16;
 const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
 
+/// The layout for `usage`, honoring a texture's overridden present layout. Identical to
+/// [`conv::derive_image_layout`] except that `TextureUses::PRESENT` resolves to the texture's own
+/// `present_layout` (`GENERAL` for DXGI interop images rather than `PRESENT_SRC_KHR`).
+fn barrier_image_layout(texture: &super::Texture, usage: wgt::TextureUses) -> vk::ImageLayout {
+    if usage == wgt::TextureUses::PRESENT {
+        texture.present_layout
+    } else {
+        conv::derive_image_layout(usage, texture.format)
+    }
+}
+
 impl super::Texture {
     fn map_buffer_copies<T>(&self, regions: T) -> impl Iterator<Item = vk::BufferImageCopy>
     where
@@ -261,14 +272,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 self.device.queue_flags,
                 self.device.private_caps.store_op_none,
             );
-            let src_layout = conv::derive_image_layout(bar.usage.from, bar.texture.format);
+            let src_layout = barrier_image_layout(bar.texture, bar.usage.from);
             src_stages |= src_stage;
             let (dst_stage, dst_access) = conv::map_texture_usage_to_barrier(
                 bar.usage.to,
                 self.device.queue_flags,
                 self.device.private_caps.store_op_none,
             );
-            let dst_layout = conv::derive_image_layout(bar.usage.to, bar.texture.format);
+            let dst_layout = barrier_image_layout(bar.texture, bar.usage.to);
             dst_stages |= dst_stage;
 
             // Insert a queue family ownership transfer if the caller requested
