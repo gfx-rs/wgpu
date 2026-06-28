@@ -398,6 +398,7 @@ impl super::Instance {
         flags: wgt::InstanceFlags,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
         has_nv_optimus: bool,
+        swapchain_kind: wgt::VulkanSwapchainKind,
         drop_callback: Option<crate::DropCallback>,
     ) -> Result<Self, crate::InstanceError> {
         log::debug!("Instance version: 0x{instance_api_version:x}");
@@ -454,6 +455,7 @@ impl super::Instance {
                 has_nv_optimus,
                 instance_api_version,
                 android_sdk_version,
+                swapchain_kind,
             }),
         })
     }
@@ -668,6 +670,15 @@ impl super::Instance {
         hinstance: vk::HINSTANCE,
         hwnd: vk::HWND,
     ) -> Result<super::Surface, crate::InstanceError> {
+        // Scaffold: the DXGI swapchain surface does not exist yet, so a requested DXGI kind
+        // falls back to the native surface. Removed once `DxgiSurface` lands.
+        if self.shared.swapchain_kind != wgt::VulkanSwapchainKind::Native {
+            log::warn!(
+                "VulkanSwapchainKind::{:?} is not yet implemented; using the native swapchain",
+                self.shared.swapchain_kind
+            );
+        }
+
         if !self.shared.extensions.contains(&khr::win32_surface::NAME) {
             return Err(crate::InstanceError::new(String::from(
                 "Vulkan driver does not support VK_KHR_win32_surface",
@@ -1021,6 +1032,8 @@ impl super::Instance {
             })?
         };
 
+        let swapchain_kind = desc.backend_options.vulkan.swapchain_kind;
+
         unsafe {
             Self::from_raw(
                 entry,
@@ -1032,6 +1045,7 @@ impl super::Instance {
                 desc.flags,
                 desc.memory_budget_thresholds,
                 has_nv_optimus,
+                swapchain_kind,
                 None,
             )
         }
