@@ -2,7 +2,7 @@
 //! Windows Vulkan backend's DXGI interop swapchain.
 
 use wgpu_sync::Mutex;
-use windows::Win32::{Foundation, Graphics::Dxgi, System::Threading};
+use windows::Win32::{Foundation, Graphics::Dxgi, System::Threading, UI::WindowsAndMessaging};
 
 use crate::auxil::dxgi::{dcomp, factory::DxgiFactory};
 
@@ -149,5 +149,95 @@ pub(crate) fn map_surface_color_space(
         | Scs::ExtendedDisplayP3 => {
             unreachable!("`{color_space:?}` is never reported in the DXGI surface capabilities")
         }
+    }
+}
+
+/// The presentation capabilities of a DXGI flip-model surface; identical for both backends, since
+/// they drive the same kind of swapchain.
+pub(crate) fn surface_capabilities(
+    target: &SurfaceTarget,
+    supports_allow_tearing: bool,
+) -> crate::SurfaceCapabilities {
+    let mut present_modes = vec![wgt::PresentMode::Mailbox, wgt::PresentMode::Fifo];
+    if supports_allow_tearing {
+        present_modes.push(wgt::PresentMode::Immediate);
+    }
+
+    // `Surface::configure` applies the requested color space with
+    // `IDXGISwapChain3::SetColorSpace1`. fp16 buffers keep DXGI's scRGB interpretation
+    // (`DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709`) and `Rgb10a2Unorm` additionally supports
+    // BT.2100 PQ (HDR10).
+    //
+    // These color spaces are advertised unconditionally, not gated on whether the output is
+    // currently in HDR mode: Windows always composites in scRGB and tone-maps PQ down to an SDR
+    // output, so the color space is configurable regardless, and `CheckColorSpaceSupport`
+    // returning false does not mean it won't present. Whether HDR is actually *visible* is a
+    // separate, live question (the display-HDR query, #9739), not a configuration gate. Display-P3
+    // and HLG are never reported: DXGI has no RGB HLG swapchain color space, and P3 isn't a DXGI
+    // swapchain color space.
+    let formats = [
+        wgt::TextureFormat::Bgra8UnormSrgb,
+        wgt::TextureFormat::Bgra8Unorm,
+        wgt::TextureFormat::Rgba8UnormSrgb,
+        wgt::TextureFormat::Rgba8Unorm,
+        wgt::TextureFormat::Rgb10a2Unorm,
+        wgt::TextureFormat::Rgba16Float,
+    ]
+    .map(|format| wgt::SurfaceFormatCapabilities {
+        format,
+        color_spaces: match format {
+            wgt::TextureFormat::Rgba16Float => wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR,
+            wgt::TextureFormat::Rgb10a2Unorm => {
+                wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::BT2100_PQ
+            }
+            _ => wgt::SurfaceColorSpaces::SRGB,
+        },
+    })
+    .to_vec();
+
+    let composite_alpha_modes = match target {
+        SurfaceTarget::WndHandle(_) => vec![wgt::CompositeAlphaMode::Opaque],
+        _ => vec![
+            wgt::CompositeAlphaMode::Auto,
+            wgt::CompositeAlphaMode::Inherit,
+            wgt::CompositeAlphaMode::Opaque,
+            wgt::CompositeAlphaMode::PostMultiplied,
+            wgt::CompositeAlphaMode::PreMultiplied,
+        ],
+    };
+
+    crate::SurfaceCapabilities {
+        formats,
+        // See https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgidevice1-setmaximumframelatency
+        maximum_frame_latency: 1..=16,
+        current_extent: surface_extent(target),
+        usage: wgt::TextureUses::COLOR_TARGET
+            | wgt::TextureUses::COPY_SRC
+            | wgt::TextureUses::COPY_DST,
+        present_modes,
+        composite_alpha_modes,
+    }
+}
+
+/// The current client-area extent of `target`'s backing window, or `None` for targets without one
+/// (the DX12 external-surface variants) or when the query fails.
+fn surface_extent(target: &SurfaceTarget) -> Option<wgt::Extent3d> {
+    let handle = match target {
+        SurfaceTarget::WndHandle(handle) | SurfaceTarget::VisualFromWndHandle { handle, .. } => {
+            *handle
+        }
+        #[allow(unreachable_patterns)]
+        _ => return None,
+    };
+    let mut rect = Default::default();
+    if unsafe { WindowsAndMessaging::GetClientRect(handle, &mut rect) }.is_ok() {
+        Some(wgt::Extent3d {
+            width: (rect.right - rect.left) as u32,
+            height: (rect.bottom - rect.top) as u32,
+            depth_or_array_layers: 1,
+        })
+    } else {
+        log::warn!("Unable to get the window client rect");
+        None
     }
 }

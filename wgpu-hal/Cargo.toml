@@ -115,6 +115,7 @@ vulkan = [
     "windows/Win32_Graphics_DirectComposition",
     "windows/Win32_Security",
     "windows/Win32_System_Threading",
+    "windows/Win32_UI_WindowsAndMessaging",
 ]
 gles = [
     "dep:arrayvec",

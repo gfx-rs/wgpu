@@ -13,7 +13,6 @@ use windows::{
         },
         Foundation::{GetLastError, ERROR_NO_MORE_ITEMS},
         Graphics::{Direct3D, Direct3D12, Dxgi},
-        UI::WindowsAndMessaging,
     },
 };
 
@@ -21,7 +20,7 @@ use super::D3D12Lib;
 use crate::{
     auxil::{
         self,
-        dxgi::{dcomp::DCompLib, factory::DxgiAdapter, result::HResult, swapchain::SurfaceTarget},
+        dxgi::{dcomp::DCompLib, factory::DxgiAdapter, result::HResult},
     },
     dx12::{device_creation::DeviceFactory, shader_compilation, FeatureLevel, ShaderModel},
 };
@@ -1285,93 +1284,10 @@ impl crate::Adapter for super::Adapter {
         &self,
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
-        let current_extent = {
-            match surface.target {
-                SurfaceTarget::WndHandle(wnd_handle)
-                | SurfaceTarget::VisualFromWndHandle {
-                    handle: wnd_handle, ..
-                } => {
-                    let mut rect = Default::default();
-                    if unsafe { WindowsAndMessaging::GetClientRect(wnd_handle, &mut rect) }.is_ok()
-                    {
-                        Some(wgt::Extent3d {
-                            width: (rect.right - rect.left) as u32,
-                            height: (rect.bottom - rect.top) as u32,
-                            depth_or_array_layers: 1,
-                        })
-                    } else {
-                        log::warn!("Unable to get the window client rect");
-                        None
-                    }
-                }
-                SurfaceTarget::Visual(_)
-                | SurfaceTarget::SurfaceHandle(_)
-                | SurfaceTarget::SwapChainPanel(_) => None,
-            }
-        };
-
-        let mut present_modes = vec![wgt::PresentMode::Mailbox, wgt::PresentMode::Fifo];
-        if surface.supports_allow_tearing {
-            present_modes.push(wgt::PresentMode::Immediate);
-        }
-
-        Some(crate::SurfaceCapabilities {
-            // `Surface::configure` applies the requested color space with
-            // `IDXGISwapChain3::SetColorSpace1`. fp16 buffers keep DXGI's
-            // scRGB interpretation (`DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709`)
-            // and `Rgb10a2Unorm` additionally supports BT.2100 PQ (HDR10).
-            //
-            // These color spaces are advertised unconditionally, not gated on
-            // whether the output is currently in HDR mode: Windows always
-            // composites in scRGB and tone-maps PQ down to an SDR output, so the
-            // color space is configurable regardless, and `CheckColorSpaceSupport`
-            // returning false does not mean it won't present. Whether HDR is
-            // actually *visible* is a separate, live question (the upcoming
-            // display-HDR query, #9739), not a configuration gate. Display-P3 and
-            // HLG are never reported: DXGI has no RGB HLG swapchain color space,
-            // and P3 isn't a DXGI swapchain color space.
-            formats: [
-                wgt::TextureFormat::Bgra8UnormSrgb,
-                wgt::TextureFormat::Bgra8Unorm,
-                wgt::TextureFormat::Rgba8UnormSrgb,
-                wgt::TextureFormat::Rgba8Unorm,
-                wgt::TextureFormat::Rgb10a2Unorm,
-                wgt::TextureFormat::Rgba16Float,
-            ]
-            .map(|format| wgt::SurfaceFormatCapabilities {
-                format,
-                color_spaces: match format {
-                    wgt::TextureFormat::Rgba16Float => {
-                        wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR
-                    }
-                    wgt::TextureFormat::Rgb10a2Unorm => {
-                        wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::BT2100_PQ
-                    }
-                    _ => wgt::SurfaceColorSpaces::SRGB,
-                },
-            })
-            .to_vec(),
-            // See https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgidevice1-setmaximumframelatency
-            maximum_frame_latency: 1..=16,
-            current_extent,
-            usage: wgt::TextureUses::COLOR_TARGET
-                | wgt::TextureUses::COPY_SRC
-                | wgt::TextureUses::COPY_DST,
-            present_modes,
-            composite_alpha_modes: match surface.target {
-                SurfaceTarget::WndHandle(_) => vec![wgt::CompositeAlphaMode::Opaque],
-                SurfaceTarget::Visual(_)
-                | SurfaceTarget::VisualFromWndHandle { .. }
-                | SurfaceTarget::SurfaceHandle(_)
-                | SurfaceTarget::SwapChainPanel(_) => vec![
-                    wgt::CompositeAlphaMode::Auto,
-                    wgt::CompositeAlphaMode::Inherit,
-                    wgt::CompositeAlphaMode::Opaque,
-                    wgt::CompositeAlphaMode::PostMultiplied,
-                    wgt::CompositeAlphaMode::PreMultiplied,
-                ],
-            },
-        })
+        Some(auxil::dxgi::swapchain::surface_capabilities(
+            &surface.target,
+            surface.supports_allow_tearing,
+        ))
     }
 
     unsafe fn surface_display_hdr_info(
