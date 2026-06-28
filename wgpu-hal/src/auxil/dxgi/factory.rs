@@ -4,6 +4,7 @@ use core::ops::Deref;
 use windows::{core::Interface as _, Win32::Graphics::Dxgi};
 
 use super::dxgi_lib::DxgiLib;
+#[cfg(dx12)]
 use super::result::HResult as _;
 
 // We can rely on the presence of DXGI 1.4 since D3D12 requires WDDM 2.0, Windows 10 (1507), and so does DXGI 1.4.
@@ -57,6 +58,9 @@ pub enum DxgiAdapter {
 }
 
 impl DxgiAdapter {
+    // Only the DX12 backend queries video memory; the Vulkan DXGI path uses adapters for LUID
+    // matching only.
+    #[cfg(dx12)]
     pub fn query_video_memory_info(
         &self,
         group: Dxgi::DXGI_MEMORY_SEGMENT_GROUP,

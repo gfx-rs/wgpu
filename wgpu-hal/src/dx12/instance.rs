@@ -1,14 +1,14 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
 
 use wgpu_sync::RwLock;
-use windows::Win32::{Foundation, Graphics::Dxgi};
+use windows::Win32::Foundation;
 
-use super::SurfaceTarget;
 use crate::{
-    auxil,
-    dx12::{
-        device_creation::DeviceFactory, shader_compilation::CompilerContainer, D3D12Lib, DCompLib,
+    auxil::{
+        self,
+        dxgi::{dcomp::DCompLib, swapchain::SurfaceTarget},
     },
+    dx12::{device_creation::DeviceFactory, shader_compilation::CompilerContainer, D3D12Lib},
 };
 
 impl crate::Instance for super::Instance {
@@ -31,22 +31,7 @@ impl crate::Instance for super::Instance {
         // Create IDXGIFactoryMedia
         let factory_media = lib_dxgi.create_factory_media().ok();
 
-        let mut supports_allow_tearing = false;
-        if let Some(factory5) = factory.as_factory5() {
-            let mut allow_tearing = Foundation::FALSE;
-            let hr = unsafe {
-                factory5.CheckFeatureSupport(
-                    Dxgi::DXGI_FEATURE_PRESENT_ALLOW_TEARING,
-                    <*mut _>::cast(&mut allow_tearing),
-                    size_of_val(&allow_tearing) as u32,
-                )
-            };
-
-            match hr {
-                Err(err) => log::warn!("Unable to check for tearing support: {err}"),
-                Ok(()) => supports_allow_tearing = true,
-            }
-        }
+        let supports_allow_tearing = auxil::dxgi::swapchain::supports_allow_tearing(&factory);
 
         // Initialize the shader compiler
         let compiler_container = match desc.backend_options.dx12.shader_compiler.clone() {
