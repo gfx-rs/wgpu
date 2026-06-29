@@ -4,6 +4,8 @@
 # scope. The binaries, tests, examples, and tooling in this workspace pull in many
 # more dependencies that would produce false-positive advisory/ban/license noise.
 exclude-unpublished = true
+# Dev dependencies are not relevant to the published library crates, so we ignore them.
+exclude-dev = true
 
 [bans]
 multiple-versions = "deny"
@@ -19,9 +21,6 @@ skip = [
 
     # wgpu-hal -> drm -> drm-sys uses an older version, while wgpu-hal -> drm -> rustix uses a newer one
     { name = "linux-raw-sys", version = "0.9.4" },
-
-    # wgpu-hal -> ndk-sys -> jni-sys uses an old version, while jni-sys 0.4 re-exports it
-    { name = "jni-sys", version = "0.3.1" },
 ]
 wildcards = "deny"
 allow-wildcard-paths = true
