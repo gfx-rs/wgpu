@@ -42,6 +42,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Bug Fixes
+
+#### Vulkan
+
+- Fixed `VUID-RuntimeSpirv-vulkanMemoryModel-06265` validation errors by enabling `vulkanMemoryModelDeviceScope` whenever the Vulkan memory model is enabled, since the SPIR-V backend emits storage atomics with `Device` scope. By @francisdb in [#9741](https://github.com/gfx-rs/wgpu/pull/9741).
+
 ## v29.0.3 (2026-05-01)
 
 ### Bug Fixes
