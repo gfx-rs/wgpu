@@ -150,6 +150,7 @@ impl<A: hal::Api> Example<A> {
             present_mode: wgpu_types::PresentMode::Fifo,
             composite_alpha_mode: wgpu_types::CompositeAlphaMode::Opaque,
             format: wgpu_types::TextureFormat::Bgra8UnormSrgb,
+            color_space: wgpu_types::SurfaceColorSpace::Srgb,
             extent: wgpu_types::Extent3d {
                 width: window_size.0,
                 height: window_size.1,

@@ -17,6 +17,7 @@ use wgc::{
     id::{Marker, PointerId},
 };
 
+#[derive(Debug)]
 pub struct Player {
     pipeline_layouts: HashMap<
         wgc::id::PointerId<wgc::id::markers::PipelineLayout>,
@@ -126,7 +127,8 @@ impl Player {
             }
             Action::ConfigureSurface { .. }
             | Action::Present(_)
-            | Action::DiscardSurfaceTexture(_) => {
+            | Action::DiscardSurfaceTexture(_)
+            | Action::ReleaseSurfaceTexture(_) => {
                 panic!("Unexpected Surface action: winit feature is not enabled")
             }
             Action::CreateBuffer(id, desc) => {
@@ -142,7 +144,13 @@ impl Player {
                 let _ = buffer.unmap();
             }
             Action::CreateTexture(id, desc) => {
-                let texture = device.create_texture(&desc).expect("create_texture error");
+                let (texture, _) = device.create_texture(&desc);
+
+                self.textures.insert(id, texture);
+            }
+            Action::CreateTextureError(id, desc) => {
+                let texture = device.create_texture_error(&desc);
+
                 self.textures.insert(id, texture);
             }
             Action::DestroyTexture(id) => {
@@ -363,13 +371,8 @@ impl Player {
                 // pipeline descriptor that can represent either a conventional
                 // pipeline or a mesh shading pipeline.
                 let resolved_desc = self.resolve_render_pipeline_descriptor(desc);
-                let pipeline = device.create_render_pipeline(resolved_desc);
-                process_result(
-                    "create_render_pipeline",
-                    &mut self.render_pipelines,
-                    id,
-                    pipeline,
-                );
+                let (pipeline, _error) = device.create_render_pipeline(resolved_desc);
+                self.render_pipelines.insert(id, pipeline);
             }
             Action::DropRenderPipeline(id) => {
                 self.render_pipelines

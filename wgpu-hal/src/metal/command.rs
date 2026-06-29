@@ -350,12 +350,31 @@ impl super::CommandEncoder {
                     }
                     let index = (resource_indices.buffers + index) as usize;
                     encoder.set_buffer(buffer, offset as usize, index);
+                    let br = naga::ResourceBinding {
+                        group: group_index,
+                        binding: *binding_location,
+                    };
                     if let Some(size) = binding_size {
-                        let br = naga::ResourceBinding {
-                            group: group_index,
-                            binding: *binding_location,
-                        };
-                        self.state.storage_buffer_length_map.insert(br, *size);
+                        self.state.storage_buffer_length_map.insert((br, 0), *size);
+                        changes_sizes_buffer = true;
+                    }
+                }
+                super::BufferLikeResource::StorageBindingArray {
+                    ptr,
+                    array_element_sizes,
+                    binding_location,
+                } => {
+                    let buffer = Some(unsafe { ptr.as_ref() });
+                    let index = (resource_indices.buffers + index) as usize;
+                    encoder.set_buffer(buffer, 0, index);
+                    let br = naga::ResourceBinding {
+                        group: group_index,
+                        binding: *binding_location,
+                    };
+                    for &(array_idx, size) in array_element_sizes {
+                        self.state
+                            .storage_buffer_length_map
+                            .insert((br, array_idx), size);
                         changes_sizes_buffer = true;
                     }
                 }
@@ -430,9 +449,9 @@ impl super::CommandState {
         let slot = stage_info.sizes_slot?;
 
         result_sizes.clear();
-        result_sizes.extend(stage_info.sized_bindings.iter().map(|br| {
+        result_sizes.extend(stage_info.sized_bindings.iter().map(|(br, array_idx)| {
             self.storage_buffer_length_map
-                .get(br)
+                .get(&(*br, *array_idx))
                 .map(|size| u32::try_from(size.get()).unwrap_or(u32::MAX))
                 .unwrap_or_default()
         }));
@@ -1889,6 +1908,31 @@ impl crate::CommandEncoder for super::CommandEncoder {
             residency_set.addAllocation(ProtocolObject::from_ref(&*dependency.raw));
         }
         residency_set.commit();
+    }
+
+    unsafe fn begin_ray_tracing_pass(&mut self, _desc: &crate::RayTracingPassDescriptor) {
+        unreachable!("Ray tracing pipelines not supported")
+    }
+
+    unsafe fn end_ray_tracing_pass(&mut self) {
+        unreachable!("Ray tracing pipelines not supported")
+    }
+
+    unsafe fn set_ray_tracing_pipeline(
+        &mut self,
+        _pipeline: &<Self::A as crate::Api>::RayTracingPipeline,
+    ) {
+        unreachable!("Ray tracing pipelines not supported")
+    }
+
+    unsafe fn trace_rays(
+        &mut self,
+        _count: [u32; 3],
+        _ray_generation_group_data: crate::PipelineGroupData<super::Buffer>,
+        _miss_group_data: crate::PipelineGroupData<super::Buffer>,
+        _intersection_group_data: crate::PipelineGroupData<super::Buffer>,
+    ) {
+        unreachable!("Ray tracing pipelines not supported")
     }
 }
 

@@ -906,6 +906,9 @@ impl super::Adapter {
             max_acceleration_structures_per_shader_stage: 0,
 
             max_multiview_view_count: 0,
+
+            max_ray_dispatch_count: 0,
+            max_ray_recursion_depth: 0,
         });
 
         let mut workarounds = super::Workarounds::empty();
@@ -980,6 +983,9 @@ impl super::Adapter {
                     uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
                     raw_tlas_instance_size: 0,
                     ray_tracing_scratch_buffer_alignment: 0,
+                    ray_tracing_pipeline_group_data_size: 0,
+                    ray_tracing_pipeline_group_data_alignment: 0,
+                    ray_tracing_pipeline_data_offset_alignment: 0,
                 },
                 cooperative_matrix_properties: Vec::new(),
             },
@@ -1333,16 +1339,22 @@ impl crate::Adapter for super::Adapter {
         }
 
         if surface.presentable {
+            // There is no extended-range or wide-gamut path in the GLES
+            // backend; everything is presented as sRGB.
+            let format_caps = |format: wgt::TextureFormat| wgt::SurfaceFormatCapabilities {
+                format,
+                color_spaces: wgt::SurfaceColorSpaces::SRGB,
+            };
             let mut formats = vec![
-                wgt::TextureFormat::Rgba8Unorm,
+                format_caps(wgt::TextureFormat::Rgba8Unorm),
                 #[cfg(native)]
-                wgt::TextureFormat::Bgra8Unorm,
+                format_caps(wgt::TextureFormat::Bgra8Unorm),
             ];
             if surface.supports_srgb() {
                 formats.extend([
-                    wgt::TextureFormat::Rgba8UnormSrgb,
+                    format_caps(wgt::TextureFormat::Rgba8UnormSrgb),
                     #[cfg(native)]
-                    wgt::TextureFormat::Bgra8UnormSrgb,
+                    format_caps(wgt::TextureFormat::Bgra8UnormSrgb),
                 ])
             }
             if self
@@ -1350,7 +1362,7 @@ impl crate::Adapter for super::Adapter {
                 .private_caps
                 .contains(super::PrivateCapabilities::COLOR_BUFFER_HALF_FLOAT)
             {
-                formats.push(wgt::TextureFormat::Rgba16Float)
+                formats.push(format_caps(wgt::TextureFormat::Rgba16Float))
             }
 
             Some(crate::SurfaceCapabilities {

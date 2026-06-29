@@ -87,6 +87,7 @@ impl GPUCanvasContext {
     let conf = wgpu_types::SurfaceConfiguration {
       usage: configuration.usage.into(),
       format,
+      color_space: wgpu_types::SurfaceColorSpace::Srgb,
       width: *self.width.borrow(),
       height: *self.height.borrow(),
       present_mode: configuration

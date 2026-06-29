@@ -129,6 +129,9 @@ serde = { workspace = true, features = ["default", "derive"] }
 strum = { workspace = true }
 walkdir.workspace = true
 
+[lints.rust]
+missing_debug_implementations = "warn"
+
 [lints.clippy]
 std_instead_of_alloc = "warn"
 std_instead_of_core = "warn"

@@ -200,6 +200,7 @@ impl StrUnstable for str {
     }
 }
 
+#[derive(Debug)]
 pub enum BindingDecorations {
     BuiltIn(spirv::BuiltIn, ArrayVec<spirv::Decoration, 2>),
     Location {
