@@ -25,7 +25,7 @@ use crate::{
     resource::{
         Buffer, DestroyedResourceError, ExternalTexture, InvalidResourceError, Labeled,
         MissingBufferUsageError, MissingTextureUsageError, RawResourceAccess, ResourceErrorIdent,
-        Sampler, TextureView, Tlas, TrackingData,
+        ResourceState, Sampler, TextureView, Tlas, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -763,15 +763,11 @@ pub enum RawBindGroupLayout {
     Owning(ManuallyDrop<Box<dyn hal::DynBindGroupLayout>>),
     /// The empty BGL was created by the device and will be destroyed by the device.
     RefDeviceEmptyBGL,
-    Invalid,
 }
 
-/// Bind group layout.
 #[derive(Debug)]
-pub struct BindGroupLayout {
+pub(crate) struct BindGroupLayoutState {
     pub(crate) raw: RawBindGroupLayout,
-    pub(crate) device: Arc<Device>,
-    pub(crate) entries: bgl::EntryMap,
     /// It is very important that we know if the bind group comes from the BGL pool.
     ///
     /// If it does, then we need to remove it from the pool when we drop it.
@@ -779,8 +775,16 @@ pub struct BindGroupLayout {
     /// We cannot unconditionally remove from the pool, as BGLs that don't come from the pool
     /// (derived BGLs) must not be removed.
     pub(crate) origin: bgl::Origin,
-    pub(crate) exclusive_pipeline: crate::OnceCellOrLock<ExclusivePipeline>,
     pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
+}
+
+/// Bind group layout.
+#[derive(Debug)]
+pub struct BindGroupLayout {
+    pub(crate) state: ResourceState<BindGroupLayoutState>,
+    pub(crate) device: Arc<Device>,
+    pub(crate) entries: bgl::EntryMap,
+    pub(crate) exclusive_pipeline: crate::OnceCellOrLock<ExclusivePipeline>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
 }
@@ -800,19 +804,21 @@ impl Drop for BindGroupLayout {
             }
         }
         resource_log!("Destroy raw {}", self.error_ident());
-        if matches!(self.origin, bgl::Origin::Pool) {
+        let ResourceState::Valid(state) = &mut self.state else {
+            return;
+        };
+        if matches!(state.origin, bgl::Origin::Pool) {
             self.device.bgl_pool.remove(&self.entries);
         }
-        match self.raw {
+        match state.raw {
             RawBindGroupLayout::Owning(ref mut raw) => {
-                // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+                // SAFETY: We are in the Drop impl and we don't use state.raw anymore after this point.
                 let raw = unsafe { ManuallyDrop::take(raw) };
                 unsafe {
                     self.device.raw().destroy_bind_group_layout(raw);
                 }
             }
             RawBindGroupLayout::RefDeviceEmptyBGL => {}
-            RawBindGroupLayout::Invalid => {}
         }
     }
 }
@@ -824,41 +830,49 @@ crate::impl_storage_item!(BindGroupLayout);
 
 impl BindGroupLayout {
     pub(crate) fn try_raw(&self) -> Result<&dyn hal::DynBindGroupLayout, InvalidResourceError> {
-        match &self.raw {
+        let ResourceState::Valid(state) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        match &state.raw {
             RawBindGroupLayout::Owning(raw) => Ok(raw.as_ref()),
             RawBindGroupLayout::RefDeviceEmptyBGL => Ok(self.device.empty_bgl.as_ref()),
-            RawBindGroupLayout::Invalid => Err(InvalidResourceError(self.error_ident())),
         }
     }
 
+    pub(crate) fn state(&self) -> Result<&BindGroupLayoutState, InvalidResourceError> {
+        let ResourceState::Valid(state) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        Ok(state)
+    }
+
     pub(crate) fn check_is_valid(self: &Arc<Self>) -> Result<(), InvalidResourceError> {
-        match &self.raw {
-            RawBindGroupLayout::Owning(_) => Ok(()),
-            RawBindGroupLayout::RefDeviceEmptyBGL => Ok(()),
-            RawBindGroupLayout::Invalid => Err(InvalidResourceError(self.error_ident())),
-        }
+        let ResourceState::Valid(_) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        Ok(())
     }
 
     fn empty(device: &Arc<Device>, exclusive_pipeline: ExclusivePipeline) -> Arc<Self> {
         Arc::new(Self {
-            raw: RawBindGroupLayout::RefDeviceEmptyBGL,
+            state: ResourceState::Valid(BindGroupLayoutState {
+                raw: RawBindGroupLayout::RefDeviceEmptyBGL,
+                origin: bgl::Origin::Derived,
+                binding_count_validator: BindingTypeMaxCountValidator::default(),
+            }),
             device: device.clone(),
             entries: bgl::EntryMap::default(),
-            origin: bgl::Origin::Derived,
             exclusive_pipeline: crate::OnceCellOrLock::from(exclusive_pipeline),
-            binding_count_validator: BindingTypeMaxCountValidator::default(),
             label: String::new(),
         })
     }
 
     pub(crate) fn invalid(device: &Arc<Device>, label: String) -> Arc<Self> {
         Arc::new(Self {
-            raw: RawBindGroupLayout::Invalid,
+            state: ResourceState::Invalid,
             device: device.clone(),
             entries: bgl::EntryMap::default(),
-            origin: bgl::Origin::Derived,
             exclusive_pipeline: crate::OnceCellOrLock::from(ExclusivePipeline::None),
-            binding_count_validator: BindingTypeMaxCountValidator::default(),
             label,
         })
     }

@@ -27,7 +27,8 @@ use crate::{
     api_log,
     binding_model::{
         self, BindGroup, BindGroupLateBufferBindingInfo, BindGroupLayout,
-        BindGroupLayoutEntryError, CreateBindGroupError, CreateBindGroupLayoutError,
+        BindGroupLayoutEntryError, BindGroupLayoutState, CreateBindGroupError,
+        CreateBindGroupLayoutError,
     },
     command, conv,
     device::{
@@ -2961,12 +2962,14 @@ impl Device {
             .map_err(|e| self.handle_hal_error(e))?;
 
         let bgl = BindGroupLayout {
-            raw: binding_model::RawBindGroupLayout::Owning(ManuallyDrop::new(raw)),
+            state: ResourceState::Valid(BindGroupLayoutState {
+                raw: binding_model::RawBindGroupLayout::Owning(ManuallyDrop::new(raw)),
+                origin,
+                binding_count_validator: count_validator,
+            }),
             device: self.clone(),
             entries: entry_map,
-            origin,
             exclusive_pipeline: OnceCellOrLock::new(),
-            binding_count_validator: count_validator,
             label: label.to_string(),
         };
 
@@ -3873,7 +3876,7 @@ impl Device {
                 }
             }
 
-            count_validator.merge(&bgl.binding_count_validator);
+            count_validator.merge(&bgl.state()?.binding_count_validator);
         }
 
         count_validator
