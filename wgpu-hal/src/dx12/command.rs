@@ -506,8 +506,60 @@ impl crate::CommandEncoder for super::CommandEncoder {
         T: Iterator<Item = crate::TextureBarrier<'a, super::Texture>>,
     {
         self.temp.barriers.clear();
+        self.temp.texture_barriers.clear();
+
+        let mut barriers_ds_split = mem::take(&mut self.temp.texture_barriers)
+            .into_iter()
+            .map(|_| -> crate::TextureBarrier<'a, super::Texture> { unreachable!() })
+            .collect::<Vec<_>>();
 
         for barrier in barriers {
+            // For depth stencil textures, we generate one `TextureBarrier` with `TextureAspect::All`,
+            // but in DX12 depth and stencil are subresources and need to be transitioned separately
+            // to separate their read-only states.
+            if barrier.usage.from.intersects(
+                wgt::TextureUses::DEPTH_READ
+                    | wgt::TextureUses::DEPTH_WRITE
+                    | wgt::TextureUses::STENCIL_READ
+                    | wgt::TextureUses::STENCIL_WRITE,
+            ) || barrier.usage.to.intersects(
+                wgt::TextureUses::DEPTH_READ
+                    | wgt::TextureUses::DEPTH_WRITE
+                    | wgt::TextureUses::STENCIL_READ
+                    | wgt::TextureUses::STENCIL_WRITE,
+            ) {
+                let mut barrier_stencil = crate::TextureBarrier {
+                    texture: barrier.texture,
+                    range: barrier.range,
+                    usage: barrier.usage.clone(),
+                };
+                let mut barrier_depth = barrier;
+
+                barrier_depth.range.aspect = wgt::TextureAspect::DepthOnly;
+                barrier_depth
+                    .usage
+                    .from
+                    .remove(wgt::TextureUses::STENCIL_READ | wgt::TextureUses::STENCIL_WRITE);
+                barrier_depth
+                    .usage
+                    .to
+                    .remove(wgt::TextureUses::STENCIL_READ | wgt::TextureUses::STENCIL_WRITE);
+
+                barrier_stencil.range.aspect = wgt::TextureAspect::StencilOnly;
+                barrier_stencil
+                    .usage
+                    .from
+                    .remove(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::DEPTH_WRITE);
+                barrier_stencil
+                    .usage
+                    .to
+                    .remove(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::DEPTH_WRITE);
+            } else {
+                barriers_ds_split.push(barrier);
+            }
+        }
+
+        for barrier in &barriers_ds_split {
             let s0 = conv::map_texture_usage_to_state(barrier.usage.from);
             let s1 = conv::map_texture_usage_to_state(barrier.usage.to);
             if s0 != s1 {
@@ -598,6 +650,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     .ResourceBarrier(&self.temp.barriers)
             };
         }
+
+        barriers_ds_split.clear();
+        self.temp.texture_barriers = barriers_ds_split
+            .into_iter()
+            .map(|_| -> crate::TextureBarrier<'static, super::Texture> { unreachable!() })
+            .collect();
     }
 
     unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {
