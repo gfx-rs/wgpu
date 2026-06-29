@@ -1668,11 +1668,15 @@ impl Device {
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let clear_mode = if hal_usage
-            .intersects(wgt::TextureUses::DEPTH_STENCIL_WRITE | wgt::TextureUses::COLOR_TARGET)
-            && desc.dimension == wgt::TextureDimension::D2
+            .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE)
+            || hal_usage.contains(wgt::TextureUses::COLOR_TARGET)
+                && desc.dimension == wgt::TextureDimension::D2
         {
             let (is_color, usage) = if desc.format.is_depth_stencil_format() {
-                (false, wgt::TextureUses::DEPTH_STENCIL_WRITE)
+                (
+                    false,
+                    wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE,
+                )
             } else {
                 (true, wgt::TextureUses::COLOR_TARGET)
             };

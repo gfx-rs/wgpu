@@ -73,9 +73,25 @@ impl super::DeviceShared {
         };
     }
 
+    fn get_store_op_none(&self) -> vk::AttachmentStoreOp {
+        if self.private_caps.store_op_none {
+            vk::AttachmentStoreOp::NONE
+        } else if self.private_caps.store_op_none_khr {
+            vk::AttachmentStoreOp::NONE_KHR
+        } else if self.private_caps.store_op_none_qcom {
+            vk::AttachmentStoreOp::NONE_QCOM
+        } else if self.private_caps.store_op_none_ext {
+            vk::AttachmentStoreOp::NONE_EXT
+        } else {
+            vk::AttachmentStoreOp::STORE
+        }
+    }
+
     pub fn make_render_pass(
         &self,
         key: super::RenderPassKey,
+        depth_read_only: Option<bool>,
+        stencil_read_only: Option<bool>,
     ) -> Result<vk::RenderPass, crate::DeviceError> {
         Ok(match self.render_passes.lock().entry(key) {
             Entry::Occupied(e) => *e.get(),
@@ -169,8 +185,19 @@ impl super::DeviceShared {
                         attachment: vk_attachments.len() as u32,
                         layout,
                     });
-                    let (load_op, store_op) = conv::map_attachment_ops(ops);
-                    let (stencil_load_op, stencil_store_op) = conv::map_attachment_ops(stencil_ops);
+                    let (load_op, mut store_op) = conv::map_attachment_ops(ops);
+                    let (stencil_load_op, mut stencil_store_op) =
+                        conv::map_attachment_ops(stencil_ops);
+                    if let Some(depth_read_only) = depth_read_only {
+                        if depth_read_only {
+                            store_op = self.get_store_op_none();
+                        }
+                    }
+                    if let Some(stencil_read_only) = stencil_read_only {
+                        if stencil_read_only {
+                            stencil_store_op = self.get_store_op_none();
+                        }
+                    }
                     let vk_attachment = vk::AttachmentDescription::default()
                         .format(format)
                         .samples(samples)
@@ -2050,12 +2077,20 @@ impl crate::Device for super::Device {
         }
 
         let mut vk_depth_stencil = vk::PipelineDepthStencilStateCreateInfo::default();
+        let (mut depth_read_only, mut stencil_read_only) = (None, None);
         if let Some(ref ds) = desc.depth_stencil {
+            let (_depth_read_only, _stencil_read_only) = (
+                ds.is_depth_read_only(),
+                ds.is_stencil_read_only(desc.primitive.cull_mode),
+            );
+            (depth_read_only, stencil_read_only) =
+                (Some(_depth_read_only), Some(_stencil_read_only));
             let vk_format = self.shared.private_caps.map_texture_format(ds.format);
-            let vk_layout = if ds.is_read_only(desc.primitive.cull_mode) {
-                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL
-            } else {
-                vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+            let vk_layout = match (_depth_read_only, _stencil_read_only) {
+                (true, true) => vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                (true, false) => vk::ImageLayout::DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL,
+                (false, true) => vk::ImageLayout::DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
+                (false, false) => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             };
             compatible_rp_key.depth_stencil = Some(super::DepthStencilAttachmentKey {
                 base: super::AttachmentKey::compatible(vk_format, vk_layout),
@@ -2144,7 +2179,9 @@ impl crate::Device for super::Device {
         let vk_dynamic_state =
             vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
 
-        let raw_pass = self.shared.make_render_pass(compatible_rp_key)?;
+        let raw_pass =
+            self.shared
+                .make_render_pass(compatible_rp_key, depth_read_only, stencil_read_only)?;
 
         let vk_infos = [{
             vk::GraphicsPipelineCreateInfo::default()

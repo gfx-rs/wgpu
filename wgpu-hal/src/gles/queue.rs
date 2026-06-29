@@ -1313,8 +1313,10 @@ impl super::Queue {
                 }
                 if usage.intersects(
                     wgt::TextureUses::COLOR_TARGET
-                        | wgt::TextureUses::DEPTH_STENCIL_READ
-                        | wgt::TextureUses::DEPTH_STENCIL_WRITE,
+                        | wgt::TextureUses::DEPTH_READ
+                        | wgt::TextureUses::DEPTH_WRITE
+                        | wgt::TextureUses::STENCIL_READ
+                        | wgt::TextureUses::STENCIL_WRITE,
                 ) {
                     flags |= glow::FRAMEBUFFER_BARRIER_BIT;
                 }

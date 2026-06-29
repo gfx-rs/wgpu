@@ -20,13 +20,17 @@ pub fn map_texture_usage(format: wgt::TextureFormat, usage: wgt::TextureUses) ->
 
     mtl_usage.set(
         MTLTextureUsage::RenderTarget,
-        usage.intersects(Tu::COLOR_TARGET | Tu::DEPTH_STENCIL_READ | Tu::DEPTH_STENCIL_WRITE),
+        usage.intersects(
+            Tu::COLOR_TARGET
+                | Tu::DEPTH_READ
+                | Tu::DEPTH_WRITE
+                | Tu::STENCIL_READ
+                | Tu::STENCIL_WRITE,
+        ),
     );
     mtl_usage.set(
         MTLTextureUsage::ShaderRead,
-        usage.intersects(
-            Tu::RESOURCE | Tu::DEPTH_STENCIL_READ | Tu::STORAGE_READ_ONLY | Tu::STORAGE_READ_WRITE,
-        ),
+        usage.intersects(Tu::RESOURCE | Tu::STORAGE_READ_ONLY | Tu::STORAGE_READ_WRITE),
     );
     mtl_usage.set(
         MTLTextureUsage::ShaderWrite,

@@ -1310,6 +1310,26 @@ impl PhysicalDeviceProperties {
             if self.supports_extension(khr::shader_integer_dot_product::NAME) {
                 extensions.push(khr::shader_integer_dot_product::NAME);
             }
+
+            // Optional `VK_KHR_dynamic_rendering`
+            if self.supports_extension(khr::dynamic_rendering::NAME) {
+                extensions.push(khr::dynamic_rendering::NAME);
+            }
+
+            // Optional `VK_KHR_load_store_op_none`
+            if self.supports_extension(khr::load_store_op_none::NAME) {
+                extensions.push(khr::load_store_op_none::NAME);
+            }
+
+            // Optional `VK_QCOM_render_pass_store_ops`
+            if self.supports_extension(ash::qcom::render_pass_store_ops::NAME) {
+                extensions.push(ash::qcom::render_pass_store_ops::NAME);
+            }
+
+            // Optional `VK_EXT_load_store_op_none`
+            if self.supports_extension(ext::load_store_op_none::NAME) {
+                extensions.push(ext::load_store_op_none::NAME);
+            }
         }
 
         // Optional `VK_KHR_swapchain_mutable_format`
@@ -2435,6 +2455,13 @@ impl super::Instance {
                 .unwrap_or(0),
             scratch_buffer_alignment: alignments.ray_tracing_scratch_buffer_alignment,
             ray_tracing_pipeline_group_data_size: alignments.ray_tracing_pipeline_group_data_size,
+            store_op_none: phd_capabilities.device_api_version >= vk::API_VERSION_1_3,
+            store_op_none_khr: phd_capabilities.supports_extension(khr::load_store_op_none::NAME)
+                || phd_capabilities.supports_extension(khr::load_store_op_none::NAME)
+                || phd_capabilities.device_api_version >= vk::make_api_version(0, 1, 4, 0), // TODO: Use `vk::API_VERSION_1_4` after updating `ash`
+            store_op_none_qcom: phd_capabilities
+                .supports_extension(ash::qcom::render_pass_store_ops::NAME),
+            store_op_none_ext: phd_capabilities.supports_extension(ext::load_store_op_none::NAME),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),

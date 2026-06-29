@@ -1167,8 +1167,10 @@ pub struct TextureView {
     handle_srv: Option<descriptor::Handle>,
     handle_uav: Option<descriptor::Handle>,
     handle_rtv: Option<descriptor::Handle>,
-    handle_dsv_ro: Option<descriptor::Handle>,
+    handle_dsv_rr: Option<descriptor::Handle>,
+    handle_dsv_wr: Option<descriptor::Handle>,
     handle_dsv_rw: Option<descriptor::Handle>,
+    handle_dsv_ww: Option<descriptor::Handle>,
 }
 
 impl crate::DynTextureView for TextureView {}

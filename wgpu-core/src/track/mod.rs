@@ -323,7 +323,7 @@ pub(crate) trait ResourceUses:
     type Selector: fmt::Debug;
 
     /// Turn the resource into a pile of bits.
-    fn bits(self) -> u16;
+    fn bits(self) -> u32;
     /// Returns true if any of the uses are exclusive.
     fn any_exclusive(self) -> bool;
 }

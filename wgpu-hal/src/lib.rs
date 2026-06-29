@@ -2841,6 +2841,8 @@ pub struct DepthStencilAttachment<'a, T: DynTextureView + ?Sized> {
     pub target: Attachment<'a, T>,
     pub depth_ops: AttachmentOps,
     pub stencil_ops: AttachmentOps,
+    pub depth_read_only: bool,
+    pub stencil_read_only: bool,
     pub clear_value: (f32, u32),
 }
 

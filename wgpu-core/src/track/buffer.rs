@@ -27,8 +27,8 @@ impl ResourceUses for BufferUses {
 
     type Selector = ();
 
-    fn bits(self) -> u16 {
-        Self::bits(&self)
+    fn bits(self) -> u32 {
+        Self::bits(&self).into()
     }
 
     fn any_exclusive(self) -> bool {

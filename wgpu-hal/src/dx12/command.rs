@@ -940,10 +940,26 @@ impl crate::CommandEncoder for super::CommandEncoder {
         drop(rtv_pool);
 
         let ds_view = desc.depth_stencil_attachment.as_ref().map(|ds| {
-            if ds.target.usage == wgt::TextureUses::DEPTH_STENCIL_WRITE {
+            if ds
+                .target
+                .usage
+                .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
+            {
+                ds.target.view.handle_dsv_wr.as_ref().unwrap().raw
+            } else if ds
+                .target
+                .usage
+                .contains(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::STENCIL_WRITE)
+            {
                 ds.target.view.handle_dsv_rw.as_ref().unwrap().raw
+            } else if ds
+                .target
+                .usage
+                .intersects(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE)
+            {
+                ds.target.view.handle_dsv_ww.as_ref().unwrap().raw
             } else {
-                ds.target.view.handle_dsv_ro.as_ref().unwrap().raw
+                ds.target.view.handle_dsv_rr.as_ref().unwrap().raw
             }
         });
 

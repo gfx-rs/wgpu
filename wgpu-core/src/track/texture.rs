@@ -45,7 +45,7 @@ impl ResourceUses for TextureUses {
 
     type Selector = TextureSelector;
 
-    fn bits(self) -> u16 {
+    fn bits(self) -> u32 {
         Self::bits(&self)
     }
 
