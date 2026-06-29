@@ -763,6 +763,7 @@ pub enum RawBindGroupLayout {
     Owning(ManuallyDrop<Box<dyn hal::DynBindGroupLayout>>),
     /// The empty BGL was created by the device and will be destroyed by the device.
     RefDeviceEmptyBGL,
+    Invalid,
 }
 
 /// Bind group layout.
@@ -786,6 +787,18 @@ pub struct BindGroupLayout {
 
 impl Drop for BindGroupLayout {
     fn drop(&mut self) {
+        #[cfg(feature = "trace")]
+        {
+            let mut t = self.device.trace.lock();
+            if let Some(t) = t.as_mut() {
+                use crate::device::trace;
+
+                // SAFETY: All bind group layouts are constructed in Arc => are heap allocated
+                t.add(trace::Action::DropBindGroupLayout(unsafe {
+                    trace::to_trace(self)
+                }));
+            }
+        }
         resource_log!("Destroy raw {}", self.error_ident());
         if matches!(self.origin, bgl::Origin::Pool) {
             self.device.bgl_pool.remove(&self.entries);
@@ -799,6 +812,7 @@ impl Drop for BindGroupLayout {
                 }
             }
             RawBindGroupLayout::RefDeviceEmptyBGL => {}
+            RawBindGroupLayout::Invalid => {}
         }
     }
 }
@@ -809,10 +823,19 @@ crate::impl_parent_device!(BindGroupLayout);
 crate::impl_storage_item!(BindGroupLayout);
 
 impl BindGroupLayout {
-    pub(crate) fn raw(&self) -> &dyn hal::DynBindGroupLayout {
+    pub(crate) fn try_raw(&self) -> Result<&dyn hal::DynBindGroupLayout, InvalidResourceError> {
         match &self.raw {
-            RawBindGroupLayout::Owning(raw) => raw.as_ref(),
-            RawBindGroupLayout::RefDeviceEmptyBGL => self.device.empty_bgl.as_ref(),
+            RawBindGroupLayout::Owning(raw) => Ok(raw.as_ref()),
+            RawBindGroupLayout::RefDeviceEmptyBGL => Ok(self.device.empty_bgl.as_ref()),
+            RawBindGroupLayout::Invalid => Err(InvalidResourceError(self.error_ident())),
+        }
+    }
+
+    pub(crate) fn check_is_valid(self: &Arc<Self>) -> Result<(), InvalidResourceError> {
+        match &self.raw {
+            RawBindGroupLayout::Owning(_) => Ok(()),
+            RawBindGroupLayout::RefDeviceEmptyBGL => Ok(()),
+            RawBindGroupLayout::Invalid => Err(InvalidResourceError(self.error_ident())),
         }
     }
 
@@ -825,6 +848,18 @@ impl BindGroupLayout {
             exclusive_pipeline: crate::OnceCellOrLock::from(exclusive_pipeline),
             binding_count_validator: BindingTypeMaxCountValidator::default(),
             label: String::new(),
+        })
+    }
+
+    pub(crate) fn invalid(device: &Arc<Device>, label: String) -> Arc<Self> {
+        Arc::new(Self {
+            raw: RawBindGroupLayout::Invalid,
+            device: device.clone(),
+            entries: bgl::EntryMap::default(),
+            origin: bgl::Origin::Derived,
+            exclusive_pipeline: crate::OnceCellOrLock::from(ExclusivePipeline::None),
+            binding_count_validator: BindingTypeMaxCountValidator::default(),
+            label,
         })
     }
 }

@@ -183,9 +183,7 @@ impl Player {
                 unimplemented!()
             }
             Action::CreateBindGroupLayout(id, desc) => {
-                let bind_group_layout = device
-                    .create_bind_group_layout(&desc)
-                    .expect("create_bind_group_layout error");
+                let (bind_group_layout, _error) = device.create_bind_group_layout(&desc);
                 self.bind_group_layouts.insert(id, bind_group_layout);
             }
             Action::GetRenderPipelineBindGroupLayout {
@@ -194,9 +192,7 @@ impl Player {
                 index,
             } => {
                 let pipeline = self.resolve_render_pipeline_id(pipeline);
-                let bgl = pipeline
-                    .get_bind_group_layout(index)
-                    .expect("invalid render pipeline");
+                let (bgl, _error) = pipeline.get_bind_group_layout(index);
                 self.bind_group_layouts.insert(id, bgl);
             }
             Action::GetComputePipelineBindGroupLayout {
@@ -205,9 +201,7 @@ impl Player {
                 index,
             } => {
                 let pipeline = self.resolve_compute_pipeline_id(pipeline);
-                let bgl = pipeline
-                    .get_bind_group_layout(index)
-                    .expect("invalid compute pipeline");
+                let (bgl, _error) = pipeline.get_bind_group_layout(index);
                 self.bind_group_layouts.insert(id, bgl);
             }
             Action::DropBindGroupLayout(id) => {

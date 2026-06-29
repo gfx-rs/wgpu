@@ -380,11 +380,35 @@ impl ComputePipeline {
         })
     }
 
-    pub fn get_bind_group_layout(
+    pub fn get_bind_group_layout_inner(
         self: &Arc<Self>,
         index: u32,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
         self.layout()?.get_bind_group_layout(index, self.into())
+    }
+
+    pub fn get_bind_group_layout(
+        self: &Arc<Self>,
+        index: u32,
+    ) -> (Arc<BindGroupLayout>, Option<GetBindGroupLayoutError>) {
+        let (bgl, error) = match self.get_bind_group_layout_inner(index) {
+            Ok(bgl) => (bgl, None),
+            Err(e) => (
+                BindGroupLayout::invalid(&self.device, String::new()),
+                Some(e),
+            ),
+        };
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.device.trace.lock() {
+            use crate::device::trace;
+            use trace::IntoTrace;
+            trace.add(trace::Action::GetComputePipelineBindGroupLayout {
+                id: bgl.to_trace(),
+                pipeline: self.to_trace(),
+                index,
+            });
+        };
+        (bgl, error)
     }
 }
 
@@ -985,10 +1009,34 @@ impl RenderPipeline {
         })
     }
 
-    pub fn get_bind_group_layout(
+    pub fn get_bind_group_layout_inner(
         self: &Arc<Self>,
         index: u32,
     ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
         self.layout()?.get_bind_group_layout(index, self.into())
+    }
+
+    pub fn get_bind_group_layout(
+        self: &Arc<Self>,
+        index: u32,
+    ) -> (Arc<BindGroupLayout>, Option<GetBindGroupLayoutError>) {
+        let (bgl, error) = match self.get_bind_group_layout_inner(index) {
+            Ok(bgl) => (bgl, None),
+            Err(e) => (
+                BindGroupLayout::invalid(&self.device, String::new()),
+                Some(e),
+            ),
+        };
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.device.trace.lock() {
+            use crate::device::trace;
+            use trace::IntoTrace;
+            trace.add(trace::Action::GetRenderPipelineBindGroupLayout {
+                id: bgl.to_trace(),
+                pipeline: self.to_trace(),
+                index,
+            });
+        };
+        (bgl, error)
     }
 }

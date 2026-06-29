@@ -2661,6 +2661,29 @@ impl Device {
     pub fn create_bind_group_layout(
         self: &Arc<Self>,
         desc: &binding_model::BindGroupLayoutDescriptor,
+    ) -> (Arc<BindGroupLayout>, Option<CreateBindGroupLayoutError>) {
+        let (bgl, error) = match self.create_bind_group_layout_inner(desc) {
+            Ok(layout) => (layout, None),
+            Err(e) => (
+                BindGroupLayout::invalid(self, desc.label.to_string()),
+                Some(e),
+            ),
+        };
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace::IntoTrace;
+
+            trace.add(trace::Action::CreateBindGroupLayout(
+                bgl.to_trace(),
+                desc.clone(),
+            ));
+        }
+        (bgl, error)
+    }
+
+    fn create_bind_group_layout_inner(
+        self: &Arc<Device>,
+        desc: &binding_model::BindGroupLayoutDescriptor,
     ) -> Result<Arc<BindGroupLayout>, CreateBindGroupLayoutError> {
         self.check_is_valid()?;
 
@@ -2668,7 +2691,7 @@ impl Device {
 
         let bgl_result = self.bgl_pool.get_or_init(entry_map, |entry_map| {
             let bgl =
-                self.create_bind_group_layout_internal(&desc.label, entry_map, bgl::Origin::Pool)?;
+                self.create_bind_group_layout_impl(&desc.label, entry_map, bgl::Origin::Pool)?;
             bgl.exclusive_pipeline
                 .set(binding_model::ExclusivePipeline::None)
                 .unwrap();
@@ -2681,7 +2704,7 @@ impl Device {
         }
     }
 
-    fn create_bind_group_layout_internal(
+    fn create_bind_group_layout_impl(
         self: &Arc<Self>,
         label: &crate::Label,
         entry_map: bgl::EntryMap,
@@ -3349,6 +3372,7 @@ impl Device {
 
         self.check_is_valid()?;
         layout.same_device(self)?;
+        layout.check_is_valid()?;
 
         {
             // Check that the number of entries in the descriptor matches
@@ -3552,7 +3576,7 @@ impl Device {
 
         let hal_desc = hal::BindGroupDescriptor {
             label: desc.label.to_hal(self.instance_flags),
-            layout: layout.raw(),
+            layout: layout.try_raw()?,
             entries: &hal_entries,
             buffers: &hal_buffers,
             samplers: &hal_samplers,
@@ -3867,8 +3891,8 @@ impl Device {
             .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
 
         let raw_bind_group_layouts = get_bgl_iter()
-            .map(|bgl| bgl.map(|bgl| bgl.raw()))
-            .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
+            .map(|bgl| bgl.map(|bgl| bgl.try_raw()).transpose())
+            .collect::<Result<ArrayVec<_, { hal::MAX_BIND_GROUPS }>, _>>()?;
 
         let additional_flags = if self.indirect_validation.is_some() {
             hal::PipelineLayoutFlags::INDIRECT_BUILTIN_UPDATE
@@ -3928,7 +3952,7 @@ impl Device {
                 match unique_bind_group_layouts.entry(bgl_entry_map) {
                     hashbrown::hash_map::Entry::Occupied(v) => Ok(Some(Arc::clone(v.get()))),
                     hashbrown::hash_map::Entry::Vacant(e) => {
-                        match self.create_bind_group_layout_internal(
+                        match self.create_bind_group_layout_impl(
                             &None,
                             e.key().clone(),
                             bgl::Origin::Derived,

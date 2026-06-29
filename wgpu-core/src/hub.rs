@@ -189,7 +189,7 @@ pub struct Hub {
     pub(crate) queues: Registry<Arc<Queue>>,
     pub(crate) pipeline_layouts: Registry<Fallible<PipelineLayout>>,
     pub(crate) shader_modules: Registry<Fallible<ShaderModule>>,
-    pub(crate) bind_group_layouts: Registry<Fallible<BindGroupLayout>>,
+    pub(crate) bind_group_layouts: Registry<Arc<BindGroupLayout>>,
     pub(crate) bind_groups: Registry<Fallible<BindGroup>>,
     pub(crate) command_encoders: Registry<Arc<CommandEncoder>>,
     pub(crate) command_buffers: Registry<Arc<CommandBuffer>>,

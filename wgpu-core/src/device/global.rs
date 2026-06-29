@@ -1,4 +1,4 @@
-use alloc::{borrow::Cow, boxed::Box, string::String, sync::Arc, vec::Vec};
+use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::{ptr::NonNull, sync::atomic::Ordering};
 
 #[cfg(feature = "trace")]
@@ -267,11 +267,16 @@ impl Global {
     /// See [`Self::create_buffer_error`] for additional context and explanation.
     pub fn create_bind_group_layout_error(
         &self,
+        device_id: DeviceId,
         id_in: Option<id::BindGroupLayoutId>,
         label: Option<Cow<'_, str>>,
     ) {
         let fid = self.hub.bind_group_layouts.prepare(id_in);
-        fid.assign(Fallible::Invalid(Arc::new(label.to_string())));
+        let device = self.hub.devices.get(device_id);
+        fid.assign(binding_model::BindGroupLayout::invalid(
+            &device,
+            label.to_string(),
+        ));
     }
 
     pub fn buffer_destroy(&self, buffer_id: id::BufferId) {
@@ -672,30 +677,15 @@ impl Global {
         let hub = &self.hub;
         let fid = hub.bind_group_layouts.prepare(id_in);
 
-        let error = 'error: {
-            let device = self.hub.devices.get(device_id);
+        let device = self.hub.devices.get(device_id);
 
-            let layout = match device.create_bind_group_layout(desc) {
-                Ok(layout) => layout,
-                Err(e) => break 'error e,
-            };
+        let (bgl, error) = device.create_bind_group_layout(desc);
 
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateBindGroupLayout(
-                    layout.to_trace(),
-                    desc.clone(),
-                ));
-            }
+        let id = fid.assign(bgl);
 
-            let id = fid.assign(Fallible::Valid(layout.clone()));
+        api_log!("Device::create_bind_group_layout -> {id:?}");
 
-            api_log!("Device::create_bind_group_layout -> {id:?}");
-            return (id, None);
-        };
-
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-        (id, Some(error))
+        (id, error)
     }
 
     pub fn bind_group_layout_drop(&self, bind_group_layout_id: id::BindGroupLayoutId) {
@@ -705,13 +695,6 @@ impl Global {
         let hub = &self.hub;
 
         let _layout = hub.bind_group_layouts.remove(bind_group_layout_id);
-
-        #[cfg(feature = "trace")]
-        if let Ok(layout) = _layout.get() {
-            if let Some(t) = layout.device.trace.lock().as_mut() {
-                t.add(trace::Action::DropBindGroupLayout(layout.to_trace()));
-            }
-        }
     }
 
     pub fn device_create_pipeline_layout(
@@ -739,16 +722,8 @@ impl Global {
                 let bind_group_layouts_guard = hub.bind_group_layouts.read();
                 desc.bind_group_layouts
                     .iter()
-                    .map(|bgl_id| match bgl_id {
-                        Some(bgl_id) => bind_group_layouts_guard.get(*bgl_id).get().map(Some),
-                        None => Ok(None),
-                    })
-                    .collect::<Result<Vec<_>, _>>()
-            };
-
-            let bind_group_layouts = match bind_group_layouts {
-                Ok(bind_group_layouts) => bind_group_layouts,
-                Err(e) => break 'error e.into(),
+                    .map(|bgl_id| bgl_id.map(|bgl_id| bind_group_layouts_guard.get(bgl_id)))
+                    .collect::<Vec<_>>()
             };
 
             let desc = binding_model::ResolvedPipelineLayoutDescriptor {
@@ -813,10 +788,7 @@ impl Global {
                 break 'error e.into();
             }
 
-            let layout = match hub.bind_group_layouts.get(desc.layout).get() {
-                Ok(layout) => layout,
-                Err(e) => break 'error e.into(),
-            };
+            let layout = hub.bind_group_layouts.get(desc.layout);
 
             fn resolve_entry<'a>(
                 e: &BindGroupEntry<'a>,
@@ -1600,28 +1572,13 @@ impl Global {
 
         let fid = hub.bind_group_layouts.prepare(id_in);
 
-        let error = 'error: {
-            let pipeline = hub.render_pipelines.get(pipeline_id);
-            match pipeline.get_bind_group_layout(index) {
-                Ok(bgl) => {
-                    #[cfg(feature = "trace")]
-                    if let Some(ref mut trace) = *pipeline.device.trace.lock() {
-                        trace.add(trace::Action::GetRenderPipelineBindGroupLayout {
-                            id: bgl.to_trace(),
-                            pipeline: pipeline.to_trace(),
-                            index,
-                        });
-                    }
+        let pipeline = hub.render_pipelines.get(pipeline_id);
 
-                    let id = fid.assign(Fallible::Valid(bgl.clone()));
-                    return (id, None);
-                }
-                Err(err) => break 'error err,
-            };
-        };
+        let (bgl, error) = pipeline.get_bind_group_layout(index);
 
-        let id = fid.assign(Fallible::Invalid(Arc::new(String::new())));
-        (id, Some(error))
+        let id = fid.assign(bgl);
+
+        (id, error)
     }
 
     pub fn render_pipeline_drop(&self, render_pipeline_id: id::RenderPipelineId) {
@@ -1732,27 +1689,11 @@ impl Global {
 
         let pipeline = hub.compute_pipelines.get(pipeline_id);
 
-        let error = 'error: {
-            match pipeline.get_bind_group_layout(index) {
-                Ok(bgl) => {
-                    #[cfg(feature = "trace")]
-                    if let Some(ref mut trace) = *pipeline.device.trace.lock() {
-                        trace.add(trace::Action::GetComputePipelineBindGroupLayout {
-                            id: bgl.to_trace(),
-                            pipeline: pipeline.to_trace(),
-                            index,
-                        });
-                    }
+        let (bgl, error) = pipeline.get_bind_group_layout(index);
 
-                    let id = fid.assign(Fallible::Valid(bgl.clone()));
-                    return (id, None);
-                }
-                Err(err) => break 'error err,
-            };
-        };
+        let id = fid.assign(bgl);
 
-        let id = fid.assign(Fallible::Invalid(Arc::new(String::new())));
-        (id, Some(error))
+        (id, error)
     }
 
     pub fn compute_pipeline_drop(&self, compute_pipeline_id: id::ComputePipelineId) {
