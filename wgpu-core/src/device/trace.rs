@@ -200,7 +200,7 @@ pub enum Action<'a, R: ReferenceType> {
     },
     DropComputePipeline(PointerId<markers::ComputePipeline>),
     CreateGeneralRenderPipeline {
-        id: Option<PointerId<markers::RenderPipeline>>,
+        id: PointerId<markers::RenderPipeline>,
         desc: TraceGeneralRenderPipelineDescriptor<'a>,
     },
     DropRenderPipeline(PointerId<markers::RenderPipeline>),
