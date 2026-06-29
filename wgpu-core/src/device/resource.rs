@@ -3709,7 +3709,14 @@ impl Device {
                     });
                 }
                 view.check_usage(wgt::TextureUsages::TEXTURE_BINDING)?;
-                Ok(wgt::TextureUses::RESOURCE)
+                let depth_stencil_uses = if view.desc.aspects() == hal::FormatAspects::DEPTH {
+                    wgt::TextureUses::DEPTH_SAMPLED
+                } else if view.desc.aspects() == hal::FormatAspects::DEPTH {
+                    wgt::TextureUses::STENCIL_SAMPLED
+                } else {
+                    wgt::TextureUses::empty()
+                };
+                Ok(wgt::TextureUses::RESOURCE | depth_stencil_uses)
             }
             wgt::BindingType::StorageTexture {
                 access,
