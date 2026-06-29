@@ -3711,7 +3711,7 @@ impl Device {
                 view.check_usage(wgt::TextureUsages::TEXTURE_BINDING)?;
                 let depth_stencil_uses = if view.desc.aspects() == hal::FormatAspects::DEPTH {
                     wgt::TextureUses::DEPTH_SAMPLED
-                } else if view.desc.aspects() == hal::FormatAspects::DEPTH {
+                } else if view.desc.aspects() == hal::FormatAspects::STENCIL {
                     wgt::TextureUses::STENCIL_SAMPLED
                 } else {
                     wgt::TextureUses::empty()
