@@ -39,14 +39,14 @@ metal::float4 mock_function(
     device InStorage const& in_storage,
     constant InUniform& in_uniform,
     metal::texture2d_array<float, metal::access::sample> image_2d_array,
-    threadgroup type_5& in_workgroup,
+    threadgroup type_5* in_workgroup,
     thread type_6& in_private
 ) {
     type_9 in_function = type_9 {{metal::float4(0.707, 0.0, 0.0, 1.0), metal::float4(0.0, 0.707, 0.0, 1.0)}};
     metal::float4 _e18 = in_storage.a.inner[i];
     metal::float4 _e22 = in_uniform.a.inner[i];
     metal::float4 _e25 = (uint(l) < image_2d_array.get_num_mip_levels() && uint(i) < image_2d_array.get_array_size() && metal::all(metal::uint2(c) < metal::uint2(image_2d_array.get_width(l), image_2d_array.get_height(l))) ? image_2d_array.read(metal::uint2(c), i, l): DefaultConstructible());
-    float _e29 = in_workgroup.inner[metal::min(unsigned(i), 29u)];
+    float _e29 = in_workgroup->inner[metal::min(unsigned(i), 29u)];
     float _e34 = in_private.inner[metal::min(unsigned(i), 39u)];
     metal::float4 _e38 = in_function.inner[metal::min(unsigned(i), 1u)];
     return ((((_e18 + _e22) + _e25) + metal::float4(_e29)) + metal::float4(_e34)) + _e38;
@@ -57,11 +57,11 @@ kernel void main_(
 , device InStorage const& in_storage [[user(fake0)]]
 , constant InUniform& in_uniform [[user(fake0)]]
 , metal::texture2d_array<float, metal::access::sample> image_2d_array [[user(fake0)]]
-, threadgroup type_5& in_workgroup
+, threadgroup type_5* in_workgroup
 ) {
     type_6 in_private = {};
     if (__local_invocation_index == 0u) {
-        in_workgroup = {};
+        *in_workgroup = {};
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::float4 _e5 = mock_function(metal::int2(1, 2), 3, 4, in_storage, in_uniform, image_2d_array, in_workgroup, in_private);

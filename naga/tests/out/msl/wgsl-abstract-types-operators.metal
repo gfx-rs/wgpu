@@ -100,18 +100,18 @@ void wgpu_4445_(
 }
 
 void wgpu_4435_(
-    threadgroup type_3& a
+    threadgroup type_3* a
 ) {
-    uint y = a.inner[as_type<int>(as_type<uint>(1) - as_type<uint>(1))];
+    uint y = a->inner[as_type<int>(as_type<uint>(1) - as_type<uint>(1))];
     return;
 }
 
 kernel void main_(
   uint __local_invocation_index [[thread_index_in_threadgroup]]
-, threadgroup type_3& a
+, threadgroup type_3* a
 ) {
     if (__local_invocation_index == 0u) {
-        a = {};
+        *a = {};
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     runtime_values();

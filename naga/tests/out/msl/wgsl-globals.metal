@@ -61,8 +61,8 @@ void test_msl_packed_vec3_(
 
 kernel void main_(
   uint __local_invocation_index [[thread_index_in_threadgroup]]
-, threadgroup type_2& wg
-, threadgroup metal::atomic_uint& at_1
+, threadgroup type_2* wg
+, threadgroup metal::atomic_uint* at_1
 , device FooStruct& alignment [[user(fake0)]]
 , device type_6 const& dummy [[user(fake0)]]
 , constant type_8& float_vecs [[user(fake0)]]
@@ -73,8 +73,8 @@ kernel void main_(
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
     if (__local_invocation_index == 0u) {
-        wg = {};
-        metal::atomic_store_explicit(&at_1, 0, metal::memory_order_relaxed);
+        *wg = {};
+        metal::atomic_store_explicit(at_1, 0, metal::memory_order_relaxed);
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     float Foo = 1.0;
@@ -82,20 +82,20 @@ kernel void main_(
     test_msl_packed_vec3_(alignment);
     metal::float4x2 _e5 = global_nested_arrays_of_matrices_4x2_.inner[0].inner[0];
     metal::float4 _e10 = global_nested_arrays_of_matrices_2x4_.inner[0].inner[0][0];
-    wg.inner[7] = (_e5 * _e10).x;
+    wg->inner[7] = (_e5 * _e10).x;
     metal::float3x2 _e16 = global_mat;
     metal::float3 _e18 = global_vec;
-    wg.inner[6] = (_e16 * _e18).x;
+    wg->inner[6] = (_e16 * _e18).x;
     float _e26 = dummy[1].y;
-    wg.inner[5] = _e26;
+    wg->inner[5] = _e26;
     float _e32 = float_vecs.inner[0].w;
-    wg.inner[4] = _e32;
+    wg->inner[4] = _e32;
     float _e37 = alignment.v1_;
-    wg.inner[3] = _e37;
+    wg->inner[3] = _e37;
     float _e43 = alignment.v3_[0];
-    wg.inner[2] = _e43;
+    wg->inner[2] = _e43;
     alignment.v1_ = 4.0;
-    wg.inner[1] = static_cast<float>(1 + (_buffer_sizes.size3 - 0 - 8) / 8);
-    metal::atomic_store_explicit(&at_1, 2u, metal::memory_order_relaxed);
+    wg->inner[1] = static_cast<float>(1 + (_buffer_sizes.size3 - 0 - 8) / 8);
+    metal::atomic_store_explicit(at_1, 2u, metal::memory_order_relaxed);
     return;
 }

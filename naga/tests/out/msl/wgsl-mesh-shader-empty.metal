@@ -71,10 +71,10 @@ struct ms_mainPrimitiveOutput {
 void _ms_main(
   uint __local_invocation_index
 , object_data TaskPayload const& taskPayload
-, threadgroup MeshOutput& mesh_output
+, threadgroup MeshOutput* mesh_output
 ) {
     if (__local_invocation_index == 0u) {
-        mesh_output = {};
+        *mesh_output = {};
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_object_data);
@@ -86,7 +86,7 @@ void _ms_main(
 , object_data TaskPayload const& taskPayload [[payload]]
 ) {
     threadgroup MeshOutput mesh_output;
-    _ms_main(__local_invocation_index, taskPayload, mesh_output);
+    _ms_main(__local_invocation_index, taskPayload, &mesh_output);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_object_data);
     for(uint vertexIndex = __local_invocation_index; vertexIndex < metal::min(mesh_output.vertex_count, 3u); vertexIndex += 64) {

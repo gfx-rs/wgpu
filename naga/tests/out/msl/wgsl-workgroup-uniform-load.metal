@@ -14,14 +14,14 @@ struct test_workgroupUniformLoadInput {
 kernel void test_workgroupUniformLoad(
   metal::uint3 workgroup_id [[threadgroup_position_in_grid]]
 , uint __local_invocation_index [[thread_index_in_threadgroup]]
-, threadgroup type_2& arr_i32_
+, threadgroup type_2* arr_i32_
 ) {
     if (__local_invocation_index == 0u) {
-        arr_i32_ = {};
+        *arr_i32_ = {};
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    int unnamed = arr_i32_.inner[workgroup_id.x];
+    int unnamed = arr_i32_->inner[workgroup_id.x];
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     if (unnamed > 10) {
         metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);

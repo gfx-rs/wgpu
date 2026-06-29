@@ -217,7 +217,7 @@ impl<W: core::fmt::Write> super::Writer<W> {
         writeln!(self.out, ") {{")?;
 
         // Function body
-        if ep.stage == crate::ShaderStage::Mesh {
+        if ep.stage == crate::ShaderStage::Mesh || ep.stage == crate::ShaderStage::Task {
             for (handle, var) in module.global_variables.iter() {
                 if var.space != crate::AddressSpace::WorkGroup || fun_info[handle].is_empty() {
                     continue;
@@ -252,7 +252,7 @@ impl<W: core::fmt::Write> super::Writer<W> {
                 is_first = false;
                 write!(self.out, "{}", arg.name)?;
             }
-            if ep.stage == crate::ShaderStage::Mesh {
+            if ep.stage == crate::ShaderStage::Mesh || ep.stage == crate::ShaderStage::Task {
                 for (handle, var) in module.global_variables.iter() {
                     if var.space != crate::AddressSpace::WorkGroup || fun_info[handle].is_empty() {
                         continue;
@@ -261,7 +261,7 @@ impl<W: core::fmt::Write> super::Writer<W> {
                         write!(self.out, ", ")?;
                     }
                     let name = &self.names[&NameKey::GlobalVariable(handle)];
-                    write!(self.out, "{name}")?;
+                    write!(self.out, "&{name}")?;
                 }
             }
         }
