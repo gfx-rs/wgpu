@@ -514,9 +514,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .collect::<Vec<_>>();
 
         for barrier in barriers {
-            // For depth stencil textures, we generate one `TextureBarrier` with `TextureAspect::All`,
+            // For depth-stencil textures, we generated `TextureBarrier` with `TextureAspect::All`,
             // but in DX12 depth and stencil are subresources and need to be transitioned separately
-            // to separate their read-only states.
+            // to separate their resource states, otherwise the render pass is invalid.
             if barrier.usage.from.intersects(
                 wgt::TextureUses::DEPTH_READ
                     | wgt::TextureUses::DEPTH_WRITE

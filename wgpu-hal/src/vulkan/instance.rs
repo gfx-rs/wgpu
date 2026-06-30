@@ -11,20 +11,6 @@ use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
 use parking_lot::RwLock;
 
-const SYNC_HAZARD_WRITE_AFTER_WRITE_SUPPRESS_PATTERNS: &[&str] = &[
-    "vkQueueSubmit(): WRITE_AFTER_WRITE hazard detected. \
-    vkCmdEndRenderPass (from VkCommandBuffer ", "submitted on the current VkQueue ",") writes to resource, \
-    which was previously written during an image layout transition initiated by vkCmdPipelineBarrier \
-    (from VkCommandBuffer ", "[(wgpu internal) Pre Pass] submitted on VkQueue ", "). \
-    \nThe current synchronization allows VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT accesses at \
-    VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT|VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, \
-    VK_ACCESS_2_SHADER_READ_BIT|VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT accesses at \
-    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT accesses at \
-    VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT|VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
-    but to prevent this hazard, it must allow VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT \
-    accesses at VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT."
-];
-
 unsafe extern "system" fn debug_utils_messenger_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
@@ -91,16 +77,6 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     const VUID_STANDALONESPIRV_NONE_10684: i32 = 0xb210f7c2_u32 as i32;
     if cd.message_id_number == VUID_STANDALONESPIRV_NONE_10684 {
         return vk::FALSE;
-    }
-
-    const SYNC_HAZARD_WRITE_AFTER_WRITE: i32 = 0x5c0ec5d6_u32 as i32;
-    if cd.message_id_number == SYNC_HAZARD_WRITE_AFTER_WRITE {
-        let msg = unsafe { cd.message_as_c_str() }
-            .unwrap_or(c"")
-            .to_string_lossy();
-        if sequential_match(&msg, SYNC_HAZARD_WRITE_AFTER_WRITE_SUPPRESS_PATTERNS) {
-            return vk::FALSE;
-        }
     }
 
     let level = match message_severity {
@@ -1063,39 +1039,4 @@ impl crate::Surface for super::Surface {
                 .unwrap()
         };
     }
-}
-
-fn sequential_match(msg: &str, patterns: &[&str]) -> bool {
-    let bytes = msg.as_bytes();
-    let mut cursor = 0;
-    let mut pat_idx = 0;
-    while cursor < bytes.len() && pat_idx < patterns.len() {
-        let pat = patterns[pat_idx];
-        if bytes[cursor..].starts_with(pat.as_bytes()) {
-            cursor += pat.len();
-            pat_idx += 1;
-        } else {
-            cursor += 1;
-        }
-    }
-    pat_idx == patterns.len()
-}
-
-#[test]
-fn test_sequential_match() {
-    assert!(sequential_match(
-    "vkQueueSubmit(): WRITE_AFTER_WRITE hazard detected. \
-    vkCmdEndRenderPass (from VkCommandBuffer 0x564b19230230 submitted on the current VkQueue 0x564b18df5520) \
-    writes to resource, which was previously written during an image layout transition \
-    initiated by vkCmdPipelineBarrier (from VkCommandBuffer 0x564b192196e0[(wgpu internal) Pre Pass] \
-    submitted on VkQueue 0x564b18df5520). \n\
-    The current synchronization allows VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT \
-    accesses at VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT|VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, \
-    VK_ACCESS_2_SHADER_READ_BIT|VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT \
-    accesses at VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT \
-    accesses at VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT|VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
-    but to prevent this hazard, it must allow VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT \
-    accesses at VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT.",
-        SYNC_HAZARD_WRITE_AFTER_WRITE_SUPPRESS_PATTERNS
-    ));
 }

@@ -73,20 +73,6 @@ impl super::DeviceShared {
         };
     }
 
-    fn get_store_op_none(&self) -> vk::AttachmentStoreOp {
-        if self.private_caps.store_op_none {
-            vk::AttachmentStoreOp::NONE
-        } else if self.private_caps.store_op_none_khr {
-            vk::AttachmentStoreOp::NONE_KHR
-        } else if self.private_caps.store_op_none_qcom {
-            vk::AttachmentStoreOp::NONE_QCOM
-        } else if self.private_caps.store_op_none_ext {
-            vk::AttachmentStoreOp::NONE_EXT
-        } else {
-            vk::AttachmentStoreOp::STORE
-        }
-    }
-
     pub fn make_render_pass(
         &self,
         key: super::RenderPassKey,
@@ -190,12 +176,12 @@ impl super::DeviceShared {
                         conv::map_attachment_ops(stencil_ops);
                     if let Some(depth_read_only) = depth_read_only {
                         if depth_read_only {
-                            store_op = self.get_store_op_none();
+                            store_op = self.private_caps.get_store_op_none();
                         }
                     }
                     if let Some(stencil_read_only) = stencil_read_only {
                         if stencil_read_only {
-                            stencil_store_op = self.get_store_op_none();
+                            stencil_store_op = self.private_caps.get_store_op_none();
                         }
                     }
                     let vk_attachment = vk::AttachmentDescription::default()

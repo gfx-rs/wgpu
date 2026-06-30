@@ -156,6 +156,20 @@ impl super::PrivateCapabilities {
             },
         }
     }
+
+    pub fn get_store_op_none(&self) -> vk::AttachmentStoreOp {
+        if self.store_op_none {
+            vk::AttachmentStoreOp::NONE
+        } else if self.store_op_none_khr {
+            vk::AttachmentStoreOp::NONE_KHR
+        } else if self.store_op_none_qcom {
+            vk::AttachmentStoreOp::NONE_QCOM
+        } else if self.store_op_none_ext {
+            vk::AttachmentStoreOp::NONE_EXT
+        } else {
+            vk::AttachmentStoreOp::STORE
+        }
+    }
 }
 
 pub fn map_vk_surface_formats(
@@ -304,6 +318,7 @@ pub fn map_texture_usage(usage: wgt::TextureUses) -> vk::ImageUsageFlags {
 
 pub fn map_texture_usage_to_barrier(
     usage: wgt::TextureUses,
+    support_store_op_none: bool,
 ) -> (vk::PipelineStageFlags, vk::AccessFlags) {
     let mut stages = vk::PipelineStageFlags::empty();
     let mut access = vk::AccessFlags::empty();
@@ -330,7 +345,14 @@ pub fn map_texture_usage_to_barrier(
     if usage.intersects(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::STENCIL_READ) {
         stages |= vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS
             | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS;
-        access |= vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ;
+        access |= if !support_store_op_none {
+            // If `vk::AttachmentStoreOp::NONE` isn't available we use `vk::AttachmentStoreOp::Store`
+            // for readonly depth-stencil attachments, which needs write access to avoid validation error.
+            vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
+                | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE
+        } else {
+            vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
+        }
     }
     if usage.intersects(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE) {
         stages |= vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS
