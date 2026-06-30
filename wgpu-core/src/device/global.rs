@@ -1181,14 +1181,14 @@ impl Global {
         // no lock rank here because only one thread should be using compute pass
         // and it's only used by id variants of compute pass methods on global
         // so no deadlock (or concurrent lock) should happen in practise
-        let id = fid.assign(Arc::new(parking_lot::Mutex::new(render_bundle_encoder)));
+        let id = fid.assign(Arc::new(parking_lot::Mutex::new(*render_bundle_encoder)));
 
         (id, error)
     }
 
     pub fn render_bundle_encoder_finish(
         &self,
-        bundle_encoder: &mut Box<command::RenderBundleEncoder>,
+        bundle_encoder: &mut command::RenderBundleEncoder,
         desc: &command::RenderBundleDescriptor,
         id_in: Option<id::RenderBundleId>,
     ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {

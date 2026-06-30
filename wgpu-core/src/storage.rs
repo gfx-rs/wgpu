@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
 use core::mem;
 
 use crate::id::{Id, Marker};
@@ -39,14 +39,6 @@ impl<T: ResourceType> ResourceType for Mutex<T> {
 }
 
 impl<T: StorageItem> StorageItem for Mutex<T> {
-    type Marker = T::Marker;
-}
-
-impl<T: ResourceType> ResourceType for Box<T> {
-    const TYPE: &'static str = T::TYPE;
-}
-
-impl<T: StorageItem> StorageItem for Box<T> {
     type Marker = T::Marker;
 }
 

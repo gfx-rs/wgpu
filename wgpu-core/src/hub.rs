@@ -116,7 +116,6 @@ when replaying a trace.
 
 */
 
-use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::fmt::Debug;
 
@@ -216,7 +215,7 @@ pub struct Hub {
     pub(crate) tlas_s: Registry<Fallible<Tlas>>,
     pub(crate) render_passes: Registry<Arc<Mutex<RenderPass>>>,
     pub(crate) compute_passes: Registry<Arc<Mutex<ComputePass>>>,
-    pub(crate) render_bundle_encoders: Registry<Arc<Mutex<Box<RenderBundleEncoder>>>>,
+    pub(crate) render_bundle_encoders: Registry<Arc<Mutex<RenderBundleEncoder>>>,
 }
 
 impl Hub {
