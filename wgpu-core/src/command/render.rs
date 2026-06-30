@@ -718,7 +718,7 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         // SAFETY: The range of immediates written was validated in `is_ready`.
         unsafe {
             self.pass.immediate_state.flush_immediates(
-                self.pipeline.as_ref().unwrap().layout.raw(),
+                self.pipeline.as_ref().unwrap().layout().unwrap().raw(),
                 self.pass.base.raw_encoder,
             );
         }
