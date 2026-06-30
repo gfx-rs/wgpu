@@ -116,12 +116,15 @@ when replaying a trace.
 
 */
 
+use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::fmt::Debug;
 
 use crate::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
-    command::{CommandBuffer, CommandEncoder, ComputePass, RenderBundle, RenderPass},
+    command::{
+        CommandBuffer, CommandEncoder, ComputePass, RenderBundle, RenderBundleEncoder, RenderPass,
+    },
     device::{queue::Queue, Device},
     instance::Adapter,
     lock::rank,
@@ -158,6 +161,7 @@ pub struct HubReport {
     pub samplers: RegistryReport,
     pub render_passes: RegistryReport,
     pub compute_passes: RegistryReport,
+    pub render_bundle_encoders: RegistryReport,
 }
 
 impl HubReport {
@@ -212,6 +216,7 @@ pub struct Hub {
     pub(crate) tlas_s: Registry<Fallible<Tlas>>,
     pub(crate) render_passes: Registry<Arc<Mutex<RenderPass>>>,
     pub(crate) compute_passes: Registry<Arc<Mutex<ComputePass>>>,
+    pub(crate) render_bundle_encoders: Registry<Arc<Mutex<Box<RenderBundleEncoder>>>>,
 }
 
 impl Hub {
@@ -248,6 +253,7 @@ impl Hub {
             tlas_s: Registry::with_rank(rank::HUB_TLAS),
             render_passes: Registry::new(),
             compute_passes: Registry::new(),
+            render_bundle_encoders: Registry::new(),
         }
     }
 
@@ -274,6 +280,7 @@ impl Hub {
             samplers: self.samplers.generate_report(),
             render_passes: self.render_passes.generate_report(),
             compute_passes: self.compute_passes.generate_report(),
+            render_bundle_encoders: self.render_bundle_encoders.generate_report(),
         }
     }
 }

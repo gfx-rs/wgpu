@@ -1164,6 +1164,28 @@ impl Global {
         (Box::new(encoder), error)
     }
 
+    pub fn device_create_render_bundle_encoder_with_id(
+        &self,
+        device_id: DeviceId,
+        desc: &command::RenderBundleEncoderDescriptor,
+        id_in: Option<id::RenderBundleEncoderId>,
+    ) -> (
+        id::RenderBundleEncoderId,
+        Option<command::CreateRenderBundleError>,
+    ) {
+        let fid = self.hub.render_bundle_encoders.prepare(id_in);
+
+        let (render_bundle_encoder, error) =
+            self.device_create_render_bundle_encoder(device_id, desc);
+
+        // no lock rank here because only one thread should be using compute pass
+        // and it's only used by id variants of compute pass methods on global
+        // so no deadlock (or concurrent lock) should happen in practise
+        let id = fid.assign(Arc::new(parking_lot::Mutex::new(render_bundle_encoder)));
+
+        (id, error)
+    }
+
     pub fn render_bundle_encoder_finish(
         &self,
         bundle_encoder: &mut Box<command::RenderBundleEncoder>,
@@ -1209,6 +1231,26 @@ impl Global {
 
         let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
+    }
+
+    pub fn render_bundle_encoder_finish_with_id(
+        &self,
+        render_bundle_encoder_id: id::RenderBundleEncoderId,
+        desc: &command::RenderBundleDescriptor,
+        id_in: Option<id::RenderBundleId>,
+    ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
+        let bundle_encoder = self
+            .hub
+            .render_bundle_encoders
+            .get(render_bundle_encoder_id);
+
+        let mut bundle_encoder = bundle_encoder
+            .try_lock()
+            .expect("RenderBundleEncoders should not be accessed concurrently");
+
+        let (id, error) = self.render_bundle_encoder_finish(&mut bundle_encoder, desc, id_in);
+
+        (id, error)
     }
 
     pub fn render_bundle_drop(&self, render_bundle_id: id::RenderBundleId) {
