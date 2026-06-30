@@ -15,6 +15,10 @@ on:
 
 env:
   #
+  # Keep in sync with cts.yml
+  #
+
+  #
   # Dependency versioning
   #
 
@@ -27,12 +31,11 @@ env:
   CORE_MSRV: "1.87"
 
   #
-  # Environment variables
+  # Build and test configuration
   #
 
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
-  WGPU_DX12_COMPILER: dxc
   RUST_LOG: debug,wasm_bindgen_wasm_interpreter=warn,wasm_bindgen_cli_support=warn,walrus=warn,naga=info
   RUST_BACKTRACE: full
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
@@ -41,6 +44,13 @@ env:
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: e # cache busting
   WGPU_CI: true
+
+  #
+  # Runtime configuration
+  #
+
+  LVP_POISON_MEMORY: true # to test memory init; see docs/testing.md
+  WGPU_DX12_COMPILER: dxc
 
 # Every time a PR is pushed to, cancel any previous jobs. This
 # makes us behave nicer to github and get faster turnaround times
