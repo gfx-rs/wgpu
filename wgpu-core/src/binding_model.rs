@@ -893,14 +893,14 @@ pub enum ImmediateUploadError {
     )]
     SizeUnaligned(usize),
     #[error(
-        "Provided immediate data start offset {} + size bytes {} * 4 overruns `max_immediate_size` {}",
+        "Provided immediate data start offset {} + size {} overruns `max_immediate_size` {}",
         start_offset,
-        slots,
+        size_bytes,
         limit
     )]
     EndOffsetBeyondLimit {
         start_offset: u32,
-        slots: usize,
+        size_bytes: usize,
         limit: u32,
     },
 }

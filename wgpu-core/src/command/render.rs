@@ -3744,13 +3744,15 @@ impl Global {
             pass::validate_immediates_alignment(offset, data_bytes.len())
         );
 
-        // `bytemuck::cast_slice` panics when input is empty.
-        if data_bytes.is_empty() {
-            return Ok(());
-        }
         base.commands.push(ArcRenderCommand::SetImmediate {
             offset,
-            data: bytemuck::cast_slice(data_bytes).to_vec(),
+            data: data_bytes
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .copied()
+                .map(u32::from_le_bytes)
+                .collect(),
         });
 
         Ok(())
