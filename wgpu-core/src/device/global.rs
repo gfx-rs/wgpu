@@ -711,47 +711,25 @@ impl Global {
         let hub = &self.hub;
         let fid = hub.pipeline_layouts.prepare(id_in);
 
-        let error = 'error: {
-            let device = self.hub.devices.get(device_id);
+        let device = self.hub.devices.get(device_id);
 
-            if let Err(e) = device.check_is_valid() {
-                break 'error e.into();
-            }
-
-            let bind_group_layouts = {
-                let bind_group_layouts_guard = hub.bind_group_layouts.read();
-                desc.bind_group_layouts
-                    .iter()
-                    .map(|bgl_id| bgl_id.map(|bgl_id| bind_group_layouts_guard.get(bgl_id)))
-                    .collect::<Vec<_>>()
-            };
-
-            let desc = binding_model::ResolvedPipelineLayoutDescriptor {
-                label: desc.label.clone(),
-                bind_group_layouts: Cow::Owned(bind_group_layouts),
-                immediate_size: desc.immediate_size,
-            };
-
-            let layout = match device.create_pipeline_layout(&desc) {
-                Ok(layout) => layout,
-                Err(e) => break 'error e,
-            };
-
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreatePipelineLayout(
-                    layout.to_trace(),
-                    desc.to_trace(),
-                ));
-            }
-
-            let id = fid.assign(Fallible::Valid(layout));
-            api_log!("Device::create_pipeline_layout -> {id:?}");
-            return (id, None);
+        let bind_group_layouts = {
+            let bind_group_layouts_guard = hub.bind_group_layouts.read();
+            desc.bind_group_layouts
+                .iter()
+                .map(|bgl_id| bgl_id.map(|bgl_id| bind_group_layouts_guard.get(bgl_id)))
+                .collect::<Vec<_>>()
         };
 
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-        (id, Some(error))
+        let desc = binding_model::ResolvedPipelineLayoutDescriptor {
+            label: desc.label.clone(),
+            bind_group_layouts: Cow::Owned(bind_group_layouts),
+            immediate_size: desc.immediate_size,
+        };
+
+        let (layout, error) = device.create_pipeline_layout(&desc);
+        let id = fid.assign(layout);
+        (id, error)
     }
 
     pub fn pipeline_layout_drop(&self, pipeline_layout_id: id::PipelineLayoutId) {
@@ -761,13 +739,6 @@ impl Global {
         let hub = &self.hub;
 
         let _layout = hub.pipeline_layouts.remove(pipeline_layout_id);
-
-        #[cfg(feature = "trace")]
-        if let Ok(layout) = _layout.get() {
-            if let Some(t) = layout.device.trace.lock().as_mut() {
-                t.add(trace::Action::DropPipelineLayout(layout.to_trace()));
-            }
-        }
     }
 
     pub fn device_create_bind_group(
@@ -1385,14 +1356,7 @@ impl Global {
                 break 'error e.into();
             }
 
-            let layout = desc
-                .layout
-                .map(|layout| hub.pipeline_layouts.get(layout).get())
-                .transpose();
-            let layout = match layout {
-                Ok(layout) => layout,
-                Err(e) => break 'error e.into(),
-            };
+            let layout = desc.layout.map(|layout| hub.pipeline_layouts.get(layout));
 
             let cache = desc
                 .cache
@@ -1614,14 +1578,7 @@ impl Global {
                 break 'error e.into();
             }
 
-            let layout = desc
-                .layout
-                .map(|layout| hub.pipeline_layouts.get(layout).get())
-                .transpose();
-            let layout = match layout {
-                Ok(layout) => layout,
-                Err(e) => break 'error e.into(),
-            };
+            let layout = desc.layout.map(|layout| hub.pipeline_layouts.get(layout));
 
             let cache = desc
                 .cache

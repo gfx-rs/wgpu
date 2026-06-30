@@ -3817,8 +3817,30 @@ impl Device {
     pub fn create_pipeline_layout(
         self: &Arc<Self>,
         desc: &binding_model::ResolvedPipelineLayoutDescriptor,
-    ) -> Result<Arc<binding_model::PipelineLayout>, binding_model::CreatePipelineLayoutError> {
-        self.create_pipeline_layout_impl(desc, false)
+    ) -> (
+        Arc<binding_model::PipelineLayout>,
+        Option<binding_model::CreatePipelineLayoutError>,
+    ) {
+        let (layout, error) = match self.create_pipeline_layout_impl(desc, false) {
+            Ok(layout) => (layout, None),
+            Err(e) => (
+                binding_model::PipelineLayout::invalid(Arc::clone(self), desc.label.to_string()),
+                Some(e),
+            ),
+        };
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace::IntoTrace;
+            trace.add(trace::Action::CreatePipelineLayout(
+                layout.to_trace(),
+                desc.to_trace(),
+            ));
+        }
+        api_log!(
+            "Device::create_pipeline_layout -> {:?}",
+            Arc::as_ptr(&layout)
+        );
+        (layout, error)
     }
 
     fn create_pipeline_layout_impl(
@@ -3918,7 +3940,7 @@ impl Device {
         drop(raw_bind_group_layouts);
 
         let layout = binding_model::PipelineLayout {
-            raw: ManuallyDrop::new(raw),
+            raw: ResourceState::Valid(ManuallyDrop::new(raw)),
             device: self.clone(),
             label: desc.label.to_string(),
             bind_group_layouts,
@@ -4025,6 +4047,7 @@ impl Device {
         let pipeline_layout = match desc.layout {
             Some(pipeline_layout) => {
                 pipeline_layout.same_device(self)?;
+                pipeline_layout.check_valid()?;
                 Some(pipeline_layout)
             }
             None => None,
@@ -4083,7 +4106,7 @@ impl Device {
 
         let pipeline_desc = hal::ComputePipelineDescriptor {
             label: desc.label.to_hal(self.instance_flags),
-            layout: pipeline_layout.raw(),
+            layout: pipeline_layout.raw()?,
             stage: hal::ProgrammableStage {
                 module: shader_module.raw(),
                 entry_point: final_entry_point_name.as_ref(),
@@ -4580,6 +4603,7 @@ impl Device {
         let pipeline_layout = match desc.layout {
             Some(pipeline_layout) => {
                 pipeline_layout.same_device(self)?;
+                pipeline_layout.check_valid()?;
                 Some(pipeline_layout)
             }
             None => None,
@@ -4918,7 +4942,7 @@ impl Device {
         let raw = {
             let pipeline_desc = hal::RenderPipelineDescriptor {
                 label: desc.label.to_hal(self.instance_flags),
-                layout: pipeline_layout.raw(),
+                layout: pipeline_layout.raw()?,
                 vertex_processor: match vertex_stage {
                     Some(vertex_stage) => hal::VertexProcessor::Standard {
                         vertex_buffers: &hal_vertex_buffer_layouts,

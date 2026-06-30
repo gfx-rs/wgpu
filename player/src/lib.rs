@@ -223,9 +223,7 @@ impl Player {
                     immediate_size: desc.immediate_size,
                 };
 
-                let pipeline_layout = device
-                    .create_pipeline_layout(&resolved_desc)
-                    .expect("create_pipeline_layout error");
+                let (pipeline_layout, _error) = device.create_pipeline_layout(&resolved_desc);
                 self.pipeline_layouts.insert(id, pipeline_layout);
             }
             Action::DropPipelineLayout(id) => {

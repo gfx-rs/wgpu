@@ -999,7 +999,7 @@ pub type ResolvedPipelineLayoutDescriptor<'a, BGL = Arc<BindGroupLayout>> =
 
 #[derive(Debug)]
 pub struct PipelineLayout {
-    pub(crate) raw: ManuallyDrop<Box<dyn hal::DynPipelineLayout>>,
+    pub(crate) raw: ResourceState<ManuallyDrop<Box<dyn hal::DynPipelineLayout>>>,
     pub(crate) device: Arc<Device>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -1010,17 +1010,39 @@ pub struct PipelineLayout {
 impl Drop for PipelineLayout {
     fn drop(&mut self) {
         resource_log!("Destroy raw {}", self.error_ident());
-        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
-        unsafe {
-            self.device.raw().destroy_pipeline_layout(raw);
+        if let ResourceState::Valid(raw) = &mut self.raw {
+            // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+            let raw = unsafe { ManuallyDrop::take(raw) };
+            unsafe {
+                self.device.raw().destroy_pipeline_layout(raw);
+            }
+        }
+        #[cfg(feature = "trace")]
+        {
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(crate::device::trace::Action::DropPipelineLayout(unsafe {
+                    crate::device::trace::to_trace(self)
+                }));
+            }
         }
     }
 }
 
 impl PipelineLayout {
-    pub(crate) fn raw(&self) -> &dyn hal::DynPipelineLayout {
-        self.raw.as_ref()
+    pub(crate) fn raw(&self) -> Result<&dyn hal::DynPipelineLayout, InvalidResourceError> {
+        self.raw
+            .as_ref()
+            .valid()
+            .map(|r| r.as_ref())
+            .ok_or_else(|| InvalidResourceError(self.error_ident()))
+    }
+
+    pub(crate) fn check_valid(&self) -> Result<(), InvalidResourceError> {
+        self.raw
+            .as_ref()
+            .valid()
+            .map(|_| ())
+            .ok_or_else(|| InvalidResourceError(self.error_ident()))
     }
 
     pub(crate) fn get_bind_group_layout(
@@ -1081,6 +1103,16 @@ impl PipelineLayout {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn invalid(device: Arc<Device>, label: String) -> Arc<Self> {
+        Arc::new(Self {
+            raw: ResourceState::Invalid,
+            device,
+            label,
+            bind_group_layouts: ArrayVec::new(),
+            immediate_size: 0,
+        })
     }
 }
 

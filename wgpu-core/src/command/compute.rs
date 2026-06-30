@@ -1106,7 +1106,7 @@ fn dispatch_workgroups_indirect(
             if !state.immediates.is_empty() {
                 unsafe {
                     state.pass.base.raw_encoder.set_immediates(
-                        pipeline_layout.raw(),
+                        pipeline_layout.raw()?,
                         0,
                         &state.immediates,
                     );
@@ -1117,7 +1117,7 @@ fn dispatch_workgroups_indirect(
                 let raw_bg = group.try_raw(state.pass.base.snatch_guard)?;
                 unsafe {
                     state.pass.base.raw_encoder.set_bind_group(
-                        pipeline_layout.raw(),
+                        pipeline_layout.raw()?,
                         i as u32,
                         raw_bg,
                         dynamic_offsets,

@@ -1250,7 +1250,11 @@ impl RenderBundle {
                     let raw_bg = bind_group.as_ref().unwrap().try_raw(snatch_guard)?;
                     unsafe {
                         raw.set_bind_group(
-                            pipeline_layout.as_ref().unwrap().raw(),
+                            pipeline_layout
+                                .as_ref()
+                                .unwrap()
+                                .raw()
+                                .expect("PipelineLayout should be valid at this point"),
                             *index,
                             raw_bg,
                             &offsets[..*num_dynamic_offsets],
@@ -1311,7 +1315,15 @@ impl RenderBundle {
                         let data_slice =
                             &self.base.immediates_data[(values_offset as usize)..values_end_offset];
 
-                        unsafe { raw.set_immediates(pipeline_layout.raw(), *offset, data_slice) }
+                        unsafe {
+                            raw.set_immediates(
+                                pipeline_layout
+                                    .raw()
+                                    .expect("PipelineLayout should be valid at this point"),
+                                *offset,
+                                data_slice,
+                            )
+                        }
                     } else {
                         super::immediates_clear(
                             *offset,
@@ -1319,7 +1331,9 @@ impl RenderBundle {
                             |clear_offset, clear_data| {
                                 unsafe {
                                     raw.set_immediates(
-                                        pipeline_layout.raw(),
+                                        pipeline_layout
+                                            .raw()
+                                            .expect("PipelineLayout should be valid at this point"),
                                         clear_offset,
                                         clear_data,
                                     )
