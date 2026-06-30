@@ -2721,12 +2721,9 @@ impl crate::Device for super::Device {
         self.counters.fences.add(1);
 
         Ok(if self.shared.private_caps.timeline_semaphores {
-            let mut sem_type_info =
-                vk::SemaphoreTypeCreateInfo::default().semaphore_type(vk::SemaphoreType::TIMELINE);
-            let vk_info = vk::SemaphoreCreateInfo::default().push_next(&mut sem_type_info);
-            let raw = unsafe { self.shared.raw.create_semaphore(&vk_info, None) }
-                .map_err(super::map_host_device_oom_err)?;
-
+            let raw = self
+                .shared
+                .new_timeline_semaphore("wgpu-hal device fence")?;
             super::Fence::TimelineSemaphore(raw)
         } else {
             super::Fence::FencePool(RwLock::new(super::FencePool {
@@ -3214,6 +3211,20 @@ impl super::DeviceShared {
 
             Ok(semaphore)
         }
+    }
+
+    /// Creates a timeline semaphore with an initial value of 0.
+    pub(super) fn new_timeline_semaphore(
+        &self,
+        name: &str,
+    ) -> Result<vk::Semaphore, crate::DeviceError> {
+        let mut type_info =
+            vk::SemaphoreTypeCreateInfo::default().semaphore_type(vk::SemaphoreType::TIMELINE);
+        let info = vk::SemaphoreCreateInfo::default().push_next(&mut type_info);
+        let semaphore = unsafe { self.raw.create_semaphore(&info, None) }
+            .map_err(super::map_host_device_oom_err)?;
+        unsafe { self.set_object_name(semaphore, name) };
+        Ok(semaphore)
     }
 
     pub(super) fn wait_for_fence(
