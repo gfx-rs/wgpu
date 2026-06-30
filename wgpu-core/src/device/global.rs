@@ -80,6 +80,26 @@ impl Global {
         })
     }
 
+    /// Returns the HDR and luminance characteristics of the display backing
+    /// `surface_id` on `adapter_id`.
+    ///
+    /// Reports the raw display state, independent of the surface's configured
+    /// color space; see [`wgt::DisplayHdrInfo`] for per-field platform coverage.
+    /// Returns [`wgt::DisplayHdrInfo::default`] (all fields `None`) when nothing
+    /// is known: the surface is not on `adapter_id`'s backend, the backend has
+    /// no display-query path, or the Metal backend is queried off the main
+    /// thread.
+    pub fn surface_display_hdr_info(
+        &self,
+        surface_id: SurfaceId,
+        adapter_id: AdapterId,
+    ) -> wgt::DisplayHdrInfo {
+        profiling::scope!("Surface::display_hdr_info");
+        self.fetch_adapter_and_surface(surface_id, adapter_id, |adapter, surface| {
+            surface.display_hdr_info(adapter)
+        })
+    }
+
     fn fetch_adapter_and_surface<F: FnOnce(&Adapter, &Surface) -> B, B>(
         &self,
         surface_id: SurfaceId,

@@ -491,6 +491,13 @@ impl crate::Adapter for super::Adapter {
         })
     }
 
+    unsafe fn surface_display_hdr_info(
+        &self,
+        surface: &super::Surface,
+    ) -> Option<wgt::DisplayHdrInfo> {
+        surface.display_hdr_info()
+    }
+
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         let timestamp = self.shared.presentation_timer.get_timestamp_ns();
 
@@ -1242,6 +1249,14 @@ impl super::CapabilitiesQuery {
                 | F::PARTIALLY_BOUND_BINDING_ARRAY,
             self.msl_version >= MTLLanguageVersion::Version3_0
                 && self.supports_arrays_of_textures
+                && self
+                    .argument_buffers
+                    .unwrap_or(MTLArgumentBuffersTier::Tier1)
+                    >= MTLArgumentBuffersTier::Tier2,
+        );
+        features.set(
+            F::BUFFER_BINDING_ARRAY,
+            self.msl_version >= MTLLanguageVersion::Version2_0
                 && self
                     .argument_buffers
                     .unwrap_or(MTLArgumentBuffersTier::Tier1)

@@ -3939,6 +3939,27 @@ impl Drop for WebRenderBundle {
     }
 }
 
+/// Evaluates a CSS media query, or `None` if there is no [`web_sys::Window`]
+/// (Worker / `OffscreenCanvas` contexts, where `matchMedia` is absent).
+fn match_media_query(query: &str) -> Option<bool> {
+    let list = web_sys::window()?.match_media(query).ok().flatten()?;
+    Some(list.matches())
+}
+
+/// Classifies the display's gamut from CSS `color-gamut`, widest bucket first.
+/// `None` if there is no `Window` or the browser reports nothing.
+fn environment_color_gamut() -> Option<wgt::DisplayGamut> {
+    if match_media_query("(color-gamut: rec2020)") == Some(true) {
+        Some(wgt::DisplayGamut::Rec2020)
+    } else if match_media_query("(color-gamut: p3)") == Some(true) {
+        Some(wgt::DisplayGamut::DisplayP3)
+    } else if match_media_query("(color-gamut: srgb)") == Some(true) {
+        Some(wgt::DisplayGamut::Srgb)
+    } else {
+        None
+    }
+}
+
 /// Probing and caching of whether this browser can configure an `rgba16float`
 /// WebGPU canvas. Only the reader functions are visible outside this module; the
 /// cached state and the probe machinery are private to it.
@@ -4056,11 +4077,12 @@ impl dispatch::SurfaceInterface for WebSurface {
                     // `configure` here never gates on display HDR state either).
                     // So these spaces are gated on fp16-canvas support alone —
                     // the same condition that puts `Rgba16Float` in `formats` —
-                    // not on whether the display is currently HDR. WebGPU has no
-                    // linear canvas color space, so the web backend advertises
-                    // the encoded `ExtendedSrgb` and, for the "display-p3"
-                    // canvas, the wide-gamut `ExtendedDisplayP3` — not the
-                    // linear `ExtendedSrgbLinear`.
+                    // not on whether the display is currently HDR, which is what
+                    // `display_hdr_info` reports. WebGPU has no linear canvas
+                    // color space, so the web backend advertises the encoded
+                    // `ExtendedSrgb` and, for the "display-p3" canvas, the
+                    // wide-gamut `ExtendedDisplayP3` — not the linear
+                    // `ExtendedSrgbLinear`.
                     if format == wgt::TextureFormat::Rgba16Float {
                         color_spaces |= wgt::SurfaceColorSpaces::EXTENDED_SRGB
                             | wgt::SurfaceColorSpaces::EXTENDED_DISPLAY_P3;
@@ -4078,6 +4100,32 @@ impl dispatch::SurfaceInterface for WebSurface {
             alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
             // Statically set to RENDER_ATTACHMENT for now. See https://gpuweb.github.io/gpuweb/#dom-gpucanvasconfiguration-usage
             usages: wgt::TextureUsages::RENDER_ATTACHMENT,
+        }
+    }
+
+    fn display_hdr_info(&self, _adapter: &dispatch::DispatchAdapter) -> wgt::DisplayHdrInfo {
+        // The web exposes only coarse boolean dynamic-range + gamut buckets (CSS
+        // media queries), no numeric luminance, so every numeric field stays
+        // `None`. `(dynamic-range: high)` reports capability, not whether HDR is
+        // active. Worker / `OffscreenCanvas` contexts have no `Window` (no
+        // `matchMedia`), so this falls back to `default()`.
+        let high_dynamic_range = match_media_query("(dynamic-range: high)");
+        let gamut = environment_color_gamut();
+
+        let coarse = if high_dynamic_range.is_some() || gamut.is_some() {
+            Some(wgt::DisplayCoarseRange {
+                high_dynamic_range,
+                gamut,
+            })
+        } else {
+            None
+        };
+        wgt::DisplayHdrInfo {
+            luminance: None,
+            headroom: None,
+            chromaticity: None,
+            coarse,
+            bits_per_color: None,
         }
     }
 

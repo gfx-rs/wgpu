@@ -1376,6 +1376,13 @@ impl crate::Adapter for super::Adapter {
         })
     }
 
+    unsafe fn surface_display_hdr_info(
+        &self,
+        surface: &super::Surface,
+    ) -> Option<wgt::DisplayHdrInfo> {
+        surface.hdr_source.as_ref()?.display_hdr_info()
+    }
+
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         wgt::PresentationTimestamp(self.presentation_timer.get_timestamp_ns())
     }

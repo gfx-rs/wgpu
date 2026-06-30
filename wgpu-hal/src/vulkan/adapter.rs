@@ -3230,6 +3230,15 @@ impl crate::Adapter for super::Adapter {
         surface.inner.surface_capabilities(self)
     }
 
+    unsafe fn surface_display_hdr_info(
+        &self,
+        surface: &super::Surface,
+    ) -> Option<wgt::DisplayHdrInfo> {
+        // Vulkan has no portable luminance query; the Win32 surface reads it
+        // through DXGI (see `dxgi::hdr`). Every other surface reports `None`.
+        surface.inner.display_hdr_info()
+    }
+
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         // VK_GOOGLE_display_timing is the only way to get presentation
         // timestamps on vulkan right now and it is only ever available

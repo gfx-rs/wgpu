@@ -145,6 +145,11 @@ development. Naming is mostly taken from vulkan.
 
 ```wgsl
 // - Initializes the `ray_query` to check where (if anywhere) the ray defined by `ray_desc` hits in `acceleration_structure`
+// - If `ray_desc` is "invalid" (see definition on struct) then either:
+//    1. the call is discarded (see behaviour of other calls if the ray query is uninitialized)
+//    2. the call behaves *as if* the minimum number of fields were changed to make `ray_desc` valid
+// - A ray query is "initialized" if this function has been called *and* was not discarded. If the call was discarded,
+//   the ray query may either be treated as if it were uninitialized or left in its previous state.
 rayQueryInitialize(rq: ptr<function, ray_query>, acceleration_structure: acceleration_structure, ray_desc: RayDesc)
 // Overload.
 rayQueryInitialize(rq: ptr<function, ray_query<vertex_return>>, acceleration_structure: acceleration_structure<vertex_return>, ray_desc: RayDesc)
@@ -160,18 +165,31 @@ rayQueryInitialize(rq: ptr<function, ray_query<vertex_return>>, acceleration_str
 //   the closest hit a `Committed` intersection should be used.
 // - Calling this function multiple times will cause the ray traversal to continue if it was interrupted by a `Candidate`
 //   intersection.
+// - If `rq` was not previously initialized, the call is discarded.
+// - If the previous proceed returned false (and no initialize was performed in between), the call is discarded.
 rayQueryProceed(rq: ptr<function, ray_query>) -> bool
 // Overload.
 rayQueryProceed(rq: ptr<function, ray_query<vertex_return>>) -> bool
 
 // - Generates a hit from procedural geometry at a particular distance.
-rayQueryGenerateIntersection(hit_t: f32)
+// - If `rq` was not previously initialized, the call is discarded.
+// - If the previous proceed returned false (and no initialize was performed in between), the call is discarded.
+// - If `hit_t` is not between the `ray_desc.tmin` provided to the previous initialize and the `t` value of the
+//   latest committed hit (or the last `ray_desc.tmax` if there are no committed hits), the call is discarded.
+rayQueryGenerateIntersection(rq: ptr<function, ray_query>, hit_t: f32)
 
 // - Commits a hit from triangular non-opaque geometry.
-rayQueryConfirmIntersection()
+// - If `rq` was not previously initialized, the call is discarded.
+// - If the previous proceed returned false (and no initialize was performed in between), the call is discarded.
+rayQueryConfirmIntersection(rq: ptr<function, ray_query>)
 
 // Aborts the query which is in progress, that is, the next `rayQueryProceed` is guaranteed to return `false`
-// and any call to `rayQueryGetCommittedIntersection` will return the closest committed result so far.
+// and any call to `rayQueryGetCommittedIntersection` after the `rayQueryProceed` will return the closest
+// committed result so far. (`rayQueryProceed` must be called for `rayQueryGetCommittedIntersection` to return
+// a non zeroed value).
+//
+// - If `rq` was not previously initialized, the call is discarded.
+// - If the previous proceed returned false (and no initialize was performed in between), the call is discarded.
 rayQueryTerminate(rq: ptr<function, ray_query>)
 
 // - Returns intersection details about a hit considered `Committed`.
@@ -190,6 +208,9 @@ rayQueryTerminate(rq: ptr<function, ray_query>)
 // - The following fields are populated if the closest hit is was a triangle.
 //    - barycentrics
 //    - front_face
+// If `rq` was not previously initialized, the call is discarded.
+// If the previous proceed returned true or there were no previous proceed calls since the last initialize, a
+//  zero-initialized `RayIntersection` is returned.
 rayQueryGetCommittedIntersection(rq: ptr<function, ray_query>) -> RayIntersection
 // Overload.
 rayQueryGetCommittedIntersection(rq: ptr<function, ray_query<vertex_return>>) -> RayIntersection
@@ -213,44 +234,35 @@ rayQueryGetCommittedIntersection(rq: ptr<function, ray_query<vertex_return>>) ->
 //
 // Note that `t` is *only* returned for a candidate triangle intersection. This is because
 // `RAY_QUERY_INTERSECTION_AABB` is an AABB which has a volume.
+// If `rq` was not previously initialized, the call is discarded.
+// If the previous proceed returned false or there were no previous proceed calls since the last initialize, a
+// zero-initialized `RayIntersection` is returned.
 rayQueryGetCandidateIntersection(rq: ptr<function, ray_query>) -> RayIntersection
 // Overload.
 rayQueryGetCandidateIntersection(rq: ptr<function, ray_query<vertex_return>>) -> RayIntersection
 
 // - Returns the vertices of the hit triangle considered `Committed`.
+// - If `rq` was not previously initialized, the call is discarded.
+// - If the previous proceed returned true or there were no previous proceed calls since the last initialize, a
+//   zero-initialized `array` is returned.
+// - If the last hit was not a triangle, a zero-initialized `array` is returned.
 getCommittedHitVertexPositions(rq: ptr<function, ray_query<vertex_return>>) -> array<vec3<f32>, 3>
 
 // - Returns the vertices of the hit triangle considered `Candidate`.
+// - If `rq` was not previously initialized, the call is discarded.
+// - If the previous proceed returned true or there were no previous proceed calls since the last initialize, a
+//   zero-initialized `array` is returned.
+// - If the last hit was not a triangle, a zero-initialized `array` is returned.
 getCandidateHitVertexPositions(rq: ptr<function, ray_query<vertex_return>>) -> array<vec3<f32>, 3>
-```
 
-> [!CAUTION]
->
-> #### ⚠️Undefined behavior ⚠️:
->
-> - Calling `rayQueryGetCommittedIntersection` or `rayQueryGetCandidateIntersection` when `rayQueryProceed` has not been
->   called on this ray query since it was initialized (or if the ray query has not been previously initialized).
-> - Calling `rayQueryGetCommittedIntersection` when `rayQueryProceed`'s latest return on this ray query is considered
->   `Candidate`.
-> - Calling `rayQueryGetCandidateIntersection` when `rayQueryProceed`'s latest return on this ray query is considered
->   `Committed`.
-> - Calling `getCommittedHitVertexPositions` when `rayQueryProceed`'s latest return on this ray query is considered
->   `Candidate`.
-> - Calling `getCandidateHitVertexPositions` when `rayQueryProceed`'s latest return on this ray query is considered
->   `Committed`.
-> - Calling `get*HitVertexPositions` when the last `rayQueryProceed` did not hit a triangle
-> - Calling `rayQueryProceed` when `rayQueryInitialize` has not previously been called on this ray query
-> - Calling `rayQueryGenerateIntersection` on a query with last intersection kind not being
->   `RAY_QUERY_INTERSECTION_AABB`,
-> - Calling `rayQueryGenerateIntersection` with `hit_t` outside of `RayDesc::t_min .. RayDesc::t_max` range.
->   or when `rayQueryProceed`'s latest return on this ray query is not considered `Candidate`.
-> - Calling `rayQueryConfirmIntersection` on a query with last intersection kind not being
->   `RAY_QUERY_INTERSECTION_TRIANGLE`,
->   or when `rayQueryProceed`'s latest return on this ray query is not considered `Candidate`.
->
-> \*this is only known undefined behaviour, and will be worked around in the future.
-
-```wgsl
+// A `RayDesc` is invalid if:
+// - `ray_desc.flags` contains more than one of `SKIP_TRIANGLES` and `SKIP_AABBS`
+// - `ray_desc.flags` contains more than one of `SKIP_TRIANGLES`, `CULL_BACK_FACING` and `CULL_FRONT_FACING`
+// - `ray_desc.flags` contains more than one of `FORCE_OPAQUE`, `FORCE_NO_OPAQUE`, `CULL_OPAQUE`, `CULL_NO_OPAQUE`
+// - `ray_desc.t_min` is less than `0.0`, or is not finite (`NaN` or `Inf`).
+// - `ray_desc.t_max` is less than `0.0`, less than `ray_desc.t_min` (the first rule is implied by the second).
+// - Any component of `ray_desc.origin` or `ray_desc.dir` is not finite (`NaN` or `Inf`)
+// - `ray_desc.dir`'s length is zero (this implies `ray_desc.dir`)
 struct RayDesc {
     // Contains flags to use for this ray (e.g. consider all `Blas`es opaque)
     flags: u32,

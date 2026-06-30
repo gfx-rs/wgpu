@@ -28,12 +28,41 @@ use winit::{
     window::{Window, WindowId},
 };
 
+#[cfg(target_os = "macos")]
+mod macos;
+
 /// Print to stdout on native, the developer console on the web.
 fn report(msg: impl std::fmt::Display) {
     #[cfg(not(target_arch = "wasm32"))]
     println!("{msg}");
     #[cfg(target_arch = "wasm32")]
     web_sys::console::log_1(&msg.to_string().into());
+}
+
+/// Report the display HDR info returned by
+/// [`wgpu::Surface::display_hdr_info`], the read-only query of what the panel can
+/// show right now, tagged with the `source` that triggered it (startup, a window
+/// event, or the macOS notification). Every field is advisory and
+/// platform-dependent (`None` == unknown here, **not** an SDR display). It's also
+/// a live check: on macOS, dimming the display changes `headroom` between
+/// re-queries.
+fn report_display_hdr_info(source: &str, info: &wgpu::DisplayHdrInfo) {
+    report(format_args!(
+        "Display HDR info [{source}] (advisory; None = unknown on this platform):"
+    ));
+    report(format_args!("  luminance:      {:?}", info.luminance));
+    report(format_args!("  headroom:       {:?}", info.headroom));
+    report(format_args!("  chromaticity:   {:?}", info.chromaticity));
+    report(format_args!("  coarse:         {:?}", info.coarse));
+    report(format_args!("  bits_per_color: {:?}", info.bits_per_color));
+    // The one number a tone-mapper needs: how far above SDR white highlights can
+    // go this frame (1.0 == none). Whether to use HDR at all is a separate
+    // question, answered by the surface's color spaces (see `pick_mode`), not by
+    // this live value.
+    report(format_args!(
+        "  -> tone_map_headroom() = {:?}",
+        info.tone_map_headroom()
+    ));
 }
 
 /// The forced mode, from the first positional CLI argument on native (e.g.
@@ -172,12 +201,17 @@ fn pick_mode(caps: &wgpu::SurfaceCapabilities, forced: Option<&str>) -> ModeChoi
 
 struct State {
     window: Arc<Window>,
+    /// Kept so the display info can be re-queried after startup;
+    /// `display_hdr_info` takes the adapter, exactly like `get_capabilities`.
+    adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
+    /// The most recent display info, so a re-query only logs on change.
+    last_hdr_info: wgpu::DisplayHdrInfo,
 }
 
 impl State {
@@ -251,8 +285,8 @@ impl State {
             );
         }
         // `pick_mode` already chose in one pass; `is_hdr()` on the result is the
-        // whole capability branch — an HDR space is the one whose highlights can
-        // go brighter than SDR reference white.
+        // whole capability branch — an HDR space is the one whose highlights you
+        // scale by `tone_map_headroom()`.
         let dynamic_range = if choice.color_space.is_hdr() {
             "HDR"
         } else {
@@ -348,12 +382,15 @@ impl State {
 
         State {
             window,
+            adapter,
             device,
             queue,
             surface,
             config,
             pipeline,
             bind_group,
+            // Seeded by the first main-thread query in `user_event`.
+            last_hdr_info: wgpu::DisplayHdrInfo::default(),
         }
     }
 
@@ -361,6 +398,29 @@ impl State {
         self.config.width = size.width.max(1);
         self.config.height = size.height.max(1);
         self.surface.configure(&self.device, &self.config);
+    }
+
+    /// Re-query the display HDR info and log it if it changed.
+    ///
+    /// `display_hdr_info` is a point-in-time read, so re-query when the display
+    /// might have changed. winit reports window changes (`Resized` / `Moved`);
+    /// this example also installs a macOS observer for the in-place changes winit
+    /// has no event for (HDR toggled, or the brightness slider that moves EDR
+    /// headroom). Other platforms' in-place triggers are left unwired.
+    ///
+    /// Call this on the main thread: on the Metal backend `display_hdr_info` reads
+    /// main-thread-only `NSScreen`, and all triggers deliver here.
+    ///
+    /// macOS EDR headroom drifts and ramps over ~1-2 s, so apps that tone-map from
+    /// it tend to re-read every frame; otherwise a query at startup is enough,
+    /// since every value but that headroom is advisory.
+    fn requery_display_hdr_info(&mut self, source: &str) {
+        let info = self.surface.display_hdr_info(&self.adapter);
+        // Change-gated: a printed line means this `source` changed something.
+        if info != self.last_hdr_info {
+            report_display_hdr_info(source, &info);
+            self.last_hdr_info = info;
+        }
     }
 
     fn render(&mut self) {
@@ -404,12 +464,20 @@ enum UserEvent {
     /// The async setup finished; carries the initialized `State`. Boxed to keep
     /// the event small (`State` is large).
     Initialized(Box<State>),
+    /// macOS: the display configuration changed, so re-query the HDR info. See
+    /// [`macos::observe_screen_parameter_changes`].
+    #[cfg(target_os = "macos")]
+    ScreenParametersChanged,
 }
 
 struct App {
     /// Taken on the first `resumed` call so initialization happens once.
     proxy: Option<EventLoopProxy<UserEvent>>,
     state: Option<State>,
+    /// macOS: holds the screen-change observer so it stays registered for the
+    /// app's lifetime (dropping it removes the observer).
+    #[cfg(target_os = "macos")]
+    screen_observer: Option<macos::ScreenObserver>,
 }
 
 impl ApplicationHandler<UserEvent> for App {
@@ -417,6 +485,15 @@ impl ApplicationHandler<UserEvent> for App {
         let Some(proxy) = self.proxy.take() else {
             return;
         };
+
+        // macOS: start observing screen-parameter changes so the display HDR
+        // info is re-queried reactively. AppKit posts the notification when the
+        // display configuration changes — including the SDR brightness slider,
+        // which moves the EDR headroom — and winit doesn't surface it.
+        #[cfg(target_os = "macos")]
+        {
+            self.screen_observer = Some(macos::observe_screen_parameter_changes(proxy.clone()));
+        }
 
         #[cfg_attr(
             not(target_arch = "wasm32"),
@@ -464,9 +541,26 @@ impl ApplicationHandler<UserEvent> for App {
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::Initialized(state) => {
-                let state = *state;
+                let mut state = *state;
+                // The first display query runs here because it must be on the
+                // main thread (see `requery_display_hdr_info`) and `State::new`
+                // ran on a worker. It also seeds the baseline later re-queries
+                // compare against.
+                let info = state.surface.display_hdr_info(&state.adapter);
+                report_display_hdr_info("initial query", &info);
+                state.last_hdr_info = info;
+
                 state.window.request_redraw();
                 self.state = Some(state);
+            }
+            // macOS: the screen changed (HDR toggled, brightness moved, monitor
+            // switched). Re-query — the headroom can change our tone-map target.
+            #[cfg(target_os = "macos")]
+            UserEvent::ScreenParametersChanged => {
+                if let Some(state) = self.state.as_mut() {
+                    state.requery_display_hdr_info("macOS screen-parameters notification");
+                    state.window.request_redraw();
+                }
             }
         }
     }
@@ -479,8 +573,14 @@ impl ApplicationHandler<UserEvent> for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
                 state.resize(size);
+                // A resize can also land the window on another monitor, so
+                // re-query here too.
+                state.requery_display_hdr_info("window resized");
                 state.window.request_redraw();
             }
+            // The main signal for a monitor change. winit doesn't deliver it on
+            // Wayland or web, so they won't react (see `requery_display_hdr_info`).
+            WindowEvent::Moved(_) => state.requery_display_hdr_info("window moved"),
             // The test pattern is static, so we render on demand (startup, OS
             // expose, resize) rather than spinning a continuous redraw loop.
             WindowEvent::RedrawRequested => state.render(),
@@ -500,6 +600,8 @@ fn main() {
     let app = App {
         proxy: Some(event_loop.create_proxy()),
         state: None,
+        #[cfg(target_os = "macos")]
+        screen_observer: None,
     };
 
     #[cfg(not(target_arch = "wasm32"))]

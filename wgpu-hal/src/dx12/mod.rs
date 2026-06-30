@@ -558,6 +558,7 @@ impl Instance {
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: RwLock::new(None),
             options: self.options.clone(),
+            hdr_source: None,
         }
     }
 
@@ -576,6 +577,7 @@ impl Instance {
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: RwLock::new(None),
             options: self.options.clone(),
+            hdr_source: None,
         }
     }
 
@@ -593,6 +595,7 @@ impl Instance {
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: RwLock::new(None),
             options: self.options.clone(),
+            hdr_source: None,
         }
     }
 }
@@ -635,6 +638,9 @@ pub struct Surface {
     supports_allow_tearing: bool,
     swap_chain: RwLock<Option<SwapChain>>,
     options: wgt::Dx12BackendOptions,
+    /// HDR-info source for HWND-backed targets; `None` for composition /
+    /// SwapChainPanel / surface-handle targets, which have no monitor identity.
+    hdr_source: Option<auxil::dxgi::hdr::DxgiHdrSource>,
 }
 
 unsafe impl Send for Surface {}

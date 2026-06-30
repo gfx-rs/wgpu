@@ -103,6 +103,11 @@ vulkan = [
     "dep:windows",
     "gpu-allocator/vulkan",
     "windows/Win32",
+    "windows/Win32_Devices_Display",
+    "windows/Win32_Foundation",
+    "windows/Win32_Graphics_Dxgi",
+    "windows/Win32_Graphics_Dxgi_Common",
+    "windows/Win32_Graphics_Gdi",
 ]
 gles = [
     "dep:arrayvec",
@@ -145,6 +150,7 @@ dx12 = [
     "naga/hlsl-out",
     "once_cell/std",
     "windows/Win32_Devices_DeviceAndDriverInstallation",
+    "windows/Win32_Devices_Display",
     "windows/Win32_Graphics_Direct3D_Dxc",
     "windows/Win32_Graphics_Direct3D_Fxc",
     "windows/Win32_Graphics_Direct3D",

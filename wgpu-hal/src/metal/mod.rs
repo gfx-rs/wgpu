@@ -1020,6 +1020,7 @@ pub struct PipelineLayout {
     immediates_infos: MultiStageData<Option<ImmediateDataInfo>>,
     total_immediates: u32,
     per_stage_map: MultiStageResources,
+    binding_array_length_map: FastHashMap<naga::ResourceBinding, u32>,
 }
 
 impl crate::DynPipelineLayout for PipelineLayout {}
@@ -1041,6 +1042,16 @@ enum BufferLikeResource {
         /// [`Storage`]: wgt::BufferBindingType::Storage
         binding_size: Option<wgt::BufferSize>,
 
+        binding_location: u32,
+    },
+
+    /// Bindless storage `binding_array`: one argument [`MTLBuffer`] (pointer table) plus element
+    /// byte sizes `(array index, size)` for `_buffer_sizes` / runtime-sized arrays.
+    ///
+    /// [`MTLBuffer`]: objc2_metal::MTLBuffer
+    StorageBindingArray {
+        ptr: NonNull<ProtocolObject<dyn MTLBuffer>>,
+        array_element_sizes: Vec<(u32, wgt::BufferSize)>,
         binding_location: u32,
     },
     AccelerationStructure(NonNull<ProtocolObject<dyn MTLAccelerationStructure>>),
@@ -1116,7 +1127,7 @@ struct PipelineStageInfo {
     /// Bindings of all WGSL `storage` globals that contain runtime-sized arrays.
     ///
     /// See `device::CompiledShader::sized_bindings` for more details.
-    sized_bindings: Vec<naga::ResourceBinding>,
+    sized_bindings: Vec<(naga::ResourceBinding, u32)>,
 
     /// Info on all bound vertex buffers.
     vertex_buffer_mappings: Vec<naga::back::msl::VertexBufferMapping>,
@@ -1317,7 +1328,7 @@ struct CommandState {
     /// See `device::CompiledShader::sized_bindings` for more details.
     ///
     /// [`ResourceBinding`]: naga::ResourceBinding
-    storage_buffer_length_map: FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
+    storage_buffer_length_map: FastHashMap<(naga::ResourceBinding, u32), wgt::BufferSize>,
 
     vertex_buffer_size_map: FastHashMap<u32, wgt::BufferSize>,
 

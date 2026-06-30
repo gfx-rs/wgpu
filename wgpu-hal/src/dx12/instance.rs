@@ -154,6 +154,7 @@ impl crate::Instance for super::Instance {
                     supports_allow_tearing: self.supports_allow_tearing,
                     swap_chain: RwLock::new(None),
                     options: self.options.clone(),
+                    hdr_source: Some(auxil::dxgi::hdr::DxgiHdrSource::new(handle)),
                 })
             }
             _ => Err(crate::InstanceError::new(format!(
