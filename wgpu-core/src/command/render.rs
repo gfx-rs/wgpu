@@ -3747,11 +3747,8 @@ impl Global {
         base.commands.push(ArcRenderCommand::SetImmediate {
             offset,
             data: data_bytes
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .copied()
-                .map(u32::from_le_bytes)
+                .chunks_exact(size_of::<u32>())
+                .map(|ck| u32::from_le_bytes(ck.try_into().unwrap()))
                 .collect(),
         });
 
