@@ -102,9 +102,9 @@ use crate::command::ArcReferences;
 use crate::{
     binding_model::{BindError, BindGroup, PipelineLayout},
     command::{
-        bind::Binder, pass::validate_immediates_alignment, BasePass, BindGroupStateChange,
-        ColorAttachmentError, DrawError, IdReferences, MapPassErr, PassErrorScope, RenderCommand,
-        RenderCommandError, StateChange,
+        bind::Binder, pass::validate_immediates_alignment, pass_base, BasePass,
+        BindGroupStateChange, ColorAttachmentError, DrawError, EncoderStateError, IdReferences,
+        MapPassErr, PassErrorScope, PassStateError, RenderCommand, RenderCommandError, StateChange,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
@@ -164,6 +164,12 @@ pub struct RenderBundleEncoderDescriptor<'a> {
 pub struct RenderBundleEncoder {
     base: BasePass<RenderCommand<IdReferences>, Infallible>,
     parent_id: id::DeviceId,
+    /// State of the render bundle encoder. Encoded to be compatible with pass macros.
+    ///
+    /// If this is `Some`, then the pass is in WebGPU's "open" state. If it is
+    /// `None`, then the pass is in the "ended" state.
+    /// See <https://www.w3.org/TR/webgpu/#encoder-state>
+    parent: Option<()>,
     pub(crate) context: RenderPassContext,
     pub(crate) is_depth_read_only: bool,
     pub(crate) is_stencil_read_only: bool,
@@ -259,6 +265,7 @@ impl RenderBundleEncoder {
 
         Ok(Self {
             base: BasePass::new(&desc.label),
+            parent: Some(()),
             parent_id,
             context: RenderPassContext {
                 attachments: AttachmentData {
@@ -280,6 +287,7 @@ impl RenderBundleEncoder {
     pub fn dummy(parent_id: id::DeviceId) -> Self {
         Self {
             base: BasePass::new(&None),
+            parent: None,
             parent_id,
             context: RenderPassContext::default(),
             is_depth_read_only: false,
@@ -311,6 +319,11 @@ impl RenderBundleEncoder {
         hub: &Hub,
     ) -> Result<Arc<RenderBundle>, RenderBundleError> {
         let scope = PassErrorScope::Bundle;
+
+        self.parent
+            .take()
+            .ok_or(RenderBundleErrorInner::Ended)
+            .map_pass_err(scope)?;
 
         device.check_is_valid().map_pass_err(scope)?;
 
@@ -573,13 +586,15 @@ impl RenderBundleEncoder {
         index_format: wgt::IndexFormat,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
-    ) {
+    ) -> Result<(), PassStateError> {
+        pass_base!(self, PassErrorScope::SetIndexBuffer);
         self.base.commands.push(RenderCommand::SetIndexBuffer {
             buffer,
             index_format,
             offset,
             size,
         });
+        Ok(())
     }
 
     pub fn set_bind_group(
@@ -587,7 +602,8 @@ impl RenderBundleEncoder {
         index: u32,
         bind_group_id: Option<id::BindGroupId>,
         offsets: &[wgt::DynamicOffset],
-    ) {
+    ) -> Result<(), PassStateError> {
+        pass_base!(self, PassErrorScope::SetBindGroup);
         let redundant = self.current_bind_groups.set_and_check_redundant(
             bind_group_id,
             index,
@@ -596,7 +612,7 @@ impl RenderBundleEncoder {
         );
 
         if redundant {
-            return;
+            return Ok(());
         }
 
         self.base.commands.push(RenderCommand::SetBindGroup {
@@ -604,16 +620,22 @@ impl RenderBundleEncoder {
             num_dynamic_offsets: offsets.len(),
             bind_group: bind_group_id,
         });
+        Ok(())
     }
 
-    pub fn set_pipeline(&mut self, pipeline_id: id::RenderPipelineId) {
+    pub fn set_pipeline(
+        &mut self,
+        pipeline_id: id::RenderPipelineId,
+    ) -> Result<(), PassStateError> {
+        pass_base!(self, PassErrorScope::SetPipelineRender);
         if self.current_pipeline.set_and_check_redundant(pipeline_id) {
-            return;
+            return Ok(());
         }
 
         self.base
             .commands
             .push(RenderCommand::SetPipeline(pipeline_id));
+        Ok(())
     }
 
     pub fn set_vertex_buffer(
@@ -622,16 +644,19 @@ impl RenderBundleEncoder {
         buffer_id: Option<id::BufferId>,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
-    ) {
+    ) -> Result<(), PassStateError> {
+        pass_base!(self, PassErrorScope::SetVertexBuffer);
         self.base.commands.push(RenderCommand::SetVertexBuffer {
             slot,
             buffer: buffer_id,
             offset,
             size,
         });
+        Ok(())
     }
 
-    pub fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+    pub fn set_immediates(&mut self, offset: u32, data: &[u8]) -> Result<(), PassStateError> {
+        pass_base!(self, PassErrorScope::SetImmediate);
         let value_offset = self.base.immediates_data.len().try_into().expect(
             "Ran out of immediate data space. Don't set 4gb of immediates per RenderBundle.",
         );
@@ -645,6 +670,7 @@ impl RenderBundleEncoder {
             size_bytes: data.len() as u32,
             values_offset: Some(value_offset),
         });
+        Ok(())
     }
 
     pub fn draw(
@@ -653,13 +679,21 @@ impl RenderBundleEncoder {
         instance_count: u32,
         first_vertex: u32,
         first_instance: u32,
-    ) {
+    ) -> Result<(), PassStateError> {
+        pass_base!(
+            self,
+            PassErrorScope::Draw {
+                kind: DrawKind::Draw,
+                family: DrawCommandFamily::Draw
+            }
+        );
         self.base.commands.push(RenderCommand::Draw {
             vertex_count,
             instance_count,
             first_vertex,
             first_instance,
         });
+        Ok(())
     }
 
     pub fn draw_indexed(
@@ -669,7 +703,14 @@ impl RenderBundleEncoder {
         first_index: u32,
         base_vertex: i32,
         first_instance: u32,
-    ) {
+    ) -> Result<(), PassStateError> {
+        pass_base!(
+            self,
+            PassErrorScope::Draw {
+                kind: DrawKind::Draw,
+                family: DrawCommandFamily::DrawIndexed
+            }
+        );
         self.base.commands.push(RenderCommand::DrawIndexed {
             index_count,
             instance_count,
@@ -677,9 +718,21 @@ impl RenderBundleEncoder {
             base_vertex,
             first_instance,
         });
+        Ok(())
     }
 
-    pub fn draw_indirect(&mut self, buffer_id: id::BufferId, offset: wgt::BufferAddress) {
+    pub fn draw_indirect(
+        &mut self,
+        buffer_id: id::BufferId,
+        offset: wgt::BufferAddress,
+    ) -> Result<(), PassStateError> {
+        pass_base!(
+            self,
+            PassErrorScope::Draw {
+                kind: DrawKind::DrawIndirect,
+                family: DrawCommandFamily::Draw
+            }
+        );
         self.base.commands.push(RenderCommand::DrawIndirect {
             buffer: buffer_id,
             offset,
@@ -688,9 +741,21 @@ impl RenderBundleEncoder {
             vertex_or_index_limit: None,
             instance_limit: None,
         });
+        Ok(())
     }
 
-    pub fn draw_indexed_indirect(&mut self, buffer_id: id::BufferId, offset: wgt::BufferAddress) {
+    pub fn draw_indexed_indirect(
+        &mut self,
+        buffer_id: id::BufferId,
+        offset: wgt::BufferAddress,
+    ) -> Result<(), PassStateError> {
+        pass_base!(
+            self,
+            PassErrorScope::Draw {
+                kind: DrawKind::DrawIndirect,
+                family: DrawCommandFamily::DrawIndexed
+            }
+        );
         self.base.commands.push(RenderCommand::DrawIndirect {
             buffer: buffer_id,
             offset,
@@ -699,18 +764,25 @@ impl RenderBundleEncoder {
             vertex_or_index_limit: None,
             instance_limit: None,
         });
+        Ok(())
     }
 
-    pub fn push_debug_group(&mut self, _label: &str) {
+    pub fn push_debug_group(&mut self, _label: &str) -> Result<(), PassStateError> {
+        pass_base!(self, PassErrorScope::PushDebugGroup);
         //TODO
+        Ok(())
     }
 
-    pub fn pop_debug_group(&mut self) {
+    pub fn pop_debug_group(&mut self) -> Result<(), PassStateError> {
+        pass_base!(self, PassErrorScope::PopDebugGroup);
         //TODO
+        Ok(())
     }
 
-    pub fn insert_debug_marker(&mut self, _label: &str) {
+    pub fn insert_debug_marker(&mut self, _label: &str) -> Result<(), PassStateError> {
+        pass_base!(self, PassErrorScope::InsertDebugMarker);
         //TODO
+        Ok(())
     }
 }
 
@@ -1692,6 +1764,8 @@ pub enum RenderBundleErrorInner {
     Bind(#[from] BindError),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+    #[error("Render bundle encoder has already ended")]
+    Ended,
 }
 
 impl<T> From<T> for RenderBundleErrorInner
@@ -1723,6 +1797,7 @@ impl WebGpuError for RenderBundleError {
             RenderBundleErrorInner::MissingDownlevelFlags(e) => e.webgpu_error_type(),
             RenderBundleErrorInner::Bind(e) => e.webgpu_error_type(),
             RenderBundleErrorInner::InvalidResource(e) => e.webgpu_error_type(),
+            RenderBundleErrorInner::Ended => ErrorType::Validation,
         }
     }
 }
@@ -1755,16 +1830,16 @@ impl crate::global::Global {
         index: u32,
         bind_group_id: Option<id::BindGroupId>,
         offsets: &[wgt::DynamicOffset],
-    ) {
-        bundle.set_bind_group(index, bind_group_id, offsets);
+    ) -> Result<(), PassStateError> {
+        bundle.set_bind_group(index, bind_group_id, offsets)
     }
 
     pub fn render_bundle_encoder_set_pipeline(
         &self,
         bundle: &mut RenderBundleEncoder,
         pipeline_id: id::RenderPipelineId,
-    ) {
-        bundle.set_pipeline(pipeline_id);
+    ) -> Result<(), PassStateError> {
+        bundle.set_pipeline(pipeline_id)
     }
 
     pub fn render_bundle_encoder_set_vertex_buffer(
@@ -1774,8 +1849,8 @@ impl crate::global::Global {
         buffer_id: Option<id::BufferId>,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
-    ) {
-        bundle.set_vertex_buffer(slot, buffer_id, offset, size);
+    ) -> Result<(), PassStateError> {
+        bundle.set_vertex_buffer(slot, buffer_id, offset, size)
     }
 
     pub fn render_bundle_encoder_set_index_buffer(
@@ -1785,8 +1860,8 @@ impl crate::global::Global {
         index_format: wgt::IndexFormat,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
-    ) {
-        encoder.set_index_buffer(buffer, index_format, offset, size);
+    ) -> Result<(), PassStateError> {
+        encoder.set_index_buffer(buffer, index_format, offset, size)
     }
 
     pub fn render_bundle_encoder_set_immediates(
@@ -1794,8 +1869,8 @@ impl crate::global::Global {
         pass: &mut RenderBundleEncoder,
         offset: u32,
         data: &[u8],
-    ) {
-        pass.set_immediates(offset, data);
+    ) -> Result<(), PassStateError> {
+        pass.set_immediates(offset, data)
     }
 
     pub fn render_bundle_encoder_draw(
@@ -1805,8 +1880,8 @@ impl crate::global::Global {
         instance_count: u32,
         first_vertex: u32,
         first_instance: u32,
-    ) {
-        bundle.draw(vertex_count, instance_count, first_vertex, first_instance);
+    ) -> Result<(), PassStateError> {
+        bundle.draw(vertex_count, instance_count, first_vertex, first_instance)
     }
 
     pub fn render_bundle_encoder_draw_indexed(
@@ -1817,14 +1892,14 @@ impl crate::global::Global {
         first_index: u32,
         base_vertex: i32,
         first_instance: u32,
-    ) {
+    ) -> Result<(), PassStateError> {
         bundle.draw_indexed(
             index_count,
             instance_count,
             first_index,
             base_vertex,
             first_instance,
-        );
+        )
     }
 
     pub fn render_bundle_encoder_draw_indirect(
@@ -1832,8 +1907,8 @@ impl crate::global::Global {
         bundle: &mut RenderBundleEncoder,
         buffer_id: id::BufferId,
         offset: wgt::BufferAddress,
-    ) {
-        bundle.draw_indirect(buffer_id, offset);
+    ) -> Result<(), PassStateError> {
+        bundle.draw_indirect(buffer_id, offset)
     }
 
     pub fn render_bundle_encoder_draw_indexed_indirect(
@@ -1841,28 +1916,31 @@ impl crate::global::Global {
         bundle: &mut RenderBundleEncoder,
         buffer_id: id::BufferId,
         offset: wgt::BufferAddress,
-    ) {
-        bundle.draw_indexed_indirect(buffer_id, offset);
+    ) -> Result<(), PassStateError> {
+        bundle.draw_indexed_indirect(buffer_id, offset)
     }
 
     pub fn render_bundle_encoder_push_debug_group(
         &self,
         bundle: &mut RenderBundleEncoder,
         label: &str,
-    ) {
-        bundle.push_debug_group(label);
+    ) -> Result<(), PassStateError> {
+        bundle.push_debug_group(label)
     }
 
-    pub fn render_bundle_encoder_pop_debug_group(&self, bundle: &mut RenderBundleEncoder) {
-        bundle.pop_debug_group();
+    pub fn render_bundle_encoder_pop_debug_group(
+        &self,
+        bundle: &mut RenderBundleEncoder,
+    ) -> Result<(), PassStateError> {
+        bundle.pop_debug_group()
     }
 
     pub fn render_bundle_encoder_insert_debug_marker(
         &self,
         bundle: &mut RenderBundleEncoder,
         label: &str,
-    ) {
-        bundle.insert_debug_marker(label);
+    ) -> Result<(), PassStateError> {
+        bundle.insert_debug_marker(label)
     }
 }
 
@@ -1886,7 +1964,7 @@ pub mod bundle_ffi {
     ) {
         let offsets = unsafe { slice::from_raw_parts(offsets, offset_length) };
 
-        bundle.set_bind_group(index, bind_group_id, offsets);
+        let _ = bundle.set_bind_group(index, bind_group_id, offsets);
     }
 
     #[deprecated(note = "Use `Global::render_bundle_encoder_set_pipeline` instead.")]
@@ -1894,7 +1972,7 @@ pub mod bundle_ffi {
         bundle: &mut RenderBundleEncoder,
         pipeline_id: id::RenderPipelineId,
     ) {
-        bundle.set_pipeline(pipeline_id);
+        let _ = bundle.set_pipeline(pipeline_id);
     }
 
     #[deprecated(note = "Use `Global::render_bundle_encoder_set_vertex_buffer` instead.")]
@@ -1905,7 +1983,7 @@ pub mod bundle_ffi {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
-        bundle.set_vertex_buffer(slot, buffer_id, offset, size);
+        let _ = bundle.set_vertex_buffer(slot, buffer_id, offset, size);
     }
 
     #[deprecated(note = "Use `Global::render_bundle_encoder_set_index_buffer` instead.")]
@@ -1916,7 +1994,7 @@ pub mod bundle_ffi {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
-        encoder.set_index_buffer(buffer, index_format, offset, size);
+        let _ = encoder.set_index_buffer(buffer, index_format, offset, size);
     }
 
     #[deprecated(note = "Use `Global::render_bundle_encoder_set_immediates` instead.")]
@@ -1931,7 +2009,7 @@ pub mod bundle_ffi {
         data: *const u8,
     ) {
         let data_slice = unsafe { slice::from_raw_parts(data, size_bytes as usize) };
-        pass.set_immediates(offset, data_slice);
+        let _ = pass.set_immediates(offset, data_slice);
     }
 
     #[deprecated(note = "Use `Global::render_bundle_encoder_draw` instead.")]
@@ -1942,7 +2020,7 @@ pub mod bundle_ffi {
         first_vertex: u32,
         first_instance: u32,
     ) {
-        bundle.draw(vertex_count, instance_count, first_vertex, first_instance);
+        let _ = bundle.draw(vertex_count, instance_count, first_vertex, first_instance);
     }
 
     #[deprecated(note = "Use `Global::render_bundle_encoder_draw_indexed` instead.")]
@@ -1954,7 +2032,7 @@ pub mod bundle_ffi {
         base_vertex: i32,
         first_instance: u32,
     ) {
-        bundle.draw_indexed(
+        let _ = bundle.draw_indexed(
             index_count,
             instance_count,
             first_index,
@@ -1969,7 +2047,7 @@ pub mod bundle_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        bundle.draw_indirect(buffer_id, offset);
+        let _ = bundle.draw_indirect(buffer_id, offset);
     }
 
     #[deprecated(note = "Use `Global::render_bundle_encoder_draw_indexed_indirect` instead.")]
@@ -1978,7 +2056,7 @@ pub mod bundle_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        bundle.draw_indexed_indirect(buffer_id, offset);
+        let _ = bundle.draw_indexed_indirect(buffer_id, offset);
     }
 
     #[deprecated(note = "Use `Global::render_bundle_encoder_push_debug_group` instead.")]
