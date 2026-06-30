@@ -3940,7 +3940,7 @@ impl Device {
         drop(raw_bind_group_layouts);
 
         let layout = binding_model::PipelineLayout {
-            raw: ResourceState::Valid(ManuallyDrop::new(raw)),
+            raw: ResourceState::Valid(raw),
             device: self.clone(),
             label: desc.label.to_string(),
             bind_group_layouts,

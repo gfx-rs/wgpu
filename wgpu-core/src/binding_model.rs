@@ -999,7 +999,7 @@ pub type ResolvedPipelineLayoutDescriptor<'a, BGL = Arc<BindGroupLayout>> =
 
 #[derive(Debug)]
 pub struct PipelineLayout {
-    pub(crate) raw: ResourceState<ManuallyDrop<Box<dyn hal::DynPipelineLayout>>>,
+    pub(crate) raw: ResourceState<Box<dyn hal::DynPipelineLayout>>,
     pub(crate) device: Arc<Device>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -1010,9 +1010,8 @@ pub struct PipelineLayout {
 impl Drop for PipelineLayout {
     fn drop(&mut self) {
         resource_log!("Destroy raw {}", self.error_ident());
-        if let ResourceState::Valid(raw) = &mut self.raw {
-            // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-            let raw = unsafe { ManuallyDrop::take(raw) };
+        if let ResourceState::Valid(raw) = core::mem::replace(&mut self.raw, ResourceState::Invalid)
+        {
             unsafe {
                 self.device.raw().destroy_pipeline_layout(raw);
             }
