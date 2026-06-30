@@ -429,17 +429,12 @@ struct PrivateCapabilities {
     /// require an unnecessary parameter.
     ray_tracing_pipeline_group_data_size: u32,
 
-    // `VK_ATTACHMENT_STORE_OP_NONE` provided by `VK_VERSION_1_3`.
+    /// Whether `VK_ATTACHMENT_STORE_OP_NONE` is supported. This includes:
+    /// - `VK_ATTACHMENT_STORE_OP_NONE` provided by `VK_VERSION_1_3`.
+    /// - `VK_ATTACHMENT_STORE_OP_NONE_KHR` provided by `VK_KHR_dynamic_rendering`, or `VK_KHR_load_store_op_none` (promoted to Vulkan 1.4).
+    /// - `VK_ATTACHMENT_STORE_OP_NONE_QCOM` provided by `VK_QCOM_render_pass_store_ops`.
+    /// - `VK_ATTACHMENT_STORE_OP_NONE_EXT` provided by `VK_EXT_load_store_op_none`.
     store_op_none: bool,
-
-    /// `VK_ATTACHMENT_STORE_OP_NONE_KHR` provided by `VK_KHR_dynamic_rendering`, or `VK_KHR_load_store_op_none` (promoted to Vulkan 1.4).
-    store_op_none_khr: bool,
-
-    /// `VK_ATTACHMENT_STORE_OP_NONE_QCOM` provided by `VK_QCOM_render_pass_store_ops`.
-    store_op_none_qcom: bool,
-
-    /// `VK_ATTACHMENT_STORE_OP_NONE_EXT` provided by `VK_EXT_load_store_op_none`.
-    store_op_none_ext: bool,
 }
 
 bitflags::bitflags!(

@@ -239,8 +239,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let mut dst_stages = vk::PipelineStageFlags::empty();
         let vk_barriers = &mut self.temp.image_barriers;
         vk_barriers.clear();
-        let support_store_op_none =
-            self.device.private_caps.get_store_op_none() != vk::AttachmentStoreOp::STORE;
 
         for bar in barriers {
             let range = conv::map_subresource_range_combined_aspect(
@@ -248,12 +246,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 bar.texture.format,
                 &self.device.private_caps,
             );
-            let (src_stage, src_access) =
-                conv::map_texture_usage_to_barrier(bar.usage.from, support_store_op_none);
+            let (src_stage, src_access) = conv::map_texture_usage_to_barrier(
+                bar.usage.from,
+                self.device.private_caps.store_op_none,
+            );
             let src_layout = conv::derive_image_layout(bar.usage.from, bar.texture.format);
             src_stages |= src_stage;
-            let (dst_stage, dst_access) =
-                conv::map_texture_usage_to_barrier(bar.usage.to, support_store_op_none);
+            let (dst_stage, dst_access) = conv::map_texture_usage_to_barrier(
+                bar.usage.to,
+                self.device.private_caps.store_op_none,
+            );
             let dst_layout = conv::derive_image_layout(bar.usage.to, bar.texture.format);
             dst_stages |= dst_stage;
 
@@ -838,10 +840,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 rp_key.colors.push(None);
             }
         }
-        let (mut depth_read_only, mut stencil_read_only) = (None, None);
+        let (mut depth_read_only, mut stencil_read_only) = (false, false);
         if let Some(ref ds) = desc.depth_stencil_attachment {
-            depth_read_only = Some(ds.depth_read_only);
-            stencil_read_only = Some(ds.stencil_read_only);
+            depth_read_only = ds.depth_read_only;
+            stencil_read_only = ds.stencil_read_only;
             vk_clear_values.push(vk::ClearValue {
                 depth_stencil: vk::ClearDepthStencilValue {
                     depth: ds.clear_value.0,

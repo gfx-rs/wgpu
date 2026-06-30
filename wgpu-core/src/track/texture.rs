@@ -54,7 +54,7 @@ impl ResourceUses for TextureUses {
     }
 
     fn is_invalid(self) -> bool {
-        // Besides exclusive uses, depth/stencil can't be sampled if it's not readonly.
+        // Besides exclusive uses, depth/stencil can't be sampled while written.
         self.any_exclusive() && !self.bits().is_power_of_two()
             || self.contains(Self::DEPTH_WRITE | Self::DEPTH_SAMPLED)
             || self.contains(Self::STENCIL_WRITE | Self::STENCIL_SAMPLED)

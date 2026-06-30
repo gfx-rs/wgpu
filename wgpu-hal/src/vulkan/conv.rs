@@ -156,20 +156,6 @@ impl super::PrivateCapabilities {
             },
         }
     }
-
-    pub fn get_store_op_none(&self) -> vk::AttachmentStoreOp {
-        if self.store_op_none {
-            vk::AttachmentStoreOp::NONE
-        } else if self.store_op_none_khr {
-            vk::AttachmentStoreOp::NONE_KHR
-        } else if self.store_op_none_qcom {
-            vk::AttachmentStoreOp::NONE_QCOM
-        } else if self.store_op_none_ext {
-            vk::AttachmentStoreOp::NONE_EXT
-        } else {
-            vk::AttachmentStoreOp::STORE
-        }
-    }
 }
 
 pub fn map_vk_surface_formats(

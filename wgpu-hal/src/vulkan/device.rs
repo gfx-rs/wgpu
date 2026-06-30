@@ -76,8 +76,8 @@ impl super::DeviceShared {
     pub fn make_render_pass(
         &self,
         key: super::RenderPassKey,
-        depth_read_only: Option<bool>,
-        stencil_read_only: Option<bool>,
+        depth_read_only: bool,
+        stencil_read_only: bool,
     ) -> Result<vk::RenderPass, crate::DeviceError> {
         Ok(match self.render_passes.lock().entry(key) {
             Entry::Occupied(e) => *e.get(),
@@ -174,16 +174,19 @@ impl super::DeviceShared {
                     let (load_op, mut store_op) = conv::map_attachment_ops(ops);
                     let (stencil_load_op, mut stencil_store_op) =
                         conv::map_attachment_ops(stencil_ops);
-                    if let Some(depth_read_only) = depth_read_only {
-                        if depth_read_only {
-                            store_op = self.private_caps.get_store_op_none();
-                        }
+
+                    let store_op_for_read_only = if self.private_caps.store_op_none {
+                        vk::AttachmentStoreOp::NONE
+                    } else {
+                        vk::AttachmentStoreOp::STORE
+                    };
+                    if depth_read_only {
+                        store_op = store_op_for_read_only;
                     }
-                    if let Some(stencil_read_only) = stencil_read_only {
-                        if stencil_read_only {
-                            stencil_store_op = self.private_caps.get_store_op_none();
-                        }
+                    if stencil_read_only {
+                        stencil_store_op = store_op_for_read_only;
                     }
+
                     let vk_attachment = vk::AttachmentDescription::default()
                         .format(format)
                         .samples(samples)
@@ -2063,16 +2066,14 @@ impl crate::Device for super::Device {
         }
 
         let mut vk_depth_stencil = vk::PipelineDepthStencilStateCreateInfo::default();
-        let (mut depth_read_only, mut stencil_read_only) = (None, None);
+        let (mut depth_read_only, mut stencil_read_only) = (false, false);
         if let Some(ref ds) = desc.depth_stencil {
-            let (_depth_read_only, _stencil_read_only) = (
+            (depth_read_only, stencil_read_only) = (
                 ds.is_depth_read_only(),
                 ds.is_stencil_read_only(desc.primitive.cull_mode),
             );
-            (depth_read_only, stencil_read_only) =
-                (Some(_depth_read_only), Some(_stencil_read_only));
             let vk_format = self.shared.private_caps.map_texture_format(ds.format);
-            let vk_layout = match (_depth_read_only, _stencil_read_only) {
+            let vk_layout = match (depth_read_only, stencil_read_only) {
                 (true, true) => vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
                 (true, false) => vk::ImageLayout::DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL,
                 (false, true) => vk::ImageLayout::DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
