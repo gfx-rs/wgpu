@@ -391,10 +391,8 @@ impl crate::Function {
                 crate::Expression::Access { base, .. } => base,
                 crate::Expression::AccessIndex { base, .. } => base,
                 crate::Expression::GlobalVariable(handle) => return Some(handle),
-                crate::Expression::LocalVariable(_) => return None,
-                crate::Expression::FunctionArgument(_) => return None,
-                // There are no other expressions that produce pointer values.
-                _ => unreachable!(),
+                // Other expressions are not on this path to a global.
+                _ => return None,
             }
         }
     }

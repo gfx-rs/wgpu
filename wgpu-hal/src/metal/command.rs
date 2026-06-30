@@ -350,12 +350,31 @@ impl super::CommandEncoder {
                     }
                     let index = (resource_indices.buffers + index) as usize;
                     encoder.set_buffer(buffer, offset as usize, index);
+                    let br = naga::ResourceBinding {
+                        group: group_index,
+                        binding: *binding_location,
+                    };
                     if let Some(size) = binding_size {
-                        let br = naga::ResourceBinding {
-                            group: group_index,
-                            binding: *binding_location,
-                        };
-                        self.state.storage_buffer_length_map.insert(br, *size);
+                        self.state.storage_buffer_length_map.insert((br, 0), *size);
+                        changes_sizes_buffer = true;
+                    }
+                }
+                super::BufferLikeResource::StorageBindingArray {
+                    ptr,
+                    array_element_sizes,
+                    binding_location,
+                } => {
+                    let buffer = Some(unsafe { ptr.as_ref() });
+                    let index = (resource_indices.buffers + index) as usize;
+                    encoder.set_buffer(buffer, 0, index);
+                    let br = naga::ResourceBinding {
+                        group: group_index,
+                        binding: *binding_location,
+                    };
+                    for &(array_idx, size) in array_element_sizes {
+                        self.state
+                            .storage_buffer_length_map
+                            .insert((br, array_idx), size);
                         changes_sizes_buffer = true;
                     }
                 }
@@ -430,9 +449,9 @@ impl super::CommandState {
         let slot = stage_info.sizes_slot?;
 
         result_sizes.clear();
-        result_sizes.extend(stage_info.sized_bindings.iter().map(|br| {
+        result_sizes.extend(stage_info.sized_bindings.iter().map(|(br, array_idx)| {
             self.storage_buffer_length_map
-                .get(br)
+                .get(&(*br, *array_idx))
                 .map(|size| u32::try_from(size.get()).unwrap_or(u32::MAX))
                 .unwrap_or_default()
         }));

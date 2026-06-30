@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use wgpu::{
     AdapterInfo, DownlevelCapabilities, Features, Limits, TextureFormat, TextureFormatFeatures,
 };
@@ -8,7 +8,7 @@ use wgpu::{
 /// Report specifying the capabilities of the GPUs on the system.
 ///
 /// Must be synchronized with the definition on wgpu-info/src/report.rs.
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub(crate) struct GpuReport {
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
     pub devices: Vec<AdapterReport>,
@@ -39,7 +39,7 @@ impl GpuReport {
 /// A single report of the capabilities of an Adapter.
 ///
 /// Must be synchronized with the definition on wgpu-info/src/report.rs.
-#[derive(Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct AdapterReport {
     pub info: AdapterInfo,
     pub features: Features,

@@ -4102,6 +4102,31 @@ impl Device {
     pub fn create_render_pipeline(
         self: &Arc<Self>,
         desc: pipeline::ResolvedGeneralRenderPipelineDescriptor,
+    ) -> (
+        Arc<pipeline::RenderPipeline>,
+        Option<pipeline::CreateRenderPipelineError>,
+    ) {
+        let (render_pipeline, error) = match self.create_render_pipeline_inner(desc.clone()) {
+            Ok(pipeline) => (pipeline, None),
+            Err(e) => (
+                pipeline::RenderPipeline::invalid(self.clone(), desc.label.to_string()),
+                Some(e),
+            ),
+        };
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace::IntoTrace;
+            trace.add(trace::Action::CreateGeneralRenderPipeline {
+                id: render_pipeline.to_trace(),
+                desc: desc.to_trace(),
+            });
+        }
+        (render_pipeline, error)
+    }
+
+    pub fn create_render_pipeline_inner(
+        self: &Arc<Self>,
+        desc: pipeline::ResolvedGeneralRenderPipelineDescriptor,
     ) -> Result<Arc<pipeline::RenderPipeline>, pipeline::CreateRenderPipelineError> {
         use wgt::TextureFormatFeatureFlags as Tfff;
 
@@ -4928,8 +4953,10 @@ impl Device {
         };
 
         let pipeline = pipeline::RenderPipeline {
-            raw: ManuallyDrop::new(raw),
-            layout: pipeline_layout,
+            state: resource::ResourceState::Valid(pipeline::RenderPipelineState {
+                raw: ManuallyDrop::new(raw),
+                layout: pipeline_layout.clone(),
+            }),
             device: self.clone(),
             pass_context,
             _shader_modules: shader_modules,
@@ -4948,7 +4975,7 @@ impl Device {
         let pipeline = Arc::new(pipeline);
 
         if is_auto_layout {
-            for bgl in pipeline.layout.bind_group_layouts.iter() {
+            for bgl in pipeline_layout.bind_group_layouts.iter() {
                 let Some(bgl) = bgl else {
                     continue;
                 };

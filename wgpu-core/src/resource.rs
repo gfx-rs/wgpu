@@ -91,6 +91,28 @@ impl fmt::Display for ResourceErrorIdent {
     }
 }
 
+#[derive(Debug)]
+pub enum ResourceState<T> {
+    Valid(T),
+    Invalid,
+}
+
+impl<T> ResourceState<T> {
+    pub fn as_ref(&self) -> ResourceState<&T> {
+        match self {
+            ResourceState::Valid(v) => ResourceState::Valid(v),
+            ResourceState::Invalid => ResourceState::Invalid,
+        }
+    }
+
+    pub fn valid(self) -> Option<T> {
+        match self {
+            ResourceState::Valid(v) => Some(v),
+            ResourceState::Invalid => None,
+        }
+    }
+}
+
 pub enum DestructibleResourceState<T> {
     Valid(T),
     Invalid,

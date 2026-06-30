@@ -14,12 +14,23 @@ on:
   merge_group:
 
 env:
+  #
+  # Keep in sync with ci.yml
+  #
+
   REPO_MSRV: "1.93"
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
   RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
+
+  #
+  # Runtime configuration
+  #
+
+  LVP_POISON_MEMORY: true # to test memory init; see docs/testing.md
+  # cts_runner uses dxc by default
 
 # Every time a PR is pushed to, cancel any previous jobs. This
 # makes us behave nicer to github and get faster turnaround times

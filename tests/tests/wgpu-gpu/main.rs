@@ -100,6 +100,10 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     clip_distances::all_tests(&mut tests);
     cloneable_types::all_tests(&mut tests);
     compute_pass_ownership::all_tests(&mut tests);
+
+    #[cfg(wasm_test)]
+    create_surface_error::all_tests(&mut tests);
+
     device::all_tests(&mut tests);
     dispatch_workgroups_indirect::all_tests(&mut tests);
     draw_index::all_tests(&mut tests);

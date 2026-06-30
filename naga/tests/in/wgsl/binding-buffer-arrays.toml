@@ -1,4 +1,4 @@
-targets = "WGSL | SPIRV"
+targets = "WGSL | METAL | SPIRV"
 capabilities = """
   STORAGE_BUFFER_BINDING_ARRAY
   | STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
@@ -8,6 +8,24 @@ capabilities = """
 index = "ReadZeroSkipWrite"
 buffer = "ReadZeroSkipWrite"
 image = "ReadZeroSkipWrite"
+binding_array = "ReadZeroSkipWrite"
+
+[msl]
+fake_missing_bindings = true
+lang_version = [3, 0]
+spirv_cross_compatibility = false
+zero_initialize_workgroup_memory = true
+
+[msl.per_entry_point_map.main]
+resources = [
+    { bind_target = { buffer = 0, mutable = false }, resource_binding = { group = 0, binding = 0 } },
+    { bind_target = { buffer = 1, mutable = false }, resource_binding = { group = 0, binding = 1 } },
+    { bind_target = { buffer = 2, mutable = false }, resource_binding = { group = 0, binding = 10 } },
+]
+
+[[msl_pipeline.binding_array_length_map]]
+resource_binding = { group = 0, binding = 0 }
+count = 10
 
 [spv]
 version = [1, 1]
@@ -15,3 +33,7 @@ version = [1, 1]
 [[spv.binding_map]]
 bind_target = { descriptor_set = 0, binding = 0, binding_array_size = 10 }
 resource_binding = { group = 0, binding = 0 }
+
+[[spv.binding_map]]
+bind_target = { descriptor_set = 0, binding = 1 }
+resource_binding = { group = 0, binding = 1 }

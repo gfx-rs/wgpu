@@ -205,6 +205,7 @@ toml = "1.0.0"
 trybuild = "1"
 tracy-client = "0.18"
 thiserror = { version = "2.0.12", default-features = false }
+ureq = { version = "3.2.0", default-features = false }
 unicode-ident = "1.0.5"
 walkdir = "2.3"
 winit = { version = "0.30.8", features = ["android-native-activity"] }
@@ -307,7 +308,6 @@ console_log = "1"
 js-sys = { version = "0.3.85", default-features = false }
 wasm-bindgen = { version = "0.2.108", default-features = false }
 wasm-bindgen-futures = { version = "0.4.58", default-features = false }
-wasm-bindgen-test = "0.3"
 web-sys = { version = "0.3.85", default-features = false }
 web-time = "1.1.0"
 

@@ -9,7 +9,9 @@ use parking_lot::{Mutex, MutexGuard};
 use crate::vulkan::{
     conv, map_host_device_oom_and_lost_err,
     semaphore_list::SemaphoreType,
-    swapchain::{Surface, SurfaceTextureMetadata, Swapchain, SwapchainSubmissionSemaphoreGuard},
+    swapchain::{
+        Surface, SurfaceTextureMetadata, Swapchain, SwapchainSubmissionSemaphoreGuard, WindowHandle,
+    },
     DeviceShared, InstanceShared,
 };
 
@@ -17,15 +19,27 @@ pub(crate) struct NativeSurface {
     raw: vk::SurfaceKHR,
     functor: khr::surface::Instance,
     instance: Arc<InstanceShared>,
+    /// Built from the window's `HWND` (Windows only) to answer the display-HDR
+    /// query; `None` for non-Win32 surfaces.
+    #[cfg(windows)]
+    hdr_source: Option<crate::auxil::dxgi::hdr::DxgiHdrSource>,
 }
 
 impl NativeSurface {
-    pub fn from_vk_surface_khr(instance: &crate::vulkan::Instance, raw: vk::SurfaceKHR) -> Self {
+    pub fn from_vk_surface_khr(
+        instance: &crate::vulkan::Instance,
+        raw: vk::SurfaceKHR,
+        hwnd: Option<WindowHandle>,
+    ) -> Self {
+        #[cfg(not(windows))]
+        let _ = hwnd;
         let functor = khr::surface::Instance::new(&instance.shared.entry, &instance.shared.raw);
         Self {
             raw,
             functor,
             instance: Arc::clone(&instance.shared),
+            #[cfg(windows)]
+            hdr_source: hwnd.map(|wh| crate::auxil::dxgi::hdr::DxgiHdrSource::new(wh.0)),
         }
     }
 
@@ -277,6 +291,11 @@ impl Surface for NativeSurface {
             present_semaphores,
             next_present_time: None,
         }))
+    }
+
+    #[cfg(windows)]
+    fn display_hdr_info(&self) -> Option<wgt::DisplayHdrInfo> {
+        self.hdr_source.as_ref()?.display_hdr_info()
     }
 
     fn as_any(&self) -> &dyn Any {

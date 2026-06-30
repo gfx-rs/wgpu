@@ -371,13 +371,8 @@ impl Player {
                 // pipeline descriptor that can represent either a conventional
                 // pipeline or a mesh shading pipeline.
                 let resolved_desc = self.resolve_render_pipeline_descriptor(desc);
-                let pipeline = device.create_render_pipeline(resolved_desc);
-                process_result(
-                    "create_render_pipeline",
-                    &mut self.render_pipelines,
-                    id,
-                    pipeline,
-                );
+                let (pipeline, _error) = device.create_render_pipeline(resolved_desc);
+                self.render_pipelines.insert(id, pipeline);
             }
             Action::DropRenderPipeline(id) => {
                 self.render_pipelines

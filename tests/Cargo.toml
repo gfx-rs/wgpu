@@ -32,7 +32,8 @@ name = "wgpu-validation"
 harness = true
 
 [features]
-webgl = []
+webgl = ["wgpu/webgl"]
+exhaust = ["wgpu/exhaust"]
 # This feature is not actually used by this package, but it being present somewhere in the workspace
 # allows us to force the build to have profiling code enabled so we can test that configuration.
 test-build-with-profiling = ["profiling/type-check"]
@@ -62,6 +63,7 @@ arrayvec.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true
 cfg-if.workspace = true
+exhaust.workspace = true
 futures-lite.workspace = true
 libtest-mimic.workspace = true
 log.workspace = true
@@ -89,6 +91,7 @@ trybuild.workspace = true
 cargo_metadata.workspace = true
 env_logger.workspace = true
 parking_lot = { workspace = true, features = ["deadlock_detection"] }
+ureq.workspace = true
 
 [target.'cfg(not(any(target_arch = "wasm32", miri)))'.dependencies]
 nv-flip.workspace = true
@@ -97,17 +100,21 @@ nv-flip.workspace = true
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_log.workspace = true
 wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
 web-sys = { workspace = true }
+parking_lot = { workspace = true, features = ["deadlock_detection"] }
 
 # Webassembly Dev Dependencies
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 image.workspace = true
 js-sys.workspace = true
 wasm-bindgen-futures.workspace = true
-wasm-bindgen-test.workspace = true
 wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "Blob"] }
 
 [lints.clippy]
 bool_assert_comparison = "allow"
 disallowed_types = "allow"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wasm_test)'] }

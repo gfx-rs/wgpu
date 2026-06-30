@@ -56,6 +56,22 @@ impl Surface<'_> {
         self.inner.get_capabilities(&adapter.inner)
     }
 
+    /// Returns the HDR and luminance characteristics of the display backing this
+    /// surface, or [`DisplayHdrInfo::default`] (all fields `None`) when nothing is
+    /// known - which means unknown, not an SDR display. Never panics, including on
+    /// wasm. See [`DisplayHdrInfo`] for the fields and how to use them.
+    ///
+    /// # Threading
+    ///
+    /// Each call re-queries the OS; nothing is cached. On the Metal backend the
+    /// display's HDR state lives on main-thread-only AppKit objects (`NSScreen` /
+    /// `NSWindow`), so call this from the main thread. Off the main thread it logs
+    /// once and returns [`DisplayHdrInfo::default`]; a later main-thread call still
+    /// returns real data. No other backend has this requirement.
+    pub fn display_hdr_info(&self, adapter: &Adapter) -> DisplayHdrInfo {
+        self.inner.display_hdr_info(&adapter.inner)
+    }
+
     /// Return a default `SurfaceConfiguration` from width and height to use for the [`Surface`] with this adapter.
     ///
     /// The returned configuration requests the surface's preferred format and

@@ -80,6 +80,26 @@ impl Global {
         })
     }
 
+    /// Returns the HDR and luminance characteristics of the display backing
+    /// `surface_id` on `adapter_id`.
+    ///
+    /// Reports the raw display state, independent of the surface's configured
+    /// color space; see [`wgt::DisplayHdrInfo`] for per-field platform coverage.
+    /// Returns [`wgt::DisplayHdrInfo::default`] (all fields `None`) when nothing
+    /// is known: the surface is not on `adapter_id`'s backend, the backend has
+    /// no display-query path, or the Metal backend is queried off the main
+    /// thread.
+    pub fn surface_display_hdr_info(
+        &self,
+        surface_id: SurfaceId,
+        adapter_id: AdapterId,
+    ) -> wgt::DisplayHdrInfo {
+        profiling::scope!("Surface::display_hdr_info");
+        self.fetch_adapter_and_surface(surface_id, adapter_id, |adapter, surface| {
+            surface.display_hdr_info(adapter)
+        })
+    }
+
     fn fetch_adapter_and_surface<F: FnOnce(&Adapter, &Surface) -> B, B>(
         &self,
         surface_id: SurfaceId,
@@ -1377,7 +1397,7 @@ impl Global {
         &self,
         desc: pipeline::GeneralRenderPipelineDescriptor,
         device: Arc<crate::device::resource::Device>,
-        fid: crate::registry::FutureId<Fallible<pipeline::RenderPipeline>>,
+        fid: crate::registry::FutureId<Arc<pipeline::RenderPipeline>>,
     ) -> (
         id::RenderPipelineId,
         Option<pipeline::CreateRenderPipelineError>,
@@ -1386,7 +1406,9 @@ impl Global {
 
         let hub = &self.hub;
 
+        // eventually there will be no error handling here only id to object mapping
         let error = 'error: {
+            // until then we also need this
             if let Err(e) = device.check_is_valid() {
                 break 'error e.into();
             }
@@ -1547,31 +1569,18 @@ impl Global {
                 cache,
             };
 
-            #[cfg(feature = "trace")]
-            let trace_desc = desc.clone().into_trace();
+            let (pipeline, error) = device.create_render_pipeline(desc);
 
-            let res = device.create_render_pipeline(desc);
-
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateGeneralRenderPipeline {
-                    id: res.as_ref().ok().map(IntoTrace::to_trace),
-                    desc: trace_desc,
-                });
-            }
-
-            let pipeline = match res {
-                Ok(pair) => pair,
-                Err(e) => break 'error e,
-            };
-
-            let id = fid.assign(Fallible::Valid(pipeline));
+            let id = fid.assign(pipeline);
             api_log!("Device::create_render_pipeline -> {id:?}");
 
-            return (id, None);
+            return (id, error);
         };
 
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
+        let id = fid.assign(pipeline::RenderPipeline::invalid(
+            device.clone(),
+            desc.label.to_string(),
+        ));
 
         (id, Some(error))
     }
@@ -1592,10 +1601,7 @@ impl Global {
         let fid = hub.bind_group_layouts.prepare(id_in);
 
         let error = 'error: {
-            let pipeline = match hub.render_pipelines.get(pipeline_id).get() {
-                Ok(pipeline) => pipeline,
-                Err(e) => break 'error e.into(),
-            };
+            let pipeline = hub.render_pipelines.get(pipeline_id);
             match pipeline.get_bind_group_layout(index) {
                 Ok(bgl) => {
                     #[cfg(feature = "trace")]
@@ -1625,13 +1631,6 @@ impl Global {
         let hub = &self.hub;
 
         let _pipeline = hub.render_pipelines.remove(render_pipeline_id);
-
-        #[cfg(feature = "trace")]
-        if let Ok(pipeline) = _pipeline.get() {
-            if let Some(t) = pipeline.device.trace.lock().as_mut() {
-                t.add(trace::Action::DropRenderPipeline(pipeline.to_trace()));
-            }
-        }
     }
 
     pub fn device_create_compute_pipeline(

@@ -628,7 +628,13 @@ impl PhysicalDeviceFeatures {
                     requested_features.contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX);
                 Some(
                     vk::PhysicalDeviceVulkanMemoryModelFeaturesKHR::default()
-                        .vulkan_memory_model(needed),
+                        .vulkan_memory_model(needed)
+                        // The SPIR-V backend emits storage atomics with `Device`
+                        // memory scope, so whenever the Vulkan memory model is
+                        // enabled we must also enable device scope, otherwise the
+                        // validation layers report
+                        // `VUID-RuntimeSpirv-vulkanMemoryModel-06265`.
+                        .vulkan_memory_model_device_scope(needed),
                 )
             } else {
                 None
@@ -1079,10 +1085,17 @@ impl PhysicalDeviceFeatures {
                 .map(|p| p.multisample_array_image == vk::TRUE)
                 .unwrap_or(true),
         );
-        // Enable cooperative matrix if any configuration is supported
+        // Enable cooperative matrix if any configuration is supported. The SPIR-V
+        // we emit for it uses `Device`-scope atomics under the Vulkan memory model,
+        // so the device must also support `vulkanMemoryModelDeviceScope`, otherwise
+        // those shaders trip `VUID-RuntimeSpirv-vulkanMemoryModel-06265`.
         features.set(
             F::EXPERIMENTAL_COOPERATIVE_MATRIX,
-            !caps.cooperative_matrix_properties.is_empty(),
+            !caps.cooperative_matrix_properties.is_empty()
+                && self.vulkan_memory_model.is_some_and(|m| {
+                    m.vulkan_memory_model == vk::TRUE
+                        && m.vulkan_memory_model_device_scope == vk::TRUE
+                }),
         );
 
         features.set(
@@ -2174,6 +2187,15 @@ impl super::InstanceShared {
                 features2 = features2.push_next(next);
             }
 
+            if capabilities.device_api_version >= vk::API_VERSION_1_2
+                || capabilities.supports_extension(khr::vulkan_memory_model::NAME)
+            {
+                let next = features
+                    .vulkan_memory_model
+                    .insert(vk::PhysicalDeviceVulkanMemoryModelFeaturesKHR::default());
+                features2 = features2.push_next(next);
+            }
+
             if capabilities.device_api_version >= vk::API_VERSION_1_1 {
                 let next = features
                     .shader_draw_parameters
@@ -3179,6 +3201,15 @@ impl crate::Adapter for super::Adapter {
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
         surface.inner.surface_capabilities(self)
+    }
+
+    unsafe fn surface_display_hdr_info(
+        &self,
+        surface: &super::Surface,
+    ) -> Option<wgt::DisplayHdrInfo> {
+        // Vulkan has no portable luminance query; the Win32 surface reads it
+        // through DXGI (see `dxgi::hdr`). Every other surface reports `None`.
+        surface.inner.display_hdr_info()
     }
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {

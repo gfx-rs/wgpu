@@ -1638,6 +1638,33 @@ impl crate::Device for super::Device {
                         let handle = data.view.handle_srv.unwrap();
                         cpu_views.as_mut().unwrap().stage.push(handle.raw);
                     }
+                    // The table range reserves the full `layout.count`, so pad a
+                    // partially-bound array with null SRVs to keep later bindings aligned.
+                    let array_size = layout.count.map_or(1, NonZeroU32::get);
+                    for _ in entry.count..array_size {
+                        let inner = cpu_views.as_mut().unwrap();
+                        let cpu_index = inner.stage.len() as u32;
+                        let handle = desc.layout.cpu_heap_views.as_ref().unwrap().at(cpu_index);
+                        let raw_desc = Direct3D12::D3D12_SHADER_RESOURCE_VIEW_DESC {
+                            Format: Dxgi::Common::DXGI_FORMAT_R8G8B8A8_UNORM,
+                            ViewDimension: Direct3D12::D3D12_SRV_DIMENSION_TEXTURE2D,
+                            Shader4ComponentMapping:
+                                Direct3D12::D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+                            Anonymous: Direct3D12::D3D12_SHADER_RESOURCE_VIEW_DESC_0 {
+                                Texture2D: Direct3D12::D3D12_TEX2D_SRV {
+                                    MostDetailedMip: 0,
+                                    MipLevels: 1,
+                                    PlaneSlice: 0,
+                                    ResourceMinLODClamp: 0.0,
+                                },
+                            },
+                        };
+                        unsafe {
+                            self.raw
+                                .CreateShaderResourceView(None, Some(&raw_desc), handle)
+                        };
+                        inner.stage.push(handle);
+                    }
                 }
                 wgt::BindingType::StorageTexture { .. } => {
                     let start = entry.resource_index as usize;
@@ -1645,6 +1672,29 @@ impl crate::Device for super::Device {
                     for data in &desc.textures[start..end] {
                         let handle = data.view.handle_uav.unwrap();
                         cpu_views.as_mut().unwrap().stage.push(handle.raw);
+                    }
+                    // Same partial-binding-array padding as the `Texture` branch above, but
+                    // with null UAVs so that bindings following the array keep their offsets.
+                    let array_size = layout.count.map_or(1, NonZeroU32::get);
+                    for _ in entry.count..array_size {
+                        let inner = cpu_views.as_mut().unwrap();
+                        let cpu_index = inner.stage.len() as u32;
+                        let handle = desc.layout.cpu_heap_views.as_ref().unwrap().at(cpu_index);
+                        let raw_desc = Direct3D12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
+                            Format: Dxgi::Common::DXGI_FORMAT_R8G8B8A8_UNORM,
+                            ViewDimension: Direct3D12::D3D12_UAV_DIMENSION_TEXTURE2D,
+                            Anonymous: Direct3D12::D3D12_UNORDERED_ACCESS_VIEW_DESC_0 {
+                                Texture2D: Direct3D12::D3D12_TEX2D_UAV {
+                                    MipSlice: 0,
+                                    PlaneSlice: 0,
+                                },
+                            },
+                        };
+                        unsafe {
+                            self.raw
+                                .CreateUnorderedAccessView(None, None, Some(&raw_desc), handle)
+                        };
+                        inner.stage.push(handle);
                     }
                 }
                 wgt::BindingType::Sampler { .. } => {
