@@ -64,8 +64,9 @@ impl GPURenderBundleEncoder {
       label: crate::transform_label(descriptor.label.clone()),
     };
 
+    // TODO: keep the encoder when validation is working in wgpu-core
     let (id, err) = self.instance.render_bundle_encoder_finish(
-      self.encoder.borrow_mut().take().unwrap(),
+      &mut self.encoder.borrow_mut().take().unwrap(),
       &wgpu_descriptor,
       None,
     );

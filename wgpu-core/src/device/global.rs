@@ -1166,7 +1166,7 @@ impl Global {
 
     pub fn render_bundle_encoder_finish(
         &self,
-        bundle_encoder: Box<command::RenderBundleEncoder>,
+        bundle_encoder: &mut Box<command::RenderBundleEncoder>,
         desc: &command::RenderBundleDescriptor,
         id_in: Option<id::RenderBundleId>,
     ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {

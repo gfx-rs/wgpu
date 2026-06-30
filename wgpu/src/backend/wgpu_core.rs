@@ -3904,12 +3904,12 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
         )
     }
 
-    fn finish(self, desc: &crate::RenderBundleDescriptor<'_>) -> dispatch::DispatchRenderBundle
+    fn finish(mut self, desc: &crate::RenderBundleDescriptor<'_>) -> dispatch::DispatchRenderBundle
     where
         Self: Sized,
     {
         let (id, error) = self.context.0.render_bundle_encoder_finish(
-            self.encoder,
+            &mut self.encoder,
             &desc.map_label(|l| l.map(Borrowed)),
             None,
         );

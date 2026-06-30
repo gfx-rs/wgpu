@@ -86,6 +86,7 @@ use alloc::{
 };
 use core::{
     convert::Infallible,
+    mem,
     num::{NonZeroU32, NonZeroU64},
     ops::Range,
 };
@@ -280,15 +281,7 @@ impl RenderBundleEncoder {
         Self {
             base: BasePass::new(&None),
             parent_id,
-            context: RenderPassContext {
-                attachments: AttachmentData {
-                    colors: ArrayVec::new(),
-                    resolves: ArrayVec::new(),
-                    depth_stencil: None,
-                },
-                sample_count: 0,
-                multiview_mask: None,
-            },
+            context: RenderPassContext::default(),
             is_depth_read_only: false,
             is_stencil_read_only: false,
 
@@ -312,7 +305,7 @@ impl RenderBundleEncoder {
     ///
     /// [`ExecuteBundle`]: RenderCommand::ExecuteBundle
     pub(crate) fn finish(
-        self,
+        &mut self,
         desc: &RenderBundleDescriptor,
         device: &Arc<Device>,
         hub: &Hub,
@@ -545,14 +538,17 @@ impl RenderBundleEncoder {
             .instance_flags
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS);
 
+        let string_data = mem::take(&mut self.base.string_data);
+        let immediates_data = mem::take(&mut self.base.immediates_data);
+        let context = mem::take(&mut self.context);
         let render_bundle = RenderBundle {
             base: BasePass {
                 label: desc.label.as_deref().map(str::to_owned),
                 error: None,
                 commands,
                 dynamic_offsets: flat_dynamic_offsets,
-                string_data: self.base.string_data,
-                immediates_data: self.base.immediates_data,
+                string_data,
+                immediates_data,
             },
             is_depth_read_only: self.is_depth_read_only,
             is_stencil_read_only: self.is_stencil_read_only,
@@ -560,7 +556,7 @@ impl RenderBundleEncoder {
             used: trackers,
             buffer_memory_init_actions,
             texture_memory_init_actions,
-            context: self.context,
+            context,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(tracker_indices),
             discard_hal_labels,
