@@ -4,6 +4,7 @@ use core::mem;
 use crate::id::{Id, Marker};
 use crate::resource::ResourceType;
 use crate::{Epoch, Index};
+use parking_lot::Mutex;
 
 /// An entry in a `Storage::map` table.
 #[derive(Debug)]
@@ -30,6 +31,14 @@ impl<T: ResourceType> ResourceType for Arc<T> {
 }
 
 impl<T: StorageItem> StorageItem for Arc<T> {
+    type Marker = T::Marker;
+}
+
+impl<T: ResourceType> ResourceType for Mutex<T> {
+    const TYPE: &'static str = T::TYPE;
+}
+
+impl<T: StorageItem> StorageItem for Mutex<T> {
     type Marker = T::Marker;
 }
 
