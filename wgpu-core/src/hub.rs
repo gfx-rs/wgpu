@@ -121,7 +121,7 @@ use core::fmt::Debug;
 
 use crate::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
-    command::{CommandBuffer, CommandEncoder, RenderBundle, RenderPass},
+    command::{CommandBuffer, CommandEncoder, ComputePass, RenderBundle, RenderPass},
     device::{queue::Queue, Device},
     instance::Adapter,
     lock::rank,
@@ -157,6 +157,7 @@ pub struct HubReport {
     pub external_textures: RegistryReport,
     pub samplers: RegistryReport,
     pub render_passes: RegistryReport,
+    pub compute_passes: RegistryReport,
 }
 
 impl HubReport {
@@ -210,6 +211,7 @@ pub struct Hub {
     pub(crate) blas_s: Registry<Fallible<Blas>>,
     pub(crate) tlas_s: Registry<Fallible<Tlas>>,
     pub(crate) render_passes: Registry<Arc<Mutex<RenderPass>>>,
+    pub(crate) compute_passes: Registry<Arc<Mutex<ComputePass>>>,
 }
 
 impl Hub {
@@ -245,6 +247,7 @@ impl Hub {
             blas_s: Registry::new(),
             tlas_s: Registry::with_rank(rank::HUB_TLAS),
             render_passes: Registry::new(),
+            compute_passes: Registry::new(),
         }
     }
 
@@ -270,6 +273,7 @@ impl Hub {
             external_textures: self.external_textures.generate_report(),
             samplers: self.samplers.generate_report(),
             render_passes: self.render_passes.generate_report(),
+            compute_passes: self.compute_passes.generate_report(),
         }
     }
 }
