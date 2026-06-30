@@ -964,6 +964,8 @@ impl PassState {
     }
 }
 
+// Any state in this struct that may be dirty after an abandoned encoding must
+// be reset for reused encoders in `begin_encoding`.
 pub struct CommandEncoder {
     allocator: Direct3D12::ID3D12CommandAllocator,
     device: Direct3D12::ID3D12Device,
