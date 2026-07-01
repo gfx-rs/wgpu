@@ -535,6 +535,25 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         usage: barrier.usage.clone(),
                     };
                     barrier_stencil.range.aspect = wgt::TextureAspect::StencilOnly;
+                    // Remove `TextureUses::RESOURCE`. It is used for the other readonly aspect, not this aspect.
+                    if barrier_stencil
+                        .usage
+                        .from
+                        .contains(wgt::TextureUses::STENCIL_WRITE | wgt::TextureUses::DEPTH_READ)
+                    {
+                        barrier_stencil
+                            .usage
+                            .from
+                            .remove(wgt::TextureUses::RESOURCE);
+                    }
+                    if barrier_stencil
+                        .usage
+                        .to
+                        .contains(wgt::TextureUses::STENCIL_WRITE | wgt::TextureUses::DEPTH_READ)
+                    {
+                        barrier_stencil.usage.to.remove(wgt::TextureUses::RESOURCE);
+                    }
+                    // Remove the other aspect usage.
                     barrier_stencil
                         .usage
                         .from
@@ -548,8 +567,23 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
                 if barrier.texture.format.has_depth_aspect() {
                     let mut barrier_depth = barrier;
-
                     barrier_depth.range.aspect = wgt::TextureAspect::DepthOnly;
+                    // Remove `TextureUses::RESOURCE`. It is used for the other readonly aspect, not this aspect.
+                    if barrier_depth
+                        .usage
+                        .from
+                        .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
+                    {
+                        barrier_depth.usage.from.remove(wgt::TextureUses::RESOURCE);
+                    }
+                    if barrier_depth
+                        .usage
+                        .to
+                        .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
+                    {
+                        barrier_depth.usage.to.remove(wgt::TextureUses::RESOURCE);
+                    }
+                    // Remove the other aspect usage.
                     barrier_depth
                         .usage
                         .from
