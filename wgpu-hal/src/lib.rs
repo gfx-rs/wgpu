@@ -2761,11 +2761,21 @@ pub struct BufferBarrier<'a, B: DynBuffer + ?Sized> {
     pub usage: StateTransition<wgt::BufferUses>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TextureBarrier<'a, T: DynTexture + ?Sized> {
     pub texture: &'a T,
     pub range: wgt::ImageSubresourceRange,
     pub usage: StateTransition<wgt::TextureUses>,
+}
+
+impl<'a, T: DynTexture + ?Sized> Clone for TextureBarrier<'a, T> {
+    fn clone(&self) -> Self {
+        Self {
+            texture: self.texture,
+            range: self.range,
+            usage: self.usage.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

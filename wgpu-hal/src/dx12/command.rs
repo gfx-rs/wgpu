@@ -509,100 +509,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
         T: Iterator<Item = crate::TextureBarrier<'a, super::Texture>>,
     {
         self.temp.barriers.clear();
-        self.temp.texture_barriers.clear();
 
-        let mut barriers_ds_split = mem::take(&mut self.temp.texture_barriers)
-            .into_iter()
-            .map(|_| -> crate::TextureBarrier<'a, super::Texture> { unreachable!() })
-            .collect::<Vec<_>>();
-
-        for barrier in barriers {
-            // For depth-stencil textures, we generated `TextureBarrier` with `TextureAspect::All`,
-            // but in DX12 depth and stencil are subresources and need to be transitioned separately
-            // to separate their resource states, otherwise the render pass is invalid.
-            if barrier.usage.from.intersects(
-                wgt::TextureUses::DEPTH_READ
-                    | wgt::TextureUses::DEPTH_WRITE
-                    | wgt::TextureUses::STENCIL_READ
-                    | wgt::TextureUses::STENCIL_WRITE,
-            ) || barrier.usage.to.intersects(
-                wgt::TextureUses::DEPTH_READ
-                    | wgt::TextureUses::DEPTH_WRITE
-                    | wgt::TextureUses::STENCIL_READ
-                    | wgt::TextureUses::STENCIL_WRITE,
-            ) {
-                if barrier.texture.format.has_stencil_aspect() {
-                    let mut barrier_stencil = crate::TextureBarrier {
-                        texture: barrier.texture,
-                        range: barrier.range,
-                        usage: barrier.usage.clone(),
-                    };
-                    barrier_stencil.range.aspect = wgt::TextureAspect::StencilOnly;
-                    // Remove `TextureUses::RESOURCE`. It is used for the other readonly aspect, not this aspect.
-                    if barrier_stencil
-                        .usage
-                        .from
-                        .contains(wgt::TextureUses::STENCIL_WRITE | wgt::TextureUses::DEPTH_READ)
-                    {
-                        barrier_stencil
-                            .usage
-                            .from
-                            .remove(wgt::TextureUses::RESOURCE);
-                    }
-                    if barrier_stencil
-                        .usage
-                        .to
-                        .contains(wgt::TextureUses::STENCIL_WRITE | wgt::TextureUses::DEPTH_READ)
-                    {
-                        barrier_stencil.usage.to.remove(wgt::TextureUses::RESOURCE);
-                    }
-                    // Remove the other aspect usage.
-                    barrier_stencil
-                        .usage
-                        .from
-                        .remove(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::DEPTH_WRITE);
-                    barrier_stencil
-                        .usage
-                        .to
-                        .remove(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::DEPTH_WRITE);
-                    barriers_ds_split.push(barrier_stencil);
-                }
-
-                if barrier.texture.format.has_depth_aspect() {
-                    let mut barrier_depth = barrier;
-                    barrier_depth.range.aspect = wgt::TextureAspect::DepthOnly;
-                    // Remove `TextureUses::RESOURCE`. It is used for the other readonly aspect, not this aspect.
-                    if barrier_depth
-                        .usage
-                        .from
-                        .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
-                    {
-                        barrier_depth.usage.from.remove(wgt::TextureUses::RESOURCE);
-                    }
-                    if barrier_depth
-                        .usage
-                        .to
-                        .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
-                    {
-                        barrier_depth.usage.to.remove(wgt::TextureUses::RESOURCE);
-                    }
-                    // Remove the other aspect usage.
-                    barrier_depth
-                        .usage
-                        .from
-                        .remove(wgt::TextureUses::STENCIL_READ | wgt::TextureUses::STENCIL_WRITE);
-                    barrier_depth
-                        .usage
-                        .to
-                        .remove(wgt::TextureUses::STENCIL_READ | wgt::TextureUses::STENCIL_WRITE);
-                    barriers_ds_split.push(barrier_depth);
-                }
-            } else {
-                barriers_ds_split.push(barrier);
-            }
-        }
-
-        for barrier in &barriers_ds_split {
+        let mut push_barrier = |barrier: crate::TextureBarrier<'a, super::Texture>| {
             let s0 = conv::map_texture_usage_to_state(barrier.usage.from);
             let s1 = conv::map_texture_usage_to_state(barrier.usage.to);
             if s0 != s1 {
@@ -683,6 +591,88 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 };
                 self.temp.barriers.push(raw);
             }
+        };
+
+        for barrier in barriers {
+            // For depth-stencil textures, we generated `TextureBarrier` with `TextureAspect::All`,
+            // but in DX12 depth and stencil are subresources and need to be transitioned separately
+            // to separate their resource states, otherwise the render pass is invalid.
+            if barrier.usage.from.intersects(
+                wgt::TextureUses::DEPTH_READ
+                    | wgt::TextureUses::DEPTH_WRITE
+                    | wgt::TextureUses::STENCIL_READ
+                    | wgt::TextureUses::STENCIL_WRITE,
+            ) || barrier.usage.to.intersects(
+                wgt::TextureUses::DEPTH_READ
+                    | wgt::TextureUses::DEPTH_WRITE
+                    | wgt::TextureUses::STENCIL_READ
+                    | wgt::TextureUses::STENCIL_WRITE,
+            ) {
+                if barrier.texture.format.has_stencil_aspect() {
+                    let mut barrier_stencil = barrier.clone();
+                    barrier_stencil.range.aspect = wgt::TextureAspect::StencilOnly;
+                    // Remove `TextureUses::RESOURCE`. It is used for the other readonly aspect, not this aspect.
+                    if barrier_stencil
+                        .usage
+                        .from
+                        .contains(wgt::TextureUses::STENCIL_WRITE | wgt::TextureUses::DEPTH_READ)
+                    {
+                        barrier_stencil
+                            .usage
+                            .from
+                            .remove(wgt::TextureUses::RESOURCE);
+                    }
+                    if barrier_stencil
+                        .usage
+                        .to
+                        .contains(wgt::TextureUses::STENCIL_WRITE | wgt::TextureUses::DEPTH_READ)
+                    {
+                        barrier_stencil.usage.to.remove(wgt::TextureUses::RESOURCE);
+                    }
+                    // Remove the other aspect usage.
+                    barrier_stencil
+                        .usage
+                        .from
+                        .remove(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::DEPTH_WRITE);
+                    barrier_stencil
+                        .usage
+                        .to
+                        .remove(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::DEPTH_WRITE);
+                    push_barrier(barrier_stencil);
+                }
+
+                if barrier.texture.format.has_depth_aspect() {
+                    let mut barrier_depth = barrier;
+                    barrier_depth.range.aspect = wgt::TextureAspect::DepthOnly;
+                    // Remove `TextureUses::RESOURCE`. It is used for the other readonly aspect, not this aspect.
+                    if barrier_depth
+                        .usage
+                        .from
+                        .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
+                    {
+                        barrier_depth.usage.from.remove(wgt::TextureUses::RESOURCE);
+                    }
+                    if barrier_depth
+                        .usage
+                        .to
+                        .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
+                    {
+                        barrier_depth.usage.to.remove(wgt::TextureUses::RESOURCE);
+                    }
+                    // Remove the other aspect usage.
+                    barrier_depth
+                        .usage
+                        .from
+                        .remove(wgt::TextureUses::STENCIL_READ | wgt::TextureUses::STENCIL_WRITE);
+                    barrier_depth
+                        .usage
+                        .to
+                        .remove(wgt::TextureUses::STENCIL_READ | wgt::TextureUses::STENCIL_WRITE);
+                    push_barrier(barrier_depth);
+                }
+            } else {
+                push_barrier(barrier);
+            }
         }
 
         if !self.temp.barriers.is_empty() {
@@ -693,12 +683,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     .ResourceBarrier(&self.temp.barriers)
             };
         }
-
-        barriers_ds_split.clear();
-        self.temp.texture_barriers = barriers_ds_split
-            .into_iter()
-            .map(|_| -> crate::TextureBarrier<'static, super::Texture> { unreachable!() })
-            .collect();
     }
 
     unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {

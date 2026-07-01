@@ -860,7 +860,6 @@ unsafe impl Sync for Queue {}
 #[derive(Default)]
 struct Temp {
     marker: Vec<u16>,
-    texture_barriers: Vec<crate::TextureBarrier<'static, Texture>>,
     barriers: Vec<Direct3D12::D3D12_RESOURCE_BARRIER>,
 }
 
@@ -868,7 +867,6 @@ impl Temp {
     fn clear(&mut self) {
         self.marker.clear();
         self.barriers.clear();
-        self.texture_barriers.clear();
     }
 }
 
