@@ -5,7 +5,7 @@ rust-version = "1.87"
 publish = false
 
 [dependencies]
-wgpu = "29.0.0"
+wgpu = "30.0.0"
 winit = { version = "0.30.8", features = ["android-native-activity"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -15,7 +15,11 @@ pollster = "0.4"
 # macOS: observe screen-parameter changes to re-query HDR info (winit has no event for it).
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.3"
-objc2-foundation = { version = "0.3.2", features = ["NSNotification", "NSOperation", "NSString"] }
+objc2-foundation = { version = "0.3.2", features = [
+    "NSNotification",
+    "NSOperation",
+    "NSString",
+] }
 block2 = "0.6.2"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
