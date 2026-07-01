@@ -1285,7 +1285,7 @@ impl Global {
         Ok(())
     }
 
-    pub fn compute_pass_set_bindgroup_with_id(
+    pub fn compute_pass_set_bind_group_with_id(
         &self,
         pass_id: id::ComputePassEncoderId,
         index: u32,
