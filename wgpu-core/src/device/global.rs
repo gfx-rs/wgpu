@@ -1253,6 +1253,12 @@ impl Global {
         (id, error)
     }
 
+    pub fn render_bundle_encoder_drop(&self, render_bundle_encoder_id: id::RenderBundleEncoderId) {
+        let hub = &self.hub;
+
+        let _bundle_encoder = hub.render_bundle_encoders.remove(render_bundle_encoder_id);
+    }
+
     pub fn render_bundle_drop(&self, render_bundle_id: id::RenderBundleId) {
         profiling::scope!("RenderBundle::drop");
         api_log!("RenderBundle::drop {render_bundle_id:?}");

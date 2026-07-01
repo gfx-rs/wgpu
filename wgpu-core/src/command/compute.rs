@@ -648,6 +648,10 @@ impl Global {
             .expect("ComputePasses should not be accessed concurrently");
         self.compute_pass_end(&mut pass)
     }
+
+    pub fn compute_pass_drop(&self, pass_id: id::ComputePassEncoderId) {
+        self.hub.compute_passes.remove(pass_id);
+    }
 }
 
 pub(super) fn encode_compute_pass(

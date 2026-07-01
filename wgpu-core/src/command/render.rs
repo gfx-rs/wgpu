@@ -2279,6 +2279,10 @@ impl Global {
             .expect("RenderPasses should not be accessed concurrently");
         self.render_pass_end(&mut pass)
     }
+
+    pub fn render_pass_drop(&self, pass: id::RenderPassEncoderId) {
+        self.hub.render_passes.remove(pass);
+    }
 }
 
 pub(super) fn encode_render_pass(
