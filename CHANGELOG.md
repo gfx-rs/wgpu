@@ -42,6 +42,14 @@ Bottom level categories:
 
 ## Unreleased
 
+## v29.0.4 (2026-07-01)
+
+### New Features
+
+#### GLES
+
+- XCB window handles can now be used to initialize OpenGL on Linux. By @reflectronic in [#9271](https://github.com/gfx-rs/wgpu/pull/9271).
+
 ### Bug Fixes
 
 #### Metal
