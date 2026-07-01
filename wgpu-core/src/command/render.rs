@@ -1829,12 +1829,12 @@ fn check_transient_attachment_ops<V>(load_op: LoadOp<V>, store_op: StoreOp) -> b
 impl CommandEncoder {
     fn begin_render_pass(
         self: Arc<Self>,
-        desc: &ResolvedRenderPassDescriptor<'_>,
+        desc: ResolvedRenderPassDescriptor<'_>,
     ) -> (RenderPass, Option<CommandEncoderError>) {
         use EncoderStateError as SErr;
 
         fn fill_arc_desc(
-            desc: &ResolvedRenderPassDescriptor<'_>,
+            desc: ResolvedRenderPassDescriptor<'_>,
             arc_desc: &mut ArcRenderPassDescriptor,
             device: &Device,
         ) -> Result<(), RenderPassErrorInner> {
@@ -1909,9 +1909,9 @@ impl CommandEncoder {
 
             // https://gpuweb.github.io/gpuweb/#abstract-opdef-gpurenderpassdepthstencilattachment-gpurenderpassdepthstencilattachment-valid-usage
             arc_desc.depth_stencil_attachment = if let Some(depth_stencil_attachment) =
-                desc.depth_stencil_attachment.as_ref()
+                desc.depth_stencil_attachment
             {
-                let view = depth_stencil_attachment.view.clone().get()?;
+                let view = depth_stencil_attachment.view.get()?;
                 view.same_device(device)?;
 
                 let format = view.desc.format;
@@ -2049,17 +2049,16 @@ impl CommandEncoder {
 
             arc_desc.timestamp_writes = desc
                 .timestamp_writes
-                .as_ref()
                 .map(|tw| {
                     CommandEncoder::validate_pass_timestamp_writes::<RenderPassErrorInner>(
-                        device, tw,
+                        device, &tw,
                     )
                 })
                 .transpose()?;
 
             arc_desc.occlusion_query_set =
-                if let Some(occlusion_query_set) = &desc.occlusion_query_set {
-                    let query_set = occlusion_query_set.clone().get()?;
+                if let Some(occlusion_query_set) = desc.occlusion_query_set {
+                    let query_set = occlusion_query_set.get()?;
                     query_set.same_device(device)?;
 
                     if !matches!(query_set.desc.ty, wgt::QueryType::Occlusion) {
@@ -2086,8 +2085,9 @@ impl CommandEncoder {
         match cmd_buf_data.lock_encoder() {
             Ok(()) => {
                 drop(cmd_buf_data);
+                let label = desc.label.clone();
                 let mut arc_desc = ArcRenderPassDescriptor {
-                    label: &desc.label,
+                    label: &label,
                     timestamp_writes: None,
                     color_attachments: ArrayVec::new(),
                     depth_stencil_attachment: None,
@@ -2097,7 +2097,7 @@ impl CommandEncoder {
                 match fill_arc_desc(desc, &mut arc_desc, &self.device) {
                     Ok(()) => (RenderPass::new(self, arc_desc), None),
                     Err(err) => (
-                        RenderPass::new_invalid(self, &desc.label, err.map_pass_err(scope)),
+                        RenderPass::new_invalid(self, &label, err.map_pass_err(scope)),
                         None,
                     ),
                 }
@@ -2208,7 +2208,7 @@ impl Global {
         drop(texture_views);
         drop(query_sets);
 
-        cmd_enc.begin_render_pass(&desc)
+        cmd_enc.begin_render_pass(desc)
     }
 
     pub fn command_encoder_begin_render_pass_with_id(
