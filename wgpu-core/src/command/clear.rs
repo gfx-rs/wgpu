@@ -152,7 +152,7 @@ impl Global {
 
         cmd_buf_data.push_with(|| -> Result<_, ClearError> {
             let texture = self.resolve_texture_id(dst);
-            texture.check_valid(&cmd_enc.device.snatchable_lock.read())?;
+            texture.check_valid()?;
             Ok(ArcCommand::ClearTexture {
                 dst: texture,
                 subresource_range: *subresource_range,

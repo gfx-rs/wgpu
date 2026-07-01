@@ -339,9 +339,9 @@ impl Queue {
 
         let mut exclusive_snatch_guard = device.snatchable_lock.write();
         let inner = texture
-            .inner
-            .snatch(&mut exclusive_snatch_guard)
-            .maybe_valid();
+            .state()
+            .ok()
+            .and_then(|state| state.inner.snatch(&mut exclusive_snatch_guard));
         drop(exclusive_snatch_guard);
 
         let result = match inner {
@@ -398,9 +398,9 @@ impl Surface {
 
         let mut exclusive_snatch_guard = device.snatchable_lock.write();
         let inner = texture
-            .inner
-            .snatch(&mut exclusive_snatch_guard)
-            .maybe_valid();
+            .state()
+            .ok()
+            .and_then(|state| state.inner.snatch(&mut exclusive_snatch_guard));
         drop(exclusive_snatch_guard);
 
         match inner {

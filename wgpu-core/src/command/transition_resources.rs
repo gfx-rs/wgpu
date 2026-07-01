@@ -26,7 +26,6 @@ impl Global {
         // Lock command encoder for recording
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-        let snatch_guard = cmd_enc.device.snatchable_lock.read();
         cmd_buf_data.push_with(|| -> Result<_, TransitionResourcesError> {
             Ok(ArcCommand::TransitionResources {
                 buffer_transitions: buffer_transitions
@@ -40,7 +39,7 @@ impl Global {
                 texture_transitions: texture_transitions
                     .map(|t| {
                         let texture = self.resolve_texture_id(t.texture);
-                        texture.check_valid(&snatch_guard)?;
+                        texture.check_valid()?;
                         Ok(wgt::TextureTransition {
                             texture,
                             selector: t.selector,
