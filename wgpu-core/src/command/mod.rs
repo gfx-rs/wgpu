@@ -99,7 +99,6 @@ use crate::resource::{
     DestroyedResourceError, Fallible, InvalidOrDestroyedResourceError, InvalidResourceError,
     Labeled, ParentDevice as _, QuerySet,
 };
-use crate::storage::Storage;
 use crate::track::{DeviceTracker, ResourceUsageCompatibilityError, Tracker, UsageScope};
 use crate::{api_log, global::Global, id, resource_log, Label};
 use crate::{hal_label, LabelHelpers};
@@ -965,6 +964,56 @@ impl CommandEncoder {
         }
     }
 
+    pub(crate) fn validate_pass_timestamp_writes<E>(
+        device: &Device,
+        timestamp_writes: &PassTimestampWrites<Fallible<QuerySet>>,
+    ) -> Result<ArcPassTimestampWrites, E>
+    where
+        E: From<TimestampWritesError>
+            + From<QueryUseError>
+            + From<DeviceError>
+            + From<MissingFeatures>
+            + From<InvalidResourceError>,
+    {
+        let &PassTimestampWrites {
+            ref query_set,
+            beginning_of_pass_write_index,
+            end_of_pass_write_index,
+        } = timestamp_writes;
+
+        device.require_features(wgt::Features::TIMESTAMP_QUERY)?;
+
+        let query_set = query_set.clone().get()?;
+
+        query_set.same_device(device)?;
+
+        for idx in [beginning_of_pass_write_index, end_of_pass_write_index]
+            .into_iter()
+            .flatten()
+        {
+            query_set.validate_query(SimplifiedQueryType::Timestamp, idx, None)?;
+        }
+
+        if let Some((begin, end)) = beginning_of_pass_write_index.zip(end_of_pass_write_index) {
+            if begin == end {
+                return Err(TimestampWritesError::IndicesEqual { idx: begin }.into());
+            }
+        }
+
+        if beginning_of_pass_write_index
+            .or(end_of_pass_write_index)
+            .is_none()
+        {
+            return Err(TimestampWritesError::IndicesMissing.into());
+        }
+
+        Ok(ArcPassTimestampWrites {
+            query_set,
+            beginning_of_pass_write_index,
+            end_of_pass_write_index,
+        })
+    }
+
     pub(crate) fn insert_barriers_from_tracker(
         raw: &mut dyn hal::DynCommandEncoder,
         base: &mut Tracker,
@@ -1814,57 +1863,6 @@ impl Global {
 
         cmd_buf_data
             .push_with(|| -> Result<_, CommandEncoderError> { Ok(ArcCommand::PopDebugGroup) })
-    }
-
-    fn validate_pass_timestamp_writes<E>(
-        device: &Device,
-        query_sets: &Storage<Fallible<QuerySet>>,
-        timestamp_writes: &PassTimestampWrites,
-    ) -> Result<ArcPassTimestampWrites, E>
-    where
-        E: From<TimestampWritesError>
-            + From<QueryUseError>
-            + From<DeviceError>
-            + From<MissingFeatures>
-            + From<InvalidResourceError>,
-    {
-        let &PassTimestampWrites {
-            query_set,
-            beginning_of_pass_write_index,
-            end_of_pass_write_index,
-        } = timestamp_writes;
-
-        device.require_features(wgt::Features::TIMESTAMP_QUERY)?;
-
-        let query_set = query_sets.get(query_set).get()?;
-
-        query_set.same_device(device)?;
-
-        for idx in [beginning_of_pass_write_index, end_of_pass_write_index]
-            .into_iter()
-            .flatten()
-        {
-            query_set.validate_query(SimplifiedQueryType::Timestamp, idx, None)?;
-        }
-
-        if let Some((begin, end)) = beginning_of_pass_write_index.zip(end_of_pass_write_index) {
-            if begin == end {
-                return Err(TimestampWritesError::IndicesEqual { idx: begin }.into());
-            }
-        }
-
-        if beginning_of_pass_write_index
-            .or(end_of_pass_write_index)
-            .is_none()
-        {
-            return Err(TimestampWritesError::IndicesMissing.into());
-        }
-
-        Ok(ArcPassTimestampWrites {
-            query_set,
-            beginning_of_pass_write_index,
-            end_of_pass_write_index,
-        })
     }
 }
 

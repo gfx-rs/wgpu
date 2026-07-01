@@ -33,7 +33,7 @@ use crate::{
     init_tracker::MemoryInitKind,
     pipeline::ComputePipeline,
     resource::{
-        self, Buffer, DestroyedResourceError, InvalidResourceError, Labeled,
+        self, Buffer, DestroyedResourceError, Fallible, InvalidResourceError, Labeled,
         MissingBufferUsageError, ParentDevice, RawResourceAccess, TextureView, Trackable,
     },
     track::{ResourceUsageCompatibilityError, TextureViewBindGroupState, Tracker},
@@ -455,6 +455,96 @@ fn transition_resources(
     Ok(())
 }
 
+impl CommandEncoder {
+    fn begin_compute_pass(
+        self: &Arc<Self>,
+        desc: &ComputePassDescriptor<'_, PassTimestampWrites<Fallible<resource::QuerySet>>>,
+    ) -> (ComputePass, Option<CommandEncoderError>) {
+        use EncoderStateError as SErr;
+
+        let scope = PassErrorScope::Pass;
+
+        let label = desc.label.as_deref().map(Cow::Borrowed);
+
+        let mut cmd_buf_data = self.data.lock();
+
+        match cmd_buf_data.lock_encoder() {
+            Ok(()) => {
+                drop(cmd_buf_data);
+                if let Err(err) = self.device.check_is_valid() {
+                    return (
+                        ComputePass::new_invalid(Arc::clone(self), &label, err.map_pass_err(scope)),
+                        None,
+                    );
+                }
+
+                match desc
+                    .timestamp_writes
+                    .as_ref()
+                    .map(|tw| {
+                        Self::validate_pass_timestamp_writes::<ComputePassErrorInner>(
+                            &self.device,
+                            tw,
+                        )
+                    })
+                    .transpose()
+                {
+                    Ok(timestamp_writes) => {
+                        let arc_desc = ArcComputePassDescriptor {
+                            label,
+                            timestamp_writes,
+                        };
+                        (ComputePass::new(Arc::clone(self), arc_desc), None)
+                    }
+                    Err(err) => (
+                        ComputePass::new_invalid(Arc::clone(self), &label, err.map_pass_err(scope)),
+                        None,
+                    ),
+                }
+            }
+            Err(err @ SErr::Locked) => {
+                // Attempting to open a new pass while the encoder is locked
+                // invalidates the encoder, but does not generate a validation
+                // error.
+                cmd_buf_data.invalidate(err.clone());
+                drop(cmd_buf_data);
+                (
+                    ComputePass::new_invalid(Arc::clone(self), &label, err.map_pass_err(scope)),
+                    None,
+                )
+            }
+            Err(err @ (SErr::Ended | SErr::Submitted)) => {
+                // Attempting to open a new pass after the encode has ended
+                // generates an immediate validation error.
+                drop(cmd_buf_data);
+                (
+                    ComputePass::new_invalid(
+                        Arc::clone(self),
+                        &label,
+                        err.clone().map_pass_err(scope),
+                    ),
+                    Some(err.into()),
+                )
+            }
+            Err(err @ SErr::Invalid) => {
+                // Passes can be opened even on an invalid encoder. Such passes
+                // are even valid, but since there's no visible side-effect of
+                // the pass being valid and there's no point in storing recorded
+                // commands that will ultimately be discarded, we open an
+                // invalid pass to save that work.
+                drop(cmd_buf_data);
+                (
+                    ComputePass::new_invalid(Arc::clone(self), &label, err.map_pass_err(scope)),
+                    None,
+                )
+            }
+            Err(SErr::Unlocked) => {
+                unreachable!("lock_encoder cannot fail due to the encoder being unlocked")
+            }
+        }
+    }
+}
+
 // Running the compute pass.
 
 impl Global {
@@ -473,87 +563,23 @@ impl Global {
         encoder_id: id::CommandEncoderId,
         desc: &ComputePassDescriptor<'_>,
     ) -> (ComputePass, Option<CommandEncoderError>) {
-        use EncoderStateError as SErr;
-
-        let scope = PassErrorScope::Pass;
         let hub = &self.hub;
 
-        let label = desc.label.as_deref().map(Cow::Borrowed);
-
         let cmd_enc = hub.command_encoders.get(encoder_id);
-        let mut cmd_buf_data = cmd_enc.data.lock();
 
-        match cmd_buf_data.lock_encoder() {
-            Ok(()) => {
-                drop(cmd_buf_data);
-                if let Err(err) = cmd_enc.device.check_is_valid() {
-                    return (
-                        ComputePass::new_invalid(cmd_enc, &label, err.map_pass_err(scope)),
-                        None,
-                    );
-                }
+        let desc = ComputePassDescriptor {
+            label: desc.label.as_deref().map(Cow::Borrowed),
+            timestamp_writes: desc
+                .timestamp_writes
+                .as_ref()
+                .map(|tw| PassTimestampWrites {
+                    query_set: hub.query_sets.get(tw.query_set),
+                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
+                    end_of_pass_write_index: tw.end_of_pass_write_index,
+                }),
+        };
 
-                match desc
-                    .timestamp_writes
-                    .as_ref()
-                    .map(|tw| {
-                        Self::validate_pass_timestamp_writes::<ComputePassErrorInner>(
-                            &cmd_enc.device,
-                            &hub.query_sets.read(),
-                            tw,
-                        )
-                    })
-                    .transpose()
-                {
-                    Ok(timestamp_writes) => {
-                        let arc_desc = ArcComputePassDescriptor {
-                            label,
-                            timestamp_writes,
-                        };
-                        (ComputePass::new(cmd_enc, arc_desc), None)
-                    }
-                    Err(err) => (
-                        ComputePass::new_invalid(cmd_enc, &label, err.map_pass_err(scope)),
-                        None,
-                    ),
-                }
-            }
-            Err(err @ SErr::Locked) => {
-                // Attempting to open a new pass while the encoder is locked
-                // invalidates the encoder, but does not generate a validation
-                // error.
-                cmd_buf_data.invalidate(err.clone());
-                drop(cmd_buf_data);
-                (
-                    ComputePass::new_invalid(cmd_enc, &label, err.map_pass_err(scope)),
-                    None,
-                )
-            }
-            Err(err @ (SErr::Ended | SErr::Submitted)) => {
-                // Attempting to open a new pass after the encode has ended
-                // generates an immediate validation error.
-                drop(cmd_buf_data);
-                (
-                    ComputePass::new_invalid(cmd_enc, &label, err.clone().map_pass_err(scope)),
-                    Some(err.into()),
-                )
-            }
-            Err(err @ SErr::Invalid) => {
-                // Passes can be opened even on an invalid encoder. Such passes
-                // are even valid, but since there's no visible side-effect of
-                // the pass being valid and there's no point in storing recorded
-                // commands that will ultimately be discarded, we open an
-                // invalid pass to save that work.
-                drop(cmd_buf_data);
-                (
-                    ComputePass::new_invalid(cmd_enc, &label, err.map_pass_err(scope)),
-                    None,
-                )
-            }
-            Err(SErr::Unlocked) => {
-                unreachable!("lock_encoder cannot fail due to the encoder being unlocked")
-            }
-        }
+        cmd_enc.begin_compute_pass(&desc)
     }
 
     pub fn command_encoder_begin_compute_pass_with_id(

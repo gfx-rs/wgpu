@@ -40,9 +40,10 @@ use crate::{
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
     resource::{
-        Buffer, DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
-        MissingTextureUsageError, ParentDevice, QuerySet, RawResourceAccess, ResourceErrorIdent,
-        Texture, TextureView, TextureViewNotRenderableReason,
+        Buffer, DestroyedResourceError, Fallible, InvalidResourceError, Labeled,
+        MissingBufferUsageError, MissingTextureUsageError, ParentDevice, QuerySet,
+        RawResourceAccess, ResourceErrorIdent, Texture, TextureView,
+        TextureViewNotRenderableReason,
     },
     snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker, UsageScope},
@@ -268,6 +269,22 @@ pub struct RenderPassDescriptor<'a> {
     pub timestamp_writes: Option<PassTimestampWrites>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<id::QuerySetId>,
+    /// The multiview array layers that will be used
+    pub multiview_mask: Option<NonZeroU32>,
+}
+
+/// Describes the attachments of a render pass.
+#[derive(Clone, Default)]
+pub struct ResolvedRenderPassDescriptor<'a> {
+    pub label: Label<'a>,
+    /// The color attachments of the render pass.
+    pub color_attachments: Cow<'a, [Option<RenderPassColorAttachment<Fallible<TextureView>>>]>,
+    /// The depth and stencil attachment of the render pass, if any.
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<Fallible<TextureView>>>,
+    /// Defines where and when timestamp values will be written for this pass.
+    pub timestamp_writes: Option<PassTimestampWrites<Fallible<QuerySet>>>,
+    /// Defines where the occlusion query results will be stored for this pass.
+    pub occlusion_query_set: Option<Fallible<QuerySet>>,
     /// The multiview array layers that will be used
     pub multiview_mask: Option<NonZeroU32>,
 }
@@ -1809,34 +1826,19 @@ fn check_transient_attachment_ops<V>(load_op: LoadOp<V>, store_op: StoreOp) -> b
     )
 }
 
-impl Global {
-    /// Creates a render pass.
-    ///
-    /// If creation fails, an invalid pass is returned. Attempting to record
-    /// commands into an invalid pass is permitted, but a validation error will
-    /// ultimately be generated when the parent encoder is finished, and it is
-    /// not possible to run any commands from the invalid pass.
-    ///
-    /// If successful, puts the encoder into the [`Locked`] state.
-    ///
-    /// [`Locked`]: crate::command::CommandEncoderStatus::Locked
-    pub fn command_encoder_begin_render_pass(
-        &self,
-        encoder_id: id::CommandEncoderId,
-        desc: &RenderPassDescriptor<'_>,
+impl CommandEncoder {
+    fn begin_render_pass(
+        self: Arc<Self>,
+        desc: &ResolvedRenderPassDescriptor<'_>,
     ) -> (RenderPass, Option<CommandEncoderError>) {
         use EncoderStateError as SErr;
 
         fn fill_arc_desc(
-            hub: &crate::hub::Hub,
-            desc: &RenderPassDescriptor<'_>,
+            desc: &ResolvedRenderPassDescriptor<'_>,
             arc_desc: &mut ArcRenderPassDescriptor,
             device: &Device,
         ) -> Result<(), RenderPassErrorInner> {
             device.check_is_valid()?;
-
-            let query_sets = hub.query_sets.read();
-            let texture_views = hub.texture_views.read();
 
             let max_color_attachments = device.limits.max_color_attachments as usize;
             if desc.color_attachments.len() > max_color_attachments {
@@ -1850,14 +1852,14 @@ impl Global {
 
             for color_attachment in desc.color_attachments.iter() {
                 if let Some(RenderPassColorAttachment {
-                    view: view_id,
+                    view,
                     depth_slice,
                     resolve_target,
                     load_op,
                     store_op,
                 }) = color_attachment
                 {
-                    let view = texture_views.get(*view_id).get()?;
+                    let view = view.clone().get()?;
                     view.same_device(device)?;
                     if matches!(*load_op, LoadOp::DontCare(..))
                         && device
@@ -1882,8 +1884,8 @@ impl Global {
                         ));
                     }
 
-                    let resolve_target = if let Some(resolve_target_id) = resolve_target {
-                        let rt_arc = texture_views.get(*resolve_target_id).get()?;
+                    let resolve_target = if let Some(resolve_target) = resolve_target {
+                        let rt_arc = resolve_target.clone().get()?;
                         rt_arc.same_device(device)?;
 
                         Some(rt_arc)
@@ -1909,7 +1911,7 @@ impl Global {
             arc_desc.depth_stencil_attachment = if let Some(depth_stencil_attachment) =
                 desc.depth_stencil_attachment.as_ref()
             {
-                let view = texture_views.get(depth_stencil_attachment.view).get()?;
+                let view = depth_stencil_attachment.view.clone().get()?;
                 view.same_device(device)?;
 
                 let format = view.desc.format;
@@ -2049,17 +2051,15 @@ impl Global {
                 .timestamp_writes
                 .as_ref()
                 .map(|tw| {
-                    Global::validate_pass_timestamp_writes::<RenderPassErrorInner>(
-                        device,
-                        &query_sets,
-                        tw,
+                    CommandEncoder::validate_pass_timestamp_writes::<RenderPassErrorInner>(
+                        device, tw,
                     )
                 })
                 .transpose()?;
 
             arc_desc.occlusion_query_set =
-                if let Some(occlusion_query_set) = desc.occlusion_query_set {
-                    let query_set = query_sets.get(occlusion_query_set).get()?;
+                if let Some(occlusion_query_set) = &desc.occlusion_query_set {
+                    let query_set = occlusion_query_set.clone().get()?;
                     query_set.same_device(device)?;
 
                     if !matches!(query_set.desc.ty, wgt::QueryType::Occlusion) {
@@ -2081,10 +2081,7 @@ impl Global {
         }
 
         let scope = PassErrorScope::Pass;
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(encoder_id);
-        let mut cmd_buf_data = cmd_enc.data.lock();
+        let mut cmd_buf_data = self.data.lock();
 
         match cmd_buf_data.lock_encoder() {
             Ok(()) => {
@@ -2097,10 +2094,10 @@ impl Global {
                     occlusion_query_set: None,
                     multiview_mask: None,
                 };
-                match fill_arc_desc(hub, desc, &mut arc_desc, &cmd_enc.device) {
-                    Ok(()) => (RenderPass::new(cmd_enc, arc_desc), None),
+                match fill_arc_desc(desc, &mut arc_desc, &self.device) {
+                    Ok(()) => (RenderPass::new(self, arc_desc), None),
                     Err(err) => (
-                        RenderPass::new_invalid(cmd_enc, &desc.label, err.map_pass_err(scope)),
+                        RenderPass::new_invalid(self, &desc.label, err.map_pass_err(scope)),
                         None,
                     ),
                 }
@@ -2112,7 +2109,7 @@ impl Global {
                 cmd_buf_data.invalidate(err.clone());
                 drop(cmd_buf_data);
                 (
-                    RenderPass::new_invalid(cmd_enc, &desc.label, err.map_pass_err(scope)),
+                    RenderPass::new_invalid(self, &desc.label, err.map_pass_err(scope)),
                     None,
                 )
             }
@@ -2121,7 +2118,7 @@ impl Global {
                 // generates an immediate validation error.
                 drop(cmd_buf_data);
                 (
-                    RenderPass::new_invalid(cmd_enc, &desc.label, err.clone().map_pass_err(scope)),
+                    RenderPass::new_invalid(self, &desc.label, err.clone().map_pass_err(scope)),
                     Some(err.into()),
                 )
             }
@@ -2133,7 +2130,7 @@ impl Global {
                 // invalid pass to save that work.
                 drop(cmd_buf_data);
                 (
-                    RenderPass::new_invalid(cmd_enc, &desc.label, err.map_pass_err(scope)),
+                    RenderPass::new_invalid(self, &desc.label, err.map_pass_err(scope)),
                     None,
                 )
             }
@@ -2141,6 +2138,77 @@ impl Global {
                 unreachable!("lock_encoder cannot fail due to the encoder being unlocked")
             }
         }
+    }
+}
+
+impl Global {
+    /// Creates a render pass.
+    ///
+    /// If creation fails, an invalid pass is returned. Attempting to record
+    /// commands into an invalid pass is permitted, but a validation error will
+    /// ultimately be generated when the parent encoder is finished, and it is
+    /// not possible to run any commands from the invalid pass.
+    ///
+    /// If successful, puts the encoder into the [`Locked`] state.
+    ///
+    /// [`Locked`]: crate::command::CommandEncoderStatus::Locked
+    pub fn command_encoder_begin_render_pass(
+        &self,
+        encoder_id: id::CommandEncoderId,
+        desc: &RenderPassDescriptor<'_>,
+    ) -> (RenderPass, Option<CommandEncoderError>) {
+        let hub = &self.hub;
+
+        let cmd_enc = hub.command_encoders.get(encoder_id);
+
+        let texture_views = hub.texture_views.read();
+        let query_sets = hub.query_sets.read();
+
+        let desc = ResolvedRenderPassDescriptor {
+            label: desc.label.as_deref().map(Cow::Borrowed),
+            color_attachments: Cow::Owned(
+                desc.color_attachments
+                    .iter()
+                    .map(|at| {
+                        at.as_ref().map(|at| RenderPassColorAttachment {
+                            view: texture_views.get(at.view),
+                            depth_slice: at.depth_slice,
+                            resolve_target: at
+                                .resolve_target
+                                .as_ref()
+                                .map(|rt| texture_views.get(*rt)),
+                            load_op: at.load_op,
+                            store_op: at.store_op,
+                        })
+                    })
+                    .collect(),
+            ),
+            depth_stencil_attachment: desc.depth_stencil_attachment.as_ref().map(|at| {
+                RenderPassDepthStencilAttachment {
+                    view: texture_views.get(at.view),
+                    depth: at.depth.clone(),
+                    stencil: at.stencil.clone(),
+                }
+            }),
+            timestamp_writes: desc
+                .timestamp_writes
+                .as_ref()
+                .map(|tw| PassTimestampWrites {
+                    query_set: query_sets.get(tw.query_set),
+                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
+                    end_of_pass_write_index: tw.end_of_pass_write_index,
+                }),
+            occlusion_query_set: desc
+                .occlusion_query_set
+                .as_ref()
+                .map(|query_set| query_sets.get(*query_set)),
+            multiview_mask: desc.multiview_mask,
+        };
+
+        drop(texture_views);
+        drop(query_sets);
+
+        cmd_enc.begin_render_pass(&desc)
     }
 
     pub fn command_encoder_begin_render_pass_with_id(
