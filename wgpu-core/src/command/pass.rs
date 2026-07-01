@@ -176,7 +176,9 @@ pub(super) fn flush_bindings_helper(state: &mut PassState) -> Result<(), Destroy
         let raw_bg = bind_group.try_raw(state.base.snatch_guard)?;
         unsafe {
             state.base.raw_encoder.set_bind_group(
-                pipeline_layout.raw(),
+                pipeline_layout
+                    .raw()
+                    .expect("Pipeline layout should be valid at this point"),
                 i as u32,
                 raw_bg,
                 dynamic_offsets,
@@ -207,13 +209,30 @@ where
             pipeline_layout.immediate_size,
             |clear_offset, clear_data| unsafe {
                 state.base.raw_encoder.set_immediates(
-                    pipeline_layout.raw(),
+                    pipeline_layout
+                        .raw()
+                        .expect("Pipeline layout should be valid at this point"),
                     clear_offset,
                     clear_data,
                 );
             },
         );
     }
+    Ok(())
+}
+
+pub(crate) fn validate_immediates_alignment(
+    offset: u32,
+    size_bytes: u32,
+) -> Result<(), ImmediateUploadError> {
+    if !offset.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
+        return Err(ImmediateUploadError::StartOffsetUnaligned(offset));
+    }
+
+    if !size_bytes.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
+        return Err(ImmediateUploadError::SizeUnaligned(size_bytes));
+    }
+
     Ok(())
 }
 
@@ -230,6 +249,8 @@ where
 {
     api_log!("Pass::set_immediates");
 
+    // Alignment has been validated by `validate_immediates_alignment` when pushing `SetImmediate` commands.
+
     let values_offset = values_offset.ok_or(InvalidValuesOffset)?;
 
     let pipeline_layout = state
@@ -243,24 +264,25 @@ where
     let values_offset_usize = usize::try_from(values_offset)
         .expect("`values_offset` is outside the bounds of `usize` (!?)");
     if values_offset_usize > immediates_data.len() {
-        return Err(ImmediateUploadError::ValueStartIndexOverrun {
-            start_index: values_offset,
-            data_size: immediates_data.len(),
-        }
-        .into());
+        panic!(
+            "Internal error: `set_immediates` values offset ({}) \
+            overruns the immediates data length ({})",
+            values_offset,
+            immediates_data.len()
+        );
     }
 
-    // NOTE: The `validate_immediates_ranges` call above validates `size_bytes` is aligned.
     let size_immediate_elements = size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT;
     let size_immediate_elements_usize = usize::try_from(size_immediate_elements)
         .expect("`size_immediate_elements` is outside the bounds of `usize` (!?)");
     if size_immediate_elements_usize > immediates_data.len() - values_offset_usize {
-        return Err(ImmediateUploadError::ValueEndIndexOverrun {
-            start_index: values_offset,
-            count: size_immediate_elements,
-            data_size: immediates_data.len(),
-        }
-        .into());
+        panic!(
+            "Internal error: `set_immediates` values offset + count ({} + {}) \
+            overruns the immediates data length ({})",
+            values_offset,
+            size_immediate_elements,
+            immediates_data.len()
+        );
     }
 
     // NOTE: These additions are will not overflow, because we've validated the range above.
@@ -270,10 +292,13 @@ where
     f(data_slice);
 
     unsafe {
-        state
-            .base
-            .raw_encoder
-            .set_immediates(pipeline_layout.raw(), offset, data_slice)
+        state.base.raw_encoder.set_immediates(
+            pipeline_layout
+                .raw()
+                .expect("Pipeline layout should be valid at this point"),
+            offset,
+            data_slice,
+        )
     }
     Ok(())
 }

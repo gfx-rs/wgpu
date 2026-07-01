@@ -57,12 +57,18 @@ async fn clip_distances(ctx: TestingContext) {
             cache: None,
         });
 
+    // Deliberately non-square so a width/height swap in the copy or the
+    // readback index math is caught. `WIDTH` is a multiple of
+    // `COPY_BYTES_PER_ROW_ALIGNMENT` so `bytes_per_row` stays aligned.
+    const WIDTH: u32 = 256;
+    const HEIGHT: u32 = 192;
+
     // Create render target
     let render_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Render Texture"),
         size: wgpu::Extent3d {
-            width: 256,
-            height: 256,
+            width: WIDTH,
+            height: HEIGHT,
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
@@ -106,7 +112,7 @@ async fn clip_distances(ctx: TestingContext) {
     // Read texture data
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: 256 * 256,
+        size: (WIDTH * HEIGHT) as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
@@ -121,13 +127,13 @@ async fn clip_distances(ctx: TestingContext) {
             buffer: &readback_buffer,
             layout: wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(256),
+                bytes_per_row: Some(WIDTH),
                 rows_per_image: None,
             },
         },
         wgpu::Extent3d {
-            width: 256,
-            height: 256,
+            width: WIDTH,
+            height: HEIGHT,
             depth_or_array_layers: 1,
         },
     );
@@ -139,11 +145,23 @@ async fn clip_distances(ctx: TestingContext) {
         .unwrap();
     let data: &[u8] = &slice.get_mapped_range().unwrap();
 
-    // We should have filled the upper sector of the texture. Verify that this is the case.
-    assert_eq!(data[128 + 64 * 256], 0xFF);
-    assert_eq!(data[64 + 128 * 256], 0x00);
-    assert_eq!(data[192 + 128 * 256], 0x00);
-    assert_eq!(data[128 + 192 * 256], 0x00);
+    // The shader fills the upper wedge of the framebuffer (`y_ndc >= |x_ndc|`).
+    // Sample one point inside the wedge and three outside it. The points are
+    // deliberately off-axis and use a non-square stride (`x + y * WIDTH`) so a
+    // width/height confusion would read the wrong texel.
+    let texel = |x: u32, y: u32| data[(x + y * WIDTH) as usize];
+    assert_eq!(
+        texel(144, 48),
+        0xFF,
+        "inside wedge (upper, right of center)"
+    );
+    assert_eq!(texel(32, 96), 0x00, "outside wedge (far left, middle row)");
+    assert_eq!(
+        texel(224, 96),
+        0x00,
+        "outside wedge (far right, middle row)"
+    );
+    assert_eq!(texel(128, 160), 0x00, "outside wedge (bottom center)");
 }
 
 const SHADER_SRC: &str = "

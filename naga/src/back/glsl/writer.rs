@@ -1,6 +1,7 @@
 use super::*;
 
 /// Writer responsible for all code generation.
+#[expect(missing_debug_implementations, reason = "would be way too verbose?")]
 pub struct Writer<'a, W> {
     // Inputs
     /// The module being written.

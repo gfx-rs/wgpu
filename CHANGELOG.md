@@ -112,6 +112,37 @@ Zero-size buffer bindings are still not permitted. `BufferBinding` now implement
 
 By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
+#### Surface color space selection (HDR output)
+
+Surfaces can now be configured with an explicit color space, enabling HDR and wide-gamut output where the platform supports it. `SurfaceConfiguration` has a new `color_space` field, and `SurfaceCapabilities` reports the supported color spaces for every supported format in a new `format_capabilities` field ([#2920](https://github.com/gfx-rs/wgpu/issues/2920)). `SurfaceColorSpace::is_hdr()` classifies a color space (the extended-range and PQ/HLG spaces are HDR) so you can branch after picking one.
+
+The new `SurfaceColorSpace::Auto` default reproduces wgpu's historical behavior (extended linear scRGB for `Rgba16Float` where supported, sRGB otherwise; never a wide-gamut or HDR color space), so to migrate, add the field:
+
+```diff
+  let config = wgpu::SurfaceConfiguration {
+      usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+      format: surface_format,
++     color_space: wgpu::SurfaceColorSpace::Auto,
+      ..
+  };
+```
+
+Support by backend:
+
+- **Vulkan**: reports and honors `SurfaceColorSpace::Bt2100Pq` (HDR10: BT.2020 + ST 2084 PQ), `SurfaceColorSpace::Bt2100Hlg` (BT.2100 HLG), `SurfaceColorSpace::DisplayP3`, `SurfaceColorSpace::ExtendedSrgb` (extended-range nonlinear sRGB, via `VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT`), `SurfaceColorSpace::ExtendedSrgbLinear` (scRGB), and `SurfaceColorSpace::Srgb`, as exposed by the driver via `VK_EXT_swapchain_colorspace`.
+- **DX12**: reports and honors `Bt2100Pq` (HDR10) on `Rgb10a2Unorm`, applied with `IDXGISwapChain3::SetColorSpace1`; `Rgba16Float` keeps its scRGB (`ExtendedSrgbLinear`) interpretation. These are advertised regardless of whether the display is currently in HDR mode — Windows always composites in scRGB and tone-maps as needed, so the live HDR state is a query concern (`Surface::display_hdr_info`), not a configuration gate. `ExtendedSrgb` is not supported, as DXGI has no encoded-extended-sRGB swapchain color space (only G10 linear scRGB).
+- **Metal**: reports and honors `DisplayP3` on every format, `ExtendedSrgb` (extended-range nonlinear sRGB, via `kCGColorSpaceExtendedSRGB`), `ExtendedDisplayP3` (extended-range nonlinear Display-P3, via `kCGColorSpaceExtendedDisplayP3`), and `ExtendedSrgbLinear` (EDR) on `Rgba16Float`, and `Bt2100Pq`/`Bt2100Hlg` on `Rgba16Float`/`Rgb10a2Unorm` (macOS 11+/iOS 14+), by setting the `CAMetalLayer` color space.
+- **Browser WebGPU**: reports and honors `DisplayP3` (canvas `colorSpace`), `ExtendedSrgb` (sRGB-encoded extended range), and `ExtendedDisplayP3` (Display-P3-encoded extended range, via the `"display-p3"` canvas plus extended tone mapping) on `Rgba16Float`, via the W3C HDR-canvas `toneMapping: { mode: "extended" }` (Chrome 129+); these extended spaces are advertised whenever the fp16 canvas is configurable, independent of the display's current dynamic range (which `Surface::display_hdr_info` reports separately). `ExtendedSrgbLinear` is native-only and not advertised here, since WebGPU exposes no linear-transfer canvas color space. `Bt2100Pq`/`Bt2100Hlg` are unsupported (browsers expose no PQ/HLG canvas signaling). `Auto` keeps the browser defaults even for fp16, matching historical behavior. `Rgba16Float` is only advertised in `get_capabilities` when the browser can actually configure an fp16 canvas (probed empirically, so it self-corrects when e.g. Firefox adds support), and a `configure` that the browser rejects or that requests an unsupported color space reports the surface as lost from `get_current_texture` instead of panicking (there is no `catch_unwind` on wasm).
+- **GLES**: sRGB only.
+
+Selecting a color space a surface doesn't support fails validation with `ConfigureSurfaceError::UnsupportedColorSpace`. Formats that a driver exposes exclusively in explicit-opt-in color spaces (e.g. HDR10-only) are listed in `format_capabilities` but excluded from the legacy `formats` list.
+
+For `wgpu-hal` users: `hal::SurfaceConfiguration` gained a `color_space` field (never `Auto`), and `hal::SurfaceCapabilities::formats` is now `Vec<SurfaceFormatCapabilities>` instead of `Vec<TextureFormat>`.
+
+A new standalone example, `examples/standalone/03_hdr_surface`, prints a surface's (format, color space) capabilities and renders an HDR luminance test pattern through the most capable color space available.
+
+By @stuartparmenter in [#9658](https://github.com/gfx-rs/wgpu/pull/9658).
+
 ### Added/New Features
 
 #### General
@@ -136,12 +167,15 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Added `InstanceFlags::STRICT_WEBGPU_COMPLIANCE` flag, which restricts the available feature set to the one defined by the WebGPU specification. By @teoxoy in [#9586](https://github.com/gfx-rs/wgpu/pull/9586).
 - Implemented `QuerySet::destroy` by @sagudev in [#9671](https://github.com/gfx-rs/wgpu/pull/9671)
 - Implemented query set initialization tracking, ensuring unwritten query slots resolve to 0; avoiding UB. By @teoxoy in [#9664](https://github.com/gfx-rs/wgpu/pull/9664).
+- Add `Surface::display_hdr_info`, a read-only snapshot of the backing display's HDR characteristics (luminance in nits, EDR headroom, primaries, bit depth, and a coarse dynamic-range/gamut bucket) for tone-mapping. `DisplayHdrInfo::tone_map_headroom()` folds it into the one multiplier most tone-mappers want; whether to request an HDR surface at all is a separate, capability question answered by `SurfaceCapabilities`, not by this live value. Populated on DX12 and Vulkan on Windows, Metal on macOS, and the web. By @stuartparmenter.
 
 #### Metal
 
 - Add `metal::Queue::add_wait_event` / `add_signal_event` (with `remove_*` companions) to stage `MTLSharedEvent` waits/signals on the next `Queue::submit`, for GPU-side interop with foreign APIs. Waits run on an internal CB committed before user CBs. By @AdrianEddy in [#9483](https://github.com/gfx-rs/wgpu/pull/9483).
 - Unconditionally enable `Features::CLIP_DISTANCES`. By @ErichDonGubler in [#9270](https://github.com/gfx-rs/wgpu/pull/9270).
 - Added full support for mesh shaders, including in WGSL shaders. By @inner-daemons in [#8739](https://github.com/gfx-rs/wgpu/pull/8739).
+- Fixed structure field names incorrectly ignoring reserved keywords in the Metal (MSL) backend. By @39ali [#9379](https://github.com/gfx-rs/wgpu/pull/9379).
+- Added support for bindless storage buffers (buffer binding arrays) on Metal. By @mate-h in [#9081](https://github.com/gfx-rs/wgpu/pull/9081).
 - Added `DropCallback`s to Metal textures. By @jerzywilczek in [#9634](https://github.com/gfx-rs/wgpu/pull/9634).
 
 #### GLES
@@ -171,6 +205,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - spirv-out ray tracing pipelines. By @Vecvec in [#9085](https://github.com/gfx-rs/wgpu/pull/9085).
 - Add `spirv-out` ray tracing pipelines. By @Vecvec in [#9085](https://github.com/gfx-rs/wgpu/pull/9085).
 - Add `naga::front::wgsl::ParseError::notes()`. By @kwillemsen in [#9572](https://github.com/gfx-rs/wgpu/pull/9572).
+- Add MSL support for cooperative matrix multiply-add with lower-precision A/B operands and a higher-precision accumulator/result, such as `coopMultiplyAdd(f16, f16, f32) -> f32`. By @seddonm1 in [#9629](https://github.com/gfx-rs/wgpu/pull/9629).
 
 ### Changes
 
@@ -193,6 +228,9 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
   - `TextureDescriptor::map_label_and_view_formats` and `SurfaceConfiguration::map_view_formats` now take `FnOnce(&V)` instead of `FnOnce(V)`.
   - All `map_label` helpers except `CreateShaderModuleDescriptorPassthrough` now have the signature `map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K)` (previously the lifetimes were implicit and thus could differ).
 - Relaxed locking within `wgpu-core` to enable queue submission processing on one thread to proceed while another thread is blocked in a device poll. To facilitate this, `wgpu-hal` fences are now internally synchronized. By @Vecvec in [#9475](https://github.com/gfx-rs/wgpu/pull/9475).
+- `AdapterInfo::transient_saves_memory` now is `Option<bool>` instead of `bool`. It is `None` on web and `Some` on native platforms. By @beicause in [#9568](https://github.com/gfx-rs/wgpu/pull/9568).
+- BREAKING: `TextureUsages::TRANSIENT` is renamed to `TextureUsages::TRANSIENT_ATTACHMENT` and brought in line with WebGPU spec. Transient textures may now only be used with `LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and `StoreOp::Discard`. By @beicause in [#9568](https://github.com/gfx-rs/wgpu/pull/9568).
+- Implement `Debug` for `TextureBlitter` and its builder. By @euclio in [#9370](https://github.com/gfx-rs/wgpu/pull/9730).
 
 #### Validation
 
@@ -207,6 +245,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 #### naga
 
 - Switched from using an `intersector` to using an `intersection_query` on metal so AABBs and non-opaque triangles can be handled. By @Vecvec in [#9304](https://github.com/gfx-rs/wgpu/pull/9304).
+- Guard against invalid calls to ray query functions on Metal. By @Vecvec in [#9442](https://github.com/gfx-rs/wgpu/pull/9442).
 
 ### Bug Fixes
 
@@ -219,6 +258,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Increase recursion limits to please `-Znext-solver`. By @nazar-pc in [#9609](https://github.com/gfx-rs/wgpu/pull/9609)
 - Stencil clear and reference values are now truncated to 8 bits. By @beicause in [#9607](https://github.com/gfx-rs/wgpu/pull/9607).
 - Fixed missing initialization of other aspects when writing to a single aspect of a multi-aspect texture. By @andyleiserson in [#9626](https://github.com/gfx-rs/wgpu/pull/9626).
+- Fix process abort when a `SurfaceTexture` is dropped during panic unwind between `get_current_texture` and `Queue::present`. The acquired texture reference is now released without calling HAL discard. By @hack3rmann in [#9678](https://github.com/gfx-rs/wgpu/pull/9678).
 
 #### naga
 
@@ -234,6 +274,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - \[hlsl\] more `matCx2` fixes. By @teoxoy in [#9507](https://github.com/gfx-rs/wgpu/pull/9507).
 - Fix `packSnorm2x16` and `packUnorm2x16` swap in the GLSL frontend. By @treylutton in [#9675](https://github.com/gfx-rs/wgpu/pull/9675).
 - Fixed WGSL loop-local `var` declarations without explicit initializers so they are zero-initialized each iteration. By @ruihe774 in [#9592](https://github.com/gfx-rs/wgpu/pull/9592).
+- Fixed logic errors in the ray query spirv writer. By @Vecvec in [#9731](https://github.com/gfx-rs/wgpu/pull/9731).
 
 #### Vulkan
 
@@ -243,6 +284,8 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Fixed vkAcquireNextImage fence being awaited on non-Windows platforms causing frametime spikes on nvidia drivers. By @cohaereo in [#9486](https://github.com/gfx-rs/wgpu/pull/9486).
 - Fixed alignment and `MatrixStride` for mat2x2 in SPIR-V uniform blocks. By @39ali [#9369](https://github.com/gfx-rs/wgpu/pull/9369).
 - Fixed loading of `libvulkan.so` on OpenHarmony (`target_env = "ohos"`). By @jschwe in [#9649](https://github.com/gfx-rs/wgpu/pull/9649).
+- Fixed `VUID-RuntimeSpirv-vulkanMemoryModel-06265` validation errors by enabling `vulkanMemoryModelDeviceScope` whenever the Vulkan memory model is enabled, since the SPIR-V backend emits storage atomics with `Device` scope. By @francisdb in [#9741](https://github.com/gfx-rs/wgpu/pull/9741).
+- Fixed some cases where out-of-memory errors were reported incorrectly. By @andyleiserson in [#9643](https://github.com/gfx-rs/wgpu/pull/9643) and [#9747](https://github.com/gfx-rs/wgpu/pull/9747).
 - Fixed signed integer `%` (and `%=`) returning the wrong result for negative operands in the SPIR-V backend, e.g. `-1 % 768` yielding `255` instead of `-1` on NVIDIA. `OpSRem` is poison for negative operands in the Vulkan SPIR-V environment without `VK_KHR_maintenance8`, even though WGSL defines `%` for these operands, so signed remainder is now always lowered as `a - b * (a / b)`. By @mstampfli in [#9674](https://github.com/gfx-rs/wgpu/pull/9674).
 
 #### DX12
@@ -252,6 +295,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Fixed stencil values read with `textureLoad` appearing in G instead of R. By @andyleiserson in [#9520](https://github.com/gfx-rs/wgpu/pull/9520).
 - Fixed some cases where the `textureNum{Layers,Levels,Samples}` functions returned incorrect results. By @andyleiserson in [#9542](https://github.com/gfx-rs/wgpu/pull/9542).
 - Fixed `map_texture_format_for_copy` panicking on `(planar_format, single_plane_aspect)` during buffer<->texture transfers, and `TextureView::subresource_index` previously being hard-coded to plane 0. By @AdrianEddy in [#9551](https://github.com/gfx-rs/wgpu/pull/9551).
+- Fixed partially-bound texture and storage-texture binding arrays (`PARTIALLY_BOUND_BINDING_ARRAY`) reading garbage in `create_bind_group`. By @holg in [#9653](https://github.com/gfx-rs/wgpu/pull/9653).
 
 #### Metal
 
@@ -263,11 +307,20 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Fixed structure field names incorrectly ignoring reserved keywords in the Metal (MSL) backend. By @39ali [#9379](https://github.com/gfx-rs/wgpu/pull/9379).
 - Restore the `Queue::as_raw` method, which was removed without good reason in v29. It now returns `&ProtocolObject<dyn MTLCommandQueue>`. By @andyleiserson in [#9560](https://github.com/gfx-rs/wgpu/pull/9560).
 
+#### WebGPU
+
+- Expose the underlying JS handles of WebGPU-backed resources via new `as_webgpu` accessors on `Texture`, `TextureView`, `Buffer`, `Queue`, and `Device`, returning `Option<&wgpu::webgpu::Gpu*>`. This is the WebGPU counterpart of `as_hal` (which returns `None` on the WebGPU backend, since WebGPU is not a `wgpu_hal` API). The vendored handle types are re-exported under the new `wgpu::webgpu` module. By @AdrianEddy in [#9530](https://github.com/gfx-rs/wgpu/pull/9530)
+- Add `Device::create_texture_from_webgpu_handle(texture, desc, drop_callback)` for wrapping a foreign `webgpu::GpuTexture` (e.g. a canvas `getCurrentTexture()` result) as a `wgpu::Texture` without copy. Use the `drop_callback` to decide if you want to call `GpuTexture.destroy()` when wgpu is done with the texture. By @AdrianEddy in [#9530](https://github.com/gfx-rs/wgpu/pull/9530)
+
 ### Dependency Updates
 
 #### WebGPU
 
 - Upgrade vendored `wasm-bindgen` WebGPU bindings to 0.2.115 and adapt the `webgpu` backend to the new API. `ExternalImageSource::VideoFrame` no longer requires `--cfg=web_sys_unstable_apis`, as `web_sys::VideoFrame` is now stable. The GLES backend still requires the cfg to upload `VideoFrame`s, since `glow` still needs to adapt. By @evilpie in [#9090](https://github.com/gfx-rs/wgpu/pull/9090).
+
+### Testing/Internal
+
+- We now use `tombi` as our TOML formatter instead of `taplo`, which has been unmaintained for some time. If you currently use `taplo` as part of your workflow, we recommend you migrate, or change your editor settings while working with wgpu.
 
 ## v29.0.1 (2026-03-26)
 

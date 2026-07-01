@@ -700,6 +700,7 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
                     &wgpu::SurfaceConfiguration {
                         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                         format,
+                        color_space: wgpu::SurfaceColorSpace::Auto,
                         width: params.width,
                         height: params.height,
                         desired_maximum_frame_latency: 2,

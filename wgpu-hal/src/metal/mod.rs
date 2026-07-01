@@ -88,6 +88,7 @@ impl crate::Api for Api {
     type PipelineLayout = PipelineLayout;
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
+    type RayTracingPipeline = RayTracingPipeline;
     type ComputePipeline = ComputePipeline;
     type PipelineCache = PipelineCache;
 
@@ -111,6 +112,7 @@ crate::impl_dyn_resource!(
     QuerySet,
     Queue,
     RenderPipeline,
+    RayTracingPipeline,
     Sampler,
     ShaderModule,
     Surface,
@@ -134,6 +136,7 @@ impl OsFeatures {
     }
 }
 
+#[derive(Debug)]
 pub struct Instance {}
 
 impl Instance {
@@ -384,6 +387,7 @@ impl Default for Settings {
     }
 }
 
+#[derive(Debug)]
 struct AdapterShared {
     device: Retained<ProtocolObject<dyn MTLDevice>>,
     disabilities: PrivateDisabilities,
@@ -432,7 +436,7 @@ impl AdapterShared {
                     // for more information.
                     subgroup_min_size: 4,
                     subgroup_max_size: 64,
-                    transient_saves_memory: shared.private_caps.supports_memoryless_storage,
+                    transient_saves_memory: Some(shared.private_caps.supports_memoryless_storage),
                     ..wgt::AdapterInfo::new(shared.private_caps.device_type(), wgt::Backend::Metal)
                 },
                 features,
@@ -443,6 +447,7 @@ impl AdapterShared {
     }
 }
 
+#[derive(Debug)]
 pub struct Adapter {
     shared: Arc<AdapterShared>,
 }
@@ -450,6 +455,7 @@ pub struct Adapter {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Adapter: Send, Sync);
 
+#[derive(Debug)]
 pub struct Queue {
     shared: Arc<QueueShared>,
     timestamp_period: f32,
@@ -617,6 +623,7 @@ pub struct QueueShared {
     relay: OnceLock<Relay>,
 }
 
+#[derive(Debug)]
 pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
@@ -624,6 +631,7 @@ pub struct Device {
     limits: wgt::Limits,
 }
 
+#[derive(Debug)]
 pub struct Surface {
     render_layer: Mutex<Retained<CAMetalLayer>>,
     swapchain_format: RwLock<Option<wgt::TextureFormat>>,
@@ -1012,6 +1020,7 @@ pub struct PipelineLayout {
     immediates_infos: MultiStageData<Option<ImmediateDataInfo>>,
     total_immediates: u32,
     per_stage_map: MultiStageResources,
+    binding_array_length_map: FastHashMap<naga::ResourceBinding, u32>,
 }
 
 impl crate::DynPipelineLayout for PipelineLayout {}
@@ -1033,6 +1042,16 @@ enum BufferLikeResource {
         /// [`Storage`]: wgt::BufferBindingType::Storage
         binding_size: Option<wgt::BufferSize>,
 
+        binding_location: u32,
+    },
+
+    /// Bindless storage `binding_array`: one argument [`MTLBuffer`] (pointer table) plus element
+    /// byte sizes `(array index, size)` for `_buffer_sizes` / runtime-sized arrays.
+    ///
+    /// [`MTLBuffer`]: objc2_metal::MTLBuffer
+    StorageBindingArray {
+        ptr: NonNull<ProtocolObject<dyn MTLBuffer>>,
+        array_element_sizes: Vec<(u32, wgt::BufferSize)>,
         binding_location: u32,
     },
     AccelerationStructure(NonNull<ProtocolObject<dyn MTLAccelerationStructure>>),
@@ -1108,7 +1127,7 @@ struct PipelineStageInfo {
     /// Bindings of all WGSL `storage` globals that contain runtime-sized arrays.
     ///
     /// See `device::CompiledShader::sized_bindings` for more details.
-    sized_bindings: Vec<naga::ResourceBinding>,
+    sized_bindings: Vec<(naga::ResourceBinding, u32)>,
 
     /// Info on all bound vertex buffers.
     vertex_buffer_mappings: Vec<naga::back::msl::VertexBufferMapping>,
@@ -1205,6 +1224,11 @@ static_assertions::assert_impl_all!(ComputePipeline: Send, Sync);
 
 impl crate::DynComputePipeline for ComputePipeline {}
 
+#[derive(Debug)]
+pub struct RayTracingPipeline {}
+
+impl crate::DynRayTracingPipeline for RayTracingPipeline {}
+
 #[derive(Debug, Clone)]
 pub struct QuerySet {
     raw_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
@@ -1275,6 +1299,8 @@ struct Temp {
     binding_sizes: Vec<u32>,
 }
 
+// Any state in this struct that may be dirty after an abandoned encoding must
+// be reset in `discard_encoding` for possible encoder reuse.
 struct CommandState {
     blit: Option<Retained<ProtocolObject<dyn MTLBlitCommandEncoder>>>,
     acceleration_structure_builder:
@@ -1304,7 +1330,7 @@ struct CommandState {
     /// See `device::CompiledShader::sized_bindings` for more details.
     ///
     /// [`ResourceBinding`]: naga::ResourceBinding
-    storage_buffer_length_map: FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
+    storage_buffer_length_map: FastHashMap<(naga::ResourceBinding, u32), wgt::BufferSize>,
 
     vertex_buffer_size_map: FastHashMap<u32, wgt::BufferSize>,
 
@@ -1314,6 +1340,8 @@ struct CommandState {
     pending_timer_queries: Vec<(QuerySet, u32)>,
 }
 
+// Any state in this struct that may be dirty after an abandoned encoding must
+// be reset in `discard_encoding` for possible encoder reuse.
 pub struct CommandEncoder {
     shared: Arc<AdapterShared>,
     queue_shared: Arc<QueueShared>,

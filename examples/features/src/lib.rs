@@ -42,7 +42,7 @@ pub mod water;
 #[cfg(test)]
 fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     #[cfg_attr(
-        target_arch = "wasm32",
+        wasm_test,
         expect(unused_mut, reason = "non-wasm32 needs this mutable")
     )]
     let mut test_list = vec![
@@ -81,7 +81,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
         water::TEST,
     ];
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(wasm_test))]
     {
         test_list.push(big_compute_buffers::tests::TWO_BUFFERS);
         test_list.push(cooperative_matrix::tests::COOPERATIVE_MATRIX);

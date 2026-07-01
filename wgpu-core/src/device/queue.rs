@@ -34,9 +34,10 @@ use crate::{
     ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError},
     resource::{
         Blas, BlasCompactState, Buffer, BufferAccessError, BufferMapState, DestroyedBuffer,
-        DestroyedResourceError, DestroyedTexture, Fallible, FlushedStagingBuffer,
-        InvalidResourceError, Labeled, ParentDevice, ResourceErrorIdent, StagingBuffer, Texture,
-        TextureInner, Trackable, TrackingData,
+        DestroyedQuerySet, DestroyedResourceError, DestroyedTexture, Fallible,
+        FlushedStagingBuffer, InvalidOrDestroyedResourceError, InvalidResourceError, Labeled,
+        ParentDevice, ResourceErrorIdent, StagingBuffer, Texture, TextureInner, Trackable,
+        TrackingData,
     },
     resource_log,
     scratch::ScratchBuffer,
@@ -198,8 +199,8 @@ impl Queue {
         // Emit the transition barriers to PRESENT.
         {
             let raw_texture = texture
-                .try_raw(&submission.snatch_guard)
-                .map_err(|_| DeviceError::Lost)?;
+                .raw(&submission.snatch_guard)
+                .ok_or(DeviceError::Lost)?;
             let barriers: Vec<hal::TextureBarrier<'_, dyn hal::DynTexture>> = pending
                 .into_iter()
                 .map(|pt| pt.into_hal(raw_texture))
@@ -331,6 +332,7 @@ pub enum TempResource {
     ScratchBuffer(ScratchBuffer),
     DestroyedBuffer(DestroyedBuffer),
     DestroyedTexture(DestroyedTexture),
+    DestroyedQuerySet(DestroyedQuerySet),
 }
 
 /// A series of raw [`CommandBuffer`]s that have been submitted to a
@@ -531,6 +533,15 @@ pub enum QueueWriteError {
     InvalidResource(#[from] InvalidResourceError),
 }
 
+impl From<InvalidOrDestroyedResourceError> for QueueWriteError {
+    fn from(e: InvalidOrDestroyedResourceError) -> Self {
+        match e {
+            InvalidOrDestroyedResourceError::InvalidResource(e) => Self::InvalidResource(e),
+            InvalidOrDestroyedResourceError::DestroyedResource(e) => Self::DestroyedResource(e),
+        }
+    }
+}
+
 impl WebGpuError for QueueWriteError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
@@ -558,6 +569,15 @@ pub enum QueueSubmitError {
     CommandEncoder(#[from] CommandEncoderError),
     #[error(transparent)]
     ValidateAsActionsError(#[from] crate::ray_tracing::ValidateAsActionsError),
+}
+
+impl From<InvalidOrDestroyedResourceError> for QueueSubmitError {
+    fn from(e: InvalidOrDestroyedResourceError) -> Self {
+        match e {
+            InvalidOrDestroyedResourceError::InvalidResource(e) => Self::InvalidResource(e),
+            InvalidOrDestroyedResourceError::DestroyedResource(e) => Self::DestroyedResource(e),
+        }
+    }
 }
 
 impl WebGpuError for QueueSubmitError {
@@ -892,7 +912,7 @@ impl Queue {
 
         let snatch_guard = self.device.snatchable_lock.read();
 
-        let dst_raw = dst.try_raw(&snatch_guard)?;
+        let dst_raw = dst.try_inner(&snatch_guard)?.raw();
 
         // This must happen after parameter validation (so that errors are reported
         // as required by the spec), but before any side effects.
@@ -1064,7 +1084,7 @@ impl Queue {
     pub fn copy_external_image_to_texture(
         &self,
         source: &wgt::CopyExternalImageSourceInfo,
-        destination: wgt::CopyExternalImageDestInfo<Fallible<Texture>>,
+        destination: wgt::CopyExternalImageDestInfo<Arc<Texture>>,
         size: wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
         use crate::conv;
@@ -1092,7 +1112,7 @@ impl Queue {
         let src_width = source.source.width();
         let src_height = source.source.height();
 
-        let dst = destination.texture.get()?;
+        let dst = destination.texture;
         let premultiplied_alpha = destination.premultiplied_alpha;
         let destination = wgt::TexelCopyTextureInfo {
             texture: (),
@@ -1257,6 +1277,8 @@ impl Queue {
                 iter::once(regions),
             );
         }
+
+        pending_writes.insert_texture(&dst);
 
         Ok(())
     }
@@ -1643,7 +1665,10 @@ impl Queue {
                 // encoded. If it was destroyed after that, then it was transferred
                 // to `pending_writes.temp_resources` at the time of destruction, so
                 // we are still okay to use it.
-                Err(DestroyedResourceError(_)) => {}
+                Err(InvalidOrDestroyedResourceError::DestroyedResource(_)) => {}
+                Err(InvalidOrDestroyedResourceError::InvalidResource(_)) => {
+                    unreachable!()
+                }
             }
         }
 
@@ -1677,7 +1702,7 @@ impl Queue {
             let mut submit_surface_textures =
                 SmallVec::<[&dyn hal::DynSurfaceTexture; 2]>::with_capacity(surface_textures.len());
             for texture in surface_textures.values() {
-                let raw = match texture.inner.get(&snatch_guard) {
+                let raw = match texture.inner.get(&snatch_guard).maybe_valid() {
                     Some(TextureInner::Surface { raw, .. }) => raw.as_ref(),
                     _ => unreachable!(),
                 };
@@ -1895,7 +1920,7 @@ impl Global {
         size: &wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
         let queue = self.hub.queues.get(queue_id);
-        let texture = self.hub.textures.get(destination.texture).get()?;
+        let texture = self.hub.textures.get(destination.texture);
         let destination = wgt::TexelCopyTextureInfo {
             texture,
             mip_level: destination.mip_level,
@@ -2073,7 +2098,7 @@ fn validate_command_buffer(
         }
         {
             profiling::scope!("query sets");
-            for query_set in &cmd_buf_data.trackers.query_sets {
+            for query_set in cmd_buf_data.trackers.query_sets.used_resources() {
                 query_set.try_raw(snatch_guard)?;
             }
         }

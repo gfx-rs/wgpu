@@ -89,6 +89,9 @@ macro_rules! with_limits {
         $macro_name!(max_acceleration_structures_per_shader_stage, Ordering::Less);
 
         $macro_name!(max_multiview_view_count, Ordering::Less);
+
+        $macro_name!(max_ray_dispatch_count, Ordering::Less);
+        $macro_name!(max_ray_recursion_depth, Ordering::Less);
     };
 }
 
@@ -316,6 +319,19 @@ pub struct Limits {
 
     /// The maximum number of views that can be used in multiview rendering
     pub max_multiview_view_count: u32,
+
+    /// The maximum total number (`x*y*z`) of rays able to be dispatched by a trace rays call in a ray
+    /// tracing pass. Requesting more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`]
+    /// is enabled.
+    ///
+    /// Currently only affects wgpu-hal
+    pub max_ray_dispatch_count: u32,
+    /// The maximum number that one can pass into a ray tracing pipeline creation to be the maximum ray
+    /// recursion depth. (the maximum of the max ray recursion depth) Requesting more than 0 during device
+    /// creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`] is enabled.
+    ///
+    /// Currently only affects wgpu-hal
+    pub max_ray_recursion_depth: u32,
 }
 
 impl Default for Limits {
@@ -386,6 +402,8 @@ impl Limits {
     ///     max_tlas_instance_count: 0,
     ///     max_acceleration_structures_per_shader_stage: 0,
     ///     max_multiview_view_count: 0,
+    ///     max_ray_dispatch_count: 0,
+    ///     max_ray_recursion_depth: 0,
     /// });
     /// ```
     ///
@@ -451,6 +469,9 @@ impl Limits {
             max_acceleration_structures_per_shader_stage: 0,
 
             max_multiview_view_count: 0,
+
+            max_ray_dispatch_count: 0,
+            max_ray_recursion_depth: 0,
         }
     }
 
@@ -517,6 +538,9 @@ impl Limits {
     ///     max_acceleration_structures_per_shader_stage: 0,
     ///
     ///     max_multiview_view_count: 0,
+    ///
+    ///     max_ray_dispatch_count: 0,
+    ///     max_ray_recursion_depth: 0,
     /// });
     /// ```
     #[must_use]
@@ -599,6 +623,9 @@ impl Limits {
     ///     max_acceleration_structures_per_shader_stage: 0,
     ///
     ///     max_multiview_view_count: 0,
+    ///
+    ///     max_ray_dispatch_count: 0,
+    ///     max_ray_recursion_depth: 0,
     /// });
     /// ```
     #[must_use]
@@ -697,6 +724,8 @@ impl Limits {
             max_acceleration_structures_per_shader_stage: ALLOC_MAX_U32,
 
             max_multiview_view_count: ALLOC_MAX_U32,
+            max_ray_dispatch_count: ALLOC_MAX_U32,
+            max_ray_recursion_depth: ALLOC_MAX_U32,
         }
     }
 
@@ -750,6 +779,17 @@ impl Limits {
             max_blas_primitive_count: other.max_blas_primitive_count,
             max_acceleration_structures_per_shader_stage: other
                 .max_acceleration_structures_per_shader_stage,
+            ..self
+        }
+    }
+
+    /// The minimum guaranteed limits for acceleration structures if you enable [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`]
+    /// These may change in the future (including downwards).
+    #[must_use]
+    pub const fn using_minimum_supported_ray_tracing_pipeline_values(self) -> Self {
+        Self {
+            max_ray_dispatch_count: 1 << 30,
+            max_ray_recursion_depth: 1,
             ..self
         }
     }

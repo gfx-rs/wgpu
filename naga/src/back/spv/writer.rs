@@ -524,7 +524,7 @@ impl Writer {
     ///
     /// If the specified resource is not present in the binding map this will
     /// return an error, unless [`Writer::fake_missing_bindings`] is set.
-    fn resolve_resource_binding(
+    pub(super) fn resolve_resource_binding(
         &self,
         res_binding: &crate::ResourceBinding,
     ) -> Result<BindingInfo, Error> {

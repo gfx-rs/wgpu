@@ -17,3 +17,6 @@ num_cpus.workspace = true
 pico-args.workspace = true
 shell-words.workspace = true
 which.workspace = true
+
+[lints]
+workspace = true

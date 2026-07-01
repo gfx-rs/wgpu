@@ -625,8 +625,9 @@ impl Instance {
             limits.max_buffer_size = limits.max_buffer_size.min(u32::MAX as u64);
             limits.max_uniform_buffer_binding_size =
                 limits.max_uniform_buffer_binding_size.min(u32::MAX as u64);
-            limits.max_storage_buffer_binding_size =
-                limits.max_storage_buffer_binding_size.min(u32::MAX as u64);
+            limits.max_storage_buffer_binding_size = limits
+                .max_storage_buffer_binding_size
+                .min(u32::MAX as u64 & !(wgt::STORAGE_BINDING_SIZE_ALIGNMENT as u64 - 1));
         }
     }
 
@@ -670,6 +671,27 @@ impl Surface {
         let caps = unsafe { adapter.adapter.surface_capabilities(suf) }
             .ok_or(GetSurfaceSupportError::FailedToRetrieveSurfaceCapabilitiesForAdapter)?;
         Ok(caps)
+    }
+
+    /// Returns the HDR / luminance characteristics of the display backing this
+    /// surface on `adapter`.
+    ///
+    /// Falls back to [`wgt::DisplayHdrInfo::default`] (all fields `None`) when the
+    /// surface is not on `adapter`'s backend or the backend reports nothing.
+    pub fn display_hdr_info(&self, adapter: &Adapter) -> wgt::DisplayHdrInfo {
+        self.display_hdr_info_with_raw(&adapter.raw)
+    }
+
+    pub fn display_hdr_info_with_raw(
+        &self,
+        adapter: &hal::DynExposedAdapter,
+    ) -> wgt::DisplayHdrInfo {
+        let backend = adapter.backend();
+        let Some(suf) = self.raw(backend) else {
+            return wgt::DisplayHdrInfo::default();
+        };
+        profiling::scope!("surface_display_hdr_info");
+        unsafe { adapter.adapter.surface_display_hdr_info(suf) }.unwrap_or_default()
     }
 
     pub fn raw(&self, backend: Backend) -> Option<&dyn hal::DynSurface> {
@@ -762,7 +784,7 @@ impl Adapter {
             ),
         );
         allowed_usages.set(
-            wgt::TextureUsages::RENDER_ATTACHMENT | wgt::TextureUsages::TRANSIENT,
+            wgt::TextureUsages::RENDER_ATTACHMENT | wgt::TextureUsages::TRANSIENT_ATTACHMENT,
             caps.intersects(Tfc::COLOR_ATTACHMENT | Tfc::DEPTH_STENCIL_ATTACHMENT),
         );
         allowed_usages.set(

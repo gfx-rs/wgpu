@@ -56,6 +56,11 @@ default-members = [
     "xtask",
 ]
 
+# NOTE: many packages have non-inherited [lints] sections (Cargo does not support combining
+# workspace inheritance with customization) and must be updated separately.
+[workspace.lints.rust]
+missing_debug_implementations = "warn"
+
 [workspace.lints.clippy]
 ref_as_ptr = "warn"
 # NOTE: clippy configuration values (disallowed-types and
@@ -143,7 +148,7 @@ indicatif = "0.18"
 itertools = { version = "0.14" }
 jobserver = "0.1"
 ktx2 = "0.5"
-libc = { version = "0.2.172", default-features = false }
+libc = { version = "0.2.183", default-features = false }
 # See https://github.com/rust-fuzz/libfuzzer/issues/126
 libfuzzer-sys = ">0.4.0,<=0.4.7"
 libloading = "0.8"
@@ -200,6 +205,7 @@ toml = "1.0.0"
 trybuild = "1"
 tracy-client = "0.18"
 thiserror = { version = "2.0.12", default-features = false }
+ureq = { version = "3.2.0", default-features = false }
 unicode-ident = "1.0.5"
 walkdir = "2.3"
 winit = { version = "0.30.8", features = ["android-native-activity"] }
@@ -212,6 +218,10 @@ objc2 = "0.6.3"
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
     "CFCGTypes",
+] }
+objc2-core-graphics = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "CGColorSpace",
 ] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
@@ -260,6 +270,7 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
     "std",
     "objc2-core-foundation",
+    "objc2-core-graphics",
     "CALayer",
     "CAMetalLayer",
     "objc2-metal",
@@ -297,7 +308,6 @@ console_log = "1"
 js-sys = { version = "0.3.85", default-features = false }
 wasm-bindgen = { version = "0.2.108", default-features = false }
 wasm-bindgen-futures = { version = "0.4.58", default-features = false }
-wasm-bindgen-test = "0.3"
 web-sys = { version = "0.3.85", default-features = false }
 web-time = "1.1.0"
 

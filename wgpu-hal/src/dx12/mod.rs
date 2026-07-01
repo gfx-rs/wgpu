@@ -72,6 +72,11 @@ Otherwise, we pass a range corresponding only to the current bind group.
 
 !*/
 
+#![expect(
+    missing_debug_implementations,
+    reason = "TODO: someone developing on Windows add Debug impls where possible"
+)]
+
 mod adapter;
 mod command;
 mod conv;
@@ -150,7 +155,7 @@ struct D3D12Lib {
     lib: DynLib,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum CreateDeviceError {
     GetProcAddress,
     D3D12CreateDevice(windows_core::HRESULT),
@@ -478,6 +483,7 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+    type RayTracingPipeline = RayTracingPipeline;
     type PipelineCache = PipelineCache;
 
     type AccelerationStructure = AccelerationStructure;
@@ -499,6 +505,7 @@ crate::impl_dyn_resource!(
     PipelineLayout,
     QuerySet,
     Queue,
+    RayTracingPipeline,
     RenderPipeline,
     Sampler,
     ShaderModule,
@@ -551,6 +558,7 @@ impl Instance {
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: RwLock::new(None),
             options: self.options.clone(),
+            hdr_source: None,
         }
     }
 
@@ -569,6 +577,7 @@ impl Instance {
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: RwLock::new(None),
             options: self.options.clone(),
+            hdr_source: None,
         }
     }
 
@@ -586,6 +595,7 @@ impl Instance {
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: RwLock::new(None),
             options: self.options.clone(),
+            hdr_source: None,
         }
     }
 }
@@ -628,6 +638,9 @@ pub struct Surface {
     supports_allow_tearing: bool,
     swap_chain: RwLock<Option<SwapChain>>,
     options: wgt::Dx12BackendOptions,
+    /// HDR-info source for HWND-backed targets; `None` for composition /
+    /// SwapChainPanel / surface-handle targets, which have no monitor identity.
+    hdr_source: Option<auxil::dxgi::hdr::DxgiHdrSource>,
 }
 
 unsafe impl Send for Surface {}
@@ -964,6 +977,8 @@ impl PassState {
     }
 }
 
+// Any state in this struct that may be dirty after an abandoned encoding must
+// be reset for reused encoders in `begin_encoding`.
 pub struct CommandEncoder {
     allocator: Direct3D12::ID3D12CommandAllocator,
     device: Direct3D12::ID3D12Device,
@@ -1381,6 +1396,11 @@ unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
 
 #[derive(Debug)]
+pub struct RayTracingPipeline {}
+
+impl crate::DynRayTracingPipeline for RayTracingPipeline {}
+
+#[derive(Debug)]
 pub struct PipelineCache;
 
 impl crate::DynPipelineCache for PipelineCache {}
@@ -1424,6 +1444,24 @@ impl SwapChain {
             }
         } else {
             Ok(true)
+        }
+    }
+}
+
+fn map_surface_color_space(
+    color_space: wgt::SurfaceColorSpace,
+) -> Dxgi::Common::DXGI_COLOR_SPACE_TYPE {
+    use wgt::SurfaceColorSpace as Scs;
+    match color_space {
+        Scs::Srgb => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709,
+        Scs::ExtendedSrgbLinear => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709,
+        Scs::Bt2100Pq => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020,
+        Scs::Auto
+        | Scs::DisplayP3
+        | Scs::Bt2100Hlg
+        | Scs::ExtendedSrgb
+        | Scs::ExtendedDisplayP3 => {
+            unreachable!("`{color_space:?}` is never reported in the DX12 surface capabilities")
         }
     }
 }
@@ -1602,6 +1640,23 @@ impl crate::Surface for Surface {
                 })?
             }
         };
+
+        // Apply the color space unconditionally (even for sRGB) so that
+        // reconfiguring away from HDR10 resets the swapchain's state.
+        //
+        // We deliberately skip `CheckColorSpaceSupport`: a color space reporting as
+        // unsupported is not a failure. Windows composites in scRGB and tone-maps
+        // the color space down to the output, so `SetColorSpace1` still presents
+        // correctly even when the check returns false (as the MS docs note). This
+        // lets an app configure e.g. BT.2100 PQ on an SDR output and let the
+        // compositor map it.
+        let color_space = map_surface_color_space(config.color_space);
+        // SAFETY: `swap_chain` is a live `IDXGISwapChain3`; `color_space` is a
+        // valid `DXGI_COLOR_SPACE_TYPE`.
+        unsafe { swap_chain.SetColorSpace1(color_space) }.map_err(|err| {
+            log::error!("SetColorSpace1 failed: {err}");
+            crate::SurfaceError::Other("IDXGISwapChain3::SetColorSpace1")
+        })?;
 
         match self.target {
             SurfaceTarget::WndHandle(wnd_handle) => {
@@ -1828,7 +1883,7 @@ pub enum ShaderModuleSource {
     HlslPassthrough(HlslPassthroughShader),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FeatureLevel {
     V11_0,
     V11_1,
@@ -1837,7 +1892,7 @@ pub enum FeatureLevel {
     V12_2,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ShaderModel {
     V5_1,
     V6_0,

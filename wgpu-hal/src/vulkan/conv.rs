@@ -158,29 +158,55 @@ impl super::PrivateCapabilities {
     }
 }
 
-pub fn map_vk_surface_formats(sf: vk::SurfaceFormatKHR) -> Option<wgt::TextureFormat> {
+pub fn map_vk_surface_formats(
+    sf: vk::SurfaceFormatKHR,
+) -> Option<(wgt::TextureFormat, wgt::SurfaceColorSpace)> {
     use ash::vk::Format as F;
     use wgt::TextureFormat as Tf;
-    // List we care about pulled from https://vulkan.gpuinfo.org/listsurfaceformats.php.
-    // Device::create_swapchain() hardcodes linear scRGB for fp16, non-linear sRGB otherwise.
-    Some(match sf.color_space {
-        vk::ColorSpaceKHR::SRGB_NONLINEAR => match sf.format {
-            F::B8G8R8A8_UNORM => Tf::Bgra8Unorm,
-            F::B8G8R8A8_SRGB => Tf::Bgra8UnormSrgb,
-            F::R8G8B8A8_SNORM => Tf::Rgba8Snorm,
-            F::R8G8B8A8_UNORM => Tf::Rgba8Unorm,
-            F::R8G8B8A8_SRGB => Tf::Rgba8UnormSrgb,
-            F::R16G16B16A16_SNORM => Tf::Rgba16Snorm,
-            F::R16G16B16A16_UNORM => Tf::Rgba16Unorm,
-            F::A2B10G10R10_UNORM_PACK32 => Tf::Rgb10a2Unorm,
-            _ => return None,
-        },
-        vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT => match sf.format {
-            F::R16G16B16A16_SFLOAT => Tf::Rgba16Float,
-            _ => return None,
-        },
+    // Format list we care about pulled from https://vulkan.gpuinfo.org/listsurfaceformats.php.
+    let format = match sf.format {
+        F::B8G8R8A8_UNORM => Tf::Bgra8Unorm,
+        F::B8G8R8A8_SRGB => Tf::Bgra8UnormSrgb,
+        F::R8G8B8A8_SNORM => Tf::Rgba8Snorm,
+        F::R8G8B8A8_UNORM => Tf::Rgba8Unorm,
+        F::R8G8B8A8_SRGB => Tf::Rgba8UnormSrgb,
+        F::R16G16B16A16_SNORM => Tf::Rgba16Snorm,
+        F::R16G16B16A16_UNORM => Tf::Rgba16Unorm,
+        F::R16G16B16A16_SFLOAT => Tf::Rgba16Float,
+        F::A2B10G10R10_UNORM_PACK32 => Tf::Rgb10a2Unorm,
+        _ => return None,
+    };
+    let color_space = map_vk_color_space(sf.color_space)?;
+    Some((format, color_space))
+}
+
+pub fn map_vk_color_space(color_space: vk::ColorSpaceKHR) -> Option<wgt::SurfaceColorSpace> {
+    use wgt::SurfaceColorSpace as Scs;
+    Some(match color_space {
+        vk::ColorSpaceKHR::SRGB_NONLINEAR => Scs::Srgb,
+        vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT => Scs::ExtendedSrgbLinear,
+        vk::ColorSpaceKHR::EXTENDED_SRGB_NONLINEAR_EXT => Scs::ExtendedSrgb,
+        vk::ColorSpaceKHR::DISPLAY_P3_NONLINEAR_EXT => Scs::DisplayP3,
+        vk::ColorSpaceKHR::HDR10_ST2084_EXT => Scs::Bt2100Pq,
+        vk::ColorSpaceKHR::HDR10_HLG_EXT => Scs::Bt2100Hlg,
         _ => return None,
     })
+}
+
+pub fn map_surface_color_space(color_space: wgt::SurfaceColorSpace) -> vk::ColorSpaceKHR {
+    use wgt::SurfaceColorSpace as Scs;
+    match color_space {
+        Scs::Auto => unreachable!("wgpu-core resolves `Auto` before configuring the surface"),
+        Scs::Srgb => vk::ColorSpaceKHR::SRGB_NONLINEAR,
+        Scs::ExtendedSrgbLinear => vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT,
+        Scs::ExtendedSrgb => vk::ColorSpaceKHR::EXTENDED_SRGB_NONLINEAR_EXT,
+        Scs::DisplayP3 => vk::ColorSpaceKHR::DISPLAY_P3_NONLINEAR_EXT,
+        Scs::Bt2100Pq => vk::ColorSpaceKHR::HDR10_ST2084_EXT,
+        Scs::Bt2100Hlg => vk::ColorSpaceKHR::HDR10_HLG_EXT,
+        Scs::ExtendedDisplayP3 => {
+            unreachable!("`ExtendedDisplayP3` is never reported in the Vulkan surface capabilities")
+        }
+    }
 }
 
 impl crate::Attachment<'_, super::TextureView> {
@@ -567,6 +593,10 @@ pub fn map_buffer_usage(usage: wgt::BufferUses) -> vk::BufferUsageFlags {
     if usage.intersects(wgt::BufferUses::ACCELERATION_STRUCTURE_QUERY) {
         flags |= vk::BufferUsageFlags::TRANSFER_DST;
     }
+    if usage.intersects(wgt::BufferUses::RAY_TRACING_PIPELINE_SHADER_DATA) {
+        flags |= vk::BufferUsageFlags::SHADER_BINDING_TABLE_KHR
+            | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+    }
     flags
 }
 
@@ -766,6 +796,18 @@ pub fn map_shader_stage(stage: wgt::ShaderStages) -> vk::ShaderStageFlags {
     }
     if stage.contains(wgt::ShaderStages::MESH) {
         flags |= vk::ShaderStageFlags::MESH_EXT;
+    }
+    if stage.contains(wgt::ShaderStages::RAY_GENERATION) {
+        flags |= vk::ShaderStageFlags::RAYGEN_KHR;
+    }
+    if stage.contains(wgt::ShaderStages::MISS) {
+        flags |= vk::ShaderStageFlags::MISS_KHR;
+    }
+    if stage.contains(wgt::ShaderStages::ANY_HIT) {
+        flags |= vk::ShaderStageFlags::ANY_HIT_KHR;
+    }
+    if stage.contains(wgt::ShaderStages::CLOSEST_HIT) {
+        flags |= vk::ShaderStageFlags::CLOSEST_HIT_KHR;
     }
     flags
 }
@@ -1024,6 +1066,12 @@ pub fn map_acceleration_structure_usage_to_barrier(
             | vk::PipelineStageFlags::COMPUTE_SHADER;
         access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
     }
+    if usage.contains(crate::AccelerationStructureUses::SHADER_INPUT)
+        && features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+    {
+        stages |= vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR;
+        access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
+    }
     if usage.contains(crate::AccelerationStructureUses::COPY_SRC) {
         stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
         access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
@@ -1034,4 +1082,55 @@ pub fn map_acceleration_structure_usage_to_barrier(
     }
 
     (stages, access)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `map_vk_color_space` and `map_surface_color_space` must stay mutually
+    /// inverse so that a color space reported in the surface capabilities is
+    /// exactly what the swapchain is created with.
+    #[test]
+    fn color_space_round_trip() {
+        for vk_color_space in [
+            vk::ColorSpaceKHR::SRGB_NONLINEAR,
+            vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT,
+            vk::ColorSpaceKHR::EXTENDED_SRGB_NONLINEAR_EXT,
+            vk::ColorSpaceKHR::DISPLAY_P3_NONLINEAR_EXT,
+            vk::ColorSpaceKHR::HDR10_ST2084_EXT,
+            vk::ColorSpaceKHR::HDR10_HLG_EXT,
+        ] {
+            let mapped = map_vk_color_space(vk_color_space).unwrap();
+            assert_eq!(map_surface_color_space(mapped), vk_color_space);
+        }
+    }
+
+    #[test]
+    fn unknown_color_spaces_are_dropped() {
+        for vk_color_space in [
+            vk::ColorSpaceKHR::BT2020_LINEAR_EXT,
+            vk::ColorSpaceKHR::DOLBYVISION_EXT,
+            vk::ColorSpaceKHR::PASS_THROUGH_EXT,
+            vk::ColorSpaceKHR::ADOBERGB_NONLINEAR_EXT,
+        ] {
+            assert!(map_vk_color_space(vk_color_space).is_none());
+            assert!(map_vk_surface_formats(vk::SurfaceFormatKHR {
+                format: vk::Format::B8G8R8A8_UNORM,
+                color_space: vk_color_space,
+            })
+            .is_none());
+        }
+    }
+
+    #[test]
+    fn hdr10_surface_format_maps() {
+        let (format, color_space) = map_vk_surface_formats(vk::SurfaceFormatKHR {
+            format: vk::Format::A2B10G10R10_UNORM_PACK32,
+            color_space: vk::ColorSpaceKHR::HDR10_ST2084_EXT,
+        })
+        .unwrap();
+        assert_eq!(format, wgt::TextureFormat::Rgb10a2Unorm);
+        assert_eq!(color_space, wgt::SurfaceColorSpace::Bt2100Pq);
+    }
 }

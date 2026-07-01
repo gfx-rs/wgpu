@@ -273,7 +273,9 @@ impl Buffer {
     ///
     /// This method will return None if:
     /// - The buffer is not from the backend specified by `A`.
-    /// - The buffer is from the `webgpu` or `custom` backend.
+    /// - The buffer is from [`Backend::BrowserWebGpu`].
+    ///   (Use `Buffer::as_webgpu()` instead.)
+    /// - The buffer is from a custom backend.
     /// - The buffer has had [`Self::destroy()`] called on it.
     ///
     /// # Safety
@@ -454,6 +456,13 @@ impl Buffer {
     /// Returns custom implementation of Buffer (if custom backend and is internally T)
     pub fn as_custom<T: custom::BufferInterface>(&self) -> Option<&T> {
         self.inner.as_custom()
+    }
+
+    /// Returns the underlying [`webgpu::GpuBuffer`] handle if this `Buffer`
+    /// is on the WebGPU backend, otherwise `None`.
+    #[cfg(webgpu)]
+    pub fn as_webgpu(&self) -> Option<&webgpu::GpuBuffer> {
+        self.inner.as_webgpu_opt().map(|wb| &wb.inner)
     }
 }
 
