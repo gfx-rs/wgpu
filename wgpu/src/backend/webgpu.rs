@@ -3,7 +3,7 @@
 mod defined_non_null_js_value;
 mod ext_bindings;
 #[allow(clippy::allow_attributes)]
-mod webgpu_sys;
+pub(crate) mod webgpu_sys;
 
 use alloc::{
     boxed::Box,
@@ -84,6 +84,37 @@ impl crate::Error {
         } else {
             panic!("Unexpected error");
         }
+    }
+}
+
+/// A callback invoked when wgpu releases its reference to an externally
+/// owned WebGPU resource (e.g. a `GpuTexture` passed to
+/// [`crate::Device::create_texture_from_webgpu_handle`]).
+///
+/// This is the WebGPU counterpart of [`wgpu_hal::DropCallback`].
+pub type DropCallback = Box<dyn FnOnce() + 'static>;
+
+pub(crate) struct DropGuard {
+    callback: Option<DropCallback>,
+}
+
+impl DropGuard {
+    fn new(callback: Option<DropCallback>) -> Self {
+        Self { callback }
+    }
+}
+
+impl Drop for DropGuard {
+    fn drop(&mut self) {
+        if let Some(cb) = self.callback.take() {
+            cb();
+        }
+    }
+}
+
+impl fmt::Debug for DropGuard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DropGuard").finish()
     }
 }
 
@@ -1293,7 +1324,7 @@ struct WebBufferMapState {
 #[derive(Debug, Clone)]
 pub struct WebBuffer {
     /// The associated GPU buffer.
-    inner: webgpu_sys::GpuBuffer,
+    pub(crate) inner: webgpu_sys::GpuBuffer,
     /// The mapped array buffer and mapped range.
     mapping: Rc<RefCell<WebBufferMapState>>,
     /// Unique identifier for this Buffer.
@@ -1347,6 +1378,17 @@ impl WebBuffer {
 #[derive(Debug, Clone)]
 pub struct WebTexture {
     pub(crate) inner: webgpu_sys::GpuTexture,
+    /// Lifetime management for the underlying `GpuTexture`.
+    ///
+    /// - `None` means wgpu owns the handle: [`Self::destroy`] forwards to
+    ///   `GpuTexture.destroy()`. (This is the case for textures created via
+    ///   `device.createTexture` or `surface.getCurrentTexture`.)
+    /// - `Some(_)` means the handle is externally owned (wrapped via
+    ///   [`WebDevice::wrap_external_texture`]). `destroy()` is a no-op, and
+    ///   the wrapped [`DropCallback`], if any, fires when the last clone of
+    ///   this `WebTexture` is dropped, signalling that wgpu is done with the
+    ///   handle.
+    drop_guard: Option<Rc<DropGuard>>,
     /// Unique identifier for this Texture.
     ident: crate::cmp::Identifier,
 }
@@ -1807,6 +1849,34 @@ impl dispatch::AdapterInterface for WebAdapter {
 impl Drop for WebAdapter {
     fn drop(&mut self) {
         // no-op
+    }
+}
+
+impl WebDevice {
+    /// Wrap a foreign `webgpu_sys::GpuTexture` (e.g. from a canvas `getCurrentTexture()`) as a
+    /// dispatch-level `WebTexture` without calling `device.createTexture(...)`.
+    ///
+    /// The resulting texture is *external*: its `destroy()` is a no-op, since
+    /// the JS handle's lifetime is the caller's responsibility.
+    ///
+    /// If `drop_callback` is `Some`, it fires when the last clone of the
+    /// returned `WebTexture` is dropped, signalling that wgpu is done with
+    /// the handle (e.g. so the caller can call `GpuTexture.destroy()`
+    /// themselves, release a pool slot, etc.).
+    ///
+    /// The caller is responsible for asserting that `texture` was produced by
+    /// the same underlying `GpuDevice` as `self`.
+    pub(crate) fn wrap_external_texture(
+        &self,
+        texture: webgpu_sys::GpuTexture,
+        drop_callback: Option<DropCallback>,
+    ) -> dispatch::DispatchTexture {
+        WebTexture {
+            inner: texture,
+            drop_guard: Some(Rc::new(DropGuard::new(drop_callback))),
+            ident: crate::cmp::Identifier::create(),
+        }
+        .into()
     }
 }
 
@@ -2415,6 +2485,7 @@ impl dispatch::DeviceInterface for WebDevice {
         let texture = self.inner.create_texture(&mapped_desc).unwrap();
         WebTexture {
             inner: texture,
+            drop_guard: None,
             ident: crate::cmp::Identifier::create(),
         }
         .into()
@@ -2943,12 +3014,15 @@ impl dispatch::TextureInterface for WebTexture {
     }
 
     fn destroy(&self) {
-        self.inner.destroy();
+        if self.drop_guard.is_none() {
+            self.inner.destroy();
+        }
     }
 }
 impl Drop for WebTexture {
     fn drop(&mut self) {
-        // no-op
+        // The drop callback for external textures is fired by `DropGuard`'s
+        // own `Drop` impl when the last `Rc<DropGuard>` clone is released.
     }
 }
 
@@ -4282,6 +4356,7 @@ impl dispatch::SurfaceInterface for WebSurface {
 
         let web_surface_texture = WebTexture {
             inner: surface_texture,
+            drop_guard: None,
             ident: crate::cmp::Identifier::create(),
         };
 

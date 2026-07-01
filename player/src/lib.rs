@@ -14,7 +14,7 @@ use wgc::{
     binding_model::BindingResource,
     command::{ArcCommand, ArcReferences, BasePass, Command, PointerReferences},
     device::trace::{self, DataKind, DataLoader},
-    id::{Marker, PointerId},
+    id::PointerId,
 };
 
 #[derive(Debug)]
@@ -85,28 +85,6 @@ impl Default for Player {
             samplers: HashMap::new(),
             blas_s: HashMap::new(),
             tlas_s: HashMap::new(),
-        }
-    }
-}
-
-fn process_result<T: Marker, U>(
-    op: &str,
-    map: &mut HashMap<PointerId<T>, U>,
-    id: Option<PointerId<T>>,
-    value: Result<U, impl std::error::Error>,
-) {
-    match (id, value) {
-        (Some(id), Ok(value)) => {
-            map.insert(id, value);
-        }
-        (Some(_), Err(err)) => {
-            panic!("{op} succeeded when recording, but failed on playback: {err}");
-        }
-        (None, Ok(_)) => {
-            panic!("{op} failed when recording, but succeeded on playback");
-        }
-        (None, Err(err)) => {
-            panic!("{op} failed when recording, and failed on playback: {err}");
         }
     }
 }
@@ -205,9 +183,7 @@ impl Player {
                 unimplemented!()
             }
             Action::CreateBindGroupLayout(id, desc) => {
-                let bind_group_layout = device
-                    .create_bind_group_layout(&desc)
-                    .expect("create_bind_group_layout error");
+                let (bind_group_layout, _error) = device.create_bind_group_layout(&desc);
                 self.bind_group_layouts.insert(id, bind_group_layout);
             }
             Action::GetRenderPipelineBindGroupLayout {
@@ -216,9 +192,7 @@ impl Player {
                 index,
             } => {
                 let pipeline = self.resolve_render_pipeline_id(pipeline);
-                let bgl = pipeline
-                    .get_bind_group_layout(index)
-                    .expect("invalid render pipeline");
+                let (bgl, _error) = pipeline.get_bind_group_layout(index);
                 self.bind_group_layouts.insert(id, bgl);
             }
             Action::GetComputePipelineBindGroupLayout {
@@ -227,9 +201,7 @@ impl Player {
                 index,
             } => {
                 let pipeline = self.resolve_compute_pipeline_id(pipeline);
-                let bgl = pipeline
-                    .get_bind_group_layout(index)
-                    .expect("invalid compute pipeline");
+                let (bgl, _error) = pipeline.get_bind_group_layout(index);
                 self.bind_group_layouts.insert(id, bgl);
             }
             Action::DropBindGroupLayout(id) => {
@@ -251,9 +223,7 @@ impl Player {
                     immediate_size: desc.immediate_size,
                 };
 
-                let pipeline_layout = device
-                    .create_pipeline_layout(&resolved_desc)
-                    .expect("create_pipeline_layout error");
+                let (pipeline_layout, _error) = device.create_pipeline_layout(&resolved_desc);
                 self.pipeline_layouts.insert(id, pipeline_layout);
             }
             Action::DropPipelineLayout(id) => {
@@ -353,13 +323,8 @@ impl Player {
             }
             Action::CreateComputePipeline { id, desc } => {
                 let resolved_desc = self.resolve_compute_pipeline_descriptor(desc);
-                let pipeline = device.create_compute_pipeline(resolved_desc);
-                process_result(
-                    "create_compute_pipeline",
-                    &mut self.compute_pipelines,
-                    id,
-                    pipeline,
-                );
+                let (pipeline, _error) = device.create_compute_pipeline(resolved_desc);
+                self.compute_pipelines.insert(id, pipeline);
             }
             Action::DropComputePipeline(id) => {
                 self.compute_pipelines

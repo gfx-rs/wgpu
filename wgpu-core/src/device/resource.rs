@@ -27,7 +27,8 @@ use crate::{
     api_log,
     binding_model::{
         self, BindGroup, BindGroupLateBufferBindingInfo, BindGroupLayout,
-        BindGroupLayoutEntryError, CreateBindGroupError, CreateBindGroupLayoutError,
+        BindGroupLayoutEntryError, BindGroupLayoutState, CreateBindGroupError,
+        CreateBindGroupLayoutError,
     },
     command, conv,
     device::{
@@ -47,7 +48,7 @@ use crate::{
     present,
     resource::{
         self, Buffer, ExternalTexture, Fallible, Labeled, ParentDevice, QuerySet,
-        RawResourceAccess, Sampler, StagingBuffer, Texture, TextureView,
+        RawResourceAccess, ResourceState, Sampler, StagingBuffer, Texture, TextureView,
         TextureViewNotRenderableReason, Tlas, TrackingData,
     },
     resource_log,
@@ -2665,6 +2666,29 @@ impl Device {
     pub fn create_bind_group_layout(
         self: &Arc<Self>,
         desc: &binding_model::BindGroupLayoutDescriptor,
+    ) -> (Arc<BindGroupLayout>, Option<CreateBindGroupLayoutError>) {
+        let (bgl, error) = match self.create_bind_group_layout_inner(desc) {
+            Ok(layout) => (layout, None),
+            Err(e) => (
+                BindGroupLayout::invalid(self, desc.label.to_string()),
+                Some(e),
+            ),
+        };
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace::IntoTrace;
+
+            trace.add(trace::Action::CreateBindGroupLayout(
+                bgl.to_trace(),
+                desc.clone(),
+            ));
+        }
+        (bgl, error)
+    }
+
+    fn create_bind_group_layout_inner(
+        self: &Arc<Device>,
+        desc: &binding_model::BindGroupLayoutDescriptor,
     ) -> Result<Arc<BindGroupLayout>, CreateBindGroupLayoutError> {
         self.check_is_valid()?;
 
@@ -2672,7 +2696,7 @@ impl Device {
 
         let bgl_result = self.bgl_pool.get_or_init(entry_map, |entry_map| {
             let bgl =
-                self.create_bind_group_layout_internal(&desc.label, entry_map, bgl::Origin::Pool)?;
+                self.create_bind_group_layout_impl(&desc.label, entry_map, bgl::Origin::Pool)?;
             bgl.exclusive_pipeline
                 .set(binding_model::ExclusivePipeline::None)
                 .unwrap();
@@ -2685,7 +2709,7 @@ impl Device {
         }
     }
 
-    fn create_bind_group_layout_internal(
+    fn create_bind_group_layout_impl(
         self: &Arc<Self>,
         label: &crate::Label,
         entry_map: bgl::EntryMap,
@@ -2942,12 +2966,14 @@ impl Device {
             .map_err(|e| self.handle_hal_error(e))?;
 
         let bgl = BindGroupLayout {
-            raw: binding_model::RawBindGroupLayout::Owning(ManuallyDrop::new(raw)),
+            state: ResourceState::Valid(BindGroupLayoutState {
+                raw: binding_model::RawBindGroupLayout::Owning(ManuallyDrop::new(raw)),
+                origin,
+                binding_count_validator: count_validator,
+            }),
             device: self.clone(),
             entries: entry_map,
-            origin,
             exclusive_pipeline: OnceCellOrLock::new(),
-            binding_count_validator: count_validator,
             label: label.to_string(),
         };
 
@@ -3353,6 +3379,7 @@ impl Device {
 
         self.check_is_valid()?;
         layout.same_device(self)?;
+        layout.check_is_valid()?;
 
         {
             // Check that the number of entries in the descriptor matches
@@ -3556,7 +3583,7 @@ impl Device {
 
         let hal_desc = hal::BindGroupDescriptor {
             label: desc.label.to_hal(self.instance_flags),
-            layout: layout.raw(),
+            layout: layout.try_raw()?,
             entries: &hal_entries,
             buffers: &hal_buffers,
             samplers: &hal_samplers,
@@ -3801,8 +3828,30 @@ impl Device {
     pub fn create_pipeline_layout(
         self: &Arc<Self>,
         desc: &binding_model::ResolvedPipelineLayoutDescriptor,
-    ) -> Result<Arc<binding_model::PipelineLayout>, binding_model::CreatePipelineLayoutError> {
-        self.create_pipeline_layout_impl(desc, false)
+    ) -> (
+        Arc<binding_model::PipelineLayout>,
+        Option<binding_model::CreatePipelineLayoutError>,
+    ) {
+        let (layout, error) = match self.create_pipeline_layout_impl(desc, false) {
+            Ok(layout) => (layout, None),
+            Err(e) => (
+                binding_model::PipelineLayout::invalid(Arc::clone(self), desc.label.to_string()),
+                Some(e),
+            ),
+        };
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace::IntoTrace;
+            trace.add(trace::Action::CreatePipelineLayout(
+                layout.to_trace(),
+                desc.to_trace(),
+            ));
+        }
+        api_log!(
+            "Device::create_pipeline_layout -> {:?}",
+            Arc::as_ptr(&layout)
+        );
+        (layout, error)
     }
 
     fn create_pipeline_layout_impl(
@@ -3860,7 +3909,7 @@ impl Device {
                 }
             }
 
-            count_validator.merge(&bgl.binding_count_validator);
+            count_validator.merge(&bgl.state()?.binding_count_validator);
         }
 
         count_validator
@@ -3878,8 +3927,8 @@ impl Device {
             .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
 
         let raw_bind_group_layouts = get_bgl_iter()
-            .map(|bgl| bgl.map(|bgl| bgl.raw()))
-            .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
+            .map(|bgl| bgl.map(|bgl| bgl.try_raw()).transpose())
+            .collect::<Result<ArrayVec<_, { hal::MAX_BIND_GROUPS }>, _>>()?;
 
         let additional_flags = if self.indirect_validation.is_some() {
             hal::PipelineLayoutFlags::INDIRECT_BUILTIN_UPDATE
@@ -3902,7 +3951,7 @@ impl Device {
         drop(raw_bind_group_layouts);
 
         let layout = binding_model::PipelineLayout {
-            raw: ManuallyDrop::new(raw),
+            raw: ResourceState::Valid(raw),
             device: self.clone(),
             label: desc.label.to_string(),
             bind_group_layouts,
@@ -3939,7 +3988,7 @@ impl Device {
                 match unique_bind_group_layouts.entry(bgl_entry_map) {
                     hashbrown::hash_map::Entry::Occupied(v) => Ok(Some(Arc::clone(v.get()))),
                     hashbrown::hash_map::Entry::Vacant(e) => {
-                        match self.create_bind_group_layout_internal(
+                        match self.create_bind_group_layout_impl(
                             &None,
                             e.key().clone(),
                             bgl::Origin::Derived,
@@ -3968,6 +4017,32 @@ impl Device {
     pub fn create_compute_pipeline(
         self: &Arc<Self>,
         desc: pipeline::ResolvedComputePipelineDescriptor,
+    ) -> (
+        Arc<pipeline::ComputePipeline>,
+        Option<pipeline::CreateComputePipelineError>,
+    ) {
+        let (compute_pipeline, error) = match self.create_compute_pipeline_inner(desc.clone()) {
+            Ok(compute_pipeline) => (compute_pipeline, None),
+            Err(error) => (
+                pipeline::ComputePipeline::invalid(self.clone(), desc.label.to_string()),
+                Some(error),
+            ),
+        };
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace;
+            use crate::device::trace::IntoTrace;
+            trace.add(trace::Action::CreateComputePipeline {
+                id: compute_pipeline.to_trace(),
+                desc: desc.to_trace(),
+            });
+        }
+        (compute_pipeline, error)
+    }
+
+    pub fn create_compute_pipeline_inner(
+        self: &Arc<Self>,
+        desc: pipeline::ResolvedComputePipelineDescriptor,
     ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
         self.check_is_valid()?;
 
@@ -3983,6 +4058,7 @@ impl Device {
         let pipeline_layout = match desc.layout {
             Some(pipeline_layout) => {
                 pipeline_layout.same_device(self)?;
+                pipeline_layout.check_valid()?;
                 Some(pipeline_layout)
             }
             None => None,
@@ -4041,7 +4117,7 @@ impl Device {
 
         let pipeline_desc = hal::ComputePipelineDescriptor {
             label: desc.label.to_hal(self.instance_flags),
-            layout: pipeline_layout.raw(),
+            layout: pipeline_layout.raw()?,
             stage: hal::ProgrammableStage {
                 module: shader_module.raw(),
                 entry_point: final_entry_point_name.as_ref(),
@@ -4083,10 +4159,12 @@ impl Device {
                 });
 
         let pipeline = pipeline::ComputePipeline {
-            raw: ManuallyDrop::new(raw),
-            layout: pipeline_layout,
+            state: ResourceState::Valid(pipeline::ComputePipelineState {
+                raw: ManuallyDrop::new(raw),
+                layout: pipeline_layout.clone(),
+                _shader_module: shader_module,
+            }),
             device: self.clone(),
-            _shader_module: shader_module,
             late_sized_buffer_groups,
             immediate_slots_required,
             label: desc.label.to_string(),
@@ -4096,7 +4174,7 @@ impl Device {
         let pipeline = Arc::new(pipeline);
 
         if is_auto_layout {
-            for bgl in pipeline.layout.bind_group_layouts.iter() {
+            for bgl in pipeline_layout.bind_group_layouts.iter() {
                 let Some(bgl) = bgl else {
                     continue;
                 };
@@ -4536,6 +4614,7 @@ impl Device {
         let pipeline_layout = match desc.layout {
             Some(pipeline_layout) => {
                 pipeline_layout.same_device(self)?;
+                pipeline_layout.check_valid()?;
                 Some(pipeline_layout)
             }
             None => None,
@@ -4874,7 +4953,7 @@ impl Device {
         let raw = {
             let pipeline_desc = hal::RenderPipelineDescriptor {
                 label: desc.label.to_hal(self.instance_flags),
-                layout: pipeline_layout.raw(),
+                layout: pipeline_layout.raw()?,
                 vertex_processor: match vertex_stage {
                     Some(vertex_stage) => hal::VertexProcessor::Standard {
                         vertex_buffers: &hal_vertex_buffer_layouts,
@@ -4964,7 +5043,7 @@ impl Device {
         };
 
         let pipeline = pipeline::RenderPipeline {
-            state: resource::ResourceState::Valid(pipeline::RenderPipelineState {
+            state: ResourceState::Valid(pipeline::RenderPipelineState {
                 raw: ManuallyDrop::new(raw),
                 layout: pipeline_layout.clone(),
             }),

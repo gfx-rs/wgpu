@@ -259,6 +259,7 @@ By @stuartparmenter in [#9658](https://github.com/gfx-rs/wgpu/pull/9658).
 - Stencil clear and reference values are now truncated to 8 bits. By @beicause in [#9607](https://github.com/gfx-rs/wgpu/pull/9607).
 - Fixed missing initialization of other aspects when writing to a single aspect of a multi-aspect texture. By @andyleiserson in [#9626](https://github.com/gfx-rs/wgpu/pull/9626).
 - Fix process abort when a `SurfaceTexture` is dropped during panic unwind between `get_current_texture` and `Queue::present`. The acquired texture reference is now released without calling HAL discard. By @hack3rmann in [#9678](https://github.com/gfx-rs/wgpu/pull/9678).
+- Fixed incorrect initialization tracking for 3D textures. By @andyleiserson in [#9765](https://github.com/gfx-rs/wgpu/pull/9765).
 - Fix separate depth/stencil read-only state and `SYNC-HAZARD-WRITE-AFTER-WRITE` on Vulkan. By @beicause in [#9763](https://github.com/gfx-rs/wgpu/pull/9763).
 
 #### naga
@@ -286,6 +287,8 @@ By @stuartparmenter in [#9658](https://github.com/gfx-rs/wgpu/pull/9658).
 - Fixed alignment and `MatrixStride` for mat2x2 in SPIR-V uniform blocks. By @39ali [#9369](https://github.com/gfx-rs/wgpu/pull/9369).
 - Fixed loading of `libvulkan.so` on OpenHarmony (`target_env = "ohos"`). By @jschwe in [#9649](https://github.com/gfx-rs/wgpu/pull/9649).
 - Fixed `VUID-RuntimeSpirv-vulkanMemoryModel-06265` validation errors by enabling `vulkanMemoryModelDeviceScope` whenever the Vulkan memory model is enabled, since the SPIR-V backend emits storage atomics with `Device` scope. By @francisdb in [#9741](https://github.com/gfx-rs/wgpu/pull/9741).
+- Fixed some cases where out-of-memory errors were reported incorrectly. By @andyleiserson in [#9643](https://github.com/gfx-rs/wgpu/pull/9643) and [#9747](https://github.com/gfx-rs/wgpu/pull/9747).
+- Fixed signed integer `%` (and `%=`) returning the wrong result for negative operands in the SPIR-V backend, e.g. `-1 % 768` yielding `255` instead of `-1` on NVIDIA. `OpSRem` is poison for negative operands in the Vulkan SPIR-V environment without `VK_KHR_maintenance8`, even though WGSL defines `%` for these operands, so signed remainder is now always lowered as `a - b * (a / b)`. By @mstampfli in [#9674](https://github.com/gfx-rs/wgpu/pull/9674).
 
 #### DX12
 
@@ -305,6 +308,11 @@ By @stuartparmenter in [#9658](https://github.com/gfx-rs/wgpu/pull/9658).
   - Fixed a hang in `Device::poll(PollType::wait_indefinitely())` when a Metal command buffer exits with an error.
 - Fixed structure field names incorrectly ignoring reserved keywords in the Metal (MSL) backend. By @39ali [#9379](https://github.com/gfx-rs/wgpu/pull/9379).
 - Restore the `Queue::as_raw` method, which was removed without good reason in v29. It now returns `&ProtocolObject<dyn MTLCommandQueue>`. By @andyleiserson in [#9560](https://github.com/gfx-rs/wgpu/pull/9560).
+
+#### WebGPU
+
+- Expose the underlying JS handles of WebGPU-backed resources via new `as_webgpu` accessors on `Texture`, `TextureView`, `Buffer`, `Queue`, and `Device`, returning `Option<&wgpu::webgpu::Gpu*>`. This is the WebGPU counterpart of `as_hal` (which returns `None` on the WebGPU backend, since WebGPU is not a `wgpu_hal` API). The vendored handle types are re-exported under the new `wgpu::webgpu` module. By @AdrianEddy in [#9530](https://github.com/gfx-rs/wgpu/pull/9530)
+- Add `Device::create_texture_from_webgpu_handle(texture, desc, drop_callback)` for wrapping a foreign `webgpu::GpuTexture` (e.g. a canvas `getCurrentTexture()` result) as a `wgpu::Texture` without copy. Use the `drop_callback` to decide if you want to call `GpuTexture.destroy()` when wgpu is done with the texture. By @AdrianEddy in [#9530](https://github.com/gfx-rs/wgpu/pull/9530)
 
 ### Dependency Updates
 

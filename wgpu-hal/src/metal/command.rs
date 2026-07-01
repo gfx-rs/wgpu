@@ -520,6 +520,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
             cmd_buf_ref.to_owned()
         });
 
+        // Queries should either be closed out, or cleared in `discard_encoding`.
+        // This assertion is here mainly to facilitate comparison with the other
+        // backends, which clear in `begin_encoding` rather than `discard_encoding`.
+        debug_assert!(self.state.pending_timer_queries.is_empty());
+
         self.raw_cmd_buf = Some(raw);
 
         Ok(())
@@ -536,6 +541,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         if let Some(encoder) = self.state.compute.take() {
             encoder.endEncoding();
         }
+        self.state.pending_timer_queries.clear();
         let had_command_buffer = self.raw_cmd_buf.is_some();
         // Clear the Option first so the underlying `metal::CommandBuffer` is
         // dropped before we update the counter.

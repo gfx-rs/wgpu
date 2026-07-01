@@ -315,6 +315,8 @@ impl Device {
     #[doc = crate::macros::hal_type_dx12!("Texture")]
     #[doc = crate::macros::hal_type_gles!("Texture")]
     ///
+    /// On [`Backend::BrowserWebGpu`], use `Device::create_texture_from_webgpu_handle()` instead.
+    ///
     /// # `initial_state`
     ///
     /// If the resource has already been initialized, `initial_state` should be
@@ -359,6 +361,70 @@ impl Device {
                 ..desc.clone()
             },
         }
+    }
+
+    /// Wraps a foreign [`webgpu::GpuTexture`] (e.g. a canvas `getCurrentTexture()` result)
+    /// as a [`Texture`] without any copy.
+    ///
+    /// The wrapped texture is *external*: dropping the returned `Texture` (or
+    /// calling [`Texture::destroy`] on it) does **not** call `GpuTexture.destroy()`
+    /// on the underlying handle - its lifetime is the caller's responsibility.
+    ///
+    /// If `drop_callback` is `Some`, it fires when wgpu releases its last
+    /// reference to the wrapped handle. wgpu never calls `GpuTexture.destroy()`
+    /// itself on a wrapped texture; to hand the handle's lifetime to wgpu,
+    /// supply a callback that calls `GpuTexture.destroy()`. The callback can
+    /// also be used to free a pool slot or notify dependent code that wgpu is
+    /// done with the handle. Pass `None` if the caller manages the handle's
+    /// lifetime entirely on their own.
+    ///
+    /// This is the WebGPU counterpart of [`Self::create_texture_from_hal`].
+    /// A `Some` `drop_callback` plays the same role as `wgpu_hal::DropCallback`
+    /// does on the Vulkan backend. The `None` case differs: here the texture is
+    /// always external and wgpu never destroys it, whereas on Vulkan a `None`
+    /// callback means wgpu takes ownership of the image and destroys it.
+    ///
+    /// The caller must guarantee:
+    ///
+    /// 1. `texture` was produced by the same underlying `GpuDevice` that this `Device` wraps.
+    /// 2. `desc.format`, `desc.size`, `desc.usage`, `desc.dimension`,
+    ///    `desc.mip_level_count`, and `desc.sample_count` match the actual
+    ///    `GPUTexture`'s reflected values. wgpu stores these verbatim and
+    ///    returns them from [`Texture::size`], [`Texture::format`], etc.
+    ///    without re-checking the handle; a mismatch yields silently incorrect
+    ///    metadata and, downstream, `GPUValidationError`s rather than memory
+    ///    unsafety (the browser bounds every access).
+    /// 3. The underlying `GpuTexture` must remain alive for as long as wgpu
+    ///    may use it (e.g. until any submitted command buffer that references
+    ///    it has finished executing). If `drop_callback` is `Some`, it is
+    ///    sufficient to keep the handle alive until the callback fires.
+    #[cfg(webgpu)]
+    #[must_use]
+    pub fn create_texture_from_webgpu_handle(
+        &self,
+        texture: webgpu::GpuTexture,
+        desc: &TextureDescriptor<'_>,
+        drop_callback: Option<webgpu::DropCallback>,
+    ) -> Texture {
+        let inner = self
+            .inner
+            .as_webgpu()
+            .wrap_external_texture(texture, drop_callback);
+        Texture {
+            inner,
+            descriptor: TextureDescriptor {
+                label: None,
+                view_formats: &[],
+                ..desc.clone()
+            },
+        }
+    }
+
+    /// Returns the underlying [`webgpu::GpuDevice`] handle if this `Device`
+    /// is on the WebGPU backend, otherwise `None`.
+    #[cfg(webgpu)]
+    pub fn as_webgpu(&self) -> Option<&webgpu::GpuDevice> {
+        self.inner.as_webgpu_opt().map(|wd| &wd.inner)
     }
 
     /// Creates a new [`ExternalTexture`].
@@ -587,6 +653,8 @@ impl Device {
     /// This method will return None if:
     /// - The device is not from the backend specified by `A`.
     /// - The device is from the `webgpu` or `custom` backend.
+    ///
+    /// On the `webgpu` backend, use `as_webgpu` instead.
     ///
     /// # Safety
     ///

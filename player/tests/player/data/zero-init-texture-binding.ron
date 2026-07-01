@@ -128,7 +128,7 @@
             data: File("zero-init-texture-binding.wgsl"),
         ),
         CreateComputePipeline(
-            id: Some(PointerId(0x10)),
+            id: PointerId(0x10),
             desc: (
                 label: None,
                 layout: Some(PointerId(0x10)),

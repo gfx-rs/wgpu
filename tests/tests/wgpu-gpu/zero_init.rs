@@ -12,6 +12,41 @@ use wgpu_test::{
     TestParameters, TestingContext,
 };
 
+/// A way to write data into a texture.
+#[derive(Clone, Copy)]
+#[allow(clippy::enum_variant_names)]
+enum WriteMethod {
+    WriteTexture,
+    CopyBufferToTexture,
+    CopyTextureToTexture,
+}
+
+impl WriteMethod {
+    fn name(self) -> &'static str {
+        match self {
+            WriteMethod::WriteTexture => "write_texture",
+            WriteMethod::CopyBufferToTexture => "copy_buffer_to_texture",
+            WriteMethod::CopyTextureToTexture => "copy_texture_to_texture",
+        }
+    }
+}
+
+/// A way to read data out of a texture.
+#[derive(Clone, Copy)]
+enum ReadMethod {
+    CopyTextureToBuffer,
+    CopyTextureToTexture,
+}
+
+impl ReadMethod {
+    fn name(self) -> &'static str {
+        match self {
+            ReadMethod::CopyTextureToBuffer => "copy_texture_to_buffer",
+            ReadMethod::CopyTextureToTexture => "copy_texture_to_texture",
+        }
+    }
+}
+
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
         COPY_BUFFER_TO_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_NV12,
@@ -27,6 +62,10 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH24PLUS_STENCIL8,
         WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH32FLOAT_STENCIL8,
         DYNAMIC_OFFSET_BUFFER_BINDING_INIT,
+        COPY_TEXTURE_TO_BUFFER_3D_SOURCE_ORIGIN_Z_UNINIT,
+        COPY_TEXTURE_TO_TEXTURE_3D_SOURCE_ORIGIN_Z_UNINIT,
+        COPY_BUFFER_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL,
+        COPY_TEXTURE_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL,
     ]);
 }
 
@@ -588,21 +627,6 @@ struct AspectInfo {
     bpp: u32,
 }
 
-#[derive(Clone, Copy)]
-enum WriteMethod {
-    WriteTexture,
-    CopyBufferToTexture,
-}
-
-impl WriteMethod {
-    fn name(self) -> &'static str {
-        match self {
-            WriteMethod::WriteTexture => "write_texture",
-            WriteMethod::CopyBufferToTexture => "copy_buffer_to_texture",
-        }
-    }
-}
-
 async fn check_depth_stencil_write_leaves_other_uninit(
     ctx: &TestingContext,
     format: TextureFormat,
@@ -762,6 +786,9 @@ async fn check_write_aspect_leaves_other_uninit(
                 write.size,
             );
             ctx.queue.submit(Some(encoder.finish()));
+        }
+        WriteMethod::CopyTextureToTexture => {
+            unreachable!("aspect-init tests do not use copy_texture_to_texture")
         }
     }
 
@@ -964,3 +991,264 @@ static DYNAMIC_OFFSET_BUFFER_BINDING_INIT: GpuTestConfiguration = GpuTestConfigu
             data[nonzero.unwrap()],
         );
     });
+
+// Tests of initialization of 3D textures.
+//
+// Init tracking only operates on array layers, not on depth/volume slices
+// of 3D textures. Therefore,
+
+const D3_WIDTH: u32 = 256;
+const D3_HEIGHT: u32 = 2;
+const D3_DEPTH: u32 = 4;
+
+// A read from a fresh 3D texture as a copy *source* at `origin.z >= 1` must
+// trigger initialization of the full texture.
+#[gpu_test]
+static COPY_TEXTURE_TO_BUFFER_3D_SOURCE_ORIGIN_Z_UNINIT: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
+        .run_async(|ctx| async move {
+            check_3d_copy_source_init(&ctx, ReadMethod::CopyTextureToBuffer).await;
+        });
+
+#[gpu_test]
+static COPY_TEXTURE_TO_TEXTURE_3D_SOURCE_ORIGIN_Z_UNINIT: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
+        .run_async(|ctx| async move {
+            check_3d_copy_source_init(&ctx, ReadMethod::CopyTextureToTexture).await;
+        });
+
+// The first depth slice must be initialized to zero before a partial copy into a fresh 3D
+// texture with destination `origin.z >= 1`.
+#[gpu_test]
+static COPY_BUFFER_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
+        .run_async(|ctx| async move {
+            check_3d_copy_dest_init(&ctx, WriteMethod::CopyBufferToTexture).await;
+        });
+
+#[gpu_test]
+static COPY_TEXTURE_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
+        .run_async(|ctx| async move {
+            check_3d_copy_dest_init(&ctx, WriteMethod::CopyTextureToTexture).await;
+        });
+
+fn create_3d_texture(ctx: &TestingContext, label: &str, depth: u32) -> Texture {
+    ctx.device.create_texture(&TextureDescriptor {
+        label: Some(label),
+        size: Extent3d {
+            width: D3_WIDTH,
+            height: D3_HEIGHT,
+            depth_or_array_layers: depth,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D3,
+        format: TextureFormat::R8Uint,
+        usage: TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
+        view_formats: &[],
+    })
+}
+
+fn d3_buffer_layout() -> TexelCopyBufferLayout {
+    TexelCopyBufferLayout {
+        offset: 0,
+        bytes_per_row: Some(D3_WIDTH),
+        rows_per_image: Some(D3_HEIGHT),
+    }
+}
+
+async fn map_and_read(ctx: &TestingContext, buffer: &Buffer) -> Vec<u8> {
+    let slice = buffer.slice(..);
+    slice.map_async(MapMode::Read, |_| ());
+    ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
+    slice.get_mapped_range().unwrap().to_vec()
+}
+
+async fn check_3d_copy_source_init(ctx: &TestingContext, method: ReadMethod) {
+    const COPY_Z: u32 = 1;
+    let copy_depth = D3_DEPTH - COPY_Z;
+    let copy_size = Extent3d {
+        width: D3_WIDTH,
+        height: D3_HEIGHT,
+        depth_or_array_layers: copy_depth,
+    };
+
+    let src = create_3d_texture(ctx, "3d source init test", D3_DEPTH);
+    let src_info = TexelCopyTextureInfo {
+        texture: &src,
+        mip_level: 0,
+        origin: Origin3d {
+            x: 0,
+            y: 0,
+            z: COPY_Z,
+        },
+        aspect: TextureAspect::All,
+    };
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+    match method {
+        ReadMethod::CopyTextureToBuffer => {
+            // The copy source is partial (it starts at origin.z = COPY_Z), so the
+            // readback can't go through `ReadbackBuffers`, which always copies the
+            // full texture from the origin.
+            let readback = ctx.device.create_buffer(&BufferDescriptor {
+                label: Some("3d source readback"),
+                size: (D3_WIDTH * D3_HEIGHT * copy_depth) as u64,
+                usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            encoder.copy_texture_to_buffer(
+                src_info,
+                TexelCopyBufferInfo {
+                    buffer: &readback,
+                    layout: d3_buffer_layout(),
+                },
+                copy_size,
+            );
+            ctx.queue.submit(Some(encoder.finish()));
+
+            let data = map_and_read(ctx, &readback).await;
+            let nonzero = data.iter().position(|&b| b != 0);
+            assert!(
+                nonzero.is_none(),
+                "3D texture used as {} source at origin.z={} read back non-zero from \
+                 never-written memory; first non-zero byte at offset {} = 0x{:02x}",
+                method.name(),
+                COPY_Z,
+                nonzero.unwrap(),
+                data[nonzero.unwrap()],
+            );
+        }
+        ReadMethod::CopyTextureToTexture => {
+            let dst = create_3d_texture(ctx, "3d source init test dst", copy_depth);
+            encoder.copy_texture_to_texture(
+                src_info,
+                TexelCopyTextureInfo {
+                    texture: &dst,
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                copy_size,
+            );
+            // The full `dst` is read back, so route it through `ReadbackBuffers`.
+            let readback_buffers = ReadbackBuffers::new(&ctx.device, &dst);
+            readback_buffers.copy_from(&ctx.device, &mut encoder, &dst);
+            ctx.queue.submit(Some(encoder.finish()));
+
+            assert!(
+                readback_buffers.are_zero(ctx).await,
+                "3D texture used as {} source at origin.z={} read back non-zero from \
+                 never-written memory",
+                method.name(),
+                COPY_Z,
+            );
+        }
+    }
+}
+
+async fn check_3d_copy_dest_init(ctx: &TestingContext, method: WriteMethod) {
+    const DST_Z: u32 = 1;
+    const SENTINEL: u8 = 0xAA;
+    let slice_bytes = (D3_WIDTH * D3_HEIGHT) as usize;
+    let one_slice = Extent3d {
+        width: D3_WIDTH,
+        height: D3_HEIGHT,
+        depth_or_array_layers: 1,
+    };
+
+    let dst = create_3d_texture(ctx, "3d dest init test", D3_DEPTH);
+    let dst_info = TexelCopyTextureInfo {
+        texture: &dst,
+        mip_level: 0,
+        origin: Origin3d {
+            x: 0,
+            y: 0,
+            z: DST_Z,
+        },
+        aspect: TextureAspect::All,
+    };
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+    match method {
+        WriteMethod::CopyBufferToTexture => {
+            let src_buffer = ctx.device.create_buffer(&BufferDescriptor {
+                label: Some("3d dest init source"),
+                size: slice_bytes as u64,
+                usage: BufferUsages::COPY_SRC,
+                mapped_at_creation: true,
+            });
+            {
+                let mut view = src_buffer.slice(..).get_mapped_range_mut().unwrap();
+                view.copy_from_slice(&vec![SENTINEL; slice_bytes]);
+            }
+            src_buffer.unmap();
+            encoder.copy_buffer_to_texture(
+                TexelCopyBufferInfo {
+                    buffer: &src_buffer,
+                    layout: d3_buffer_layout(),
+                },
+                dst_info,
+                one_slice,
+            );
+        }
+        WriteMethod::CopyTextureToTexture => {
+            // Initialize the source, then copy a single slice into the destination at z=1.
+            let src_tex = create_3d_texture(ctx, "3d dest init source texture", 1);
+            ctx.queue.write_texture(
+                TexelCopyTextureInfo {
+                    texture: &src_tex,
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                &vec![SENTINEL; slice_bytes],
+                d3_buffer_layout(),
+                one_slice,
+            );
+            ctx.queue.submit(None);
+            encoder.copy_texture_to_texture(
+                TexelCopyTextureInfo {
+                    texture: &src_tex,
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                dst_info,
+                one_slice,
+            );
+        }
+        WriteMethod::WriteTexture => {
+            unreachable!("3D dest-init tests exercise only the encoder copy commands")
+        }
+    }
+    // Submit the partial copy on its own to ensure the init action is applied on its own,
+    // and not in combination with an init action for the readback.
+    ctx.queue.submit(Some(encoder.finish()));
+
+    // The whole texture is read back from the origin, so route it through
+    // `ReadbackBuffers`. The written slice (z = DST_Z) must keep its sentinel data
+    // and every untouched slice must be zero-initialized.
+    let readback_buffers = ReadbackBuffers::new(&ctx.device, &dst);
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+    readback_buffers.copy_from(&ctx.device, &mut encoder, &dst);
+    ctx.queue.submit(Some(encoder.finish()));
+
+    let mut expected = vec![0u8; slice_bytes * D3_DEPTH as usize];
+    let written_start = DST_Z as usize * slice_bytes;
+    expected[written_start..written_start + slice_bytes].fill(SENTINEL);
+    readback_buffers
+        .assert_buffer_contents(ctx, &expected)
+        .await;
+}

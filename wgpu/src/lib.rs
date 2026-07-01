@@ -333,5 +333,23 @@ pub use raw_window_handle as rwh;
 #[cfg(web)]
 pub use web_sys;
 
+/// Vendored WebGPU JS-handle types used by the WebGPU backend.
+///
+/// They are exposed publicly so that interop crates can read the JS handle
+/// behind a [`Texture`] / [`Buffer`] / etc. (via [`Texture::as_webgpu`] and
+/// siblings), and pass a foreign handle in (via
+/// [`Device::create_texture_from_webgpu_handle`]).
+///
+/// A `web_sys::GpuTexture` from a consumer's own `web-sys` dependency wraps
+/// the same JS object as a `wgpu::webgpu::GpuTexture`; convert between them
+/// with [`wasm_bindgen::JsCast::unchecked_into`].
+#[cfg(webgpu)]
+pub mod webgpu {
+    pub use crate::backend::webgpu::webgpu_sys::{
+        GpuBuffer, GpuDevice, GpuQueue, GpuTexture, GpuTextureView,
+    };
+    pub use crate::backend::webgpu::DropCallback;
+}
+
 #[doc(hidden)]
 pub use macros::helpers as __macro_helpers;

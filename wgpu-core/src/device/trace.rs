@@ -195,7 +195,7 @@ pub enum Action<'a, R: ReferenceType> {
     },
     DropShaderModule(PointerId<markers::ShaderModule>),
     CreateComputePipeline {
-        id: Option<PointerId<markers::ComputePipeline>>,
+        id: PointerId<markers::ComputePipeline>,
         desc: TraceComputePipelineDescriptor<'a>,
     },
     DropComputePipeline(PointerId<markers::ComputePipeline>),

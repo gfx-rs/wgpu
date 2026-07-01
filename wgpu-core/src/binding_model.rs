@@ -25,7 +25,7 @@ use crate::{
     resource::{
         Buffer, DestroyedResourceError, ExternalTexture, InvalidResourceError, Labeled,
         MissingBufferUsageError, MissingTextureUsageError, RawResourceAccess, ResourceErrorIdent,
-        Sampler, TextureView, Tlas, TrackingData,
+        ResourceState, Sampler, TextureView, Tlas, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -765,12 +765,9 @@ pub enum RawBindGroupLayout {
     RefDeviceEmptyBGL,
 }
 
-/// Bind group layout.
 #[derive(Debug)]
-pub struct BindGroupLayout {
+pub(crate) struct BindGroupLayoutState {
     pub(crate) raw: RawBindGroupLayout,
-    pub(crate) device: Arc<Device>,
-    pub(crate) entries: bgl::EntryMap,
     /// It is very important that we know if the bind group comes from the BGL pool.
     ///
     /// If it does, then we need to remove it from the pool when we drop it.
@@ -778,21 +775,44 @@ pub struct BindGroupLayout {
     /// We cannot unconditionally remove from the pool, as BGLs that don't come from the pool
     /// (derived BGLs) must not be removed.
     pub(crate) origin: bgl::Origin,
-    pub(crate) exclusive_pipeline: crate::OnceCellOrLock<ExclusivePipeline>,
     pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
+}
+
+/// Bind group layout.
+#[derive(Debug)]
+pub struct BindGroupLayout {
+    pub(crate) state: ResourceState<BindGroupLayoutState>,
+    pub(crate) device: Arc<Device>,
+    pub(crate) entries: bgl::EntryMap,
+    pub(crate) exclusive_pipeline: crate::OnceCellOrLock<ExclusivePipeline>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
 }
 
 impl Drop for BindGroupLayout {
     fn drop(&mut self) {
+        #[cfg(feature = "trace")]
+        {
+            let mut t = self.device.trace.lock();
+            if let Some(t) = t.as_mut() {
+                use crate::device::trace;
+
+                // SAFETY: All bind group layouts are constructed in Arc => are heap allocated
+                t.add(trace::Action::DropBindGroupLayout(unsafe {
+                    trace::to_trace(self)
+                }));
+            }
+        }
         resource_log!("Destroy raw {}", self.error_ident());
-        if matches!(self.origin, bgl::Origin::Pool) {
+        let ResourceState::Valid(state) = &mut self.state else {
+            return;
+        };
+        if matches!(state.origin, bgl::Origin::Pool) {
             self.device.bgl_pool.remove(&self.entries);
         }
-        match self.raw {
+        match state.raw {
             RawBindGroupLayout::Owning(ref mut raw) => {
-                // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+                // SAFETY: We are in the Drop impl and we don't use state.raw anymore after this point.
                 let raw = unsafe { ManuallyDrop::take(raw) };
                 unsafe {
                     self.device.raw().destroy_bind_group_layout(raw);
@@ -809,22 +829,51 @@ crate::impl_parent_device!(BindGroupLayout);
 crate::impl_storage_item!(BindGroupLayout);
 
 impl BindGroupLayout {
-    pub(crate) fn raw(&self) -> &dyn hal::DynBindGroupLayout {
-        match &self.raw {
-            RawBindGroupLayout::Owning(raw) => raw.as_ref(),
-            RawBindGroupLayout::RefDeviceEmptyBGL => self.device.empty_bgl.as_ref(),
+    pub(crate) fn try_raw(&self) -> Result<&dyn hal::DynBindGroupLayout, InvalidResourceError> {
+        let ResourceState::Valid(state) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        match &state.raw {
+            RawBindGroupLayout::Owning(raw) => Ok(raw.as_ref()),
+            RawBindGroupLayout::RefDeviceEmptyBGL => Ok(self.device.empty_bgl.as_ref()),
         }
+    }
+
+    pub(crate) fn state(&self) -> Result<&BindGroupLayoutState, InvalidResourceError> {
+        let ResourceState::Valid(state) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        Ok(state)
+    }
+
+    pub(crate) fn check_is_valid(self: &Arc<Self>) -> Result<(), InvalidResourceError> {
+        let ResourceState::Valid(_) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        Ok(())
     }
 
     fn empty(device: &Arc<Device>, exclusive_pipeline: ExclusivePipeline) -> Arc<Self> {
         Arc::new(Self {
-            raw: RawBindGroupLayout::RefDeviceEmptyBGL,
+            state: ResourceState::Valid(BindGroupLayoutState {
+                raw: RawBindGroupLayout::RefDeviceEmptyBGL,
+                origin: bgl::Origin::Derived,
+                binding_count_validator: BindingTypeMaxCountValidator::default(),
+            }),
             device: device.clone(),
             entries: bgl::EntryMap::default(),
-            origin: bgl::Origin::Derived,
             exclusive_pipeline: crate::OnceCellOrLock::from(exclusive_pipeline),
-            binding_count_validator: BindingTypeMaxCountValidator::default(),
             label: String::new(),
+        })
+    }
+
+    pub(crate) fn invalid(device: &Arc<Device>, label: String) -> Arc<Self> {
+        Arc::new(Self {
+            state: ResourceState::Invalid,
+            device: device.clone(),
+            entries: bgl::EntryMap::default(),
+            exclusive_pipeline: crate::OnceCellOrLock::from(ExclusivePipeline::None),
+            label,
         })
     }
 }
@@ -950,7 +999,7 @@ pub type ResolvedPipelineLayoutDescriptor<'a, BGL = Arc<BindGroupLayout>> =
 
 #[derive(Debug)]
 pub struct PipelineLayout {
-    pub(crate) raw: ManuallyDrop<Box<dyn hal::DynPipelineLayout>>,
+    pub(crate) raw: ResourceState<Box<dyn hal::DynPipelineLayout>>,
     pub(crate) device: Arc<Device>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -961,17 +1010,38 @@ pub struct PipelineLayout {
 impl Drop for PipelineLayout {
     fn drop(&mut self) {
         resource_log!("Destroy raw {}", self.error_ident());
-        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
-        unsafe {
-            self.device.raw().destroy_pipeline_layout(raw);
+        if let ResourceState::Valid(raw) = core::mem::replace(&mut self.raw, ResourceState::Invalid)
+        {
+            unsafe {
+                self.device.raw().destroy_pipeline_layout(raw);
+            }
+        }
+        #[cfg(feature = "trace")]
+        {
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(crate::device::trace::Action::DropPipelineLayout(unsafe {
+                    crate::device::trace::to_trace(self)
+                }));
+            }
         }
     }
 }
 
 impl PipelineLayout {
-    pub(crate) fn raw(&self) -> &dyn hal::DynPipelineLayout {
-        self.raw.as_ref()
+    pub(crate) fn raw(&self) -> Result<&dyn hal::DynPipelineLayout, InvalidResourceError> {
+        self.raw
+            .as_ref()
+            .valid()
+            .map(|r| r.as_ref())
+            .ok_or_else(|| InvalidResourceError(self.error_ident()))
+    }
+
+    pub(crate) fn check_valid(&self) -> Result<(), InvalidResourceError> {
+        self.raw
+            .as_ref()
+            .valid()
+            .map(|_| ())
+            .ok_or_else(|| InvalidResourceError(self.error_ident()))
     }
 
     pub(crate) fn get_bind_group_layout(
@@ -1032,6 +1102,16 @@ impl PipelineLayout {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn invalid(device: Arc<Device>, label: String) -> Arc<Self> {
+        Arc::new(Self {
+            raw: ResourceState::Invalid,
+            device,
+            label,
+            bind_group_layouts: ArrayVec::new(),
+            immediate_size: 0,
+        })
     }
 }
 
