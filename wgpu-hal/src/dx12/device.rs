@@ -693,9 +693,10 @@ impl crate::Device for super::Device {
             } else {
                 None
             },
-            handle_dsv_wr: if desc
-                .usage
-                .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
+            handle_dsv_wr: if desc.format.is_combined_depth_stencil_format()
+                && desc
+                    .usage
+                    .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
             {
                 let raw_desc = unsafe { view_desc.to_dsv(false, true) };
                 let handle = self.dsv_pool.lock().alloc_handle()?;
@@ -707,9 +708,10 @@ impl crate::Device for super::Device {
             } else {
                 None
             },
-            handle_dsv_rw: if desc
-                .usage
-                .contains(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::STENCIL_WRITE)
+            handle_dsv_rw: if desc.format.is_combined_depth_stencil_format()
+                && desc
+                    .usage
+                    .contains(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::STENCIL_WRITE)
             {
                 let raw_desc = unsafe { view_desc.to_dsv(true, false) };
                 let handle = self.dsv_pool.lock().alloc_handle()?;

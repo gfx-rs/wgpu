@@ -528,32 +528,38 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     | wgt::TextureUses::STENCIL_READ
                     | wgt::TextureUses::STENCIL_WRITE,
             ) {
-                let mut barrier_stencil = crate::TextureBarrier {
-                    texture: barrier.texture,
-                    range: barrier.range,
-                    usage: barrier.usage.clone(),
-                };
-                let mut barrier_depth = barrier;
+                if barrier.texture.format.has_stencil_aspect() {
+                    let mut barrier_stencil = crate::TextureBarrier {
+                        texture: barrier.texture,
+                        range: barrier.range,
+                        usage: barrier.usage.clone(),
+                    };
+                    barrier_stencil.range.aspect = wgt::TextureAspect::StencilOnly;
+                    barrier_stencil
+                        .usage
+                        .from
+                        .remove(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::DEPTH_WRITE);
+                    barrier_stencil
+                        .usage
+                        .to
+                        .remove(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::DEPTH_WRITE);
+                    barriers_ds_split.push(barrier_stencil);
+                }
 
-                barrier_depth.range.aspect = wgt::TextureAspect::DepthOnly;
-                barrier_depth
-                    .usage
-                    .from
-                    .remove(wgt::TextureUses::STENCIL_READ | wgt::TextureUses::STENCIL_WRITE);
-                barrier_depth
-                    .usage
-                    .to
-                    .remove(wgt::TextureUses::STENCIL_READ | wgt::TextureUses::STENCIL_WRITE);
+                if barrier.texture.format.has_depth_aspect() {
+                    let mut barrier_depth = barrier;
 
-                barrier_stencil.range.aspect = wgt::TextureAspect::StencilOnly;
-                barrier_stencil
-                    .usage
-                    .from
-                    .remove(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::DEPTH_WRITE);
-                barrier_stencil
-                    .usage
-                    .to
-                    .remove(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::DEPTH_WRITE);
+                    barrier_depth.range.aspect = wgt::TextureAspect::DepthOnly;
+                    barrier_depth
+                        .usage
+                        .from
+                        .remove(wgt::TextureUses::STENCIL_READ | wgt::TextureUses::STENCIL_WRITE);
+                    barrier_depth
+                        .usage
+                        .to
+                        .remove(wgt::TextureUses::STENCIL_READ | wgt::TextureUses::STENCIL_WRITE);
+                    barriers_ds_split.push(barrier_depth);
+                }
             } else {
                 barriers_ds_split.push(barrier);
             }
@@ -1000,14 +1006,24 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let ds_view = desc.depth_stencil_attachment.as_ref().map(|ds| {
             if ds
                 .target
-                .usage
-                .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
+                .view
+                .aspects
+                .contains(crate::FormatAspects::DEPTH_STENCIL)
+                && ds
+                    .target
+                    .usage
+                    .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
             {
                 ds.target.view.handle_dsv_wr.as_ref().unwrap().raw
             } else if ds
                 .target
-                .usage
-                .contains(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::STENCIL_WRITE)
+                .view
+                .aspects
+                .contains(crate::FormatAspects::DEPTH_STENCIL)
+                && ds
+                    .target
+                    .usage
+                    .contains(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::STENCIL_WRITE)
             {
                 ds.target.view.handle_dsv_rw.as_ref().unwrap().raw
             } else if ds
