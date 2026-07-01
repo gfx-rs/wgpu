@@ -468,49 +468,20 @@ impl Global {
 
         let fid = hub.texture_views.prepare(id_in);
 
-        let error = 'error: {
-            let texture = hub.textures.get(texture_id);
-            let device = &texture.device;
+        let texture = hub.textures.get(texture_id);
+        let device = &texture.device;
 
-            let view = match device.create_texture_view(&texture, desc) {
-                Ok(view) => view,
-                Err(e) => break 'error e,
-            };
+        let (view, error) = device.create_texture_view(&texture, desc);
 
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateTextureView {
-                    id: view.to_trace(),
-                    parent: texture.to_trace(),
-                    desc: desc.clone(),
-                });
-            }
+        let id = fid.assign(view);
 
-            let id = fid.assign(Fallible::Valid(view));
-
-            api_log!("Texture::create_view({texture_id:?}) -> {id:?}");
-
-            return (id, None);
-        };
-
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-        (id, Some(error))
+        (id, error)
     }
 
     pub fn texture_view_drop(&self, texture_view_id: id::TextureViewId) {
-        profiling::scope!("TextureView::drop");
-        api_log!("TextureView::drop {texture_view_id:?}");
-
         let hub = &self.hub;
 
         let _view = hub.texture_views.remove(texture_view_id);
-
-        #[cfg(feature = "trace")]
-        if let Ok(view) = _view.get() {
-            if let Some(t) = view.device.trace.lock().as_mut() {
-                t.add(trace::Action::DropTextureView(view.to_trace()));
-            }
-        }
     }
 
     pub fn device_create_external_texture(
@@ -534,12 +505,8 @@ impl Global {
 
             let planes = planes
                 .iter()
-                .map(|plane_id| self.hub.texture_views.get(*plane_id).get())
-                .collect::<Result<Vec<_>, _>>();
-            let planes = match planes {
-                Ok(planes) => planes,
-                Err(error) => break 'error error.into(),
-            };
+                .map(|plane_id| self.hub.texture_views.get(*plane_id))
+                .collect::<Vec<_>>();
 
             let external_texture = match device.create_external_texture(desc, &planes) {
                 Ok(external_texture) => external_texture,
@@ -765,7 +732,7 @@ impl Global {
                 e: &BindGroupEntry<'a>,
                 buffer_storage: &Storage<Fallible<resource::Buffer>>,
                 sampler_storage: &Storage<Fallible<resource::Sampler>>,
-                texture_view_storage: &Storage<Fallible<resource::TextureView>>,
+                texture_view_storage: &Storage<Arc<resource::TextureView>>,
                 tlas_storage: &Storage<Fallible<resource::Tlas>>,
                 external_texture_storage: &Storage<Fallible<resource::ExternalTexture>>,
             ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
@@ -787,12 +754,7 @@ impl Global {
                         .get()
                         .map_err(binding_model::CreateBindGroupError::from)
                 };
-                let resolve_view = |id: &id::TextureViewId| {
-                    texture_view_storage
-                        .get(*id)
-                        .get()
-                        .map_err(binding_model::CreateBindGroupError::from)
-                };
+                let resolve_view = |id: &id::TextureViewId| texture_view_storage.get(*id);
                 let resolve_tlas = |id: &id::TlasId| {
                     tlas_storage
                         .get(*id)
@@ -827,13 +789,10 @@ impl Global {
                         ResolvedBindingResource::SamplerArray(Cow::Owned(samplers))
                     }
                     BindingResource::TextureView(ref view) => {
-                        ResolvedBindingResource::TextureView(resolve_view(view)?)
+                        ResolvedBindingResource::TextureView(resolve_view(view))
                     }
                     BindingResource::TextureViewArray(ref views) => {
-                        let views = views
-                            .iter()
-                            .map(resolve_view)
-                            .collect::<Result<Vec<_>, _>>()?;
+                        let views = views.iter().map(resolve_view).collect::<Vec<_>>();
                         ResolvedBindingResource::TextureViewArray(Cow::Owned(views))
                     }
                     BindingResource::AccelerationStructure(ref tlas) => {

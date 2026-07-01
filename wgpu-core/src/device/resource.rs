@@ -49,7 +49,7 @@ use crate::{
     resource::{
         self, Buffer, ExternalTexture, Fallible, Labeled, ParentDevice, QuerySet,
         RawResourceAccess, ResourceState, Sampler, StagingBuffer, Texture, TextureView,
-        TextureViewNotRenderableReason, Tlas, TrackingData,
+        TextureViewNotRenderableReason, TextureViewState, Tlas, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
@@ -733,7 +733,11 @@ impl Device {
                         let Some(view) = view.upgrade() else {
                             continue;
                         };
-                        let Some(raw_view) = view.raw.snatch(&mut self.snatchable_lock.write())
+                        let Ok(view_state) = view.state() else {
+                            continue;
+                        };
+                        let Some(raw_view) =
+                            view_state.raw.snatch(&mut self.snatchable_lock.write())
                         else {
                             continue;
                         };
@@ -1795,7 +1799,7 @@ impl Device {
         texture
     }
 
-    pub fn create_texture_view(
+    fn create_texture_view_inner(
         self: &Arc<Self>,
         texture: &Arc<Texture>,
         desc: &resource::TextureViewDescriptor,
@@ -2127,7 +2131,10 @@ impl Device {
         };
 
         let view = TextureView {
-            raw: Snatchable::new(raw),
+            state: ResourceState::Valid(TextureViewState {
+                raw: Snatchable::new(raw),
+                render_extent,
+            }),
             parent: texture.clone(),
             device: self.clone(),
             desc: resource::HalTextureViewDescriptor {
@@ -2138,7 +2145,6 @@ impl Device {
                 range: resolved_range,
             },
             format_features: texture.format_features,
-            render_extent,
             samples: texture.desc.sample_count,
             selector,
             label: desc.label.to_string(),
@@ -2152,6 +2158,36 @@ impl Device {
         }
 
         Ok(view)
+    }
+
+    pub fn create_texture_view(
+        self: &Arc<Self>,
+        texture: &Arc<Texture>,
+        desc: &resource::TextureViewDescriptor,
+    ) -> (Arc<TextureView>, Option<resource::CreateTextureViewError>) {
+        let (view, error) = match self.create_texture_view_inner(texture, desc) {
+            Ok(view) => (view, None),
+            Err(e) => (TextureView::invalid(self, texture, desc), Some(e)),
+        };
+
+        api_log!(
+            "Texture::create_view({:?}) -> {:?}",
+            Arc::as_ptr(texture),
+            Arc::as_ptr(&view)
+        );
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace;
+            use trace::IntoTrace as _;
+            trace.add(trace::Action::CreateTextureView {
+                id: view.to_trace(),
+                parent: texture.to_trace(),
+                desc: desc.clone(),
+            });
+        }
+
+        (view, error)
     }
 
     pub fn create_external_texture(
@@ -3185,6 +3221,7 @@ impl Device {
         texture_init_actions: &mut Vec<TextureInitTrackerAction>,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<hal::TextureBinding<'a, dyn hal::DynTextureView>, CreateBindGroupError> {
+        view.check_valid()?;
         view.same_device(self)?;
 
         let internal_use = self.texture_use_parameters(

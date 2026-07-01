@@ -278,9 +278,9 @@ pub struct RenderPassDescriptor<'a> {
 pub struct ResolvedRenderPassDescriptor<'a> {
     pub label: Label<'a>,
     /// The color attachments of the render pass.
-    pub color_attachments: Cow<'a, [Option<RenderPassColorAttachment<Fallible<TextureView>>>]>,
+    pub color_attachments: Cow<'a, [Option<RenderPassColorAttachment<Arc<TextureView>>>]>,
     /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<Fallible<TextureView>>>,
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<Arc<TextureView>>>,
     /// Defines where and when timestamp values will be written for this pass.
     pub timestamp_writes: Option<PassTimestampWrites<Fallible<QuerySet>>>,
     /// Defines where the occlusion query results will be stored for this pass.
@@ -1261,7 +1261,7 @@ impl RenderPassInfo {
             Ok(())
         };
         let mut add_view = |view: &TextureView, location| {
-            let render_extent = view.render_extent.map_err(|reason| {
+            let render_extent = view.state()?.render_extent.map_err(|reason| {
                 RenderPassErrorInner::TextureViewIsNotRenderable { location, reason }
             })?;
             if let Some(ex) = extent {
@@ -1552,13 +1552,13 @@ impl RenderPassInfo {
                     resolve: true,
                 };
 
-                let render_extent = resolve_view.render_extent.map_err(|reason| {
+                let render_extent = resolve_view.state()?.render_extent.map_err(|reason| {
                     RenderPassErrorInner::TextureViewIsNotRenderable {
                         location: resolve_location,
                         reason,
                     }
                 })?;
-                if color_view.render_extent.unwrap() != render_extent {
+                if color_view.state()?.render_extent.unwrap() != render_extent {
                     return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
                         expected_location: attachment_location,
                         expected_extent: extent.unwrap_or_default(),
@@ -1792,7 +1792,7 @@ impl RenderPassInfo {
                     Some("(wgpu internal) Zero init discarded depth/stencil aspect"),
                     instance_flags,
                 ),
-                extent: view.render_extent.unwrap(),
+                extent: view.state()?.render_extent.unwrap(),
                 sample_count: view.samples,
                 color_attachments: &[],
                 depth_stencil_attachment: Some(hal::DepthStencilAttachment {
@@ -1859,7 +1859,7 @@ impl CommandEncoder {
                     store_op,
                 }) = color_attachment
                 {
-                    let view = view.clone().get()?;
+                    view.check_valid()?;
                     view.same_device(device)?;
                     if matches!(*load_op, LoadOp::DontCare(..))
                         && device
@@ -1885,10 +1885,10 @@ impl CommandEncoder {
                     }
 
                     let resolve_target = if let Some(resolve_target) = resolve_target {
-                        let rt_arc = resolve_target.clone().get()?;
-                        rt_arc.same_device(device)?;
+                        resolve_target.check_valid()?;
+                        resolve_target.same_device(device)?;
 
-                        Some(rt_arc)
+                        Some(resolve_target)
                     } else {
                         None
                     };
@@ -1896,9 +1896,9 @@ impl CommandEncoder {
                     arc_desc
                         .color_attachments
                         .push(Some(ArcRenderPassColorAttachment {
-                            view,
+                            view: Arc::clone(view),
                             depth_slice: *depth_slice,
-                            resolve_target,
+                            resolve_target: resolve_target.map(Arc::clone),
                             load_op: *load_op,
                             store_op: *store_op,
                         }));
@@ -1911,7 +1911,8 @@ impl CommandEncoder {
             arc_desc.depth_stencil_attachment = if let Some(depth_stencil_attachment) =
                 desc.depth_stencil_attachment
             {
-                let view = depth_stencil_attachment.view.get()?;
+                let view = depth_stencil_attachment.view;
+                view.check_valid()?;
                 view.same_device(device)?;
 
                 let format = view.desc.format;

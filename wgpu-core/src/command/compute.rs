@@ -1635,6 +1635,7 @@ impl Global {
         let base = pass_base!(pass, scope);
 
         let hub = &self.hub;
+
         let buffer_transitions = pass_try!(
             base,
             scope,
@@ -1653,8 +1654,10 @@ impl Global {
             scope,
             texture_transitions
                 .map(|texture_transition| -> Result<_, InvalidResourceError> {
+                    let texture_view = hub.texture_views.get(texture_transition.texture);
+                    texture_view.check_valid()?;
                     Ok(wgt::TextureTransition {
-                        texture: hub.texture_views.get(texture_transition.texture).get()?,
+                        texture: texture_view,
                         selector: texture_transition.selector,
                         state: texture_transition.state,
                     })

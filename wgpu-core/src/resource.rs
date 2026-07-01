@@ -17,6 +17,7 @@ use wgt::{
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
+    api_log,
     binding_model::{BindGroup, BindingError},
     device::{
         queue, resource::DeferredDestroy, BufferMapPendingClosure, Device, DeviceError,
@@ -1948,15 +1949,20 @@ pub enum TextureViewNotRenderableReason {
 }
 
 #[derive(Debug)]
-pub struct TextureView {
+pub struct TextureViewState {
     pub(crate) raw: Snatchable<Box<dyn hal::DynTextureView>>,
+    /// This is `Err` only if the texture view is not renderable
+    pub(crate) render_extent: Result<wgt::Extent3d, TextureViewNotRenderableReason>,
+}
+
+#[derive(Debug)]
+pub struct TextureView {
+    pub(crate) state: ResourceState<TextureViewState>,
     // if it's a surface texture - it's none
     pub(crate) parent: Arc<Texture>,
     pub(crate) device: Arc<Device>,
     pub(crate) desc: HalTextureViewDescriptor,
     pub(crate) format_features: wgt::TextureFormatFeatures,
-    /// This is `Err` only if the texture view is not renderable
-    pub(crate) render_extent: Result<wgt::Extent3d, TextureViewNotRenderableReason>,
     pub(crate) samples: u32,
     pub(crate) selector: TextureSelector,
     /// The `label` from the descriptor used to create the resource.
@@ -1964,8 +1970,21 @@ pub struct TextureView {
 }
 
 impl Drop for TextureView {
+    #[expect(trivial_casts)]
     fn drop(&mut self) {
-        if let Some(raw) = self.raw.take() {
+        profiling::scope!("TextureView::drop");
+        api_log!("TextureView::drop {:?}", self as *const _);
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            t.add(trace::Action::DropTextureView(unsafe {
+                trace::to_trace(self)
+            }));
+        }
+        let ResourceState::Valid(state) = &mut self.state else {
+            return;
+        };
+
+        if let Some(raw) = state.raw.take() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
                 self.device.raw().destroy_texture_view(raw);
@@ -1978,7 +1997,9 @@ impl RawResourceAccess for TextureView {
     type DynResource = dyn hal::DynTextureView;
 
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
-        self.raw.get(guard).map(|it| it.as_ref())
+        self.state()
+            .ok()
+            .and_then(|state| state.raw.get(guard).map(|it| it.as_ref()))
     }
 
     fn try_raw<'a>(
@@ -2008,6 +2029,51 @@ impl TextureView {
                 expected,
             })
         }
+    }
+
+    pub(crate) fn state(&self) -> Result<&TextureViewState, InvalidResourceError> {
+        match &self.state {
+            ResourceState::Valid(state) => Ok(state),
+            ResourceState::Invalid => Err(InvalidResourceError(self.error_ident())),
+        }
+    }
+
+    pub(crate) fn check_valid(&self) -> Result<(), InvalidResourceError> {
+        self.state().map(|_| ())
+    }
+
+    pub(crate) fn invalid(
+        device: &Arc<Device>,
+        texture: &Arc<Texture>,
+        desc: &TextureViewDescriptor,
+    ) -> Arc<Self> {
+        // we do best effort to fill the descriptor with sensible values
+        Arc::new(TextureView {
+            state: ResourceState::Invalid,
+            parent: texture.clone(),
+            device: device.clone(),
+            desc: HalTextureViewDescriptor {
+                texture_format: texture.desc.format,
+                format: desc.format.unwrap_or(texture.desc.format),
+                usage: desc.usage.unwrap_or(texture.desc.usage),
+                dimension: desc.dimension.unwrap_or(match texture.desc.dimension {
+                    wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
+                    wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
+                    wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
+                }),
+                range: desc.range,
+            },
+            format_features: texture.format_features,
+            samples: texture.desc.sample_count,
+            selector: TextureSelector {
+                mips: desc.range.base_mip_level
+                    ..(desc.range.base_mip_level + desc.range.mip_level_count.unwrap_or_default()),
+                layers: desc.range.base_array_layer
+                    ..(desc.range.base_array_layer
+                        + desc.range.array_layer_count.unwrap_or_default()),
+            },
+            label: desc.label.to_string(),
+        })
     }
 }
 

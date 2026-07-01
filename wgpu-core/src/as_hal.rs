@@ -197,7 +197,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let view = hub.texture_views.get(id).get().ok()?;
+        let view = hub.texture_views.get(id);
 
         SnatchableResourceGuard::new(view)
     }
