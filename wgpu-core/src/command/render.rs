@@ -3749,8 +3749,11 @@ impl Global {
         let scope = PassErrorScope::SetIndexBuffer;
         let base = pass_base!(pass, scope);
 
+        let buffer = self.resolve_buffer_id(buffer_id);
+        pass_try!(base, scope, buffer.check_is_valid());
+
         base.commands.push(ArcRenderCommand::SetIndexBuffer {
-            buffer: pass_try!(base, scope, self.resolve_buffer_id(buffer_id)),
+            buffer,
             index_format,
             offset,
             size,
@@ -3786,7 +3789,9 @@ impl Global {
         let base = pass_base!(pass, scope);
 
         let buffer = if let Some(buffer_id) = buffer_id {
-            Some(pass_try!(base, scope, self.resolve_buffer_id(buffer_id)))
+            let buffer = self.resolve_buffer_id(buffer_id);
+            pass_try!(base, scope, buffer.check_is_valid());
+            Some(buffer)
         } else {
             None
         };
@@ -4120,8 +4125,11 @@ impl Global {
         };
         let base = pass_base!(pass, scope);
 
+        let buffer = self.resolve_buffer_id(buffer_id);
+        pass_try!(base, scope, buffer.check_is_valid());
+
         base.commands.push(ArcRenderCommand::DrawIndirect {
-            buffer: pass_try!(base, scope, self.resolve_buffer_id(buffer_id)),
+            buffer,
             offset,
             count: 1,
             family: DrawCommandFamily::Draw,
@@ -4158,8 +4166,11 @@ impl Global {
         };
         let base = pass_base!(pass, scope);
 
+        let buffer = self.resolve_buffer_id(buffer_id);
+        pass_try!(base, scope, buffer.check_is_valid());
+
         base.commands.push(ArcRenderCommand::DrawIndirect {
-            buffer: pass_try!(base, scope, self.resolve_buffer_id(buffer_id)),
+            buffer,
             offset,
             count: 1,
             family: DrawCommandFamily::DrawIndexed,
@@ -4196,8 +4207,11 @@ impl Global {
         };
         let base = pass_base!(pass, scope);
 
+        let buffer = self.resolve_buffer_id(buffer_id);
+        pass_try!(base, scope, buffer.check_is_valid());
+
         base.commands.push(ArcRenderCommand::DrawIndirect {
-            buffer: pass_try!(base, scope, self.resolve_buffer_id(buffer_id)),
+            buffer,
             offset,
             count: 1,
             family: DrawCommandFamily::DrawMeshTasks,
@@ -4222,8 +4236,11 @@ impl Global {
         };
         let base = pass_base!(pass, scope);
 
+        let buffer = self.resolve_buffer_id(buffer_id);
+        pass_try!(base, scope, buffer.check_is_valid());
+
         base.commands.push(ArcRenderCommand::DrawIndirect {
-            buffer: pass_try!(base, scope, self.resolve_buffer_id(buffer_id)),
+            buffer,
             offset,
             count,
             family: DrawCommandFamily::Draw,
@@ -4248,8 +4265,11 @@ impl Global {
         };
         let base = pass_base!(pass, scope);
 
+        let buffer = self.resolve_buffer_id(buffer_id);
+        pass_try!(base, scope, buffer.check_is_valid());
+
         base.commands.push(ArcRenderCommand::DrawIndirect {
-            buffer: pass_try!(base, scope, self.resolve_buffer_id(buffer_id)),
+            buffer,
             offset,
             count,
             family: DrawCommandFamily::DrawIndexed,
@@ -4274,8 +4294,11 @@ impl Global {
         };
         let base = pass_base!(pass, scope);
 
+        let buffer = self.resolve_buffer_id(buffer_id);
+        pass_try!(base, scope, buffer.check_is_valid());
+
         base.commands.push(ArcRenderCommand::DrawIndirect {
-            buffer: pass_try!(base, scope, self.resolve_buffer_id(buffer_id)),
+            buffer,
             offset,
             count,
             family: DrawCommandFamily::DrawMeshTasks,
@@ -4302,11 +4325,16 @@ impl Global {
         };
         let base = pass_base!(pass, scope);
 
+        let buffer = self.resolve_buffer_id(buffer_id);
+        pass_try!(base, scope, buffer.check_is_valid());
+        let count_buffer = self.resolve_buffer_id(count_buffer_id);
+        pass_try!(base, scope, count_buffer.check_is_valid());
+
         base.commands
             .push(ArcRenderCommand::MultiDrawIndirectCount {
-                buffer: pass_try!(base, scope, self.resolve_buffer_id(buffer_id)),
+                buffer,
                 offset,
-                count_buffer: pass_try!(base, scope, self.resolve_buffer_id(count_buffer_id)),
+                count_buffer,
                 count_buffer_offset,
                 max_count,
                 family: DrawCommandFamily::Draw,
@@ -4330,11 +4358,16 @@ impl Global {
         };
         let base = pass_base!(pass, scope);
 
+        let buffer = self.resolve_buffer_id(buffer_id);
+        pass_try!(base, scope, buffer.check_is_valid());
+        let count_buffer = self.resolve_buffer_id(count_buffer_id);
+        pass_try!(base, scope, count_buffer.check_is_valid());
+
         base.commands
             .push(ArcRenderCommand::MultiDrawIndirectCount {
-                buffer: pass_try!(base, scope, self.resolve_buffer_id(buffer_id)),
+                buffer,
                 offset,
-                count_buffer: pass_try!(base, scope, self.resolve_buffer_id(count_buffer_id)),
+                count_buffer,
                 count_buffer_offset,
                 max_count,
                 family: DrawCommandFamily::DrawIndexed,
@@ -4358,11 +4391,16 @@ impl Global {
         };
         let base = pass_base!(pass, scope);
 
+        let buffer = self.resolve_buffer_id(buffer_id);
+        pass_try!(base, scope, buffer.check_is_valid());
+        let count_buffer = self.resolve_buffer_id(count_buffer_id);
+        pass_try!(base, scope, count_buffer.check_is_valid());
+
         base.commands
             .push(ArcRenderCommand::MultiDrawIndirectCount {
-                buffer: pass_try!(base, scope, self.resolve_buffer_id(buffer_id)),
+                buffer,
                 offset,
-                count_buffer: pass_try!(base, scope, self.resolve_buffer_id(count_buffer_id)),
+                count_buffer,
                 count_buffer_offset,
                 max_count,
                 family: DrawCommandFamily::DrawMeshTasks,

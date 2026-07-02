@@ -10,6 +10,7 @@ use wgt::{math::align_to, BufferUsages, BufferUses, Features};
 use crate::{
     command::encoder::EncodingState,
     ray_tracing::{AsAction, AsBuild, TlasBuild, ValidateAsActionsError},
+    resource::InvalidResourceError,
 };
 use crate::{command::EncoderStateError, device::resource::CommandIndices};
 use crate::{
@@ -112,16 +113,26 @@ impl Global {
                         BlasGeometries::TriangleGeometries(triangle_geometries) => {
                             let tri_geo = triangle_geometries
                                 .map(|tg| {
+                                    let vertex_buffer = self.resolve_buffer_id(tg.vertex_buffer);
+                                    vertex_buffer.check_is_valid()?;
                                     Ok(ArcBlasTriangleGeometry {
                                         size: tg.size.clone(),
-                                        vertex_buffer: self.resolve_buffer_id(tg.vertex_buffer)?,
+                                        vertex_buffer,
                                         index_buffer: tg
                                             .index_buffer
-                                            .map(|id| self.resolve_buffer_id(id))
+                                            .map(|id| -> Result<_, InvalidResourceError> {
+                                                let index_buffer = self.resolve_buffer_id(id);
+                                                index_buffer.check_is_valid()?;
+                                                Ok(index_buffer)
+                                            })
                                             .transpose()?,
                                         transform_buffer: tg
                                             .transform_buffer
-                                            .map(|id| self.resolve_buffer_id(id))
+                                            .map(|id| -> Result<_, InvalidResourceError> {
+                                                let transform_buffer = self.resolve_buffer_id(id);
+                                                transform_buffer.check_is_valid()?;
+                                                Ok(transform_buffer)
+                                            })
                                             .transpose()?,
                                         first_vertex: tg.first_vertex,
                                         vertex_stride: tg.vertex_stride,
@@ -135,10 +146,12 @@ impl Global {
                         BlasGeometries::AabbGeometries(aabb_geometries) => {
                             let aabb_geo = aabb_geometries
                                 .map(|ag| {
+                                    let aabb_buffer = self.resolve_buffer_id(ag.aabb_buffer);
+                                    aabb_buffer.check_is_valid()?;
                                     Ok(ArcBlasAabbGeometry {
                                         size: ag.size.clone(),
                                         stride: ag.stride,
-                                        aabb_buffer: self.resolve_buffer_id(ag.aabb_buffer)?,
+                                        aabb_buffer,
                                         primitive_offset: ag.primitive_offset,
                                     })
                                 })

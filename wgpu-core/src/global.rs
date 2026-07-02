@@ -7,13 +7,14 @@ use crate::{
     device::{queue::Queue, Device},
     hub::{Hub, HubReport},
     id::{
-        AdapterId, BindGroupLayoutId, CommandBufferId, CommandEncoderId, ComputePipelineId,
-        DeviceId, PipelineLayoutId, QuerySetId, QueueId, RenderPipelineId, TextureId,
+        AdapterId, BindGroupLayoutId, BufferId, CommandBufferId, CommandEncoderId,
+        ComputePipelineId, DeviceId, PipelineLayoutId, QuerySetId, QueueId, RenderPipelineId,
+        TextureId,
     },
     instance::{Adapter, Instance, Surface},
     pipeline::{ComputePipeline, RenderPipeline},
     registry::{Registry, RegistryReport},
-    resource::{QuerySet, Texture},
+    resource::{Buffer, QuerySet, Texture},
     resource_log,
 };
 
@@ -259,6 +260,18 @@ impl Global {
     /// Resolve a [`QuerySetId`] to the corresponding [`Arc<QuerySet>`] in the global hub.
     pub fn resolve_query_set_id(&self, query_set_id: QuerySetId) -> Arc<QuerySet> {
         self.hub.query_sets.get(query_set_id)
+    }
+
+    /// Import [`Arc<Buffer>`] into the global hub,
+    /// returning a [`BufferId`] under which the buffer is stored.
+    pub fn import_buffer(&self, buffer: Arc<Buffer>, id_in: Option<BufferId>) -> BufferId {
+        let fid = self.hub.buffers.prepare(id_in);
+        fid.assign(buffer)
+    }
+
+    /// Resolve a [`BufferId`] to the corresponding [`Arc<Buffer>`] in the global hub.
+    pub fn resolve_buffer_id(&self, buffer_id: BufferId) -> Arc<Buffer> {
+        self.hub.buffers.get(buffer_id)
     }
 
     /// Import [`Arc<Texture>`] into the global hub,

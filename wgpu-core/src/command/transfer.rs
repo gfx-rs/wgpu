@@ -846,10 +846,14 @@ impl Global {
         let mut cmd_buf_data = cmd_enc.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
+            let source_buffer = self.resolve_buffer_id(source);
+            source_buffer.check_is_valid()?;
+            let destination_buffer = self.resolve_buffer_id(destination);
+            destination_buffer.check_is_valid()?;
             Ok(ArcCommand::CopyBufferToBuffer {
-                src: self.resolve_buffer_id(source)?,
+                src: source_buffer,
                 src_offset: source_offset,
-                dst: self.resolve_buffer_id(destination)?,
+                dst: destination_buffer,
                 dst_offset: destination_offset,
                 size,
             })
@@ -877,9 +881,11 @@ impl Global {
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             let texture = self.resolve_texture_id(destination.texture);
             texture.check_valid()?;
+            let source_buffer = self.resolve_buffer_id(source.buffer);
+            source_buffer.check_is_valid()?;
             Ok(ArcCommand::CopyBufferToTexture {
                 src: wgt::TexelCopyBufferInfo::<Arc<Buffer>> {
-                    buffer: self.resolve_buffer_id(source.buffer)?,
+                    buffer: source_buffer,
                     layout: source.layout,
                 },
                 dst: wgt::TexelCopyTextureInfo::<Arc<Texture>> {
@@ -914,6 +920,8 @@ impl Global {
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             let texture = self.resolve_texture_id(source.texture);
             texture.check_valid()?;
+            let destination_buffer = self.resolve_buffer_id(destination.buffer);
+            destination_buffer.check_is_valid()?;
             Ok(ArcCommand::CopyTextureToBuffer {
                 src: wgt::TexelCopyTextureInfo::<Arc<Texture>> {
                     texture,
@@ -922,7 +930,7 @@ impl Global {
                     aspect: source.aspect,
                 },
                 dst: wgt::TexelCopyBufferInfo::<Arc<Buffer>> {
-                    buffer: self.resolve_buffer_id(destination.buffer)?,
+                    buffer: destination_buffer,
                     layout: destination.layout,
                 },
                 size: *copy_size,

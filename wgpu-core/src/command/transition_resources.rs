@@ -30,8 +30,10 @@ impl Global {
             Ok(ArcCommand::TransitionResources {
                 buffer_transitions: buffer_transitions
                     .map(|t| {
+                        let buffer = self.resolve_buffer_id(t.buffer);
+                        buffer.check_is_valid()?;
                         Ok(wgt::BufferTransition {
-                            buffer: self.resolve_buffer_id(t.buffer)?,
+                            buffer,
                             state: t.state,
                         })
                     })

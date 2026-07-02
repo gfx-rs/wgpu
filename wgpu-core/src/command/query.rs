@@ -466,11 +466,13 @@ impl Global {
         cmd_buf_data.push_with(|| -> Result<_, QueryError> {
             let query_set = self.resolve_query_set_id(query_set_id);
             query_set.check_is_valid()?;
+            let buffer = self.resolve_buffer_id(destination);
+            buffer.check_is_valid()?;
             Ok(ArcCommand::ResolveQuerySet {
                 query_set,
                 start_query,
                 query_count,
-                destination: self.resolve_buffer_id(destination)?,
+                destination: buffer,
                 destination_offset,
             })
         })

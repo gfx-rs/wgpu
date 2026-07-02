@@ -142,43 +142,13 @@ impl Global {
         let hub = &self.hub;
         let fid = hub.buffers.prepare(id_in);
 
-        let error = 'error: {
-            let device = self.hub.devices.get(device_id);
+        let device = self.hub.devices.get(device_id);
 
-            let buffer = match device.create_buffer(desc) {
-                Ok(buffer) => buffer,
-                Err(e) => {
-                    break 'error e;
-                }
-            };
+        let (buffer, error) = device.create_buffer(desc);
 
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                let mut desc = desc.clone();
-                let mapped_at_creation = core::mem::replace(&mut desc.mapped_at_creation, false);
-                if mapped_at_creation && !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
-                    desc.usage |= wgt::BufferUsages::COPY_DST;
-                }
-                trace.add(trace::Action::CreateBuffer(buffer.to_trace(), desc));
-            }
+        let id = fid.assign(buffer);
 
-            let id = fid.assign(Fallible::Valid(buffer));
-
-            api_log!(
-                "Device::create_buffer({:?}{}) -> {id:?}",
-                desc.label.as_deref().unwrap_or(""),
-                if desc.mapped_at_creation {
-                    ", mapped_at_creation"
-                } else {
-                    ""
-                }
-            );
-
-            return (id, None);
-        };
-
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-        (id, Some(error))
+        (id, error)
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -211,11 +181,13 @@ impl Global {
     /// [`wgpu_types::BufferUsages`]: wgt::BufferUsages
     pub fn create_buffer_error(
         &self,
+        device_id: DeviceId,
         id_in: Option<id::BufferId>,
         desc: &resource::BufferDescriptor,
     ) {
         let fid = self.hub.buffers.prepare(id_in);
-        fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
+        let device = self.hub.devices.get(device_id);
+        fid.assign(resource::Buffer::invalid(device, desc));
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -289,17 +261,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let Ok(buffer) = hub.buffers.get(buffer_id).get() else {
-            // If the buffer is already invalid, there's nothing to do.
-            return;
-        };
-
-        #[cfg(feature = "trace")]
-        if let Some(trace) = buffer.device.trace.lock().as_mut() {
-            trace.add(trace::Action::DestroyBuffer(buffer.to_trace()));
-        }
-
-        let _ = buffer.unmap();
+        let buffer = hub.buffers.get(buffer_id);
 
         buffer.destroy();
     }
@@ -310,17 +272,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = match hub.buffers.remove(buffer_id).get() {
-            Ok(buffer) => buffer,
-            Err(_) => {
-                return;
-            }
-        };
-
-        #[cfg(feature = "trace")]
-        if let Some(t) = buffer.device.trace.lock().as_mut() {
-            t.add(trace::Action::DropBuffer(buffer.to_trace()));
-        }
+        let buffer = hub.buffers.remove(buffer_id);
 
         let _ = buffer.unmap();
     }
@@ -417,20 +369,7 @@ impl Global {
 
         let (buffer, err) = unsafe { device.create_buffer_from_hal(Box::new(hal_buffer), desc) };
 
-        // NB: Any change done through the raw buffer handle will not be
-        // recorded in the replay
-        #[cfg(feature = "trace")]
-        if let Some(trace) = device.trace.lock().as_mut() {
-            match &buffer {
-                Fallible::Valid(arc) => {
-                    trace.add(trace::Action::CreateBuffer(arc.to_trace(), desc.clone()))
-                }
-                Fallible::Invalid(_) => {}
-            }
-        }
-
         let id = fid.assign(buffer);
-        api_log!("Device::create_buffer -> {id:?}");
 
         (id, err)
     }
@@ -662,24 +601,23 @@ impl Global {
 
             fn resolve_entry<'a>(
                 e: &BindGroupEntry<'a>,
-                buffer_storage: &Storage<Fallible<resource::Buffer>>,
+                buffer_storage: &Storage<Arc<resource::Buffer>>,
                 sampler_storage: &Storage<Arc<resource::Sampler>>,
                 texture_view_storage: &Storage<Arc<resource::TextureView>>,
                 tlas_storage: &Storage<Arc<resource::Tlas>>,
                 external_texture_storage: &Storage<Arc<resource::ExternalTexture>>,
             ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
             {
-                let resolve_buffer = |bb: &BufferBinding| {
-                    buffer_storage
-                        .get(bb.buffer)
-                        .get()
-                        .map(|buffer| ResolvedBufferBinding {
+                let resolve_buffer =
+                    |bb: &BufferBinding| -> Result<_, binding_model::CreateBindGroupError> {
+                        let buffer = buffer_storage.get(bb.buffer);
+                        buffer.check_is_valid()?;
+                        Ok(ResolvedBufferBinding {
                             buffer,
                             offset: bb.offset,
                             size: bb.size,
                         })
-                        .map_err(binding_model::CreateBindGroupError::from)
-                };
+                    };
                 let resolve_sampler = |id: &id::SamplerId| sampler_storage.get(*id);
                 let resolve_view = |id: &id::TextureViewId| texture_view_storage.get(*id);
                 let resolve_tlas = |id: &id::TlasId| tlas_storage.get(*id);
@@ -1577,15 +1515,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = match hub.buffers.get(buffer_id).get() {
-            Ok(buffer) => buffer,
-            Err(err) => {
-                if let Some(callback) = op.callback {
-                    callback(Err(err.clone().into()));
-                }
-                return Err(err.into());
-            }
-        };
+        let buffer = hub.buffers.get(buffer_id);
 
         buffer.map_async(offset, size, op)
     }
@@ -1596,12 +1526,9 @@ impl Global {
         offset: BufferAddress,
         size: Option<BufferAddress>,
     ) -> Result<(NonNull<u8>, u64), BufferAccessError> {
-        profiling::scope!("Buffer::get_mapped_range");
-        api_log!("Buffer::get_mapped_range {buffer_id:?} offset {offset:?} size {size:?}");
-
         let hub = &self.hub;
 
-        let buffer = hub.buffers.get(buffer_id).get()?;
+        let buffer = hub.buffers.get(buffer_id);
 
         buffer.get_mapped_range(offset, size)
     }
@@ -1612,13 +1539,8 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = hub.buffers.get(buffer_id).get()?;
+        let buffer = hub.buffers.get(buffer_id);
 
-        let snatch_guard = buffer.device.snatchable_lock.read();
-        buffer.check_destroyed(&snatch_guard)?;
-        drop(snatch_guard);
-
-        buffer.device.check_is_valid()?;
         buffer.unmap()
     }
 }

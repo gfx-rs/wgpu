@@ -89,7 +89,6 @@ pub use timestamp_writes::PassTimestampWrites;
 use crate::binding_model::BindingError;
 use crate::device::queue::TempResource;
 use crate::device::{Device, DeviceError, MissingFeatures};
-use crate::id::Id;
 use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
 
@@ -1764,13 +1763,6 @@ impl WebGpuError for TimestampWritesError {
 }
 
 impl Global {
-    fn resolve_buffer_id(
-        &self,
-        buffer_id: Id<id::markers::Buffer>,
-    ) -> Result<Arc<crate::resource::Buffer>, InvalidResourceError> {
-        self.hub.buffers.get(buffer_id).get()
-    }
-
     /// Finishes a command encoder, creating a command buffer and returning errors that were
     /// deferred until now.
     ///

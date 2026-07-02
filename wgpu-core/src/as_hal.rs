@@ -165,7 +165,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = hub.buffers.get(id).get().ok()?;
+        let buffer = hub.buffers.get(id);
 
         SnatchableResourceGuard::new(buffer)
     }

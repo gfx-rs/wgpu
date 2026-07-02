@@ -205,7 +205,7 @@ pub struct Hub {
     pub(crate) compute_pipelines: Registry<Arc<ComputePipeline>>,
     pub(crate) pipeline_caches: Registry<Arc<PipelineCache>>,
     pub(crate) query_sets: Registry<Arc<QuerySet>>,
-    pub(crate) buffers: Registry<Fallible<Buffer>>,
+    pub(crate) buffers: Registry<Arc<Buffer>>,
     pub(crate) staging_buffers: Registry<StagingBuffer>,
     pub(crate) textures: Registry<Arc<Texture>>,
     pub(crate) texture_views: Registry<Arc<TextureView>>,

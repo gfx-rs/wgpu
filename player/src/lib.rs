@@ -110,7 +110,7 @@ impl Player {
                 panic!("Unexpected Surface action: winit feature is not enabled")
             }
             Action::CreateBuffer(id, desc) => {
-                let buffer = device.create_buffer(&desc).expect("create_buffer error");
+                let (buffer, _error) = device.create_buffer(&desc);
                 self.buffers.insert(id, buffer);
             }
             Action::DestroyBuffer(id) => {

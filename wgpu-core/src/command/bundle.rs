@@ -935,13 +935,14 @@ fn set_pipeline(
 // This function is duplicative of `render::set_index_buffer`.
 fn set_index_buffer(
     state: &mut State,
-    buffer_guard: &crate::storage::Storage<Fallible<Buffer>>,
+    buffer_guard: &crate::storage::Storage<Arc<Buffer>>,
     buffer_id: id::Id<id::markers::Buffer>,
     index_format: wgt::IndexFormat,
     offset: u64,
     size: Option<NonZeroU64>,
 ) -> Result<(), RenderBundleErrorInner> {
-    let buffer = buffer_guard.get(buffer_id).get()?;
+    let buffer = buffer_guard.get(buffer_id);
+    buffer.check_is_valid()?;
 
     state
         .trackers
@@ -974,7 +975,7 @@ fn set_index_buffer(
 // This function is duplicative of `render::set_vertex_buffer`.
 fn set_vertex_buffer(
     state: &mut State,
-    buffer_guard: &crate::storage::Storage<Fallible<Buffer>>,
+    buffer_guard: &crate::storage::Storage<Arc<Buffer>>,
     slot: u32,
     buffer_id: Option<id::Id<id::markers::Buffer>>,
     offset: u64,
@@ -990,7 +991,8 @@ fn set_vertex_buffer(
     }
 
     if let Some(buffer_id) = buffer_id {
-        let buffer = buffer_guard.get(buffer_id).get()?;
+        let buffer = buffer_guard.get(buffer_id);
+        buffer.check_is_valid()?;
 
         state
             .trackers
@@ -1189,7 +1191,7 @@ fn draw_mesh_tasks(
 
 fn multi_draw_indirect(
     state: &mut State,
-    buffer_guard: &crate::storage::Storage<Fallible<Buffer>>,
+    buffer_guard: &crate::storage::Storage<Arc<Buffer>>,
     buffer_id: id::Id<id::markers::Buffer>,
     offset: u64,
     family: DrawCommandFamily,
@@ -1199,8 +1201,9 @@ fn multi_draw_indirect(
         .device
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
 
-    let buffer = buffer_guard.get(buffer_id).get()?;
+    let buffer = buffer_guard.get(buffer_id);
 
+    buffer.check_is_valid()?;
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
 

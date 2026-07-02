@@ -47,7 +47,7 @@ use crate::{
     pool::ResourcePool,
     present,
     resource::{
-        self, Buffer, ExternalTexture, ExternalTextureState, Fallible, Labeled, ParentDevice,
+        self, Buffer, BufferState, ExternalTexture, ExternalTextureState, Labeled, ParentDevice,
         QuerySet, QuerySetState, RawResourceAccess, ResourceState, Sampler, StagingBuffer, Texture,
         TextureView, TextureViewNotRenderableReason, TextureViewState, Tlas, TrackingData,
     },
@@ -1006,7 +1006,7 @@ impl Device {
         (user_closures, result)
     }
 
-    pub fn create_buffer(
+    pub fn create_buffer_inner(
         self: &Arc<Self>,
         desc: &resource::BufferDescriptor,
     ) -> Result<Arc<Buffer>, resource::CreateBufferError> {
@@ -1125,7 +1125,9 @@ impl Device {
             self.create_indirect_validation_bind_groups(buffer.as_ref(), desc.size, desc.usage)?;
 
         let buffer = Buffer {
-            raw: Snatchable::new(buffer),
+            state: ResourceState::Valid(BufferState {
+                raw: Snatchable::new(buffer),
+            }),
             device: self.clone(),
             usage: desc.usage,
             size: desc.size,
@@ -1182,6 +1184,37 @@ impl Device {
             .insert_single(&buffer, buffer_use);
 
         Ok(buffer)
+    }
+
+    pub fn create_buffer(
+        self: &Arc<Self>,
+        desc: &resource::BufferDescriptor,
+    ) -> (Arc<Buffer>, Option<resource::CreateBufferError>) {
+        let (buffer, error) = match self.create_buffer_inner(desc) {
+            Ok(buffer) => (buffer, None),
+            Err(e) => (Buffer::invalid(Arc::clone(self), desc), Some(e)),
+        };
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use trace::IntoTrace;
+            let mut desc = desc.clone();
+            let mapped_at_creation = mem::replace(&mut desc.mapped_at_creation, false);
+            if mapped_at_creation && !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
+                desc.usage |= wgt::BufferUsages::COPY_DST;
+            }
+            trace.add(trace::Action::CreateBuffer(buffer.to_trace(), desc));
+        }
+        api_log!(
+            "Device::create_buffer({:?}{}) -> {:?}",
+            desc.label.as_deref().unwrap_or(""),
+            if desc.mapped_at_creation {
+                ", mapped_at_creation"
+            } else {
+                ""
+            },
+            Arc::as_ptr(&buffer)
+        );
+        (buffer, error)
     }
 
     #[cfg(feature = "replay")]
@@ -1283,14 +1316,40 @@ impl Device {
     /// - `hal_buffer` must have been created respecting `desc` (in particular, the size).
     /// - `hal_buffer` must be initialized.
     /// - `hal_buffer` must not have zero size.
-    pub(crate) unsafe fn create_buffer_from_hal(
+    pub unsafe fn create_buffer_from_hal(
         self: &Arc<Self>,
         hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
-    ) -> (Fallible<Buffer>, Option<resource::CreateBufferError>) {
-        let timestamp_normalization_bind_group = unsafe {
-            match self
-                .timestamp_normalizer
+    ) -> (Arc<Buffer>, Option<resource::CreateBufferError>) {
+        let (buffer, error) = match unsafe { self.create_buffer_from_hal_inner(hal_buffer, desc) } {
+            Ok(buffer) => (buffer, None),
+            Err(e) => (Buffer::invalid(Arc::clone(self), desc), Some(e)),
+        };
+
+        // NB: Any change done through the raw buffer handle will not be
+        // recorded in the replay
+        #[cfg(feature = "trace")]
+        if let Some(trace) = self.trace.lock().as_mut() {
+            use trace::IntoTrace;
+            trace.add(trace::Action::CreateBuffer(buffer.to_trace(), desc.clone()));
+        }
+        api_log!("Device::create_buffer -> {:?}", Arc::as_ptr(&buffer));
+        (buffer, error)
+    }
+
+    /// # Safety
+    ///
+    /// - `hal_buffer` must have been created on this device.
+    /// - `hal_buffer` must have been created respecting `desc` (in particular, the size).
+    /// - `hal_buffer` must be initialized.
+    /// - `hal_buffer` must not have zero size.
+    pub(crate) unsafe fn create_buffer_from_hal_inner(
+        self: &Arc<Self>,
+        hal_buffer: Box<dyn hal::DynBuffer>,
+        desc: &resource::BufferDescriptor,
+    ) -> Result<Arc<Buffer>, resource::CreateBufferError> {
+        let timestamp_normalization_bind_group = Snatchable::new(unsafe {
+            self.timestamp_normalizer
                 .get()
                 .unwrap()
                 .create_normalization_bind_group(
@@ -1299,30 +1358,21 @@ impl Device {
                     desc.label.as_deref(),
                     wgt::BufferSize::new(desc.size).unwrap(),
                     desc.usage,
-                ) {
-                Ok(bg) => Snatchable::new(bg),
-                Err(e) => {
-                    return (
-                        Fallible::Invalid(Arc::new(desc.label.to_string())),
-                        Some(e.into()),
-                    )
-                }
-            }
-        };
+                )?
+        });
 
-        let indirect_validation_bind_groups = match self.create_indirect_validation_bind_groups(
+        let indirect_validation_bind_groups = self.create_indirect_validation_bind_groups(
             hal_buffer.as_ref(),
             desc.size,
             desc.usage,
-        ) {
-            Ok(ok) => ok,
-            Err(e) => return (Fallible::Invalid(Arc::new(desc.label.to_string())), Some(e)),
-        };
+        )?;
 
         unsafe { self.raw().add_raw_buffer(&*hal_buffer) };
 
         let buffer = Buffer {
-            raw: Snatchable::new(hal_buffer),
+            state: ResourceState::Valid(BufferState {
+                raw: Snatchable::new(hal_buffer),
+            }),
             device: self.clone(),
             usage: desc.usage,
             size: desc.size,
@@ -1345,7 +1395,7 @@ impl Device {
             .buffers
             .insert_single(&buffer, wgt::BufferUses::empty());
 
-        (Fallible::Valid(buffer), None)
+        Ok(buffer)
     }
 
     fn create_indirect_validation_bind_groups(
@@ -2305,7 +2355,7 @@ impl Device {
             usage: wgt::BufferUsages::UNIFORM | wgt::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         };
-        let params = self.create_buffer(&params_desc)?;
+        let params = self.create_buffer_inner(&params_desc)?;
         self.get_queue().unwrap().write_buffer(
             params.clone(),
             0,

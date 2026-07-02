@@ -1429,7 +1429,9 @@ impl Global {
         let scope = PassErrorScope::Dispatch { indirect: true };
         let base = pass_base!(pass, scope);
 
-        let buffer = pass_try!(base, scope, hub.buffers.get(buffer_id).get());
+        let buffer = hub.buffers.get(buffer_id);
+
+        pass_try!(base, scope, buffer.check_is_valid());
 
         base.commands
             .push(ArcComputeCommand::DispatchWorkgroupsIndirect { buffer, offset });
@@ -1643,8 +1645,10 @@ impl Global {
             scope,
             buffer_transitions
                 .map(|buffer_transition| -> Result<_, InvalidResourceError> {
+                    let buffer = hub.buffers.get(buffer_transition.buffer);
+                    buffer.check_is_valid()?;
                     Ok(wgt::BufferTransition {
-                        buffer: hub.buffers.get(buffer_transition.buffer).get()?,
+                        buffer,
                         state: buffer_transition.state,
                     })
                 })

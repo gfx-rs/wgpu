@@ -476,8 +476,13 @@ pub(crate) struct BufferPendingMapping {
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 
 #[derive(Debug)]
-pub struct Buffer {
+pub(crate) struct BufferState {
     pub(crate) raw: Snatchable<Box<dyn hal::DynBuffer>>,
+}
+
+#[derive(Debug)]
+pub struct Buffer {
+    pub(crate) state: ResourceState<BufferState>,
     pub(crate) device: Arc<Device>,
     pub(crate) usage: wgt::BufferUsages,
     pub(crate) size: wgt::BufferAddress,
@@ -494,6 +499,11 @@ pub struct Buffer {
 
 impl Drop for Buffer {
     fn drop(&mut self) {
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            t.add(trace::Action::DropBuffer(unsafe { trace::to_trace(self) }));
+        }
+
         if let Some(raw) = self.timestamp_normalization_bind_group.take() {
             raw.dispose(self.device.raw());
         }
@@ -502,7 +512,11 @@ impl Drop for Buffer {
             raw.dispose(self.device.raw());
         }
 
-        if let Some(raw) = self.raw.take() {
+        let ResourceState::Valid(state) = &mut self.state else {
+            return;
+        };
+
+        if let Some(raw) = state.raw.take() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
                 self.device.raw().destroy_buffer(raw);
@@ -515,7 +529,9 @@ impl RawResourceAccess for Buffer {
     type DynResource = dyn hal::DynBuffer;
 
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
-        self.raw.get(guard).map(|b| b.as_ref())
+        self.state()
+            .ok()
+            .and_then(|state| state.raw.get(guard).map(|b| b.as_ref()))
     }
 }
 
@@ -524,7 +540,11 @@ impl Buffer {
         &self,
         guard: &SnatchGuard,
     ) -> Result<(), DestroyedResourceError> {
-        self.raw
+        let ResourceState::Valid(state) = &self.state else {
+            return Ok(());
+        };
+        state
+            .raw
             .get(guard)
             .map(|_| ())
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
@@ -545,6 +565,36 @@ impl Buffer {
                 expected,
             })
         }
+    }
+
+    pub(crate) fn state(&self) -> Result<&BufferState, InvalidResourceError> {
+        match &self.state {
+            ResourceState::Valid(state) => Ok(state),
+            ResourceState::Invalid => Err(InvalidResourceError(self.error_ident())),
+        }
+    }
+
+    pub(crate) fn check_is_valid(&self) -> Result<(), InvalidResourceError> {
+        self.state().map(|_| ())
+    }
+
+    pub(crate) fn invalid(device: Arc<Device>, desc: &BufferDescriptor) -> Arc<Self> {
+        Arc::new(Buffer {
+            state: ResourceState::Invalid,
+            usage: desc.usage,
+            size: desc.size,
+            initialization_status: RwLock::new(
+                rank::BUFFER_INITIALIZATION_STATUS,
+                BufferInitTracker::new(0),
+            ),
+            map_state: Mutex::new(rank::BUFFER_MAP_STATE, BufferMapState::Idle),
+            label: desc.label.to_string(),
+            tracking_data: TrackingData::new(device.tracker_indices.buffers.clone()),
+            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
+            timestamp_normalization_bind_group: Snatchable::empty(),
+            indirect_validation_bind_groups: Snatchable::empty(),
+            device,
+        })
     }
 
     /// Resolve the size of a binding for buffer with `offset` and `size`.
@@ -675,6 +725,10 @@ impl Buffer {
             self.size.saturating_sub(offset)
         };
 
+        if let Err(e) = self.check_is_valid() {
+            return Err((op, e.into()));
+        }
+
         if !offset.is_multiple_of(wgt::MAP_ALIGNMENT) {
             return Err((op, BufferAccessError::UnalignedOffset { offset }));
         }
@@ -804,6 +858,13 @@ impl Buffer {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
     ) -> Result<(NonNull<u8>, u64), BufferAccessError> {
+        profiling::scope!("Buffer::get_mapped_range");
+        api_log!(
+            "Buffer::get_mapped_range {:?} offset {offset:?} size {size:?}",
+            Arc::as_ptr(self)
+        );
+
+        self.check_is_valid()?;
         {
             let snatch_guard = self.device.snatchable_lock.read();
             self.check_destroyed(&snatch_guard)?;
@@ -946,7 +1007,10 @@ impl Buffer {
 
     fn unmap_inner(self: &Arc<Self>) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
         let device = &self.device;
+        self.check_is_valid()?;
+        self.device.check_is_valid()?;
         let snatch_guard = device.snatchable_lock.read();
+        self.check_destroyed(&snatch_guard)?;
         let raw_buf = self.try_raw(&snatch_guard)?;
         let map_state = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
         match map_state {
@@ -1045,10 +1109,22 @@ impl Buffer {
     pub fn destroy(self: &Arc<Self>) {
         let device = &self.device;
 
+        #[cfg(feature = "trace")]
+        if let Some(trace) = device.trace.lock().as_mut() {
+            use crate::device::trace::IntoTrace;
+            trace.add(trace::Action::DestroyBuffer(self.to_trace()));
+        }
+
+        let ResourceState::Valid(state) = &self.state else {
+            return;
+        };
+
+        let _ = self.unmap();
+
         let temp = {
             let mut snatch_guard = device.snatchable_lock.write();
 
-            let raw = match self.raw.snatch(&mut snatch_guard) {
+            let raw = match state.raw.snatch(&mut snatch_guard) {
                 Some(raw) => raw,
                 None => {
                     // Per spec, it is valid to call `destroy` multiple times.

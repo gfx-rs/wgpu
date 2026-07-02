@@ -127,8 +127,10 @@ impl Global {
         let mut cmd_buf_data = cmd_enc.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, ClearError> {
+            let buffer = self.resolve_buffer_id(dst);
+            buffer.check_is_valid()?;
             Ok(ArcCommand::ClearBuffer {
-                dst: self.resolve_buffer_id(dst)?,
+                dst: buffer,
                 offset,
                 size,
             })

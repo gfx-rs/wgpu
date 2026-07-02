@@ -37,7 +37,7 @@ use crate::{
     resource::{
         Blas, BlasCompactState, BlasDescriptor, BlasState, Buffer, BufferAccessError,
         BufferMapState, DestroyedBuffer, DestroyedQuerySet, DestroyedResourceError,
-        DestroyedTexture, Fallible, FlushedStagingBuffer, InvalidOrDestroyedResourceError,
+        DestroyedTexture, FlushedStagingBuffer, InvalidOrDestroyedResourceError,
         InvalidResourceError, Labeled, ParentDevice, ResourceErrorIdent, ResourceState,
         StagingBuffer, Texture, TextureInner, Trackable, TrackingData,
     },
@@ -639,6 +639,21 @@ impl Queue {
         profiling::scope!("Queue::write_buffer");
         api_log!("Queue::write_buffer");
 
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.device.trace.lock() {
+            use crate::device::trace::DataKind;
+            let size = data.len() as u64;
+            let data = trace.make_binary(DataKind::Bin, data);
+            trace.add(Action::WriteBuffer {
+                id: buffer.to_trace(),
+                data,
+                offset: buffer_offset,
+                size,
+                queued: true,
+            });
+        }
+
+        buffer.check_is_valid()?;
         self.device.check_is_valid()?;
 
         let data_size = data.len() as wgt::BufferAddress;
@@ -706,15 +721,14 @@ impl Queue {
 
     pub fn write_staging_buffer(
         &self,
-        buffer: Fallible<Buffer>,
+        buffer: Arc<Buffer>,
         buffer_offset: wgt::BufferAddress,
         staging_buffer: StagingBuffer,
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::write_staging_buffer");
 
+        buffer.check_is_valid()?;
         self.device.check_is_valid()?;
-
-        let buffer = buffer.get()?;
 
         // At this point, we have taken ownership of the staging_buffer from the
         // user. Platform validation requires that the staging buffer always
@@ -744,15 +758,14 @@ impl Queue {
 
     pub fn validate_write_buffer(
         &self,
-        buffer: Fallible<Buffer>,
+        buffer: Arc<Buffer>,
         buffer_offset: u64,
         buffer_size: wgt::BufferSize,
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::validate_write_buffer");
 
         self.device.check_is_valid()?;
-
-        let buffer = buffer.get()?;
+        buffer.check_is_valid()?;
 
         self.validate_write_buffer_impl(&buffer, buffer_offset, buffer_size.into())?;
 
@@ -1901,21 +1914,7 @@ impl Global {
         data: &[u8],
     ) -> Result<(), QueueWriteError> {
         let queue = self.hub.queues.get(queue_id);
-        let buffer = self.hub.buffers.get(buffer_id).get()?;
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *queue.device.trace.lock() {
-            use crate::device::trace::DataKind;
-            let size = data.len() as u64;
-            let data = trace.make_binary(DataKind::Bin, data);
-            trace.add(Action::WriteBuffer {
-                id: buffer.to_trace(),
-                data,
-                offset: buffer_offset,
-                size,
-                queued: true,
-            });
-        }
+        let buffer = self.hub.buffers.get(buffer_id);
 
         queue.write_buffer(buffer, buffer_offset, data)
     }
