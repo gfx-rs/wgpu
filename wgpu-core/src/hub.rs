@@ -195,7 +195,7 @@ pub struct Hub {
     pub(crate) devices: Registry<Arc<Device>>,
     pub(crate) queues: Registry<Arc<Queue>>,
     pub(crate) pipeline_layouts: Registry<Arc<PipelineLayout>>,
-    pub(crate) shader_modules: Registry<Fallible<ShaderModule>>,
+    pub(crate) shader_modules: Registry<Arc<ShaderModule>>,
     pub(crate) bind_group_layouts: Registry<Arc<BindGroupLayout>>,
     pub(crate) bind_groups: Registry<Fallible<BindGroup>>,
     pub(crate) command_encoders: Registry<Arc<CommandEncoder>>,

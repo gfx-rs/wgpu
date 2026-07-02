@@ -2400,6 +2400,70 @@ impl Device {
         self: &Arc<Self>,
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: pipeline::ShaderModuleSource<'a>,
+    ) -> (
+        Arc<pipeline::ShaderModule>,
+        Option<pipeline::CreateShaderModuleError>,
+    ) {
+        #[cfg(feature = "trace")]
+        let data = self.trace.lock().as_mut().map(|trace| {
+            use crate::device::trace::DataKind;
+
+            match source {
+                #[cfg(feature = "wgsl")]
+                pipeline::ShaderModuleSource::Wgsl(ref code) => {
+                    trace.make_binary(DataKind::Wgsl, code.as_bytes())
+                }
+                #[cfg(feature = "glsl")]
+                pipeline::ShaderModuleSource::Glsl(ref code, _) => {
+                    trace.make_binary(DataKind::Glsl, code.as_bytes())
+                }
+                #[cfg(feature = "spirv")]
+                pipeline::ShaderModuleSource::SpirV(ref code, _) => {
+                    trace.make_binary(DataKind::Spv, bytemuck::cast_slice::<u32, u8>(code))
+                }
+                pipeline::ShaderModuleSource::Naga(ref module) => {
+                    let string =
+                        ron::ser::to_string_pretty(module, ron::ser::PrettyConfig::default())
+                            .unwrap();
+                    trace.make_binary(DataKind::Ron, string.as_bytes())
+                }
+                pipeline::ShaderModuleSource::Dummy(_) => {
+                    panic!("found `ShaderModuleSource::Dummy`")
+                }
+            }
+        });
+        let (shader, error) = match self.create_shader_module_inner(desc, source) {
+            Ok(shader) => (shader, None),
+            Err(e) => {
+                let shader =
+                    pipeline::ShaderModule::invalid(Arc::clone(self), desc.label.to_string());
+                (shader, Some(e))
+            }
+        };
+        api_log!("Device::create_shader_module -> {:?}", Arc::as_ptr(&shader));
+
+        #[cfg(feature = "trace")]
+        if let Some(data) = data {
+            // We don't need these two operations with the trace to be atomic.
+
+            use crate::device::trace::IntoTrace as _;
+            self.trace
+                .lock()
+                .as_mut()
+                .expect("trace went away during create_shader_module?")
+                .add(trace::Action::CreateShaderModule {
+                    id: shader.to_trace(),
+                    desc: desc.clone(),
+                    data,
+                });
+        };
+        (shader, error)
+    }
+
+    pub(crate) fn create_shader_module_inner<'a>(
+        self: &Arc<Self>,
+        desc: &pipeline::ShaderModuleDescriptor<'a>,
+        source: pipeline::ShaderModuleSource<'a>,
     ) -> Result<Arc<pipeline::ShaderModule>, pipeline::CreateShaderModuleError> {
         self.check_is_valid()?;
 
@@ -2518,9 +2582,11 @@ impl Device {
         };
 
         let module = pipeline::ShaderModule {
-            raw: ManuallyDrop::new(raw),
+            state: ResourceState::Valid(pipeline::ShaderModuleState {
+                raw,
+                interface: ShaderMetaData::Interface(interface),
+            }),
             device: self.clone(),
-            interface: ShaderMetaData::Interface(interface),
             label: desc.label.to_string(),
         };
 
@@ -2529,10 +2595,63 @@ impl Device {
         Ok(module)
     }
 
-    /// Not a public API. For use by `player` only.
-    #[allow(unused_unsafe)]
-    #[doc(hidden)]
+    /// # Safety
+    ///
+    /// This function passes source code or binary to the backend as-is and can potentially result in a
+    /// driver crash.
     pub unsafe fn create_shader_module_passthrough<'a>(
+        self: &Arc<Self>,
+        desc: &pipeline::ShaderModuleDescriptorPassthrough<'a>,
+    ) -> (
+        Arc<pipeline::ShaderModule>,
+        Option<pipeline::CreateShaderModuleError>,
+    ) {
+        profiling::scope!("Device::create_shader_module_passthrough");
+
+        let (shader, error) = match unsafe { self.create_shader_module_passthrough_inner(desc) } {
+            Ok(shader) => (shader, None),
+            Err(e) => {
+                let shader =
+                    pipeline::ShaderModule::invalid(Arc::clone(self), desc.label.to_string());
+                (shader, Some(e))
+            }
+        };
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace::{DataKind, IntoTrace as _};
+
+            let mut file_names = Vec::new();
+            for (data, kind) in [
+                (
+                    desc.spirv.as_ref().map(|a| bytemuck::cast_slice(a)),
+                    DataKind::Spv,
+                ),
+                (desc.dxil.as_deref(), DataKind::Dxil),
+                (desc.hlsl.as_ref().map(|a| a.as_bytes()), DataKind::Hlsl),
+                (desc.metallib.as_deref(), DataKind::MetalLib),
+                (desc.msl.as_ref().map(|a| a.as_bytes()), DataKind::Msl),
+                (desc.glsl.as_ref().map(|a| a.as_bytes()), DataKind::Glsl),
+                (desc.wgsl.as_ref().map(|a| a.as_bytes()), DataKind::Wgsl),
+            ] {
+                if let Some(data) = data {
+                    file_names.push(trace.make_binary(kind, data));
+                }
+            }
+            trace.add(trace::Action::CreateShaderModulePassthrough {
+                id: shader.to_trace(),
+                data: file_names,
+                label: desc.label.clone(),
+                entry_points: desc.entry_points.clone(),
+            });
+        };
+        api_log!(
+            "Device::create_shader_module_spirv -> {:?}",
+            Arc::as_ptr(&shader)
+        );
+        (shader, error)
+    }
+
+    pub(crate) unsafe fn create_shader_module_passthrough_inner<'a>(
         self: &Arc<Self>,
         descriptor: &pipeline::ShaderModuleDescriptorPassthrough<'a>,
     ) -> Result<Arc<pipeline::ShaderModule>, pipeline::CreateShaderModuleError> {
@@ -2618,15 +2737,17 @@ impl Device {
         };
 
         let module = pipeline::ShaderModule {
-            raw: ManuallyDrop::new(raw),
-            device: self.clone(),
-            interface: ShaderMetaData::Passthrough(PassthroughInterface {
-                entry_point_names: descriptor
-                    .entry_points
-                    .iter()
-                    .map(|e| e.name.to_string())
-                    .collect(),
+            state: ResourceState::Valid(pipeline::ShaderModuleState {
+                raw,
+                interface: ShaderMetaData::Passthrough(PassthroughInterface {
+                    entry_point_names: descriptor
+                        .entry_points
+                        .iter()
+                        .map(|e| e.name.to_string())
+                        .collect(),
+                }),
             }),
+            device: self.clone(),
             label: descriptor.label.to_string(),
         };
 
@@ -4080,6 +4201,7 @@ impl Device {
 
         let shader_module = desc.stage.module;
 
+        let shader_module_state = shader_module.state()?;
         shader_module.same_device(self)?;
 
         let is_auto_layout = desc.layout.is_none();
@@ -4093,6 +4215,12 @@ impl Device {
             }
             None => None,
         };
+
+        if shader_module_state.interface.interface().is_none() && pipeline_layout.is_none() {
+            return Err(pipeline::CreateComputePipelineError::Implicit(
+                pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::COMPUTE),
+            ));
+        }
 
         let mut binding_layout_source = match pipeline_layout {
             Some(pipeline_layout) => validation::BindingLayoutSource::Provided(pipeline_layout),
@@ -4111,7 +4239,7 @@ impl Device {
                 desc.stage.entry_point.as_ref().map(|ep| ep.as_ref()),
             )?;
 
-            if let Some(interface) = shader_module.interface.interface() {
+            if let Some(interface) = shader_module_state.interface.interface() {
                 let _ = interface.check_stage(
                     &mut binding_layout_source,
                     &mut shader_binding_sizes,
@@ -4126,7 +4254,7 @@ impl Device {
         let pipeline_layout = match binding_layout_source {
             validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
             validation::BindingLayoutSource::Derived(entries) => {
-                let immediate_size = shader_module
+                let immediate_size = shader_module_state
                     .interface
                     .interface()
                     .map_or(0, |i| i.immediate_size);
@@ -4149,7 +4277,7 @@ impl Device {
             label: desc.label.to_hal(self.instance_flags),
             layout: pipeline_layout.raw()?,
             stage: hal::ProgrammableStage {
-                module: shader_module.raw(),
+                module: shader_module_state.raw.as_ref(),
                 entry_point: final_entry_point_name.as_ref(),
                 constants: &desc.stage.constants,
                 zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
@@ -4178,7 +4306,7 @@ impl Device {
             )?;
 
         let immediate_slots_required =
-            shader_module
+            shader_module_state
                 .interface
                 .interface()
                 .map_or(Default::default(), |iface| {
@@ -4670,6 +4798,7 @@ impl Device {
         let mut _task_entry_point_name = String::new();
         let mut _mesh_entry_point_name = String::new();
         let mut immediate_slots_required = naga::valid::ImmediateSlots::default();
+        let mut passthrough_stages = wgt::ShaderStages::empty();
         match desc.vertex {
             pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
                 vertex_stage = {
@@ -4679,14 +4808,21 @@ impl Device {
                         compare_function: desc.depth_stencil.as_ref().and_then(|d| d.depth_compare),
                     };
                     let stage_bit = stage.to_wgt_bit();
-
-                    let vertex_shader_module = &stage_desc.module;
-                    vertex_shader_module.same_device(self)?;
-
                     let stage_err = |error| pipeline::CreateRenderPipelineError::Stage {
                         stage: stage_bit,
                         error,
                     };
+
+                    let vertex_shader_module = &stage_desc.module;
+                    let vertex_shader_module_state = vertex_shader_module
+                        .state()
+                        .map_err(Into::into)
+                        .map_err(stage_err)?;
+                    vertex_shader_module.same_device(self)?;
+
+                    if vertex_shader_module_state.interface.interface().is_none() {
+                        passthrough_stages |= stage_bit;
+                    }
 
                     _vertex_entry_point_name = vertex_shader_module
                         .finalize_entry_point_name(
@@ -4695,7 +4831,7 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(interface) = vertex_shader_module.interface.interface() {
+                    if let Some(interface) = vertex_shader_module_state.interface.interface() {
                         immediate_slots_required |= interface
                             .immediate_slots_required(stage.to_naga(), &_vertex_entry_point_name);
                         io = interface
@@ -4711,7 +4847,7 @@ impl Device {
                         validated_stages |= stage_bit;
                     }
                     Some(hal::ProgrammableStage {
-                        module: vertex_shader_module.raw(),
+                        module: vertex_shader_module_state.raw.as_ref(),
                         entry_point: &_vertex_entry_point_name,
                         constants: &stage_desc.constants,
                         zero_initialize_workgroup_memory: stage_desc
@@ -4726,13 +4862,21 @@ impl Device {
                     let stage_desc = &task.stage;
                     let stage = validation::ShaderStageForValidation::Task;
                     let stage_bit = stage.to_wgt_bit();
-                    let task_shader_module = &stage_desc.module;
-                    task_shader_module.same_device(self)?;
-
                     let stage_err = |error| pipeline::CreateRenderPipelineError::Stage {
                         stage: stage_bit,
                         error,
                     };
+
+                    let task_shader_module = &stage_desc.module;
+                    let task_shader_module_state = task_shader_module
+                        .state()
+                        .map_err(Into::into)
+                        .map_err(stage_err)?;
+                    task_shader_module.same_device(self)?;
+
+                    if task_shader_module_state.interface.interface().is_none() {
+                        passthrough_stages |= stage_bit;
+                    }
 
                     _task_entry_point_name = task_shader_module
                         .finalize_entry_point_name(
@@ -4741,7 +4885,7 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(interface) = task_shader_module.interface.interface() {
+                    if let Some(interface) = task_shader_module_state.interface.interface() {
                         immediate_slots_required |= interface
                             .immediate_slots_required(stage.to_naga(), &_task_entry_point_name);
                         io = interface
@@ -4757,7 +4901,7 @@ impl Device {
                         validated_stages |= stage_bit;
                     }
                     Some(hal::ProgrammableStage {
-                        module: task_shader_module.raw(),
+                        module: task_shader_module_state.raw.as_ref(),
                         entry_point: &_task_entry_point_name,
                         constants: &stage_desc.constants,
                         zero_initialize_workgroup_memory: stage_desc
@@ -4770,13 +4914,21 @@ impl Device {
                     let stage_desc = &mesh.stage;
                     let stage = validation::ShaderStageForValidation::Mesh;
                     let stage_bit = stage.to_wgt_bit();
-                    let mesh_shader_module = &stage_desc.module;
-                    mesh_shader_module.same_device(self)?;
-
                     let stage_err = |error| pipeline::CreateRenderPipelineError::Stage {
                         stage: stage_bit,
                         error,
                     };
+
+                    let mesh_shader_module = &stage_desc.module;
+                    let mesh_shader_module_state = mesh_shader_module
+                        .state()
+                        .map_err(Into::into)
+                        .map_err(stage_err)?;
+                    mesh_shader_module.same_device(self)?;
+
+                    if mesh_shader_module_state.interface.interface().is_none() {
+                        passthrough_stages |= stage_bit;
+                    }
 
                     _mesh_entry_point_name = mesh_shader_module
                         .finalize_entry_point_name(
@@ -4785,7 +4937,7 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(interface) = mesh_shader_module.interface.interface() {
+                    if let Some(interface) = mesh_shader_module_state.interface.interface() {
                         immediate_slots_required |= interface
                             .immediate_slots_required(stage.to_naga(), &_mesh_entry_point_name);
                         io = interface
@@ -4801,7 +4953,7 @@ impl Device {
                         validated_stages |= stage_bit;
                     }
                     Some(hal::ProgrammableStage {
-                        module: mesh_shader_module.raw(),
+                        module: mesh_shader_module_state.raw.as_ref(),
                         entry_point: &_mesh_entry_point_name,
                         constants: &stage_desc.constants,
                         zero_initialize_workgroup_memory: stage_desc
@@ -4819,14 +4971,21 @@ impl Device {
                     has_depth_attachment,
                 };
                 let stage_bit = stage.to_wgt_bit();
-
-                let shader_module = &fragment_state.stage.module;
-                shader_module.same_device(self)?;
-
                 let stage_err = |error| pipeline::CreateRenderPipelineError::Stage {
                     stage: stage_bit,
                     error,
                 };
+
+                let shader_module = &fragment_state.stage.module;
+                let shader_module_state = shader_module
+                    .state()
+                    .map_err(Into::into)
+                    .map_err(stage_err)?;
+                shader_module.same_device(self)?;
+
+                if shader_module_state.interface.interface().is_none() {
+                    passthrough_stages |= stage_bit;
+                }
 
                 fragment_entry_point_name = shader_module
                     .finalize_entry_point_name(
@@ -4839,7 +4998,7 @@ impl Device {
                     )
                     .map_err(stage_err)?;
 
-                if let Some(interface) = shader_module.interface.interface() {
+                if let Some(interface) = shader_module_state.interface.interface() {
                     immediate_slots_required |= interface
                         .immediate_slots_required(stage.to_naga(), &fragment_entry_point_name);
                     io = interface
@@ -4856,7 +5015,7 @@ impl Device {
                 }
 
                 Some(hal::ProgrammableStage {
-                    module: shader_module.raw(),
+                    module: shader_module_state.raw.as_ref(),
                     entry_point: &fragment_entry_point_name,
                     constants: &fragment_state.stage.constants,
                     zero_initialize_workgroup_memory: fragment_state
@@ -4866,6 +5025,12 @@ impl Device {
             }
             None => None,
         };
+
+        if !passthrough_stages.is_empty() && is_auto_layout {
+            return Err(pipeline::CreateRenderPipelineError::Implicit(
+                pipeline::ImplicitLayoutError::Passthrough(passthrough_stages),
+            ));
+        }
 
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
             for (i, output) in io.varyings.iter() {
@@ -4908,7 +5073,11 @@ impl Device {
             validation::BindingLayoutSource::Derived(entries) => {
                 let immediate_size = {
                     let immediate_size_of = |sm: &pipeline::ShaderModule| {
-                        sm.interface.interface().map(|i| i.immediate_size)
+                        sm.state()
+                            .expect("Should be validated above")
+                            .interface
+                            .interface()
+                            .map(|i| i.immediate_size)
                     };
                     let vertex = match desc.vertex {
                         pipeline::RenderPipelineVertexProcessor::Vertex(ref v) => {

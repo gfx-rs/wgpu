@@ -917,65 +917,13 @@ impl Global {
         let hub = &self.hub;
         let fid = hub.shader_modules.prepare(id_in);
 
-        let error = 'error: {
-            let device = self.hub.devices.get(device_id);
+        let device = self.hub.devices.get(device_id);
 
-            #[cfg(feature = "trace")]
-            let data = device.trace.lock().as_mut().map(|trace| {
-                use crate::device::trace::DataKind;
+        let (shader, error) = device.create_shader_module(desc, source);
 
-                match source {
-                    #[cfg(feature = "wgsl")]
-                    pipeline::ShaderModuleSource::Wgsl(ref code) => {
-                        trace.make_binary(DataKind::Wgsl, code.as_bytes())
-                    }
-                    #[cfg(feature = "glsl")]
-                    pipeline::ShaderModuleSource::Glsl(ref code, _) => {
-                        trace.make_binary(DataKind::Glsl, code.as_bytes())
-                    }
-                    #[cfg(feature = "spirv")]
-                    pipeline::ShaderModuleSource::SpirV(ref code, _) => {
-                        trace.make_binary(DataKind::Spv, bytemuck::cast_slice::<u32, u8>(code))
-                    }
-                    pipeline::ShaderModuleSource::Naga(ref module) => {
-                        let string =
-                            ron::ser::to_string_pretty(module, ron::ser::PrettyConfig::default())
-                                .unwrap();
-                        trace.make_binary(DataKind::Ron, string.as_bytes())
-                    }
-                    pipeline::ShaderModuleSource::Dummy(_) => {
-                        panic!("found `ShaderModuleSource::Dummy`")
-                    }
-                }
-            });
+        let id = fid.assign(shader);
 
-            let shader = match device.create_shader_module(desc, source) {
-                Ok(shader) => shader,
-                Err(e) => break 'error e,
-            };
-
-            #[cfg(feature = "trace")]
-            if let Some(data) = data {
-                // We don't need these two operations with the trace to be atomic.
-                device
-                    .trace
-                    .lock()
-                    .as_mut()
-                    .expect("trace went away during create_shader_module?")
-                    .add(trace::Action::CreateShaderModule {
-                        id: shader.to_trace(),
-                        desc: desc.clone(),
-                        data,
-                    });
-            };
-
-            let id = fid.assign(Fallible::Valid(shader));
-            api_log!("Device::create_shader_module -> {id:?}");
-            return (id, None);
-        };
-
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-        (id, Some(error))
+        (id, error)
     }
 
     /// # Safety
@@ -991,57 +939,16 @@ impl Global {
         id::ShaderModuleId,
         Option<pipeline::CreateShaderModuleError>,
     ) {
-        profiling::scope!("Device::create_shader_module_passthrough");
-
         let hub = &self.hub;
         let fid = hub.shader_modules.prepare(id_in);
 
-        let error = 'error: {
-            let device = self.hub.devices.get(device_id);
+        let device = self.hub.devices.get(device_id);
 
-            let result = unsafe { device.create_shader_module_passthrough(desc) };
+        let (shader, error) = unsafe { device.create_shader_module_passthrough(desc) };
 
-            let shader = match result {
-                Ok(shader) => shader,
-                Err(e) => break 'error e,
-            };
+        let id = fid.assign(shader);
 
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                use crate::device::trace::DataKind;
-
-                let mut file_names = Vec::new();
-                for (data, kind) in [
-                    (
-                        desc.spirv.as_ref().map(|a| bytemuck::cast_slice(a)),
-                        DataKind::Spv,
-                    ),
-                    (desc.dxil.as_deref(), DataKind::Dxil),
-                    (desc.hlsl.as_ref().map(|a| a.as_bytes()), DataKind::Hlsl),
-                    (desc.metallib.as_deref(), DataKind::MetalLib),
-                    (desc.msl.as_ref().map(|a| a.as_bytes()), DataKind::Msl),
-                    (desc.glsl.as_ref().map(|a| a.as_bytes()), DataKind::Glsl),
-                    (desc.wgsl.as_ref().map(|a| a.as_bytes()), DataKind::Wgsl),
-                ] {
-                    if let Some(data) = data {
-                        file_names.push(trace.make_binary(kind, data));
-                    }
-                }
-                trace.add(trace::Action::CreateShaderModulePassthrough {
-                    id: shader.to_trace(),
-                    data: file_names,
-                    label: desc.label.clone(),
-                    entry_points: desc.entry_points.clone(),
-                });
-            };
-
-            let id = fid.assign(Fallible::Valid(shader));
-            api_log!("Device::create_shader_module_spirv -> {id:?}");
-            return (id, None);
-        };
-
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-        (id, Some(error))
+        (id, error)
     }
 
     pub fn shader_module_drop(&self, shader_module_id: id::ShaderModuleId) {
@@ -1051,13 +958,6 @@ impl Global {
         let hub = &self.hub;
 
         let _shader_module = hub.shader_modules.remove(shader_module_id);
-
-        #[cfg(feature = "trace")]
-        if let Ok(shader_module) = _shader_module.get() {
-            if let Some(t) = shader_module.device.trace.lock().as_mut() {
-                t.add(trace::Action::DropShaderModule(shader_module.to_trace()));
-            }
-        }
     }
 
     pub fn device_create_command_encoder(
@@ -1338,25 +1238,10 @@ impl Global {
                 Ok(cache) => cache,
                 Err(e) => break 'error e.into(),
             };
-            let mut passthrough_stages = wgt::ShaderStages::empty();
 
             let vertex = match desc.vertex {
                 RenderPipelineVertexProcessor::Vertex(ref vertex) => {
-                    let module = hub
-                        .shader_modules
-                        .get(vertex.stage.module)
-                        .get()
-                        .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
-                            stage: wgt::ShaderStages::VERTEX,
-                            error: e.into(),
-                        });
-                    let module = match module {
-                        Ok(module) => module,
-                        Err(e) => break 'error e,
-                    };
-                    if module.interface.interface().is_none() {
-                        passthrough_stages |= wgt::ShaderStages::VERTEX;
-                    }
+                    let module = hub.shader_modules.get(vertex.stage.module);
                     let stage = ResolvedProgrammableStageDescriptor {
                         module,
                         entry_point: vertex.stage.entry_point.clone(),
@@ -1372,21 +1257,8 @@ impl Global {
                 }
                 RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
                     let task_module = if let Some(task) = task {
-                        let module = hub
-                            .shader_modules
-                            .get(task.stage.module)
-                            .get()
-                            .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
-                                stage: wgt::ShaderStages::VERTEX,
-                                error: e.into(),
-                            });
-                        let module = match module {
-                            Ok(module) => module,
-                            Err(e) => break 'error e,
-                        };
-                        if module.interface.interface().is_none() {
-                            passthrough_stages |= wgt::ShaderStages::TASK;
-                        }
+                        let module = hub.shader_modules.get(task.stage.module);
+
                         let state = ResolvedProgrammableStageDescriptor {
                             module,
                             entry_point: task.stage.entry_point.clone(),
@@ -1399,21 +1271,7 @@ impl Global {
                     } else {
                         None
                     };
-                    let mesh_module =
-                        hub.shader_modules
-                            .get(mesh.stage.module)
-                            .get()
-                            .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
-                                stage: wgt::ShaderStages::MESH,
-                                error: e.into(),
-                            });
-                    let mesh_module = match mesh_module {
-                        Ok(module) => module,
-                        Err(e) => break 'error e,
-                    };
-                    if mesh_module.interface.interface().is_none() {
-                        passthrough_stages |= wgt::ShaderStages::VERTEX;
-                    }
+                    let mesh_module = hub.shader_modules.get(mesh.stage.module);
                     let mesh_stage = ResolvedProgrammableStageDescriptor {
                         module: mesh_module,
                         entry_point: mesh.stage.entry_point.clone(),
@@ -1430,21 +1288,8 @@ impl Global {
             };
 
             let fragment = if let Some(ref state) = desc.fragment {
-                let module = hub
-                    .shader_modules
-                    .get(state.stage.module)
-                    .get()
-                    .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
-                        stage: wgt::ShaderStages::FRAGMENT,
-                        error: e.into(),
-                    });
-                let module = match module {
-                    Ok(module) => module,
-                    Err(e) => break 'error e,
-                };
-                if module.interface.interface().is_none() {
-                    passthrough_stages |= wgt::ShaderStages::FRAGMENT;
-                }
+                let module = hub.shader_modules.get(state.stage.module);
+
                 let stage = ResolvedProgrammableStageDescriptor {
                     module,
                     entry_point: state.stage.entry_point.clone(),
@@ -1458,12 +1303,6 @@ impl Global {
             } else {
                 None
             };
-
-            if !passthrough_stages.is_empty() && layout.is_none() {
-                break 'error pipeline::CreateRenderPipelineError::Implicit(
-                    pipeline::ImplicitLayoutError::Passthrough(passthrough_stages),
-                );
-            }
 
             let desc = ResolvedGeneralRenderPipelineDescriptor {
                 label: desc.label.clone(),
@@ -1561,16 +1400,8 @@ impl Global {
                 Err(e) => break 'error e.into(),
             };
 
-            let module = hub.shader_modules.get(desc.stage.module).get();
-            let module = match module {
-                Ok(module) => module,
-                Err(e) => break 'error e.into(),
-            };
-            if module.interface.interface().is_none() && layout.is_none() {
-                break 'error pipeline::CreateComputePipelineError::Implicit(
-                    pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::COMPUTE),
-                );
-            }
+            let module = hub.shader_modules.get(desc.stage.module);
+
             let stage = ResolvedProgrammableStageDescriptor {
                 module,
                 entry_point: desc.stage.entry_point.clone(),

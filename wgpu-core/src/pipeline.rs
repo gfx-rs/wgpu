@@ -66,10 +66,15 @@ pub type ShaderModuleDescriptorPassthrough<'a> =
     wgt::CreateShaderModuleDescriptorPassthrough<'a, Label<'a>>;
 
 #[derive(Debug)]
-pub struct ShaderModule {
-    pub(crate) raw: ManuallyDrop<Box<dyn hal::DynShaderModule>>,
-    pub(crate) device: Arc<Device>,
+pub(crate) struct ShaderModuleState {
+    pub(crate) raw: Box<dyn hal::DynShaderModule>,
     pub(crate) interface: ShaderMetaData,
+}
+
+#[derive(Debug)]
+pub struct ShaderModule {
+    pub(crate) state: ResourceState<ShaderModuleState>,
+    pub(crate) device: Arc<Device>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
 }
@@ -77,10 +82,19 @@ pub struct ShaderModule {
 impl Drop for ShaderModule {
     fn drop(&mut self) {
         resource_log!("Destroy raw {}", self.error_ident());
-        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            use crate::device::trace::{to_trace, Action};
+
+            t.add(Action::DropShaderModule(unsafe { to_trace(self) }));
+        }
+        let ResourceState::Valid(state) =
+            core::mem::replace(&mut self.state, ResourceState::Invalid)
+        else {
+            return;
+        };
         unsafe {
-            self.device.raw().destroy_shader_module(raw);
+            self.device.raw().destroy_shader_module(state.raw);
         }
     }
 }
@@ -91,8 +105,19 @@ crate::impl_parent_device!(ShaderModule);
 crate::impl_storage_item!(ShaderModule);
 
 impl ShaderModule {
-    pub(crate) fn raw(&self) -> &dyn hal::DynShaderModule {
-        self.raw.as_ref()
+    pub(crate) fn state(&self) -> Result<&ShaderModuleState, InvalidResourceError> {
+        let ResourceState::Valid(state) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        Ok(state)
+    }
+
+    pub(crate) fn invalid(device: Arc<Device>, label: String) -> Arc<Self> {
+        Arc::new(Self {
+            state: ResourceState::Invalid,
+            device,
+            label,
+        })
     }
 
     pub(crate) fn finalize_entry_point_name(
@@ -100,7 +125,8 @@ impl ShaderModule {
         stage: naga::ShaderStage,
         entry_point: Option<&str>,
     ) -> Result<String, validation::StageError> {
-        match self.interface {
+        let state = self.state()?;
+        match state.interface {
             ShaderMetaData::Interface(ref interface) => {
                 interface.finalize_entry_point_name(stage, entry_point)
             }

@@ -252,10 +252,11 @@ impl Player {
                         data.kind()
                     );
                 };
-                match device.create_shader_module(&desc, source) {
-                    Ok(module) => self.shader_modules.insert(id, module),
-                    Err(e) => panic!("shader compilation error:\n---{code}\n---\n{e}"),
-                };
+                let (shader, error) = device.create_shader_module(&desc, source);
+                if let Some(e) = error {
+                    panic!("shader compilation error:\n---{code}\n---\n{e}");
+                }
+                self.shader_modules.insert(id, shader);
             }
             Action::CreateShaderModulePassthrough {
                 id,
@@ -309,10 +310,11 @@ impl Player {
                     glsl,
                     wgsl,
                 };
-                match unsafe { device.create_shader_module_passthrough(&desc) } {
-                    Ok(module) => self.shader_modules.insert(id, module),
-                    Err(e) => panic!("shader compilation error:\n{e}"),
-                };
+                let (shader, error) = unsafe { device.create_shader_module_passthrough(&desc) };
+                if let Some(e) = error {
+                    panic!("shader compilation error:\n{e}");
+                }
+                self.shader_modules.insert(id, shader);
             }
             Action::DropShaderModule(id) => {
                 self.shader_modules
