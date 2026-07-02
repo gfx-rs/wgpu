@@ -360,9 +360,7 @@ impl Player {
                     .expect("invalid render bundle");
             }
             Action::CreateQuerySet { id, desc } => {
-                let query_set = device
-                    .create_query_set(&desc)
-                    .expect("create_query_set error");
+                let (query_set, _error) = device.create_query_set(&desc);
                 self.query_sets.insert(id, query_set);
             }
             Action::DestroyQuerySet(id) => {

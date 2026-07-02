@@ -47,7 +47,7 @@ use crate::{
     pool::ResourcePool,
     present,
     resource::{
-        self, Buffer, ExternalTexture, Fallible, Labeled, ParentDevice, QuerySet,
+        self, Buffer, ExternalTexture, Fallible, Labeled, ParentDevice, QuerySet, QuerySetState,
         RawResourceAccess, ResourceState, Sampler, StagingBuffer, Texture, TextureView,
         TextureViewNotRenderableReason, TextureViewState, Tlas, TrackingData,
     },
@@ -5243,6 +5243,26 @@ impl Device {
     pub fn create_query_set(
         self: &Arc<Self>,
         desc: &resource::QuerySetDescriptor,
+    ) -> (Arc<QuerySet>, Option<resource::CreateQuerySetError>) {
+        let (query_set, error) = match self.create_query_set_inner(desc) {
+            Ok(query_set) => (query_set, None),
+            Err(e) => (QuerySet::invalid(Arc::clone(self), desc), Some(e)),
+        };
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use trace::IntoTrace;
+            trace.add(trace::Action::CreateQuerySet {
+                id: query_set.to_trace(),
+                desc: desc.clone(),
+            });
+        }
+        api_log!("Device::create_query_set -> {:?}", Arc::as_ptr(&query_set));
+        (query_set, error)
+    }
+
+    pub(crate) fn create_query_set_inner(
+        self: &Arc<Self>,
+        desc: &resource::QuerySetDescriptor,
     ) -> Result<Arc<QuerySet>, resource::CreateQuerySetError> {
         use resource::CreateQuerySetError as Error;
 
@@ -5275,7 +5295,9 @@ impl Device {
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let query_set = QuerySet {
-            raw: Snatchable::new(raw),
+            state: ResourceState::Valid(QuerySetState {
+                raw: Snatchable::new(raw),
+            }),
             device: self.clone(),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.query_sets.clone()),

@@ -33,7 +33,7 @@ use crate::{
     init_tracker::MemoryInitKind,
     pipeline::ComputePipeline,
     resource::{
-        self, Buffer, DestroyedResourceError, Fallible, InvalidResourceError, Labeled,
+        self, Buffer, DestroyedResourceError, InvalidResourceError, Labeled,
         MissingBufferUsageError, ParentDevice, RawResourceAccess, TextureView, Trackable,
     },
     track::{ResourceUsageCompatibilityError, TextureViewBindGroupState, Tracker},
@@ -458,7 +458,7 @@ fn transition_resources(
 impl CommandEncoder {
     fn begin_compute_pass(
         self: &Arc<Self>,
-        desc: &ComputePassDescriptor<'_, PassTimestampWrites<Fallible<resource::QuerySet>>>,
+        desc: &ComputePassDescriptor<'_, PassTimestampWrites<Arc<resource::QuerySet>>>,
     ) -> (ComputePass, Option<CommandEncoderError>) {
         use EncoderStateError as SErr;
 
@@ -1546,7 +1546,8 @@ impl Global {
         let base = pass_base!(pass, scope);
 
         let hub = &self.hub;
-        let query_set = pass_try!(base, scope, hub.query_sets.get(query_set_id).get());
+        let query_set = hub.query_sets.get(query_set_id);
+        pass_try!(base, scope, query_set.check_is_valid());
 
         base.commands.push(ArcComputeCommand::WriteTimestamp {
             query_set,
@@ -1579,7 +1580,8 @@ impl Global {
         let base = pass_base!(pass, scope);
 
         let hub = &self.hub;
-        let query_set = pass_try!(base, scope, hub.query_sets.get(query_set_id).get());
+        let query_set = hub.query_sets.get(query_set_id);
+        pass_try!(base, scope, query_set.check_is_valid());
 
         base.commands
             .push(ArcComputeCommand::BeginPipelineStatisticsQuery {

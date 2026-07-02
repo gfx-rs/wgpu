@@ -8,12 +8,12 @@ use crate::{
     hub::{Hub, HubReport},
     id::{
         AdapterId, BindGroupLayoutId, CommandBufferId, CommandEncoderId, ComputePipelineId,
-        DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, TextureId,
+        DeviceId, PipelineLayoutId, QuerySetId, QueueId, RenderPipelineId, TextureId,
     },
     instance::{Adapter, Instance, Surface},
     pipeline::{ComputePipeline, RenderPipeline},
     registry::{Registry, RegistryReport},
-    resource::Texture,
+    resource::{QuerySet, Texture},
     resource_log,
 };
 
@@ -243,6 +243,22 @@ impl Global {
         compute_pipeline_id: ComputePipelineId,
     ) -> Arc<ComputePipeline> {
         self.hub.compute_pipelines.get(compute_pipeline_id)
+    }
+
+    /// Import [`Arc<QuerySet>`] into the global hub,
+    /// returning a [`QuerySetId`] under which the query set is stored.
+    pub fn import_query_set(
+        &self,
+        query_set: Arc<QuerySet>,
+        id_in: Option<QuerySetId>,
+    ) -> QuerySetId {
+        let fid = self.hub.query_sets.prepare(id_in);
+        fid.assign(query_set)
+    }
+
+    /// Resolve a [`QuerySetId`] to the corresponding [`Arc<QuerySet>`] in the global hub.
+    pub fn resolve_query_set_id(&self, query_set_id: QuerySetId) -> Arc<QuerySet> {
+        self.hub.query_sets.get(query_set_id)
     }
 
     /// Import [`Arc<Texture>`] into the global hub,

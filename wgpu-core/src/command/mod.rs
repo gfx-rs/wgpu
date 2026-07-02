@@ -96,8 +96,8 @@ use crate::snatch::SnatchGuard;
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::ray_tracing::{AsAction, BuildAccelerationStructureError};
 use crate::resource::{
-    DestroyedResourceError, Fallible, InvalidOrDestroyedResourceError, InvalidResourceError,
-    Labeled, ParentDevice as _, QuerySet,
+    DestroyedResourceError, InvalidOrDestroyedResourceError, InvalidResourceError, Labeled,
+    ParentDevice as _, QuerySet,
 };
 use crate::track::{DeviceTracker, ResourceUsageCompatibilityError, Tracker, UsageScope};
 use crate::{api_log, global::Global, id, resource_log, Label};
@@ -966,7 +966,7 @@ impl CommandEncoder {
 
     pub(crate) fn validate_pass_timestamp_writes<E>(
         device: &Device,
-        timestamp_writes: &PassTimestampWrites<Fallible<QuerySet>>,
+        timestamp_writes: &PassTimestampWrites<Arc<QuerySet>>,
     ) -> Result<ArcPassTimestampWrites, E>
     where
         E: From<TimestampWritesError>
@@ -983,8 +983,7 @@ impl CommandEncoder {
 
         device.require_features(wgt::Features::TIMESTAMP_QUERY)?;
 
-        let query_set = query_set.clone().get()?;
-
+        query_set.check_is_valid()?;
         query_set.same_device(device)?;
 
         for idx in [beginning_of_pass_write_index, end_of_pass_write_index]
@@ -1008,7 +1007,7 @@ impl CommandEncoder {
         }
 
         Ok(ArcPassTimestampWrites {
-            query_set,
+            query_set: query_set.clone(),
             beginning_of_pass_write_index,
             end_of_pass_write_index,
         })
@@ -1770,13 +1769,6 @@ impl Global {
         buffer_id: Id<id::markers::Buffer>,
     ) -> Result<Arc<crate::resource::Buffer>, InvalidResourceError> {
         self.hub.buffers.get(buffer_id).get()
-    }
-
-    fn resolve_query_set(
-        &self,
-        query_set_id: Id<id::markers::QuerySet>,
-    ) -> Result<Arc<QuerySet>, InvalidResourceError> {
-        self.hub.query_sets.get(query_set_id).get()
     }
 
     /// Finishes a command encoder, creating a command buffer and returning errors that were

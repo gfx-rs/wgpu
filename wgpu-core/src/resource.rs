@@ -2430,8 +2430,13 @@ impl WebGpuError for CreateQuerySetError {
 pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 
 #[derive(Debug)]
-pub struct QuerySet {
+pub(crate) struct QuerySetState {
     pub(crate) raw: Snatchable<Box<dyn hal::DynQuerySet>>,
+}
+
+#[derive(Debug)]
+pub struct QuerySet {
+    pub(crate) state: ResourceState<QuerySetState>,
     pub(crate) device: Arc<Device>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -2444,18 +2449,57 @@ impl RawResourceAccess for QuerySet {
     type DynResource = dyn hal::DynQuerySet;
 
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
-        self.raw.get(guard).map(|b| b.as_ref())
+        self.state().ok()?.raw.get(guard).map(|b| b.as_ref())
     }
 }
 
 impl QuerySet {
+    pub(crate) fn state(&self) -> Result<&QuerySetState, InvalidResourceError> {
+        match &self.state {
+            ResourceState::Valid(state) => Ok(state),
+            ResourceState::Invalid => Err(InvalidResourceError(self.error_ident())),
+        }
+    }
+
+    pub(crate) fn check_is_valid(&self) -> Result<(), InvalidResourceError> {
+        self.state().map(|_| ())
+    }
+
+    pub fn invalid(device: Arc<Device>, desc: &QuerySetDescriptor) -> Arc<Self> {
+        Arc::new(QuerySet {
+            state: ResourceState::Invalid,
+            label: desc.label.to_string(),
+            tracking_data: TrackingData::new(device.tracker_indices.query_sets.clone()),
+            desc: desc.clone().map_label(|_| ()),
+            initialized_slots: Mutex::new(
+                rank::QUERY_SET_INITIALIZED_SLOTS,
+                bit_vec::BitVec::from_elem(desc.count as usize, false),
+            ),
+            device,
+        })
+    }
+
     pub fn destroy(self: &Arc<Self>) {
         let device = &self.device;
+
+        profiling::scope!("QuerySet::destroy");
+        api_log!("QuerySet::destroy {:?}", Arc::as_ptr(self));
+
+        #[cfg(feature = "trace")]
+        if let Some(trace) = device.trace.lock().as_mut() {
+            use crate::device::trace::IntoTrace as _;
+
+            trace.add(trace::Action::DestroyQuerySet(self.to_trace()));
+        };
+
+        let ResourceState::Valid(state) = &self.state else {
+            return;
+        };
 
         let temp = {
             let mut snatch_guard = self.device.snatchable_lock.write();
 
-            let raw = match self.raw.snatch(&mut snatch_guard) {
+            let raw = match state.raw.snatch(&mut snatch_guard) {
                 Some(raw) => raw,
                 None => {
                     // Per spec, it is valid to call `destroy` multiple times.
@@ -2487,7 +2531,16 @@ impl QuerySet {
 impl Drop for QuerySet {
     fn drop(&mut self) {
         resource_log!("Destroy raw {}", self.error_ident());
-        if let Some(raw) = self.raw.take() {
+        #[cfg(feature = "trace")]
+        if let Some(trace) = self.device.trace.lock().as_mut() {
+            use crate::device::trace::to_trace;
+
+            trace.add(trace::Action::DropQuerySet(unsafe { to_trace(self) }));
+        }
+        let ResourceState::Valid(state) = &mut self.state else {
+            return;
+        };
+        if let Some(raw) = state.raw.take() {
             // SAFETY: We are in the Drop impl and we don't use raw anymore after this point.
             unsafe {
                 self.device.raw().destroy_query_set(raw);

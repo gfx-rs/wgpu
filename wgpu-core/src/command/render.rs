@@ -40,10 +40,9 @@ use crate::{
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
     resource::{
-        Buffer, DestroyedResourceError, Fallible, InvalidResourceError, Labeled,
-        MissingBufferUsageError, MissingTextureUsageError, ParentDevice, QuerySet,
-        RawResourceAccess, ResourceErrorIdent, Texture, TextureView,
-        TextureViewNotRenderableReason,
+        Buffer, DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
+        MissingTextureUsageError, ParentDevice, QuerySet, RawResourceAccess, ResourceErrorIdent,
+        Texture, TextureView, TextureViewNotRenderableReason,
     },
     snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker, UsageScope},
@@ -282,9 +281,9 @@ pub struct ResolvedRenderPassDescriptor<'a> {
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<Arc<TextureView>>>,
     /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Option<PassTimestampWrites<Fallible<QuerySet>>>,
+    pub timestamp_writes: Option<PassTimestampWrites<Arc<QuerySet>>>,
     /// Defines where the occlusion query results will be stored for this pass.
-    pub occlusion_query_set: Option<Fallible<QuerySet>>,
+    pub occlusion_query_set: Option<Arc<QuerySet>>,
     /// The multiview array layers that will be used
     pub multiview_mask: Option<NonZeroU32>,
 }
@@ -2059,18 +2058,18 @@ impl CommandEncoder {
 
             arc_desc.occlusion_query_set =
                 if let Some(occlusion_query_set) = desc.occlusion_query_set {
-                    let query_set = occlusion_query_set.get()?;
-                    query_set.same_device(device)?;
+                    occlusion_query_set.check_is_valid()?;
+                    occlusion_query_set.same_device(device)?;
 
-                    if !matches!(query_set.desc.ty, wgt::QueryType::Occlusion) {
+                    if !matches!(occlusion_query_set.desc.ty, wgt::QueryType::Occlusion) {
                         return Err(QueryUseError::IncompatibleType {
-                            set_type: query_set.desc.ty.into(),
+                            set_type: occlusion_query_set.desc.ty.into(),
                             query_type: super::SimplifiedQueryType::Occlusion,
                         }
                         .into());
                     }
 
-                    Some(query_set)
+                    Some(occlusion_query_set)
                 } else {
                     None
                 };
@@ -4463,8 +4462,10 @@ impl Global {
         let scope = PassErrorScope::WriteTimestamp;
         let base = pass_base!(pass, scope);
 
+        let query_set = self.resolve_query_set_id(query_set_id);
+        pass_try!(base, scope, query_set.check_is_valid());
         base.commands.push(ArcRenderCommand::WriteTimestamp {
-            query_set: pass_try!(base, scope, self.resolve_query_set(query_set_id)),
+            query_set,
             query_index,
         });
 
@@ -4542,9 +4543,11 @@ impl Global {
         let scope = PassErrorScope::BeginPipelineStatisticsQuery;
         let base = pass_base!(pass, scope);
 
+        let query_set = self.resolve_query_set_id(query_set_id);
+        pass_try!(base, scope, query_set.check_is_valid());
         base.commands
             .push(ArcRenderCommand::BeginPipelineStatisticsQuery {
-                query_set: pass_try!(base, scope, self.resolve_query_set(query_set_id)),
+                query_set,
                 query_index,
             });
 

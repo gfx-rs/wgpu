@@ -440,8 +440,10 @@ impl Global {
         let mut cmd_buf_data = cmd_enc.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, QueryError> {
+            let query_set = self.resolve_query_set_id(query_set_id);
+            query_set.check_is_valid()?;
             Ok(ArcCommand::WriteTimestamp {
-                query_set: self.resolve_query_set(query_set_id)?,
+                query_set,
                 query_index,
             })
         })
@@ -462,8 +464,10 @@ impl Global {
         let mut cmd_buf_data = cmd_enc.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, QueryError> {
+            let query_set = self.resolve_query_set_id(query_set_id);
+            query_set.check_is_valid()?;
             Ok(ArcCommand::ResolveQuerySet {
-                query_set: self.resolve_query_set(query_set_id)?,
+                query_set,
                 start_query,
                 query_count,
                 destination: self.resolve_buffer_id(destination)?,

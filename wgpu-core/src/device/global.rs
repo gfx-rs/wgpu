@@ -1245,49 +1245,21 @@ impl Global {
         let hub = &self.hub;
         let fid = hub.query_sets.prepare(id_in);
 
-        let error = 'error: {
-            let device = self.hub.devices.get(device_id);
+        let device = self.hub.devices.get(device_id);
 
-            let query_set = match device.create_query_set(desc) {
-                Ok(query_set) => query_set,
-                Err(err) => break 'error err,
-            };
+        let (query_set, error) = device.create_query_set(desc);
 
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateQuerySet {
-                    id: query_set.to_trace(),
-                    desc: desc.clone(),
-                });
-            }
+        let id = fid.assign(query_set);
 
-            let id = fid.assign(Fallible::Valid(query_set));
-            api_log!("Device::create_query_set -> {id:?}");
-
-            return (id, None);
-        };
-
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-        (id, Some(error))
+        (id, error)
     }
 
     pub fn query_set_destroy(&self, query_set_id: id::QuerySetId) {
-        profiling::scope!("QuerySet::destroy");
-        api_log!("QuerySet::destroy {query_set_id:?}");
-
         let hub = &self.hub;
 
-        let Ok(query_set) = hub.query_sets.get(query_set_id).get() else {
-            // If the query set is already invalid, there's nothing to do.
-            return;
-        };
+        let query_set = hub.query_sets.get(query_set_id);
 
         query_set.destroy();
-
-        #[cfg(feature = "trace")]
-        if let Some(trace) = query_set.device.trace.lock().as_mut() {
-            trace.add(trace::Action::DestroyQuerySet(query_set.to_trace()));
-        };
     }
 
     pub fn query_set_drop(&self, query_set_id: id::QuerySetId) {
@@ -1297,13 +1269,6 @@ impl Global {
         let hub = &self.hub;
 
         let _query_set = hub.query_sets.remove(query_set_id);
-
-        #[cfg(feature = "trace")]
-        if let Ok(query_set) = _query_set.get() {
-            if let Some(trace) = query_set.device.trace.lock().as_mut() {
-                trace.add(trace::Action::DropQuerySet(query_set.to_trace()));
-            }
-        }
     }
 
     pub fn device_create_render_pipeline(
