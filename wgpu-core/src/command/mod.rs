@@ -520,7 +520,7 @@ impl<'a> ops::DerefMut for RecordingGuard<'a> {
     }
 }
 
-pub(crate) struct CommandEncoder {
+pub struct CommandEncoder {
     pub(crate) device: Arc<Device>,
 
     pub(crate) label: String,
@@ -1770,13 +1770,6 @@ impl Global {
         buffer_id: Id<id::markers::Buffer>,
     ) -> Result<Arc<crate::resource::Buffer>, InvalidResourceError> {
         self.hub.buffers.get(buffer_id).get()
-    }
-
-    fn resolve_texture_id(
-        &self,
-        texture_id: Id<id::markers::Texture>,
-    ) -> Arc<crate::resource::Texture> {
-        self.hub.textures.get(texture_id)
     }
 
     fn resolve_query_set(
