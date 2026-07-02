@@ -312,7 +312,6 @@ By @inner-daemons in [#9434](https://github.com/gfx-rs/wgpu/pull/9434).
 - Fixed vkAcquireNextImage fence being awaited on non-Windows platforms causing frametime spikes on nvidia drivers. By @cohaereo in [#9486](https://github.com/gfx-rs/wgpu/pull/9486).
 - Fixed alignment and `MatrixStride` for mat2x2 in SPIR-V uniform blocks. By @39ali [#9369](https://github.com/gfx-rs/wgpu/pull/9369).
 - Fixed loading of `libvulkan.so` on OpenHarmony (`target_env = "ohos"`). By @jschwe in [#9649](https://github.com/gfx-rs/wgpu/pull/9649).
-- Fixed `VUID-RuntimeSpirv-vulkanMemoryModel-06265` validation errors by enabling `vulkanMemoryModelDeviceScope` whenever the Vulkan memory model is enabled, since the SPIR-V backend emits storage atomics with `Device` scope. By @francisdb in [#9741](https://github.com/gfx-rs/wgpu/pull/9741).
 - Fixed some cases where out-of-memory errors were reported incorrectly. By @andyleiserson in [#9643](https://github.com/gfx-rs/wgpu/pull/9643) and [#9747](https://github.com/gfx-rs/wgpu/pull/9747).
 - Fixed signed integer `%` (and `%=`) returning the wrong result for negative operands in the SPIR-V backend, e.g. `-1 % 768` yielding `255` instead of `-1` on NVIDIA. `OpSRem` is poison for negative operands in the Vulkan SPIR-V environment without `VK_KHR_maintenance8`, even though WGSL defines `%` for these operands, so signed remainder is now always lowered as `a - b * (a / b)`. By @mstampfli in [#9674](https://github.com/gfx-rs/wgpu/pull/9674).
 
@@ -324,7 +323,6 @@ By @inner-daemons in [#9434](https://github.com/gfx-rs/wgpu/pull/9434).
   - Wait using a condition variable, instead of polling.
   - Fixed a hang in `Device::poll(PollType::wait_indefinitely())` when a Metal command buffer exits with an error.
 - Fixed structure field names incorrectly ignoring reserved keywords in the Metal (MSL) backend. By @39ali [#9379](https://github.com/gfx-rs/wgpu/pull/9379).
-- Restore the `Queue::as_raw` method, which was removed without good reason in v29. It now returns `&ProtocolObject<dyn MTLCommandQueue>`. By @andyleiserson in [#9560](https://github.com/gfx-rs/wgpu/pull/9560).
 
 #### WebGPU
 
@@ -340,6 +338,54 @@ By @inner-daemons in [#9434](https://github.com/gfx-rs/wgpu/pull/9434).
 ### Testing/Internal
 
 - We now use `tombi` as our TOML formatter instead of `taplo`, which has been unmaintained for some time. If you currently use `taplo` as part of your workflow, we recommend you migrate, or change your editor settings while working with wgpu.
+
+## v29.0.4 (2026-07-01)
+
+### New Features
+
+#### GLES
+
+- XCB window handles can now be used to initialize OpenGL on Linux. By @reflectronic in [#9271](https://github.com/gfx-rs/wgpu/pull/9271).
+
+### Bug Fixes
+
+#### Metal
+
+- Restore the `Queue::as_raw` method, which was removed without good reason in v29. It now returns `&ProtocolObject<dyn MTLCommandQueue>`. By @andyleiserson in [#9560](https://github.com/gfx-rs/wgpu/pull/9560).
+
+#### Vulkan
+
+- Fixed `VUID-RuntimeSpirv-vulkanMemoryModel-06265` validation errors by enabling `vulkanMemoryModelDeviceScope` whenever the Vulkan memory model is enabled, since the SPIR-V backend emits storage atomics with `Device` scope. By @francisdb in [#9741](https://github.com/gfx-rs/wgpu/pull/9741).
+
+## v29.0.3 (2026-05-01)
+
+### Bug Fixes
+
+- Fix compilation error when `cfg(debug_assertions)` is not active. `wgpu-core` `v29.0.2` has been yanked. By @Elabajaba in [#9352](https://github.com/gfx-rs/wgpu/pull/9352).
+
+## v29.0.2 (2026-05-01)
+
+### Bug Fixes
+
+#### General
+
+- Fix late bindings not being updated for identical pipeline layouts. By @kristoff3r in [#9341](https://github.com/gfx-rs/wgpu/pull/9341).
+- Fix missing dependency feature activations when building wgpu-hal with gles/dx12 in isolation. By @wumpf in [#9325](https://github.com/gfx-rs/wgpu/pull/9325).
+
+- Make `wgpu_types::texture::format::TextureChannel` accessible as `wgpu::TextureChannel`. By @TornaxO7 in [#9349](https://github.com/gfx-rs/wgpu/pull/9349).
+
+#### DX12
+
+- Fixed a `debug_assert` during stride validation for indirect multi draw. By @kristoff3r in [#9332](https://github.com/gfx-rs/wgpu/pull/9332).
+- Fix incorrect `max_binding_array_sampler_elements_per_shader_stage` limit reported on DX12. By @kristoff3r in [#9330](https://github.com/gfx-rs/wgpu/pull/9330).
+
+#### Vulkan
+
+- Only request `shaderDrawParameters` when `SHADER_DRAW_INDEX` is requested, avoiding device creation failures on drivers that don't support it (e.g. V3DV, SwiftShader). By @mohamedtahaguelzim in [#9331](https://github.com/gfx-rs/wgpu/pull/9331).
+
+#### Metal
+
+- Fix crash on fence creation when running in a MacOS sandbox. By @wumpf in [#9415](https://github.com/gfx-rs/wgpu/pull/9415).
 
 ## v29.0.1 (2026-03-26)
 
