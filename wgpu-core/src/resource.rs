@@ -2307,7 +2307,7 @@ pub struct SamplerDescriptor<'a> {
 
 #[derive(Debug)]
 pub struct Sampler {
-    pub(crate) raw: ManuallyDrop<Box<dyn hal::DynSampler>>,
+    pub(crate) raw: ResourceState<Box<dyn hal::DynSampler>>,
     pub(crate) device: Arc<Device>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -2319,19 +2319,43 @@ pub struct Sampler {
 }
 
 impl Drop for Sampler {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("Sampler::drop");
+        api_log!("Sampler::drop {:?}", self as *const _);
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            t.add(trace::Action::DropSampler(unsafe { trace::to_trace(self) }));
+        }
         resource_log!("Destroy raw {}", self.error_ident());
-        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
-        unsafe {
-            self.device.raw().destroy_sampler(raw);
+        if let ResourceState::Valid(raw) = mem::replace(&mut self.raw, ResourceState::Invalid) {
+            unsafe {
+                self.device.raw().destroy_sampler(raw);
+            }
         }
     }
 }
 
 impl Sampler {
-    pub(crate) fn raw(&self) -> &dyn hal::DynSampler {
-        self.raw.as_ref()
+    pub(crate) fn raw(&self) -> Result<&dyn hal::DynSampler, InvalidResourceError> {
+        self.raw
+            .as_ref()
+            .valid()
+            .map(|raw| raw.as_ref())
+            .ok_or_else(|| InvalidResourceError(self.error_ident()))
+    }
+
+    pub(crate) fn invalid(device: Arc<Device>, desc: &SamplerDescriptor) -> Arc<Self> {
+        Arc::new(Sampler {
+            raw: ResourceState::Invalid,
+            label: desc.label.to_string(),
+            tracking_data: TrackingData::new(device.tracker_indices.samplers.clone()),
+            device,
+            comparison: desc.compare.is_some(),
+            filtering: desc.mag_filter == wgt::FilterMode::Linear
+                || desc.min_filter == wgt::FilterMode::Linear
+                || desc.mipmap_filter == wgt::MipmapFilterMode::Linear,
+        })
     }
 }
 

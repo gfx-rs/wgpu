@@ -583,51 +583,22 @@ impl Global {
         desc: &resource::SamplerDescriptor,
         id_in: Option<id::SamplerId>,
     ) -> (id::SamplerId, Option<resource::CreateSamplerError>) {
-        profiling::scope!("Device::create_sampler");
-
         let hub = &self.hub;
         let fid = hub.samplers.prepare(id_in);
 
-        let error = 'error: {
-            let device = self.hub.devices.get(device_id);
+        let device = self.hub.devices.get(device_id);
 
-            let sampler = match device.create_sampler(desc) {
-                Ok(sampler) => sampler,
-                Err(e) => break 'error e,
-            };
+        let (sampler, error) = device.create_sampler(desc);
 
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateSampler(
-                    sampler.to_trace(),
-                    desc.clone(),
-                ));
-            }
+        let id = fid.assign(sampler);
 
-            let id = fid.assign(Fallible::Valid(sampler));
-            api_log!("Device::create_sampler -> {id:?}");
-
-            return (id, None);
-        };
-
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-        (id, Some(error))
+        (id, error)
     }
 
     pub fn sampler_drop(&self, sampler_id: id::SamplerId) {
-        profiling::scope!("Sampler::drop");
-        api_log!("Sampler::drop {sampler_id:?}");
-
         let hub = &self.hub;
 
         let _sampler = hub.samplers.remove(sampler_id);
-
-        #[cfg(feature = "trace")]
-        if let Ok(sampler) = _sampler.get() {
-            if let Some(t) = sampler.device.trace.lock().as_mut() {
-                t.add(trace::Action::DropSampler(sampler.to_trace()));
-            }
-        }
     }
 
     pub fn device_create_bind_group_layout(
@@ -731,7 +702,7 @@ impl Global {
             fn resolve_entry<'a>(
                 e: &BindGroupEntry<'a>,
                 buffer_storage: &Storage<Fallible<resource::Buffer>>,
-                sampler_storage: &Storage<Fallible<resource::Sampler>>,
+                sampler_storage: &Storage<Arc<resource::Sampler>>,
                 texture_view_storage: &Storage<Arc<resource::TextureView>>,
                 tlas_storage: &Storage<Fallible<resource::Tlas>>,
                 external_texture_storage: &Storage<Fallible<resource::ExternalTexture>>,
@@ -748,12 +719,7 @@ impl Global {
                         })
                         .map_err(binding_model::CreateBindGroupError::from)
                 };
-                let resolve_sampler = |id: &id::SamplerId| {
-                    sampler_storage
-                        .get(*id)
-                        .get()
-                        .map_err(binding_model::CreateBindGroupError::from)
-                };
+                let resolve_sampler = |id: &id::SamplerId| sampler_storage.get(*id);
                 let resolve_view = |id: &id::TextureViewId| texture_view_storage.get(*id);
                 let resolve_tlas = |id: &id::TlasId| {
                     tlas_storage
@@ -779,13 +745,10 @@ impl Global {
                         ResolvedBindingResource::BufferArray(Cow::Owned(buffers))
                     }
                     BindingResource::Sampler(ref sampler) => {
-                        ResolvedBindingResource::Sampler(resolve_sampler(sampler)?)
+                        ResolvedBindingResource::Sampler(resolve_sampler(sampler))
                     }
                     BindingResource::SamplerArray(ref samplers) => {
-                        let samplers = samplers
-                            .iter()
-                            .map(resolve_sampler)
-                            .collect::<Result<Vec<_>, _>>()?;
+                        let samplers = samplers.iter().map(resolve_sampler).collect::<Vec<_>>();
                         ResolvedBindingResource::SamplerArray(Cow::Owned(samplers))
                     }
                     BindingResource::TextureView(ref view) => {

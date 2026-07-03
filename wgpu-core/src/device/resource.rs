@@ -2288,6 +2288,28 @@ impl Device {
     pub fn create_sampler(
         self: &Arc<Self>,
         desc: &resource::SamplerDescriptor,
+    ) -> (Arc<Sampler>, Option<resource::CreateSamplerError>) {
+        profiling::scope!("Device::create_sampler");
+
+        let (sampler, error) = match self.create_sampler_inner(desc) {
+            Ok(sampler) => (sampler, None),
+            Err(e) => (Sampler::invalid(Arc::clone(self), desc), Some(e)),
+        };
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace::{Action, IntoTrace as _};
+            trace.add(Action::CreateSampler(sampler.to_trace(), desc.clone()));
+        }
+
+        api_log!("Device::create_sampler -> {:?}", Arc::as_ptr(&sampler));
+
+        (sampler, error)
+    }
+
+    pub(crate) fn create_sampler_inner(
+        self: &Arc<Self>,
+        desc: &resource::SamplerDescriptor,
     ) -> Result<Arc<Sampler>, resource::CreateSamplerError> {
         self.check_is_valid()?;
 
@@ -2381,7 +2403,7 @@ impl Device {
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let sampler = Sampler {
-            raw: ManuallyDrop::new(raw),
+            raw: ResourceState::Valid(raw),
             device: self.clone(),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.samplers.clone()),
@@ -3209,7 +3231,7 @@ impl Device {
             }
         }
 
-        Ok(sampler.raw())
+        Ok(sampler.raw()?)
     }
 
     fn create_texture_binding<'a>(
