@@ -2918,8 +2918,14 @@ crate::impl_storage_item!(Blas);
 crate::impl_trackable!(Blas);
 
 #[derive(Debug)]
-pub struct Tlas {
+pub(crate) struct TlasState {
     pub(crate) raw: Snatchable<Box<dyn hal::DynAccelerationStructure>>,
+    pub(crate) instance_buffer: Box<dyn hal::DynBuffer>,
+}
+
+#[derive(Debug)]
+pub struct Tlas {
+    pub(crate) state: ResourceState<TlasState>,
     pub(crate) device: Arc<Device>,
     pub(crate) size_info: hal::AccelerationStructureBuildSizes,
     pub(crate) max_instance_count: u32,
@@ -2927,22 +2933,64 @@ pub struct Tlas {
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
     pub(crate) built_index: RwLock<Option<NonZeroU64>>,
     pub(crate) dependencies: RwLock<Vec<Arc<Blas>>>,
-    pub(crate) instance_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
 }
 
 impl Drop for Tlas {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
-        unsafe {
-            resource_log!("Destroy raw {}", self.error_ident());
-            if let Some(structure) = self.raw.take() {
-                self.device.raw().destroy_acceleration_structure(structure);
-            }
-            let buffer = ManuallyDrop::take(&mut self.instance_buffer);
-            self.device.raw().destroy_buffer(buffer);
+        profiling::scope!("Tlas::drop");
+        api_log!("Tlas::drop {:?}", self as *const _);
+
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            use crate::device::trace::{to_trace, Action};
+            t.add(Action::DropTlas(unsafe { to_trace(self) }));
         }
+
+        resource_log!("Destroy raw {}", self.error_ident());
+        let ResourceState::Valid(mut state) = mem::replace(&mut self.state, ResourceState::Invalid)
+        else {
+            return;
+        };
+        if let Some(structure) = state.raw.take() {
+            unsafe { self.device.raw().destroy_acceleration_structure(structure) };
+        }
+        unsafe { self.device.raw().destroy_buffer(state.instance_buffer) };
+    }
+}
+
+impl Tlas {
+    pub(crate) fn state(&self) -> Result<&TlasState, InvalidResourceError> {
+        match &self.state {
+            ResourceState::Valid(state) => Ok(state),
+            ResourceState::Invalid => Err(InvalidResourceError(self.error_ident())),
+        }
+    }
+
+    pub(crate) fn check_is_valid(&self) -> Result<(), InvalidResourceError> {
+        self.state().map(|_| ())
+    }
+
+    pub(crate) fn invalid(device: Arc<Device>, desc: &TlasDescriptor) -> Arc<Self> {
+        Arc::new(Self {
+            state: ResourceState::Invalid,
+            label: desc.label.to_string(),
+            tracking_data: TrackingData::new(device.tracker_indices.tlas_s.clone()),
+            size_info: hal::AccelerationStructureBuildSizes {
+                acceleration_structure_size: 0,
+                update_scratch_size: 0,
+                build_scratch_size: 0,
+            },
+            max_instance_count: desc.max_instances,
+            flags: desc.flags,
+            update_mode: desc.update_mode,
+            built_index: RwLock::new(rank::TLAS_BUILT_INDEX, None),
+            dependencies: RwLock::new(rank::TLAS_DEPENDENCIES, Vec::new()),
+            device,
+        })
     }
 }
 
@@ -2950,7 +2998,7 @@ impl RawResourceAccess for Tlas {
     type DynResource = dyn hal::DynAccelerationStructure;
 
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
-        self.raw.get(guard).map(|raw| raw.as_ref())
+        self.state().ok()?.raw.get(guard).map(|raw| raw.as_ref())
     }
 }
 

@@ -3447,6 +3447,7 @@ impl Device {
 
         used.acceleration_structures.insert_single(tlas.clone());
 
+        tlas.check_is_valid()?;
         tlas.same_device(self)?;
 
         match decl.ty {

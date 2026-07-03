@@ -665,7 +665,7 @@ impl Global {
                 buffer_storage: &Storage<Fallible<resource::Buffer>>,
                 sampler_storage: &Storage<Arc<resource::Sampler>>,
                 texture_view_storage: &Storage<Arc<resource::TextureView>>,
-                tlas_storage: &Storage<Fallible<resource::Tlas>>,
+                tlas_storage: &Storage<Arc<resource::Tlas>>,
                 external_texture_storage: &Storage<Arc<resource::ExternalTexture>>,
             ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
             {
@@ -682,12 +682,7 @@ impl Global {
                 };
                 let resolve_sampler = |id: &id::SamplerId| sampler_storage.get(*id);
                 let resolve_view = |id: &id::TextureViewId| texture_view_storage.get(*id);
-                let resolve_tlas = |id: &id::TlasId| {
-                    tlas_storage
-                        .get(*id)
-                        .get()
-                        .map_err(binding_model::CreateBindGroupError::from)
-                };
+                let resolve_tlas = |id: &id::TlasId| tlas_storage.get(*id);
                 let resolve_external_texture =
                     |id: &id::ExternalTextureId| external_texture_storage.get(*id);
                 let resource = match e.resource {
@@ -716,13 +711,10 @@ impl Global {
                         ResolvedBindingResource::TextureViewArray(Cow::Owned(views))
                     }
                     BindingResource::AccelerationStructure(ref tlas) => {
-                        ResolvedBindingResource::AccelerationStructure(resolve_tlas(tlas)?)
+                        ResolvedBindingResource::AccelerationStructure(resolve_tlas(tlas))
                     }
                     BindingResource::AccelerationStructureArray(ref tlas_array) => {
-                        let tlas_array = tlas_array
-                            .iter()
-                            .map(resolve_tlas)
-                            .collect::<Result<Vec<_>, _>>()?;
+                        let tlas_array = tlas_array.iter().map(resolve_tlas).collect::<Vec<_>>();
                         ResolvedBindingResource::AccelerationStructureArray(Cow::Owned(tlas_array))
                     }
                     BindingResource::ExternalTexture(ref et) => {

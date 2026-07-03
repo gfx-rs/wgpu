@@ -212,7 +212,7 @@ pub struct Hub {
     pub(crate) external_textures: Registry<Arc<ExternalTexture>>,
     pub(crate) samplers: Registry<Arc<Sampler>>,
     pub(crate) blas_s: Registry<Arc<Blas>>,
-    pub(crate) tlas_s: Registry<Fallible<Tlas>>,
+    pub(crate) tlas_s: Registry<Arc<Tlas>>,
     pub(crate) render_passes: Registry<Arc<Mutex<RenderPass>>>,
     pub(crate) compute_passes: Registry<Arc<Mutex<ComputePass>>>,
     pub(crate) render_bundle_encoders: Registry<Arc<Mutex<RenderBundleEncoder>>>,

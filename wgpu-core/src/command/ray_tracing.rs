@@ -10,7 +10,6 @@ use wgt::{math::align_to, BufferUsages, BufferUses, Features};
 use crate::{
     command::encoder::EncodingState,
     ray_tracing::{AsAction, AsBuild, TlasBuild, ValidateAsActionsError},
-    resource::InvalidResourceError,
 };
 use crate::{command::EncoderStateError, device::resource::CommandIndices};
 use crate::{
@@ -50,10 +49,6 @@ struct TlasStore<'a> {
 }
 
 impl Global {
-    fn resolve_tlas_id(&self, tlas_id: TlasId) -> Result<Arc<Tlas>, InvalidResourceError> {
-        self.hub.tlas_s.get(tlas_id).get()
-    }
-
     pub fn command_encoder_mark_acceleration_structures_built(
         &self,
         command_encoder_id: CommandEncoderId,
@@ -83,7 +78,8 @@ impl Global {
                 }
 
                 for tlas in tlas_ids {
-                    let tlas = hub.tlas_s.get(*tlas).get()?;
+                    let tlas = hub.tlas_s.get(*tlas);
+                    tlas.check_is_valid()?;
                     build_command.tlas_s_built.push(TlasBuild {
                         tlas,
                         dependencies: Vec::new(),
@@ -176,8 +172,10 @@ impl Global {
                                 .transpose()
                         })
                         .collect::<Result<_, BuildAccelerationStructureError>>()?;
+                    let tlas = self.hub.tlas_s.get(tlas_package.tlas_id);
+                    tlas.check_is_valid()?;
                     Ok(ArcTlasPackage {
-                        tlas: self.resolve_tlas_id(tlas_package.tlas_id)?,
+                        tlas,
                         instances,
                         lowest_unmodified: tlas_package.lowest_unmodified,
                     })
@@ -287,7 +285,7 @@ pub(crate) fn build_acceleration_structures(
                 tlas: tlas.clone(),
                 entries: hal::AccelerationStructureEntries::Instances(
                     hal::AccelerationStructureInstances {
-                        buffer: Some(tlas.instance_buffer.as_ref()),
+                        buffer: Some(tlas.state()?.instance_buffer.as_ref()),
                         offset: 0,
                         count: instance_count,
                     },
@@ -407,8 +405,9 @@ pub(crate) fn build_acceleration_structures(
                 None => continue,
                 Some(size) => size,
             };
+            let tlas_state = tlas.state()?;
             instance_buffer_barriers.push(hal::BufferBarrier::<dyn hal::DynBuffer> {
-                buffer: tlas.instance_buffer.as_ref(),
+                buffer: tlas_state.instance_buffer.as_ref(),
                 usage: hal::StateTransition {
                     from: BufferUses::COPY_DST,
                     to: BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
@@ -416,7 +415,7 @@ pub(crate) fn build_acceleration_structures(
             });
             unsafe {
                 raw_encoder.transition_buffers(&[hal::BufferBarrier::<dyn hal::DynBuffer> {
-                    buffer: tlas.instance_buffer.as_ref(),
+                    buffer: tlas_state.instance_buffer.as_ref(),
                     usage: hal::StateTransition {
                         from: BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                         to: BufferUses::COPY_DST,
@@ -429,7 +428,7 @@ pub(crate) fn build_acceleration_structures(
                 };
                 raw_encoder.copy_buffer_to_buffer(
                     staging_buffer.as_ref().unwrap().raw(),
-                    tlas.instance_buffer.as_ref(),
+                    tlas_state.instance_buffer.as_ref(),
                     &[temp],
                 );
             }

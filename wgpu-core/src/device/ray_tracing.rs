@@ -1,9 +1,10 @@
-use alloc::{string::ToString as _, sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
 use core::mem::{size_of, ManuallyDrop};
 
 #[cfg(feature = "trace")]
 use crate::device::trace::{Action, IntoTrace};
 use crate::device::DeviceError;
+use crate::resource::ResourceState;
 use crate::{
     api_log,
     device::Device,
@@ -15,9 +16,7 @@ use crate::{
     ray_tracing::BlasPrepareCompactError,
     ray_tracing::{CreateBlasError, CreateTlasError},
     resource,
-    resource::{
-        BlasCompactCallback, BlasCompactState, Fallible, InvalidResourceError, TrackingData,
-    },
+    resource::{BlasCompactCallback, BlasCompactState, InvalidResourceError, TrackingData},
     snatch::Snatchable,
     LabelHelpers,
 };
@@ -219,7 +218,7 @@ impl Device {
         };
 
         Ok(Arc::new(resource::Blas {
-            state: resource::ResourceState::Valid(resource::BlasState {
+            state: ResourceState::Valid(resource::BlasState {
                 raw: Snatchable::new(raw),
             }),
             device: self.clone(),
@@ -237,6 +236,27 @@ impl Device {
     }
 
     pub fn create_tlas(
+        self: &Arc<Self>,
+        desc: &resource::TlasDescriptor,
+    ) -> (Arc<resource::Tlas>, Option<CreateTlasError>) {
+        let (tlas, error) = match self.create_tlas_inner(desc) {
+            Ok(tlas) => (tlas, None),
+            Err(e) => (resource::Tlas::invalid(Arc::clone(self), desc), Some(e)),
+        };
+        #[cfg(feature = "trace")]
+        if let Some(trace) = self.trace.lock().as_mut() {
+            trace.add(Action::CreateTlas {
+                id: tlas.to_trace(),
+                desc: desc.clone(),
+            });
+        }
+
+        api_log!("Device::create_tlas -> {:?}", Arc::as_ptr(&tlas));
+
+        (tlas, error)
+    }
+
+    pub(crate) fn create_tlas_inner(
         self: &Arc<Self>,
         desc: &resource::TlasDescriptor,
     ) -> Result<Arc<resource::Tlas>, CreateTlasError> {
@@ -309,14 +329,16 @@ impl Device {
         .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         Ok(Arc::new(resource::Tlas {
-            raw: Snatchable::new(raw),
+            state: ResourceState::Valid(resource::TlasState {
+                raw: Snatchable::new(raw),
+                instance_buffer,
+            }),
             device: self.clone(),
             size_info,
             flags: desc.flags,
             update_mode: desc.update_mode,
             built_index: RwLock::new(rank::TLAS_BUILT_INDEX, None),
             dependencies: RwLock::new(rank::TLAS_DEPENDENCIES, Vec::new()),
-            instance_buffer: ManuallyDrop::new(instance_buffer),
             label: desc.label.to_string(),
             max_instance_count: desc.max_instances,
             tracking_data: TrackingData::new(self.tracker_indices.tlas_s.clone()),
@@ -357,30 +379,13 @@ impl Global {
 
         let fid = self.hub.tlas_s.prepare(id_in);
 
-        let error = 'error: {
-            let device = self.hub.devices.get(device_id);
+        let device = self.hub.devices.get(device_id);
 
-            let tlas = match device.create_tlas(desc) {
-                Ok(tlas) => tlas,
-                Err(e) => break 'error e,
-            };
+        let (tlas, error) = device.create_tlas(desc);
 
-            #[cfg(feature = "trace")]
-            if let Some(trace) = device.trace.lock().as_mut() {
-                trace.add(Action::CreateTlas {
-                    id: tlas.to_trace(),
-                    desc: desc.clone(),
-                });
-            }
+        let id = fid.assign(tlas);
 
-            let id = fid.assign(Fallible::Valid(tlas));
-            api_log!("Device::create_tlas -> {id:?}");
-
-            return (id, None);
-        };
-
-        let id = fid.assign(Fallible::Invalid(Arc::new(error.to_string())));
-        (id, Some(error))
+        (id, error)
     }
 
     pub fn blas_drop(&self, blas_id: BlasId) {
@@ -388,17 +393,7 @@ impl Global {
     }
 
     pub fn tlas_drop(&self, tlas_id: TlasId) {
-        profiling::scope!("Tlas::drop");
-        api_log!("Tlas::drop {tlas_id:?}");
-
         let _tlas = self.hub.tlas_s.remove(tlas_id);
-
-        #[cfg(feature = "trace")]
-        if let Ok(tlas) = _tlas.get() {
-            if let Some(t) = tlas.device.trace.lock().as_mut() {
-                t.add(Action::DropTlas(tlas.to_trace()));
-            }
-        }
     }
 
     pub fn blas_prepare_compact_async(
