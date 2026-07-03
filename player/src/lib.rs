@@ -432,7 +432,7 @@ impl Player {
                 panic!("Error recorded in trace: {error}");
             }
             Action::CreateBlas { id, desc, sizes } => {
-                let blas = device.create_blas(&desc, sizes).expect("create_blas error");
+                let (blas, _error) = device.create_blas(&desc, sizes);
                 self.blas_s.insert(id, blas);
             }
             Action::DropBlas(id) => {

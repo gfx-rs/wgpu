@@ -29,6 +29,31 @@ impl Device {
         self: &Arc<Self>,
         blas_desc: &resource::BlasDescriptor,
         sizes: wgt::BlasGeometrySizeDescriptors,
+    ) -> (Arc<resource::Blas>, Option<CreateBlasError>) {
+        #[cfg(feature = "trace")]
+        let trace_sizes = sizes.clone();
+
+        let (blas, error) = match self.create_blas_inner(blas_desc, sizes) {
+            Ok(blas) => (blas, None),
+            Err(err) => (resource::Blas::invalid(self.clone(), blas_desc), Some(err)),
+        };
+
+        #[cfg(feature = "trace")]
+        if let Some(trace) = self.trace.lock().as_mut() {
+            trace.add(Action::CreateBlas {
+                id: blas.to_trace(),
+                desc: blas_desc.clone(),
+                sizes: trace_sizes,
+            });
+        }
+
+        api_log!("Device::create_blas -> {:?}", Arc::as_ptr(&blas));
+        (blas, error)
+    }
+    pub(crate) fn create_blas_inner(
+        self: &Arc<Self>,
+        blas_desc: &resource::BlasDescriptor,
+        sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> Result<Arc<resource::Blas>, CreateBlasError> {
         self.check_is_valid()?;
         self.require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
@@ -194,7 +219,9 @@ impl Device {
         };
 
         Ok(Arc::new(resource::Blas {
-            raw: Snatchable::new(raw),
+            state: resource::ResourceState::Valid(resource::BlasState {
+                raw: Snatchable::new(raw),
+            }),
             device: self.clone(),
             size_info,
             sizes,
@@ -309,35 +336,15 @@ impl Global {
 
         let fid = self.hub.blas_s.prepare(id_in);
 
-        let error = 'error: {
-            let device = self.hub.devices.get(device_id);
+        let device = self.hub.devices.get(device_id);
 
-            #[cfg(feature = "trace")]
-            let trace_sizes = sizes.clone();
+        let (blas, error) = device.create_blas(desc, sizes);
 
-            let blas = match device.create_blas(desc, sizes) {
-                Ok(blas) => blas,
-                Err(e) => break 'error e,
-            };
-            let handle = blas.handle;
+        let handle = blas.handle();
 
-            #[cfg(feature = "trace")]
-            if let Some(trace) = device.trace.lock().as_mut() {
-                trace.add(Action::CreateBlas {
-                    id: blas.to_trace(),
-                    desc: desc.clone(),
-                    sizes: trace_sizes,
-                });
-            }
+        let id = fid.assign(blas);
 
-            let id = fid.assign(Fallible::Valid(blas));
-            api_log!("Device::create_blas -> {id:?}");
-
-            return (id, Some(handle), None);
-        };
-
-        let id = fid.assign(Fallible::Invalid(Arc::new(error.to_string())));
-        (id, None, Some(error))
+        (id, handle, error)
     }
 
     pub fn device_create_tlas(
@@ -377,17 +384,7 @@ impl Global {
     }
 
     pub fn blas_drop(&self, blas_id: BlasId) {
-        profiling::scope!("Blas::drop");
-        api_log!("Blas::drop {blas_id:?}");
-
         let _blas = self.hub.blas_s.remove(blas_id);
-
-        #[cfg(feature = "trace")]
-        if let Ok(blas) = _blas.get() {
-            if let Some(t) = blas.device.trace.lock().as_mut() {
-                t.add(Action::DropBlas(blas.to_trace()));
-            }
-        }
     }
 
     pub fn tlas_drop(&self, tlas_id: TlasId) {
@@ -409,37 +406,18 @@ impl Global {
         blas_id: BlasId,
         callback: Option<BlasCompactCallback>,
     ) -> Result<crate::SubmissionIndex, BlasPrepareCompactError> {
-        profiling::scope!("Blas::prepare_compact_async");
-        api_log!("Blas::prepare_compact_async {blas_id:?}");
-
         let hub = &self.hub;
 
-        let compact_result = match hub.blas_s.get(blas_id).get() {
-            Ok(blas) => blas.prepare_compact_async(callback),
-            Err(e) => Err((callback, e.into())),
-        };
+        let blas = hub.blas_s.get(blas_id);
 
-        match compact_result {
-            Ok(submission_index) => Ok(submission_index),
-            Err((mut callback, err)) => {
-                if let Some(callback) = callback.take() {
-                    callback(Err(err.clone()));
-                }
-                Err(err)
-            }
-        }
+        blas.prepare_compact_async(callback)
     }
 
     pub fn ready_for_compaction(&self, blas_id: BlasId) -> Result<bool, InvalidResourceError> {
-        profiling::scope!("Blas::prepare_compact_async");
-        api_log!("Blas::prepare_compact_async {blas_id:?}");
-
         let hub = &self.hub;
 
-        let blas = hub.blas_s.get(blas_id).get()?;
+        let blas = hub.blas_s.get(blas_id);
 
-        let lock = blas.compacted_state.lock();
-
-        Ok(matches!(*lock, BlasCompactState::Ready { .. }))
+        blas.ready_for_compaction()
     }
 }

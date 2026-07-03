@@ -50,10 +50,6 @@ struct TlasStore<'a> {
 }
 
 impl Global {
-    fn resolve_blas_id(&self, blas_id: BlasId) -> Result<Arc<Blas>, InvalidResourceError> {
-        self.hub.blas_s.get(blas_id).get()
-    }
-
     fn resolve_tlas_id(&self, tlas_id: TlasId) -> Result<Arc<Tlas>, InvalidResourceError> {
         self.hub.tlas_s.get(tlas_id).get()
     }
@@ -81,7 +77,9 @@ impl Global {
                 let mut build_command = AsBuild::with_capacity(blas_ids.len(), tlas_ids.len());
 
                 for blas in blas_ids {
-                    let blas = hub.blas_s.get(*blas).get()?;
+                    let blas = hub.blas_s.get(*blas);
+                    blas.check_is_valid()?;
+                    // TODO: we should probably do same device check too
                     build_command.blas_s_built.push(blas);
                 }
 
@@ -153,10 +151,9 @@ impl Global {
                             ArcBlasGeometries::AabbGeometries(aabb_geo)
                         }
                     };
-                    Ok(ArcBlasBuildEntry {
-                        blas: self.resolve_blas_id(blas_entry.blas_id)?,
-                        geometries,
-                    })
+                    let blas = hub.blas_s.get(blas_entry.blas_id);
+                    blas.check_is_valid()?;
+                    Ok(ArcBlasBuildEntry { blas, geometries })
                 })
                 .collect::<Result<_, BuildAccelerationStructureError>>()?;
 
@@ -168,8 +165,10 @@ impl Global {
                             instance
                                 .as_ref()
                                 .map(|instance| {
+                                    let blas = hub.blas_s.get(instance.blas_id);
+                                    blas.check_is_valid()?;
                                     Ok(ArcTlasInstance {
-                                        blas: self.resolve_blas_id(instance.blas_id)?,
+                                        blas,
                                         transform: *instance.transform,
                                         custom_data: instance.custom_data,
                                         mask: instance.mask,

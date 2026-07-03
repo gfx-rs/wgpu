@@ -2647,8 +2647,13 @@ unsafe impl Send for BlasCompactState {}
 unsafe impl Sync for BlasCompactState {}
 
 #[derive(Debug)]
-pub struct Blas {
+pub(crate) struct BlasState {
     pub(crate) raw: Snatchable<Box<dyn hal::DynAccelerationStructure>>,
+}
+
+#[derive(Debug)]
+pub struct Blas {
+    pub(crate) state: ResourceState<BlasState>,
     pub(crate) device: Arc<Device>,
     pub(crate) size_info: hal::AccelerationStructureBuildSizes,
     pub(crate) sizes: wgt::BlasGeometrySizeDescriptors,
@@ -2664,12 +2669,22 @@ pub struct Blas {
 }
 
 impl Drop for Blas {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("Blas::drop");
+        api_log!("Blas::drop {:?}", self as *const _);
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            use crate::device::trace::{to_trace, Action};
+            t.add(Action::DropBlas(unsafe { to_trace(self) }));
+        }
         resource_log!("Destroy raw {}", self.error_ident());
         // SAFETY: We are in the Drop impl, and we don't use self.raw or self.compaction_buffer anymore after this point.
-        if let Some(raw) = self.raw.take() {
-            unsafe {
-                self.device.raw().destroy_acceleration_structure(raw);
+        if let ResourceState::Valid(state) = &mut self.state {
+            if let Some(raw) = state.raw.take() {
+                unsafe {
+                    self.device.raw().destroy_acceleration_structure(raw);
+                }
             }
         }
         if let Some(mut raw) = self.compaction_buffer.take() {
@@ -2686,17 +2701,88 @@ impl RawResourceAccess for Blas {
     type DynResource = dyn hal::DynAccelerationStructure;
 
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
-        self.raw.get(guard).map(|it| it.as_ref())
+        self.state().ok()?.raw.get(guard).map(|it| it.as_ref())
     }
 }
 
 impl Blas {
-    pub(crate) fn prepare_compact_async(
+    pub(crate) fn state(&self) -> Result<&BlasState, InvalidResourceError> {
+        match &self.state {
+            ResourceState::Valid(state) => Ok(state),
+            ResourceState::Invalid => Err(InvalidResourceError(self.error_ident())),
+        }
+    }
+
+    pub(crate) fn check_is_valid(&self) -> Result<(), InvalidResourceError> {
+        self.state().map(|_| ())
+    }
+
+    pub(crate) fn invalid(device: Arc<Device>, desc: &BlasDescriptor) -> Arc<Self> {
+        Arc::new(Blas {
+            state: ResourceState::Invalid,
+            size_info: hal::AccelerationStructureBuildSizes {
+                acceleration_structure_size: 0,
+                update_scratch_size: 0,
+                build_scratch_size: 0,
+            },
+            sizes: wgt::BlasGeometrySizeDescriptors::Triangles {
+                descriptors: Vec::new(),
+            },
+            flags: desc.flags,
+            update_mode: desc.update_mode,
+            built_index: RwLock::new(rank::BLAS_BUILT_INDEX, None),
+            handle: 0,
+            label: desc.label.to_string(),
+            tracking_data: TrackingData::new(device.tracker_indices.blas_s.clone()),
+            device,
+            compaction_buffer: None,
+            compacted_state: Mutex::new(rank::BLAS_COMPACTION_STATE, BlasCompactState::Idle),
+        })
+    }
+
+    pub fn handle(&self) -> Option<u64> {
+        Some(self.handle)
+    }
+
+    pub fn ready_for_compaction(self: &Arc<Self>) -> Result<bool, InvalidResourceError> {
+        profiling::scope!("Blas::prepare_compact_async");
+        api_log!("Blas::prepare_compact_async {:?}", Arc::as_ptr(self));
+
+        self.check_is_valid()?;
+        let state = self.compacted_state.lock();
+        Ok(matches!(*state, BlasCompactState::Ready { .. }))
+    }
+
+    pub fn prepare_compact_async(
+        self: &Arc<Self>,
+        callback: Option<BlasCompactCallback>,
+    ) -> Result<SubmissionIndex, BlasPrepareCompactError> {
+        profiling::scope!("Blas::prepare_compact_async");
+        api_log!("Blas::prepare_compact_async {:?}", Arc::as_ptr(self));
+
+        let compact_result = self.prepare_compact_async_inner(callback);
+
+        match compact_result {
+            Ok(submission_index) => Ok(submission_index),
+            Err((mut callback, err)) => {
+                if let Some(callback) = callback.take() {
+                    callback(Err(err.clone()));
+                }
+                Err(err)
+            }
+        }
+    }
+
+    fn prepare_compact_async_inner(
         self: &Arc<Self>,
         op: Option<BlasCompactCallback>,
     ) -> Result<SubmissionIndex, (Option<BlasCompactCallback>, BlasPrepareCompactError)> {
         let device = &self.device;
         if let Err(e) = device.check_is_valid() {
+            return Err((op, e.into()));
+        }
+
+        if let Err(e) = self.check_is_valid() {
             return Err((op, e.into()));
         }
 

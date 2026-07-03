@@ -322,7 +322,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let blas = hub.blas_s.get(id).get().ok()?;
+        let blas = hub.blas_s.get(id);
 
         SnatchableResourceGuard::new(blas)
     }

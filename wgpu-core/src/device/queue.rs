@@ -33,11 +33,11 @@ use crate::{
     lock::{rank, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
     ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError},
     resource::{
-        Blas, BlasCompactState, Buffer, BufferAccessError, BufferMapState, DestroyedBuffer,
-        DestroyedQuerySet, DestroyedResourceError, DestroyedTexture, Fallible,
-        FlushedStagingBuffer, InvalidOrDestroyedResourceError, InvalidResourceError, Labeled,
-        ParentDevice, ResourceErrorIdent, StagingBuffer, Texture, TextureInner, Trackable,
-        TrackingData,
+        Blas, BlasCompactState, BlasDescriptor, BlasState, Buffer, BufferAccessError,
+        BufferMapState, DestroyedBuffer, DestroyedQuerySet, DestroyedResourceError,
+        DestroyedTexture, Fallible, FlushedStagingBuffer, InvalidOrDestroyedResourceError,
+        InvalidResourceError, Labeled, ParentDevice, ResourceErrorIdent, ResourceState,
+        StagingBuffer, Texture, TextureInner, Trackable, TrackingData,
     },
     resource_log,
     scratch::ScratchBuffer,
@@ -1761,13 +1761,52 @@ impl Queue {
         self.lock_life().add_work_done_closure(closure)
     }
 
-    pub fn compact_blas(&self, blas: &Arc<Blas>) -> Result<Arc<Blas>, CompactBlasError> {
+    #[allow(trivial_casts)]
+    pub fn compact_blas(&self, blas: &Arc<Blas>) -> (Arc<Blas>, Option<CompactBlasError>) {
+        api_log!(
+            "Queue::compact_blas {:?}, {:?}",
+            self as *const _,
+            Arc::as_ptr(blas)
+        );
+
+        let (blas, error) = match self.compact_blas_inner(blas) {
+            Ok(blas) => (blas, None),
+            Err(err) => {
+                let new_label = blas.label.clone() + " (compacted)";
+                (
+                    Blas::invalid(
+                        self.device.clone(),
+                        &BlasDescriptor {
+                            label: Some(new_label.into()),
+                            flags: blas.flags,
+                            update_mode: blas.update_mode,
+                        },
+                    ),
+                    Some(err),
+                )
+            }
+        };
+
+        // TODO: Tracing
+
+        (blas, error)
+    }
+
+    pub(crate) fn compact_blas_inner(
+        &self,
+        blas: &Arc<Blas>,
+    ) -> Result<Arc<Blas>, CompactBlasError> {
         profiling::scope!("Queue::compact_blas");
         api_log!("Queue::compact_blas");
 
         let new_label = blas.label.clone() + " (compacted)";
 
         self.device.check_is_valid()?;
+
+        self.device
+            .require_features(wgpu_types::Features::EXPERIMENTAL_RAY_QUERY)?;
+
+        blas.check_is_valid()?;
         self.same_device_as(blas.as_ref())?;
 
         let device = blas.device.clone();
@@ -1821,7 +1860,9 @@ impl Queue {
                 .unwrap();
 
         let new_blas = Arc::new(Blas {
-            raw: Snatchable::new(raw),
+            state: ResourceState::Valid(BlasState {
+                raw: Snatchable::new(raw),
+            }),
             device: device.clone(),
             size_info,
             sizes: blas.sizes.clone(),
@@ -1838,6 +1879,12 @@ impl Queue {
 
         pending_writes.insert_blas(blas);
         pending_writes.insert_blas(&new_blas);
+
+        // We should have no more errors after this because we have marked the command encoder as successful.
+        let old_blas_size = blas.size_info.acceleration_structure_size;
+        let new_blas_size = new_blas.size_info.acceleration_structure_size;
+
+        api_log!("CommandEncoder::compact_blas {:?} (size: {old_blas_size}) -> {:?} (size: {new_blas_size})", Arc::as_ptr(blas), Arc::as_ptr(&new_blas));
 
         Ok(new_blas)
     }
@@ -2006,47 +2053,17 @@ impl Global {
         blas_id: BlasId,
         id_in: Option<BlasId>,
     ) -> (BlasId, Option<u64>, Option<CompactBlasError>) {
-        api_log!("Queue::compact_blas {queue_id:?}, {blas_id:?}");
-
         let fid = self.hub.blas_s.prepare(id_in);
 
         let queue = self.hub.queues.get(queue_id);
         let blas = self.hub.blas_s.get(blas_id);
-        let device = &queue.device;
 
-        // TODO: Tracing
+        let (blas, error) = queue.compact_blas(&blas);
 
-        let error = 'error: {
-            match device.require_features(wgpu_types::Features::EXPERIMENTAL_RAY_QUERY) {
-                Ok(_) => {}
-                Err(err) => break 'error err.into(),
-            }
+        let handle = blas.handle();
+        let id = fid.assign(blas);
 
-            let blas = match blas.get() {
-                Ok(blas) => blas,
-                Err(err) => break 'error err.into(),
-            };
-
-            let new_blas = match queue.compact_blas(&blas) {
-                Ok(blas) => blas,
-                Err(err) => break 'error err,
-            };
-
-            // We should have no more errors after this because we have marked the command encoder as successful.
-            let old_blas_size = blas.size_info.acceleration_structure_size;
-            let new_blas_size = new_blas.size_info.acceleration_structure_size;
-            let handle = new_blas.handle;
-
-            let id = fid.assign(Fallible::Valid(new_blas));
-
-            api_log!("CommandEncoder::compact_blas {blas_id:?} (size: {old_blas_size}) -> {id:?} (size: {new_blas_size})");
-
-            return (id, Some(handle), None);
-        };
-
-        let id = fid.assign(Fallible::Invalid(Arc::new(error.to_string())));
-
-        (id, None, Some(error))
+        (id, handle, error)
     }
 }
 
