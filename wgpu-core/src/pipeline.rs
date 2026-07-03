@@ -14,6 +14,7 @@ use wgt::error::{ErrorType, WebGpuError};
 
 pub use crate::pipeline_cache::PipelineCacheValidationError;
 use crate::{
+    api_log,
     binding_model::{
         BindGroupLayout, CreateBindGroupLayoutError, CreatePipelineLayoutError,
         GetBindGroupLayoutError, PipelineLayout,
@@ -24,10 +25,11 @@ use crate::{
         RenderPassContext,
     },
     id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
+    pipeline_cache,
     resource::{InvalidResourceError, Labeled, ResourceState, TrackingData},
     resource_log,
     validation::{self, ShaderMetaData},
-    Label,
+    Label, LabelHelpers as _,
 };
 
 /// Information about buffer bindings, which
@@ -461,19 +463,28 @@ impl WebGpuError for CreatePipelineCacheError {
 
 #[derive(Debug)]
 pub struct PipelineCache {
-    pub(crate) raw: ManuallyDrop<Box<dyn hal::DynPipelineCache>>,
+    pub(crate) raw: ResourceState<Box<dyn hal::DynPipelineCache>>,
     pub(crate) device: Arc<Device>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
 }
 
 impl Drop for PipelineCache {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("PipelineCache::drop");
+        api_log!("PipelineCache::drop {:?}", self as *const _);
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            use crate::device::trace::{to_trace, Action};
+            t.add(Action::DropPipelineCache(unsafe { to_trace(self) }));
+        }
         resource_log!("Destroy raw {}", self.error_ident());
-        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
-        unsafe {
-            self.device.raw().destroy_pipeline_cache(raw);
+        if let ResourceState::Valid(raw) = core::mem::replace(&mut self.raw, ResourceState::Invalid)
+        {
+            unsafe {
+                self.device.raw().destroy_pipeline_cache(raw);
+            }
         }
     }
 }
@@ -484,8 +495,51 @@ crate::impl_parent_device!(PipelineCache);
 crate::impl_storage_item!(PipelineCache);
 
 impl PipelineCache {
-    pub(crate) fn raw(&self) -> &dyn hal::DynPipelineCache {
-        self.raw.as_ref()
+    pub(crate) fn raw(&self) -> Result<&dyn hal::DynPipelineCache, InvalidResourceError> {
+        self.raw
+            .as_ref()
+            .valid()
+            .map(|raw| raw.as_ref())
+            .ok_or_else(|| InvalidResourceError(self.error_ident()))
+    }
+
+    pub(crate) fn check_is_valid(&self) -> Result<(), InvalidResourceError> {
+        self.raw().map(|_| ())
+    }
+
+    pub(crate) fn invalid(device: Arc<Device>, desc: &PipelineCacheDescriptor) -> Arc<Self> {
+        Arc::new(Self {
+            raw: ResourceState::Invalid,
+            device,
+            label: desc.label.to_string(),
+        })
+    }
+
+    pub fn get_data(self: &Arc<Self>) -> Option<Vec<u8>> {
+        api_log!("PipelineCache::get_data");
+
+        let ResourceState::Valid(raw) = &self.raw else {
+            return None;
+        };
+
+        if !self.device.is_valid() {
+            return None;
+        }
+        let mut vec = unsafe { self.device.raw().pipeline_cache_get_data(raw.as_ref()) }?;
+        let validation_key = self.device.raw().pipeline_cache_validation_key()?;
+
+        let mut header_contents = [0; pipeline_cache::HEADER_LENGTH];
+        pipeline_cache::add_cache_header(
+            &mut header_contents,
+            &vec,
+            &self.device.adapter.raw.info,
+            validation_key,
+        );
+
+        let deleted = vec.splice(..0, header_contents).collect::<Vec<_>>();
+        debug_assert!(deleted.is_empty());
+
+        Some(vec)
     }
 }
 

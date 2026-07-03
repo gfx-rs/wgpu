@@ -203,7 +203,7 @@ pub struct Hub {
     pub(crate) render_bundles: Registry<Arc<RenderBundle>>,
     pub(crate) render_pipelines: Registry<Arc<RenderPipeline>>,
     pub(crate) compute_pipelines: Registry<Arc<ComputePipeline>>,
-    pub(crate) pipeline_caches: Registry<Fallible<PipelineCache>>,
+    pub(crate) pipeline_caches: Registry<Arc<PipelineCache>>,
     pub(crate) query_sets: Registry<Arc<QuerySet>>,
     pub(crate) buffers: Registry<Fallible<Buffer>>,
     pub(crate) staging_buffers: Registry<StagingBuffer>,

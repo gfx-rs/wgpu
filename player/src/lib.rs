@@ -345,7 +345,7 @@ impl Player {
                     .expect("invalid render pipeline");
             }
             Action::CreatePipelineCache { id, desc } => {
-                let cache = unsafe { device.create_pipeline_cache(&desc) }.unwrap();
+                let (cache, _error) = unsafe { device.create_pipeline_cache(&desc) };
                 self.pipeline_caches.insert(id, cache);
             }
             Action::DropPipelineCache(id) => {

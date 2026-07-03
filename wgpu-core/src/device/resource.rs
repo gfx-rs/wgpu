@@ -4289,6 +4289,7 @@ impl Device {
 
         let cache = match desc.cache {
             Some(cache) => {
+                cache.check_is_valid()?;
                 cache.same_device(self)?;
                 Some(cache)
             }
@@ -4304,7 +4305,7 @@ impl Device {
                 constants: &desc.stage.constants,
                 zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
             },
-            cache: cache.as_ref().map(|it| it.raw()),
+            cache: cache.as_ref().map(|it| it.raw()).transpose()?,
         };
 
         let raw =
@@ -5183,6 +5184,7 @@ impl Device {
 
         let cache = match desc.cache {
             Some(cache) => {
+                cache.check_is_valid()?;
                 cache.same_device(self)?;
                 Some(cache)
             }
@@ -5211,7 +5213,7 @@ impl Device {
                 fragment_stage,
                 color_targets,
                 multiview_mask: desc.multiview_mask,
-                cache: cache.as_ref().map(|it| it.raw()),
+                cache: cache.as_ref().map(|it| it.raw()).transpose()?,
             };
             unsafe { self.raw().create_render_pipeline(&pipeline_desc) }.map_err(
                 |err| match err {
@@ -5326,6 +5328,35 @@ impl Device {
     pub unsafe fn create_pipeline_cache(
         self: &Arc<Self>,
         desc: &pipeline::PipelineCacheDescriptor,
+    ) -> (
+        Arc<pipeline::PipelineCache>,
+        Option<pipeline::CreatePipelineCacheError>,
+    ) {
+        let (cache, error) = match unsafe { self.create_pipeline_cache_inner(desc) } {
+            Ok(cache) => (cache, None),
+            Err(e) => (
+                pipeline::PipelineCache::invalid(self.clone(), desc),
+                Some(e),
+            ),
+        };
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use trace::IntoTrace;
+            trace.add(trace::Action::CreatePipelineCache {
+                id: cache.to_trace(),
+                desc: desc.clone(),
+            });
+        }
+        api_log!("Device::create_pipeline_cache -> {:?}", Arc::as_ptr(&cache));
+        (cache, error)
+    }
+
+    /// # Safety
+    /// The `data` field on `desc` must have previously been returned from
+    /// [`crate::global::Global::pipeline_cache_get_data`]
+    pub(crate) unsafe fn create_pipeline_cache_inner(
+        self: &Arc<Self>,
+        desc: &pipeline::PipelineCacheDescriptor,
     ) -> Result<Arc<pipeline::PipelineCache>, pipeline::CreatePipelineCacheError> {
         use crate::pipeline_cache;
 
@@ -5365,7 +5396,7 @@ impl Device {
             device: self.clone(),
             label: desc.label.to_string(),
             // This would be none in the error condition, which we don't implement yet
-            raw: ManuallyDrop::new(raw),
+            raw: ResourceState::Valid(raw),
         };
 
         let cache = Arc::new(cache);

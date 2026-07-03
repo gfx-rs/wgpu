@@ -1159,14 +1159,7 @@ impl Global {
 
             let layout = desc.layout.map(|layout| hub.pipeline_layouts.get(layout));
 
-            let cache = desc
-                .cache
-                .map(|cache| hub.pipeline_caches.get(cache).get())
-                .transpose();
-            let cache = match cache {
-                Ok(cache) => cache,
-                Err(e) => break 'error e.into(),
-            };
+            let cache = desc.cache.map(|cache| hub.pipeline_caches.get(cache));
 
             let vertex = match desc.vertex {
                 RenderPipelineVertexProcessor::Vertex(ref vertex) => {
@@ -1320,14 +1313,7 @@ impl Global {
 
             let layout = desc.layout.map(|layout| hub.pipeline_layouts.get(layout));
 
-            let cache = desc
-                .cache
-                .map(|cache| hub.pipeline_caches.get(cache).get())
-                .transpose();
-            let cache = match cache {
-                Ok(cache) => cache,
-                Err(e) => break 'error e.into(),
-            };
+            let cache = desc.cache.map(|cache| hub.pipeline_caches.get(cache));
 
             let module = hub.shader_modules.get(desc.stage.module);
 
@@ -1411,47 +1397,19 @@ impl Global {
         let hub = &self.hub;
 
         let fid = hub.pipeline_caches.prepare(id_in);
-        let error: pipeline::CreatePipelineCacheError = 'error: {
-            let device = self.hub.devices.get(device_id);
+        let device = self.hub.devices.get(device_id);
 
-            let cache = unsafe { device.create_pipeline_cache(desc) };
-            match cache {
-                Ok(cache) => {
-                    #[cfg(feature = "trace")]
-                    if let Some(ref mut trace) = *device.trace.lock() {
-                        trace.add(trace::Action::CreatePipelineCache {
-                            id: cache.to_trace(),
-                            desc: desc.clone(),
-                        });
-                    }
+        let (cache, error) = unsafe { device.create_pipeline_cache(desc) };
 
-                    let id = fid.assign(Fallible::Valid(cache));
-                    api_log!("Device::create_pipeline_cache -> {id:?}");
-                    return (id, None);
-                }
-                Err(e) => break 'error e,
-            }
-        };
+        let id = fid.assign(cache);
 
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-
-        (id, Some(error))
+        (id, error)
     }
 
     pub fn pipeline_cache_drop(&self, pipeline_cache_id: id::PipelineCacheId) {
-        profiling::scope!("PipelineCache::drop");
-        api_log!("PipelineCache::drop {pipeline_cache_id:?}");
-
         let hub = &self.hub;
 
         let _cache = hub.pipeline_caches.remove(pipeline_cache_id);
-
-        #[cfg(feature = "trace")]
-        if let Ok(cache) = _cache.get() {
-            if let Some(t) = cache.device.trace.lock().as_mut() {
-                t.add(trace::Action::DropPipelineCache(cache.to_trace()));
-            }
-        }
     }
 
     pub fn surface_configure(
@@ -1577,32 +1535,9 @@ impl Global {
     }
 
     pub fn pipeline_cache_get_data(&self, id: id::PipelineCacheId) -> Option<Vec<u8>> {
-        use crate::pipeline_cache;
-        api_log!("PipelineCache::get_data");
         let hub = &self.hub;
 
-        if let Ok(cache) = hub.pipeline_caches.get(id).get() {
-            // TODO: Is this check needed?
-            if !cache.device.is_valid() {
-                return None;
-            }
-            let mut vec = unsafe { cache.device.raw().pipeline_cache_get_data(cache.raw()) }?;
-            let validation_key = cache.device.raw().pipeline_cache_validation_key()?;
-
-            let mut header_contents = [0; pipeline_cache::HEADER_LENGTH];
-            pipeline_cache::add_cache_header(
-                &mut header_contents,
-                &vec,
-                &cache.device.adapter.raw.info,
-                validation_key,
-            );
-
-            let deleted = vec.splice(..0, header_contents).collect::<Vec<_>>();
-            debug_assert!(deleted.is_empty());
-
-            return Some(vec);
-        }
-        None
+        hub.pipeline_caches.get(id).get_data()
     }
 
     pub fn device_drop(&self, device_id: DeviceId) {
