@@ -1,4 +1,6 @@
-use alloc::{boxed::Box, string::ToString, sync::Arc, vec, vec::Vec};
+#[cfg(feature = "trace")]
+use alloc::string::ToString as _;
+use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
 use core::{
     iter,
     mem::{self, ManuallyDrop},

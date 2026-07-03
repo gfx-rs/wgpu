@@ -79,7 +79,6 @@ impl Global {
                 for blas in blas_ids {
                     let blas = hub.blas_s.get(*blas);
                     blas.check_is_valid()?;
-                    // TODO: we should probably do same device check too
                     build_command.blas_s_built.push(blas);
                 }
 
