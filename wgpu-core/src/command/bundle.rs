@@ -81,6 +81,7 @@ index format changes.
 use alloc::{
     borrow::{Cow, ToOwned as _},
     string::String,
+    string::ToString as _,
     sync::Arc,
     vec::Vec,
 };
@@ -100,6 +101,7 @@ use wgt::error::{ErrorType, WebGpuError};
 #[cfg(feature = "trace")]
 use crate::command::ArcReferences;
 use crate::{
+    api_log,
     binding_model::{BindError, BindGroup, PipelineLayout},
     command::{
         bind::Binder, pass::validate_immediates_alignment, pass_base, BasePass,
@@ -116,7 +118,7 @@ use crate::{
     pipeline::{PipelineFlags, RenderPipeline},
     resource::{
         Buffer, DestroyedResourceError, Fallible, InvalidResourceError, Labeled, ParentDevice,
-        RawResourceAccess, TrackingData,
+        RawResourceAccess, ResourceState, TrackingData,
     },
     resource_log,
     snatch::SnatchGuard,
@@ -315,7 +317,54 @@ impl RenderBundleEncoder {
     /// and accumulate buffer and texture initialization actions.
     ///
     /// [`ExecuteBundle`]: RenderCommand::ExecuteBundle
-    pub(crate) fn finish(
+    pub fn finish(
+        &mut self,
+        desc: &RenderBundleDescriptor,
+        device: &Arc<Device>,
+        hub: &Hub,
+    ) -> (Arc<RenderBundle>, Option<RenderBundleError>) {
+        #[cfg(feature = "trace")]
+        let trace_desc = crate::device::trace::new_render_bundle_encoder_descriptor(
+            desc.label.clone(),
+            &self.context,
+            self.is_depth_read_only,
+            self.is_stencil_read_only,
+        );
+
+        let (render_bundle, error) = match self.finish_inner(desc, device, hub) {
+            Ok(render_bundle) => (render_bundle, None),
+            Err(e) => (RenderBundle::invalid(Arc::clone(device), desc), Some(e)),
+        };
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *device.trace.lock() {
+            use crate::device::trace::{Action, IntoTrace};
+            trace.add(Action::CreateRenderBundle {
+                id: render_bundle.to_trace(),
+                desc: trace_desc,
+                base: render_bundle.to_base_pass().to_trace(),
+            });
+        }
+
+        api_log!(
+            "RenderBundleEncoder::finish -> {:?}",
+            Arc::as_ptr(&render_bundle)
+        );
+
+        (render_bundle, error)
+    }
+
+    /// Convert this encoder's commands into a [`RenderBundle`].
+    ///
+    /// We want executing a [`RenderBundle`] to be quick, so we take
+    /// this opportunity to clean up the [`RenderBundleEncoder`]'s
+    /// command stream and gather metadata about it that will help
+    /// keep [`ExecuteBundle`] simple and fast. We remove redundant
+    /// commands (along with their side data), note resource usage,
+    /// and accumulate buffer and texture initialization actions.
+    ///
+    /// [`ExecuteBundle`]: RenderCommand::ExecuteBundle
+    pub(crate) fn finish_inner(
         &mut self,
         desc: &RenderBundleDescriptor,
         device: &Arc<Device>,
@@ -558,6 +607,10 @@ impl RenderBundleEncoder {
         let immediates_data = mem::take(&mut self.base.immediates_data);
         let context = mem::take(&mut self.context);
         let render_bundle = RenderBundle {
+            state: ResourceState::Valid(RenderBundleState {
+                context,
+                used: trackers,
+            }),
             base: BasePass {
                 label: desc.label.as_deref().map(str::to_owned),
                 error: None,
@@ -569,10 +622,8 @@ impl RenderBundleEncoder {
             is_depth_read_only: self.is_depth_read_only,
             is_stencil_read_only: self.is_stencil_read_only,
             device: device.clone(),
-            used: trackers,
             buffer_memory_init_actions,
             texture_memory_init_actions,
-            context,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(tracker_indices),
             discard_hal_labels,
@@ -1247,22 +1298,27 @@ pub enum ExecutionError {
 
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 
+#[derive(Debug)]
+pub(crate) struct RenderBundleState {
+    pub(crate) used: RenderBundleScope,
+    pub(super) context: RenderPassContext,
+}
+
 //Note: here, `RenderBundle` is just wrapping a raw stream of render commands.
 // The plan is to back it by an actual Vulkan secondary buffer, D3D12 Bundle,
 // or Metal indirect command buffer.
 /// cbindgen:ignore
 #[derive(Debug)]
 pub struct RenderBundle {
+    pub(crate) state: ResourceState<RenderBundleState>,
     // Normalized command stream. It can be executed verbatim,
     // without re-binding anything on the pipeline change.
     base: BasePass<ArcRenderCommand, Infallible>,
     pub(super) is_depth_read_only: bool,
     pub(super) is_stencil_read_only: bool,
     pub(crate) device: Arc<Device>,
-    pub(crate) used: RenderBundleScope,
     pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction>,
-    pub(super) context: RenderPassContext,
     /// The `label` from the descriptor used to create the resource.
     label: String,
     pub(crate) tracking_data: TrackingData,
@@ -1270,8 +1326,17 @@ pub struct RenderBundle {
 }
 
 impl Drop for RenderBundle {
+    #[expect(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("RenderBundle::drop");
+        api_log!("RenderBundle::drop {:?}", self as *const _);
         resource_log!("Drop {}", self.error_ident());
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            use crate::device::trace::{to_trace, Action};
+
+            t.add(Action::DropRenderBundle(unsafe { to_trace(self) }));
+        }
     }
 }
 
@@ -1281,6 +1346,39 @@ unsafe impl Send for RenderBundle {}
 unsafe impl Sync for RenderBundle {}
 
 impl RenderBundle {
+    pub(crate) fn state(&self) -> Result<&RenderBundleState, InvalidResourceError> {
+        self.state
+            .as_ref()
+            .valid()
+            .ok_or_else(|| InvalidResourceError(self.error_ident()))
+    }
+
+    pub(crate) fn check_is_valid(&self) -> Result<(), InvalidResourceError> {
+        self.state().map(|_| ())
+    }
+
+    pub(crate) fn invalid(device: Arc<Device>, desc: &RenderBundleDescriptor) -> Arc<Self> {
+        Arc::new(RenderBundle {
+            state: ResourceState::Invalid,
+            base: BasePass {
+                label: desc.label.as_ref().map(|l| l.to_string()),
+                error: None,
+                commands: Vec::new(),
+                dynamic_offsets: Vec::new(),
+                string_data: Vec::new(),
+                immediates_data: Vec::new(),
+            },
+            is_depth_read_only: false,
+            is_stencil_read_only: false,
+            buffer_memory_init_actions: Vec::new(),
+            texture_memory_init_actions: Vec::new(),
+            label: desc.label.to_string(),
+            tracking_data: TrackingData::new(device.tracker_indices.bundles.clone()),
+            discard_hal_labels: false,
+            device,
+        })
+    }
+
     #[cfg(feature = "trace")]
     pub(crate) fn to_base_pass(&self) -> BasePass<RenderCommand<ArcReferences>, Infallible> {
         self.base.clone()
@@ -1603,7 +1701,7 @@ impl IndexState {
 /// [`SetBindGroup`]: RenderCommand::SetBindGroup
 /// [`SetIndexBuffer`]: RenderCommand::SetIndexBuffer
 struct State {
-    /// Resources used by this bundle. This will become [`RenderBundle::used`].
+    /// Resources used by this bundle. This will become [`RenderBundleState::used`].
     trackers: RenderBundleScope,
 
     /// The currently set pipeline, if any.

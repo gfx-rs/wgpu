@@ -3562,12 +3562,13 @@ fn execute_bundle(
 
     let bundle = state.pass.base.tracker.bundles.insert_single(bundle);
 
+    let bundle_state = bundle.state()?;
     bundle.same_device(device)?;
 
     state
         .info
         .context
-        .check_compatible(&bundle.context, bundle.as_ref())
+        .check_compatible(&bundle_state.context, bundle.as_ref())
         .map_err(RenderPassErrorInner::IncompatibleBundleTargets)?;
 
     if (state.info.is_depth_read_only && !bundle.is_depth_read_only)
@@ -3624,7 +3625,7 @@ fn execute_bundle(
     })?;
 
     unsafe {
-        state.pass.scope.merge_render_bundle(&bundle.used)?;
+        state.pass.scope.merge_render_bundle(&bundle_state.used)?;
     };
     state.reset_bundle();
     Ok(())
@@ -4603,7 +4604,8 @@ impl Global {
         let bundles = hub.render_bundles.read();
 
         for &bundle_id in render_bundle_ids {
-            let bundle = pass_try!(base, scope, bundles.get(bundle_id).get());
+            let bundle = bundles.get(bundle_id);
+            pass_try!(base, scope, bundle.check_is_valid());
 
             base.commands.push(ArcRenderCommand::ExecuteBundle(bundle));
         }

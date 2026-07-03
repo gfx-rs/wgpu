@@ -223,11 +223,13 @@ impl Global {
     /// See [`Self::create_buffer_error`] for more context and explanation.
     pub fn create_render_bundle_error(
         &self,
+        device_id: DeviceId,
         id_in: Option<id::RenderBundleId>,
         desc: &command::RenderBundleDescriptor,
     ) {
+        let device = self.hub.devices.get(device_id);
         let fid = self.hub.render_bundles.prepare(id_in);
-        fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
+        fid.assign(command::RenderBundle::invalid(device, desc));
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -1157,39 +1159,13 @@ impl Global {
 
         let fid = hub.render_bundles.prepare(id_in);
 
-        let error = 'error: {
-            let device = self.hub.devices.get(bundle_encoder.parent());
+        let device = self.hub.devices.get(bundle_encoder.parent());
 
-            #[cfg(feature = "trace")]
-            let trace_desc = trace::new_render_bundle_encoder_descriptor(
-                desc.label.clone(),
-                &bundle_encoder.context,
-                bundle_encoder.is_depth_read_only,
-                bundle_encoder.is_stencil_read_only,
-            );
+        let (render_bundle, error) = bundle_encoder.finish(desc, &device, hub);
 
-            let render_bundle = match bundle_encoder.finish(desc, &device, hub) {
-                Ok(bundle) => bundle,
-                Err(e) => break 'error e,
-            };
+        let id = fid.assign(render_bundle);
 
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateRenderBundle {
-                    id: render_bundle.to_trace(),
-                    desc: trace_desc,
-                    base: render_bundle.to_base_pass().to_trace(),
-                });
-            }
-
-            let id = fid.assign(Fallible::Valid(render_bundle));
-            api_log!("RenderBundleEncoder::finish -> {id:?}");
-
-            return (id, None);
-        };
-
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-        (id, Some(error))
+        (id, error)
     }
 
     pub fn render_bundle_encoder_finish_with_id(
@@ -1219,19 +1195,9 @@ impl Global {
     }
 
     pub fn render_bundle_drop(&self, render_bundle_id: id::RenderBundleId) {
-        profiling::scope!("RenderBundle::drop");
-        api_log!("RenderBundle::drop {render_bundle_id:?}");
-
         let hub = &self.hub;
 
         let _bundle = hub.render_bundles.remove(render_bundle_id);
-
-        #[cfg(feature = "trace")]
-        if let Ok(bundle) = _bundle.get() {
-            if let Some(t) = bundle.device.trace.lock().as_mut() {
-                t.add(trace::Action::DropRenderBundle(bundle.to_trace()));
-            }
-        }
     }
 
     pub fn device_create_query_set(
