@@ -47,9 +47,9 @@ use crate::{
     pool::ResourcePool,
     present,
     resource::{
-        self, Buffer, ExternalTexture, Fallible, Labeled, ParentDevice, QuerySet, QuerySetState,
-        RawResourceAccess, ResourceState, Sampler, StagingBuffer, Texture, TextureView,
-        TextureViewNotRenderableReason, TextureViewState, Tlas, TrackingData,
+        self, Buffer, ExternalTexture, ExternalTextureState, Fallible, Labeled, ParentDevice,
+        QuerySet, QuerySetState, RawResourceAccess, ResourceState, Sampler, StagingBuffer, Texture,
+        TextureView, TextureViewNotRenderableReason, TextureViewState, Tlas, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
@@ -2194,6 +2194,45 @@ impl Device {
         self: &Arc<Self>,
         desc: &resource::ExternalTextureDescriptor,
         planes: &[Arc<TextureView>],
+    ) -> (
+        Arc<ExternalTexture>,
+        Option<resource::CreateExternalTextureError>,
+    ) {
+        let (external_texture, error) = match self.create_external_texture_inner(desc, planes) {
+            Ok(external_texture) => (external_texture, None),
+            Err(e) => (ExternalTexture::invalid(Arc::clone(self), desc), Some(e)),
+        };
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace;
+            use trace::IntoTrace as _;
+
+            let planes = Box::from(
+                planes
+                    .iter()
+                    .map(|plane| plane.to_trace())
+                    .collect::<Vec<_>>(),
+            );
+            trace.add(trace::Action::CreateExternalTexture {
+                id: external_texture.to_trace(),
+                desc: desc.clone(),
+                planes,
+            });
+        }
+
+        api_log!(
+            "Device::create_external_texture({desc:?}) -> {:?}",
+            Arc::as_ptr(&external_texture)
+        );
+
+        (external_texture, error)
+    }
+
+    pub(crate) fn create_external_texture_inner(
+        self: &Arc<Self>,
+        desc: &resource::ExternalTextureDescriptor,
+        planes: &[Arc<TextureView>],
     ) -> Result<Arc<ExternalTexture>, resource::CreateExternalTextureError> {
         use resource::CreateExternalTextureError;
         self.require_features(wgt::Features::EXTERNAL_TEXTURE)?;
@@ -2274,9 +2313,9 @@ impl Device {
         )?;
 
         let external_texture = ExternalTexture {
+            state: ResourceState::Valid(ExternalTextureState { params }),
             device: self.clone(),
             planes,
-            params,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.external_textures.clone()),
         };
@@ -3445,6 +3484,7 @@ impl Device {
     > {
         use crate::binding_model::CreateBindGroupError as Error;
 
+        let external_texture_state = external_texture.state()?;
         external_texture.same_device(self)?;
 
         used.external_textures
@@ -3483,9 +3523,14 @@ impl Device {
             .collect::<Result<Vec<_>, Error>>()?;
         let planes = planes.try_into().unwrap();
 
-        used.buffers
-            .insert_single(external_texture.params.clone(), wgt::BufferUses::UNIFORM);
-        let params = external_texture.params.binding(0, None, snatch_guard)?.0;
+        used.buffers.insert_single(
+            external_texture_state.params.clone(),
+            wgt::BufferUses::UNIFORM,
+        );
+        let params = external_texture_state
+            .params
+            .binding(0, None, snatch_guard)?
+            .0;
 
         Ok(hal::ExternalTextureBinding { planes, params })
     }

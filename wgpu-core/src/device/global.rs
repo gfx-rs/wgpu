@@ -252,11 +252,13 @@ impl Global {
     /// See [`Self::create_buffer_error`] for more context and explanation.
     pub fn create_external_texture_error(
         &self,
+        device_id: DeviceId,
         id_in: Option<id::ExternalTextureId>,
         desc: &resource::ExternalTextureDescriptor,
     ) {
         let fid = self.hub.external_textures.prepare(id_in);
-        fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
+        let device = self.hub.devices.get(device_id);
+        fid.assign(resource::ExternalTexture::invalid(device, desc));
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -502,42 +504,18 @@ impl Global {
 
         let fid = hub.external_textures.prepare(id_in);
 
-        let error = 'error: {
-            let device = self.hub.devices.get(device_id);
+        let device = self.hub.devices.get(device_id);
 
-            let planes = planes
-                .iter()
-                .map(|plane_id| self.hub.texture_views.get(*plane_id))
-                .collect::<Vec<_>>();
+        let planes = planes
+            .iter()
+            .map(|plane_id| self.hub.texture_views.get(*plane_id))
+            .collect::<Vec<_>>();
 
-            let external_texture = match device.create_external_texture(desc, &planes) {
-                Ok(external_texture) => external_texture,
-                Err(error) => break 'error error,
-            };
+        let (external_texture, error) = device.create_external_texture(desc, &planes);
 
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                let planes = Box::from(
-                    planes
-                        .into_iter()
-                        .map(|plane| plane.to_trace())
-                        .collect::<Vec<_>>(),
-                );
-                trace.add(trace::Action::CreateExternalTexture {
-                    id: external_texture.to_trace(),
-                    desc: desc.clone(),
-                    planes,
-                });
-            }
+        let id = fid.assign(external_texture);
 
-            let id = fid.assign(Fallible::Valid(external_texture));
-            api_log!("Device::create_external_texture({desc:?}) -> {id:?}");
-
-            return (id, None);
-        };
-
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-        (id, Some(error))
+        (id, error)
     }
 
     pub fn external_texture_destroy(&self, external_texture_id: id::ExternalTextureId) {
@@ -546,17 +524,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let Ok(external_texture) = hub.external_textures.get(external_texture_id).get() else {
-            // If the external texture is already invalid, there's nothing to do.
-            return;
-        };
-
-        #[cfg(feature = "trace")]
-        if let Some(trace) = external_texture.device.trace.lock().as_mut() {
-            trace.add(trace::Action::DestroyExternalTexture(
-                external_texture.to_trace(),
-            ));
-        }
+        let external_texture = hub.external_textures.get(external_texture_id);
 
         external_texture.destroy();
     }
@@ -568,15 +536,6 @@ impl Global {
         let hub = &self.hub;
 
         let _external_texture = hub.external_textures.remove(external_texture_id);
-
-        #[cfg(feature = "trace")]
-        if let Ok(external_texture) = _external_texture.get() {
-            if let Some(t) = external_texture.device.trace.lock().as_mut() {
-                t.add(trace::Action::DropExternalTexture(
-                    external_texture.to_trace(),
-                ));
-            }
-        }
     }
 
     pub fn device_create_sampler(
@@ -707,7 +666,7 @@ impl Global {
                 sampler_storage: &Storage<Arc<resource::Sampler>>,
                 texture_view_storage: &Storage<Arc<resource::TextureView>>,
                 tlas_storage: &Storage<Fallible<resource::Tlas>>,
-                external_texture_storage: &Storage<Fallible<resource::ExternalTexture>>,
+                external_texture_storage: &Storage<Arc<resource::ExternalTexture>>,
             ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
             {
                 let resolve_buffer = |bb: &BufferBinding| {
@@ -729,12 +688,8 @@ impl Global {
                         .get()
                         .map_err(binding_model::CreateBindGroupError::from)
                 };
-                let resolve_external_texture = |id: &id::ExternalTextureId| {
-                    external_texture_storage
-                        .get(*id)
-                        .get()
-                        .map_err(binding_model::CreateBindGroupError::from)
-                };
+                let resolve_external_texture =
+                    |id: &id::ExternalTextureId| external_texture_storage.get(*id);
                 let resource = match e.resource {
                     BindingResource::Buffer(ref buffer) => {
                         ResolvedBindingResource::Buffer(resolve_buffer(buffer)?)
@@ -771,7 +726,7 @@ impl Global {
                         ResolvedBindingResource::AccelerationStructureArray(Cow::Owned(tlas_array))
                     }
                     BindingResource::ExternalTexture(ref et) => {
-                        ResolvedBindingResource::ExternalTexture(resolve_external_texture(et)?)
+                        ResolvedBindingResource::ExternalTexture(resolve_external_texture(et))
                     }
                 };
                 Ok(ResolvedBindGroupEntry {

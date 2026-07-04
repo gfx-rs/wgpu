@@ -2188,13 +2188,18 @@ crate::impl_storage_item!(TextureView);
 pub type ExternalTextureDescriptor<'a> = wgt::ExternalTextureDescriptor<Label<'a>>;
 
 #[derive(Debug)]
-pub struct ExternalTexture {
-    pub(crate) device: Arc<Device>,
-    /// Between 1 and 3 (inclusive) planes of texture data.
-    pub(crate) planes: arrayvec::ArrayVec<Arc<TextureView>, 3>,
+pub(crate) struct ExternalTextureState {
     /// Buffer containing a [`crate::device::resource::ExternalTextureParams`]
     /// describing the external texture.
     pub(crate) params: Arc<Buffer>,
+}
+
+#[derive(Debug)]
+pub struct ExternalTexture {
+    pub(crate) state: ResourceState<ExternalTextureState>,
+    pub(crate) device: Arc<Device>,
+    /// Between 1 and 3 (inclusive) planes of texture data.
+    pub(crate) planes: arrayvec::ArrayVec<Arc<TextureView>, 3>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
@@ -2203,12 +2208,43 @@ pub struct ExternalTexture {
 impl Drop for ExternalTexture {
     fn drop(&mut self) {
         resource_log!("Destroy raw {}", self.error_ident());
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            t.add(trace::Action::DropExternalTexture(unsafe {
+                trace::to_trace(self)
+            }));
+        }
     }
 }
 
 impl ExternalTexture {
+    pub(crate) fn state(&self) -> Result<&ExternalTextureState, InvalidResourceError> {
+        match &self.state {
+            ResourceState::Valid(state) => Ok(state),
+            ResourceState::Invalid => Err(InvalidResourceError(self.error_ident())),
+        }
+    }
+
     pub fn destroy(self: &Arc<Self>) {
-        self.params.destroy();
+        #[cfg(feature = "trace")]
+        if let Some(trace) = self.device.trace.lock().as_mut() {
+            use crate::device::trace::IntoTrace as _;
+
+            trace.add(trace::Action::DestroyExternalTexture(self.to_trace()));
+        }
+        if let Ok(state) = self.state() {
+            state.params.destroy();
+        }
+    }
+
+    pub fn invalid(device: Arc<Device>, desc: &ExternalTextureDescriptor) -> Arc<Self> {
+        Arc::new(ExternalTexture {
+            state: ResourceState::Invalid,
+            planes: arrayvec::ArrayVec::new(),
+            label: desc.label.to_string(),
+            tracking_data: TrackingData::new(device.tracker_indices.external_textures.clone()),
+            device,
+        })
     }
 }
 

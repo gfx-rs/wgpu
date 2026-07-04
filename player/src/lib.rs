@@ -153,9 +153,7 @@ impl Player {
                     .iter()
                     .map(|&id| self.resolve_texture_view_id(id))
                     .collect::<Vec<_>>();
-                let external_texture = device
-                    .create_external_texture(&desc, &planes)
-                    .expect("create_external_texture error");
+                let (external_texture, _error) = device.create_external_texture(&desc, &planes);
                 self.external_textures.insert(id, external_texture);
             }
             Action::DestroyExternalTexture(id) => {
