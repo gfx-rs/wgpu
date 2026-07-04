@@ -33,8 +33,8 @@ use crate::{
     command, conv,
     device::{
         bgl, create_validator, features_to_naga_capabilities, life::WaitIdleError, map_buffer,
-        AttachmentData, DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures,
-        RenderPassContext,
+        AttachmentData, BufferMapPendingClosure, DeviceLostInvocation, HostMap,
+        MissingDownlevelFlags, MissingFeatures, RenderPassContext,
     },
     hal_label,
     init_tracker::{
@@ -272,6 +272,8 @@ pub struct Device {
     pub(crate) ordered_texture_usages: wgt::TextureUses,
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
+    /// This closures were created in [`Buffer::drop`] where we do not run them to prevent locking problems.
+    pub(crate) deferred_buffer_map_pending_closures: Mutex<Vec<BufferMapPendingClosure>>,
     pub(crate) usage_scopes: UsageScopePool,
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
     // Optional so that we can late-initialize this after the queue is created.
@@ -560,6 +562,10 @@ impl Device {
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
             timestamp_normalizer: OnceCellOrLock::new(),
             indirect_validation,
+            deferred_buffer_map_pending_closures: Mutex::new(
+                rank::DEVICE_DEFERRED_BUFFER_MAP_PENDING_CLOSURES,
+                Vec::new(),
+            ),
         })
     }
 
@@ -835,6 +841,11 @@ impl Device {
         profiling::scope!("Device::maintain");
 
         let mut user_closures = UserClosures::default();
+
+        mem::swap(
+            &mut user_closures.mappings,
+            &mut self.deferred_buffer_map_pending_closures.lock(),
+        );
 
         // If a wait was requested, determine which submission index to wait for.
         let wait_submission_index = match poll_type {

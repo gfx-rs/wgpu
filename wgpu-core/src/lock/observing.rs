@@ -79,6 +79,10 @@ impl<T> Mutex<T> {
         }
     }
 
+    pub fn get_mut(&mut self) -> &mut T {
+        self.inner.get_mut()
+    }
+
     pub fn into_inner(self) -> T {
         self.inner.into_inner()
     }

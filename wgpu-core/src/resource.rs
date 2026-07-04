@@ -512,11 +512,36 @@ impl Drop for Buffer {
             raw.dispose(self.device.raw());
         }
 
+        let map_state = mem::replace(self.map_state.get_mut(), BufferMapState::Idle);
+        let active_map = match map_state {
+            BufferMapState::Init { staging_buffer } => {
+                staging_buffer.dispose();
+                false
+            }
+            BufferMapState::Waiting(buffer_pending_mapping) => {
+                if buffer_pending_mapping.op.callback.is_some() {
+                    let result = Err(BufferAccessError::DestroyedResource(
+                        DestroyedResourceError(self.error_ident()),
+                    ));
+                    self.device
+                        .deferred_buffer_map_pending_closures
+                        .lock()
+                        .push((buffer_pending_mapping.op, result));
+                }
+                false
+            }
+            BufferMapState::Active { .. } => true,
+            BufferMapState::Idle => false,
+        };
+
         let ResourceState::Valid(state) = &mut self.state else {
             return;
         };
 
         if let Some(raw) = state.raw.take() {
+            if active_map {
+                unsafe { self.device.raw().unmap_buffer(raw.as_ref()) }
+            }
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
                 self.device.raw().destroy_buffer(raw);
@@ -1395,6 +1420,12 @@ impl StagingBuffer {
             device,
             size,
         }
+    }
+
+    pub(crate) fn dispose(self) {
+        let device = self.device.raw();
+        unsafe { device.unmap_buffer(self.raw.as_ref()) };
+        unsafe { device.destroy_buffer(self.raw) };
     }
 }
 

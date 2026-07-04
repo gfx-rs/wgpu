@@ -272,9 +272,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = hub.buffers.remove(buffer_id);
-
-        let _ = buffer.unmap();
+        let _buffer = hub.buffers.remove(buffer_id);
     }
 
     pub fn device_create_texture(
