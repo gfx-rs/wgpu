@@ -273,7 +273,11 @@ pub struct Device {
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
     /// This closures were created in [`Buffer::drop`] where we do not run them to prevent locking problems.
-    pub(crate) deferred_buffer_map_pending_closures: Mutex<Vec<BufferMapPendingClosure>>,
+    ///
+    /// Because all operations are push/swap (no longlived lock),
+    /// we can have mutex without lock rank
+    pub(crate) deferred_buffer_map_pending_closures:
+        parking_lot::Mutex<Vec<BufferMapPendingClosure>>,
     pub(crate) usage_scopes: UsageScopePool,
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
     // Optional so that we can late-initialize this after the queue is created.
@@ -562,10 +566,7 @@ impl Device {
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
             timestamp_normalizer: OnceCellOrLock::new(),
             indirect_validation,
-            deferred_buffer_map_pending_closures: Mutex::new(
-                rank::DEVICE_DEFERRED_BUFFER_MAP_PENDING_CLOSURES,
-                Vec::new(),
-            ),
+            deferred_buffer_map_pending_closures: parking_lot::Mutex::new(Vec::new()),
         })
     }
 
