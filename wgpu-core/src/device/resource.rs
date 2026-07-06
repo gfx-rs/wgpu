@@ -204,6 +204,26 @@ impl ExternalTextureParams {
     }
 }
 
+/// Because all operations are push/swap (no longlived lock),
+/// we can have mutex without lock rank
+pub(crate) struct DeferredBufferMapPendingClosures(
+    parking_lot::Mutex<Vec<BufferMapPendingClosure>>,
+);
+
+impl DeferredBufferMapPendingClosures {
+    pub(crate) fn new() -> Self {
+        Self(parking_lot::Mutex::new(Vec::new()))
+    }
+
+    pub(crate) fn push(&self, closure: BufferMapPendingClosure) {
+        self.0.lock().push(closure);
+    }
+
+    pub(crate) fn swap(&self, other: &mut Vec<BufferMapPendingClosure>) {
+        mem::swap(&mut *self.0.lock(), other)
+    }
+}
+
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
 pub struct Device {
@@ -273,11 +293,7 @@ pub struct Device {
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
     /// This closures were created in [`Buffer::drop`] where we do not run them to prevent locking problems.
-    ///
-    /// Because all operations are push/swap (no longlived lock),
-    /// we can have mutex without lock rank
-    pub(crate) deferred_buffer_map_pending_closures:
-        parking_lot::Mutex<Vec<BufferMapPendingClosure>>,
+    pub(crate) deferred_buffer_map_pending_closures: DeferredBufferMapPendingClosures,
     pub(crate) usage_scopes: UsageScopePool,
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
     // Optional so that we can late-initialize this after the queue is created.
@@ -566,7 +582,7 @@ impl Device {
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
             timestamp_normalizer: OnceCellOrLock::new(),
             indirect_validation,
-            deferred_buffer_map_pending_closures: parking_lot::Mutex::new(Vec::new()),
+            deferred_buffer_map_pending_closures: DeferredBufferMapPendingClosures::new(),
         })
     }
 
@@ -843,10 +859,7 @@ impl Device {
 
         let mut user_closures = UserClosures::default();
 
-        mem::swap(
-            &mut user_closures.mappings,
-            &mut self.deferred_buffer_map_pending_closures.lock(),
-        );
+        self.deferred_buffer_map_pending_closures.swap(&mut user_closures.mappings);
 
         // If a wait was requested, determine which submission index to wait for.
         let wait_submission_index = match poll_type {

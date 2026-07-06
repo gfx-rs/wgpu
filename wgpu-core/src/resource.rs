@@ -525,7 +525,6 @@ impl Drop for Buffer {
                     ));
                     self.device
                         .deferred_buffer_map_pending_closures
-                        .lock()
                         .push((buffer_pending_mapping.op, result));
                 }
                 false
