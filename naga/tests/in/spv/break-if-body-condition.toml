@@ -1,0 +1,4 @@
+targets = "METAL | WGSL"
+
+[spv-in]
+adjust_coordinate_space = true
