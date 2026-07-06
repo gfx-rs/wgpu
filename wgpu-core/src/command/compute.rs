@@ -1268,7 +1268,7 @@ impl Global {
         let base = pass_base!(pass, scope);
 
         if pass.current_bind_groups.set_and_check_redundant(
-            bind_group_id,
+            &bind_group_id,
             index,
             &mut base.dynamic_offsets,
             offsets,
@@ -1312,7 +1312,7 @@ impl Global {
         pass: &mut ComputePass,
         pipeline_id: id::ComputePipelineId,
     ) -> Result<(), PassStateError> {
-        let redundant = pass.current_pipeline.set_and_check_redundant(pipeline_id);
+        let redundant = pass.current_pipeline.set_and_check_redundant(&pipeline_id);
 
         let scope = PassErrorScope::SetPipelineCompute;
 

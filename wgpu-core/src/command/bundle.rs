@@ -659,7 +659,7 @@ impl RenderBundleEncoder {
     ) -> Result<(), PassStateError> {
         pass_base!(self, PassErrorScope::SetBindGroup);
         let redundant = self.current_bind_groups.set_and_check_redundant(
-            bind_group_id,
+            &bind_group_id,
             index,
             &mut self.base.dynamic_offsets,
             offsets,
@@ -682,7 +682,7 @@ impl RenderBundleEncoder {
         pipeline_id: id::RenderPipelineId,
     ) -> Result<(), PassStateError> {
         pass_base!(self, PassErrorScope::SetPipelineRender);
-        if self.current_pipeline.set_and_check_redundant(pipeline_id) {
+        if self.current_pipeline.set_and_check_redundant(&pipeline_id) {
             return Ok(());
         }
 

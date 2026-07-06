@@ -1912,46 +1912,76 @@ where
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 struct StateChange<T> {
     last_state: Option<T>,
 }
 
-impl<T: Copy + PartialEq> StateChange<T> {
-    fn new() -> Self {
+impl<T: Clone + PartialEq_> StateChange<T> {
+    const fn new() -> Self {
         Self { last_state: None }
     }
-    fn set_and_check_redundant(&mut self, new_state: T) -> bool {
-        let already_set = self.last_state == Some(new_state);
-        self.last_state = Some(new_state);
+
+    fn set_and_check_redundant(&mut self, new_state: &T) -> bool {
+        let already_set = self.last_state.as_ref().is_some_and(|s| s.eq(new_state));
+        if !already_set {
+            self.last_state = Some(new_state.clone());
+        }
         already_set
     }
+
     fn reset(&mut self) {
         self.last_state = None;
     }
 }
 
-impl<T: Copy + PartialEq> Default for StateChange<T> {
+impl<T: Clone + PartialEq_> Default for StateChange<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[derive(Debug)]
-struct BindGroupStateChange {
-    last_states: [StateChange<Option<id::BindGroupId>>; hal::MAX_BIND_GROUPS],
+trait PartialEq_ {
+    fn eq(&self, other: &Self) -> bool;
 }
 
-impl BindGroupStateChange {
+impl<T: id::Marker> PartialEq_ for id::Id<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
+impl<T> PartialEq_ for Arc<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(self, other)
+    }
+}
+
+impl<T: PartialEq_> PartialEq_ for Option<T> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Some(a), Some(b)) => a.eq(b),
+            (None, None) => true,
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct BindGroupStateChange<BG = id::BindGroupId> {
+    last_states: [StateChange<Option<BG>>; hal::MAX_BIND_GROUPS],
+}
+
+impl<BG: Clone + PartialEq_> BindGroupStateChange<BG> {
     fn new() -> Self {
         Self {
-            last_states: [StateChange::new(); hal::MAX_BIND_GROUPS],
+            last_states: [const { StateChange::new() }; hal::MAX_BIND_GROUPS],
         }
     }
 
     fn set_and_check_redundant(
         &mut self,
-        bind_group_id: Option<id::BindGroupId>,
+        bind_group: &Option<BG>,
         index: u32,
         dynamic_offsets: &mut Vec<u32>,
         offsets: &[wgt::DynamicOffset],
@@ -1962,7 +1992,7 @@ impl BindGroupStateChange {
             // so let the call through to get a proper error
             if let Some(current_bind_group) = self.last_states.get_mut(index as usize) {
                 // Bail out if we're binding the same bind group.
-                if current_bind_group.set_and_check_redundant(bind_group_id) {
+                if current_bind_group.set_and_check_redundant(bind_group) {
                     return true;
                 }
             }
@@ -1978,11 +2008,11 @@ impl BindGroupStateChange {
         false
     }
     fn reset(&mut self) {
-        self.last_states = [StateChange::new(); hal::MAX_BIND_GROUPS];
+        self.last_states = [const { StateChange::new() }; hal::MAX_BIND_GROUPS];
     }
 }
 
-impl Default for BindGroupStateChange {
+impl<BG: Clone + PartialEq_> Default for BindGroupStateChange<BG> {
     fn default() -> Self {
         Self::new()
     }

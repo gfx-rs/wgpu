@@ -3672,7 +3672,7 @@ impl Global {
         let base = pass_base!(pass, scope);
 
         if pass.current_bind_groups.set_and_check_redundant(
-            bind_group_id,
+            &bind_group_id,
             index,
             &mut base.dynamic_offsets,
             offsets,
@@ -3718,7 +3718,7 @@ impl Global {
     ) -> Result<(), PassStateError> {
         let scope = PassErrorScope::SetPipelineRender;
 
-        let redundant = pass.current_pipeline.set_and_check_redundant(pipeline_id);
+        let redundant = pass.current_pipeline.set_and_check_redundant(&pipeline_id);
 
         // This statement will return an error if the pass is ended.
         // Its important the error check comes before the early-out for `redundant`.
