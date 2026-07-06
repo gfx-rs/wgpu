@@ -331,9 +331,6 @@ ndk-sys = "0.6"
 [patch.crates-io]
 wgpu = { path = "./wgpu" }
 
-env_logger = { version = "0.11", git = "https://github.com/rust-cli/env_logger.git", rev = "d550741" }
-libtest-mimic = { version = "0.8", git = "https://github.com/cwfitzgerald/libtest-mimic.git", rev = "9979b3c" }
-
 [profile.release]
 lto = "thin"
 debug = true

@@ -49,10 +49,6 @@ allow = [
 private = { ignore = true }
 
 [sources]
-allow-git = [
-    # Pending a release for https://github.com/rust-cli/env_logger/commit/143fa647ab33ed3acc9f160dfa3cb075cc62b5a3
-    "https://github.com/rust-cli/env_logger",
-]
 unknown-registry = "deny"
 unknown-git = "deny"
 required-git-spec = "rev"
