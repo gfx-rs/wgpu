@@ -2344,7 +2344,8 @@ pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
     ///
     /// This is not fully `pub` to prevent direct construction of
     /// `BufferBinding`s, while still allowing public read access to the `offset`
-    /// and `size` properties.
+    /// and `size` properties. Read access to the buffer is available via
+    /// [`Self::buffer`].
     pub(crate) buffer: &'a B,
 
     /// The offset at which the bound region starts.
@@ -2426,6 +2427,11 @@ impl<'a, B: DynBuffer + ?Sized> BufferBinding<'a, B> {
             offset,
             size: size.into(),
         }
+    }
+
+    /// The buffer being bound.
+    pub fn buffer(&self) -> &'a B {
+        self.buffer
     }
 }
 
