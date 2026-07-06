@@ -64,7 +64,7 @@
 
 extern crate alloc;
 extern crate naga_types as nt;
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", test))]
 extern crate std;
 extern crate wgpu_hal as hal;
 extern crate wgpu_types as wgt;

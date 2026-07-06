@@ -243,7 +243,7 @@ extern crate alloc;
 extern crate naga_types as nt;
 extern crate wgpu_types as wgt;
 // Each of these backends needs `std` in some fashion; usually `std::thread` functions.
-#[cfg(any(dx12, gles_with_std, metal, vulkan))]
+#[cfg(any(dx12, gles_with_std, metal, vulkan, test))]
 #[macro_use]
 extern crate std;
 
