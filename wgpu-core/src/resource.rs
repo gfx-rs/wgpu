@@ -429,40 +429,6 @@ impl WebGpuError for InvalidResourceError {
     }
 }
 
-pub enum Fallible<T: ParentDevice> {
-    Valid(Arc<T>),
-    Invalid(Arc<String>),
-}
-
-impl<T: ParentDevice> Fallible<T> {
-    pub fn get(self) -> Result<Arc<T>, InvalidResourceError> {
-        match self {
-            Fallible::Valid(v) => Ok(v),
-            Fallible::Invalid(label) => Err(InvalidResourceError(ResourceErrorIdent {
-                r#type: Cow::Borrowed(T::TYPE),
-                label: (*label).clone(),
-            })),
-        }
-    }
-}
-
-impl<T: ParentDevice> Clone for Fallible<T> {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Valid(v) => Self::Valid(v.clone()),
-            Self::Invalid(l) => Self::Invalid(l.clone()),
-        }
-    }
-}
-
-impl<T: ParentDevice> ResourceType for Fallible<T> {
-    const TYPE: &'static str = T::TYPE;
-}
-
-impl<T: ParentDevice + crate::storage::StorageItem> crate::storage::StorageItem for Fallible<T> {
-    type Marker = T::Marker;
-}
-
 pub type BufferAccessResult = Result<(), BufferAccessError>;
 
 #[derive(Debug)]
