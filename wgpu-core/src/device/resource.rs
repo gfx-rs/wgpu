@@ -859,7 +859,8 @@ impl Device {
 
         let mut user_closures = UserClosures::default();
 
-        self.deferred_buffer_map_pending_closures.swap(&mut user_closures.mappings);
+        self.deferred_buffer_map_pending_closures
+            .swap(&mut user_closures.mappings);
 
         // If a wait was requested, determine which submission index to wait for.
         let wait_submission_index = match poll_type {
