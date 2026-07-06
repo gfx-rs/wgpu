@@ -10,7 +10,7 @@ use core::{convert::Infallible, fmt, str};
 
 use crate::{
     api_log,
-    binding_model::{BindError, ImmediateUploadError, LateMinBufferBindingSizeMismatch},
+    binding_model::{BindError, BindGroup, ImmediateUploadError, LateMinBufferBindingSizeMismatch},
     command::{
         bind::{Binder, BinderError},
         compute_command::ArcComputeCommand,
@@ -33,9 +33,9 @@ use crate::{
     init_tracker::MemoryInitKind,
     pipeline::ComputePipeline,
     resource::{
-        self, Buffer, DestroyedResourceError, InvalidOrDestroyedResourceError,
-        InvalidResourceError, Labeled, MissingBufferUsageError, ParentDevice, RawResourceAccess,
-        TextureView, Trackable,
+        Buffer, DestroyedResourceError, InvalidOrDestroyedResourceError, InvalidResourceError,
+        Labeled, MissingBufferUsageError, ParentDevice, QuerySet, RawResourceAccess, TextureView,
+        Trackable,
     },
     track::{ResourceUsageCompatibilityError, TextureViewBindGroupState, Tracker},
     Label,
@@ -64,8 +64,8 @@ pub struct ComputePass {
     timestamp_writes: Option<ArcPassTimestampWrites>,
 
     // Resource binding dedupe state.
-    current_bind_groups: BindGroupStateChange,
-    current_pipeline: StateChange<id::ComputePipelineId>,
+    current_bind_groups: BindGroupStateChange<Arc<BindGroup>>,
+    current_pipeline: StateChange<Arc<ComputePipeline>>,
 }
 
 impl_resource_type!(ComputePass);
@@ -277,7 +277,7 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
 
     pass: pass::PassState<'scope, 'snatch_guard, 'cmd_enc>,
 
-    active_query: Option<(Arc<resource::QuerySet>, u32)>,
+    active_query: Option<(Arc<QuerySet>, u32)>,
 
     immediates: Vec<u32>,
 
@@ -468,7 +468,7 @@ fn transition_resources(
 impl CommandEncoder {
     fn begin_compute_pass(
         self: &Arc<Self>,
-        desc: &ComputePassDescriptor<'_, PassTimestampWrites<Arc<resource::QuerySet>>>,
+        desc: &ComputePassDescriptor<'_, PassTimestampWrites<Arc<QuerySet>>>,
     ) -> (ComputePass, Option<CommandEncoderError>) {
         use EncoderStateError as SErr;
 
@@ -556,6 +556,45 @@ impl CommandEncoder {
 }
 
 // Running the compute pass.
+impl ComputePass {
+    fn end(&mut self) -> Result<(), EncoderStateError> {
+        profiling::scope!(
+            "CommandEncoder::run_compute_pass {}",
+            self.base.label.as_deref().unwrap_or("")
+        );
+
+        let cmd_enc = self.parent.take().ok_or(EncoderStateError::Ended)?;
+        let mut cmd_buf_data = cmd_enc.data.lock();
+
+        cmd_buf_data.unlock_encoder()?;
+
+        let base = self.base.take();
+
+        if let Err(ComputePassError {
+            inner:
+                ComputePassErrorInner::EncoderState(
+                    err @ (EncoderStateError::Locked | EncoderStateError::Ended),
+                ),
+            scope: _,
+        }) = base
+        {
+            // Most encoding errors are detected and raised within `finish()`.
+            //
+            // However, we raise a validation error here if the pass was opened
+            // within another pass, or on a finished encoder. The latter is
+            // particularly important, because in that case reporting errors via
+            // `CommandEncoder::finish` is not possible.
+            return Err(err.clone());
+        }
+
+        cmd_buf_data.push_with(|| -> Result<_, ComputePassError> {
+            Ok(ArcCommand::RunComputePass {
+                pass: base?,
+                timestamp_writes: self.timestamp_writes.take(),
+            })
+        })
+    }
+}
 
 impl Global {
     /// Creates a compute pass.
@@ -611,41 +650,7 @@ impl Global {
     }
 
     pub fn compute_pass_end(&self, pass: &mut ComputePass) -> Result<(), EncoderStateError> {
-        profiling::scope!(
-            "CommandEncoder::run_compute_pass {}",
-            pass.base.label.as_deref().unwrap_or("")
-        );
-
-        let cmd_enc = pass.parent.take().ok_or(EncoderStateError::Ended)?;
-        let mut cmd_buf_data = cmd_enc.data.lock();
-
-        cmd_buf_data.unlock_encoder()?;
-
-        let base = pass.base.take();
-
-        if let Err(ComputePassError {
-            inner:
-                ComputePassErrorInner::EncoderState(
-                    err @ (EncoderStateError::Locked | EncoderStateError::Ended),
-                ),
-            scope: _,
-        }) = base
-        {
-            // Most encoding errors are detected and raised within `finish()`.
-            //
-            // However, we raise a validation error here if the pass was opened
-            // within another pass, or on a finished encoder. The latter is
-            // particularly important, because in that case reporting errors via
-            // `CommandEncoder::finish` is not possible.
-            return Err(err.clone());
-        }
-
-        cmd_buf_data.push_with(|| -> Result<_, ComputePassError> {
-            Ok(ArcCommand::RunComputePass {
-                pass: base?,
-                timestamp_writes: pass.timestamp_writes.take(),
-            })
-        })
+        pass.end()
     }
 
     pub fn compute_pass_end_with_id(
@@ -1252,12 +1257,11 @@ fn dispatch_workgroups_indirect(
 // The `pass_try!` macro should be used to handle errors appropriately. Note
 // that the `pass_try!` and `pass_base!` macros may return early from the
 // function that invokes them, like the `?` operator.
-impl Global {
-    pub fn compute_pass_set_bind_group(
-        &self,
-        pass: &mut ComputePass,
+impl ComputePass {
+    pub fn set_bind_group(
+        &mut self,
         index: u32,
-        bind_group_id: Option<id::BindGroupId>,
+        bind_group: Option<Arc<BindGroup>>,
         offsets: &[DynamicOffset],
     ) -> Result<(), PassStateError> {
         let scope = PassErrorScope::SetBindGroup;
@@ -1265,10 +1269,10 @@ impl Global {
         // This statement will return an error if the pass is ended. It's
         // important the error check comes before the early-out for
         // `set_and_check_redundant`.
-        let base = pass_base!(pass, scope);
+        let base = pass_base!(self, scope);
 
-        if pass.current_bind_groups.set_and_check_redundant(
-            &bind_group_id,
+        if self.current_bind_groups.set_and_check_redundant(
+            &bind_group,
             index,
             &mut base.dynamic_offsets,
             offsets,
@@ -1276,13 +1280,12 @@ impl Global {
             return Ok(());
         }
 
-        let mut bind_group = None;
-        if let Some(bind_group_id) = bind_group_id {
-            let hub = &self.hub;
-            let bg = hub.bind_groups.get(bind_group_id);
-            pass_try!(base, scope, bg.check_is_valid());
-            bind_group = Some(bg);
-        }
+        let bind_group = if let Some(bind_group) = bind_group {
+            pass_try!(base, scope, bind_group.check_is_valid());
+            Some(bind_group)
+        } else {
+            None
+        };
 
         base.commands.push(ArcComputeCommand::SetBindGroup {
             index,
@@ -1293,39 +1296,24 @@ impl Global {
         Ok(())
     }
 
-    pub fn compute_pass_set_bind_group_with_id(
-        &self,
-        pass_id: id::ComputePassEncoderId,
-        index: u32,
-        bind_group_id: Option<id::BindGroupId>,
-        offsets: &[DynamicOffset],
+    pub fn set_pipeline(
+        &mut self,
+        compute_pipeline: Arc<ComputePipeline>,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.compute_passes.get(pass_id);
-        let mut pass = pass
-            .try_lock()
-            .expect("ComputePasses should not be accessed concurrently");
-        self.compute_pass_set_bind_group(&mut pass, index, bind_group_id, offsets)
-    }
-
-    pub fn compute_pass_set_pipeline(
-        &self,
-        pass: &mut ComputePass,
-        pipeline_id: id::ComputePipelineId,
-    ) -> Result<(), PassStateError> {
-        let redundant = pass.current_pipeline.set_and_check_redundant(&pipeline_id);
+        let redundant = self
+            .current_pipeline
+            .set_and_check_redundant(&compute_pipeline);
 
         let scope = PassErrorScope::SetPipelineCompute;
 
         // This statement will return an error if the pass is ended.
         // Its important the error check comes before the early-out for `redundant`.
-        let base = pass_base!(pass, scope);
+        let base = pass_base!(self, scope);
 
         if redundant {
             return Ok(());
         }
 
-        let hub = &self.hub;
-        let compute_pipeline = hub.compute_pipelines.get(pipeline_id);
         pass_try!(base, scope, compute_pipeline.check_valid());
 
         base.commands
@@ -1334,26 +1322,9 @@ impl Global {
         Ok(())
     }
 
-    pub fn compute_pass_set_pipeline_with_id(
-        &self,
-        pass_id: id::ComputePassEncoderId,
-        pipeline_id: id::ComputePipelineId,
-    ) -> Result<(), PassStateError> {
-        let pass = self.hub.compute_passes.get(pass_id);
-        let mut pass = pass
-            .try_lock()
-            .expect("ComputePasses should not be accessed concurrently");
-        self.compute_pass_set_pipeline(&mut pass, pipeline_id)
-    }
-
-    pub fn compute_pass_set_immediates(
-        &self,
-        pass: &mut ComputePass,
-        offset: u32,
-        data: &[u8],
-    ) -> Result<(), PassStateError> {
+    pub fn set_immediates(&mut self, offset: u32, data: &[u8]) -> Result<(), PassStateError> {
         let scope = PassErrorScope::SetImmediate;
-        let base = pass_base!(pass, scope);
+        let base = pass_base!(self, scope);
 
         let size_bytes = pass_try!(
             base,
@@ -1382,6 +1353,239 @@ impl Global {
         Ok(())
     }
 
+    pub fn dispatch_workgroups(
+        &mut self,
+        groups_x: u32,
+        groups_y: u32,
+        groups_z: u32,
+    ) -> Result<(), PassStateError> {
+        let scope = PassErrorScope::Dispatch { indirect: false };
+
+        pass_base!(self, scope)
+            .commands
+            .push(ArcComputeCommand::DispatchWorkgroups([
+                groups_x, groups_y, groups_z,
+            ]));
+
+        Ok(())
+    }
+
+    pub fn dispatch_workgroups_indirect(
+        &mut self,
+        buffer: Arc<Buffer>,
+        offset: BufferAddress,
+    ) -> Result<(), PassStateError> {
+        let scope = PassErrorScope::Dispatch { indirect: true };
+        let base = pass_base!(self, scope);
+
+        pass_try!(base, scope, buffer.check_is_valid());
+
+        base.commands
+            .push(ArcComputeCommand::DispatchWorkgroupsIndirect { buffer, offset });
+
+        Ok(())
+    }
+
+    pub fn push_debug_group(&mut self, label: &str, color: u32) -> Result<(), PassStateError> {
+        let base = pass_base!(self, PassErrorScope::PushDebugGroup);
+
+        let bytes = label.as_bytes();
+        base.string_data.extend_from_slice(bytes);
+
+        base.commands.push(ArcComputeCommand::PushDebugGroup {
+            color,
+            len: bytes.len(),
+        });
+
+        Ok(())
+    }
+
+    pub fn pop_debug_group(&mut self) -> Result<(), PassStateError> {
+        let base = pass_base!(self, PassErrorScope::PopDebugGroup);
+
+        base.commands.push(ArcComputeCommand::PopDebugGroup);
+
+        Ok(())
+    }
+
+    pub fn insert_debug_marker(&mut self, label: &str, color: u32) -> Result<(), PassStateError> {
+        let base = pass_base!(self, PassErrorScope::InsertDebugMarker);
+
+        let bytes = label.as_bytes();
+        base.string_data.extend_from_slice(bytes);
+
+        base.commands.push(ArcComputeCommand::InsertDebugMarker {
+            color,
+            len: bytes.len(),
+        });
+
+        Ok(())
+    }
+
+    pub fn write_timestamp(
+        &mut self,
+        query_set: Arc<QuerySet>,
+        query_index: u32,
+    ) -> Result<(), PassStateError> {
+        let scope = PassErrorScope::WriteTimestamp;
+        let base = pass_base!(self, scope);
+
+        pass_try!(base, scope, query_set.check_is_valid());
+
+        base.commands.push(ArcComputeCommand::WriteTimestamp {
+            query_set,
+            query_index,
+        });
+
+        Ok(())
+    }
+
+    pub fn begin_pipeline_statistics_query(
+        &mut self,
+        query_set: Arc<QuerySet>,
+        query_index: u32,
+    ) -> Result<(), PassStateError> {
+        let scope = PassErrorScope::BeginPipelineStatisticsQuery;
+        let base = pass_base!(self, scope);
+
+        pass_try!(base, scope, query_set.check_is_valid());
+
+        base.commands
+            .push(ArcComputeCommand::BeginPipelineStatisticsQuery {
+                query_set,
+                query_index,
+            });
+
+        Ok(())
+    }
+
+    pub fn end_pipeline_statistics_query(&mut self) -> Result<(), PassStateError> {
+        pass_base!(self, PassErrorScope::EndPipelineStatisticsQuery)
+            .commands
+            .push(ArcComputeCommand::EndPipelineStatisticsQuery);
+
+        Ok(())
+    }
+
+    pub fn transition_resources(
+        &mut self,
+        buffer_transitions: impl Iterator<Item = wgt::BufferTransition<Arc<Buffer>>>,
+        texture_transitions: impl Iterator<Item = wgt::TextureTransition<Arc<TextureView>>>,
+    ) -> Result<(), PassStateError> {
+        let scope = PassErrorScope::TransitionResources;
+        let base = pass_base!(self, scope);
+
+        let buffer_transitions = pass_try!(
+            base,
+            scope,
+            buffer_transitions
+                .map(|buffer_transition| -> Result<_, InvalidResourceError> {
+                    let buffer = buffer_transition.buffer;
+                    buffer.check_is_valid()?;
+                    Ok(wgt::BufferTransition {
+                        buffer,
+                        state: buffer_transition.state,
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        );
+
+        let texture_transitions = pass_try!(
+            base,
+            scope,
+            texture_transitions
+                .map(|texture_transition| -> Result<_, InvalidResourceError> {
+                    let texture_view = texture_transition.texture;
+                    texture_view.check_valid()?;
+                    Ok(wgt::TextureTransition {
+                        texture: texture_view,
+                        selector: texture_transition.selector,
+                        state: texture_transition.state,
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        );
+
+        base.commands.push(ArcComputeCommand::TransitionResources {
+            buffer_transitions,
+            texture_transitions,
+        });
+
+        Ok(())
+    }
+}
+
+// Recording a compute pass.
+//
+// The only error that should be returned from these methods is
+// `EncoderStateError::Ended`, when the pass has already ended and an immediate
+// validation error is raised.
+//
+// All other errors should be stored in the pass for later reporting when
+// `CommandEncoder.finish()` is called.
+//
+// The `pass_try!` macro should be used to handle errors appropriately. Note
+// that the `pass_try!` and `pass_base!` macros may return early from the
+// function that invokes them, like the `?` operator.
+impl Global {
+    pub fn compute_pass_set_bind_group(
+        &self,
+        pass: &mut ComputePass,
+        index: u32,
+        bind_group_id: Option<id::BindGroupId>,
+        offsets: &[DynamicOffset],
+    ) -> Result<(), PassStateError> {
+        pass.set_bind_group(
+            index,
+            bind_group_id.map(|bind_group_id| self.hub.bind_groups.get(bind_group_id)),
+            offsets,
+        )
+    }
+
+    pub fn compute_pass_set_bind_group_with_id(
+        &self,
+        pass_id: id::ComputePassEncoderId,
+        index: u32,
+        bind_group_id: Option<id::BindGroupId>,
+        offsets: &[DynamicOffset],
+    ) -> Result<(), PassStateError> {
+        let pass = self.hub.compute_passes.get(pass_id);
+        let mut pass = pass
+            .try_lock()
+            .expect("ComputePasses should not be accessed concurrently");
+        self.compute_pass_set_bind_group(&mut pass, index, bind_group_id, offsets)
+    }
+
+    pub fn compute_pass_set_pipeline(
+        &self,
+        pass: &mut ComputePass,
+        pipeline_id: id::ComputePipelineId,
+    ) -> Result<(), PassStateError> {
+        let pipeline = self.hub.compute_pipelines.get(pipeline_id);
+        pass.set_pipeline(pipeline)
+    }
+
+    pub fn compute_pass_set_pipeline_with_id(
+        &self,
+        pass_id: id::ComputePassEncoderId,
+        pipeline_id: id::ComputePipelineId,
+    ) -> Result<(), PassStateError> {
+        let pass = self.hub.compute_passes.get(pass_id);
+        let mut pass = pass
+            .try_lock()
+            .expect("ComputePasses should not be accessed concurrently");
+        self.compute_pass_set_pipeline(&mut pass, pipeline_id)
+    }
+
+    pub fn compute_pass_set_immediates(
+        &self,
+        pass: &mut ComputePass,
+        offset: u32,
+        data: &[u8],
+    ) -> Result<(), PassStateError> {
+        pass.set_immediates(offset, data)
+    }
+
     pub fn compute_pass_set_immediates_with_id(
         &self,
         pass_id: id::ComputePassEncoderId,
@@ -1402,15 +1606,7 @@ impl Global {
         groups_y: u32,
         groups_z: u32,
     ) -> Result<(), PassStateError> {
-        let scope = PassErrorScope::Dispatch { indirect: false };
-
-        pass_base!(pass, scope)
-            .commands
-            .push(ArcComputeCommand::DispatchWorkgroups([
-                groups_x, groups_y, groups_z,
-            ]));
-
-        Ok(())
+        pass.dispatch_workgroups(groups_x, groups_y, groups_z)
     }
 
     pub fn compute_pass_dispatch_workgroups_with_id(
@@ -1433,18 +1629,7 @@ impl Global {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) -> Result<(), PassStateError> {
-        let hub = &self.hub;
-        let scope = PassErrorScope::Dispatch { indirect: true };
-        let base = pass_base!(pass, scope);
-
-        let buffer = hub.buffers.get(buffer_id);
-
-        pass_try!(base, scope, buffer.check_is_valid());
-
-        base.commands
-            .push(ArcComputeCommand::DispatchWorkgroupsIndirect { buffer, offset });
-
-        Ok(())
+        pass.dispatch_workgroups_indirect(self.hub.buffers.get(buffer_id), offset)
     }
 
     pub fn compute_pass_dispatch_workgroups_indirect_with_id(
@@ -1466,17 +1651,7 @@ impl Global {
         label: &str,
         color: u32,
     ) -> Result<(), PassStateError> {
-        let base = pass_base!(pass, PassErrorScope::PushDebugGroup);
-
-        let bytes = label.as_bytes();
-        base.string_data.extend_from_slice(bytes);
-
-        base.commands.push(ArcComputeCommand::PushDebugGroup {
-            color,
-            len: bytes.len(),
-        });
-
-        Ok(())
+        pass.push_debug_group(label, color)
     }
 
     pub fn compute_pass_push_debug_group_with_id(
@@ -1496,11 +1671,7 @@ impl Global {
         &self,
         pass: &mut ComputePass,
     ) -> Result<(), PassStateError> {
-        let base = pass_base!(pass, PassErrorScope::PopDebugGroup);
-
-        base.commands.push(ArcComputeCommand::PopDebugGroup);
-
-        Ok(())
+        pass.pop_debug_group()
     }
 
     pub fn compute_pass_pop_debug_group_with_id(
@@ -1520,17 +1691,7 @@ impl Global {
         label: &str,
         color: u32,
     ) -> Result<(), PassStateError> {
-        let base = pass_base!(pass, PassErrorScope::InsertDebugMarker);
-
-        let bytes = label.as_bytes();
-        base.string_data.extend_from_slice(bytes);
-
-        base.commands.push(ArcComputeCommand::InsertDebugMarker {
-            color,
-            len: bytes.len(),
-        });
-
-        Ok(())
+        pass.insert_debug_marker(label, color)
     }
 
     pub fn compute_pass_insert_debug_marker_with_id(
@@ -1552,19 +1713,8 @@ impl Global {
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) -> Result<(), PassStateError> {
-        let scope = PassErrorScope::WriteTimestamp;
-        let base = pass_base!(pass, scope);
-
-        let hub = &self.hub;
-        let query_set = hub.query_sets.get(query_set_id);
-        pass_try!(base, scope, query_set.check_is_valid());
-
-        base.commands.push(ArcComputeCommand::WriteTimestamp {
-            query_set,
-            query_index,
-        });
-
-        Ok(())
+        let query_set = self.hub.query_sets.get(query_set_id);
+        pass.write_timestamp(query_set, query_index)
     }
 
     pub fn compute_pass_write_timestamp_with_id(
@@ -1586,20 +1736,8 @@ impl Global {
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) -> Result<(), PassStateError> {
-        let scope = PassErrorScope::BeginPipelineStatisticsQuery;
-        let base = pass_base!(pass, scope);
-
-        let hub = &self.hub;
-        let query_set = hub.query_sets.get(query_set_id);
-        pass_try!(base, scope, query_set.check_is_valid());
-
-        base.commands
-            .push(ArcComputeCommand::BeginPipelineStatisticsQuery {
-                query_set,
-                query_index,
-            });
-
-        Ok(())
+        let query_set = self.hub.query_sets.get(query_set_id);
+        pass.begin_pipeline_statistics_query(query_set, query_index)
     }
 
     pub fn compute_pass_begin_pipeline_statistics_query_with_id(
@@ -1619,11 +1757,7 @@ impl Global {
         &self,
         pass: &mut ComputePass,
     ) -> Result<(), PassStateError> {
-        pass_base!(pass, PassErrorScope::EndPipelineStatisticsQuery)
-            .commands
-            .push(ArcComputeCommand::EndPipelineStatisticsQuery);
-
-        Ok(())
+        pass.end_pipeline_statistics_query()
     }
 
     pub fn compute_pass_end_pipeline_statistics_query_with_id(
@@ -1643,47 +1777,16 @@ impl Global {
         buffer_transitions: impl Iterator<Item = wgt::BufferTransition<id::BufferId>>,
         texture_transitions: impl Iterator<Item = wgt::TextureTransition<id::TextureViewId>>,
     ) -> Result<(), PassStateError> {
-        let scope = PassErrorScope::TransitionResources;
-        let base = pass_base!(pass, scope);
-
-        let hub = &self.hub;
-
-        let buffer_transitions = pass_try!(
-            base,
-            scope,
-            buffer_transitions
-                .map(|buffer_transition| -> Result<_, InvalidResourceError> {
-                    let buffer = hub.buffers.get(buffer_transition.buffer);
-                    buffer.check_is_valid()?;
-                    Ok(wgt::BufferTransition {
-                        buffer,
-                        state: buffer_transition.state,
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()
-        );
-
-        let texture_transitions = pass_try!(
-            base,
-            scope,
-            texture_transitions
-                .map(|texture_transition| -> Result<_, InvalidResourceError> {
-                    let texture_view = hub.texture_views.get(texture_transition.texture);
-                    texture_view.check_valid()?;
-                    Ok(wgt::TextureTransition {
-                        texture: texture_view,
-                        selector: texture_transition.selector,
-                        state: texture_transition.state,
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()
-        );
-
-        base.commands.push(ArcComputeCommand::TransitionResources {
-            buffer_transitions,
-            texture_transitions,
-        });
-
-        Ok(())
+        pass.transition_resources(
+            buffer_transitions.map(|bt| wgt::BufferTransition {
+                buffer: self.hub.buffers.get(bt.buffer),
+                state: bt.state,
+            }),
+            texture_transitions.map(|tt| wgt::TextureTransition {
+                texture: self.hub.texture_views.get(tt.texture),
+                selector: tt.selector,
+                state: tt.state,
+            }),
+        )
     }
 }
