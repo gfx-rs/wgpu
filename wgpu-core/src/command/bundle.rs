@@ -117,8 +117,8 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline},
     resource::{
-        Buffer, DestroyedResourceError, Fallible, InvalidResourceError, Labeled, ParentDevice,
-        RawResourceAccess, ResourceState, TrackingData,
+        Buffer, DestroyedResourceError, InvalidOrDestroyedResourceError, InvalidResourceError,
+        Labeled, ParentDevice, RawResourceAccess, ResourceState, TrackingData,
     },
     resource_log,
     snatch::SnatchGuard,
@@ -842,7 +842,7 @@ impl RenderBundleEncoder {
 
 fn set_bind_group(
     state: &mut State,
-    bind_group_guard: &crate::storage::Storage<Fallible<BindGroup>>,
+    bind_group_guard: &crate::storage::Storage<Arc<BindGroup>>,
     dynamic_offsets: &[u32],
     index: u32,
     num_dynamic_offsets: usize,
@@ -867,7 +867,7 @@ fn set_bind_group(
     let bind_group = bind_group_id.map(|id| bind_group_guard.get(id));
 
     if let Some(bind_group) = bind_group {
-        let bind_group = bind_group.get()?;
+        bind_group.check_is_valid()?;
         bind_group.same_device(&state.device)?;
         bind_group.validate_dynamic_bindings(index, offsets)?;
 
@@ -1295,8 +1295,19 @@ pub enum ExecutionError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
     #[error("Using {0} in a render bundle is not implemented")]
     Unimplemented(&'static str),
+}
+
+impl From<InvalidOrDestroyedResourceError> for ExecutionError {
+    fn from(e: InvalidOrDestroyedResourceError) -> Self {
+        match e {
+            InvalidOrDestroyedResourceError::InvalidResource(e) => Self::InvalidResource(e),
+            InvalidOrDestroyedResourceError::DestroyedResource(e) => Self::DestroyedResource(e),
+        }
+    }
 }
 
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
@@ -1866,8 +1877,6 @@ pub enum RenderBundleErrorInner {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error(transparent)]
     Bind(#[from] BindError),
-    #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
     #[error("Render bundle encoder has already ended")]
     Ended,
 }
@@ -1900,7 +1909,6 @@ impl WebGpuError for RenderBundleError {
             RenderBundleErrorInner::Draw(e) => e.webgpu_error_type(),
             RenderBundleErrorInner::MissingDownlevelFlags(e) => e.webgpu_error_type(),
             RenderBundleErrorInner::Bind(e) => e.webgpu_error_type(),
-            RenderBundleErrorInner::InvalidResource(e) => e.webgpu_error_type(),
             RenderBundleErrorInner::Ended => ErrorType::Validation,
         }
     }

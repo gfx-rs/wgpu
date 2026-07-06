@@ -22,12 +22,12 @@ use wgt::{
 };
 
 #[cfg(feature = "trace")]
-use crate::device::trace;
+use crate::device::trace::{self, IntoTrace as _};
 use crate::{
     api_log,
     binding_model::{
         self, BindGroup, BindGroupLateBufferBindingInfo, BindGroupLayout,
-        BindGroupLayoutEntryError, BindGroupLayoutState, CreateBindGroupError,
+        BindGroupLayoutEntryError, BindGroupLayoutState, BindGroupState, CreateBindGroupError,
         CreateBindGroupLayoutError,
     },
     command, conv,
@@ -754,8 +754,12 @@ impl Device {
                         let Some(bind_group) = bind_group.upgrade() else {
                             continue;
                         };
-                        let Some(raw_bind_group) =
-                            bind_group.raw.snatch(&mut self.snatchable_lock.write())
+                        let Ok(bind_group_state) = bind_group.state() else {
+                            continue;
+                        };
+                        let Some(raw_bind_group) = bind_group_state
+                            .raw
+                            .snatch(&mut self.snatchable_lock.write())
                         else {
                             continue;
                         };
@@ -3305,6 +3309,7 @@ impl Device {
 
         used.buffers.insert_single(buffer.clone(), internal_use);
 
+        buffer.check_is_valid()?;
         buffer.same_device(self)?;
 
         buffer.check_usage(pub_usage)?;
@@ -3639,17 +3644,49 @@ impl Device {
         Ok(hal::ExternalTextureBinding { planes, params })
     }
 
-    // This function expects the provided bind group layout to be resolved
-    // (not passing a duplicate) beforehand.
     pub fn create_bind_group(
         self: &Arc<Self>,
-        desc: binding_model::ResolvedBindGroupDescriptor,
+        desc: &binding_model::ResolvedBindGroupDescriptor,
+    ) -> (Arc<BindGroup>, Option<CreateBindGroupError>) {
+        #[cfg(feature = "trace")]
+        let trace_desc = (&desc).to_trace();
+
+        let (bind_group, error) = match self.create_bind_group_inner(desc) {
+            Ok(bind_group) => (bind_group, None),
+            Err(e) => (
+                BindGroup::invalid(self.clone(), desc.label.to_string(), desc.layout.clone()),
+                Some(e),
+            ),
+        };
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            trace.add(trace::Action::CreateBindGroup(
+                bind_group.to_trace(),
+                trace_desc,
+            ));
+        }
+
+        api_log!(
+            "Device::create_bind_group -> {:?}",
+            Arc::as_ptr(&bind_group)
+        );
+
+        (bind_group, error)
+    }
+
+    // This function expects the provided bind group layout to be resolved
+    // (not passing a duplicate) beforehand.
+    pub fn create_bind_group_inner(
+        self: &Arc<Self>,
+        desc: &binding_model::ResolvedBindGroupDescriptor,
     ) -> Result<Arc<BindGroup>, CreateBindGroupError> {
         use crate::binding_model::{CreateBindGroupError as Error, ResolvedBindingResource as Br};
 
-        let layout = desc.layout;
-
         self.check_is_valid()?;
+
+        let layout = desc.layout.clone();
+
         layout.same_device(self)?;
         layout.check_is_valid()?;
 
@@ -3880,7 +3917,9 @@ impl Device {
             .collect();
 
         let bind_group = BindGroup {
-            raw: Snatchable::new(raw),
+            state: ResourceState::Valid(BindGroupState {
+                raw: Snatchable::new(raw),
+            }),
             device: self.clone(),
             layout,
             label: desc.label.to_string(),

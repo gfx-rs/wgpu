@@ -229,9 +229,7 @@ impl Player {
             }
             Action::CreateBindGroup(id, desc) => {
                 let resolved_desc = self.resolve_bind_group_descriptor(desc);
-                let bind_group = device
-                    .create_bind_group(resolved_desc)
-                    .expect("create_bind_group error");
+                let (bind_group, _error) = device.create_bind_group(&resolved_desc);
                 self.bind_groups.insert(id, bind_group);
             }
             Action::DropBindGroup(id) => {

@@ -23,7 +23,6 @@ use crate::{
     present,
     resource::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
-        Fallible,
     },
     storage::Storage,
     Label, LabelHelpers,
@@ -590,152 +589,108 @@ impl Global {
         let hub = &self.hub;
         let fid = hub.bind_groups.prepare(id_in);
 
-        let error = 'error: {
-            let device = self.hub.devices.get(device_id);
+        let device = hub.devices.get(device_id);
 
-            if let Err(e) = device.check_is_valid() {
-                break 'error e.into();
+        let layout = hub.bind_group_layouts.get(desc.layout);
+
+        fn resolve_entry<'a>(
+            e: &BindGroupEntry<'a>,
+            buffer_storage: &Storage<Arc<resource::Buffer>>,
+            sampler_storage: &Storage<Arc<resource::Sampler>>,
+            texture_view_storage: &Storage<Arc<resource::TextureView>>,
+            tlas_storage: &Storage<Arc<resource::Tlas>>,
+            external_texture_storage: &Storage<Arc<resource::ExternalTexture>>,
+        ) -> ResolvedBindGroupEntry<'a> {
+            let resolve_buffer = |bb: &BufferBinding| {
+                let buffer = buffer_storage.get(bb.buffer);
+                ResolvedBufferBinding {
+                    buffer,
+                    offset: bb.offset,
+                    size: bb.size,
+                }
+            };
+            let resolve_sampler = |id: &id::SamplerId| sampler_storage.get(*id);
+            let resolve_view = |id: &id::TextureViewId| texture_view_storage.get(*id);
+            let resolve_tlas = |id: &id::TlasId| tlas_storage.get(*id);
+            let resolve_external_texture =
+                |id: &id::ExternalTextureId| external_texture_storage.get(*id);
+            let resource = match e.resource {
+                BindingResource::Buffer(ref buffer) => {
+                    ResolvedBindingResource::Buffer(resolve_buffer(buffer))
+                }
+                BindingResource::BufferArray(ref buffers) => {
+                    let buffers = buffers.iter().map(resolve_buffer).collect::<Vec<_>>();
+                    ResolvedBindingResource::BufferArray(Cow::Owned(buffers))
+                }
+                BindingResource::Sampler(ref sampler) => {
+                    ResolvedBindingResource::Sampler(resolve_sampler(sampler))
+                }
+                BindingResource::SamplerArray(ref samplers) => {
+                    let samplers = samplers.iter().map(resolve_sampler).collect::<Vec<_>>();
+                    ResolvedBindingResource::SamplerArray(Cow::Owned(samplers))
+                }
+                BindingResource::TextureView(ref view) => {
+                    ResolvedBindingResource::TextureView(resolve_view(view))
+                }
+                BindingResource::TextureViewArray(ref views) => {
+                    let views = views.iter().map(resolve_view).collect::<Vec<_>>();
+                    ResolvedBindingResource::TextureViewArray(Cow::Owned(views))
+                }
+                BindingResource::AccelerationStructure(ref tlas) => {
+                    ResolvedBindingResource::AccelerationStructure(resolve_tlas(tlas))
+                }
+                BindingResource::AccelerationStructureArray(ref tlas_array) => {
+                    let tlas_array = tlas_array.iter().map(resolve_tlas).collect::<Vec<_>>();
+                    ResolvedBindingResource::AccelerationStructureArray(Cow::Owned(tlas_array))
+                }
+                BindingResource::ExternalTexture(ref et) => {
+                    ResolvedBindingResource::ExternalTexture(resolve_external_texture(et))
+                }
+            };
+            ResolvedBindGroupEntry {
+                binding: e.binding,
+                resource,
             }
+        }
 
-            let layout = hub.bind_group_layouts.get(desc.layout);
-
-            fn resolve_entry<'a>(
-                e: &BindGroupEntry<'a>,
-                buffer_storage: &Storage<Arc<resource::Buffer>>,
-                sampler_storage: &Storage<Arc<resource::Sampler>>,
-                texture_view_storage: &Storage<Arc<resource::TextureView>>,
-                tlas_storage: &Storage<Arc<resource::Tlas>>,
-                external_texture_storage: &Storage<Arc<resource::ExternalTexture>>,
-            ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
-            {
-                let resolve_buffer =
-                    |bb: &BufferBinding| -> Result<_, binding_model::CreateBindGroupError> {
-                        let buffer = buffer_storage.get(bb.buffer);
-                        buffer.check_is_valid()?;
-                        Ok(ResolvedBufferBinding {
-                            buffer,
-                            offset: bb.offset,
-                            size: bb.size,
-                        })
-                    };
-                let resolve_sampler = |id: &id::SamplerId| sampler_storage.get(*id);
-                let resolve_view = |id: &id::TextureViewId| texture_view_storage.get(*id);
-                let resolve_tlas = |id: &id::TlasId| tlas_storage.get(*id);
-                let resolve_external_texture =
-                    |id: &id::ExternalTextureId| external_texture_storage.get(*id);
-                let resource = match e.resource {
-                    BindingResource::Buffer(ref buffer) => {
-                        ResolvedBindingResource::Buffer(resolve_buffer(buffer)?)
-                    }
-                    BindingResource::BufferArray(ref buffers) => {
-                        let buffers = buffers
-                            .iter()
-                            .map(resolve_buffer)
-                            .collect::<Result<Vec<_>, _>>()?;
-                        ResolvedBindingResource::BufferArray(Cow::Owned(buffers))
-                    }
-                    BindingResource::Sampler(ref sampler) => {
-                        ResolvedBindingResource::Sampler(resolve_sampler(sampler))
-                    }
-                    BindingResource::SamplerArray(ref samplers) => {
-                        let samplers = samplers.iter().map(resolve_sampler).collect::<Vec<_>>();
-                        ResolvedBindingResource::SamplerArray(Cow::Owned(samplers))
-                    }
-                    BindingResource::TextureView(ref view) => {
-                        ResolvedBindingResource::TextureView(resolve_view(view))
-                    }
-                    BindingResource::TextureViewArray(ref views) => {
-                        let views = views.iter().map(resolve_view).collect::<Vec<_>>();
-                        ResolvedBindingResource::TextureViewArray(Cow::Owned(views))
-                    }
-                    BindingResource::AccelerationStructure(ref tlas) => {
-                        ResolvedBindingResource::AccelerationStructure(resolve_tlas(tlas))
-                    }
-                    BindingResource::AccelerationStructureArray(ref tlas_array) => {
-                        let tlas_array = tlas_array.iter().map(resolve_tlas).collect::<Vec<_>>();
-                        ResolvedBindingResource::AccelerationStructureArray(Cow::Owned(tlas_array))
-                    }
-                    BindingResource::ExternalTexture(ref et) => {
-                        ResolvedBindingResource::ExternalTexture(resolve_external_texture(et))
-                    }
-                };
-                Ok(ResolvedBindGroupEntry {
-                    binding: e.binding,
-                    resource,
+        let entries = {
+            let buffer_guard = hub.buffers.read();
+            let texture_view_guard = hub.texture_views.read();
+            let sampler_guard = hub.samplers.read();
+            let tlas_guard = hub.tlas_s.read();
+            let external_texture_guard = hub.external_textures.read();
+            desc.entries
+                .iter()
+                .map(|e| {
+                    resolve_entry(
+                        e,
+                        &buffer_guard,
+                        &sampler_guard,
+                        &texture_view_guard,
+                        &tlas_guard,
+                        &external_texture_guard,
+                    )
                 })
-            }
+                .collect::<Vec<_>>()
+        };
+        let entries = Cow::Owned(entries);
 
-            let entries = {
-                let buffer_guard = hub.buffers.read();
-                let texture_view_guard = hub.texture_views.read();
-                let sampler_guard = hub.samplers.read();
-                let tlas_guard = hub.tlas_s.read();
-                let external_texture_guard = hub.external_textures.read();
-                desc.entries
-                    .iter()
-                    .map(|e| {
-                        resolve_entry(
-                            e,
-                            &buffer_guard,
-                            &sampler_guard,
-                            &texture_view_guard,
-                            &tlas_guard,
-                            &external_texture_guard,
-                        )
-                    })
-                    .collect::<Result<Vec<_>, _>>()
-            };
-            let entries = match entries {
-                Ok(entries) => Cow::Owned(entries),
-                Err(e) => break 'error e,
-            };
-
-            let desc = ResolvedBindGroupDescriptor {
-                label: desc.label.clone(),
-                layout,
-                entries,
-            };
-            #[cfg(feature = "trace")]
-            let trace_desc = (&desc).to_trace();
-
-            let bind_group = match device.create_bind_group(desc) {
-                Ok(bind_group) => bind_group,
-                Err(e) => break 'error e,
-            };
-
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateBindGroup(
-                    bind_group.to_trace(),
-                    trace_desc,
-                ));
-            }
-
-            let id = fid.assign(Fallible::Valid(bind_group));
-
-            api_log!("Device::create_bind_group -> {id:?}");
-
-            return (id, None);
+        let desc = ResolvedBindGroupDescriptor {
+            label: desc.label.clone(),
+            layout,
+            entries,
         };
 
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-        (id, Some(error))
+        let (bind_group, error) = device.create_bind_group(&desc);
+
+        let id = fid.assign(bind_group);
+        (id, error)
     }
 
     pub fn bind_group_drop(&self, bind_group_id: id::BindGroupId) {
-        profiling::scope!("BindGroup::drop");
-        api_log!("BindGroup::drop {bind_group_id:?}");
-
         let hub = &self.hub;
 
         let _bind_group = hub.bind_groups.remove(bind_group_id);
-
-        #[cfg(feature = "trace")]
-        if let Ok(bind_group) = _bind_group.get() {
-            if let Some(t) = bind_group.device.trace.lock().as_mut() {
-                t.add(trace::Action::DropBindGroup(bind_group.to_trace()));
-            }
-        }
     }
 
     /// Create a shader module with the given `source`.

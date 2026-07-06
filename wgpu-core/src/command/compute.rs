@@ -33,8 +33,9 @@ use crate::{
     init_tracker::MemoryInitKind,
     pipeline::ComputePipeline,
     resource::{
-        self, Buffer, DestroyedResourceError, InvalidResourceError, Labeled,
-        MissingBufferUsageError, ParentDevice, RawResourceAccess, TextureView, Trackable,
+        self, Buffer, DestroyedResourceError, InvalidOrDestroyedResourceError,
+        InvalidResourceError, Labeled, MissingBufferUsageError, ParentDevice, RawResourceAccess,
+        TextureView, Trackable,
     },
     track::{ResourceUsageCompatibilityError, TextureViewBindGroupState, Tracker},
     Label,
@@ -202,6 +203,15 @@ pub enum ComputePassErrorInner {
     // This one is unreachable, but required for generic pass support
     #[error(transparent)]
     InvalidValuesOffset(#[from] pass::InvalidValuesOffset),
+}
+
+impl From<InvalidOrDestroyedResourceError> for ComputePassErrorInner {
+    fn from(value: InvalidOrDestroyedResourceError) -> Self {
+        match value {
+            InvalidOrDestroyedResourceError::InvalidResource(e) => Self::InvalidResource(e),
+            InvalidOrDestroyedResourceError::DestroyedResource(e) => Self::DestroyedResource(e),
+        }
+    }
 }
 
 /// Error encountered when performing a compute pass, stored for later reporting
@@ -1269,11 +1279,9 @@ impl Global {
         let mut bind_group = None;
         if let Some(bind_group_id) = bind_group_id {
             let hub = &self.hub;
-            bind_group = Some(pass_try!(
-                base,
-                scope,
-                hub.bind_groups.get(bind_group_id).get(),
-            ));
+            let bg = hub.bind_groups.get(bind_group_id);
+            pass_try!(base, scope, bg.check_is_valid());
+            bind_group = Some(bg);
         }
 
         base.commands.push(ArcComputeCommand::SetBindGroup {

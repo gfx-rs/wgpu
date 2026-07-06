@@ -40,9 +40,10 @@ use crate::{
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
     resource::{
-        Buffer, DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
-        MissingTextureUsageError, ParentDevice, QuerySet, RawResourceAccess, ResourceErrorIdent,
-        Texture, TextureView, TextureViewNotRenderableReason,
+        Buffer, DestroyedResourceError, InvalidOrDestroyedResourceError, InvalidResourceError,
+        Labeled, MissingBufferUsageError, MissingTextureUsageError, ParentDevice, QuerySet,
+        RawResourceAccess, ResourceErrorIdent, Texture, TextureView,
+        TextureViewNotRenderableReason,
     },
     snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker, UsageScope},
@@ -1023,6 +1024,15 @@ pub enum RenderPassErrorInner {
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     TimestampWrites(#[from] TimestampWritesError),
+}
+
+impl From<InvalidOrDestroyedResourceError> for RenderPassErrorInner {
+    fn from(error: InvalidOrDestroyedResourceError) -> Self {
+        match error {
+            InvalidOrDestroyedResourceError::InvalidResource(e) => Self::InvalidResource(e),
+            InvalidOrDestroyedResourceError::DestroyedResource(e) => Self::DestroyedResource(e),
+        }
+    }
 }
 
 impl From<MissingBufferUsageError> for RenderPassErrorInner {
@@ -3619,6 +3629,9 @@ fn execute_bundle(
         ExecutionError::DestroyedResource(e) => {
             RenderPassErrorInner::RenderCommand(RenderCommandError::DestroyedResource(e))
         }
+        ExecutionError::InvalidResource(e) => {
+            RenderPassErrorInner::RenderCommand(RenderCommandError::InvalidResource(e))
+        }
         ExecutionError::Unimplemented(what) => {
             RenderPassErrorInner::RenderCommand(RenderCommandError::Unimplemented(what))
         }
@@ -3670,11 +3683,9 @@ impl Global {
         let mut bind_group = None;
         if let Some(bind_group_id) = bind_group_id {
             let hub = &self.hub;
-            bind_group = Some(pass_try!(
-                base,
-                scope,
-                hub.bind_groups.get(bind_group_id).get(),
-            ));
+            let bg = hub.bind_groups.get(bind_group_id);
+            pass_try!(base, scope, bg.check_is_valid());
+            bind_group = Some(bg);
         }
 
         base.commands.push(ArcRenderCommand::SetBindGroup {
