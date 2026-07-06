@@ -44,6 +44,10 @@ Bottom level categories:
 
 ### Bug Fixes
 
+#### Metal
+
+- Fixed the MSL backend re-evaluating a loop's `break if` condition after the hoisted `continuing` block had already updated the variables it reads. Loops with a conditional backedge computed in the loop body (`OpBranchConditional` in SPIR-V, e.g. rust-gpu `while` loops) exited one iteration early or looped forever. Such conditions are now captured into a `bool` where they are computed; conditions reading state written by the `continuing` block keep the previous behavior. By @haixuanTao in [#9815](https://github.com/gfx-rs/wgpu/pull/9815).
+
 #### GLES
 
 - Fixed signed integer `%` (and `%=`) returning the wrong result for negative operands in the GLSL (OpenGL/GLES) backend, e.g. `-1 % 768` yielding `255` instead of `-1`. GLSL's `%` is undefined when either operand is negative, so signed remainder is now lowered as `a - b * (a / b)`, matching the SPIR-V, HLSL, and Metal backends. By @mstampfli in [#9687](https://github.com/gfx-rs/wgpu/pull/9687).
