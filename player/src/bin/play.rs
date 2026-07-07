@@ -118,7 +118,7 @@ fn main() {
     {
         struct App<'a> {
             window: Option<Arc<Window>>,
-            surface: Option<wgc::instance::Surface>,
+            surface: Option<Arc<wgc::instance::Surface>>,
             configured_surface_id: Option<wgc::id::PointerId<wgc::id::markers::Surface>>,
             instance: &'a wgc::instance::Instance,
             device: &'a Arc<wgc::device::Device>,
@@ -151,7 +151,7 @@ fn main() {
                 }
                 .unwrap();
                 self.window = Some(window);
-                self.surface = Some(surface);
+                self.surface = Some(Arc::new(surface));
             }
 
             fn exiting(&mut self, _event_loop: &ActiveEventLoop) {

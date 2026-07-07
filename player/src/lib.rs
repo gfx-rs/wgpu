@@ -450,7 +450,7 @@ impl Player {
     pub fn get_surface_texture(
         &mut self,
         id: wgc::id::PointerId<wgc::id::markers::Texture>,
-        surface: &wgc::instance::Surface,
+        surface: &Arc<wgc::instance::Surface>,
     ) {
         let frame = surface
             .get_current_texture()

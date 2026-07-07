@@ -162,7 +162,23 @@ pub struct SurfaceOutput<T = id::TextureId> {
 }
 
 impl Surface {
-    pub fn get_current_texture(&self) -> Result<ResolvedSurfaceOutput, SurfaceError> {
+    pub fn get_current_texture(self: &Arc<Self>) -> Result<ResolvedSurfaceOutput, SurfaceError> {
+        let output = self.get_current_texture_inner();
+        #[cfg(feature = "trace")]
+        if let Some(present) = self.presentation.lock().as_ref() {
+            if let Some(ref mut trace) = *present.device.trace.lock() {
+                if let Some(texture) = present.acquired_texture.as_ref() {
+                    trace.add(Action::GetSurfaceTexture {
+                        id: texture.to_trace(),
+                        parent: self.to_trace(),
+                    });
+                }
+            }
+        }
+        output
+    }
+
+    pub(crate) fn get_current_texture_inner(&self) -> Result<ResolvedSurfaceOutput, SurfaceError> {
         profiling::scope!("Surface::get_current_texture");
 
         let (device, config) = if let Some(ref present) = *self.presentation.lock() {
@@ -279,7 +295,17 @@ impl Surface {
         Ok(ResolvedSurfaceOutput { status, texture })
     }
 
-    pub fn present(&self) -> Result<Status, SurfaceError> {
+    pub fn present(self: &Arc<Self>) -> Result<Status, SurfaceError> {
+        #[cfg(feature = "trace")]
+        if let Some(present) = self.presentation.lock().as_ref() {
+            if let Some(ref mut trace) = *present.device.trace.lock() {
+                trace.add(Action::Present(self.to_trace()));
+            }
+        }
+        self.present_inner()
+    }
+
+    pub(crate) fn present_inner(&self) -> Result<Status, SurfaceError> {
         profiling::scope!("Surface::present");
 
         let presentation = self.presentation.lock();
@@ -378,7 +404,17 @@ impl Queue {
 }
 
 impl Surface {
-    pub fn discard(&self) -> Result<(), SurfaceError> {
+    pub fn discard(self: &Arc<Self>) -> Result<(), SurfaceError> {
+        #[cfg(feature = "trace")]
+        if let Some(present) = self.presentation.lock().as_ref() {
+            if let Some(ref mut trace) = *present.device.trace.lock() {
+                trace.add(Action::DiscardSurfaceTexture(self.to_trace()));
+            }
+        }
+        self.discard_inner()
+    }
+
+    pub(crate) fn discard_inner(&self) -> Result<(), SurfaceError> {
         profiling::scope!("Surface::discard");
 
         let mut presentation = self.presentation.lock();
@@ -415,9 +451,19 @@ impl Surface {
         Ok(())
     }
 
+    pub fn release(self: &Arc<Self>) -> Result<(), SurfaceError> {
+        #[cfg(feature = "trace")]
+        if let Some(present) = self.presentation.lock().as_ref() {
+            if let Some(ref mut trace) = *present.device.trace.lock() {
+                trace.add(Action::ReleaseSurfaceTexture(self.to_trace()));
+            }
+        }
+        self.release_inner()
+    }
+
     /// Like `discard`, drops the inner texture reference, but skips the
     /// HAL `discard_texture` call. Safe to call during unwinding
-    pub fn release(&self) -> Result<(), SurfaceError> {
+    pub(crate) fn release_inner(&self) -> Result<(), SurfaceError> {
         profiling::scope!("Surface::release");
 
         let mut presentation = self.presentation.lock();
@@ -450,18 +496,6 @@ impl Global {
 
         let output = surface.get_current_texture()?;
 
-        #[cfg(feature = "trace")]
-        if let Some(present) = surface.presentation.lock().as_ref() {
-            if let Some(ref mut trace) = *present.device.trace.lock() {
-                if let Some(texture) = present.acquired_texture.as_ref() {
-                    trace.add(Action::GetSurfaceTexture {
-                        id: texture.to_trace(),
-                        parent: surface.to_trace(),
-                    });
-                }
-            }
-        }
-
         let status = output.status;
         let texture_id = output.texture.map(|texture| fid.assign(texture));
 
@@ -474,38 +508,17 @@ impl Global {
     pub fn surface_present(&self, surface_id: id::SurfaceId) -> Result<Status, SurfaceError> {
         let surface = self.surfaces.get(surface_id);
 
-        #[cfg(feature = "trace")]
-        if let Some(present) = surface.presentation.lock().as_ref() {
-            if let Some(ref mut trace) = *present.device.trace.lock() {
-                trace.add(Action::Present(surface.to_trace()));
-            }
-        }
-
         surface.present()
     }
 
     pub fn surface_texture_discard(&self, surface_id: id::SurfaceId) -> Result<(), SurfaceError> {
         let surface = self.surfaces.get(surface_id);
 
-        #[cfg(feature = "trace")]
-        if let Some(present) = surface.presentation.lock().as_ref() {
-            if let Some(ref mut trace) = *present.device.trace.lock() {
-                trace.add(Action::DiscardSurfaceTexture(surface.to_trace()));
-            }
-        }
-
         surface.discard()
     }
 
     pub fn surface_texture_release(&self, surface_id: id::SurfaceId) -> Result<(), SurfaceError> {
         let surface = self.surfaces.get(surface_id);
-
-        #[cfg(feature = "trace")]
-        if let Some(present) = surface.presentation.lock().as_ref() {
-            if let Some(ref mut trace) = *present.device.trace.lock() {
-                trace.add(Action::ReleaseSurfaceTexture(surface.to_trace()));
-            }
-        }
 
         surface.release()
     }
