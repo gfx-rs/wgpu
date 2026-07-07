@@ -43,7 +43,7 @@ pub use self::encoder_command::PointerReferences;
 // here. Some types (in particular `CopySide`) may be exported unnecessarily.
 pub use self::{
     bundle::{
-        bundle_ffi, CreateRenderBundleError, ExecutionError, RenderBundle, RenderBundleDescriptor,
+        CreateRenderBundleError, ExecutionError, RenderBundle, RenderBundleDescriptor,
         RenderBundleEncoder, RenderBundleEncoderDescriptor, RenderBundleError,
         RenderBundleErrorInner,
     },
