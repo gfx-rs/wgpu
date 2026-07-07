@@ -3,7 +3,7 @@
 
 Designed to work on platforms with context provided by EGL or WGL, including
 Linux and Android via EGL, and Windows via WGL by default or ANGLE/EGL with
-the `angle` feature.
+`cfg(windows_angle)`.
 
 ## Texture views
 
@@ -86,9 +86,9 @@ mod command;
 mod conv;
 mod device;
 ///cbindgen:ignore
-#[cfg(all(not(webgl), any(not(windows), feature = "gles-with-angle")))]
+#[cfg(all(not(webgl), any(not(windows), windows_angle)))]
 mod egl;
-#[cfg(all(not(webgl), any(not(windows), feature = "gles-with-angle")))]
+#[cfg(all(not(webgl), any(not(windows), windows_angle)))]
 pub use self::egl::{AdapterContext, AdapterContextLock, Instance, Surface};
 
 #[cfg(Emscripten)]
@@ -102,9 +102,9 @@ mod web;
 #[cfg(webgl)]
 pub use self::web::{AdapterContext, Instance, Surface};
 
-#[cfg(all(windows, not(webgl), not(feature = "gles-with-angle")))]
+#[cfg(all(windows, not(webgl), not(windows_angle)))]
 mod wgl;
-#[cfg(all(windows, not(webgl), not(feature = "gles-with-angle")))]
+#[cfg(all(windows, not(webgl), not(windows_angle)))]
 pub use self::wgl::{AdapterContext, AdapterContextLock, Instance, Surface};
 
 pub use fence::Fence;

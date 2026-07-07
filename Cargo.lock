@@ -4744,7 +4744,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core-deps-linux-android-bsd"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "wgpu-hal",
 ]
