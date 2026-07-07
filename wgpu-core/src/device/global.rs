@@ -280,30 +280,11 @@ impl Global {
 
         let device = self.hub.devices.get(device_id);
 
-        let error = 'error: {
-            let texture = match device.create_texture_from_hal(hal_texture, desc, initial_state) {
-                Ok(texture) => texture,
-                Err(error) => break 'error error,
-            };
+        let (texture, error) =
+            unsafe { device.create_texture_from_hal(hal_texture, desc, initial_state) };
 
-            // NB: Any change done through the raw texture handle will not be
-            // recorded in the replay
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateTexture(
-                    texture.to_trace(),
-                    desc.clone(),
-                ));
-            }
-
-            let id = fid.assign(texture);
-            api_log!("Device::create_texture({desc:?}) -> {id:?}");
-
-            return (id, None);
-        };
-
-        let id = fid.assign(Arc::new(resource::Texture::invalid(&device, desc)));
-        (id, Some(error))
+        let id = fid.assign(texture);
+        (id, error)
     }
 
     /// # Safety
@@ -334,25 +315,14 @@ impl Global {
     }
 
     pub fn texture_destroy(&self, texture_id: id::TextureId) {
-        profiling::scope!("Texture::destroy");
-        api_log!("Texture::destroy {texture_id:?}");
-
         let hub = &self.hub;
 
         let texture = hub.textures.get(texture_id);
-
-        #[cfg(feature = "trace")]
-        if let Some(trace) = texture.device.trace.lock().as_mut() {
-            trace.add(trace::Action::DestroyTexture(texture.to_trace()));
-        }
 
         texture.destroy();
     }
 
     pub fn texture_drop(&self, texture_id: id::TextureId) {
-        profiling::scope!("Texture::drop");
-        api_log!("Texture::drop {texture_id:?}");
-
         let hub = &self.hub;
 
         hub.textures.remove(texture_id);

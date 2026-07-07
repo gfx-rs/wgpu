@@ -1520,8 +1520,8 @@ impl Texture {
         }
     }
 
-    pub(crate) fn invalid(device: &Arc<Device>, desc: &TextureDescriptor) -> Self {
-        Texture {
+    pub fn invalid(device: &Arc<Device>, desc: &TextureDescriptor) -> Arc<Self> {
+        Arc::new(Texture {
             state: ResourceState::Invalid,
             device: device.clone(),
             desc: desc.map_label(|label| label.to_string()),
@@ -1542,7 +1542,7 @@ impl Texture {
             clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, TextureClearMode::None),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
-        }
+        })
     }
 
     /// Checks that the given texture usage contains the required texture usage,
@@ -1564,7 +1564,11 @@ impl Texture {
 }
 
 impl Drop for Texture {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("Texture::drop");
+        api_log!("Texture::drop {:?}", self as *const _);
+
         #[cfg(feature = "trace")]
         {
             let mut t = self.device.trace.lock();
@@ -1689,6 +1693,16 @@ impl Texture {
     }
 
     pub fn destroy(self: &Arc<Self>) {
+        profiling::scope!("Texture::destroy");
+        api_log!("Texture::destroy {:?}", Arc::as_ptr(self));
+
+        #[cfg(feature = "trace")]
+        if let Some(trace) = self.device.trace.lock().as_mut() {
+            use crate::device::trace::IntoTrace as _;
+
+            trace.add(trace::Action::DestroyTexture(self.to_trace()));
+        }
+
         let device = &self.device;
 
         let ResourceState::Valid(state) = &self.state else {
