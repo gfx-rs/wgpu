@@ -386,10 +386,8 @@ webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type=
 webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="vec4u";*
 webgpu:shader,execution,expression,unary,bool_conversion:*
 webgpu:shader,execution,flow_control,return:*
-// Many other vertex_buffer_access subtests also passing, but there are too many to enumerate.
-// Fails on Metal in CI only, not when running locally.
-// Fails on Vulkan with LVP_POISON_MEMORY=true possibly due to https://github.com/gfx-rs/wgpu/issues/8034
-fails-if(metal,vulkan) webgpu:shader,execution,robust_access_vertex:vertex_buffer_access:indexed=true;indirect=false;drawCallTestParameter="baseVertex";type="float32x4";additionalBuffers=4;partialLastNumber=false;offsetVertexBuffer=true
+// Fails on Metal in CI only, not when running locally. https://github.com/gfx-rs/wgpu/issues/8023
+fails-if(metal) webgpu:shader,execution,robust_access_vertex:vertex_buffer_access:*
 webgpu:shader,execution,shader_io,fragment_builtins:inputs,front_facing:*
 webgpu:shader,execution,shader_io,fragment_builtins:inputs,interStage,centroid:*
 fails-if(vulkan) webgpu:shader,execution,shader_io,fragment_builtins:inputs,interStage:*

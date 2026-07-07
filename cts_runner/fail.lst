@@ -69,6 +69,7 @@ webgpu:api,validation,texture,destroy:submit_a_destroyed_texture_as_attachment:*
 webgpu:shader,execution,expression,call,builtin,atan2:f16:* // dx12, fails with dxc, passes with fxc, https://github.com/gfx-rs/wgpu/issues/9179
 webgpu:shader,execution,expression,call,builtin,textureDimensions:* // dx12, https://github.com/gfx-rs/wgpu/issues/9541
 webgpu:shader,execution,expression,call,builtin,textureNumSamples:* // dx12, fails intermittently on WARP < 1.0.17
+webgpu:shader,execution,robust_access_vertex:vertex_buffer_access:* // metal paravirt GPU only, https://github.com/gfx-rs/wgpu/issues/8023
 
 webgpu:shader,validation,decl,let:* // texture/sampler let
 webgpu:shader,validation,decl,override:* // 93%, unrestricted_pointer_parameters not implemented, https://github.com/gfx-rs/wgpu/issues/5158

@@ -1188,6 +1188,8 @@ pub enum CreateBufferError {
     MissingFeatures(#[from] MissingFeatures),
     #[error("Failed to create bind group for indirect buffer validation: {0}")]
     IndirectValidationBindGroup(DeviceError),
+    #[error("Error initializing buffer: {0}")]
+    QueueWrite(#[from] queue::QueueWriteError),
 }
 
 crate::impl_resource_type!(Buffer);
@@ -1204,6 +1206,7 @@ impl WebGpuError for CreateBufferError {
             Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
             Self::IndirectValidationBindGroup(e) => e.webgpu_error_type(),
             Self::MissingFeatures(e) => e.webgpu_error_type(),
+            Self::QueueWrite(e) => e.webgpu_error_type(),
 
             Self::UnalignedSize
             | Self::InvalidUsage(_)
