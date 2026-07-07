@@ -897,7 +897,7 @@ impl BindGroupLayout {
         })
     }
 
-    pub(crate) fn invalid(device: &Arc<Device>, label: String) -> Arc<Self> {
+    pub fn invalid(device: &Arc<Device>, label: String) -> Arc<Self> {
         Arc::new(Self {
             state: ResourceState::Invalid,
             device: device.clone(),

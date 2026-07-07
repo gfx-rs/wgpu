@@ -10,7 +10,6 @@ use crate::{
         ResolvedBindGroupEntry, ResolvedBindingResource, ResolvedBufferBinding,
     },
     command::{self, CommandEncoder},
-    conv,
     device::{life::WaitIdleError, DeviceError, DeviceLostClosure},
     global::Global,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
@@ -30,7 +29,7 @@ use crate::{
 
 use wgt::{BufferAddress, TextureFormat};
 
-use super::{surface_config, UserClosures};
+use super::UserClosures;
 
 impl Global {
     pub fn adapter_is_surface_supported(
@@ -48,34 +47,8 @@ impl Global {
         surface_id: SurfaceId,
         adapter_id: AdapterId,
     ) -> Result<wgt::SurfaceCapabilities, instance::GetSurfaceSupportError> {
-        profiling::scope!("Surface::get_capabilities");
         self.fetch_adapter_and_surface::<_, _>(surface_id, adapter_id, |adapter, surface| {
-            let mut hal_caps = surface.get_capabilities(adapter)?;
-
-            hal_caps.formats.sort_by_key(|fc| !fc.format.is_srgb());
-
-            let usages = conv::map_texture_usage_from_hal(hal_caps.usage);
-
-            // `SurfaceCapabilities::formats` lists only the formats a
-            // color-space-unaware application can configure via
-            // `SurfaceColorSpace::Auto`, i.e. those for which `Auto` resolves to a
-            // concrete color space. (The full `format_capabilities` still reports
-            // every color space, including HDR ones, for explicit opt-in.)
-            Ok(wgt::SurfaceCapabilities {
-                formats: hal_caps
-                    .formats
-                    .iter()
-                    .filter(|fc| {
-                        surface_config::resolve_auto_color_space(fc.format, fc.color_spaces)
-                            .is_some()
-                    })
-                    .map(|fc| fc.format)
-                    .collect(),
-                format_capabilities: hal_caps.formats,
-                present_modes: hal_caps.present_modes,
-                alpha_modes: hal_caps.composite_alpha_modes,
-                usages,
-            })
+            surface.get_capabilities(adapter)
         })
     }
 
@@ -93,7 +66,6 @@ impl Global {
         surface_id: SurfaceId,
         adapter_id: AdapterId,
     ) -> wgt::DisplayHdrInfo {
-        profiling::scope!("Surface::display_hdr_info");
         self.fetch_adapter_and_surface(surface_id, adapter_id, |adapter, surface| {
             surface.display_hdr_info(adapter)
         })
@@ -112,12 +84,12 @@ impl Global {
 
     pub fn device_features(&self, device_id: DeviceId) -> wgt::Features {
         let device = self.hub.devices.get(device_id);
-        device.features
+        *device.features()
     }
 
     pub fn device_limits(&self, device_id: DeviceId) -> wgt::Limits {
         let device = self.hub.devices.get(device_id);
-        device.limits.clone()
+        device.limits().clone()
     }
 
     pub fn device_adapter_info(&self, device_id: DeviceId) -> wgt::AdapterInfo {
@@ -127,7 +99,7 @@ impl Global {
 
     pub fn device_downlevel_properties(&self, device_id: DeviceId) -> wgt::DownlevelCapabilities {
         let device = self.hub.devices.get(device_id);
-        device.downlevel.clone()
+        device.downlevel().clone()
     }
 
     pub fn device_create_buffer(
@@ -136,8 +108,6 @@ impl Global {
         desc: &resource::BufferDescriptor,
         id_in: Option<id::BufferId>,
     ) -> (id::BufferId, Option<CreateBufferError>) {
-        profiling::scope!("Device::create_buffer");
-
         let hub = &self.hub;
         let fid = hub.buffers.prepare(id_in);
 
@@ -255,9 +225,6 @@ impl Global {
     }
 
     pub fn buffer_destroy(&self, buffer_id: id::BufferId) {
-        profiling::scope!("Buffer::destroy");
-        api_log!("Buffer::destroy {buffer_id:?}");
-
         let hub = &self.hub;
 
         let buffer = hub.buffers.get(buffer_id);
@@ -266,9 +233,6 @@ impl Global {
     }
 
     pub fn buffer_drop(&self, buffer_id: id::BufferId) {
-        profiling::scope!("Buffer::drop");
-        api_log!("Buffer::drop {buffer_id:?}");
-
         let hub = &self.hub;
 
         let _buffer = hub.buffers.remove(buffer_id);
@@ -280,8 +244,6 @@ impl Global {
         desc: &resource::TextureDescriptor,
         id_in: Option<id::TextureId>,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
-        profiling::scope!("Device::create_texture");
-
         let hub = &self.hub;
 
         let fid = hub.textures.prepare(id_in);

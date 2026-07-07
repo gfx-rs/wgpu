@@ -464,7 +464,10 @@ pub struct Buffer {
 }
 
 impl Drop for Buffer {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("Buffer::drop");
+        api_log!("Buffer::drop {:?}", self as *const _);
         #[cfg(feature = "trace")]
         if let Some(t) = self.device.trace.lock().as_mut() {
             t.add(trace::Action::DropBuffer(unsafe { trace::to_trace(self) }));
@@ -568,7 +571,7 @@ impl Buffer {
         self.state().map(|_| ())
     }
 
-    pub(crate) fn invalid(device: Arc<Device>, desc: &BufferDescriptor) -> Arc<Self> {
+    pub fn invalid(device: Arc<Device>, desc: &BufferDescriptor) -> Arc<Self> {
         Arc::new(Buffer {
             state: ResourceState::Invalid,
             usage: desc.usage,
@@ -1097,6 +1100,9 @@ impl Buffer {
     }
 
     pub fn destroy(self: &Arc<Self>) {
+        profiling::scope!("Buffer::destroy");
+        api_log!("Buffer::destroy {:?}", Arc::as_ptr(self));
+
         let device = &self.device;
 
         #[cfg(feature = "trace")]

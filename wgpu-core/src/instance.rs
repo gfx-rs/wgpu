@@ -671,6 +671,42 @@ impl Surface {
     pub fn get_capabilities(
         &self,
         adapter: &Adapter,
+    ) -> Result<wgt::SurfaceCapabilities, GetSurfaceSupportError> {
+        profiling::scope!("Surface::get_capabilities");
+        let mut hal_caps = self.get_hal_capabilities(adapter)?;
+
+        hal_caps.formats.sort_by_key(|fc| !fc.format.is_srgb());
+
+        let usages = crate::conv::map_texture_usage_from_hal(hal_caps.usage);
+
+        // `SurfaceCapabilities::formats` lists only the formats a
+        // color-space-unaware application can configure via
+        // `SurfaceColorSpace::Auto`, i.e. those for which `Auto` resolves to a
+        // concrete color space. (The full `format_capabilities` still reports
+        // every color space, including HDR ones, for explicit opt-in.)
+        Ok(wgt::SurfaceCapabilities {
+            formats: hal_caps
+                .formats
+                .iter()
+                .filter(|fc| {
+                    crate::device::surface_config::resolve_auto_color_space(
+                        fc.format,
+                        fc.color_spaces,
+                    )
+                    .is_some()
+                })
+                .map(|fc| fc.format)
+                .collect(),
+            format_capabilities: hal_caps.formats,
+            present_modes: hal_caps.present_modes,
+            alpha_modes: hal_caps.composite_alpha_modes,
+            usages,
+        })
+    }
+
+    pub fn get_hal_capabilities(
+        &self,
+        adapter: &Adapter,
     ) -> Result<hal::SurfaceCapabilities, GetSurfaceSupportError> {
         self.get_capabilities_with_raw(&adapter.raw)
     }
@@ -695,6 +731,7 @@ impl Surface {
     /// Falls back to [`wgt::DisplayHdrInfo::default`] (all fields `None`) when the
     /// surface is not on `adapter`'s backend or the backend reports nothing.
     pub fn display_hdr_info(&self, adapter: &Adapter) -> wgt::DisplayHdrInfo {
+        profiling::scope!("Surface::display_hdr_info");
         self.display_hdr_info_with_raw(&adapter.raw)
     }
 
@@ -748,7 +785,7 @@ impl Adapter {
         //
         // This could occur if the user is running their app on Wayland but Vulkan does not support
         // VK_KHR_wayland_surface.
-        surface.get_capabilities(self).is_ok()
+        surface.get_hal_capabilities(self).is_ok()
     }
 
     pub fn get_info(&self) -> wgt::AdapterInfo {

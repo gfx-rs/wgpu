@@ -357,6 +357,20 @@ impl Drop for Device {
 }
 
 impl Device {
+    pub fn features(&self) -> &wgt::Features {
+        &self.features
+    }
+
+    pub fn limits(&self) -> &wgt::Limits {
+        &self.limits
+    }
+
+    pub fn downlevel(&self) -> &wgt::DownlevelCapabilities {
+        &self.downlevel
+    }
+}
+
+impl Device {
     pub(crate) fn raw(&self) -> &dyn hal::DynDevice {
         self.raw.as_ref()
     }
@@ -1220,6 +1234,8 @@ impl Device {
         self: &Arc<Self>,
         desc: &resource::BufferDescriptor,
     ) -> (Arc<Buffer>, Option<resource::CreateBufferError>) {
+        profiling::scope!("Device::create_buffer");
+
         let (buffer, error) = match self.create_buffer_inner(desc) {
             Ok(buffer) => (buffer, None),
             Err(e) => (Buffer::invalid(Arc::clone(self), desc), Some(e)),
@@ -1837,6 +1853,7 @@ impl Device {
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
     ) -> (Arc<Texture>, Option<resource::CreateTextureError>) {
+        profiling::scope!("Device::create_texture");
         let (texture, error) = match self.create_texture_inner(desc) {
             Ok(texture) => (texture, None),
             Err(e) => {
@@ -5714,7 +5731,7 @@ impl Device {
                     break 'error e.into();
                 }
 
-                let caps = match surface.get_capabilities(&self.adapter) {
+                let caps = match surface.get_hal_capabilities(&self.adapter) {
                     Ok(caps) => caps,
                     Err(_) => break 'error E::UnsupportedQueueFamily,
                 };

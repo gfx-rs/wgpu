@@ -1371,7 +1371,7 @@ impl RenderBundle {
         self.state().map(|_| ())
     }
 
-    pub(crate) fn invalid(device: Arc<Device>, desc: &RenderBundleDescriptor) -> Arc<Self> {
+    pub fn invalid(device: Arc<Device>, desc: &RenderBundleDescriptor) -> Arc<Self> {
         Arc::new(RenderBundle {
             state: ResourceState::Invalid,
             base: BasePass {
