@@ -1,5 +1,5 @@
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
-use core::{ptr::NonNull, sync::atomic::Ordering};
+use core::ptr::NonNull;
 
 #[cfg(feature = "trace")]
 use crate::device::trace;
@@ -1196,9 +1196,6 @@ impl Global {
     }
 
     pub fn device_drop(&self, device_id: DeviceId) {
-        profiling::scope!("Device::drop");
-        api_log!("Device::drop {device_id:?}");
-
         self.hub.devices.remove(device_id);
     }
 
@@ -1210,42 +1207,17 @@ impl Global {
     ) {
         let device = self.hub.devices.get(device_id);
 
-        device
-            .device_lost_closure
-            .lock()
-            .replace(device_lost_closure);
+        device.set_device_lost_closure(device_lost_closure);
     }
 
     pub fn device_destroy(&self, device_id: DeviceId) {
-        api_log!("Device::destroy {device_id:?}");
-
         let device = self.hub.devices.get(device_id);
-
-        // Follow the steps at
-        // https://gpuweb.github.io/gpuweb/#dom-gpudevice-destroy.
-        // It's legal to call destroy multiple times, but if the device
-        // is already invalid, there's nothing more to do. There's also
-        // no need to return an error.
-        if !device.is_valid() {
-            return;
-        }
-
-        // The last part of destroy is to lose the device. The spec says
-        // delay that until all "currently-enqueued operations on any
-        // queue on this device are completed." This is accomplished by
-        // setting valid to false, and then relying upon maintain to
-        // check for empty queues and a DeviceLostClosure. At that time,
-        // the DeviceLostClosure will be called with "destroyed" as the
-        // reason.
-        device.valid.store(false, Ordering::Release);
+        device.destroy();
     }
 
     pub fn device_get_internal_counters(&self, device_id: DeviceId) -> wgt::InternalCounters {
         let device = self.hub.devices.get(device_id);
-        wgt::InternalCounters {
-            hal: device.get_hal_counters(),
-            core: wgt::CoreCounters {},
-        }
+        device.get_internal_counters()
     }
 
     pub fn device_generate_allocator_report(

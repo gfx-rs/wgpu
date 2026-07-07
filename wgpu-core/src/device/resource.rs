@@ -326,7 +326,10 @@ impl fmt::Debug for Device {
 }
 
 impl Drop for Device {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("Device::drop");
+        api_log!("Device::drop {:?}", self as *const _);
         resource_log!("Drop {}", self.error_ident());
 
         // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this
@@ -6022,6 +6025,40 @@ impl Device {
             self.ordered_buffer_usages,
             self.ordered_texture_usages,
         )
+    }
+
+    /// `device_lost_closure` might never be called.
+    pub fn set_device_lost_closure(&self, device_lost_closure: DeviceLostClosure) {
+        self.device_lost_closure.lock().replace(device_lost_closure);
+    }
+
+    pub fn destroy(self: &Arc<Self>) {
+        api_log!("Device::destroy {:?}", Arc::as_ptr(self));
+
+        // Follow the steps at
+        // https://gpuweb.github.io/gpuweb/#dom-gpudevice-destroy.
+        // It's legal to call destroy multiple times, but if the device
+        // is already invalid, there's nothing more to do. There's also
+        // no need to return an error.
+        if !self.is_valid() {
+            return;
+        }
+
+        // The last part of destroy is to lose the device. The spec says
+        // delay that until all "currently-enqueued operations on any
+        // queue on this device are completed." This is accomplished by
+        // setting valid to false, and then relying upon maintain to
+        // check for empty queues and a DeviceLostClosure. At that time,
+        // the DeviceLostClosure will be called with "destroyed" as the
+        // reason.
+        self.valid.store(false, Ordering::Release);
+    }
+
+    pub fn get_internal_counters(&self) -> wgt::InternalCounters {
+        wgt::InternalCounters {
+            hal: self.get_hal_counters(),
+            core: wgt::CoreCounters {},
+        }
     }
 
     pub fn get_hal_counters(&self) -> wgt::HalCounters {
