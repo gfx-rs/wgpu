@@ -1018,7 +1018,10 @@ pub struct RenderPipeline {
 }
 
 impl Drop for RenderPipeline {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("RenderPipeline::drop");
+        api_log!("RenderPipeline::drop {:?}", self as *const _);
         resource_log!("Destroy raw {}", self.error_ident());
         #[cfg(feature = "trace")]
         {

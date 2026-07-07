@@ -4628,6 +4628,7 @@ impl Device {
         Arc<pipeline::RenderPipeline>,
         Option<pipeline::CreateRenderPipelineError>,
     ) {
+        profiling::scope!("Device::create_render_pipeline");
         let (render_pipeline, error) = match self.create_render_pipeline_inner(desc.clone()) {
             Ok(pipeline) => (pipeline, None),
             Err(e) => (
@@ -4643,6 +4644,10 @@ impl Device {
                 desc: desc.to_trace(),
             });
         }
+        api_log!(
+            "Device::create_render_pipeline -> {:?}",
+            Arc::as_ptr(&render_pipeline)
+        );
         (render_pipeline, error)
     }
 

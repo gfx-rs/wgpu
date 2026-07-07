@@ -828,8 +828,6 @@ impl Global {
         id::RenderPipelineId,
         Option<pipeline::CreateRenderPipelineError>,
     ) {
-        profiling::scope!("Device::create_render_pipeline");
-
         let hub = &self.hub;
 
         let fid = hub.render_pipelines.prepare(id_in);
@@ -865,112 +863,90 @@ impl Global {
         id::RenderPipelineId,
         Option<pipeline::CreateRenderPipelineError>,
     ) {
-        profiling::scope!("Device::create_general_render_pipeline");
-
         let hub = &self.hub;
 
-        // eventually there will be no error handling here only id to object mapping
-        let error = 'error: {
-            // until then we also need this
-            if let Err(e) = device.check_is_valid() {
-                break 'error e.into();
-            }
+        let layout = desc.layout.map(|layout| hub.pipeline_layouts.get(layout));
 
-            let layout = desc.layout.map(|layout| hub.pipeline_layouts.get(layout));
+        let cache = desc.cache.map(|cache| hub.pipeline_caches.get(cache));
 
-            let cache = desc.cache.map(|cache| hub.pipeline_caches.get(cache));
-
-            let vertex = match desc.vertex {
-                RenderPipelineVertexProcessor::Vertex(ref vertex) => {
-                    let module = hub.shader_modules.get(vertex.stage.module);
-                    let stage = ResolvedProgrammableStageDescriptor {
-                        module,
-                        entry_point: vertex.stage.entry_point.clone(),
-                        constants: vertex.stage.constants.clone(),
-                        zero_initialize_workgroup_memory: vertex
-                            .stage
-                            .zero_initialize_workgroup_memory,
-                    };
-                    RenderPipelineVertexProcessor::Vertex(ResolvedVertexState {
-                        stage,
-                        buffers: vertex.buffers.clone(),
-                    })
-                }
-                RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
-                    let task_module = if let Some(task) = task {
-                        let module = hub.shader_modules.get(task.stage.module);
-
-                        let state = ResolvedProgrammableStageDescriptor {
-                            module,
-                            entry_point: task.stage.entry_point.clone(),
-                            constants: task.stage.constants.clone(),
-                            zero_initialize_workgroup_memory: task
-                                .stage
-                                .zero_initialize_workgroup_memory,
-                        };
-                        Some(ResolvedTaskState { stage: state })
-                    } else {
-                        None
-                    };
-                    let mesh_module = hub.shader_modules.get(mesh.stage.module);
-                    let mesh_stage = ResolvedProgrammableStageDescriptor {
-                        module: mesh_module,
-                        entry_point: mesh.stage.entry_point.clone(),
-                        constants: mesh.stage.constants.clone(),
-                        zero_initialize_workgroup_memory: mesh
-                            .stage
-                            .zero_initialize_workgroup_memory,
-                    };
-                    RenderPipelineVertexProcessor::Mesh(
-                        task_module,
-                        ResolvedMeshState { stage: mesh_stage },
-                    )
-                }
-            };
-
-            let fragment = if let Some(ref state) = desc.fragment {
-                let module = hub.shader_modules.get(state.stage.module);
-
+        let vertex = match desc.vertex {
+            RenderPipelineVertexProcessor::Vertex(ref vertex) => {
+                let module = hub.shader_modules.get(vertex.stage.module);
                 let stage = ResolvedProgrammableStageDescriptor {
                     module,
-                    entry_point: state.stage.entry_point.clone(),
-                    constants: state.stage.constants.clone(),
-                    zero_initialize_workgroup_memory: state.stage.zero_initialize_workgroup_memory,
+                    entry_point: vertex.stage.entry_point.clone(),
+                    constants: vertex.stage.constants.clone(),
+                    zero_initialize_workgroup_memory: vertex.stage.zero_initialize_workgroup_memory,
                 };
-                Some(ResolvedFragmentState {
+                RenderPipelineVertexProcessor::Vertex(ResolvedVertexState {
                     stage,
-                    targets: state.targets.clone(),
+                    buffers: vertex.buffers.clone(),
                 })
-            } else {
-                None
-            };
+            }
+            RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
+                let task_module = if let Some(task) = task {
+                    let module = hub.shader_modules.get(task.stage.module);
 
-            let desc = ResolvedGeneralRenderPipelineDescriptor {
-                label: desc.label.clone(),
-                layout,
-                vertex,
-                primitive: desc.primitive,
-                depth_stencil: desc.depth_stencil.clone(),
-                multisample: desc.multisample,
-                fragment,
-                multiview_mask: desc.multiview_mask,
-                cache,
-            };
-
-            let (pipeline, error) = device.create_render_pipeline(desc);
-
-            let id = fid.assign(pipeline);
-            api_log!("Device::create_render_pipeline -> {id:?}");
-
-            return (id, error);
+                    let state = ResolvedProgrammableStageDescriptor {
+                        module,
+                        entry_point: task.stage.entry_point.clone(),
+                        constants: task.stage.constants.clone(),
+                        zero_initialize_workgroup_memory: task
+                            .stage
+                            .zero_initialize_workgroup_memory,
+                    };
+                    Some(ResolvedTaskState { stage: state })
+                } else {
+                    None
+                };
+                let mesh_module = hub.shader_modules.get(mesh.stage.module);
+                let mesh_stage = ResolvedProgrammableStageDescriptor {
+                    module: mesh_module,
+                    entry_point: mesh.stage.entry_point.clone(),
+                    constants: mesh.stage.constants.clone(),
+                    zero_initialize_workgroup_memory: mesh.stage.zero_initialize_workgroup_memory,
+                };
+                RenderPipelineVertexProcessor::Mesh(
+                    task_module,
+                    ResolvedMeshState { stage: mesh_stage },
+                )
+            }
         };
 
-        let id = fid.assign(pipeline::RenderPipeline::invalid(
-            device.clone(),
-            desc.label.to_string(),
-        ));
+        let fragment = if let Some(ref state) = desc.fragment {
+            let module = hub.shader_modules.get(state.stage.module);
 
-        (id, Some(error))
+            let stage = ResolvedProgrammableStageDescriptor {
+                module,
+                entry_point: state.stage.entry_point.clone(),
+                constants: state.stage.constants.clone(),
+                zero_initialize_workgroup_memory: state.stage.zero_initialize_workgroup_memory,
+            };
+            Some(ResolvedFragmentState {
+                stage,
+                targets: state.targets.clone(),
+            })
+        } else {
+            None
+        };
+
+        let desc = ResolvedGeneralRenderPipelineDescriptor {
+            label: desc.label.clone(),
+            layout,
+            vertex,
+            primitive: desc.primitive,
+            depth_stencil: desc.depth_stencil.clone(),
+            multisample: desc.multisample,
+            fragment,
+            multiview_mask: desc.multiview_mask,
+            cache,
+        };
+
+        let (pipeline, error) = device.create_render_pipeline(desc);
+
+        let id = fid.assign(pipeline);
+
+        (id, error)
     }
 
     /// Get an ID of one of the bind group layouts. The ID adds a refcount,
@@ -998,9 +974,6 @@ impl Global {
     }
 
     pub fn render_pipeline_drop(&self, render_pipeline_id: id::RenderPipelineId) {
-        profiling::scope!("RenderPipeline::drop");
-        api_log!("RenderPipeline::drop {render_pipeline_id:?}");
-
         let hub = &self.hub;
 
         let _pipeline = hub.render_pipelines.remove(render_pipeline_id);
