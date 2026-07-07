@@ -5718,6 +5718,7 @@ impl Device {
         self: &Arc<Self>,
         desc: &resource::QuerySetDescriptor,
     ) -> (Arc<QuerySet>, Option<resource::CreateQuerySetError>) {
+        profiling::scope!("Device::create_query_set");
         let (query_set, error) = match self.create_query_set_inner(desc) {
             Ok(query_set) => (query_set, None),
             Err(e) => (QuerySet::invalid(Arc::clone(self), desc), Some(e)),

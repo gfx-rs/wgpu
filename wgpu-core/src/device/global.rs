@@ -793,8 +793,6 @@ impl Global {
         desc: &resource::QuerySetDescriptor,
         id_in: Option<id::QuerySetId>,
     ) -> (id::QuerySetId, Option<resource::CreateQuerySetError>) {
-        profiling::scope!("Device::create_query_set");
-
         let hub = &self.hub;
         let fid = hub.query_sets.prepare(id_in);
 
@@ -816,9 +814,6 @@ impl Global {
     }
 
     pub fn query_set_drop(&self, query_set_id: id::QuerySetId) {
-        profiling::scope!("QuerySet::drop");
-        api_log!("QuerySet::drop {query_set_id:?}");
-
         let hub = &self.hub;
 
         let _query_set = hub.query_sets.remove(query_set_id);

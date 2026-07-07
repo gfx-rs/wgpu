@@ -2688,7 +2688,10 @@ impl QuerySet {
 }
 
 impl Drop for QuerySet {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("QuerySet::drop");
+        api_log!("QuerySet::drop {:?}", self as *const _);
         resource_log!("Destroy raw {}", self.error_ident());
         #[cfg(feature = "trace")]
         if let Some(trace) = self.device.trace.lock().as_mut() {
