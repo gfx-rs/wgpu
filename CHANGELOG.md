@@ -51,6 +51,7 @@ Bottom level categories:
 ### Changes
 
 #### naga
+
 - `naga::valid::ValidationError` is now always returned boxed, to avoid `clippy::large_result_err` warning. By @beicause in [#9612](https://github.com/gfx-rs/wgpu/pull/9612)
 
 ### Bug Fixes
