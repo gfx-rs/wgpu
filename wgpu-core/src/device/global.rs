@@ -1101,15 +1101,9 @@ impl Global {
         device_id: DeviceId,
         poll_type: wgt::PollType<crate::SubmissionIndex>,
     ) -> Result<wgt::PollStatus, WaitIdleError> {
-        api_log!("Device::poll {poll_type:?}");
-
         let device = self.hub.devices.get(device_id);
 
-        let (closures, result) = device.poll_and_return_closures(poll_type);
-
-        closures.fire();
-
-        result
+        device.poll(poll_type)
     }
 
     /// Poll all devices belonging to the specified backend.
