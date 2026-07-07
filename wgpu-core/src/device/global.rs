@@ -456,8 +456,6 @@ impl Global {
         id::PipelineLayoutId,
         Option<binding_model::CreatePipelineLayoutError>,
     ) {
-        profiling::scope!("Device::create_pipeline_layout");
-
         let hub = &self.hub;
         let fid = hub.pipeline_layouts.prepare(id_in);
 
@@ -483,9 +481,6 @@ impl Global {
     }
 
     pub fn pipeline_layout_drop(&self, pipeline_layout_id: id::PipelineLayoutId) {
-        profiling::scope!("PipelineLayout::drop");
-        api_log!("PipelineLayout::drop {pipeline_layout_id:?}");
-
         let hub = &self.hub;
 
         let _layout = hub.pipeline_layouts.remove(pipeline_layout_id);
@@ -497,8 +492,6 @@ impl Global {
         desc: &binding_model::BindGroupDescriptor,
         id_in: Option<id::BindGroupId>,
     ) -> (id::BindGroupId, Option<binding_model::CreateBindGroupError>) {
-        profiling::scope!("Device::create_bind_group");
-
         let hub = &self.hub;
         let fid = hub.bind_groups.prepare(id_in);
 
@@ -630,8 +623,6 @@ impl Global {
         id::ShaderModuleId,
         Option<pipeline::CreateShaderModuleError>,
     ) {
-        profiling::scope!("Device::create_shader_module");
-
         let hub = &self.hub;
         let fid = hub.shader_modules.prepare(id_in);
 
@@ -670,9 +661,6 @@ impl Global {
     }
 
     pub fn shader_module_drop(&self, shader_module_id: id::ShaderModuleId) {
-        profiling::scope!("ShaderModule::drop");
-        api_log!("ShaderModule::drop {shader_module_id:?}");
-
         let hub = &self.hub;
 
         let _shader_module = hub.shader_modules.remove(shader_module_id);

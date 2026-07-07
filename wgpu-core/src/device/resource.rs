@@ -2605,6 +2605,7 @@ impl Device {
         Arc<pipeline::ShaderModule>,
         Option<pipeline::CreateShaderModuleError>,
     ) {
+        profiling::scope!("Device::create_shader_module");
         #[cfg(feature = "trace")]
         let data = self.trace.lock().as_mut().map(|trace| {
             use crate::device::trace::DataKind;
@@ -3740,6 +3741,7 @@ impl Device {
         self: &Arc<Self>,
         desc: &binding_model::ResolvedBindGroupDescriptor,
     ) -> (Arc<BindGroup>, Option<CreateBindGroupError>) {
+        profiling::scope!("Device::create_bind_group");
         #[cfg(feature = "trace")]
         let trace_desc = (&desc).to_trace();
 
@@ -4228,6 +4230,7 @@ impl Device {
         Arc<binding_model::PipelineLayout>,
         Option<binding_model::CreatePipelineLayoutError>,
     ) {
+        profiling::scope!("Device::create_pipeline_layout");
         let (layout, error) = match self.create_pipeline_layout_impl(desc, false) {
             Ok(layout) => (layout, None),
             Err(e) => (

@@ -1042,7 +1042,10 @@ pub struct PipelineLayout {
 }
 
 impl Drop for PipelineLayout {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("PipelineLayout::drop");
+        api_log!("PipelineLayout::drop {:?}", self as *const _);
         resource_log!("Destroy raw {}", self.error_ident());
         if let ResourceState::Valid(raw) = core::mem::replace(&mut self.raw, ResourceState::Invalid)
         {

@@ -82,7 +82,10 @@ pub struct ShaderModule {
 }
 
 impl Drop for ShaderModule {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("ShaderModule::drop");
+        api_log!("ShaderModule::drop {:?}", self as *const _);
         resource_log!("Destroy raw {}", self.error_ident());
         #[cfg(feature = "trace")]
         if let Some(t) = self.device.trace.lock().as_mut() {
