@@ -2301,6 +2301,8 @@ impl Device {
         texture: &Arc<Texture>,
         desc: &resource::TextureViewDescriptor,
     ) -> (Arc<TextureView>, Option<resource::CreateTextureViewError>) {
+        profiling::scope!("Texture::create_view");
+
         let (view, error) = match self.create_texture_view_inner(texture, desc) {
             Ok(view) => (view, None),
             Err(e) => (TextureView::invalid(self, texture, desc), Some(e)),
@@ -2334,6 +2336,8 @@ impl Device {
         Arc<ExternalTexture>,
         Option<resource::CreateExternalTextureError>,
     ) {
+        profiling::scope!("Device::create_external_texture");
+
         let (external_texture, error) = match self.create_external_texture_inner(desc, planes) {
             Ok(external_texture) => (external_texture, None),
             Err(e) => (ExternalTexture::invalid(Arc::clone(self), desc), Some(e)),

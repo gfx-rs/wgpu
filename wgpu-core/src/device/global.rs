@@ -334,8 +334,6 @@ impl Global {
         desc: &resource::TextureViewDescriptor,
         id_in: Option<id::TextureViewId>,
     ) -> (id::TextureViewId, Option<resource::CreateTextureViewError>) {
-        profiling::scope!("Texture::create_view");
-
         let hub = &self.hub;
 
         let fid = hub.texture_views.prepare(id_in);
@@ -366,8 +364,6 @@ impl Global {
         id::ExternalTextureId,
         Option<resource::CreateExternalTextureError>,
     ) {
-        profiling::scope!("Device::create_external_texture");
-
         let hub = &self.hub;
 
         let fid = hub.external_textures.prepare(id_in);
@@ -387,9 +383,6 @@ impl Global {
     }
 
     pub fn external_texture_destroy(&self, external_texture_id: id::ExternalTextureId) {
-        profiling::scope!("ExternalTexture::destroy");
-        api_log!("ExternalTexture::destroy {external_texture_id:?}");
-
         let hub = &self.hub;
 
         let external_texture = hub.external_textures.get(external_texture_id);
@@ -398,9 +391,6 @@ impl Global {
     }
 
     pub fn external_texture_drop(&self, external_texture_id: id::ExternalTextureId) {
-        profiling::scope!("ExternalTexture::drop");
-        api_log!("ExternalTexture::drop {external_texture_id:?}");
-
         let hub = &self.hub;
 
         let _external_texture = hub.external_textures.remove(external_texture_id);

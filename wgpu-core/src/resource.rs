@@ -2298,7 +2298,11 @@ pub struct ExternalTexture {
 }
 
 impl Drop for ExternalTexture {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("ExternalTexture::drop");
+        api_log!("ExternalTexture::drop {:?}", self as *const _);
+
         resource_log!("Destroy raw {}", self.error_ident());
         #[cfg(feature = "trace")]
         if let Some(t) = self.device.trace.lock().as_mut() {
@@ -2318,6 +2322,9 @@ impl ExternalTexture {
     }
 
     pub fn destroy(self: &Arc<Self>) {
+        profiling::scope!("ExternalTexture::destroy");
+        api_log!("ExternalTexture::destroy {:?}", Arc::as_ptr(self));
+
         #[cfg(feature = "trace")]
         if let Some(trace) = self.device.trace.lock().as_mut() {
             use crate::device::trace::IntoTrace as _;
