@@ -5594,6 +5594,7 @@ impl Device {
         Arc<pipeline::PipelineCache>,
         Option<pipeline::CreatePipelineCacheError>,
     ) {
+        profiling::scope!("Device::create_pipeline_cache");
         let (cache, error) = match unsafe { self.create_pipeline_cache_inner(desc) } {
             Ok(cache) => (cache, None),
             Err(e) => (

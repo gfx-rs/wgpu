@@ -1063,8 +1063,6 @@ impl Global {
         id::PipelineCacheId,
         Option<pipeline::CreatePipelineCacheError>,
     ) {
-        profiling::scope!("Device::create_pipeline_cache");
-
         let hub = &self.hub;
 
         let fid = hub.pipeline_caches.prepare(id_in);
