@@ -2164,21 +2164,19 @@ impl RenderPass {
 
         let base = self.base.take();
 
-        if let Err(RenderPassError {
-            inner:
-                RenderPassErrorInner::EncoderState(
-                    err @ (EncoderStateError::Locked | EncoderStateError::Ended),
-                ),
-            scope: _,
-        }) = base
-        {
-            // Most encoding errors are detected and raised within `finish()`.
-            //
-            // However, we raise a validation error here if the pass was opened
-            // within another pass, or on a finished encoder. The latter is
-            // particularly important, because in that case reporting errors via
-            // `CommandEncoder::finish` is not possible.
-            return Err(err.clone());
+        if let Err(RenderPassError { inner, scope: _ }) = &base {
+            if let RenderPassErrorInner::EncoderState(
+                err @ (EncoderStateError::Locked | EncoderStateError::Ended),
+            ) = inner.as_ref()
+            {
+                // Most encoding errors are detected and raised within `finish()`.
+                //
+                // However, we raise a validation error here if the pass was opened
+                // within another pass, or on a finished encoder. The latter is
+                // particularly important, because in that case reporting errors via
+                // `CommandEncoder::finish` is not possible.
+                return Err(err.clone());
+            }
         }
 
         cmd_buf_data.push_with(|| -> Result<_, RenderPassError> {
