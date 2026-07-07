@@ -275,7 +275,10 @@ crate::impl_parent_device!(Queue);
 crate::impl_storage_item!(Queue);
 
 impl Drop for Queue {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("Queue::drop");
+        api_log!("Queue::drop {:?}", self as *const _);
         resource_log!("Drop {}", self.error_ident());
 
         // On Vulkan, pending presents are not tracked by fences.

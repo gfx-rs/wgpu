@@ -1238,9 +1238,6 @@ impl Global {
     }
 
     pub fn queue_drop(&self, queue_id: QueueId) {
-        profiling::scope!("Queue::drop");
-        api_log!("Queue::drop {queue_id:?}");
-
         self.hub.queues.remove(queue_id);
     }
 
