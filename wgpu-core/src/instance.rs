@@ -6,7 +6,9 @@ use thiserror::Error;
 
 use crate::{
     api_log, api_log_debug,
-    device::{queue::Queue, resource::Device, DeviceDescriptor, DeviceError},
+    device::{
+        queue::Queue, resource::Device, DeviceDescriptor, DeviceError, UserClosures, WaitIdleError,
+    },
     global::Global,
     id::{markers, AdapterId, DeviceId, QueueId, SurfaceId},
     limits::{self, check_limits, FailedLimit},
@@ -15,6 +17,7 @@ use crate::{
     resource::ResourceType,
     resource_log,
     timestamp_normalization::TimestampNormalizerInitError,
+    weak_vec::WeakVec,
     DOWNLEVEL_WARNING_MESSAGE,
 };
 
@@ -29,6 +32,61 @@ fn downlevel_default_limits_less_than_default_limits() {
         res.is_empty(),
         "Downlevel limits are greater than default limits",
     )
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct InstanceDevices(Arc<Mutex<WeakVec<Device>>>);
+
+impl Default for InstanceDevices {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InstanceDevices {
+    pub(crate) fn new() -> Self {
+        Self(Arc::new(Mutex::new(rank::HUB_OTHER, WeakVec::new())))
+    }
+
+    pub(crate) fn push(&self, device: &Arc<Device>) {
+        self.0.lock().push(Arc::downgrade(device));
+    }
+
+    /// Poll all devices stored in this instance.
+    ///
+    /// If `force_wait` is true, block until all buffer mappings are done.
+    ///
+    /// Return `all_queue_empty` indicating whether there are more queue
+    /// submissions still in flight.
+    fn poll_all_devices(
+        &self,
+        force_wait: bool,
+        closure_list: &mut UserClosures,
+    ) -> Result<bool, WaitIdleError> {
+        let mut all_queue_empty = true;
+        {
+            let device_guard = self.0.lock();
+
+            for device in device_guard.iter().filter_map(|device| device.upgrade()) {
+                let poll_type = if force_wait {
+                    // TODO(#8286): Should expose timeout to poll_all.
+                    wgt::PollType::wait_indefinitely()
+                } else {
+                    wgt::PollType::Poll
+                };
+
+                let (closures, result) = device.poll_and_return_closures(poll_type);
+
+                let is_queue_empty = matches!(result, Ok(wgt::PollStatus::QueueEmpty));
+
+                all_queue_empty &= is_queue_empty;
+
+                closure_list.extend(closures);
+            }
+        }
+
+        Ok(all_queue_empty)
+    }
 }
 
 #[derive(Default)]
@@ -60,6 +118,9 @@ pub struct Instance {
     /// When used with `winit`, callers are expected to pass its `OwnedDisplayHandle` (created from
     /// the `EventLoop`) here.
     display: Option<Box<dyn wgt::WgpuHasDisplayHandle>>,
+
+    /// Keeps track of all devices created from this instance, so that they can be polled.
+    devices: InstanceDevices,
 }
 
 impl Instance {
@@ -78,6 +139,7 @@ impl Instance {
             // try_add_hal(). Remove it from the mutable descriptor instead, while try_add_hal()
             // borrows the handle from `this.display` instead.
             display: instance_desc.display.take(),
+            devices: InstanceDevices::new(),
         };
 
         #[cfg(all(vulkan, not(target_os = "netbsd")))]
@@ -156,6 +218,7 @@ impl Instance {
             supported_backends: A::VARIANT.into(),
             flags: InstanceFlags::default(),
             display: None, // TODO: Extract display from HAL instance if available?
+            devices: InstanceDevices::new(),
         }
     }
 
@@ -468,7 +531,7 @@ impl Instance {
                         }
                     })
                     .map(|raw| {
-                        let adapter = Adapter::new(raw);
+                        let adapter = Adapter::new(raw, self.devices.clone());
                         api_log_debug!("Adapter {:?}", adapter.raw.info);
                         adapter
                     }),
@@ -618,7 +681,7 @@ impl Instance {
 
         if let Some(adapter) = adapters.into_iter().next() {
             api_log_debug!("Request adapter result {:?}", adapter.info);
-            let adapter = Adapter::new(adapter);
+            let adapter = Adapter::new(adapter, self.devices.clone());
             Ok(adapter)
         } else {
             Err(wgt::RequestAdapterError::NotFound {
@@ -673,10 +736,26 @@ impl Instance {
     ) -> Arc<Adapter> {
         profiling::scope!("Instance::create_adapter_from_hal");
 
-        let adapter = Adapter::new(hal_adapter);
+        let adapter = Adapter::new(hal_adapter, self.devices.clone());
 
         resource_log!("Created Adapter {:?}", Arc::as_ptr(&adapter));
         adapter
+    }
+
+    /// Poll all devices on all backends.
+    ///
+    /// This is the implementation of `wgpu::Instance::poll_all`.
+    ///
+    /// Return `all_queue_empty` indicating whether there are more queue
+    /// submissions still in flight.
+    pub fn poll_all_devices(&self, force_wait: bool) -> Result<bool, WaitIdleError> {
+        api_log!("poll_all_devices");
+        let mut closures = UserClosures::default();
+        let all_queue_empty = self.devices.poll_all_devices(force_wait, &mut closures)?;
+
+        closures.fire();
+
+        Ok(all_queue_empty)
     }
 }
 
@@ -797,11 +876,12 @@ impl Drop for Surface {
 
 pub struct Adapter {
     pub(crate) raw: hal::DynExposedAdapter,
+    pub(crate) devices: InstanceDevices,
 }
 
 impl Adapter {
-    pub fn new(raw: hal::DynExposedAdapter) -> Arc<Self> {
-        Arc::new(Self { raw })
+    pub(crate) fn new(raw: hal::DynExposedAdapter, devices: InstanceDevices) -> Arc<Self> {
+        Arc::new(Self { raw, devices })
     }
 
     /// Returns the backend this adapter is using.
@@ -955,6 +1035,8 @@ impl Adapter {
 
         resource_log!("Created Device {:?}", Arc::as_ptr(&device));
         resource_log!("Created Queue {:?}", Arc::as_ptr(&queue));
+
+        self.devices.push(&device);
 
         Ok((device, queue))
     }

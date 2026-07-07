@@ -29,8 +29,6 @@ use crate::{
 
 use wgt::{BufferAddress, TextureFormat};
 
-use super::UserClosures;
-
 impl Global {
     pub fn adapter_is_surface_supported(
         &self,
@@ -1106,45 +1104,6 @@ impl Global {
         device.poll(poll_type)
     }
 
-    /// Poll all devices belonging to the specified backend.
-    ///
-    /// If `force_wait` is true, block until all buffer mappings are done.
-    ///
-    /// Return `all_queue_empty` indicating whether there are more queue
-    /// submissions still in flight.
-    fn poll_all_devices_of_api(
-        &self,
-        force_wait: bool,
-        closure_list: &mut UserClosures,
-    ) -> Result<bool, WaitIdleError> {
-        profiling::scope!("poll_device");
-
-        let hub = &self.hub;
-        let mut all_queue_empty = true;
-        {
-            let device_guard = hub.devices.read();
-
-            for (_id, device) in device_guard.iter() {
-                let poll_type = if force_wait {
-                    // TODO(#8286): Should expose timeout to poll_all.
-                    wgt::PollType::wait_indefinitely()
-                } else {
-                    wgt::PollType::Poll
-                };
-
-                let (closures, result) = device.poll_and_return_closures(poll_type);
-
-                let is_queue_empty = matches!(result, Ok(wgt::PollStatus::QueueEmpty));
-
-                all_queue_empty &= is_queue_empty;
-
-                closure_list.extend(closures);
-            }
-        }
-
-        Ok(all_queue_empty)
-    }
-
     /// Poll all devices on all backends.
     ///
     /// This is the implementation of `wgpu::Instance::poll_all`.
@@ -1152,13 +1111,7 @@ impl Global {
     /// Return `all_queue_empty` indicating whether there are more queue
     /// submissions still in flight.
     pub fn poll_all_devices(&self, force_wait: bool) -> Result<bool, WaitIdleError> {
-        api_log!("poll_all_devices");
-        let mut closures = UserClosures::default();
-        let all_queue_empty = self.poll_all_devices_of_api(force_wait, &mut closures)?;
-
-        closures.fire();
-
-        Ok(all_queue_empty)
+        self.instance.poll_all_devices(force_wait)
     }
 
     /// # Safety

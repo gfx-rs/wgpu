@@ -182,7 +182,7 @@ pub struct UserClosures {
 }
 
 impl UserClosures {
-    fn extend(&mut self, other: Self) {
+    pub(crate) fn extend(&mut self, other: Self) {
         self.mappings.extend(other.mappings);
         self.blas_compact_ready.extend(other.blas_compact_ready);
         self.submissions.extend(other.submissions);
@@ -190,7 +190,7 @@ impl UserClosures {
             .extend(other.device_lost_invocations);
     }
 
-    fn fire(self) {
+    pub(crate) fn fire(self) {
         // Note: this logic is specifically moved out of `handle_mapping()` in order to
         // have nothing locked by the time we execute users callback code.
 
