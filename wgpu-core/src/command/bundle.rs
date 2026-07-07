@@ -164,10 +164,9 @@ pub struct RenderBundleEncoderDescriptor<'a> {
 }
 
 #[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct RenderBundleEncoder {
     pub(crate) base: BasePass<RenderCommand<IdReferences>, Infallible>,
-    parent_id: id::DeviceId,
+    device: Arc<Device>,
     /// State of the render bundle encoder. Encoded to be compatible with pass macros.
     ///
     /// If this is `Some`, then the pass is in WebGPU's "open" state. If it is
@@ -179,9 +178,7 @@ pub struct RenderBundleEncoder {
     pub(crate) is_stencil_read_only: bool,
 
     // Resource binding dedupe state.
-    #[cfg_attr(feature = "serde", serde(skip))]
     current_bind_groups: BindGroupStateChange,
-    #[cfg_attr(feature = "serde", serde(skip))]
     current_pipeline: StateChange<id::RenderPipelineId>,
 }
 
@@ -190,20 +187,15 @@ impl_storage_item!(RenderBundleEncoder);
 
 /// Validate a render bundle descriptor.
 ///
-/// The underlying `device` is required to fully validate the descriptor.
-/// If omitted, some validation will be skipped.
-///
 /// Returns a tuple (is_depth_read_only, is_stencil_read_only).
 fn validate_render_bundle_encoder_descriptor(
     desc: &RenderBundleEncoderDescriptor,
-    device: Option<&Arc<Device>>,
+    device: &Arc<Device>,
 ) -> Result<(bool, bool), CreateRenderBundleError> {
     let mut have_attachment = false;
 
-    let max_color_attachments = device.map_or(hal::MAX_COLOR_ATTACHMENTS as u32, |device| {
-        assert!(device.limits.max_color_attachments <= hal::MAX_COLOR_ATTACHMENTS as u32);
-        device.limits.max_color_attachments
-    });
+    let max_color_attachments = device.limits.max_color_attachments;
+    assert!(max_color_attachments <= hal::MAX_COLOR_ATTACHMENTS as u32);
     check_color_attachment_count(desc.color_formats.len(), max_color_attachments)?;
 
     for &format in desc.color_formats.iter().flatten() {
@@ -211,23 +203,19 @@ fn validate_render_bundle_encoder_descriptor(
         if !format.has_color_aspect() {
             return Err(CreateRenderBundleError::FormatNotColor(format));
         }
-        if let Some(device) = device {
-            let format_features = device.describe_format_features(format)?;
-            if !format_features
-                .allowed_usages
-                .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
-            {
-                return Err(CreateRenderBundleError::FormatNotRenderable(format));
-            }
+        let format_features = device.describe_format_features(format)?;
+        if !format_features
+            .allowed_usages
+            .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+        {
+            return Err(CreateRenderBundleError::FormatNotRenderable(format));
         }
     }
 
-    if let Some(device) = device {
-        validate_color_attachment_bytes_per_sample(
-            desc.color_formats.iter().flatten().copied(),
-            device.limits.max_color_attachment_bytes_per_sample,
-        )?;
-    }
+    validate_color_attachment_bytes_per_sample(
+        desc.color_formats.iter().flatten().copied(),
+        device.limits.max_color_attachment_bytes_per_sample,
+    )?;
 
     let (is_depth_read_only, is_stencil_read_only) = match desc.depth_stencil {
         Some(ds) => {
@@ -258,22 +246,17 @@ fn validate_render_bundle_encoder_descriptor(
 
 impl RenderBundleEncoder {
     /// Create a new `RenderBundleEncoder`.
-    ///
-    /// The underlying `device` is required to fully validate the descriptor.
-    /// If the device is not available, some validation will be deferred
-    /// until `finish()`.
     pub fn new(
+        device: &Arc<Device>,
         desc: &RenderBundleEncoderDescriptor,
-        device: Option<&Arc<Device>>,
-        parent_id: id::DeviceId,
     ) -> Result<Self, CreateRenderBundleError> {
         let (is_depth_read_only, is_stencil_read_only) =
             validate_render_bundle_encoder_descriptor(desc, device)?;
 
         Ok(Self {
             base: BasePass::new(&desc.label),
+            device: Arc::clone(device),
             parent: Some(()),
-            parent_id,
             context: RenderPassContext {
                 attachments: AttachmentData {
                     colors: desc.color_formats.iter().cloned().collect(),
@@ -291,11 +274,11 @@ impl RenderBundleEncoder {
         })
     }
 
-    pub fn dummy(parent_id: id::DeviceId) -> Self {
+    pub fn dummy(device: &Arc<Device>) -> Self {
         Self {
             base: BasePass::new(&None),
             parent: None,
-            parent_id,
+            device: Arc::clone(device),
             context: RenderPassContext::default(),
             is_depth_read_only: false,
             is_stencil_read_only: false,
@@ -303,10 +286,6 @@ impl RenderBundleEncoder {
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
         }
-    }
-
-    pub fn parent(&self) -> id::DeviceId {
-        self.parent_id
     }
 
     pub fn label(&self) -> Option<&str> {
@@ -326,7 +305,6 @@ impl RenderBundleEncoder {
     pub fn finish(
         &mut self,
         desc: &RenderBundleDescriptor,
-        device: &Arc<Device>,
         hub: &Hub,
     ) -> (Arc<RenderBundle>, Option<RenderBundleError>) {
         #[cfg(feature = "trace")]
@@ -337,13 +315,16 @@ impl RenderBundleEncoder {
             self.is_stencil_read_only,
         );
 
-        let (render_bundle, error) = match self.finish_inner(desc, device, hub) {
+        let (render_bundle, error) = match self.finish_inner(desc, hub) {
             Ok(render_bundle) => (render_bundle, None),
-            Err(e) => (RenderBundle::invalid(Arc::clone(device), desc), Some(e)),
+            Err(e) => (
+                RenderBundle::invalid(Arc::clone(&self.device), desc),
+                Some(e),
+            ),
         };
 
         #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *device.trace.lock() {
+        if let Some(ref mut trace) = *self.device.trace.lock() {
             use crate::device::trace::{Action, IntoTrace};
             trace.add(Action::CreateRenderBundle {
                 id: render_bundle.to_trace(),
@@ -373,7 +354,6 @@ impl RenderBundleEncoder {
     pub(crate) fn finish_inner(
         &mut self,
         desc: &RenderBundleDescriptor,
-        device: &Arc<Device>,
         hub: &Hub,
     ) -> Result<Arc<RenderBundle>, RenderBundleError> {
         let scope = PassErrorScope::Bundle;
@@ -383,28 +363,7 @@ impl RenderBundleEncoder {
             .ok_or(RenderBundleErrorInner::Ended)
             .map_pass_err(scope)?;
 
-        device.check_is_valid().map_pass_err(scope)?;
-
-        {
-            // Reconstruct and revalidate the encoder descriptor, because
-            // `RenderBundleEncoder` is serializable and could have been tampered.
-            let encoder_desc = RenderBundleEncoderDescriptor {
-                label: self.base.label.as_ref().map(Cow::from),
-                color_formats: Cow::Borrowed(&self.context.attachments.colors),
-                depth_stencil: self.context.attachments.depth_stencil.map(|format| {
-                    wgt::RenderBundleDepthStencil {
-                        format,
-                        depth_read_only: self.is_depth_read_only,
-                        stencil_read_only: self.is_stencil_read_only,
-                    }
-                }),
-                sample_count: self.context.sample_count,
-                multiview: self.context.multiview_mask,
-            };
-
-            validate_render_bundle_encoder_descriptor(&encoder_desc, Some(device))
-                .map_pass_err(scope)?;
-        };
+        self.device.check_is_valid().map_pass_err(scope)?;
 
         let buffer_guard = hub.buffers.read();
         let bind_group_guard = hub.bind_groups.read();
@@ -416,7 +375,7 @@ impl RenderBundleEncoder {
             vertex: Default::default(),
             index: None,
             flat_dynamic_offsets: Vec::new(),
-            device: device.clone(),
+            device: Arc::clone(&self.device),
             commands: Vec::new(),
             buffer_memory_init_actions: Vec::new(),
             texture_memory_init_actions: Vec::new(),
