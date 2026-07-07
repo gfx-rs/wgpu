@@ -97,7 +97,7 @@ fn main() {
     log::info!("Using '{}'", info.name);
 
     let (device, queue) = adapter
-        .create_device_and_queue(&device_desc, instance_flags)
+        .request_device(&device_desc, instance_flags)
         .unwrap();
 
     let mut player = Player::default();

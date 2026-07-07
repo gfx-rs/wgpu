@@ -428,7 +428,7 @@ impl Instance {
         &self,
         backends: Backends,
         apply_limit_buckets: bool,
-    ) -> Vec<Adapter> {
+    ) -> Vec<Arc<Adapter>> {
         profiling::scope!("Instance::enumerate_adapters");
         api_log!("Instance::enumerate_adapters");
 
@@ -481,7 +481,7 @@ impl Instance {
         &self,
         desc: &wgt::RequestAdapterOptions<&Surface>,
         backends: Backends,
-    ) -> Result<Adapter, wgt::RequestAdapterError> {
+    ) -> Result<Arc<Adapter>, wgt::RequestAdapterError> {
         profiling::scope!("Instance::request_adapter");
         api_log!("Instance::request_adapter");
 
@@ -653,6 +653,31 @@ impl Instance {
             .map(|&(backend, _)| Backends::from(backend))
             .collect()
     }
+
+    /// Create an adapter from a HAL adapter.
+    ///
+    /// The HAL adapter may be obtained e.g. by calling `enumerate_adapters` on
+    /// the HAL directly.
+    ///
+    /// If [limit bucketing][lt] is desired, [`crate::limits::apply_limit_buckets`]
+    /// should be called with the HAL adapter before calling this function.
+    ///
+    /// # Safety
+    ///
+    /// `hal_adapter` must be created from this global internal instance handle.
+    ///
+    /// [lt]: crate::limits#Limit-bucketing
+    pub unsafe fn create_adapter_from_hal(
+        &self,
+        hal_adapter: hal::DynExposedAdapter,
+    ) -> Arc<Adapter> {
+        profiling::scope!("Instance::create_adapter_from_hal");
+
+        let adapter = Adapter::new(hal_adapter);
+
+        resource_log!("Created Adapter {:?}", Arc::as_ptr(&adapter));
+        adapter
+    }
 }
 
 pub struct Surface {
@@ -755,7 +780,11 @@ impl Surface {
 }
 
 impl Drop for Surface {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("Surface::drop");
+
+        api_log!("Surface::drop {:?}", self as *const _);
         if let Some(present) = self.presentation.lock().take() {
             for (&backend, surface) in &self.surface_per_backend {
                 if backend == present.device.backend() {
@@ -771,8 +800,8 @@ pub struct Adapter {
 }
 
 impl Adapter {
-    pub fn new(raw: hal::DynExposedAdapter) -> Self {
-        Self { raw }
+    pub fn new(raw: hal::DynExposedAdapter) -> Arc<Self> {
+        Arc::new(Self { raw })
     }
 
     /// Returns the backend this adapter is using.
@@ -902,13 +931,18 @@ impl Adapter {
         }
     }
 
-    fn create_device_and_queue_from_hal(
+    /// # Safety
+    ///
+    /// - `hal_device` must be created from this adapter.
+    /// - `desc` must be a subset of `hal_device` features and limits.
+    pub unsafe fn create_device_and_queue_from_hal(
         self: &Arc<Self>,
         hal_device: hal::DynOpenDevice,
         desc: &DeviceDescriptor,
         instance_flags: InstanceFlags,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
-        api_log!("Adapter::create_device");
+        profiling::scope!("Adapter::create_device_and_queue_from_hal");
+        api_log!("Adapter::create_device_and_queue_from_hal");
 
         let device = Device::new(hal_device.device, self, desc, instance_flags)?;
         let device = Arc::new(device);
@@ -919,14 +953,19 @@ impl Adapter {
         device.set_queue(&queue);
         device.late_init_resources_with_queue()?;
 
+        resource_log!("Created Device {:?}", Arc::as_ptr(&device));
+        resource_log!("Created Queue {:?}", Arc::as_ptr(&queue));
+
         Ok((device, queue))
     }
 
-    pub fn create_device_and_queue(
+    pub fn request_device(
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
         instance_flags: InstanceFlags,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
+        profiling::scope!("Adapter::request_device");
+        api_log!("Adapter::request_device");
         let mut desc = desc.clone();
         filter_features_and_limits(
             instance_flags,
@@ -987,7 +1026,15 @@ impl Adapter {
         }
         .map_err(DeviceError::from_hal)?;
 
-        self.create_device_and_queue_from_hal(open, &desc, instance_flags)
+        unsafe { self.create_device_and_queue_from_hal(open, &desc, instance_flags) }
+    }
+}
+
+impl Drop for Adapter {
+    #[allow(trivial_casts)]
+    fn drop(&mut self) {
+        profiling::scope!("Adapter::drop");
+        api_log!("Adapter::drop {:?}", self as *const _);
     }
 }
 
@@ -1169,10 +1216,6 @@ impl Global {
     }
 
     pub fn surface_drop(&self, id: SurfaceId) {
-        profiling::scope!("Surface::drop");
-
-        api_log!("Surface::drop {id:?}");
-
         self.surfaces.remove(id);
     }
 
@@ -1186,7 +1229,7 @@ impl Global {
             .enumerate_adapters(backends, apply_limit_buckets);
         adapters
             .into_iter()
-            .map(|adapter| self.hub.adapters.prepare(None).assign(Arc::new(adapter)))
+            .map(|adapter| self.hub.adapters.prepare(None).assign(adapter))
             .collect()
     }
 
@@ -1204,7 +1247,7 @@ impl Global {
             apply_limit_buckets: desc.apply_limit_buckets,
         };
         let adapter = self.instance.request_adapter(&desc, backends)?;
-        let id = self.hub.adapters.prepare(id_in).assign(Arc::new(adapter));
+        let id = self.hub.adapters.prepare(id_in).assign(adapter);
         Ok(id)
     }
 
@@ -1226,13 +1269,8 @@ impl Global {
         hal_adapter: hal::DynExposedAdapter,
         input: Option<AdapterId>,
     ) -> AdapterId {
-        profiling::scope!("Instance::create_adapter_from_hal");
-
         let fid = self.hub.adapters.prepare(input);
-        let id = fid.assign(Arc::new(Adapter::new(hal_adapter)));
-
-        resource_log!("Created Adapter {:?}", id);
-        id
+        fid.assign(unsafe { self.instance.create_adapter_from_hal(hal_adapter) })
     }
 
     pub fn adapter_get_info(&self, adapter_id: AdapterId) -> wgt::AdapterInfo {
@@ -1284,9 +1322,6 @@ impl Global {
     }
 
     pub fn adapter_drop(&self, adapter_id: AdapterId) {
-        profiling::scope!("Adapter::drop");
-        api_log!("Adapter::drop {adapter_id:?}");
-
         self.hub.adapters.remove(adapter_id);
     }
 }
@@ -1299,14 +1334,11 @@ impl Global {
         device_id_in: Option<DeviceId>,
         queue_id_in: Option<QueueId>,
     ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
-        profiling::scope!("Adapter::request_device");
-        api_log!("Adapter::request_device");
-
         let device_fid = self.hub.devices.prepare(device_id_in);
         let queue_fid = self.hub.queues.prepare(queue_id_in);
 
         let adapter = self.hub.adapters.get(adapter_id);
-        let (device, queue) = adapter.create_device_and_queue(desc, self.instance.flags)?;
+        let (device, queue) = adapter.request_device(desc, self.instance.flags)?;
 
         let device_id = device_fid.assign(device);
         resource_log!("Created Device {:?}", device_id);
@@ -1329,20 +1361,17 @@ impl Global {
         device_id_in: Option<DeviceId>,
         queue_id_in: Option<QueueId>,
     ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
-        profiling::scope!("Global::create_device_from_hal");
-
         let devices_fid = self.hub.devices.prepare(device_id_in);
         let queues_fid = self.hub.queues.prepare(queue_id_in);
 
         let adapter = self.hub.adapters.get(adapter_id);
-        let (device, queue) =
-            adapter.create_device_and_queue_from_hal(hal_device, desc, self.instance.flags)?;
+        let (device, queue) = unsafe {
+            adapter.create_device_and_queue_from_hal(hal_device, desc, self.instance.flags)
+        }?;
 
         let device_id = devices_fid.assign(device);
-        resource_log!("Created Device {:?}", device_id);
 
         let queue_id = queues_fid.assign(queue);
-        resource_log!("Created Queue {:?}", queue_id);
 
         Ok((device_id, queue_id))
     }
