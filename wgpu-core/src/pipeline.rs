@@ -350,7 +350,10 @@ pub struct ComputePipeline {
 }
 
 impl Drop for ComputePipeline {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("ComputePipeline::drop");
+        api_log!("ComputePipeline::drop {:?}", self as *const _);
         resource_log!("Destroy raw {}", self.error_ident());
         #[cfg(feature = "trace")]
         {

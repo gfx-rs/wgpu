@@ -4446,6 +4446,7 @@ impl Device {
         Arc<pipeline::ComputePipeline>,
         Option<pipeline::CreateComputePipelineError>,
     ) {
+        profiling::scope!("Device::create_compute_pipeline");
         let (compute_pipeline, error) = match self.create_compute_pipeline_inner(desc.clone()) {
             Ok(compute_pipeline) => (compute_pipeline, None),
             Err(error) => (
@@ -4462,6 +4463,10 @@ impl Device {
                 desc: desc.to_trace(),
             });
         }
+        api_log!(
+            "Device::create_compute_pipeline -> {:?}",
+            Arc::as_ptr(&compute_pipeline)
+        );
         (compute_pipeline, error)
     }
 

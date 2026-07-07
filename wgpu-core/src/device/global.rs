@@ -988,55 +988,37 @@ impl Global {
         id::ComputePipelineId,
         Option<pipeline::CreateComputePipelineError>,
     ) {
-        profiling::scope!("Device::create_compute_pipeline");
-
         let hub = &self.hub;
 
         let fid = hub.compute_pipelines.prepare(id_in);
 
         let device = self.hub.devices.get(device_id);
 
-        // eventually there will be no error handling here only id to object mapping
-        let error = 'error: {
-            // until then we also need this
-            if let Err(e) = device.check_is_valid() {
-                break 'error e.into();
-            }
+        let layout = desc.layout.map(|layout| hub.pipeline_layouts.get(layout));
 
-            let layout = desc.layout.map(|layout| hub.pipeline_layouts.get(layout));
+        let cache = desc.cache.map(|cache| hub.pipeline_caches.get(cache));
 
-            let cache = desc.cache.map(|cache| hub.pipeline_caches.get(cache));
+        let module = hub.shader_modules.get(desc.stage.module);
 
-            let module = hub.shader_modules.get(desc.stage.module);
-
-            let stage = ResolvedProgrammableStageDescriptor {
-                module,
-                entry_point: desc.stage.entry_point.clone(),
-                constants: desc.stage.constants.clone(),
-                zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
-            };
-
-            let desc = ResolvedComputePipelineDescriptor {
-                label: desc.label.clone(),
-                layout,
-                stage,
-                cache,
-            };
-
-            let (pipeline, error) = device.create_compute_pipeline(desc);
-
-            let id = fid.assign(pipeline);
-            api_log!("Device::create_compute_pipeline -> {id:?}");
-
-            return (id, error);
+        let stage = ResolvedProgrammableStageDescriptor {
+            module,
+            entry_point: desc.stage.entry_point.clone(),
+            constants: desc.stage.constants.clone(),
+            zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
         };
 
-        let id = fid.assign(pipeline::ComputePipeline::invalid(
-            device,
-            desc.label.to_string(),
-        ));
+        let desc = ResolvedComputePipelineDescriptor {
+            label: desc.label.clone(),
+            layout,
+            stage,
+            cache,
+        };
 
-        (id, Some(error))
+        let (pipeline, error) = device.create_compute_pipeline(desc);
+
+        let id = fid.assign(pipeline);
+
+        (id, error)
     }
 
     /// Get an ID of one of the bind group layouts. The ID adds a refcount,
@@ -1064,9 +1046,6 @@ impl Global {
     }
 
     pub fn compute_pipeline_drop(&self, compute_pipeline_id: id::ComputePipelineId) {
-        profiling::scope!("ComputePipeline::drop");
-        api_log!("ComputePipeline::drop {compute_pipeline_id:?}");
-
         let hub = &self.hub;
 
         let _pipeline = hub.compute_pipelines.remove(compute_pipeline_id);
