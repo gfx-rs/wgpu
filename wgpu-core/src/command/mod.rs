@@ -1315,10 +1315,19 @@ impl CommandEncoder {
         Ok(())
     }
 
-    fn finish(
+    /// Finishes a command encoder, creating a command buffer and returning errors that were
+    /// deferred until now.
+    ///
+    /// The returned `String` is the label of the command encoder, supplied so that `wgpu` can
+    /// include the label when printing deferred errors without having its own copy of the label.
+    /// This is a kludge and should be replaced if we think of a better solution to propagating
+    /// labels.
+    pub fn finish(
         self: &Arc<Self>,
         desc: &wgt::CommandBufferDescriptor<Label>,
-    ) -> (Arc<CommandBuffer>, Option<CommandEncoderError>) {
+    ) -> (Arc<CommandBuffer>, Option<(String, CommandEncoderError)>) {
+        profiling::scope!("CommandEncoder::finish");
+
         let status = self.data.lock().finish();
 
         let res = match status {
@@ -1374,7 +1383,7 @@ impl CommandEncoder {
             data: Mutex::new(rank::COMMAND_BUFFER_DATA, data),
         });
 
-        (cmd_buf, error)
+        (cmd_buf, error.map(|e| (self.label.clone(), e)))
     }
 }
 
@@ -1392,7 +1401,7 @@ impl CommandBuffer {
         drop(cmd_enc_status);
 
         let (cmd_buf, error) = encoder.finish(&wgt::CommandBufferDescriptor { label: None });
-        if let Some(err) = error {
+        if let Some((_, err)) = error {
             panic!("CommandEncoder::finish failed: {err}");
         }
 
@@ -1762,6 +1771,40 @@ impl WebGpuError for TimestampWritesError {
     }
 }
 
+impl CommandEncoder {
+    pub fn push_debug_group(self: &Arc<Self>, label: &str) -> Result<(), EncoderStateError> {
+        profiling::scope!("CommandEncoder::push_debug_group");
+        api_log!("CommandEncoder::push_debug_group {label}");
+
+        let mut cmd_buf_data = self.data.lock();
+
+        cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
+            Ok(ArcCommand::PushDebugGroup(label.to_owned()))
+        })
+    }
+
+    pub fn insert_debug_marker(self: &Arc<Self>, label: &str) -> Result<(), EncoderStateError> {
+        profiling::scope!("CommandEncoder::insert_debug_marker");
+        api_log!("CommandEncoder::insert_debug_marker {label}");
+
+        let mut cmd_buf_data = self.data.lock();
+
+        cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
+            Ok(ArcCommand::InsertDebugMarker(label.to_owned()))
+        })
+    }
+
+    pub fn pop_debug_group(self: &Arc<Self>) -> Result<(), EncoderStateError> {
+        profiling::scope!("CommandEncoder::pop_debug_marker");
+        api_log!("CommandEncoder::pop_debug_group");
+
+        let mut cmd_buf_data = self.data.lock();
+
+        cmd_buf_data
+            .push_with(|| -> Result<_, CommandEncoderError> { Ok(ArcCommand::PopDebugGroup) })
+    }
+}
+
 impl Global {
     /// Finishes a command encoder, creating a command buffer and returning errors that were
     /// deferred until now.
@@ -1776,18 +1819,13 @@ impl Global {
         desc: &wgt::CommandBufferDescriptor<Label>,
         id_in: Option<id::CommandBufferId>,
     ) -> (id::CommandBufferId, Option<(String, CommandEncoderError)>) {
-        profiling::scope!("CommandEncoder::finish");
-
         let hub = &self.hub;
         let cmd_enc = hub.command_encoders.get(encoder_id);
 
         let (cmd_buf, opt_error) = cmd_enc.finish(desc);
         let cmd_buf_id = hub.command_buffers.prepare(id_in).assign(cmd_buf);
 
-        (
-            cmd_buf_id,
-            opt_error.map(|error| (cmd_enc.label.clone(), error)),
-        )
+        (cmd_buf_id, opt_error)
     }
 
     pub fn command_encoder_push_debug_group(
@@ -1795,17 +1833,10 @@ impl Global {
         encoder_id: id::CommandEncoderId,
         label: &str,
     ) -> Result<(), EncoderStateError> {
-        profiling::scope!("CommandEncoder::push_debug_group");
-        api_log!("CommandEncoder::push_debug_group {label}");
-
         let hub = &self.hub;
 
         let cmd_enc = hub.command_encoders.get(encoder_id);
-        let mut cmd_buf_data = cmd_enc.data.lock();
-
-        cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
-            Ok(ArcCommand::PushDebugGroup(label.to_owned()))
-        })
+        cmd_enc.push_debug_group(label)
     }
 
     pub fn command_encoder_insert_debug_marker(
@@ -1813,33 +1844,20 @@ impl Global {
         encoder_id: id::CommandEncoderId,
         label: &str,
     ) -> Result<(), EncoderStateError> {
-        profiling::scope!("CommandEncoder::insert_debug_marker");
-        api_log!("CommandEncoder::insert_debug_marker {label}");
-
         let hub = &self.hub;
 
         let cmd_enc = hub.command_encoders.get(encoder_id);
-        let mut cmd_buf_data = cmd_enc.data.lock();
-
-        cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
-            Ok(ArcCommand::InsertDebugMarker(label.to_owned()))
-        })
+        cmd_enc.insert_debug_marker(label)
     }
 
     pub fn command_encoder_pop_debug_group(
         &self,
         encoder_id: id::CommandEncoderId,
     ) -> Result<(), EncoderStateError> {
-        profiling::scope!("CommandEncoder::pop_debug_marker");
-        api_log!("CommandEncoder::pop_debug_group");
-
         let hub = &self.hub;
 
         let cmd_enc = hub.command_encoders.get(encoder_id);
-        let mut cmd_buf_data = cmd_enc.data.lock();
-
-        cmd_buf_data
-            .push_with(|| -> Result<_, CommandEncoderError> { Ok(ArcCommand::PopDebugGroup) })
+        cmd_enc.pop_debug_group()
     }
 }
 
