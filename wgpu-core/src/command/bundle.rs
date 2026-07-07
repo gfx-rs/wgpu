@@ -250,6 +250,7 @@ impl RenderBundleEncoder {
         device: &Arc<Device>,
         desc: &RenderBundleEncoderDescriptor,
     ) -> Result<Self, CreateRenderBundleError> {
+        device.check_is_valid()?;
         let (is_depth_read_only, is_stencil_read_only) =
             validate_render_bundle_encoder_descriptor(desc, device)?;
 
@@ -1230,6 +1231,8 @@ pub enum CreateRenderBundleError {
     InvalidSampleCount(u32),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+    #[error(transparent)]
+    Device(#[from] DeviceError),
 }
 
 impl WebGpuError for CreateRenderBundleError {
@@ -1242,6 +1245,7 @@ impl WebGpuError for CreateRenderBundleError {
             | Self::NoAttachment
             | Self::InvalidSampleCount(_) => ErrorType::Validation,
             Self::MissingFeatures(e) => e.webgpu_error_type(),
+            Self::Device(e) => e.webgpu_error_type(),
         }
     }
 }
