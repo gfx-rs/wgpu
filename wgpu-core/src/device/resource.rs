@@ -3021,6 +3021,8 @@ impl Device {
         self: &Arc<Self>,
         desc: &binding_model::BindGroupLayoutDescriptor,
     ) -> (Arc<BindGroupLayout>, Option<CreateBindGroupLayoutError>) {
+        profiling::scope!("Device::create_bind_group_layout");
+
         let (bgl, error) = match self.create_bind_group_layout_inner(desc) {
             Ok(layout) => (layout, None),
             Err(e) => (
@@ -3037,6 +3039,10 @@ impl Device {
                 desc.clone(),
             ));
         }
+        api_log!(
+            "Device::create_bind_group_layout -> {:?}",
+            Arc::as_ptr(&bgl)
+        );
         (bgl, error)
     }
 

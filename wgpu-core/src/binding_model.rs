@@ -820,7 +820,10 @@ pub struct BindGroupLayout {
 }
 
 impl Drop for BindGroupLayout {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("BindGroupLayout::drop");
+        api_log!("BindGroupLayout::drop {:?}", self as *const _);
         #[cfg(feature = "trace")]
         {
             let mut t = self.device.trace.lock();

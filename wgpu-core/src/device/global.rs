@@ -429,8 +429,6 @@ impl Global {
         id::BindGroupLayoutId,
         Option<binding_model::CreateBindGroupLayoutError>,
     ) {
-        profiling::scope!("Device::create_bind_group_layout");
-
         let hub = &self.hub;
         let fid = hub.bind_group_layouts.prepare(id_in);
 
@@ -440,15 +438,10 @@ impl Global {
 
         let id = fid.assign(bgl);
 
-        api_log!("Device::create_bind_group_layout -> {id:?}");
-
         (id, error)
     }
 
     pub fn bind_group_layout_drop(&self, bind_group_layout_id: id::BindGroupLayoutId) {
-        profiling::scope!("BindGroupLayout::drop");
-        api_log!("BindGroupLayout::drop {bind_group_layout_id:?}");
-
         let hub = &self.hub;
 
         let _layout = hub.bind_group_layouts.remove(bind_group_layout_id);
