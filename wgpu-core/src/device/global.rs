@@ -2,7 +2,7 @@ use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::{ptr::NonNull, sync::atomic::Ordering};
 
 #[cfg(feature = "trace")]
-use crate::device::trace::{self, IntoTrace};
+use crate::device::trace;
 use crate::{
     api_log,
     binding_model::{
@@ -1089,14 +1089,6 @@ impl Global {
     ) -> Option<present::ConfigureSurfaceError> {
         let device = self.hub.devices.get(device_id);
         let surface = self.surfaces.get(surface_id);
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *device.trace.lock() {
-            trace.add(trace::Action::ConfigureSurface(
-                surface.to_trace(),
-                config.clone(),
-            ));
-        }
 
         device.configure_surface(&surface, config)
     }

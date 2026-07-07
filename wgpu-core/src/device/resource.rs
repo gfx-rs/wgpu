@@ -5801,11 +5801,21 @@ impl Device {
 
     pub fn configure_surface(
         self: &Arc<Self>,
-        surface: &crate::instance::Surface,
+        surface: &Arc<crate::instance::Surface>,
         config: &wgt::SurfaceConfiguration<Vec<TextureFormat>>,
     ) -> Option<present::ConfigureSurfaceError> {
         use present::ConfigureSurfaceError as E;
         profiling::scope!("surface_configure");
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use trace::IntoTrace;
+
+            trace.add(trace::Action::ConfigureSurface(
+                surface.to_trace(),
+                config.clone(),
+            ));
+        }
 
         log::debug!("configuring surface with {config:?}");
 
