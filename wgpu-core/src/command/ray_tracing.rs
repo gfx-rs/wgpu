@@ -159,7 +159,7 @@ impl Global {
                             ArcBlasGeometries::AabbGeometries(aabb_geo)
                         }
                     };
-                    let blas = hub.blas_s.get(blas_entry.blas_id);
+                    let blas = hub.blas_s.get(blas_entry.blas);
                     blas.check_is_valid()?;
                     Ok(ArcBlasBuildEntry { blas, geometries })
                 })
@@ -173,7 +173,7 @@ impl Global {
                             instance
                                 .as_ref()
                                 .map(|instance| {
-                                    let blas = hub.blas_s.get(instance.blas_id);
+                                    let blas = hub.blas_s.get(instance.blas);
                                     blas.check_is_valid()?;
                                     Ok(ArcTlasInstance {
                                         blas,
@@ -185,7 +185,7 @@ impl Global {
                                 .transpose()
                         })
                         .collect::<Result<_, BuildAccelerationStructureError>>()?;
-                    let tlas = self.hub.tlas_s.get(tlas_package.tlas_id);
+                    let tlas = self.hub.tlas_s.get(tlas_package.tlas);
                     tlas.check_is_valid()?;
                     Ok(ArcTlasPackage {
                         tlas,

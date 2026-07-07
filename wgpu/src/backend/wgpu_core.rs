@@ -2866,7 +2866,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 }
             };
             wgc::ray_tracing::BlasBuildEntry {
-                blas_id: e.blas.inner.as_core().id,
+                blas: e.blas.inner.as_core().id,
                 geometries,
             }
         });
@@ -2879,14 +2879,14 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                     instance
                         .as_ref()
                         .map(|instance| wgc::ray_tracing::TlasInstance {
-                            blas_id: instance.blas.as_core().id,
+                            blas: instance.blas.as_core().id,
                             transform: &instance.transform,
                             custom_data: instance.custom_data,
                             mask: instance.mask,
                         })
                 });
             wgc::ray_tracing::TlasPackage {
-                tlas_id: e.inner.as_core().id,
+                tlas: e.inner.as_core().id,
                 instances: Box::new(instances),
                 lowest_unmodified: e.lowest_unmodified,
             }
