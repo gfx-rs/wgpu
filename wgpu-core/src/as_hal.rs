@@ -153,6 +153,155 @@ where
 {
 }
 
+impl crate::resource::Buffer {
+    /// # Safety
+    ///
+    /// - The raw buffer handle must not be manually destroyed
+    pub unsafe fn as_hal<A: hal::Api>(self: Arc<Self>) -> Option<impl Deref<Target = A::Buffer>> {
+        profiling::scope!("Buffer::as_hal");
+
+        SnatchableResourceGuard::new(self)
+    }
+}
+
+impl crate::resource::Texture {
+    /// # Safety
+    ///
+    /// - The raw texture handle must not be manually destroyed
+    pub unsafe fn as_hal<A: hal::Api>(self: Arc<Self>) -> Option<impl Deref<Target = A::Texture>> {
+        profiling::scope!("Texture::as_hal");
+
+        SnatchableResourceGuard::new(self)
+    }
+}
+
+impl crate::resource::TextureView {
+    /// # Safety
+    ///
+    /// - The raw texture view handle must not be manually destroyed
+    pub unsafe fn as_hal<A: hal::Api>(
+        self: Arc<Self>,
+    ) -> Option<impl Deref<Target = A::TextureView>> {
+        profiling::scope!("TextureView::as_hal");
+
+        SnatchableResourceGuard::new(self)
+    }
+}
+
+impl crate::instance::Adapter {
+    /// # Safety
+    ///
+    /// - The raw adapter handle must not be manually destroyed
+    pub unsafe fn as_hal<A: hal::Api>(self: Arc<Self>) -> Option<impl Deref<Target = A::Adapter>> {
+        profiling::scope!("Adapter::as_hal");
+
+        SimpleResourceGuard::new(self, move |adapter| {
+            adapter.raw.adapter.as_any().downcast_ref()
+        })
+    }
+}
+
+impl crate::device::Device {
+    /// # Safety
+    ///
+    /// - The raw device handle must not be manually destroyed
+    pub unsafe fn as_hal<A: hal::Api>(self: Arc<Self>) -> Option<impl Deref<Target = A::Device>> {
+        profiling::scope!("Device::as_hal");
+
+        SimpleResourceGuard::new(self, move |device| device.raw().as_any().downcast_ref())
+    }
+
+    /// # Safety
+    ///
+    /// - The raw fence handle must not be manually destroyed
+    pub unsafe fn fence_as_hal<A: hal::Api>(
+        self: Arc<Self>,
+    ) -> Option<impl Deref<Target = A::Fence>> {
+        profiling::scope!("Device::fence_as_hal");
+
+        SimpleResourceGuard::new(self, move |device| device.fence.as_any().downcast_ref())
+    }
+}
+
+impl crate::instance::Surface {
+    /// # Safety
+    ///
+    /// - The raw surface handle must not be manually destroyed
+    pub unsafe fn as_hal<A: hal::Api>(self: Arc<Self>) -> Option<impl Deref<Target = A::Surface>> {
+        profiling::scope!("Surface::as_hal");
+
+        SimpleResourceGuard::new(self, move |surface| {
+            surface.raw(A::VARIANT)?.as_any().downcast_ref()
+        })
+    }
+}
+
+impl crate::command::CommandEncoder {
+    /// Encode commands using the raw HAL command encoder.
+    ///
+    /// # Panics
+    ///
+    /// If the command encoder has already been used with the wgpu encoding API.
+    ///
+    /// # Safety
+    ///
+    /// - The raw command encoder handle must not be manually destroyed
+    pub unsafe fn as_hal_mut<A: hal::Api, F: FnOnce(Option<&mut A::CommandEncoder>) -> R, R>(
+        self: &Arc<Self>,
+        hal_command_encoder_callback: F,
+    ) -> R {
+        profiling::scope!("CommandEncoder::as_hal");
+
+        let mut cmd_buf_data = self.data.lock();
+        cmd_buf_data.record_as_hal_mut(|opt_cmd_buf| -> R {
+            hal_command_encoder_callback(opt_cmd_buf.and_then(|cmd_buf| {
+                cmd_buf
+                    .encoder
+                    .open()
+                    .ok()
+                    .and_then(|encoder| encoder.as_any_mut().downcast_mut())
+            }))
+        })
+    }
+}
+
+impl crate::device::queue::Queue {
+    /// # Safety
+    ///
+    /// - The raw queue handle must not be manually destroyed
+    pub unsafe fn as_hal<A: hal::Api>(self: Arc<Self>) -> Option<impl Deref<Target = A::Queue>> {
+        profiling::scope!("Queue::as_hal");
+
+        SimpleResourceGuard::new(self, move |queue| queue.raw().as_any().downcast_ref())
+    }
+}
+
+impl crate::resource::Blas {
+    /// # Safety
+    ///
+    /// - The raw blas handle must not be manually destroyed
+    pub unsafe fn as_hal<A: hal::Api>(
+        self: Arc<Self>,
+    ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
+        profiling::scope!("Blas::as_hal");
+
+        SnatchableResourceGuard::new(self)
+    }
+}
+
+impl crate::resource::Tlas {
+    /// # Safety
+    ///
+    /// - The raw tlas handle must not be manually destroyed
+    pub unsafe fn as_hal<A: hal::Api>(
+        self: Arc<Self>,
+    ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
+        profiling::scope!("Tlas::as_hal");
+
+        SnatchableResourceGuard::new(self)
+    }
+}
+
 impl Global {
     /// # Safety
     ///
@@ -161,13 +310,11 @@ impl Global {
         &self,
         id: BufferId,
     ) -> Option<impl Deref<Target = A::Buffer>> {
-        profiling::scope!("Buffer::as_hal");
-
         let hub = &self.hub;
 
         let buffer = hub.buffers.get(id);
 
-        SnatchableResourceGuard::new(buffer)
+        unsafe { buffer.as_hal::<A>() }
     }
 
     /// # Safety
@@ -177,13 +324,11 @@ impl Global {
         &self,
         id: TextureId,
     ) -> Option<impl Deref<Target = A::Texture>> {
-        profiling::scope!("Texture::as_hal");
-
         let hub = &self.hub;
 
         let texture = hub.textures.get(id);
 
-        SnatchableResourceGuard::new(texture)
+        unsafe { texture.as_hal::<A>() }
     }
 
     /// # Safety
@@ -193,13 +338,11 @@ impl Global {
         &self,
         id: TextureViewId,
     ) -> Option<impl Deref<Target = A::TextureView>> {
-        profiling::scope!("TextureView::as_hal");
-
         let hub = &self.hub;
 
         let view = hub.texture_views.get(id);
 
-        SnatchableResourceGuard::new(view)
+        unsafe { view.as_hal::<A>() }
     }
 
     /// # Safety
@@ -209,14 +352,10 @@ impl Global {
         &self,
         id: AdapterId,
     ) -> Option<impl Deref<Target = A::Adapter>> {
-        profiling::scope!("Adapter::as_hal");
-
         let hub = &self.hub;
         let adapter = hub.adapters.get(id);
 
-        SimpleResourceGuard::new(adapter, move |adapter| {
-            adapter.raw.adapter.as_any().downcast_ref()
-        })
+        unsafe { adapter.as_hal::<A>() }
     }
 
     /// # Safety
@@ -226,11 +365,9 @@ impl Global {
         &self,
         id: DeviceId,
     ) -> Option<impl Deref<Target = A::Device>> {
-        profiling::scope!("Device::as_hal");
-
         let device = self.hub.devices.get(id);
 
-        SimpleResourceGuard::new(device, move |device| device.raw().as_any().downcast_ref())
+        unsafe { device.as_hal::<A>() }
     }
 
     /// # Safety
@@ -240,26 +377,21 @@ impl Global {
         &self,
         id: DeviceId,
     ) -> Option<impl Deref<Target = A::Fence>> {
-        profiling::scope!("Device::fence_as_hal");
-
         let device = self.hub.devices.get(id);
 
-        SimpleResourceGuard::new(device, move |device| device.fence.as_any().downcast_ref())
+        unsafe { device.fence_as_hal::<A>() }
     }
 
     /// # Safety
+    ///
     /// - The raw surface handle must not be manually destroyed
     pub unsafe fn surface_as_hal<A: hal::Api>(
         &self,
         id: SurfaceId,
     ) -> Option<impl Deref<Target = A::Surface>> {
-        profiling::scope!("Surface::as_hal");
-
         let surface = self.surfaces.get(id);
 
-        SimpleResourceGuard::new(surface, move |surface| {
-            surface.raw(A::VARIANT)?.as_any().downcast_ref()
-        })
+        unsafe { surface.as_hal::<A>() }
     }
 
     /// Encode commands using the raw HAL command encoder.
@@ -280,21 +412,10 @@ impl Global {
         id: CommandEncoderId,
         hal_command_encoder_callback: F,
     ) -> R {
-        profiling::scope!("CommandEncoder::as_hal");
-
         let hub = &self.hub;
 
         let cmd_enc = hub.command_encoders.get(id);
-        let mut cmd_buf_data = cmd_enc.data.lock();
-        cmd_buf_data.record_as_hal_mut(|opt_cmd_buf| -> R {
-            hal_command_encoder_callback(opt_cmd_buf.and_then(|cmd_buf| {
-                cmd_buf
-                    .encoder
-                    .open()
-                    .ok()
-                    .and_then(|encoder| encoder.as_any_mut().downcast_mut())
-            }))
-        })
+        unsafe { cmd_enc.as_hal_mut::<A, F, R>(hal_command_encoder_callback) }
     }
 
     /// # Safety
@@ -304,11 +425,9 @@ impl Global {
         &self,
         id: QueueId,
     ) -> Option<impl Deref<Target = A::Queue>> {
-        profiling::scope!("Queue::as_hal");
-
         let queue = self.hub.queues.get(id);
 
-        SimpleResourceGuard::new(queue, move |queue| queue.raw().as_any().downcast_ref())
+        unsafe { queue.as_hal::<A>() }
     }
 
     /// # Safety
@@ -324,7 +443,7 @@ impl Global {
 
         let blas = hub.blas_s.get(id);
 
-        SnatchableResourceGuard::new(blas)
+        unsafe { blas.as_hal::<A>() }
     }
 
     /// # Safety
@@ -340,6 +459,6 @@ impl Global {
 
         let tlas = hub.tlas_s.get(id);
 
-        SnatchableResourceGuard::new(tlas)
+        unsafe { tlas.as_hal::<A>() }
     }
 }
