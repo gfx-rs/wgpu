@@ -690,8 +690,6 @@ impl Global {
     }
 
     pub fn command_buffer_drop(&self, command_buffer_id: id::CommandBufferId) {
-        profiling::scope!("CommandBuffer::drop");
-        api_log!("CommandBuffer::drop {command_buffer_id:?}");
         let _cmd_buf = self.hub.command_buffers.remove(command_buffer_id);
     }
 

@@ -905,7 +905,10 @@ pub struct CommandBuffer {
 }
 
 impl Drop for CommandBuffer {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("CommandBuffer::drop");
+        api_log!("CommandBuffer::drop {:?}", self as *const _);
         resource_log!("Drop {}", self.error_ident());
     }
 }
