@@ -534,7 +534,10 @@ crate::impl_parent_device!(CommandEncoder);
 crate::impl_storage_item!(CommandEncoder);
 
 impl Drop for CommandEncoder {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("CommandEncoder::drop");
+        api_log!("CommandEncoder::drop {:?}", self as *const _);
         resource_log!("Drop {}", self.error_ident());
     }
 }
@@ -955,12 +958,12 @@ impl CommandEncoder {
         device: &Arc<Device>,
         label: &Label,
         err: CommandEncoderError,
-    ) -> Self {
-        CommandEncoder {
+    ) -> Arc<Self> {
+        Arc::new(CommandEncoder {
             device: device.clone(),
             label: label.to_string(),
             data: Mutex::new(rank::COMMAND_BUFFER_DATA, make_error_state(err)),
-        }
+        })
     }
 
     pub(crate) fn validate_pass_timestamp_writes<E>(
@@ -1395,7 +1398,8 @@ impl CommandBuffer {
     /// entrypoints provide.
     #[doc(hidden)]
     pub fn from_trace(device: &Arc<Device>, commands: Vec<Command<ArcReferences>>) -> Arc<Self> {
-        let encoder = device.create_command_encoder(&None).unwrap();
+        let (encoder, _error) =
+            device.create_command_encoder(&wgt::CommandEncoderDescriptor { label: None });
         let mut cmd_enc_status = encoder.data.lock();
         cmd_enc_status.replay(commands);
         drop(cmd_enc_status);

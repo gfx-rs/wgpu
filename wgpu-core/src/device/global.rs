@@ -9,7 +9,7 @@ use crate::{
         self, BindGroupEntry, BindingResource, BufferBinding, ResolvedBindGroupDescriptor,
         ResolvedBindGroupEntry, ResolvedBindingResource, ResolvedBufferBinding,
     },
-    command::{self, CommandEncoder},
+    command,
     device::{life::WaitIdleError, DeviceError, DeviceLostClosure},
     global::Global,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
@@ -679,28 +679,13 @@ impl Global {
 
         let device = self.hub.devices.get(device_id);
 
-        let error = 'error: {
-            let cmd_enc = match device.create_command_encoder(&desc.label) {
-                Ok(cmd_enc) => cmd_enc,
-                Err(e) => break 'error e,
-            };
+        let (cmd_enc, error) = device.create_command_encoder(desc);
 
-            let id = fid.assign(cmd_enc);
-            api_log!("Device::create_command_encoder -> {id:?}");
-            return (id, None);
-        };
-
-        let id = fid.assign(Arc::new(CommandEncoder::new_invalid(
-            &device,
-            &desc.label,
-            error.clone().into(),
-        )));
-        (id, Some(error))
+        let id = fid.assign(cmd_enc);
+        (id, error)
     }
 
     pub fn command_encoder_drop(&self, command_encoder_id: id::CommandEncoderId) {
-        profiling::scope!("CommandEncoder::drop");
-        api_log!("CommandEncoder::drop {command_encoder_id:?}");
         let _cmd_enc = self.hub.command_encoders.remove(command_encoder_id);
     }
 

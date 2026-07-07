@@ -2956,7 +2956,29 @@ impl Device {
         Ok(Arc::new(module))
     }
 
-    pub(crate) fn create_command_encoder(
+    pub fn create_command_encoder(
+        self: &Arc<Self>,
+        desc: &wgt::CommandEncoderDescriptor<crate::Label>,
+    ) -> (Arc<command::CommandEncoder>, Option<DeviceError>) {
+        profiling::scope!("Device::create_command_encoder");
+
+        let (cmd_enc, error) = match self.create_command_encoder_inner(&desc.label) {
+            Ok(cmd_enc) => (cmd_enc, None),
+            Err(e) => (
+                command::CommandEncoder::new_invalid(self, &desc.label, e.clone().into()),
+                Some(e),
+            ),
+        };
+
+        api_log!(
+            "Device::create_command_encoder -> {:?}",
+            Arc::as_ptr(&cmd_enc)
+        );
+
+        (cmd_enc, error)
+    }
+
+    pub(crate) fn create_command_encoder_inner(
         self: &Arc<Self>,
         label: &crate::Label,
     ) -> Result<Arc<command::CommandEncoder>, DeviceError> {
