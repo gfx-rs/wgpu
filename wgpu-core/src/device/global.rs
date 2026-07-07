@@ -1249,9 +1249,6 @@ impl Global {
         size: Option<BufferAddress>,
         op: BufferMapOperation,
     ) -> Result<crate::SubmissionIndex, BufferAccessError> {
-        profiling::scope!("Buffer::map_async");
-        api_log!("Buffer::map_async {buffer_id:?} offset {offset:?} size {size:?} op: {op:?}");
-
         let hub = &self.hub;
 
         let buffer = hub.buffers.get(buffer_id);
@@ -1273,9 +1270,6 @@ impl Global {
     }
 
     pub fn buffer_unmap(&self, buffer_id: id::BufferId) -> BufferAccessResult {
-        profiling::scope!("unmap", "Buffer");
-        api_log!("Buffer::unmap {buffer_id:?}");
-
         let hub = &self.hub;
 
         let buffer = hub.buffers.get(buffer_id);

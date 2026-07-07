@@ -675,6 +675,12 @@ impl Buffer {
         size: Option<wgt::BufferAddress>,
         op: BufferMapOperation,
     ) -> Result<SubmissionIndex, BufferAccessError> {
+        profiling::scope!("Buffer::map_async");
+        api_log!(
+            "Buffer::map_async {:?} offset {offset:?} size {size:?} op: {op:?}",
+            Arc::as_ptr(self)
+        );
+
         self.try_map_async(offset, size, op)
             .map_err(|(mut operation, err)| {
                 if let Some(callback) = operation.callback.take() {
@@ -989,6 +995,8 @@ impl Buffer {
 
     // Note: This must not be called while holding a lock.
     pub fn unmap(self: &Arc<Self>) -> Result<(), BufferAccessError> {
+        profiling::scope!("unmap", "Buffer");
+        api_log!("Buffer::unmap {:?}", Arc::as_ptr(self));
         if let Some((mut operation, status)) = self.unmap_inner()? {
             if let Some(callback) = operation.callback.take() {
                 callback(status);
