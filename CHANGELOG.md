@@ -48,6 +48,10 @@ Bottom level categories:
 
 - Add `BufferBinding::buffer`, a public read accessor for the bound buffer, which was previously inaccessible to out-of-tree `wgpu_hal::Api` implementations. By @danlehmann in [#9820](https://github.com/gfx-rs/wgpu/pull/9820).
 
+#### Metal
+
+- Expose transaction-presentation generations and completion callbacks to `wgpu-hal` clients. By @yay in [#9828](https://github.com/gfx-rs/wgpu/pull/9828).
+
 ### Bug Fixes
 
 #### GLES

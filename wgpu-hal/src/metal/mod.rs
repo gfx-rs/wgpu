@@ -29,6 +29,7 @@ mod surface;
 mod time;
 
 use alloc::{
+    boxed::Box,
     string::{String, ToString as _},
     sync::Arc,
     vec::Vec,
@@ -644,6 +645,107 @@ pub struct Surface {
     render_layer: Mutex<Retained<CAMetalLayer>>,
     swapchain_format: RwLock<Option<wgt::TextureFormat>>,
     extent: RwLock<wgt::Extent3d>,
+    transaction_presentation: Arc<TransactionPresentationState>,
+}
+
+type TransactionPresentationCallback = Box<dyn FnOnce() + Send + Sync>;
+
+#[derive(Default)]
+struct TransactionPresentationState {
+    /// Monotonically increasing identifier assigned to transaction-presented drawables.
+    submitted: atomic::AtomicU64,
+    /// Greatest submitted generation that Metal has reported as presented.
+    completed: atomic::AtomicU64,
+    /// Callbacks waiting for Metal to present at least their target generation.
+    waiters: Mutex<Vec<(u64, TransactionPresentationCallback)>>,
+}
+
+impl TransactionPresentationState {
+    fn record_submission(&self) -> u64 {
+        self.submitted.fetch_add(1, atomic::Ordering::AcqRel) + 1
+    }
+
+    fn submitted(&self) -> u64 {
+        self.submitted.load(atomic::Ordering::Acquire)
+    }
+
+    fn completed(&self) -> u64 {
+        self.completed.load(atomic::Ordering::Acquire)
+    }
+
+    fn register_waiter(
+        &self,
+        generation: u64,
+        callback: TransactionPresentationCallback,
+    ) -> Option<TransactionPresentationCallback> {
+        let mut waiters = self.waiters.lock();
+        if self.completed() >= generation {
+            Some(callback)
+        } else {
+            waiters.push((generation, callback));
+            None
+        }
+    }
+
+    fn complete(&self, generation: u64) -> Vec<TransactionPresentationCallback> {
+        self.completed
+            .fetch_max(generation, atomic::Ordering::Release);
+        let mut waiters = self.waiters.lock();
+        let (ready, pending) = core::mem::take(&mut *waiters)
+            .into_iter()
+            .partition::<Vec<_>, _>(|(target, _)| *target <= generation);
+        *waiters = pending;
+        ready.into_iter().map(|(_, callback)| callback).collect()
+    }
+}
+
+impl fmt::Debug for TransactionPresentationState {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TransactionPresentationState")
+            .field("submitted", &self.submitted.load(atomic::Ordering::Relaxed))
+            .field("completed", &self.completed.load(atomic::Ordering::Relaxed))
+            .field("waiters", &self.waiters.lock().len())
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod transaction_presentation_tests {
+    use super::*;
+
+    #[test]
+    fn waiters_complete_at_their_target_generation() {
+        let state = TransactionPresentationState::default();
+        let calls = Arc::new(atomic::AtomicUsize::new(0));
+
+        for generation in [2, 3] {
+            let calls = Arc::clone(&calls);
+            assert!(state
+                .register_waiter(
+                    generation,
+                    Box::new(move || {
+                        calls.fetch_add(1, atomic::Ordering::Relaxed);
+                    }),
+                )
+                .is_none());
+        }
+
+        for callback in state.complete(2) {
+            callback();
+        }
+        assert_eq!(calls.load(atomic::Ordering::Relaxed), 1);
+
+        for callback in state.complete(3) {
+            callback();
+        }
+        assert_eq!(calls.load(atomic::Ordering::Relaxed), 2);
+
+        let Some(callback) = state.register_waiter(3, Box::new(|| {})) else {
+            panic!("completed generations should run callbacks immediately");
+        };
+        callback();
+    }
 }
 
 unsafe impl Send for Surface {}
@@ -801,7 +903,7 @@ impl crate::Queue for Queue {
     }
     unsafe fn present(
         &self,
-        _surface: &Surface,
+        surface: &Surface,
         texture: SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
         autoreleasepool(|_| {
@@ -818,6 +920,18 @@ impl crate::Queue for Queue {
             command_buffer.commit();
 
             if texture.present_with_transaction {
+                let transaction_presentation = Arc::clone(&surface.transaction_presentation);
+                let generation = transaction_presentation.record_submission();
+                let block = block2::RcBlock::new(move |_drawable| {
+                    for callback in transaction_presentation.complete(generation) {
+                        callback();
+                    }
+                });
+                unsafe {
+                    texture
+                        .drawable
+                        .addPresentedHandler(block2::RcBlock::as_ptr(&block));
+                }
                 command_buffer.waitUntilScheduled();
                 texture.drawable.present();
             }
