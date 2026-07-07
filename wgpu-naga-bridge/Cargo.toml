@@ -15,3 +15,6 @@ rust-version = "1.87"
 [dependencies]
 naga = { workspace = true }
 wgpu-types = { workspace = true }
+
+[lints]
+workspace = true

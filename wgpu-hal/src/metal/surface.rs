@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use alloc::borrow::ToOwned as _;
 
 use objc2::{
@@ -6,13 +8,31 @@ use objc2::{
     runtime::ProtocolObject,
     ClassType, Message,
 };
-use objc2_core_foundation::CGSize;
+use objc2_core_foundation::{CFString, CGSize};
+use objc2_core_graphics::CGColorSpace;
 use objc2_foundation::NSObjectProtocol;
 use objc2_metal::MTLTextureType;
 use objc2_quartz_core::{CAMetalDrawable, CAMetalLayer};
 use parking_lot::{Mutex, RwLock};
 
 use super::OsFeatures;
+
+/// Walks up from `start` to the `NSWindow` hosting this layer: the first ancestor
+/// layer with a delegate is the backing `NSView`, and we return its `window`.
+/// `None` if no ancestor has a delegate.
+#[cfg(target_os = "macos")]
+fn hosting_window(
+    start: Retained<objc2_quartz_core::CALayer>,
+) -> Option<Retained<objc2::runtime::NSObject>> {
+    let mut current = Some(start);
+    while let Some(layer) = current {
+        if let Some(delegate) = layer.delegate() {
+            return unsafe { objc2::msg_send![&*delegate, window] };
+        }
+        current = layer.superlayer();
+    }
+    None
+}
 
 impl super::Surface {
     pub fn new(layer: Retained<CAMetalLayer>) -> Self {
@@ -30,6 +50,137 @@ impl super::Surface {
 
     pub fn render_layer(&self) -> &Mutex<Retained<CAMetalLayer>> {
         &self.render_layer
+    }
+
+    /// Returns the EDR headroom of the screen hosting this surface, as a
+    /// [`wgt::DisplayHdrInfo`].
+    ///
+    /// macOS only. Returns `None` on other Apple platforms (iOS, tvOS, visionOS),
+    /// when the hosting screen can't be resolved (e.g. an off-screen window), or
+    /// when called off the main thread: `NSScreen` and `NSWindow` are
+    /// main-thread-only, and off-thread access is undefined behavior.
+    ///
+    /// Only `headroom` and the coarse `high_dynamic_range` bit are filled: Apple
+    /// exposes a relative EDR multiplier (`1.0` == SDR white), no absolute nits,
+    /// and no HDR-mode flag. `high_dynamic_range` tracks the live `current`
+    /// multiplier (`> 1.0`), so it reports HDR active, not merely capable.
+    pub(super) fn display_hdr_info(&self) -> Option<wgt::DisplayHdrInfo> {
+        #[cfg(target_os = "macos")]
+        {
+            use objc2::rc::Retained;
+            use objc2::runtime::NSObject;
+
+            // Bail before any message send if we are not on the main thread.
+            // `MainThreadMarker::new()` is `None` off the main thread and does no
+            // Objective-C work, so it is a cheap, safe gate.
+            if objc2::MainThreadMarker::new().is_none() {
+                // Of the paths that yield `None`, this is the only one a caller
+                // can fix (the others — off-screen window, non-macOS — are
+                // environmental), so leave a breadcrumb instead of failing
+                // silently. Warn once per process so a caller that polls this
+                // per frame is not spammed.
+                static WARN_ONCE: std::sync::Once = std::sync::Once::new();
+                WARN_ONCE.call_once(|| {
+                    log::warn!(
+                        "Surface::display_hdr_info() was called from thread {:?} \
+                         and will return None. On the Metal backend, it must be \
+                         called from the main thread to succeed.",
+                        std::thread::current().id()
+                    );
+                });
+                return None;
+            }
+
+            // Take an owned reference to the layer and drop the lock before
+            // accessing the window and screen, so a main-thread AppKit callback
+            // can never deadlock against this lock.
+            let render_layer = {
+                let guard = self.render_layer.lock();
+                guard.clone()
+            };
+
+            // Resolve the hosting `NSScreen` from the hosting window. `NSWindow.screen`
+            // is nil when the window is off-screen, so this can legitimately yield `None`.
+            let screen: Retained<NSObject> = autoreleasepool(|_| {
+                hosting_window(Retained::into_super(render_layer))
+                    .and_then(|window| unsafe { objc2::msg_send![&*window, screen] })
+            })?;
+
+            // AppKit documents these EDR properties as finite multipliers
+            // (`1.0` == SDR white), but guard against a non-finite read anyway so
+            // the advisory values stay finite and the coarse `high_dynamic_range`
+            // bit reports unknown (`None`) rather than a false `Some(false)`,
+            // mirroring the `is_finite` discipline in
+            // [`wgt::DisplayHdrInfo::tone_map_headroom`]. The EDR properties return
+            // `CGFloat` (`f64` on 64-bit macOS).
+            let finite = |v: f64| v.is_finite().then_some(v as f32);
+
+            // `maximumExtendedDynamicRangeColorComponentValue` is macOS 10.11+, so
+            // it is safe at our 10.13 minimum.
+            let current: f64 = unsafe {
+                objc2::msg_send![&*screen, maximumExtendedDynamicRangeColorComponentValue]
+            };
+
+            // Apple exposes no discrete HDR-mode flag, so derive the coarse
+            // dynamic-range bit from the live `current` EDR multiplier (`> 1.0`),
+            // not `potential` (which is `> 1.0` on nearly every Apple display and
+            // would conflate "capable" with "active").
+            let high_dynamic_range = current.is_finite().then_some(current > 1.0);
+
+            // `maximumPotential...` and `maximumReference...` are macOS 10.15+,
+            // below which sending them would raise an unrecognized-selector
+            // exception, so only message them where available; otherwise leave
+            // them `None`.
+            let (potential, reference) = if available!(macos = 10.15) {
+                let potential: f64 = unsafe {
+                    objc2::msg_send![
+                        &*screen,
+                        maximumPotentialExtendedDynamicRangeColorComponentValue
+                    ]
+                };
+                let reference: f64 = unsafe {
+                    objc2::msg_send![
+                        &*screen,
+                        maximumReferenceExtendedDynamicRangeColorComponentValue
+                    ]
+                };
+                // AppKit reports `0.0` when there is no reference value; treat that
+                // (and any non-finite read) as "unknown" rather than a real `0.0`.
+                (finite(potential), finite(reference).filter(|&v| v > 0.0))
+            } else {
+                (None, None)
+            };
+            let headroom = wgt::DisplayHeadroom {
+                current: finite(current),
+                potential,
+                reference,
+            };
+
+            // `NSScreen.colorSpace` returns generic names on HDR panels
+            // post-Monterey, so deriving a gamut bucket from it would lie; leave
+            // `gamut` as `None` on macOS.
+            let coarse = wgt::DisplayCoarseRange {
+                high_dynamic_range,
+                gamut: None,
+            };
+
+            // Apple exposes no absolute nits, CIE-xy primaries, or panel bit
+            // depth, so `luminance` / `chromaticity` / `bits_per_color` stay `None`.
+            let info = wgt::DisplayHdrInfo {
+                luminance: None,
+                headroom: Some(headroom),
+                chromaticity: None,
+                coarse: Some(coarse),
+                bits_per_color: None,
+            };
+            Some(info)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            // TODO: iOS/tvOS/visionOS could report EDR headroom via
+            // `UIScreen.currentEDRHeadroom`.
+            None
+        }
     }
 
     /// Gets the current dimensions of the `Surface`.
@@ -54,6 +205,42 @@ impl super::Surface {
         }
     }
 }
+
+// objc2 strings are not, in general, thread-safe, but these should be constants.
+unsafe impl Send for ColorSpaces {}
+unsafe impl Sync for ColorSpaces {}
+
+struct ColorSpaces {
+    extended_display_p3: &'static CFString,
+    itur_bt2100_pq: &'static CFString,
+    itur_bt2100_hlg: &'static CFString,
+}
+
+static COLOR_SPACES: LazyLock<Result<ColorSpaces, crate::SurfaceError>> = LazyLock::new(|| {
+    // Stable Rust doesn't support weak linkage, so objc2 doesn't
+    // offer it. To avoid link errors on old OS versions, resolve
+    // these dynamically.
+    let lib = unsafe {
+        libloading::Library::new("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
+            .map_err(|_| crate::SurfaceError::Other("error loading CoreGraphics"))?
+    };
+    fn lookup(
+        lib: &libloading::Library,
+        name: &[u8],
+    ) -> Result<&'static CFString, crate::SurfaceError> {
+        let sym = unsafe { lib.get(name) }
+            .map_err(|_| crate::SurfaceError::Other("error resolving symbol in CoreGraphics"))?;
+        Ok(*sym)
+    }
+    let extended_display_p3 = lookup(&lib, b"kCGColorSpaceExtendedDisplayP3\0")?;
+    let itur_bt2100_pq = lookup(&lib, b"kCGColorSpaceITUR_2100_PQ\0")?;
+    let itur_bt2100_hlg = lookup(&lib, b"kCGColorSpaceITUR_2100_HLG\0")?;
+    Ok(ColorSpaces {
+        extended_display_p3,
+        itur_bt2100_pq,
+        itur_bt2100_hlg,
+    })
+});
 
 impl crate::Surface for super::Surface {
     type A = super::Api;
@@ -89,12 +276,55 @@ impl crate::Surface for super::Surface {
         render_layer.setDevice(Some(device_raw));
         render_layer.setPixelFormat(caps.map_format(config.format));
         render_layer.setFramebufferOnly(framebuffer_only);
-        // opt-in to Metal EDR
-        // EDR potentially more power used in display and more bandwidth, memory footprint.
-        let wants_edr = config.format == wgt::TextureFormat::Rgba16Float;
+        // Opt into Metal EDR for the HDR color spaces (more display power, memory,
+        // and bandwidth). The HDR spaces are exactly those `is_hdr()` classifies.
+        let wants_edr = config.color_space.is_hdr();
         if wants_edr != render_layer.wantsExtendedDynamicRangeContent() {
             render_layer.setWantsExtendedDynamicRangeContent(wants_edr);
         }
+
+        let colorspace_name: Option<&'static CFString> = match config.color_space {
+            wgt::SurfaceColorSpace::Auto => {
+                unreachable!("wgpu-core resolves `Auto` before configuring the surface")
+            }
+            // Reset to the layer's default, which treats contents as sRGB.
+            wgt::SurfaceColorSpace::Srgb => None,
+            wgt::SurfaceColorSpace::ExtendedSrgbLinear => {
+                Some(unsafe { objc2_core_graphics::kCGColorSpaceExtendedLinearSRGB })
+            }
+            wgt::SurfaceColorSpace::ExtendedSrgb => {
+                Some(unsafe { objc2_core_graphics::kCGColorSpaceExtendedSRGB })
+            }
+            wgt::SurfaceColorSpace::ExtendedDisplayP3 => {
+                // TODO: This needs protection in `surface_capabilities` like the BT.2100 cases.
+                Some(
+                    COLOR_SPACES
+                        .as_ref()
+                        .map_err(|e| e.clone())?
+                        .extended_display_p3,
+                )
+            }
+            wgt::SurfaceColorSpace::DisplayP3 => {
+                Some(unsafe { objc2_core_graphics::kCGColorSpaceDisplayP3 })
+            }
+            wgt::SurfaceColorSpace::Bt2100Pq | wgt::SurfaceColorSpace::Bt2100Hlg => {
+                // The ITUR_2100 color space constants require macOS 11.0/iOS 14.0;
+                // `surface_capabilities` only reports BT.2100 PQ/HLG on those OS versions.
+                if !available!(macos = 11.0, ios = 14.0, tvos = 14.0, visionos = 1.0) {
+                    unreachable!("BT.2100 PQ/HLG color spaces are only reported on macOS 11.0+/iOS 14.0+/tvOS 14.0+");
+                }
+                Some(if config.color_space == wgt::SurfaceColorSpace::Bt2100Pq {
+                    COLOR_SPACES.as_ref().map_err(|e| e.clone())?.itur_bt2100_pq
+                } else {
+                    COLOR_SPACES
+                        .as_ref()
+                        .map_err(|e| e.clone())?
+                        .itur_bt2100_hlg
+                })
+            }
+        };
+        let colorspace = colorspace_name.and_then(|name| CGColorSpace::with_name(Some(name)));
+        render_layer.setColorspace(colorspace.as_deref());
 
         // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
         render_layer.setMaximumDrawableCount(config.maximum_frame_latency as usize + 1);
@@ -128,33 +358,15 @@ impl crate::Surface for super::Surface {
             // for vsync. Check the window's occlusion state and skip acquisition if
             // the window is not visible - this avoids a 1-second hang in nextDrawable().
             use objc2::rc::Retained;
-            use objc2::runtime::NSObject;
-            use objc2_quartz_core::CALayer;
 
-            // The CAMetalLayer is typically a sublayer, so we need to traverse up
-            // to find the root layer whose delegate is the NSView.
-            let mut current_layer: Option<Retained<CALayer>> =
-                Some(Retained::into_super(render_layer.clone()));
-
-            while let Some(layer) = current_layer {
-                if let Some(delegate) = layer.delegate() {
-                    // Found a layer with a delegate - this should be the NSView
-                    let window: Option<Retained<NSObject>> =
-                        unsafe { objc2::msg_send![&*delegate, window] };
-
-                    if let Some(window) = window {
-                        const NS_WINDOW_OCCLUSION_STATE_VISIBLE: usize = 1 << 1;
-                        let occlusion_state: usize =
-                            unsafe { objc2::msg_send![&*window, occlusionState] };
-                        let is_visible = (occlusion_state & NS_WINDOW_OCCLUSION_STATE_VISIBLE) != 0;
-
-                        if !is_visible {
-                            return Err(crate::SurfaceError::Occluded);
-                        }
-                    }
-                    break;
+            // The CAMetalLayer is typically a sublayer; find the hosting window
+            // and skip acquisition while it is occluded.
+            if let Some(window) = hosting_window(Retained::into_super(render_layer.clone())) {
+                const NS_WINDOW_OCCLUSION_STATE_VISIBLE: usize = 1 << 1;
+                let occlusion_state: usize = unsafe { objc2::msg_send![&*window, occlusionState] };
+                if occlusion_state & NS_WINDOW_OCCLUSION_STATE_VISIBLE == 0 {
+                    return Err(crate::SurfaceError::Occluded);
                 }
-                current_layer = layer.superlayer();
             }
         }
 

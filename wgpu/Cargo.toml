@@ -67,6 +67,7 @@ webgpu = [
     "dep:wasm-bindgen-futures",
     "web-sys/Document",
     "web-sys/Event",
+    "web-sys/MediaQueryList",
     "web-sys/Navigator",
     "web-sys/NodeList",
     "web-sys/Window",
@@ -279,3 +280,6 @@ bytemuck.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
+
+[lints]
+workspace = true

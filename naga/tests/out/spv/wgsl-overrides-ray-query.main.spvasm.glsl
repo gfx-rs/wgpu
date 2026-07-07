@@ -37,11 +37,11 @@ void _37(rayQueryEXT _38, accelerationStructureEXT _39, _8 _40, inout uint _41, 
 bool _144(rayQueryEXT _145, inout uint _146)
 {
     bool _148 = false;
-    if ((_146 & 1u) != 0u)
+    if ((!((_146 & 4u) != 0u)) && ((_146 & 1u) != 0u))
     {
-        bool _155 = rayQueryProceedEXT(_145);
-        _148 = _155;
-        _146 |= (_155 ? 2u : 6u);
+        bool _159 = rayQueryProceedEXT(_145);
+        _148 = _159;
+        _146 |= (_159 ? 2u : 6u);
     }
     return _148;
 }

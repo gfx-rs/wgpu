@@ -201,8 +201,12 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_blas_geometry_count,
         max_tlas_instance_count,
         max_acceleration_structures_per_shader_stage,
+        max_buffers_and_acceleration_structures_per_shader_stage,
 
         max_multiview_view_count,
+
+        max_ray_dispatch_count,
+        max_ray_recursion_depth,
     } = limits;
     writeln!(output, "\t\t                           Max Texture Dimension 1d: {max_texture_dimension_1d}")?;
     writeln!(output, "\t\t                           Max Texture Dimension 2d: {max_texture_dimension_2d}")?;
@@ -259,8 +263,11 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                            Max BLAS Geometry count: {max_blas_geometry_count}")?;
     writeln!(output, "\t\t                            Max TLAS Instance count: {max_tlas_instance_count}")?;
     writeln!(output, "\t\t       Max Acceleration Structures Per Shader Stage: {max_acceleration_structures_per_shader_stage}")?;
+    writeln!(output, "   Max Buffers And Acceleration Structures Per Shader Stage: {max_buffers_and_acceleration_structures_per_shader_stage}")?;
 
     writeln!(output, "\t\t                           Max Multiview View Count: {max_multiview_view_count}")?;
+    writeln!(output, "\t\t                             Max Ray Dispatch Count: {max_ray_dispatch_count}")?;
+    writeln!(output, "\t\t                            Max Ray Recursion Depth: {max_ray_recursion_depth}")?;
     // This one reflects more of a wgpu implementation limitations than a hardware limit
     // so don't show it here.
     let _ = max_non_sampler_bindings;

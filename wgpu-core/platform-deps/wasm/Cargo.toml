@@ -22,3 +22,6 @@ webgl = ["wgpu-hal/gles"]
 # Depend on wgpu-hal conditionally, so that the above features only apply to wgpu-hal on this set of platforms.
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wgpu-hal.workspace = true
+
+[lints]
+workspace = true

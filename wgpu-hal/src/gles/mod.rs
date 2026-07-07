@@ -168,6 +168,7 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+    type RayTracingPipeline = RayTracingPipeline;
 }
 
 crate::impl_dyn_resource!(
@@ -187,6 +188,7 @@ crate::impl_dyn_resource!(
     QuerySet,
     Queue,
     RenderPipeline,
+    RayTracingPipeline,
     Sampler,
     ShaderModule,
     Surface,
@@ -301,10 +303,41 @@ struct AdapterShared {
     max_msaa_samples: i32,
 }
 
+impl fmt::Debug for AdapterShared {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {
+            context: _, // may or may not implement Debug depending on platform
+            private_caps,
+            features,
+            limits,
+            workarounds,
+            options,
+            shading_language_version,
+            next_shader_id,
+            program_cache: _,
+            es,
+            max_msaa_samples,
+        } = self;
+        f.debug_struct("AdapterShared")
+            .field("private_caps", private_caps)
+            .field("features", features)
+            .field("limits", limits)
+            .field("workarounds", workarounds)
+            .field("options", options)
+            .field("shading_language_version", shading_language_version)
+            .field("next_shader_id", next_shader_id)
+            .field("es", es)
+            .field("max_msaa_samples", max_msaa_samples)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug)]
 pub struct Adapter {
     shared: Arc<AdapterShared>,
 }
 
+#[derive(Debug)]
 pub struct Device {
     shared: Arc<AdapterShared>,
     main_vao: glow::VertexArray,
@@ -320,11 +353,13 @@ impl Drop for Device {
     }
 }
 
+#[derive(Debug)]
 pub struct ShaderClearProgram {
     pub program: glow::Program,
     pub color_uniform_location: glow::UniformLocation,
 }
 
+#[derive(Debug)]
 pub struct Queue {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
@@ -741,7 +776,7 @@ struct ColorTargetDesc {
     blend: Option<BlendDesc>,
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 struct ProgramStage {
     naga_stage: naga::ShaderStage,
     shader_id: ShaderId,
@@ -750,7 +785,7 @@ struct ProgramStage {
     constant_hash: Vec<u8>,
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 struct ProgramCacheKey {
     stages: ArrayVec<ProgramStage, 3>,
     group_to_binding_to_slot: Box<[Option<Box<[u8]>>]>,
@@ -782,6 +817,11 @@ pub struct ComputePipeline {
 }
 
 impl crate::DynComputePipeline for ComputePipeline {}
+
+#[derive(Debug)]
+pub struct RayTracingPipeline {}
+
+impl crate::DynRayTracingPipeline for RayTracingPipeline {}
 
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipeline: Send, Sync);

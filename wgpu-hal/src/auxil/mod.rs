@@ -1,4 +1,7 @@
-#[cfg(dx12)]
+// Mostly DX12-only, but also compiled for Vulkan-on-Windows, which reuses
+// `dxgi::hdr` to query display HDR info. The DX12-only submodules stay gated
+// behind `dx12` in `dxgi/mod.rs`.
+#[cfg(any(dx12, all(vulkan, windows)))]
 pub(super) mod dxgi;
 
 #[cfg(all(native, feature = "renderdoc"))]

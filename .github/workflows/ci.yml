@@ -15,6 +15,10 @@ on:
 
 env:
   #
+  # Keep in sync with cts.yml
+  #
+
+  #
   # Dependency versioning
   #
 
@@ -27,12 +31,11 @@ env:
   CORE_MSRV: "1.87"
 
   #
-  # Environment variables
+  # Build and test configuration
   #
 
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
-  WGPU_DX12_COMPILER: dxc
   RUST_LOG: debug,wasm_bindgen_wasm_interpreter=warn,wasm_bindgen_cli_support=warn,walrus=warn,naga=info
   RUST_BACKTRACE: full
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
@@ -41,6 +44,13 @@ env:
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: e # cache busting
   WGPU_CI: true
+
+  #
+  # Runtime configuration
+  #
+
+  LVP_POISON_MEMORY: true # to test memory init; see docs/testing.md
+  WGPU_DX12_COMPILER: dxc
 
 # Every time a PR is pushed to, cancel any previous jobs. This
 # makes us behave nicer to github and get faster turnaround times
@@ -577,16 +587,25 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
-      - name: Install `wasm-pack`
+      - name: Get `wasm-bindgen` version
+        run: |
+          WASM_BINDGEN_VERSION=$(cargo metadata --format-version 1 --all-features | jq '.packages[] | select(.name == "wasm-bindgen") | .version' | tr -d '"')
+
+          echo $WASM_BINDGEN_VERSION
+
+          echo "WASM_BINDGEN_VERSION=$WASM_BINDGEN_VERSION" >> "$GITHUB_ENV"
+
+      - name: Install `wasm-bindgen`
+        run: cargo +stable install wasm-bindgen-cli --version=$WASM_BINDGEN_VERSION
+
+      - name: Install `cargo-nextest`
         uses: taiki-e/install-action@v2
         with:
-          tool: wasm-pack
+          tool: cargo-nextest
 
       - name: Execute tests
         run: |
-          cd wgpu
-
-          wasm-pack test --headless --chrome --no-default-features --features wgsl,webgl,web --workspace
+          cargo xtask test-wasm
 
   gpu-test:
     # runtime is normally 5-15 minutes
@@ -727,7 +746,7 @@ jobs:
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
@@ -816,14 +835,8 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
-      # NOTE: Keep this above the others, because this will fail if there are _any_ changes to
-      # files, even ones this step doesn't modify.
       - name: "Format `**/*.{md,js,html,yml}` files"
-        uses: creyD/prettier_action@v4.6
-        with:
-          prettier_version: 3.8.1
-          prettier_options: --check --write .
-          dry: true
+        run: npx --yes prettier@3.8.1 --check .
 
       - name: Run `cargo fmt`
         run: |

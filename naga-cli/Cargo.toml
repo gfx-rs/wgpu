@@ -50,3 +50,6 @@ env_logger.workspace = true
 argh.workspace = true
 anyhow = { workspace = true, features = ["std"] }
 log.workspace = true
+
+[lints]
+workspace = true

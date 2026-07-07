@@ -50,13 +50,13 @@ To use wgpu in C or dozens of other languages, look at [wgpu-native](https://git
 
 |         Docs          |         Examples          |        Changelog        |
 | :-------------------: | :-----------------------: | :---------------------: |
-|    [v29][rel-docs]    |    [v29][rel-examples]    |    [v29][rel-change]    |
+|    [v30][rel-docs]    |    [v30][rel-examples]    |    [v30][rel-change]    |
 | [`trunk`][trunk-docs] | [`trunk`][trunk-examples] | [`trunk`][trunk-change] |
 
 Contributors are welcome! See [CONTRIBUTING.md][contrib] for more information.
 
 [rel-docs]: https://docs.rs/wgpu/
-[rel-examples]: https://github.com/gfx-rs/wgpu/tree/v29/examples#readme
+[rel-examples]: https://github.com/gfx-rs/wgpu/tree/v30/examples#readme
 [rel-change]: https://github.com/gfx-rs/wgpu/releases
 [trunk-docs]: https://wgpu.rs/doc/wgpu/
 [trunk-examples]: https://github.com/gfx-rs/wgpu/tree/trunk/examples#readme
@@ -89,7 +89,7 @@ Testing, examples, and `::from_env()` methods use a standardized set of environm
 
 See the [documentation](https://docs.rs/wgpu/latest/wgpu/index.html?search=env) for more environment variables.
 
-When running the CTS, use the variables `DENO_WEBGPU_ADAPTER_NAME`, `DENO_WEBGPU_BACKEND`, `DENO_WEBGPU_POWER_PREFERENCE`, and `DENO_WEBGPU_DX12_COMPILER`.
+When running the CTS, use the variables `DENO_WEBGPU_ADAPTER_NAME`, `DENO_WEBGPU_BACKEND`, `DENO_WEBGPU_POWER_PREFERENCE`, `DENO_WEBGPU_DX12_COMPILER`, and `DENO_WEBGPU_STRICT_COMPLIANCE`.
 
 ## Repo Overview
 

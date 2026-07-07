@@ -177,6 +177,28 @@ const EMPTY_RENDER_SHADER: &str = "\
 @vertex fn vs() -> @builtin(position) vec4<f32> { return vec4<f32>(0); }
 @fragment fn fs() -> @location(0) vec4<f32> { return vec4<f32>(0); }";
 
+fn clear_buffer_and_wait(ctx: &TestingContext, buffer: &wgpu::Buffer) {
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    encoder.clear_buffer(buffer, 0, None);
+    ctx.queue.submit([encoder.finish()]);
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
+}
+
+fn clear_texture_and_wait(ctx: &TestingContext, texture: &wgpu::Texture) {
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    encoder.clear_texture(texture, &wgpu::ImageSubresourceRange::default());
+    ctx.queue.submit([encoder.finish()]);
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
+}
+
 fn create_render_target(device: &wgpu::Device) -> (wgpu::Texture, wgpu::TextureView) {
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: None,
@@ -336,7 +358,7 @@ fn test_buffer_destroy_before_submit(ctx: &TestingContext, usage: UsageKind) {
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: None,
                 contents: &[0u8; 4],
-                usage: wgpu::BufferUsages::COPY_SRC,
+                usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
             });
         let buffer_dest = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
@@ -344,6 +366,9 @@ fn test_buffer_destroy_before_submit(ctx: &TestingContext, usage: UsageKind) {
             usage: wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+
+        clear_buffer_and_wait(ctx, &buffer_source);
+        clear_buffer_and_wait(ctx, &buffer_dest);
 
         let mut encoder = ctx
             .device
@@ -364,9 +389,11 @@ fn test_buffer_destroy_before_submit(ctx: &TestingContext, usage: UsageKind) {
     let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 16,
-        usage: wgpu::BufferUsages::UNIFORM,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
+
+    clear_buffer_and_wait(ctx, &buffer);
 
     let encoder = record_encoder_with_resource(
         ctx,
@@ -483,12 +510,15 @@ fn test_texture_destroy_before_submit(ctx: &TestingContext, usage: UsageKind) {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Snorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         };
 
         let texture_1 = ctx.device.create_texture(&descriptor);
         let texture_2 = ctx.device.create_texture(&descriptor);
+
+        clear_texture_and_wait(ctx, &texture_1);
+        clear_texture_and_wait(ctx, &texture_2);
 
         let mut encoder = ctx
             .device
@@ -539,6 +569,8 @@ fn test_texture_destroy_before_submit(ctx: &TestingContext, usage: UsageKind) {
         view_formats: &[],
     });
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+    clear_texture_and_wait(ctx, &texture);
 
     let encoder = record_encoder_with_resource(
         ctx,
@@ -706,6 +738,8 @@ fn test_external_texture_destroy_before_submit(ctx: &TestingContext, usage: Usag
         },
         &[&plane_texture.create_view(&wgpu::TextureViewDescriptor::default())],
     );
+
+    clear_texture_and_wait(ctx, &plane_texture);
 
     let encoder = record_encoder_with_resource(
         ctx,
@@ -931,15 +965,18 @@ fn test_replaced_bind_group(ctx: &TestingContext, usage: UsageKind) {
     let buffer_a = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 16,
-        usage: wgpu::BufferUsages::UNIFORM,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
     let buffer_b = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 16,
-        usage: wgpu::BufferUsages::UNIFORM,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
+
+    clear_buffer_and_wait(ctx, &buffer_a);
+    clear_buffer_and_wait(ctx, &buffer_b);
 
     let (_render_target, rt_view) = create_render_target(&ctx.device);
     let mut encoder = ctx

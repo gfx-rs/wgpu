@@ -272,3 +272,13 @@ To find the full list of tests, go to the
 
 The version of the CTS used by `cargo xtask cts` is specified in
 [`cts_runner/revision.txt`](../cts_runner/revision.txt).
+
+## Memory Initialization Testing
+
+Simple tests can fail to detect when necessary memory initialization is omitted because
+allocations that happen to be satisfied by fresh kernel-provided pages are zero, even though
+the actual allocator being invoked does not guarantee that.
+
+To improve our coverage of memory initialization, we set `LVP_POISON_MEMORY=true` in Linux
+(Vulkan) CI. This instructs llvmpipe to fill all newly initialized memory with a non-zero
+value, so tests will reliably fail if the memory is not properly initialized.

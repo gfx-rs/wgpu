@@ -216,6 +216,7 @@ impl From<crate::proc::MissingSpecialType> for ResolveError {
     }
 }
 
+#[expect(missing_debug_implementations, reason = "would be way too verbose?")]
 pub struct ResolveContext<'a> {
     pub constants: &'a Arena<crate::Constant>,
     pub overrides: &'a Arena<crate::Override>,
