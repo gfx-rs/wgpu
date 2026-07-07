@@ -12,38 +12,32 @@ use crate::{
     track::ResourceUsageCompatibilityError,
 };
 
-impl Global {
-    pub fn command_encoder_transition_resources(
-        &self,
-        command_encoder_id: CommandEncoderId,
-        buffer_transitions: impl Iterator<Item = wgt::BufferTransition<BufferId>>,
-        texture_transitions: impl Iterator<Item = wgt::TextureTransition<TextureId>>,
+impl CommandEncoder {
+    pub fn transition_resources(
+        self: &Arc<Self>,
+        buffer_transitions: impl Iterator<Item = wgt::BufferTransition<Arc<Buffer>>>,
+        texture_transitions: impl Iterator<Item = wgt::TextureTransition<Arc<Texture>>>,
     ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::transition_resources");
 
-        let hub = &self.hub;
-
         // Lock command encoder for recording
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-        let mut cmd_buf_data = cmd_enc.data.lock();
+        let mut cmd_buf_data = self.data.lock();
         cmd_buf_data.push_with(|| -> Result<_, TransitionResourcesError> {
             Ok(ArcCommand::TransitionResources {
                 buffer_transitions: buffer_transitions
                     .map(|t| {
-                        let buffer = self.resolve_buffer_id(t.buffer);
-                        buffer.check_is_valid()?;
+                        t.buffer.check_is_valid()?;
                         Ok(wgt::BufferTransition {
-                            buffer,
+                            buffer: t.buffer,
                             state: t.state,
                         })
                     })
                     .collect::<Result<_, TransitionResourcesError>>()?,
                 texture_transitions: texture_transitions
                     .map(|t| {
-                        let texture = self.resolve_texture_id(t.texture);
-                        texture.check_valid()?;
+                        t.texture.check_valid()?;
                         Ok(wgt::TextureTransition {
-                            texture,
+                            texture: t.texture,
                             selector: t.selector,
                             state: t.state,
                         })
@@ -51,6 +45,42 @@ impl Global {
                     .collect::<Result<_, TransitionResourcesError>>()?,
             })
         })
+    }
+}
+
+impl Global {
+    pub fn command_encoder_transition_resources(
+        &self,
+        command_encoder_id: CommandEncoderId,
+        buffer_transitions: impl Iterator<Item = wgt::BufferTransition<BufferId>>,
+        texture_transitions: impl Iterator<Item = wgt::TextureTransition<TextureId>>,
+    ) -> Result<(), EncoderStateError> {
+        let hub = &self.hub;
+
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
+        let buffer_transitions = buffer_transitions
+            .map(|t| {
+                let buffer = hub.buffers.get(t.buffer);
+                wgt::BufferTransition {
+                    buffer,
+                    state: t.state,
+                }
+            })
+            .collect::<Vec<_>>();
+        let texture_transitions = texture_transitions
+            .map(|t| {
+                let texture = hub.textures.get(t.texture);
+                wgt::TextureTransition {
+                    texture,
+                    selector: t.selector,
+                    state: t.state,
+                }
+            })
+            .collect::<Vec<_>>();
+        cmd_enc.transition_resources(
+            buffer_transitions.into_iter(),
+            texture_transitions.into_iter(),
+        )
     }
 }
 
