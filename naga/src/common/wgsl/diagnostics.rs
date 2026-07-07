@@ -24,6 +24,10 @@ impl Severity {
     }
 }
 
+#[expect(
+    missing_debug_implementations,
+    reason = "use this type with `Display`, not `Debug`"
+)]
 pub struct DisplayFilterableTriggeringRule<'a>(&'a FilterableTriggeringRule);
 
 impl Display for DisplayFilterableTriggeringRule<'_> {

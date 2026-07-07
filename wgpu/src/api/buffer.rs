@@ -2,7 +2,7 @@ use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{
     error, fmt,
     num::NonZero,
-    ops::{Bound, Deref, Range, RangeBounds},
+    ops::{Bound, Range, RangeBounds},
 };
 
 use crate::util::Mutex;
@@ -273,7 +273,9 @@ impl Buffer {
     ///
     /// This method will return None if:
     /// - The buffer is not from the backend specified by `A`.
-    /// - The buffer is from the `webgpu` or `custom` backend.
+    /// - The buffer is from [`Backend::BrowserWebGpu`].
+    ///   (Use `Buffer::as_webgpu()` instead.)
+    /// - The buffer is from a custom backend.
     /// - The buffer has had [`Self::destroy()`] called on it.
     ///
     /// # Safety
@@ -287,7 +289,7 @@ impl Buffer {
     #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: hal::Api>(
         &self,
-    ) -> Option<impl Deref<Target = A::Buffer> + WasmNotSendSync> {
+    ) -> Option<impl core::ops::Deref<Target = A::Buffer> + WasmNotSendSync> {
         let buffer = self.inner.as_core_opt()?;
         unsafe { buffer.context.buffer_as_hal::<A>(buffer) }
     }
@@ -454,6 +456,13 @@ impl Buffer {
     /// Returns custom implementation of Buffer (if custom backend and is internally T)
     pub fn as_custom<T: custom::BufferInterface>(&self) -> Option<&T> {
         self.inner.as_custom()
+    }
+
+    /// Returns the underlying [`webgpu::GpuBuffer`] handle if this `Buffer`
+    /// is on the WebGPU backend, otherwise `None`.
+    #[cfg(webgpu)]
+    pub fn as_webgpu(&self) -> Option<&webgpu::GpuBuffer> {
+        self.inner.as_webgpu_opt().map(|wb| &wb.inner)
     }
 }
 

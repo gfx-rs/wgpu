@@ -1,5 +1,5 @@
 use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
-use core::ptr::NonNull;
+use core::{mem::align_of, ptr::NonNull};
 
 use bytemuck::TransparentWrapper;
 use objc2::{
@@ -24,8 +24,8 @@ use objc2_metal::{
 };
 use parking_lot::{Condvar, Mutex, RwLock};
 
-use super::{adapter::VERTEX_BUFFER_SLOT_START, conv, PassthroughShader, ShaderModuleSource};
-use crate::{auxil::map_naga_stage, TlasInstance};
+use super::{adapter::MAX_BUFFERS, conv, PassthroughShader, ShaderModuleSource};
+use crate::{auxil::map_naga_stage, DropCallback, DropGuard, TlasInstance};
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
@@ -43,15 +43,16 @@ struct CompiledShader {
     wg_size: MTLSize,
     wg_memory_sizes: Vec<u32>,
 
-    /// Bindings of WGSL `storage` globals that contain variable-sized arrays.
+    /// Bindings of WGSL `storage` globals that contain variable-sized arrays,
+    /// paired with a binding-array element index when applicable.
     ///
     /// In order to implement bounds checks and the `arrayLength` function for
     /// WGSL runtime-sized arrays, we pass the entry point a struct with a
-    /// member for each global variable that contains such an array. That member
-    /// is a `u32` holding the variable's total size in bytes---which is simply
-    /// the size of the `Buffer` supplying that variable's contents for the
-    /// draw call.
-    sized_bindings: Vec<naga::ResourceBinding>,
+    /// `u32` member for each such binding. For ordinary storage buffers the
+    /// element index is zero; for storage binding arrays there is one entry per
+    /// layout element. Each member holds that element's total size in bytes---
+    /// the size of the `Buffer` supplying its contents for the draw or dispatch.
+    sized_bindings: Vec<(naga::ResourceBinding, u32)>,
 
     immutable_buffer_mask: usize,
 }
@@ -89,49 +90,64 @@ fn create_depth_stencil_desc(
     desc
 }
 
-const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> naga::back::msl::VertexFormat {
+#[allow(
+    clippy::mut_from_ref,
+    reason = "MTLBuffer shared contents are writable through `&MTLBuffer`"
+)]
+fn bindless_id_table_mut(
+    buffer: &ProtocolObject<dyn MTLBuffer>,
+    count: u32,
+) -> &mut [MTLResourceID] {
+    let ptr = buffer.contents().cast::<u8>().as_ptr();
+    // SAFETY: The buffer is aligned to the size of `MTLResourceID`.
+    assert_eq!(ptr as usize % align_of::<MTLResourceID>(), 0);
+    let ptr = ptr.cast::<MTLResourceID>();
+    unsafe { core::slice::from_raw_parts_mut(ptr, count as usize) }
+}
+
+const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> nt::VertexFormat {
     match format {
-        wgt::VertexFormat::Uint8 => naga::back::msl::VertexFormat::Uint8,
-        wgt::VertexFormat::Uint8x2 => naga::back::msl::VertexFormat::Uint8x2,
-        wgt::VertexFormat::Uint8x4 => naga::back::msl::VertexFormat::Uint8x4,
-        wgt::VertexFormat::Sint8 => naga::back::msl::VertexFormat::Sint8,
-        wgt::VertexFormat::Sint8x2 => naga::back::msl::VertexFormat::Sint8x2,
-        wgt::VertexFormat::Sint8x4 => naga::back::msl::VertexFormat::Sint8x4,
-        wgt::VertexFormat::Unorm8 => naga::back::msl::VertexFormat::Unorm8,
-        wgt::VertexFormat::Unorm8x2 => naga::back::msl::VertexFormat::Unorm8x2,
-        wgt::VertexFormat::Unorm8x4 => naga::back::msl::VertexFormat::Unorm8x4,
-        wgt::VertexFormat::Snorm8 => naga::back::msl::VertexFormat::Snorm8,
-        wgt::VertexFormat::Snorm8x2 => naga::back::msl::VertexFormat::Snorm8x2,
-        wgt::VertexFormat::Snorm8x4 => naga::back::msl::VertexFormat::Snorm8x4,
-        wgt::VertexFormat::Uint16 => naga::back::msl::VertexFormat::Uint16,
-        wgt::VertexFormat::Uint16x2 => naga::back::msl::VertexFormat::Uint16x2,
-        wgt::VertexFormat::Uint16x4 => naga::back::msl::VertexFormat::Uint16x4,
-        wgt::VertexFormat::Sint16 => naga::back::msl::VertexFormat::Sint16,
-        wgt::VertexFormat::Sint16x2 => naga::back::msl::VertexFormat::Sint16x2,
-        wgt::VertexFormat::Sint16x4 => naga::back::msl::VertexFormat::Sint16x4,
-        wgt::VertexFormat::Unorm16 => naga::back::msl::VertexFormat::Unorm16,
-        wgt::VertexFormat::Unorm16x2 => naga::back::msl::VertexFormat::Unorm16x2,
-        wgt::VertexFormat::Unorm16x4 => naga::back::msl::VertexFormat::Unorm16x4,
-        wgt::VertexFormat::Snorm16 => naga::back::msl::VertexFormat::Snorm16,
-        wgt::VertexFormat::Snorm16x2 => naga::back::msl::VertexFormat::Snorm16x2,
-        wgt::VertexFormat::Snorm16x4 => naga::back::msl::VertexFormat::Snorm16x4,
-        wgt::VertexFormat::Float16 => naga::back::msl::VertexFormat::Float16,
-        wgt::VertexFormat::Float16x2 => naga::back::msl::VertexFormat::Float16x2,
-        wgt::VertexFormat::Float16x4 => naga::back::msl::VertexFormat::Float16x4,
-        wgt::VertexFormat::Float32 => naga::back::msl::VertexFormat::Float32,
-        wgt::VertexFormat::Float32x2 => naga::back::msl::VertexFormat::Float32x2,
-        wgt::VertexFormat::Float32x3 => naga::back::msl::VertexFormat::Float32x3,
-        wgt::VertexFormat::Float32x4 => naga::back::msl::VertexFormat::Float32x4,
-        wgt::VertexFormat::Uint32 => naga::back::msl::VertexFormat::Uint32,
-        wgt::VertexFormat::Uint32x2 => naga::back::msl::VertexFormat::Uint32x2,
-        wgt::VertexFormat::Uint32x3 => naga::back::msl::VertexFormat::Uint32x3,
-        wgt::VertexFormat::Uint32x4 => naga::back::msl::VertexFormat::Uint32x4,
-        wgt::VertexFormat::Sint32 => naga::back::msl::VertexFormat::Sint32,
-        wgt::VertexFormat::Sint32x2 => naga::back::msl::VertexFormat::Sint32x2,
-        wgt::VertexFormat::Sint32x3 => naga::back::msl::VertexFormat::Sint32x3,
-        wgt::VertexFormat::Sint32x4 => naga::back::msl::VertexFormat::Sint32x4,
-        wgt::VertexFormat::Unorm10_10_10_2 => naga::back::msl::VertexFormat::Unorm10_10_10_2,
-        wgt::VertexFormat::Unorm8x4Bgra => naga::back::msl::VertexFormat::Unorm8x4Bgra,
+        wgt::VertexFormat::Uint8 => nt::VertexFormat::Uint8,
+        wgt::VertexFormat::Uint8x2 => nt::VertexFormat::Uint8x2,
+        wgt::VertexFormat::Uint8x4 => nt::VertexFormat::Uint8x4,
+        wgt::VertexFormat::Sint8 => nt::VertexFormat::Sint8,
+        wgt::VertexFormat::Sint8x2 => nt::VertexFormat::Sint8x2,
+        wgt::VertexFormat::Sint8x4 => nt::VertexFormat::Sint8x4,
+        wgt::VertexFormat::Unorm8 => nt::VertexFormat::Unorm8,
+        wgt::VertexFormat::Unorm8x2 => nt::VertexFormat::Unorm8x2,
+        wgt::VertexFormat::Unorm8x4 => nt::VertexFormat::Unorm8x4,
+        wgt::VertexFormat::Snorm8 => nt::VertexFormat::Snorm8,
+        wgt::VertexFormat::Snorm8x2 => nt::VertexFormat::Snorm8x2,
+        wgt::VertexFormat::Snorm8x4 => nt::VertexFormat::Snorm8x4,
+        wgt::VertexFormat::Uint16 => nt::VertexFormat::Uint16,
+        wgt::VertexFormat::Uint16x2 => nt::VertexFormat::Uint16x2,
+        wgt::VertexFormat::Uint16x4 => nt::VertexFormat::Uint16x4,
+        wgt::VertexFormat::Sint16 => nt::VertexFormat::Sint16,
+        wgt::VertexFormat::Sint16x2 => nt::VertexFormat::Sint16x2,
+        wgt::VertexFormat::Sint16x4 => nt::VertexFormat::Sint16x4,
+        wgt::VertexFormat::Unorm16 => nt::VertexFormat::Unorm16,
+        wgt::VertexFormat::Unorm16x2 => nt::VertexFormat::Unorm16x2,
+        wgt::VertexFormat::Unorm16x4 => nt::VertexFormat::Unorm16x4,
+        wgt::VertexFormat::Snorm16 => nt::VertexFormat::Snorm16,
+        wgt::VertexFormat::Snorm16x2 => nt::VertexFormat::Snorm16x2,
+        wgt::VertexFormat::Snorm16x4 => nt::VertexFormat::Snorm16x4,
+        wgt::VertexFormat::Float16 => nt::VertexFormat::Float16,
+        wgt::VertexFormat::Float16x2 => nt::VertexFormat::Float16x2,
+        wgt::VertexFormat::Float16x4 => nt::VertexFormat::Float16x4,
+        wgt::VertexFormat::Float32 => nt::VertexFormat::Float32,
+        wgt::VertexFormat::Float32x2 => nt::VertexFormat::Float32x2,
+        wgt::VertexFormat::Float32x3 => nt::VertexFormat::Float32x3,
+        wgt::VertexFormat::Float32x4 => nt::VertexFormat::Float32x4,
+        wgt::VertexFormat::Uint32 => nt::VertexFormat::Uint32,
+        wgt::VertexFormat::Uint32x2 => nt::VertexFormat::Uint32x2,
+        wgt::VertexFormat::Uint32x3 => nt::VertexFormat::Uint32x3,
+        wgt::VertexFormat::Uint32x4 => nt::VertexFormat::Uint32x4,
+        wgt::VertexFormat::Sint32 => nt::VertexFormat::Sint32,
+        wgt::VertexFormat::Sint32x2 => nt::VertexFormat::Sint32x2,
+        wgt::VertexFormat::Sint32x3 => nt::VertexFormat::Sint32x3,
+        wgt::VertexFormat::Sint32x4 => nt::VertexFormat::Sint32x4,
+        wgt::VertexFormat::Unorm10_10_10_2 => nt::VertexFormat::Unorm10_10_10_2,
+        wgt::VertexFormat::Unorm8x4Bgra => nt::VertexFormat::Unorm8x4Bgra,
 
         wgt::VertexFormat::Float64
         | wgt::VertexFormat::Float64x2
@@ -220,6 +236,11 @@ impl super::Device {
                         .module
                         .runtime_checks
                         .mesh_shader_primitive_indices_clamp,
+                    emit_int_div_checks: stage.module.runtime_checks.int_div_checks,
+                    ray_query_initialization_tracking: stage
+                        .module
+                        .runtime_checks
+                        .ray_query_initialization_tracking,
                 };
 
                 let pipeline_options = naga::back::msl::PipelineOptions {
@@ -230,6 +251,7 @@ impl super::Device {
                     },
                     vertex_pulling_transform: true,
                     vertex_buffer_mappings: vertex_buffer_mappings.to_vec(),
+                    binding_array_length_map: layout.binding_array_length_map.clone(),
                 };
 
                 let (source, info) = naga::back::msl::write_string(
@@ -321,18 +343,27 @@ impl super::Device {
                                 immutable_buffer_mask |= 1 << slot;
                             }
 
-                            let mut dynamic_array_container_ty = var.ty;
-                            if let naga::TypeInner::Struct { ref members, .. } =
-                                module.types[var.ty].inner
+                            if module.types[var.ty]
+                                .inner
+                                .needs_host_buffer_byte_size(&module.types)
                             {
-                                dynamic_array_container_ty = members.last().unwrap().ty;
-                            }
-                            if let naga::TypeInner::Array {
-                                size: naga::ArraySize::Dynamic,
-                                ..
-                            } = module.types[dynamic_array_container_ty].inner
-                            {
-                                sized_bindings.push(br);
+                                let n = match module.types[var.ty].inner {
+                                    naga::TypeInner::BindingArray { size, .. } => {
+                                        let from_shader = match size {
+                                            naga::ArraySize::Constant(n) => n.get(),
+                                            naga::ArraySize::Pending(_)
+                                            | naga::ArraySize::Dynamic => 0,
+                                        };
+                                        let from_layout = layout
+                                            .binding_array_length_map
+                                            .get(&br)
+                                            .copied()
+                                            .unwrap_or(0);
+                                        from_shader.max(from_layout).max(1)
+                                    }
+                                    _ => 1,
+                                };
+                                sized_bindings.extend((0..n).map(|i| (br, i)));
                             }
                         }
                         _ => {}
@@ -388,6 +419,7 @@ impl super::Device {
         array_layers: u32,
         mip_levels: u32,
         copy_size: crate::CopyExtent,
+        drop_callback: Option<DropCallback>,
     ) -> super::Texture {
         super::Texture {
             raw,
@@ -396,6 +428,7 @@ impl super::Device {
             array_layers,
             mip_levels,
             copy_size,
+            _drop_guard: DropGuard::from_option(drop_callback),
         }
     }
 
@@ -567,6 +600,7 @@ impl crate::Device for super::Device {
                 mip_levels: desc.mip_level_count,
                 array_layers: desc.array_layer_count(),
                 copy_size: desc.copy_extent(),
+                _drop_guard: None,
             })
         })
     }
@@ -785,6 +819,7 @@ impl crate::Device for super::Device {
             resources: Default::default(),
         });
         let mut bind_group_infos = [const { None }; crate::MAX_BIND_GROUPS];
+        let mut binding_array_length_map = naga::FastHashMap::default();
 
         // First, place the immediates
         for info in stage_data.iter_mut() {
@@ -807,6 +842,22 @@ impl crate::Device for super::Device {
             let base_resource_indices = stage_data.map_ref(|info| info.counters.clone());
 
             for entry in bgl.entries.iter() {
+                let br = naga::ResourceBinding {
+                    group: group_index as u32,
+                    binding: entry.binding,
+                };
+                if let Some(count) = entry.count {
+                    if matches!(
+                        entry.ty,
+                        wgt::BindingType::Buffer {
+                            ty: wgt::BufferBindingType::Storage { .. },
+                            ..
+                        }
+                    ) {
+                        binding_array_length_map.insert(br, count.get());
+                    }
+                }
+
                 if let wgt::BindingType::Buffer {
                     ty: wgt::BufferBindingType::Storage { .. },
                     ..
@@ -879,10 +930,6 @@ impl crate::Device for super::Device {
                         }
                     }
 
-                    let br = naga::ResourceBinding {
-                        group: group_index as u32,
-                        binding: entry.binding,
-                    };
                     info.resources.insert(br, target);
                 }
             }
@@ -926,6 +973,7 @@ impl crate::Device for super::Device {
             immediates_infos,
             total_immediates: desc.immediate_size,
             per_stage_map,
+            binding_array_length_map,
         })
     }
 
@@ -970,7 +1018,7 @@ impl crate::Device for super::Device {
                         let uses = conv::map_resource_usage(&layout.ty);
 
                         // Create argument buffer for this array
-                        let buffer = self
+                        let argument_buffer = self
                             .shared
                             .device
                             .newBufferWithLength_options(
@@ -980,22 +1028,18 @@ impl crate::Device for super::Device {
                             )
                             .unwrap();
 
-                        let contents: &mut [MTLResourceID] = unsafe {
-                            core::slice::from_raw_parts_mut(
-                                buffer.contents().cast().as_ptr(),
-                                count as usize,
-                            )
-                        };
-
+                        let mut array_element_sizes = Vec::new();
                         match layout.ty {
                             wgt::BindingType::Texture { .. }
                             | wgt::BindingType::StorageTexture { .. } => {
+                                let resource_ids =
+                                    bindless_id_table_mut(argument_buffer.as_ref(), count);
                                 let start = entry.resource_index as usize;
                                 let end = start + count as usize;
                                 let textures = &desc.textures[start..end];
 
                                 for (idx, tex) in textures.iter().enumerate() {
-                                    contents[idx] = tex.view.raw.gpuResourceID();
+                                    resource_ids[idx] = tex.view.raw.gpuResourceID();
 
                                     let use_info = bg
                                         .resources_to_use
@@ -1008,17 +1052,51 @@ impl crate::Device for super::Device {
                                 }
                             }
                             wgt::BindingType::Sampler { .. } => {
+                                let resource_ids =
+                                    bindless_id_table_mut(argument_buffer.as_ref(), count);
                                 let start = entry.resource_index as usize;
                                 let end = start + count as usize;
                                 let samplers = &desc.samplers[start..end];
 
                                 for (idx, &sampler) in samplers.iter().enumerate() {
-                                    contents[idx] = sampler.raw.gpuResourceID();
+                                    resource_ids[idx] = sampler.raw.gpuResourceID();
                                     // Samplers aren't resources like buffers and textures, so don't
                                     // need to be passed to useResource
                                 }
                             }
+                            wgt::BindingType::Buffer { ty, .. } => {
+                                let start = entry.resource_index as usize;
+                                let end = start + count as usize;
+                                let buffers = &desc.buffers[start..end];
+                                let pointers = argument_buffer.contents().cast::<u64>();
+                                for (idx, source) in buffers.iter().enumerate() {
+                                    let addr = source.buffer.raw.gpuAddress() + source.offset;
+                                    unsafe {
+                                        pointers.add(idx).write(addr);
+                                    }
+
+                                    if let wgt::BufferBindingType::Storage { .. } = ty {
+                                        let remaining_size = wgt::BufferSize::new(
+                                            source.buffer.size - source.offset,
+                                        );
+                                        if let Some(binding_size) = source.size.or(remaining_size) {
+                                            array_element_sizes.push((idx as u32, binding_size));
+                                        }
+                                    }
+
+                                    let use_info = bg
+                                        .resources_to_use
+                                        .entry(source.buffer.as_raw().cast())
+                                        .or_default();
+                                    use_info.stages |= stages;
+                                    use_info.uses |= uses;
+                                    use_info.visible_in_compute |=
+                                        layout.visibility.contains(wgt::ShaderStages::COMPUTE);
+                                }
+                            }
                             wgt::BindingType::AccelerationStructure { .. } => {
+                                let resource_ids =
+                                    bindless_id_table_mut(argument_buffer.as_ref(), count);
                                 let start = entry.resource_index as usize;
                                 let end = start + count as usize;
                                 let acceleration_structures =
@@ -1027,7 +1105,7 @@ impl crate::Device for super::Device {
                                 for (idx, &acceleration_structure) in
                                     acceleration_structures.iter().enumerate()
                                 {
-                                    contents[idx] = acceleration_structure.raw.gpuResourceID();
+                                    resource_ids[idx] = acceleration_structure.raw.gpuResourceID();
 
                                     let use_info = bg
                                         .resources_to_use
@@ -1044,16 +1122,31 @@ impl crate::Device for super::Device {
                             }
                         }
 
-                        bg.buffers.push(super::BufferLikeResource::Buffer {
-                            ptr: NonNull::from(&*buffer),
-                            offset: 0,
-                            dynamic_index: None,
-                            binding_size: None,
-                            binding_location: layout.binding,
-                        });
+                        if matches!(
+                            layout.ty,
+                            wgt::BindingType::Buffer {
+                                ty: wgt::BufferBindingType::Storage { .. },
+                                ..
+                            }
+                        ) {
+                            bg.buffers
+                                .push(super::BufferLikeResource::StorageBindingArray {
+                                    ptr: NonNull::from(&*argument_buffer),
+                                    array_element_sizes,
+                                    binding_location: layout.binding,
+                                });
+                        } else {
+                            bg.buffers.push(super::BufferLikeResource::Buffer {
+                                ptr: NonNull::from(&*argument_buffer),
+                                offset: 0,
+                                dynamic_index: None,
+                                binding_size: None,
+                                binding_location: layout.binding,
+                            });
+                        }
                         counter.buffers += 1;
 
-                        bg.argument_buffers.push(buffer)
+                        bg.argument_buffers.push(argument_buffer)
                     }
                     // Bindfull path
                     else {
@@ -1333,7 +1426,7 @@ impl crate::Device for super::Device {
                         }
 
                         let mapping = naga::back::msl::VertexBufferMapping {
-                            id: VERTEX_BUFFER_SLOT_START + i as u32,
+                            id: MAX_BUFFERS - 1 - i as u32,
                             stride: if vbl.array_stride > 0 {
                                 vbl.array_stride.try_into().unwrap()
                             } else {
@@ -1401,7 +1494,7 @@ impl crate::Device for super::Device {
                                 continue;
                             };
 
-                            let buffer_index = VERTEX_BUFFER_SLOT_START as usize + i;
+                            let buffer_index = MAX_BUFFERS as usize - 1 - i;
                             let buffer_desc = unsafe {
                                 vertex_descriptor
                                     .layouts()
@@ -1795,6 +1888,29 @@ impl crate::Device for super::Device {
         self.counters.compute_pipelines.sub(1);
     }
 
+    unsafe fn create_ray_tracing_pipeline(
+        &self,
+        _desc: &crate::RayTracingPipelineDescriptor<
+            super::PipelineLayout,
+            super::ShaderModule,
+            super::PipelineCache,
+        >,
+    ) -> Result<super::RayTracingPipeline, crate::PipelineError> {
+        unimplemented!("Ray tracing pipelines are unsupported on Metal")
+    }
+
+    unsafe fn destroy_ray_tracing_pipeline(&self, _pipeline: super::RayTracingPipeline) {
+        unimplemented!("Ray tracing pipelines are unsupported on Metal")
+    }
+
+    unsafe fn get_raytracing_pipeline_group_data(
+        &self,
+        _pipeline: &super::RayTracingPipeline,
+        _groups: core::ops::Range<u32>,
+    ) -> Result<Vec<u8>, crate::DeviceError> {
+        unimplemented!("Ray tracing pipelines are unsupported on Metal")
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         _desc: &crate::PipelineCacheDescriptor<'_>,
@@ -2038,7 +2154,7 @@ impl crate::Device for super::Device {
             },
             options: MTLAccelerationStructureInstanceOptions::None,
             mask: instance.mask as u32,
-            intersectionFunctionTableOffset: 0,
+            intersectionFunctionTableOffset: instance.pipeline_intersection_data_offset,
             userID: instance.custom_data,
             accelerationStructureID: unsafe { MTLResourceID::from_raw(instance.blas_address) },
         };

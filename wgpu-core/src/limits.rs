@@ -244,7 +244,7 @@ pub fn apply_limit_buckets(mut raw: hal::DynExposedAdapter) -> Option<hal::DynEx
 /// at that point neither excluding the tier1 formats from WebIDL entirely nor allowing
 /// content to use them on a device that doesn't have the feature enabled will be
 /// acceptable. See <https://github.com/gfx-rs/wgpu/issues/8122>.
-const EXEMPT_FEATURES: Features = Features::EXTERNAL_TEXTURE
+pub(crate) const EXEMPT_FEATURES: Features = Features::EXTERNAL_TEXTURE
     .union(Features::TEXTURE_FORMAT_NV12)
     .union(Features::TEXTURE_FORMAT_P010)
     .union(Features::TEXTURE_FORMAT_16BIT_NORM);
@@ -362,6 +362,7 @@ const BUCKET_M1: Bucket = Bucket {
         max_dynamic_uniform_buffers_per_pipeline_layout: 12,
         max_sampled_textures_per_shader_stage: 48,
         max_storage_buffer_binding_size: 1 << 30, // 1 GB,
+        max_storage_buffers_per_shader_stage: 9,
         max_vertex_attributes: 31,
         ..UPLEVEL.limits
     },

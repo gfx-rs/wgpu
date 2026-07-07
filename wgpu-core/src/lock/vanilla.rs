@@ -35,6 +35,10 @@ impl<T> Mutex<T> {
         MutexGuard(self.0.lock())
     }
 
+    pub fn get_mut(&mut self) -> &mut T {
+        self.0.get_mut()
+    }
+
     pub fn into_inner(self) -> T {
         self.0.into_inner()
     }

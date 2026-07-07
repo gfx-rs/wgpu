@@ -247,5 +247,5 @@ pub fn main() {
 }
 
 #[cfg(test)]
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(wasm_test))]
 pub mod tests;

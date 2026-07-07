@@ -482,6 +482,9 @@ class GPUTextureUsage {
   static get RENDER_ATTACHMENT() {
     return 0x10;
   }
+  static get TRANSIENT_ATTACHMENT() {
+    return 0x20;
+  }
 }
 
 const GPUTextureViewPrototype = GPUTextureView.prototype;

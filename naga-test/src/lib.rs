@@ -48,7 +48,7 @@ impl Targets {
     }
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 pub struct SpvOutVersion(pub u8, pub u8);
 impl Default for SpvOutVersion {
     fn default() -> Self {
@@ -56,7 +56,7 @@ impl Default for SpvOutVersion {
     }
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 pub struct BindingMapSerialization {
     pub resource_binding: naga::ResourceBinding,
     pub bind_target: naga::back::spv::BindingInfo,
@@ -78,7 +78,7 @@ where
     Ok(map)
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize)]
 #[serde(default)]
 pub struct WriterSharedOptions {
     pub mesh_output_validation: bool,
@@ -86,7 +86,7 @@ pub struct WriterSharedOptions {
     pub bounds_checks_policies: naga::proc::BoundsCheckPolicies,
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize)]
 #[serde(default)]
 pub struct WgslInParameters {
     pub parse_doc_comments: bool,
@@ -100,7 +100,7 @@ impl From<&WgslInParameters> for naga::front::wgsl::Options {
     }
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize)]
 #[serde(default)]
 pub struct SpirvInParameters {
     pub adjust_coordinate_space: bool,
@@ -114,7 +114,7 @@ impl From<&SpirvInParameters> for naga::front::spv::Options {
     }
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 #[serde(default)]
 pub struct SpirvOutParameters {
     pub version: SpvOutVersion,
@@ -128,6 +128,7 @@ pub struct SpirvOutParameters {
     pub binding_map: naga::back::spv::BindingMap,
     pub ray_query_initialization_tracking: bool,
     pub use_storage_input_output_16: bool,
+    pub emit_int_div_checks: bool,
 }
 impl Default for SpirvOutParameters {
     fn default() -> Self {
@@ -141,6 +142,7 @@ impl Default for SpirvOutParameters {
             separate_entry_points: false,
             ray_query_initialization_tracking: true,
             use_storage_input_output_16: true,
+            emit_int_div_checks: true,
             binding_map: naga::back::spv::BindingMap::default(),
         }
     }
@@ -179,11 +181,12 @@ impl SpirvOutParameters {
             task_dispatch_limits: shared_info.task_limits,
             mesh_shader_primitive_indices_clamp: shared_info.mesh_output_validation,
             trace_ray_argument_validation: true,
+            emit_int_div_checks: self.emit_int_div_checks,
         }
     }
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize)]
 #[serde(default)]
 pub struct WgslOutParameters {
     pub explicit_types: bool,
@@ -196,13 +199,13 @@ impl From<&WgslOutParameters> for naga::back::wgsl::WriterFlags {
     }
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize)]
 pub struct FragmentModule {
     pub path: String,
     pub entry_point: String,
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize)]
 #[serde(default)]
 pub struct Parameters {
     // -- validation options --

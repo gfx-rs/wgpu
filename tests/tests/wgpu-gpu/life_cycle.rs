@@ -1,4 +1,5 @@
 use wgpu::util::DeviceExt;
+use wgpu::{ComputePassTimestampWrites, QueryType, RenderPassTimestampWrites};
 use wgpu_test::{
     fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
@@ -8,8 +9,12 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         BUFFER_DESTROY,
         TEXTURE_DESTROY,
         BUFFER_DESTROY_BEFORE_SUBMIT,
+        BUFFER_DESTROY_AFTER_SUBMIT,
         TEXTURE_DESTROY_BEFORE_SUBMIT,
+        TEXTURE_DESTROY_AFTER_SUBMIT,
         EXTERNAL_TEXTURE_DESTROY_BEFORE_SUBMIT,
+        QUERY_SET_DESTROY_BEFORE_SUBMIT,
+        QUERY_SET_DESTROY_AFTER_SUBMIT,
         REPLACED_BIND_GROUP,
     ]);
 }
@@ -164,6 +169,35 @@ const EXTERNAL_TEXTURE_RENDER_SHADER: &str = "\
 const EXTERNAL_TEXTURE_COMPUTE_SHADER: &str = "\
 @group(0) @binding(0) var tex: texture_external;
 @compute @workgroup_size(1) fn main() { _ = textureLoad(tex, vec2(0)); }";
+
+const EMPTY_COMPUTE_SHADER: &str = "\
+@compute @workgroup_size(1) fn main() {}";
+
+const EMPTY_RENDER_SHADER: &str = "\
+@vertex fn vs() -> @builtin(position) vec4<f32> { return vec4<f32>(0); }
+@fragment fn fs() -> @location(0) vec4<f32> { return vec4<f32>(0); }";
+
+fn clear_buffer_and_wait(ctx: &TestingContext, buffer: &wgpu::Buffer) {
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    encoder.clear_buffer(buffer, 0, None);
+    ctx.queue.submit([encoder.finish()]);
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
+}
+
+fn clear_texture_and_wait(ctx: &TestingContext, texture: &wgpu::Texture) {
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    encoder.clear_texture(texture, &wgpu::ImageSubresourceRange::default());
+    ctx.queue.submit([encoder.finish()]);
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
+}
 
 fn create_render_target(device: &wgpu::Device) -> (wgpu::Texture, wgpu::TextureView) {
     let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -324,7 +358,7 @@ fn test_buffer_destroy_before_submit(ctx: &TestingContext, usage: UsageKind) {
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: None,
                 contents: &[0u8; 4],
-                usage: wgpu::BufferUsages::COPY_SRC,
+                usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
             });
         let buffer_dest = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
@@ -332,6 +366,9 @@ fn test_buffer_destroy_before_submit(ctx: &TestingContext, usage: UsageKind) {
             usage: wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+
+        clear_buffer_and_wait(ctx, &buffer_source);
+        clear_buffer_and_wait(ctx, &buffer_dest);
 
         let mut encoder = ctx
             .device
@@ -352,9 +389,11 @@ fn test_buffer_destroy_before_submit(ctx: &TestingContext, usage: UsageKind) {
     let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 16,
-        usage: wgpu::BufferUsages::UNIFORM,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
+
+    clear_buffer_and_wait(ctx, &buffer);
 
     let encoder = record_encoder_with_resource(
         ctx,
@@ -388,6 +427,76 @@ static BUFFER_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration
         test_buffer_destroy_before_submit(&ctx, UsageKind::RenderBundle);
     });
 
+fn test_buffer_destroy_after_submit(ctx: &TestingContext, usage: UsageKind) {
+    if matches!(usage, UsageKind::Direct) {
+        let buffer_source = ctx
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: &[0u8; 4],
+                usage: wgpu::BufferUsages::COPY_SRC,
+            });
+        let buffer_dest = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 4,
+            usage: wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        encoder.copy_buffer_to_buffer(&buffer_source, 0, &buffer_dest, 0, 4);
+        ctx.queue.submit([encoder.finish()]);
+
+        buffer_source.destroy();
+        buffer_dest.destroy();
+
+        ctx.device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .unwrap();
+        return;
+    }
+
+    let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 16,
+        usage: wgpu::BufferUsages::UNIFORM,
+        mapped_at_creation: false,
+    });
+
+    let encoder = record_encoder_with_resource(
+        ctx,
+        usage,
+        buffer.as_entire_binding(),
+        BUFFER_RENDER_SHADER,
+        BUFFER_COMPUTE_SHADER,
+    );
+
+    ctx.queue.submit([encoder.finish()]);
+
+    buffer.destroy();
+
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
+}
+
+// Test that destroying a buffer between submission and GPU completion is handled correctly.
+#[gpu_test]
+static BUFFER_DESTROY_AFTER_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .enable_noop(),
+    )
+    .run_sync(|ctx| {
+        test_buffer_destroy_after_submit(&ctx, UsageKind::Direct);
+        test_buffer_destroy_after_submit(&ctx, UsageKind::RenderPass);
+        test_buffer_destroy_after_submit(&ctx, UsageKind::ComputePass);
+        test_buffer_destroy_after_submit(&ctx, UsageKind::RenderBundle);
+    });
+
 fn test_texture_destroy_before_submit(ctx: &TestingContext, usage: UsageKind) {
     if matches!(usage, UsageKind::Direct) {
         let descriptor = wgpu::TextureDescriptor {
@@ -401,12 +510,15 @@ fn test_texture_destroy_before_submit(ctx: &TestingContext, usage: UsageKind) {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Snorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         };
 
         let texture_1 = ctx.device.create_texture(&descriptor);
         let texture_2 = ctx.device.create_texture(&descriptor);
+
+        clear_texture_and_wait(ctx, &texture_1);
+        clear_texture_and_wait(ctx, &texture_2);
 
         let mut encoder = ctx
             .device
@@ -458,6 +570,8 @@ fn test_texture_destroy_before_submit(ctx: &TestingContext, usage: UsageKind) {
     });
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
+    clear_texture_and_wait(ctx, &texture);
+
     let encoder = record_encoder_with_resource(
         ctx,
         usage,
@@ -491,6 +605,108 @@ static TEXTURE_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguratio
         test_texture_destroy_before_submit(&ctx, UsageKind::RenderBundle);
     });
 
+fn test_texture_destroy_after_submit(ctx: &TestingContext, usage: UsageKind) {
+    if matches!(usage, UsageKind::Direct) {
+        let descriptor = wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: 128,
+                height: 128,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Snorm,
+            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        };
+
+        let texture_1 = ctx.device.create_texture(&descriptor);
+        let texture_2 = ctx.device.create_texture(&descriptor);
+
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        encoder.copy_texture_to_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture_1,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture_2,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::Extent3d {
+                width: 128,
+                height: 128,
+                depth_or_array_layers: 1,
+            },
+        );
+        ctx.queue.submit([encoder.finish()]);
+
+        texture_1.destroy();
+        texture_2.destroy();
+
+        ctx.device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .unwrap();
+        return;
+    }
+
+    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    });
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+    let encoder = record_encoder_with_resource(
+        ctx,
+        usage,
+        wgpu::BindingResource::TextureView(&view),
+        TEXTURE_RENDER_SHADER,
+        TEXTURE_COMPUTE_SHADER,
+    );
+
+    ctx.queue.submit([encoder.finish()]);
+
+    texture.destroy();
+
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
+}
+
+// Test that destroying a texture between submission and GPU completion is handled correctly.
+#[gpu_test]
+static TEXTURE_DESTROY_AFTER_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .enable_noop()
+            .features(wgpu::Features::CLEAR_TEXTURE),
+    )
+    .run_sync(|ctx| {
+        test_texture_destroy_after_submit(&ctx, UsageKind::Direct);
+        test_texture_destroy_after_submit(&ctx, UsageKind::RenderPass);
+        test_texture_destroy_after_submit(&ctx, UsageKind::ComputePass);
+        test_texture_destroy_after_submit(&ctx, UsageKind::RenderBundle);
+    });
+
 fn test_external_texture_destroy_before_submit(ctx: &TestingContext, usage: UsageKind) {
     let plane_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: None,
@@ -522,6 +738,8 @@ fn test_external_texture_destroy_before_submit(ctx: &TestingContext, usage: Usag
         },
         &[&plane_texture.create_view(&wgpu::TextureViewDescriptor::default())],
     );
+
+    clear_texture_and_wait(ctx, &plane_texture);
 
     let encoder = record_encoder_with_resource(
         ctx,
@@ -560,19 +778,205 @@ static EXTERNAL_TEXTURE_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestCon
         test_external_texture_destroy_before_submit(&ctx, UsageKind::RenderBundle);
     });
 
+fn test_query_set_destroy_before_submit(ctx: &TestingContext, ty: QueryType, usage: UsageKind) {
+    let query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
+        label: None,
+        count: 2,
+        ty,
+    });
+
+    let (_render_target, rt_view) = create_render_target(&ctx.device);
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+    match usage {
+        UsageKind::RenderPass => {
+            let pipeline = create_render_pipeline(&ctx.device, EMPTY_RENDER_SHADER);
+            let color_attachment = [Some(wgpu::RenderPassColorAttachment {
+                view: &rt_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })];
+            let (occlusion_query_set, timestamp_writes) = match ty {
+                QueryType::Occlusion => (Some(&query_set), None),
+                QueryType::Timestamp => (
+                    None,
+                    Some(RenderPassTimestampWrites {
+                        query_set: &query_set,
+                        beginning_of_pass_write_index: Some(0),
+                        end_of_pass_write_index: Some(1),
+                    }),
+                ),
+                QueryType::PipelineStatistics(_) => unreachable!(),
+            };
+
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                color_attachments: &color_attachment,
+                occlusion_query_set,
+                timestamp_writes,
+                ..Default::default()
+            });
+            pass.set_pipeline(&pipeline);
+            pass.draw(0..0, 0..0);
+        }
+        UsageKind::ComputePass => {
+            let pipeline = create_compute_pipeline(&ctx.device, EMPTY_COMPUTE_SHADER);
+            let timestamp_writes = match ty {
+                QueryType::Timestamp => Some(ComputePassTimestampWrites {
+                    query_set: &query_set,
+                    beginning_of_pass_write_index: Some(0),
+                    end_of_pass_write_index: Some(1),
+                }),
+                _ => unreachable!(),
+            };
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                timestamp_writes,
+                ..Default::default()
+            });
+            pass.set_pipeline(&pipeline);
+            pass.dispatch_workgroups(0, 0, 0);
+        }
+        UsageKind::RenderBundle => unreachable!(),
+        UsageKind::Direct => unreachable!(),
+    }
+
+    query_set.destroy();
+
+    fail(
+        &ctx.device,
+        || ctx.queue.submit([encoder.finish()]),
+        Some("QuerySet with '' label has been destroyed"),
+    );
+}
+
+// Test that destroying a query set between command encoding and submission fails
+// gracefully.
+#[gpu_test]
+static QUERY_SET_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .enable_noop()
+            .features(wgpu::Features::TIMESTAMP_QUERY),
+    )
+    .run_sync(|ctx| {
+        test_query_set_destroy_before_submit(&ctx, QueryType::Occlusion, UsageKind::RenderPass);
+        test_query_set_destroy_before_submit(&ctx, QueryType::Timestamp, UsageKind::RenderPass);
+        test_query_set_destroy_before_submit(&ctx, QueryType::Timestamp, UsageKind::ComputePass);
+    });
+
+fn test_query_set_destroy_after_submit(ctx: &TestingContext, ty: QueryType, usage: UsageKind) {
+    let query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
+        label: None,
+        count: 2,
+        ty,
+    });
+
+    let (_render_target, rt_view) = create_render_target(&ctx.device);
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+    match usage {
+        UsageKind::RenderPass => {
+            let pipeline = create_render_pipeline(&ctx.device, EMPTY_RENDER_SHADER);
+            let color_attachment = [Some(wgpu::RenderPassColorAttachment {
+                view: &rt_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })];
+            let (occlusion_query_set, timestamp_writes) = match ty {
+                QueryType::Occlusion => (Some(&query_set), None),
+                QueryType::Timestamp => (
+                    None,
+                    Some(RenderPassTimestampWrites {
+                        query_set: &query_set,
+                        beginning_of_pass_write_index: Some(0),
+                        end_of_pass_write_index: Some(1),
+                    }),
+                ),
+                QueryType::PipelineStatistics(_) => unreachable!(),
+            };
+
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                color_attachments: &color_attachment,
+                occlusion_query_set,
+                timestamp_writes,
+                ..Default::default()
+            });
+            pass.set_pipeline(&pipeline);
+            pass.draw(0..0, 0..0);
+        }
+        UsageKind::ComputePass => {
+            let pipeline = create_compute_pipeline(&ctx.device, EMPTY_COMPUTE_SHADER);
+            let timestamp_writes = match ty {
+                QueryType::Timestamp => Some(ComputePassTimestampWrites {
+                    query_set: &query_set,
+                    beginning_of_pass_write_index: Some(0),
+                    end_of_pass_write_index: Some(1),
+                }),
+                _ => unreachable!(),
+            };
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                timestamp_writes,
+                ..Default::default()
+            });
+            pass.set_pipeline(&pipeline);
+            pass.dispatch_workgroups(0, 0, 0);
+        }
+        UsageKind::RenderBundle => unreachable!(),
+        UsageKind::Direct => unreachable!(),
+    }
+
+    ctx.queue.submit([encoder.finish()]);
+
+    query_set.destroy();
+
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
+}
+
+// Test that destroying a query set between submission and GPU completion is handled correctly.
+#[gpu_test]
+static QUERY_SET_DESTROY_AFTER_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .enable_noop()
+            .features(wgpu::Features::TIMESTAMP_QUERY),
+    )
+    .run_sync(|ctx| {
+        test_query_set_destroy_after_submit(&ctx, QueryType::Occlusion, UsageKind::RenderPass);
+        test_query_set_destroy_after_submit(&ctx, QueryType::Timestamp, UsageKind::RenderPass);
+        test_query_set_destroy_after_submit(&ctx, QueryType::Timestamp, UsageKind::ComputePass);
+    });
+
 fn test_replaced_bind_group(ctx: &TestingContext, usage: UsageKind) {
     let buffer_a = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 16,
-        usage: wgpu::BufferUsages::UNIFORM,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
     let buffer_b = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 16,
-        usage: wgpu::BufferUsages::UNIFORM,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
+
+    clear_buffer_and_wait(ctx, &buffer_a);
+    clear_buffer_and_wait(ctx, &buffer_b);
 
     let (_render_target, rt_view) = create_render_target(&ctx.device);
     let mut encoder = ctx

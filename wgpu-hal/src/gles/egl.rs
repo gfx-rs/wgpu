@@ -193,6 +193,7 @@ impl EglContext {
 
 /// A wrapper around a [`glow::Context`] and the required EGL context that uses locking to guarantee
 /// exclusive access when shared with multiple threads.
+#[derive(Debug)]
 pub struct AdapterContext {
     glow: Mutex<ManuallyDrop<glow::Context>>,
     egl: Option<EglContext>,
@@ -266,6 +267,7 @@ struct EglContextLock<'a> {
 }
 
 /// A guard containing a lock to an [`AdapterContext`], while the GL context is kept current.
+#[expect(missing_debug_implementations)]
 pub struct AdapterContextLock<'a> {
     glow: MutexGuard<'a, ManuallyDrop<glow::Context>>,
     egl: Option<EglContextLock<'a>>,
@@ -680,6 +682,7 @@ struct WindowSystemInterface {
     kind: WindowKind,
 }
 
+#[derive(Debug)]
 pub struct Instance {
     wsi: WindowSystemInterface,
     flags: wgt::InstanceFlags,

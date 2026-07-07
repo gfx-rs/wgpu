@@ -30,6 +30,8 @@ pub mod pipeline_constants;
 #[cfg(any(hlsl_out, glsl_out))]
 mod continue_forward;
 
+pub use nt::TaskDispatchLimits;
+
 /// Names of vector components.
 pub const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
 /// Indent for backends.
@@ -91,7 +93,7 @@ bitflags::bitflags! {
 pub type PipelineConstants = hashbrown::HashMap<String, f64>;
 
 /// Indentation level.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Level(pub usize);
 
 impl Level {
@@ -172,6 +174,7 @@ impl FunctionType {
 }
 
 /// Helper structure that stores data needed when writing the function
+#[derive(Debug)]
 pub struct FunctionCtx<'a> {
     /// The current function being written
     pub ty: FunctionType,
@@ -387,16 +390,9 @@ bitflags::bitflags! {
 }
 
 /// The intersection test to use for ray queries.
+#[derive(Debug)]
 #[repr(u32)]
 pub enum RayIntersectionType {
     Triangle = 1,
     BoundingBox = 4,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct TaskDispatchLimits {
-    pub max_mesh_workgroups_per_dim: u32,
-    pub max_mesh_workgroups_total: u32,
 }

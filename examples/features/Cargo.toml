@@ -11,10 +11,6 @@ license.workspace = true
 rust-version.workspace = true
 publish = false
 
-[package.metadata.cargo-machete]
-# Cargo machete struggles with this dev dependency:
-ignored = ["wasm_bindgen_test"]
-
 [lib]
 path = "src/lib.rs"
 harness = false
@@ -27,8 +23,9 @@ test = false
 
 [features]
 default = []
-webgl = ["wgpu/webgl"]
+webgl = ["wgpu/webgl", "wgpu-test/webgl"]
 webgpu = ["wgpu/webgpu"]
+exhaust = ["wgpu/exhaust"]
 
 [dependencies]
 bytemuck.workspace = true
@@ -79,8 +76,8 @@ web-sys = { workspace = true, features = [
     "CanvasRenderingContext2d",
 ] }
 
-[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-wasm-bindgen-test.workspace = true
-
 [lints.clippy]
 disallowed_types = "allow"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wasm_test)'] }

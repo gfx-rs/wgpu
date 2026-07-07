@@ -110,6 +110,8 @@ mod selection;
 mod subgroup;
 mod writer;
 
+pub use nt::spv::*;
+
 pub use mesh_shader::{MeshReturnInfo, MeshReturnMember};
 pub use spirv::{Capability, SourceLanguage};
 
@@ -906,6 +908,7 @@ impl BlockContext<'_> {
 /// type `type_id`, and the result of any `Load` will be immediately converted
 /// to the base type. This is used for matrices with 2 rows, as well as any
 /// arrays or structs containing such matrices.
+#[derive(Debug)]
 pub struct Std140CompatTypeInfo {
     /// ID of the std140 compatible type declaration.
     type_id: Word,
@@ -914,6 +917,7 @@ pub struct Std140CompatTypeInfo {
     member_indices: Vec<u32>,
 }
 
+#[expect(missing_debug_implementations, reason = "would be way too verbose?")]
 pub struct Writer {
     physical_layout: PhysicalLayout,
     logical_layout: LogicalLayout,
@@ -941,6 +945,7 @@ pub struct Writer {
     zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode,
     force_loop_bounding: bool,
     use_storage_input_output_16: bool,
+    emit_int_div_checks: bool,
     void_type: Word,
     tuple_of_u32s_ty_id: Option<Word>,
     //TODO: convert most of these into vectors, addressable by handle indices
@@ -1037,19 +1042,6 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct BindingInfo {
-    pub descriptor_set: u32,
-    pub binding: u32,
-    /// If the binding is an unsized binding array, this overrides the size.
-    pub binding_array_size: Option<u32>,
-}
-
-// Using `BTreeMap` instead of `HashMap` so that we can hash itself.
-pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindingInfo>;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZeroInitializeWorkgroupMemoryMode {
     /// Via `VK_KHR_zero_initialize_workgroup_memory` or Vulkan 1.3
@@ -1114,6 +1106,17 @@ pub struct Options<'a> {
     ///
     /// Currently this validation is unimplemented.
     pub mesh_shader_primitive_indices_clamp: bool,
+
+    /// If true (the default), integer division and modulo operations emit
+    /// wrapper functions that replace a zero divisor with one, and for signed
+    /// integers also guard against `INT_MIN / -1` overflow. This matches the
+    /// WGSL spec's requirement that these cases produce defined results.
+    ///
+    /// Set to `false` to emit raw `OpSDiv`/`OpUDiv`/`OpSRem`/`OpUMod`
+    /// instructions without checks. This is faster but produces
+    /// implementation-defined results when the divisor is zero. Appropriate
+    /// for compute shaders where the developer guarantees non-zero divisors.
+    pub emit_int_div_checks: bool,
 }
 
 impl Default for Options<'_> {
@@ -1139,6 +1142,7 @@ impl Default for Options<'_> {
             debug_info: None,
             task_dispatch_limits: None,
             mesh_shader_primitive_indices_clamp: true,
+            emit_int_div_checks: true,
         }
     }
 }

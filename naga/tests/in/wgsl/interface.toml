@@ -1,5 +1,4 @@
-msl_pipeline = { allow_and_force_point_size = true, vertex_buffer_mappings = [
-], vertex_pulling_transform = false }
+msl_pipeline = { allow_and_force_point_size = true, vertex_buffer_mappings = [], vertex_pulling_transform = false }
 targets = "SPIRV | METAL | HLSL | WGSL"
 wgsl = { explicit_types = true }
 

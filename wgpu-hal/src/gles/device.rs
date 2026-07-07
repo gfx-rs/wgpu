@@ -1647,6 +1647,29 @@ impl crate::Device for super::Device {
         self.counters.compute_pipelines.sub(1);
     }
 
+    unsafe fn create_ray_tracing_pipeline(
+        &self,
+        _desc: &crate::RayTracingPipelineDescriptor<
+            super::PipelineLayout,
+            super::ShaderModule,
+            super::PipelineCache,
+        >,
+    ) -> Result<super::RayTracingPipeline, crate::PipelineError> {
+        unimplemented!("Ray tracing is unsupported on GL")
+    }
+
+    unsafe fn destroy_ray_tracing_pipeline(&self, _pipeline: super::RayTracingPipeline) {
+        unimplemented!("Ray tracing is unsupported on GL")
+    }
+
+    unsafe fn get_raytracing_pipeline_group_data(
+        &self,
+        _pipeline: &super::RayTracingPipeline,
+        _groups: core::ops::Range<u32>,
+    ) -> Result<Vec<u8>, crate::DeviceError> {
+        unimplemented!("Ray tracing is unsupported on GL")
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         _: &crate::PipelineCacheDescriptor<'_>,

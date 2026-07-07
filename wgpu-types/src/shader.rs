@@ -40,8 +40,8 @@ pub struct ShaderRuntimeChecks {
     ///   `getCandidateHitVertexPositions` or `rayQueryGetCandidateIntersection` is called
     /// - `rayQueryProceed` must have been called and have returned false before `rayQueryGetCommittedIntersection`
     ///   or `getCommittedHitVertexPositions` are called
-    ///
-    /// It is the aim that these cases will not cause UB if this is set to true, but currently this will still happen on DX12 and Metal.
+    /// - when calling `rayQueryInitialize`, the ray desc argument must not contain NaNs in any floating point
+    ///   values and must not contain Infs in any component of `dir`, `origin`, `tmin`
     pub ray_query_initialization_tracking: bool,
 
     /// If false, task shaders will not validate that the mesh shader grid they dispatch is within legal limits.
@@ -50,6 +50,12 @@ pub struct ShaderRuntimeChecks {
     /// If false, mesh shaders won't clamp the output primitives' vertex indices, which can lead to
     /// undefined behavior and arbitrary memory access.
     pub mesh_shader_primitive_indices_clamp: bool,
+
+    /// If false, integer division and modulo operations will use raw instructions
+    /// without guards against division by zero or signed integer overflow
+    /// (`INT_MIN / -1`). The caller **MUST** ensure that all divisors are non-zero
+    /// and that no signed overflow occurs.
+    pub int_div_checks: bool,
 }
 
 impl ShaderRuntimeChecks {
@@ -85,6 +91,7 @@ impl ShaderRuntimeChecks {
             ray_query_initialization_tracking: all_checks,
             task_shader_dispatch_tracking: all_checks,
             mesh_shader_primitive_indices_clamp: all_checks,
+            int_div_checks: all_checks,
         }
     }
 }

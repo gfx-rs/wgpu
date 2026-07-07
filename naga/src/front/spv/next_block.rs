@@ -18,6 +18,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
     /// Except for the function's entry block, `block_id` should be the label of
     /// a block we've seen mentioned before, with an entry in
     /// `block_ctx.body_for_label` to tell us which `Body` it contributes to.
+    #[allow(clippy::large_stack_frames)] // TODO(https://github.com/gfx-rs/wgpu/issues/9456)
     pub(in crate::front::spv) fn next_block(
         &mut self,
         block_id: spirv::Word,

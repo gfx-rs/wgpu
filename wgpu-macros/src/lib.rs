@@ -16,7 +16,6 @@ pub fn gpu_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let ident_lower = ident_str.to_snake_case();
 
     let register_test_name = Ident::new(&format!("{ident}"), ident.span());
-    let test_name_webgl = Ident::new(&format!("{ident_lower}_webgl"), ident.span());
 
     quote! {
         #[allow(non_snake_case)]
@@ -25,17 +24,6 @@ pub fn gpu_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
             // Allow any type that can be converted to a GpuTestConfiguration
             ::wgpu_test::GpuTestConfiguration::from(#expr).name_from_init_function_typename::<S>(#ident_lower)
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        #[wasm_bindgen_test::wasm_bindgen_test]
-        #vis async fn #test_name_webgl() {
-            struct S;
-
-            // Allow any type that can be converted to a GpuTestConfiguration
-            let test_config = ::wgpu_test::GpuTestConfiguration::from(#expr).name_from_init_function_typename::<S>(#ident_lower);
-
-            ::wgpu_test::execute_test(None, test_config, None).await;
         }
     }
     .into()

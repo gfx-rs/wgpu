@@ -391,10 +391,8 @@ impl crate::Function {
                 crate::Expression::Access { base, .. } => base,
                 crate::Expression::AccessIndex { base, .. } => base,
                 crate::Expression::GlobalVariable(handle) => return Some(handle),
-                crate::Expression::LocalVariable(_) => return None,
-                crate::Expression::FunctionArgument(_) => return None,
-                // There are no other expressions that produce pointer values.
-                _ => unreachable!(),
+                // Other expressions are not on this path to a global.
+                _ => return None,
             }
         }
     }
@@ -489,7 +487,7 @@ impl From<core::convert::Infallible> for ConstValueError {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct GlobalCtx<'a> {
     pub types: &'a crate::UniqueArena<crate::Type>,
     pub constants: &'a crate::Arena<crate::Constant>,
@@ -686,24 +684,6 @@ pub fn flatten_compose<'arenas>(
         .flat_map(move |component| flatten_compose(component, is_vector, expressions))
         .flat_map(move |component| flatten_splat(component, is_vector, expressions))
         .take(size)
-}
-
-impl super::ShaderStage {
-    pub const fn compute_like(self) -> bool {
-        match self {
-            Self::Vertex | Self::Fragment => false,
-            Self::Compute | Self::Task | Self::Mesh => true,
-            Self::RayGeneration | Self::AnyHit | Self::ClosestHit | Self::Miss => false,
-        }
-    }
-
-    /// Mesh or task shader
-    pub const fn mesh_like(self) -> bool {
-        match self {
-            Self::Task | Self::Mesh => true,
-            _ => false,
-        }
-    }
 }
 
 #[test]
@@ -1004,7 +984,7 @@ impl crate::Module {
     }
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct RayTracingUses {
     pub pipelines: bool,
     pub queries: bool,
@@ -1023,5 +1003,64 @@ impl crate::MeshOutputTopology {
 impl crate::AddressSpace {
     pub const fn is_workgroup_like(self) -> bool {
         matches!(self, Self::WorkGroup | Self::TaskPayload)
+    }
+}
+
+impl TryFrom<crate::ScalarKind> for nt::glsl::GlslScalarKind {
+    type Error = ();
+
+    fn try_from(value: crate::ScalarKind) -> Result<Self, Self::Error> {
+        Ok(match value {
+            crate::ScalarKind::Sint => nt::glsl::GlslScalarKind::Sint,
+            crate::ScalarKind::Uint => nt::glsl::GlslScalarKind::Uint,
+            crate::ScalarKind::Float => nt::glsl::GlslScalarKind::Float,
+            _ => return Err(()),
+        })
+    }
+}
+
+impl From<crate::VectorSize> for nt::glsl::GlslVectorSize {
+    fn from(val: crate::VectorSize) -> Self {
+        match val {
+            crate::VectorSize::Bi => nt::glsl::GlslVectorSize::Bi,
+            crate::VectorSize::Tri => nt::glsl::GlslVectorSize::Tri,
+            crate::VectorSize::Quad => nt::glsl::GlslVectorSize::Quad,
+        }
+    }
+}
+
+impl TryFrom<crate::Scalar> for nt::glsl::GlslScalar {
+    type Error = ();
+
+    fn try_from(value: crate::Scalar) -> Result<Self, Self::Error> {
+        Ok(nt::glsl::GlslScalar {
+            kind: value.kind.try_into()?,
+            width: value.width,
+        })
+    }
+}
+
+impl TryFrom<&crate::TypeInner> for nt::glsl::GlslUniformType {
+    type Error = ();
+    fn try_from(value: &crate::TypeInner) -> Result<Self, Self::Error> {
+        match *value {
+            crate::TypeInner::Scalar(scalar) => {
+                Ok(nt::glsl::GlslUniformType::Scalar(scalar.try_into()?))
+            }
+            crate::TypeInner::Vector { size, scalar } => Ok(nt::glsl::GlslUniformType::Vector {
+                size: size.into(),
+                scalar: scalar.try_into()?,
+            }),
+            crate::TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => Ok(nt::glsl::GlslUniformType::Matrix {
+                columns: columns.into(),
+                rows: rows.into(),
+                scalar: scalar.try_into()?,
+            }),
+            _ => Err(()),
+        }
     }
 }

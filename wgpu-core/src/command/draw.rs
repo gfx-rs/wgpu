@@ -6,6 +6,7 @@ use wgt::error::{ErrorType, WebGpuError};
 
 use super::bind::BinderError;
 use crate::command::pass;
+use crate::resource::InvalidResourceError;
 use crate::validation::InvalidWorkgroupSizeError;
 use crate::{
     binding_model::{BindingError, ImmediateUploadError, LateMinBufferBindingSizeMismatch},
@@ -110,6 +111,8 @@ pub enum RenderCommandError {
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
     #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
+    #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error(transparent)]
     MissingTextureUsage(#[from] MissingTextureUsageError),
@@ -135,6 +138,7 @@ impl WebGpuError for RenderCommandError {
             Self::IncompatiblePipelineTargets(e) => e.webgpu_error_type(),
             Self::ResourceUsageCompatibility(e) => e.webgpu_error_type(),
             Self::DestroyedResource(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
             Self::MissingBufferUsage(e) => e.webgpu_error_type(),
             Self::MissingTextureUsage(e) => e.webgpu_error_type(),
             Self::ImmediateData(e) => e.webgpu_error_type(),

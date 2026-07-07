@@ -13,6 +13,7 @@ mod install_warp;
 mod miri;
 mod run_wasm;
 mod test;
+mod test_wasm;
 mod util;
 mod vendor_web_sys;
 
@@ -60,6 +61,24 @@ Commands:
     --list                        List all of the tests and their executables without running them
     --retries                     Number of times to retry failing tests
     --no-require-agility-sdk      Don't fail if the D3D12 Agility SDK cannot be loaded (fall back to system runtime)
+
+    All extra arguments will be forwarded to cargo-nextest (NOT wgpu-info)
+
+  test-wasm
+    Run wasm tests in a browser
+
+    --list          List all of the tests and their executables without running them
+    --retries       Number of times to retry failing tests
+    --show          Show each test's browser window instead of running headless.
+    --test-threads  Number of threads nextest will use. This corresponds to the number 
+                    of browser pages that can be open at once. If not specified,
+                    a default is chosen based on available parallelism.
+    --debug         Instead of running tests, just start the test server and keep it
+                    running. Tests can then be debugged individually in a browser by visiting
+                    the test URL with the test's package name for the `wasm` param
+                    and the test's name for the `name` param, for example:
+                    http://127.0.0.1:3000/?wasm=wgpu-test&name=wgpu_gpu::buffer_usages::buffer_usage
+                    When you run a test this way, check the browser's console for output.
 
     All extra arguments will be forwarded to cargo-nextest (NOT wgpu-info)
 
@@ -152,6 +171,7 @@ fn main() -> anyhow::Result<ExitCode> {
         Some("run-wasm") => run_wasm::run_wasm(shell, args, passthrough_args)?,
         Some("miri") => miri::run_miri(shell, args)?,
         Some("test") => test::run_tests(shell, args, passthrough_args)?,
+        Some("test-wasm") => test_wasm::run_wasm_tests(shell, args, passthrough_args)?,
         Some("vendor-web-sys") => vendor_web_sys::run_vendor_web_sys(shell, args)?,
         Some("install-agility-sdk") => install_agility_sdk::run_install_agility_sdk(shell, args)?,
         Some("install-warp") => install_warp::run_install_warp(shell, args)?,
