@@ -102,6 +102,7 @@ vulkan = [
     "dep:raw-window-metal",
     "dep:smallvec",
     "dep:windows",
+    "dep:windows-core",
     "gpu-allocator/vulkan",
     "windows/Win32",
     "windows/Win32_Devices_Display",

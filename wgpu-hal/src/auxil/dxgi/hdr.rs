@@ -13,7 +13,7 @@ use windows::{
     },
 };
 
-use crate::dx12::DxgiLib;
+use super::dxgi_lib::DxgiLib;
 
 /// The primary colors of a color space, in CIE 1931 xy:
 /// `[[red_x, red_y], [green_x, green_y], [blue_x, blue_y]]`.
