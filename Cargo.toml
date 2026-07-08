@@ -26,6 +26,7 @@ members = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
+    "wgpu-offset-allocator",
     "wgpu-sync",
     "wgpu-types",
     "wgpu",
@@ -54,6 +55,7 @@ default-members = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
+    "wgpu-offset-allocator",
     "wgpu-sync",
     "wgpu-types",
     "wgpu",
@@ -100,6 +102,7 @@ wgpu-core-remote = { version = "30.0.0", path = "./wgpu-core-remote" }
 wgpu-core-remote-types = { version = "30.0.0", path = "./wgpu-core-remote-types" }
 wgpu-hal = { version = "30.0.0", path = "./wgpu-hal", default-features = false }
 wgpu-naga-bridge = { version = "30.0.0", path = "./wgpu-naga-bridge" }
+wgpu-offset-allocator = { version = "30.0.0", path = "./wgpu-offset-allocator" }
 wgpu-sync = { version = "30.0.0", path = "./wgpu-sync", default-features = false }
 wgpu-test = { version = "30.0.0", path = "./tests" }
 wgpu-types = { version = "30.0.0", path = "./wgpu-types", default-features = false }
@@ -123,7 +126,7 @@ arrayvec = { version = "0.7.1", default-features = false }
 bincode = "2"
 bit-set = { version = "0.11", default-features = false }
 bit-vec = { version = "0.10", default-features = false }
-bitflags = "2.9"
+bitflags = "2.10"
 bytemuck = { version = "1.22", features = [
     "extern_crate_alloc",
     "min_const_generics",
@@ -202,7 +205,7 @@ ron = "0.12"
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
 rustc-hash = { version = "1.1", default-features = false }
 serde_json = "1.0.143"
-serde = { version = "1.0.225", default-features = false }
+serde = { version = "1.0.228", default-features = false }
 shell-words = "1"
 smallvec = "1.14"
 spirv = "0.4"

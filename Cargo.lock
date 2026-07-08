@@ -5027,6 +5027,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-offset-allocator"
+version = "30.0.0"
+dependencies = [
+ "proptest",
+]
+
+[[package]]
 name = "wgpu-sync"
 version = "30.0.0"
 dependencies = [
