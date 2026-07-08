@@ -743,7 +743,7 @@ impl Global {
 
         let fid = hub.render_bundles.prepare(id_in);
 
-        let (render_bundle, error) = bundle_encoder.finish(desc, hub);
+        let (render_bundle, error) = bundle_encoder.finish(desc);
 
         let id = fid.assign(render_bundle);
 
