@@ -1479,6 +1479,7 @@ impl Device {
         hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
     ) -> (Arc<Buffer>, Option<resource::CreateBufferError>) {
+        profiling::scope!("Device::create_buffer");
         let (buffer, error) = match unsafe { self.create_buffer_from_hal_inner(hal_buffer, desc) } {
             Ok(buffer) => (buffer, None),
             Err(e) => (Buffer::invalid(Arc::clone(self), desc), Some(e)),

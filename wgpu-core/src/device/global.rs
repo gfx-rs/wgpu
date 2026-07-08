@@ -269,8 +269,6 @@ impl Global {
         initial_state: wgt::TextureUses,
         id_in: Option<id::TextureId>,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
-        profiling::scope!("Device::create_texture_from_hal");
-
         let hub = &self.hub;
 
         let fid = hub.textures.prepare(id_in);
@@ -297,8 +295,6 @@ impl Global {
         desc: &resource::BufferDescriptor,
         id_in: Option<id::BufferId>,
     ) -> (id::BufferId, Option<CreateBufferError>) {
-        profiling::scope!("Device::create_buffer");
-
         let hub = &self.hub;
         let fid = hub.buffers.prepare(id_in);
 
@@ -669,8 +665,6 @@ impl Global {
         desc: &wgt::CommandEncoderDescriptor<Label>,
         id_in: Option<id::CommandEncoderId>,
     ) -> (id::CommandEncoderId, Option<DeviceError>) {
-        profiling::scope!("Device::create_command_encoder");
-
         let hub = &self.hub;
         let fid = hub.command_encoders.prepare(id_in);
 
