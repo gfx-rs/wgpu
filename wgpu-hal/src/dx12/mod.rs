@@ -560,7 +560,6 @@ enum MemoryArchitecture {
 struct PrivateCapabilities {
     instance_flags: wgt::InstanceFlags,
     workarounds: Workarounds,
-    #[allow(unused)]
     heterogeneous_resource_heaps: bool,
     memory_architecture: MemoryArchitecture,
     heap_create_not_zeroed: bool,
@@ -1094,6 +1093,7 @@ static_assertions::assert_impl_all!(Sampler: Send, Sync);
 pub struct QuerySet {
     raw: Direct3D12::ID3D12QueryHeap,
     raw_ty: Direct3D12::D3D12_QUERY_TYPE,
+    tracked_query_bytes: u64,
 }
 
 impl crate::DynQuerySet for QuerySet {}

@@ -60,8 +60,12 @@ impl super::Device {
             auxil::dxgi::exception::register_exception_handler();
         }
 
-        let mem_allocator =
-            suballocation::Allocator::new(&raw, memory_hints, memory_budget_thresholds)?;
+        let mem_allocator = suballocation::Allocator::new(
+            &raw,
+            memory_hints,
+            &private_caps,
+            memory_budget_thresholds,
+        )?;
 
         let idle_fence: Direct3D12::ID3D12Fence = unsafe {
             profiling::scope!("ID3D12Device::CreateFence");
@@ -2339,26 +2343,17 @@ impl crate::Device for super::Device {
             ),
         };
 
-        if let Some(threshold) = self
+        // Query heaps allocate device memory outside the pool machinery, so we
+        // gate them through the allocator's budget probe. Assume each query is
+        // 256 bytes. On an AMD W6800 with driver version 32.0.12030.9, occlusion
+        // and pipeline statistics are 256 bytes, timestamp is 8.
+        let query_bytes = (desc.count as u64).saturating_mul(256);
+        let tracked_query_bytes = self
             .mem_allocator
-            .memory_budget_thresholds
-            .for_resource_creation
-        {
-            let info = self
-                .shared
-                .adapter
-                .query_video_memory_info(Dxgi::DXGI_MEMORY_SEGMENT_GROUP_LOCAL)?;
-
-            // Assume each query is 256 bytes.
-            // On an AMD W6800 with driver version 32.0.12030.9, occlusion and pipeline statistics are 256, timestamp is 8.
-
-            if info.CurrentUsage + desc.count as u64 * 256 >= info.Budget / 100 * threshold as u64 {
-                return Err(crate::DeviceError::OutOfMemory);
-            }
-        }
+            .add_external_allocation(&self.shared.adapter, query_bytes)?;
 
         let mut raw = None::<Direct3D12::ID3D12QueryHeap>;
-        unsafe {
+        let create_result = unsafe {
             self.raw.CreateQueryHeap(
                 &Direct3D12::D3D12_QUERY_HEAP_DESC {
                     Type: heap_ty,
@@ -2368,20 +2363,39 @@ impl crate::Device for super::Device {
                 &mut raw,
             )
         }
-        .into_device_result("Query heap creation")?;
+        .into_device_result("Query heap creation");
+        if let Err(error) = create_result {
+            self.mem_allocator
+                .remove_external_allocation(tracked_query_bytes);
+            return Err(error);
+        }
 
-        let raw = raw.ok_or(crate::DeviceError::Unexpected)?;
+        let Some(raw) = raw else {
+            self.mem_allocator
+                .remove_external_allocation(tracked_query_bytes);
+            return Err(crate::DeviceError::Unexpected);
+        };
 
         if let Some(label) = desc.label {
-            raw.set_name(label)?;
+            if let Err(error) = raw.set_name(label) {
+                self.mem_allocator
+                    .remove_external_allocation(tracked_query_bytes);
+                return Err(error);
+            }
         }
 
         self.counters.query_sets.add(1);
 
-        Ok(super::QuerySet { raw, raw_ty })
+        Ok(super::QuerySet {
+            raw,
+            raw_ty,
+            tracked_query_bytes,
+        })
     }
 
-    unsafe fn destroy_query_set(&self, _set: super::QuerySet) {
+    unsafe fn destroy_query_set(&self, set: super::QuerySet) {
+        self.mem_allocator
+            .remove_external_allocation(set.tracked_query_bytes);
         self.counters.query_sets.sub(1);
     }
 

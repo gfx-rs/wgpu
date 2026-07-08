@@ -388,6 +388,7 @@ impl super::CommandEncoder {
                     &crate::dx12::QuerySet {
                         raw: query_set_raw,
                         raw_ty: Direct3D12::D3D12_QUERY_TYPE_TIMESTAMP,
+                        tracked_query_bytes: 0,
                     },
                     index,
                 );

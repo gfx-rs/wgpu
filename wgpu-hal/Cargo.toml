@@ -152,8 +152,9 @@ dx12 = [
     "dep:ordered-float",
     "dep:profiling",
     "dep:range-alloc",
+    "dep:wgpu-block-pool",
+    "dep:wgpu-offset-allocator",
     "dep:windows-core",
-    "gpu-allocator/d3d12",
     "naga/hlsl-out",
     "wgpu-sync/std", # Required for send/sync
     "windows/Win32_Devices_DeviceAndDriverInstallation",
@@ -219,7 +220,7 @@ wgpu-naga-bridge.workspace = true
 naga-types = { workspace = true }
 wgpu-sync = { workspace = true, default-features = false }
 wgpu-types = { workspace = true, default-features = false }
-# Backend: Vulkan (in-repo suballocator)
+# Backend: Vulkan and Dx12 (in-repo suballocator)
 wgpu-block-pool = { workspace = true, optional = true }
 wgpu-offset-allocator = { workspace = true, optional = true }
 
