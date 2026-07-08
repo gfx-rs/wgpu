@@ -32,203 +32,33 @@ use smallvec::SmallVec;
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
+
+/// Minimum `draw_count` for which lowering a fixed-count multi-draw to an
+/// indirect command buffer pays off. The ICB path costs a render-pass split
+/// plus blit/compute encoder setup, so below this threshold the plain
+/// per-draw indirect loop is faster. Chosen empirically on A12 through M4
+/// hardware; see `icb_multi_draw_reject_reason`.
 const ICB_MIN_DRAW_COUNT: u32 = 8;
+
+/// Test-only escape hatch: when set to `1`, every silent fallback from the
+/// ICB multi-draw path to the per-draw loop becomes a panic, so device test
+/// runs can prove the ICB path was actually exercised rather than quietly
+/// skipped. Never set this in production.
 const ICB_DIAGNOSTIC_REQUIRE_ENV: &str = "WGPU_METAL_REQUIRE_ICB_MDI";
+
+// Primitive-topology tags passed to the ICB generation kernels. `render_command`
+// in MSL needs the topology per draw, and `MTLPrimitiveType` isn't guaranteed
+// stable as an ABI, so we define our own values; they must match the
+// `WgpuIcbPrimitiveType` enum in `shaders/icb_generation.metal`.
 const ICB_PRIMITIVE_POINT: u32 = 0;
 const ICB_PRIMITIVE_LINE: u32 = 1;
 const ICB_PRIMITIVE_LINE_STRIP: u32 = 2;
 const ICB_PRIMITIVE_TRIANGLE: u32 = 3;
 const ICB_PRIMITIVE_TRIANGLE_STRIP: u32 = 4;
 
-const ICB_GENERATION_SHADER: &str = r#"
-#include <metal_stdlib>
-#include <metal_command_buffer>
-using namespace metal;
+const ICB_GENERATION_SHADER: &str = include_str!("./shaders/icb_generation.metal");
 
-struct WgpuIcbArguments {
-    command_buffer icb [[id(0)]];
-};
-
-struct WgpuDrawIndirectArgs {
-    uint vertex_count;
-    uint instance_count;
-    uint first_vertex;
-    uint first_instance;
-};
-
-struct WgpuDrawIndexedIndirectArgs {
-    uint index_count;
-    uint instance_count;
-    uint first_index;
-    int base_vertex;
-    uint first_instance;
-};
-
-struct WgpuIcbExecutionRange {
-    uint location;
-    uint length;
-};
-
-enum WgpuIcbPrimitiveType : uint {
-    WGPU_ICB_PRIMITIVE_POINT = 0,
-    WGPU_ICB_PRIMITIVE_LINE = 1,
-    WGPU_ICB_PRIMITIVE_LINE_STRIP = 2,
-    WGPU_ICB_PRIMITIVE_TRIANGLE = 3,
-    WGPU_ICB_PRIMITIVE_TRIANGLE_STRIP = 4,
-};
-
-static primitive_type wgpu_icb_primitive_type(uint value) {
-    switch (value) {
-        case WGPU_ICB_PRIMITIVE_POINT:
-            return primitive_type::point;
-        case WGPU_ICB_PRIMITIVE_LINE:
-            return primitive_type::line;
-        case WGPU_ICB_PRIMITIVE_LINE_STRIP:
-            return primitive_type::line_strip;
-        case WGPU_ICB_PRIMITIVE_TRIANGLE:
-            return primitive_type::triangle;
-        case WGPU_ICB_PRIMITIVE_TRIANGLE_STRIP:
-            return primitive_type::triangle_strip;
-        default:
-            return primitive_type::triangle;
-    }
-}
-
-kernel void wgpu_generate_mdi_icb(
-    device WgpuIcbArguments& icb_args [[buffer(0)]],
-    const device WgpuDrawIndirectArgs* draw_args [[buffer(1)]],
-    constant uint& primitive_type_value [[buffer(2)]],
-    constant uint& draw_count [[buffer(3)]],
-    uint tid [[thread_position_in_grid]])
-{
-    if (tid >= draw_count) {
-        return;
-    }
-    const WgpuDrawIndirectArgs args = draw_args[tid];
-    render_command cmd(icb_args.icb, tid);
-    if (args.vertex_count == 0 || args.instance_count == 0) {
-        cmd.reset();
-        return;
-    }
-    const primitive_type primitive = wgpu_icb_primitive_type(primitive_type_value);
-    cmd.draw_primitives(
-        primitive,
-        args.first_vertex,
-        args.vertex_count,
-        args.instance_count,
-        args.first_instance);
-}
-
-kernel void wgpu_generate_indexed_mdi_icb_u16(
-    device WgpuIcbArguments& icb_args [[buffer(0)]],
-    const device WgpuDrawIndexedIndirectArgs* draw_args [[buffer(1)]],
-    const device ushort* index_buffer [[buffer(2)]],
-    constant uint& primitive_type_value [[buffer(3)]],
-    constant uint& draw_count [[buffer(4)]],
-    uint tid [[thread_position_in_grid]])
-{
-    if (tid >= draw_count) {
-        return;
-    }
-    const WgpuDrawIndexedIndirectArgs args = draw_args[tid];
-    render_command cmd(icb_args.icb, tid);
-    if (args.index_count == 0 || args.instance_count == 0) {
-        cmd.reset();
-        return;
-    }
-    const primitive_type primitive = wgpu_icb_primitive_type(primitive_type_value);
-    cmd.draw_indexed_primitives(
-        primitive,
-        args.index_count,
-        index_buffer + args.first_index,
-        args.instance_count,
-        args.base_vertex,
-        args.first_instance);
-}
-
-kernel void wgpu_generate_indexed_mdi_icb_u32(
-    device WgpuIcbArguments& icb_args [[buffer(0)]],
-    const device WgpuDrawIndexedIndirectArgs* draw_args [[buffer(1)]],
-    const device uint* index_buffer [[buffer(2)]],
-    constant uint& primitive_type_value [[buffer(3)]],
-    constant uint& draw_count [[buffer(4)]],
-    uint tid [[thread_position_in_grid]])
-{
-    if (tid >= draw_count) {
-        return;
-    }
-    const WgpuDrawIndexedIndirectArgs args = draw_args[tid];
-    render_command cmd(icb_args.icb, tid);
-    if (args.index_count == 0 || args.instance_count == 0) {
-        cmd.reset();
-        return;
-    }
-    const primitive_type primitive = wgpu_icb_primitive_type(primitive_type_value);
-    cmd.draw_indexed_primitives(
-        primitive,
-        args.index_count,
-        index_buffer + args.first_index,
-        args.instance_count,
-        args.base_vertex,
-        args.first_instance);
-}
-
-kernel void wgpu_generate_mdi_execution_range(
-    const device uint& draw_count [[buffer(0)]],
-    device WgpuIcbExecutionRange& range [[buffer(1)]],
-    constant uint& max_draw_count [[buffer(2)]])
-{
-    range.location = 0;
-    range.length = min(draw_count, max_draw_count);
-}
-"#;
-
-const ICB_MESH_GENERATION_SHADER: &str = r#"
-#include <metal_stdlib>
-#include <metal_command_buffer>
-using namespace metal;
-
-struct WgpuIcbArguments {
-    command_buffer icb [[id(0)]];
-};
-
-struct WgpuDispatchIndirectArgs {
-    uint x;
-    uint y;
-    uint z;
-};
-
-struct WgpuMeshThreadgroupSizes {
-    uint object_x;
-    uint object_y;
-    uint object_z;
-    uint mesh_x;
-    uint mesh_y;
-    uint mesh_z;
-};
-
-kernel void wgpu_generate_mesh_mdi_icb(
-    device WgpuIcbArguments& icb_args [[buffer(0)]],
-    const device WgpuDispatchIndirectArgs* draw_args [[buffer(1)]],
-    constant WgpuMeshThreadgroupSizes& sizes [[buffer(2)]],
-    constant uint& draw_count [[buffer(3)]],
-    uint tid [[thread_position_in_grid]])
-{
-    if (tid >= draw_count) {
-        return;
-    }
-    const WgpuDispatchIndirectArgs args = draw_args[tid];
-    render_command cmd(icb_args.icb, tid);
-    if (args.x == 0 || args.y == 0 || args.z == 0) {
-        cmd.reset();
-        return;
-    }
-    cmd.draw_mesh_threadgroups(
-        uint3(args.x, args.y, args.z),
-        uint3(sizes.object_x, sizes.object_y, sizes.object_z),
-        uint3(sizes.mesh_x, sizes.mesh_y, sizes.mesh_z));
-}
-"#;
+const ICB_MESH_GENERATION_SHADER: &str = include_str!("./shaders/icb_mesh_generation.metal");
 
 #[derive(Clone, Debug)]
 pub(super) struct IcbCommandPipelines {
