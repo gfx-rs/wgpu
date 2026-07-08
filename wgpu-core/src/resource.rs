@@ -1285,18 +1285,18 @@ unsafe impl Sync for StagingBuffer {}
 /// is always created mapped, and the command that uses it destroys the buffer
 /// when it is done.
 ///
-/// [`StagingBuffer`]s can be created with [`queue_create_staging_buffer`] and
-/// used with [`queue_write_staging_buffer`]. They are also used internally by
-/// operations like [`queue_write_texture`] that need to upload data to the GPU,
+/// [`StagingBuffer`]s can be created with [`Queue::create_staging_buffer`] and
+/// used with [`Queue::write_staging_buffer`]. They are also used internally by
+/// operations like [`Queue::write_texture`] that need to upload data to the GPU,
 /// but that don't belong to any particular wgpu command buffer.
 ///
 /// Used `StagingBuffer`s are accumulated in [`Device::pending_writes`], to be
 /// freed once their associated operation's queue submission has finished
 /// execution.
 ///
-/// [`queue_create_staging_buffer`]: crate::global::Global::queue_create_staging_buffer
-/// [`queue_write_staging_buffer`]: crate::global::Global::queue_write_staging_buffer
-/// [`queue_write_texture`]: crate::global::Global::queue_write_texture
+/// [`Queue::create_staging_buffer`]: crate::device::queue::Queue::create_staging_buffer
+/// [`Queue::write_staging_buffer`]: crate::device::queue::Queue::write_staging_buffer
+/// [`Queue::write_texture`]: crate::device::queue::Queue::write_texture
 /// [`Device::pending_writes`]: crate::device::Device
 #[derive(Debug)]
 pub struct StagingBuffer {

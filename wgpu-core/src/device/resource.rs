@@ -839,9 +839,11 @@ impl Device {
     /// Poll the device, returning any `UserClosures` that need to be executed.
     ///
     /// The caller must invoke the `UserClosures` even if this function returns
-    /// an error. This is an internal helper, used by `Device::poll` and
-    /// `Global::poll_all_devices`, so that `poll_all_devices` can invoke
+    /// an error. This is an internal helper, used by [`Device::poll`] and
+    /// [`Instance::poll_all_devices`], so that `poll_all_devices` can invoke
     /// closures once after all devices have been polled.
+    ///
+    /// [`Instance::poll_all_devices`]: crate::instance::Instance::poll_all_devices
     pub(crate) fn poll_and_return_closures(
         &self,
         poll_type: wgt::PollType<crate::SubmissionIndex>,
@@ -5633,7 +5635,7 @@ impl Device {
 
     /// # Safety
     /// The `data` field on `desc` must have previously been returned from
-    /// [`crate::global::Global::pipeline_cache_get_data`]
+    /// [`pipeline::PipelineCache::get_data`]
     pub unsafe fn create_pipeline_cache(
         self: &Arc<Self>,
         desc: &pipeline::PipelineCacheDescriptor,
@@ -5663,7 +5665,7 @@ impl Device {
 
     /// # Safety
     /// The `data` field on `desc` must have previously been returned from
-    /// [`crate::global::Global::pipeline_cache_get_data`]
+    /// [`pipeline::PipelineCache::get_data`]
     pub(crate) unsafe fn create_pipeline_cache_inner(
         self: &Arc<Self>,
         desc: &pipeline::PipelineCacheDescriptor,

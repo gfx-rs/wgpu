@@ -40,14 +40,14 @@ therefore immediate data must be set again.
 To create a render bundle:
 
 1) Create a [`RenderBundleEncoder`] by calling
-   [`Global::device_create_render_bundle_encoder`][Gdcrbe].
+   [`Device::create_render_bundle_encoder`][Dcrbe].
 
 2) Record commands in the `RenderBundleEncoder` using methods on [`RenderBundleEncoder`].
 
 3) Call [`RenderBundleEncoder::finish`], which analyzes and cleans up
    the command stream and returns a [`RenderBundle`].
 
-4) Then, any number of times, call [`render_pass_execute_bundles`][wrpeb] to
+4) Then, any number of times, call [`RenderPass::execute_bundles`][rpeb] to
    execute the bundle as part of some render pass.
 
 ## Implementation
@@ -70,8 +70,8 @@ called. It goes through the commands and issues them into the native command
 buffer. Thanks to isolation, it doesn't track any bind group invalidations or
 index format changes.
 
-[Gdcrbe]: crate::global::Global::device_create_render_bundle_encoder
-[wrpeb]: crate::global::Global::render_pass_execute_bundles
+[Dcrbe]: crate::device::Device::create_render_bundle_encoder
+[rpeb]: crate::command::RenderPass::execute_bundles
 !*/
 
 #![allow(clippy::reversed_empty_ranges)]
