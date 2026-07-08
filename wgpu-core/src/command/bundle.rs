@@ -303,6 +303,7 @@ impl RenderBundleEncoder {
         &mut self,
         desc: &RenderBundleDescriptor,
     ) -> (Arc<RenderBundle>, Option<RenderBundleError>) {
+        profiling::scope!("RenderBundleEncoder::finish");
         #[cfg(feature = "trace")]
         let trace_desc = crate::device::trace::new_render_bundle_encoder_descriptor(
             desc.label.clone(),

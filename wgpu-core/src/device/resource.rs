@@ -3071,6 +3071,22 @@ impl Device {
         Ok(cmd_enc)
     }
 
+    pub fn create_render_bundle_encoder(
+        self: &Arc<Self>,
+        desc: &command::RenderBundleEncoderDescriptor,
+    ) -> (
+        Box<command::RenderBundleEncoder>,
+        Option<command::CreateRenderBundleError>,
+    ) {
+        profiling::scope!("Device::create_render_bundle_encoder");
+        api_log!("Device::create_render_bundle_encoder");
+        let (encoder, error) = match command::RenderBundleEncoder::new(self, desc) {
+            Ok(encoder) => (encoder, None),
+            Err(e) => (command::RenderBundleEncoder::dummy(self), Some(e)),
+        };
+        (Box::new(encoder), error)
+    }
+
     /// Generate information about late-validated buffer bindings for pipelines.
     //TODO: should this be combined with `get_introspection_bind_group_layouts` in some way?
     fn make_late_sized_buffer_groups(
