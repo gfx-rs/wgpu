@@ -10,11 +10,12 @@ use objc2_metal::{
     MTLCommandBufferStatus, MTLCommandEncoder, MTLCommandQueue, MTLCompileOptions,
     MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLComputePipelineState,
     MTLCounterDontSample, MTLDevice, MTLFunction, MTLIndexType, MTLIndirectCommandBuffer,
-    MTLIndirectCommandBufferDescriptor, MTLIndirectCommandType, MTLLibrary, MTLLoadAction,
-    MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor, MTLRenderStages,
-    MTLResidencySet, MTLResidencySetDescriptor, MTLResource, MTLResourceOptions, MTLResourceUsage,
-    MTLSamplerState, MTLScissorRect, MTLSize, MTLStoreAction, MTLTexture,
-    MTLVertexAmplificationViewMapping, MTLViewport, MTLVisibilityResultMode,
+    MTLIndirectCommandBufferDescriptor, MTLIndirectCommandBufferExecutionRange,
+    MTLIndirectCommandType, MTLLibrary, MTLLoadAction, MTLPrimitiveType, MTLRenderCommandEncoder,
+    MTLRenderPassDescriptor, MTLRenderStages, MTLResidencySet, MTLResidencySetDescriptor,
+    MTLResource, MTLResourceOptions, MTLResourceUsage, MTLSamplerState, MTLScissorRect, MTLSize,
+    MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping, MTLViewport,
+    MTLVisibilityResultMode,
 };
 
 use super::{
@@ -70,6 +71,10 @@ pub(super) struct IcbCommandPipelines {
     draw: IcbCommandPipeline,
     indexed_u16: IcbCommandPipeline,
     indexed_u32: IcbCommandPipeline,
+    /// Clamps a GPU-resident draw count into an ICB execution range.
+    execution_range: IcbCommandPipeline,
+    /// Clamps/zeroes indirect args for count draws that can't use an ICB.
+    clamp: IcbCommandPipeline,
     /// Compiled on first use: mesh commands in ICBs need a newer OS baseline
     /// than plain draws. Failures are cached.
     mesh: Option<Result<IcbCommandPipeline, crate::DeviceError>>,
@@ -184,6 +189,12 @@ impl IcbCommandPipelines {
                 &library,
                 "wgpu_generate_indexed_mdi_icb_u32",
             )?,
+            execution_range: Self::make_pipeline_from_library(
+                shared,
+                &library,
+                "wgpu_generate_mdi_execution_range",
+            )?,
+            clamp: Self::make_pipeline_from_library(shared, &library, "wgpu_clamp_mdi_args")?,
             mesh: None,
         })
     }
@@ -219,9 +230,35 @@ enum IcbDrawKind {
     },
 }
 
-/// A multi-draw whose ICB execution has been recorded into the render pass but
-/// whose generation compute has not been encoded yet; drained by
-/// `encode_deferred_multi_draws`.
+/// A multi-draw recorded into the render pass whose GPU-side setup has not
+/// been encoded yet; drained by `encode_deferred_multi_draws`.
+pub(super) enum DeferredMultiDraw {
+    /// Fill an ICB that executes with a fixed, CPU-known draw count.
+    Icb(IcbGenerationRequest),
+    /// Fill an ICB that executes with a GPU-computed range clamped from a
+    /// count buffer (`multi_draw_*_indirect_count`).
+    IcbCount {
+        request: IcbGenerationRequest,
+        count_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+        count_offset: wgt::BufferAddress,
+        /// Private buffer receiving the `MTLIndirectCommandBufferExecutionRange`.
+        range_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+    },
+    /// Clamp/zero indirect args into a private buffer that a fixed-length
+    /// per-draw loop consumes: the count-draw fallback for pipelines that
+    /// can't execute inside an ICB.
+    ClampedArgs {
+        dst_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+        src_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+        src_offset: wgt::BufferAddress,
+        count_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
+        words_per_draw: u32,
+    },
+}
+
+/// The ICB-filling portion of a deferred multi-draw.
 pub(super) struct IcbGenerationRequest {
     kind: IcbDrawKind,
     icb: Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>,
@@ -240,8 +277,8 @@ pub(super) struct IcbGenerationRequest {
 /// [`super::CommandBuffer::_icb_resources`].
 #[derive(Debug)]
 pub(super) struct IcbExecutionResources {
-    _icb: Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>,
-    _argument_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+    _icb: Option<Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>>,
+    _buffers: Vec<Retained<ProtocolObject<dyn MTLBuffer>>>,
 }
 
 impl Default for super::CommandState {
@@ -432,61 +469,46 @@ impl super::CommandEncoder {
         )
     }
 
-    /// Try to lower a fixed-count multi-draw to a Metal indirect command
-    /// buffer.
+    /// Common setup for lowering a multi-draw to a Metal indirect command
+    /// buffer: allocates the ICB sized for `draw_count` commands and encodes
+    /// its handle into a fresh argument buffer for the generation kernel.
     ///
-    /// This allocates the ICB and records its execution into the current
-    /// render encoder immediately; the compute work that fills the ICB from
-    /// `args_buffer` is queued on [`super::CommandEncoder::deferred_multi_draws`] and encoded by
+    /// Everything fallible happens here, before anything is recorded, so
+    /// callers can still fall back to a per-draw loop on `None` — and so
     /// [`encode_deferred_multi_draws`](crate::CommandEncoder::encode_deferred_multi_draws)
-    /// into the command buffer wgpu-core schedules *before* this pass, so the
-    /// render pass is never split. Everything fallible happens up front:
-    /// returns `false` with nothing recorded when the ICB path is unavailable,
-    /// leaving the caller to record the per-draw indirect loop instead.
-    unsafe fn defer_multi_draw_via_icb(
+    /// (whose pipeline lookups are made infallible by resolving them here)
+    /// cannot fail after execution has been recorded.
+    unsafe fn prepare_icb_request(
         &mut self,
         kind: IcbDrawKind,
         buffer: &super::Buffer,
         offset: wgt::BufferAddress,
         draw_count: u32,
-    ) -> bool {
-        if draw_count < ICB_MIN_DRAW_COUNT
-            || !self.supports_icb_multi_draw()
-            || self.state.render_pipeline_icb.is_none()
-        {
-            return false;
+    ) -> Option<IcbGenerationRequest> {
+        if !self.supports_icb_multi_draw() || self.state.render_pipeline_icb.is_none() {
+            return None;
         }
 
-        // Resolve the generation pipeline now: once execution is recorded
-        // there is no falling back, so `encode_deferred_multi_draws` must not
-        // be able to fail. The adapter-level cache is never cleared, which
-        // makes the later lookups infallible.
         let (argument_encoder, label) = match kind {
             IcbDrawKind::Draw => {
-                let Ok(pipelines) = self.get_icb_command_pipelines() else {
-                    return false;
-                };
+                let pipelines = self.get_icb_command_pipelines().ok()?;
                 (
                     self.temp.icb_argument_encoders.draw(&pipelines.draw),
                     "wgpu multi_draw_indirect ICB",
                 )
             }
             IcbDrawKind::DrawIndexed { raw_index_type, .. } => {
-                let Ok(pipelines) = self.get_icb_command_pipelines() else {
-                    return false;
-                };
+                let pipelines = self.get_icb_command_pipelines().ok()?;
                 let cache = &mut self.temp.icb_argument_encoders;
                 let state = match raw_index_type {
                     MTLIndexType::UInt16 => cache.indexed_u16(&pipelines.indexed_u16),
                     MTLIndexType::UInt32 => cache.indexed_u32(&pipelines.indexed_u32),
-                    _ => return false,
+                    _ => return None,
                 };
                 (state, "wgpu multi_draw_indexed_indirect ICB")
             }
             IcbDrawKind::DrawMeshTasks { .. } => {
-                let Ok(pipeline) = self.get_icb_mesh_command_pipeline() else {
-                    return false;
-                };
+                let pipeline = self.get_icb_mesh_command_pipeline().ok()?;
                 (
                     self.temp.icb_argument_encoders.mesh(&pipeline),
                     "wgpu multi_draw_mesh_tasks_indirect ICB",
@@ -496,10 +518,7 @@ impl super::CommandEncoder {
 
         let primitive_type_value = match kind {
             IcbDrawKind::DrawMeshTasks { .. } => 0,
-            _ => match Self::icb_primitive_type_value(self.state.raw_primitive_type) {
-                Ok(value) => value,
-                Err(_) => return false,
-            },
+            _ => Self::icb_primitive_type_value(self.state.raw_primitive_type).ok()?,
         };
 
         let descriptor = MTLIndirectCommandBufferDescriptor::new();
@@ -526,7 +545,7 @@ impl super::CommandEncoder {
             }
         }
 
-        let Some(icb) = (unsafe {
+        let icb = unsafe {
             self.shared
                 .device
                 .newIndirectCommandBufferWithDescriptor_maxCommandCount_options(
@@ -534,21 +553,17 @@ impl super::CommandEncoder {
                     draw_count as usize,
                     MTLResourceOptions::StorageModePrivate,
                 )
-        }) else {
-            return false;
-        };
+        }?;
         // Label the ICB so GPU captures and profilers attribute the executed
         // draws to wgpu's multi-draw lowering rather than an anonymous ICB.
         icb.setLabel(Some(&NSString::from_str(label)));
 
         // Encode the ICB handle into a fresh argument buffer for the
         // generation kernel.
-        let Some(argument_buffer) = self.shared.device.newBufferWithLength_options(
+        let argument_buffer = self.shared.device.newBufferWithLength_options(
             argument_encoder.encoded_length,
             MTLResourceOptions::StorageModeShared,
-        ) else {
-            return false;
-        };
+        )?;
         argument_buffer.setLabel(Some(&NSString::from_str("wgpu ICB generation arguments")));
         unsafe {
             argument_encoder
@@ -559,6 +574,75 @@ impl super::CommandEncoder {
                 .setIndirectCommandBuffer_atIndex(Some(&icb), 0);
         }
 
+        Some(IcbGenerationRequest {
+            kind,
+            icb,
+            argument_buffer,
+            args_buffer: buffer.raw.clone(),
+            args_offset: offset,
+            draw_count,
+            primitive_type_value,
+        })
+    }
+
+    /// Record `useResource` calls shared by all ICB execution paths.
+    fn use_icb_resources(
+        encoder: &ProtocolObject<dyn MTLRenderCommandEncoder>,
+        request: &IcbGenerationRequest,
+    ) {
+        // The ICB itself is deliberately declared with the stage-less
+        // `useResource:usage:`: it is consumed by command ingestion rather
+        // than by a shader stage, and declaring it stage-scoped has been
+        // observed to break execution on Apple silicon (draws silently do
+        // nothing). Ordering against the generation write is established by
+        // `executeCommandsInBuffer` referencing the ICB directly.
+        #[allow(deprecated)]
+        encoder.useResource_usage(
+            ProtocolObject::from_ref(&*request.icb),
+            MTLResourceUsage::Read,
+        );
+        if let IcbDrawKind::DrawIndexed {
+            ref index_buffer, ..
+        } = request.kind
+        {
+            // The generated commands reference the index buffer via a
+            // device pointer baked in at generation time, which residency
+            // tracking can't see. Unlike the ICB, this is an ordinary
+            // vertex-stage read, so the stage-scoped variant is correct.
+            encoder.useResource_usage_stages(
+                ProtocolObject::from_ref(&**index_buffer),
+                MTLResourceUsage::Read,
+                MTLRenderStages::Vertex,
+            );
+        }
+    }
+
+    /// Try to lower a fixed-count multi-draw to a Metal indirect command
+    /// buffer.
+    ///
+    /// This allocates the ICB and records its execution into the current
+    /// render encoder immediately; the compute work that fills the ICB from
+    /// `buffer` is queued on [`super::CommandEncoder::deferred_multi_draws`] and encoded by
+    /// [`encode_deferred_multi_draws`](crate::CommandEncoder::encode_deferred_multi_draws)
+    /// into the command buffer wgpu-core schedules *before* this pass, so the
+    /// render pass is never split. Returns `false` with nothing recorded when
+    /// the ICB path is unavailable, leaving the caller to record the per-draw
+    /// indirect loop instead.
+    unsafe fn defer_multi_draw_via_icb(
+        &mut self,
+        kind: IcbDrawKind,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+        draw_count: u32,
+    ) -> bool {
+        if draw_count < ICB_MIN_DRAW_COUNT {
+            return false;
+        }
+        let Some(request) = (unsafe { self.prepare_icb_request(kind, buffer, offset, draw_count) })
+        else {
+            return false;
+        };
+
         // Record execution into the render pass now; the ICB contents become
         // defined when the deferred generation runs, in a command buffer the
         // queue executes before this one.
@@ -566,25 +650,10 @@ impl super::CommandEncoder {
         let icb_pipeline = self.state.render_pipeline_icb.as_ref().unwrap();
         let encoder = self.state.render.as_ref().unwrap();
         encoder.setRenderPipelineState(icb_pipeline);
-        #[allow(deprecated)]
         unsafe {
-            encoder.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Read);
-            if let IcbDrawKind::DrawIndexed {
-                ref index_buffer, ..
-            } = kind
-            {
-                // The generated commands reference the index buffer via a
-                // device pointer baked in at generation time, which residency
-                // tracking can't see. Unlike the ICB, this is an ordinary
-                // vertex-stage read, so the stage-scoped variant is correct.
-                encoder.useResource_usage_stages(
-                    ProtocolObject::from_ref(&**index_buffer),
-                    MTLResourceUsage::Read,
-                    MTLRenderStages::Vertex,
-                );
-            }
+            Self::use_icb_resources(encoder, &request);
             encoder.executeCommandsInBuffer_withRange(
-                &icb,
+                &request.icb,
                 NSRange {
                     location: 0,
                     length: draw_count as usize,
@@ -593,16 +662,111 @@ impl super::CommandEncoder {
         }
         encoder.setRenderPipelineState(pipeline);
 
-        self.deferred_multi_draws.push(IcbGenerationRequest {
-            kind,
-            icb,
-            argument_buffer,
-            args_buffer: buffer.raw.clone(),
-            args_offset: offset,
-            draw_count,
-            primitive_type_value,
+        self.deferred_multi_draws
+            .push(DeferredMultiDraw::Icb(request));
+        true
+    }
+
+    /// Try to lower a `multi_draw_*_indirect_count` to a Metal indirect
+    /// command buffer executed with a GPU-computed range.
+    ///
+    /// Like [`Self::defer_multi_draw_via_icb`], but the ICB is sized for
+    /// `max_count` commands and executed through an execution-range buffer
+    /// that a deferred kernel fills with `min(count, max_count)`, keeping the
+    /// draw count entirely on the GPU. No draw-count threshold applies: there
+    /// is no cheaper correct lowering for count draws.
+    unsafe fn defer_count_multi_draw_via_icb(
+        &mut self,
+        kind: IcbDrawKind,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &super::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
+    ) -> bool {
+        let Some(request) = (unsafe { self.prepare_icb_request(kind, buffer, offset, max_count) })
+        else {
+            return false;
+        };
+        let Some(range_buffer) = self.shared.device.newBufferWithLength_options(
+            size_of::<MTLIndirectCommandBufferExecutionRange>(),
+            MTLResourceOptions::StorageModePrivate,
+        ) else {
+            return false;
+        };
+        range_buffer.setLabel(Some(&NSString::from_str("wgpu ICB execution range")));
+
+        let pipeline = self.state.render_pipeline.as_ref().unwrap();
+        let icb_pipeline = self.state.render_pipeline_icb.as_ref().unwrap();
+        let encoder = self.state.render.as_ref().unwrap();
+        encoder.setRenderPipelineState(icb_pipeline);
+        #[allow(deprecated)]
+        unsafe {
+            Self::use_icb_resources(encoder, &request);
+            encoder.useResource_usage(
+                ProtocolObject::from_ref(&*range_buffer),
+                MTLResourceUsage::Read,
+            );
+            encoder.executeCommandsInBuffer_indirectBuffer_indirectBufferOffset(
+                &request.icb,
+                &range_buffer,
+                0,
+            );
+        }
+        encoder.setRenderPipelineState(pipeline);
+
+        self.deferred_multi_draws.push(DeferredMultiDraw::IcbCount {
+            request,
+            count_buffer: count_buffer.raw.clone(),
+            count_offset,
+            range_buffer,
         });
         true
+    }
+
+    /// Count-draw fallback for pipelines that can't execute inside an ICB
+    /// (see [`super::RenderPipeline::icb_raw`]):
+    /// returns a private buffer that a deferred kernel fills with the first
+    /// `min(count, max_count)` argument structs from `buffer`, zeroing the
+    /// rest so a fixed `max_count`-length per-draw loop over it is correct.
+    ///
+    /// `MULTI_DRAW_INDIRECT_COUNT` is advertised at adapter level, so this
+    /// path must not fail; it panics only on buffer allocation failure.
+    unsafe fn defer_clamped_count_args(
+        &mut self,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &super::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
+        words_per_draw: u32,
+    ) -> Retained<ProtocolObject<dyn MTLBuffer>> {
+        // Resolve now so `encode_deferred_multi_draws` cannot fail later.
+        self.get_icb_command_pipelines().expect(
+            "Metal MULTI_DRAW_INDIRECT_COUNT is enabled but the multi-draw \
+             support kernels failed to compile",
+        );
+        let dst_buffer = self
+            .shared
+            .device
+            .newBufferWithLength_options(
+                max_count as usize * words_per_draw as usize * WORD_SIZE,
+                MTLResourceOptions::StorageModePrivate,
+            )
+            .expect("failed to allocate Metal buffer for clamped multi-draw arguments");
+        dst_buffer.setLabel(Some(&NSString::from_str("wgpu clamped multi-draw args")));
+
+        self.deferred_multi_draws
+            .push(DeferredMultiDraw::ClampedArgs {
+                dst_buffer: dst_buffer.clone(),
+                src_buffer: buffer.raw.clone(),
+                src_offset: offset,
+                count_buffer: count_buffer.raw.clone(),
+                count_offset,
+                max_count,
+                words_per_draw,
+            });
+        dst_buffer
     }
 
     fn enter_blit(&mut self) -> Retained<ProtocolObject<dyn MTLBlitCommandEncoder>> {
@@ -2136,55 +2300,219 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn draw_indirect_count(
         &mut self,
-        _buffer: &super::Buffer,
-        _offset: wgt::BufferAddress,
-        _count_buffer: &super::Buffer,
-        _count_offset: wgt::BufferAddress,
-        _max_count: u32,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &super::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
     ) {
-        //TODO
+        if max_count == 0 {
+            return;
+        }
+        if unsafe {
+            self.defer_count_multi_draw_via_icb(
+                IcbDrawKind::Draw,
+                buffer,
+                offset,
+                count_buffer,
+                count_offset,
+                max_count,
+            )
+        } {
+            return;
+        }
+        let words_per_draw = (size_of::<wgt::DrawIndirectArgs>() / WORD_SIZE) as u32;
+        let clamped = unsafe {
+            self.defer_clamped_count_args(
+                buffer,
+                offset,
+                count_buffer,
+                count_offset,
+                max_count,
+                words_per_draw,
+            )
+        };
+        let encoder = self.state.render.as_ref().unwrap();
+        let mut clamped_offset = 0;
+        for _ in 0..max_count {
+            unsafe {
+                encoder.drawPrimitives_indirectBuffer_indirectBufferOffset(
+                    self.state.raw_primitive_type,
+                    &clamped,
+                    clamped_offset,
+                )
+            };
+            clamped_offset += size_of::<wgt::DrawIndirectArgs>();
+        }
     }
     unsafe fn draw_indexed_indirect_count(
         &mut self,
-        _buffer: &super::Buffer,
-        _offset: wgt::BufferAddress,
-        _count_buffer: &super::Buffer,
-        _count_offset: wgt::BufferAddress,
-        _max_count: u32,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &super::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
     ) {
-        //TODO
+        if max_count == 0 {
+            return;
+        }
+        let kind = {
+            let index = self.state.index.as_ref().unwrap();
+            IcbDrawKind::DrawIndexed {
+                index_buffer: unsafe { index.buffer_ptr.as_ref() }.retain(),
+                index_offset: index.offset,
+                raw_index_type: index.raw_type,
+            }
+        };
+        if unsafe {
+            self.defer_count_multi_draw_via_icb(
+                kind,
+                buffer,
+                offset,
+                count_buffer,
+                count_offset,
+                max_count,
+            )
+        } {
+            return;
+        }
+        let words_per_draw = (size_of::<wgt::DrawIndexedIndirectArgs>() / WORD_SIZE) as u32;
+        let clamped = unsafe {
+            self.defer_clamped_count_args(
+                buffer,
+                offset,
+                count_buffer,
+                count_offset,
+                max_count,
+                words_per_draw,
+            )
+        };
+        let encoder = self.state.render.as_ref().unwrap();
+        let index = self.state.index.as_ref().unwrap();
+        let mut clamped_offset = 0;
+        for _ in 0..max_count {
+            unsafe {
+                encoder.drawIndexedPrimitives_indexType_indexBuffer_indexBufferOffset_indirectBuffer_indirectBufferOffset(
+                    self.state.raw_primitive_type,
+                    index.raw_type,
+                    index.buffer_ptr.as_ref(),
+                    index.offset as usize,
+                    &clamped,
+                    clamped_offset,
+                )
+            };
+            clamped_offset += size_of::<wgt::DrawIndexedIndirectArgs>();
+        }
     }
 
     unsafe fn draw_mesh_tasks_indirect_count(
         &mut self,
-        _buffer: &<Self::A as crate::Api>::Buffer,
-        _offset: wgt::BufferAddress,
-        _count_buffer: &<Self::A as crate::Api>::Buffer,
-        _count_offset: wgt::BufferAddress,
-        _max_count: u32,
+        buffer: &<Self::A as crate::Api>::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &<Self::A as crate::Api>::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
     ) {
-        unreachable!()
+        if max_count == 0 {
+            return;
+        }
+        let kind = {
+            let ts = self.state.stage_infos.ts.raw_wg_size;
+            let ms = self.state.stage_infos.ms.raw_wg_size;
+            IcbDrawKind::DrawMeshTasks {
+                threadgroup_sizes: [
+                    ts.width as u32,
+                    ts.height as u32,
+                    ts.depth as u32,
+                    ms.width as u32,
+                    ms.height as u32,
+                    ms.depth as u32,
+                ],
+            }
+        };
+        if unsafe {
+            self.defer_count_multi_draw_via_icb(
+                kind,
+                buffer,
+                offset,
+                count_buffer,
+                count_offset,
+                max_count,
+            )
+        } {
+            return;
+        }
+        let words_per_draw = (size_of::<wgt::DispatchIndirectArgs>() / WORD_SIZE) as u32;
+        let clamped = unsafe {
+            self.defer_clamped_count_args(
+                buffer,
+                offset,
+                count_buffer,
+                count_offset,
+                max_count,
+                words_per_draw,
+            )
+        };
+        let encoder = self.state.render.as_ref().unwrap();
+        let mut clamped_offset = 0;
+        for _ in 0..max_count {
+            unsafe {
+                encoder.drawMeshThreadgroupsWithIndirectBuffer_indirectBufferOffset_threadsPerObjectThreadgroup_threadsPerMeshThreadgroup(
+                    &clamped,
+                    clamped_offset,
+                    self.state.stage_infos.ts.raw_wg_size,
+                    self.state.stage_infos.ms.raw_wg_size,
+                )
+            };
+            clamped_offset += size_of::<wgt::DispatchIndirectArgs>();
+        }
     }
 
     unsafe fn encode_deferred_multi_draws(&mut self) {
         if self.deferred_multi_draws.is_empty() {
             return;
         }
-        let requests = core::mem::take(&mut self.deferred_multi_draws);
+        let deferred = core::mem::take(&mut self.deferred_multi_draws);
+        fn icb_request(draw: &DeferredMultiDraw) -> Option<&IcbGenerationRequest> {
+            match draw {
+                DeferredMultiDraw::Icb(request) | DeferredMultiDraw::IcbCount { request, .. } => {
+                    Some(request)
+                }
+                DeferredMultiDraw::ClampedArgs { .. } => None,
+            }
+        }
 
         // The pipelines were resolved when each request was queued and the
         // adapter-level cache is never cleared, so these lookups cannot fail.
         let pipelines = self.get_icb_command_pipelines().unwrap();
-        let mesh_pipeline = requests
+        let mesh_pipeline = deferred
             .iter()
-            .any(|request| matches!(request.kind, IcbDrawKind::DrawMeshTasks { .. }))
+            .any(|draw| {
+                matches!(
+                    draw,
+                    DeferredMultiDraw::Icb(IcbGenerationRequest {
+                        kind: IcbDrawKind::DrawMeshTasks { .. },
+                        ..
+                    }) | DeferredMultiDraw::IcbCount {
+                        request: IcbGenerationRequest {
+                            kind: IcbDrawKind::DrawMeshTasks { .. },
+                            ..
+                        },
+                        ..
+                    }
+                )
+            })
             .then(|| self.get_icb_mesh_command_pipeline().unwrap());
 
-        // Every target range must be reset before generation writes it.
-        {
+        // Every target ICB range must be reset before generation writes it.
+        let has_icbs = deferred.iter().any(|draw| icb_request(draw).is_some());
+        if has_icbs {
             let blit = self.enter_blit();
             blit.pushDebugGroup(&NSString::from_str("wgpu reset multi-draw ICBs"));
-            for request in &requests {
+            for draw in &deferred {
+                let Some(request) = icb_request(draw) else {
+                    continue;
+                };
                 unsafe {
                     blit.resetCommandsInBuffer_withRange(
                         &request.icb,
@@ -2205,92 +2533,171 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let raw = self.raw_cmd_buf.as_ref().unwrap();
         let compute = raw.computeCommandEncoder().unwrap();
         compute.setLabel(Some(&NSString::from_str("wgpu multi-draw ICB generation")));
-        for request in &requests {
-            let pipeline = match request.kind {
-                IcbDrawKind::Draw => &pipelines.draw,
-                IcbDrawKind::DrawIndexed { raw_index_type, .. } => {
-                    if raw_index_type == MTLIndexType::UInt16 {
-                        &pipelines.indexed_u16
-                    } else {
-                        &pipelines.indexed_u32
+        for draw in &deferred {
+            match draw {
+                DeferredMultiDraw::Icb(request) | DeferredMultiDraw::IcbCount { request, .. } => {
+                    let pipeline = match request.kind {
+                        IcbDrawKind::Draw => &pipelines.draw,
+                        IcbDrawKind::DrawIndexed { raw_index_type, .. } => {
+                            if raw_index_type == MTLIndexType::UInt16 {
+                                &pipelines.indexed_u16
+                            } else {
+                                &pipelines.indexed_u32
+                            }
+                        }
+                        IcbDrawKind::DrawMeshTasks { .. } => mesh_pipeline.as_ref().unwrap(),
+                    };
+                    compute.setComputePipelineState(&pipeline.pipeline);
+                    unsafe {
+                        compute.setBuffer_offset_atIndex(Some(&request.argument_buffer), 0, 0);
+                        compute.setBuffer_offset_atIndex(
+                            Some(&request.args_buffer),
+                            request.args_offset as usize,
+                            1,
+                        );
+                        match request.kind {
+                            IcbDrawKind::Draw => {
+                                compute.setBytes_length_atIndex(
+                                    NonNull::from(&request.primitive_type_value).cast(),
+                                    size_of::<u32>(),
+                                    2,
+                                );
+                                compute.setBytes_length_atIndex(
+                                    NonNull::from(&request.draw_count).cast(),
+                                    size_of::<u32>(),
+                                    3,
+                                );
+                            }
+                            IcbDrawKind::DrawIndexed {
+                                ref index_buffer,
+                                index_offset,
+                                ..
+                            } => {
+                                compute.setBuffer_offset_atIndex(
+                                    Some(index_buffer),
+                                    index_offset as usize,
+                                    2,
+                                );
+                                compute.setBytes_length_atIndex(
+                                    NonNull::from(&request.primitive_type_value).cast(),
+                                    size_of::<u32>(),
+                                    3,
+                                );
+                                compute.setBytes_length_atIndex(
+                                    NonNull::from(&request.draw_count).cast(),
+                                    size_of::<u32>(),
+                                    4,
+                                );
+                            }
+                            IcbDrawKind::DrawMeshTasks {
+                                ref threadgroup_sizes,
+                            } => {
+                                compute.setBytes_length_atIndex(
+                                    NonNull::new(threadgroup_sizes.as_ptr().cast_mut().cast())
+                                        .unwrap(),
+                                    size_of::<[u32; 6]>(),
+                                    2,
+                                );
+                                compute.setBytes_length_atIndex(
+                                    NonNull::from(&request.draw_count).cast(),
+                                    size_of::<u32>(),
+                                    3,
+                                );
+                            }
+                        }
+                        compute.useResource_usage(
+                            ProtocolObject::from_ref(&*request.icb),
+                            MTLResourceUsage::Write,
+                        );
+                    }
+                    let (threadgroups, threads_per_threadgroup) =
+                        Self::icb_generation_threadgroups(&pipeline.pipeline, request.draw_count);
+                    compute.dispatchThreadgroups_threadsPerThreadgroup(
+                        threadgroups,
+                        threads_per_threadgroup,
+                    );
+
+                    if let DeferredMultiDraw::IcbCount {
+                        count_buffer,
+                        count_offset,
+                        range_buffer,
+                        ..
+                    } = draw
+                    {
+                        // Clamp the GPU-resident count into the execution
+                        // range this ICB executes with.
+                        compute.setComputePipelineState(&pipelines.execution_range.pipeline);
+                        unsafe {
+                            compute.setBuffer_offset_atIndex(
+                                Some(count_buffer),
+                                *count_offset as usize,
+                                0,
+                            );
+                            compute.setBuffer_offset_atIndex(Some(range_buffer), 0, 1);
+                            compute.setBytes_length_atIndex(
+                                NonNull::from(&request.draw_count).cast(),
+                                size_of::<u32>(),
+                                2,
+                            );
+                        }
+                        let single = MTLSize {
+                            width: 1,
+                            height: 1,
+                            depth: 1,
+                        };
+                        compute.dispatchThreadgroups_threadsPerThreadgroup(single, single);
                     }
                 }
-                IcbDrawKind::DrawMeshTasks { .. } => mesh_pipeline.as_ref().unwrap(),
-            };
-            compute.setComputePipelineState(&pipeline.pipeline);
-            unsafe {
-                compute.setBuffer_offset_atIndex(Some(&request.argument_buffer), 0, 0);
-                compute.setBuffer_offset_atIndex(
-                    Some(&request.args_buffer),
-                    request.args_offset as usize,
-                    1,
-                );
-                match request.kind {
-                    IcbDrawKind::Draw => {
-                        compute.setBytes_length_atIndex(
-                            NonNull::from(&request.primitive_type_value).cast(),
-                            size_of::<u32>(),
-                            2,
-                        );
-                        compute.setBytes_length_atIndex(
-                            NonNull::from(&request.draw_count).cast(),
-                            size_of::<u32>(),
-                            3,
-                        );
-                    }
-                    IcbDrawKind::DrawIndexed {
-                        ref index_buffer,
-                        index_offset,
-                        ..
-                    } => {
+                DeferredMultiDraw::ClampedArgs {
+                    dst_buffer,
+                    src_buffer,
+                    src_offset,
+                    count_buffer,
+                    count_offset,
+                    max_count,
+                    words_per_draw,
+                } => {
+                    compute.setComputePipelineState(&pipelines.clamp.pipeline);
+                    unsafe {
+                        compute.setBuffer_offset_atIndex(Some(dst_buffer), 0, 0);
+                        compute.setBuffer_offset_atIndex(Some(src_buffer), *src_offset as usize, 1);
                         compute.setBuffer_offset_atIndex(
-                            Some(index_buffer),
-                            index_offset as usize,
+                            Some(count_buffer),
+                            *count_offset as usize,
                             2,
                         );
                         compute.setBytes_length_atIndex(
-                            NonNull::from(&request.primitive_type_value).cast(),
+                            NonNull::from(max_count).cast(),
                             size_of::<u32>(),
                             3,
                         );
                         compute.setBytes_length_atIndex(
-                            NonNull::from(&request.draw_count).cast(),
+                            NonNull::from(words_per_draw).cast(),
                             size_of::<u32>(),
                             4,
                         );
                     }
-                    IcbDrawKind::DrawMeshTasks {
-                        ref threadgroup_sizes,
-                    } => {
-                        compute.setBytes_length_atIndex(
-                            NonNull::new(threadgroup_sizes.as_ptr().cast_mut().cast()).unwrap(),
-                            size_of::<[u32; 6]>(),
-                            2,
-                        );
-                        compute.setBytes_length_atIndex(
-                            NonNull::from(&request.draw_count).cast(),
-                            size_of::<u32>(),
-                            3,
-                        );
-                    }
+                    let (threadgroups, threads_per_threadgroup) = Self::icb_generation_threadgroups(
+                        &pipelines.clamp.pipeline,
+                        max_count * words_per_draw,
+                    );
+                    compute.dispatchThreadgroups_threadsPerThreadgroup(
+                        threadgroups,
+                        threads_per_threadgroup,
+                    );
                 }
-                compute.useResource_usage(
-                    ProtocolObject::from_ref(&*request.icb),
-                    MTLResourceUsage::Write,
-                );
             }
-            let (threadgroups, threads_per_threadgroup) =
-                Self::icb_generation_threadgroups(&pipeline.pipeline, request.draw_count);
-            compute
-                .dispatchThreadgroups_threadsPerThreadgroup(threadgroups, threads_per_threadgroup);
         }
         compute.endEncoding();
 
         // Let Metal strip inherited state the generated commands don't need.
-        {
+        if has_icbs {
             let blit = self.enter_blit();
             blit.pushDebugGroup(&NSString::from_str("wgpu optimize multi-draw ICBs"));
-            for request in &requests {
+            for draw in &deferred {
+                let Some(request) = icb_request(draw) else {
+                    continue;
+                };
                 unsafe {
                     blit.optimizeIndirectCommandBuffer_withRange(
                         &request.icb,
@@ -2306,9 +2713,23 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.leave_blit();
 
         self.deferred_multi_draw_resources
-            .extend(requests.into_iter().map(|request| IcbExecutionResources {
-                _icb: request.icb,
-                _argument_buffer: request.argument_buffer,
+            .extend(deferred.into_iter().map(|draw| match draw {
+                DeferredMultiDraw::Icb(request) => IcbExecutionResources {
+                    _icb: Some(request.icb),
+                    _buffers: alloc::vec![request.argument_buffer],
+                },
+                DeferredMultiDraw::IcbCount {
+                    request,
+                    range_buffer,
+                    ..
+                } => IcbExecutionResources {
+                    _icb: Some(request.icb),
+                    _buffers: alloc::vec![request.argument_buffer, range_buffer],
+                },
+                DeferredMultiDraw::ClampedArgs { dst_buffer, .. } => IcbExecutionResources {
+                    _icb: None,
+                    _buffers: alloc::vec![dst_buffer],
+                },
             }));
     }
 

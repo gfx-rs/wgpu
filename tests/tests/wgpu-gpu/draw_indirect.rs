@@ -35,6 +35,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         MULTI_DRAW_INDEXED_INDIRECT_GPU_GENERATED_ARGS,
         MULTI_DRAW_INDIRECT_COUNT_READBACK,
         MULTI_DRAW_INDEXED_INDIRECT_COUNT_READBACK,
+        MULTI_DRAW_INDIRECT_COUNT_SAMPLED_TEXTURE,
         MULTI_DRAW_INDIRECT_OVER_ICB_WORKGROUP,
         MULTI_DRAW_INDIRECT_FIRST_VERTEX_AND_INSTANCE,
         MULTI_DRAW_INDIRECT_MIXED_SEQUENCE,
@@ -1349,6 +1350,171 @@ static MULTI_DRAW_INDEXED_INDIRECT_COUNT_READBACK: GpuTestConfiguration =
                 .limits(wgpu::Limits::downlevel_defaults()),
         )
         .run_async(|ctx| run_multi_draw_indirect_count_readback(ctx, true));
+
+/// Like `run_multi_draw_indirect_count_readback`, but the fragment shader
+/// samples a texture. On Metal GPUs where sampled textures exclude a pipeline
+/// from indirect-command-buffer execution, this exercises the GPU-clamped
+/// per-draw fallback instead of the ICB path.
+async fn run_multi_draw_indirect_count_sampled_texture(ctx: TestingContext) {
+    let shader = ctx
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("count sampled texture"),
+            source: wgpu::ShaderSource::Wgsl(
+                "
+                @group(0) @binding(0) var color_texture: texture_2d<f32>;
+                @group(0) @binding(1) var color_sampler: sampler;
+
+                @vertex
+                fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
+                    // One triangle covering the whole viewport; only
+                    // `first_vertex == 0` draws are issued, since
+                    // `vertex_index`'s interaction with `first_vertex` differs
+                    // per backend on the (unvalidated) count path and isn't
+                    // what this test targets.
+                    var positions = array<vec2<f32>, 3>(
+                        vec2<f32>(-1.0, -3.0),
+                        vec2<f32>(3.0, 1.0),
+                        vec2<f32>(-1.0, 1.0),
+                    );
+                    return vec4<f32>(positions[vertex_index], 0.0, 1.0);
+                }
+
+                @fragment
+                fn fs_main() -> @location(0) vec4<f32> {
+                    return textureSample(color_texture, color_sampler, vec2<f32>(0.5, 0.5));
+                }
+                "
+                .into(),
+            ),
+        });
+
+    let white_texture = ctx.device.create_texture_with_data(
+        &ctx.queue,
+        &wgpu::TextureDescriptor {
+            label: Some("white 1x1"),
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        },
+        wgpu::util::TextureDataOrder::LayerMajor,
+        &[u8::MAX; 4],
+    );
+    let sampler = ctx
+        .device
+        .create_sampler(&wgpu::SamplerDescriptor::default());
+
+    let pipeline = ctx
+        .device
+        .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("count sampled texture"),
+            layout: None,
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::TextureFormat::Rgba8Unorm.into())],
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+    let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &pipeline.get_bind_group_layout(0),
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(
+                    &white_texture.create_view(&wgpu::TextureViewDescriptor::default()),
+                ),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&sampler),
+            },
+        ],
+    });
+
+    let max_draw_count = ICB_MULTI_DRAW_TEST_COUNT as u32;
+    let mut args = vec![
+        wgpu::util::DrawIndirectArgs {
+            vertex_count: 0,
+            instance_count: 1,
+            first_vertex: 0,
+            first_instance: 0,
+        };
+        ICB_MULTI_DRAW_TEST_COUNT
+    ];
+    args[0] = wgpu::util::DrawIndirectArgs {
+        vertex_count: 3,
+        instance_count: 1,
+        first_vertex: 0,
+        first_instance: 0,
+    };
+    let indirect_buffer = create_draw_indirect_buffer(&ctx, &args);
+    let count_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(&[1u32]),
+        usage: wgpu::BufferUsages::INDIRECT,
+    });
+
+    let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 256, 256);
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+                resolve_target: None,
+                view: &out_texture_view,
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        rpass.set_pipeline(&pipeline);
+        rpass.set_bind_group(0, &bind_group, &[]);
+        rpass.multi_draw_indirect_count(&indirect_buffer, 0, &count_buffer, 0, max_draw_count);
+    }
+
+    let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
+    assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
+}
+
+#[apply(gpu_test!)]
+static MULTI_DRAW_INDIRECT_COUNT_SAMPLED_TEXTURE: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+                .features(wgpu::Features::MULTI_DRAW_INDIRECT_COUNT)
+                .limits(wgpu::Limits::downlevel_defaults()),
+        )
+        .run_async(run_multi_draw_indirect_count_sampled_texture);
 
 async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
     let draw_count = ICB_MULTI_DRAW_TEST_COUNT as u32;

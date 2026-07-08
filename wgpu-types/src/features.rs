@@ -875,6 +875,12 @@ bitflags_array! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan 1.2+ (or VK_KHR_draw_indirect_count)
+        /// - Metal on GPUs with indirect command buffer support
+        ///
+        /// On Metal, the draw count is always read on the GPU (never by the
+        /// CPU), but draws recorded with a pipeline whose shaders cannot
+        /// execute inside an indirect command buffer are lowered to a series
+        /// of indirect draws over GPU-clamped arguments.
         ///
         /// This is a native only feature.
         ///

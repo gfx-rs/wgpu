@@ -1,7 +1,7 @@
 // Compute kernels that translate `DrawIndirectArgs`/`DrawIndexedIndirectArgs`
 // sequences into Metal indirect-command-buffer (ICB) render commands on the
-// GPU, so `multi_draw_(indexed_)indirect` never round-trips draw arguments
-// through the CPU.
+// GPU, so `multi_draw_(indexed_)indirect(_count)` never round-trips draw
+// arguments through the CPU.
 //
 // The Rust side (`wgpu-hal/src/metal/command.rs`) binds the ICB through an
 // argument buffer (`WgpuIcbArguments`) and dispatches one thread per potential
@@ -31,6 +31,12 @@ struct WgpuDrawIndexedIndirectArgs {
     uint first_index;
     int base_vertex;
     uint first_instance;
+};
+
+// Must match the layout of `MTLIndirectCommandBufferExecutionRange`.
+struct WgpuIcbExecutionRange {
+    uint location;
+    uint length;
 };
 
 // Must match the `ICB_PRIMITIVE_*` constants in
@@ -137,4 +143,40 @@ kernel void wgpu_generate_indexed_mdi_icb_u32(
         args.instance_count,
         args.base_vertex,
         args.first_instance);
+}
+
+// Clamps a GPU-resident draw count to `max_draw_count` and writes the result
+// as the ICB execution range used by
+// `executeCommandsInBuffer:indirectBuffer:indirectBufferOffset:`, keeping
+// `multi_draw_*_indirect_count` counts on the GPU.
+kernel void wgpu_generate_mdi_execution_range(
+    const device uint& draw_count [[buffer(0)]],
+    device WgpuIcbExecutionRange& range [[buffer(1)]],
+    constant uint& max_draw_count [[buffer(2)]])
+{
+    range.location = 0;
+    range.length = min(draw_count, max_draw_count);
+}
+
+// Fallback for `multi_draw_*_indirect_count` when the bound pipeline can't
+// execute inside an ICB (see `RenderPipeline::icb_raw`):
+// copies `min(draw_count, max_draw_count)` argument structs into a private
+// destination buffer and zeroes the rest, so a fixed `max_draw_count`-length
+// loop of per-draw indirect calls executes exactly `draw_count` real draws.
+// Operates on 4-byte words with `words_per_draw` set per argument type; a
+// zeroed argument struct is a no-op draw for all three draw families.
+kernel void wgpu_clamp_mdi_args(
+    device uint* dst_args [[buffer(0)]],
+    const device uint* src_args [[buffer(1)]],
+    const device uint& draw_count [[buffer(2)]],
+    constant uint& max_draw_count [[buffer(3)]],
+    constant uint& words_per_draw [[buffer(4)]],
+    uint tid [[thread_position_in_grid]])
+{
+    const uint draw_index = tid / words_per_draw;
+    if (draw_index >= max_draw_count) {
+        return;
+    }
+    const uint live_draws = min(draw_count, max_draw_count);
+    dst_args[tid] = draw_index < live_draws ? src_args[tid] : 0u;
 }

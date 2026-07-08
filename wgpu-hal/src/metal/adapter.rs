@@ -1349,6 +1349,10 @@ impl super::CapabilitiesQuery {
             F::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
             self.supported_vertex_amplification_factor > 1 && self.mesh_shaders,
         );
+        features.set(
+            F::MULTI_DRAW_INDIRECT_COUNT,
+            self.indirect_command_buffers_rendering,
+        );
 
         // Cooperative matrix (simdgroup matrix) requires MSL 2.3+
         features.set(

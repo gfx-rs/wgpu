@@ -1374,7 +1374,7 @@ pub struct CommandEncoder {
     /// during render-pass recording, encoded (into the command buffer wgpu-core
     /// schedules before the pass) by
     /// [`encode_deferred_multi_draws`](crate::CommandEncoder::encode_deferred_multi_draws).
-    deferred_multi_draws: Vec<command::IcbGenerationRequest>,
+    deferred_multi_draws: Vec<command::DeferredMultiDraw>,
     /// Objects that must stay alive until the command buffers recorded by this
     /// encoder finish executing; drained into the next finished
     /// [`CommandBuffer`] so submission keep-alive doesn't depend on

@@ -125,6 +125,11 @@ pub const QUERY_RESOLVE_BUFFER_ALIGNMENT: BufferAddress = 256;
 /// Buffer to buffer copy as well as buffer clear offsets and sizes must be aligned to this number.
 pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
 
+/// Buffer offsets of indirect draw/dispatch arguments — and of the count in
+/// the `multi_draw_*_indirect_count` family — must be aligned to this number,
+/// per the WebGPU specification.
+pub const INDIRECT_BUFFER_OFFSET_ALIGNMENT: BufferAddress = 4;
+
 /// Minimum alignment of buffer mappings.
 ///
 /// The range passed to [`map_async()`] or [`get_mapped_range()`] must be at least this aligned.
