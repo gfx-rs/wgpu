@@ -11,10 +11,10 @@ use objc2_metal::{
     MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLComputePipelineState,
     MTLCounterDontSample, MTLDevice, MTLFunction, MTLIndexType, MTLIndirectCommandBuffer,
     MTLIndirectCommandBufferDescriptor, MTLIndirectCommandType, MTLLibrary, MTLLoadAction,
-    MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor, MTLResidencySet,
-    MTLResidencySetDescriptor, MTLResource, MTLResourceOptions, MTLResourceUsage, MTLSamplerState,
-    MTLScissorRect, MTLSize, MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping,
-    MTLViewport, MTLVisibilityResultMode,
+    MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor, MTLRenderStages,
+    MTLResidencySet, MTLResidencySetDescriptor, MTLResource, MTLResourceOptions, MTLResourceUsage,
+    MTLSamplerState, MTLScissorRect, MTLSize, MTLStoreAction, MTLTexture,
+    MTLVertexAmplificationViewMapping, MTLViewport, MTLVisibilityResultMode,
 };
 
 use super::{
@@ -40,9 +40,12 @@ const WORD_SIZE: usize = 4;
 /// on A12 through M4 hardware.
 const ICB_MIN_DRAW_COUNT: u32 = 8;
 
-/// Upper bound declared for `maxVertexBufferBindCount` when the ICB inherits
-/// buffer bindings: Metal's per-stage buffer argument table has 31 slots, so
-/// 31 covers every possible inherited binding.
+/// Value declared for `maxVertexBufferBindCount` on ICB descriptors. The
+/// generated commands never set buffers themselves (all bindings are
+/// inherited from the encoder), so per Metal's documentation these counts
+/// only size command-side binding storage; the full 31-slot argument-table
+/// size is declared anyway because driver validation of the interaction with
+/// `inheritBuffers` has proven underdocumented across OS generations.
 const ICB_MAX_INHERITED_BUFFER_BIND_COUNT: usize = 31;
 
 // Primitive-topology tags passed to the ICB generation kernels.
@@ -68,8 +71,8 @@ pub(super) struct IcbCommandPipelines {
     indexed_u16: IcbCommandPipeline,
     indexed_u32: IcbCommandPipeline,
     /// Compiled on first use: mesh commands in ICBs need a newer OS baseline
-    /// than plain draws.
-    mesh: Option<IcbCommandPipeline>,
+    /// than plain draws. Failures are cached.
+    mesh: Option<Result<IcbCommandPipeline, crate::DeviceError>>,
 }
 
 #[derive(Clone, Debug)]
@@ -189,15 +192,14 @@ impl IcbCommandPipelines {
         &mut self,
         shared: &super::AdapterShared,
     ) -> Result<IcbCommandPipeline, crate::DeviceError> {
-        if self.mesh.is_none() {
-            let library = Self::make_library(shared, ICB_MESH_GENERATION_SHADER)?;
-            self.mesh = Some(Self::make_pipeline_from_library(
-                shared,
-                &library,
-                "wgpu_generate_mesh_mdi_icb",
-            )?);
-        }
-        Ok(self.mesh.as_ref().unwrap().clone())
+        // Failures are cached too, so a driver that rejects the mesh kernel
+        // doesn't recompile it on every mesh multi-draw.
+        self.mesh
+            .get_or_insert_with(|| {
+                let library = Self::make_library(shared, ICB_MESH_GENERATION_SHADER)?;
+                Self::make_pipeline_from_library(shared, &library, "wgpu_generate_mesh_mdi_icb")
+            })
+            .clone()
     }
 }
 
@@ -378,18 +380,20 @@ impl super::CommandEncoder {
 
     fn get_icb_command_pipelines(&self) -> Result<IcbCommandPipelines, crate::DeviceError> {
         let mut pipelines = self.shared.icb_command_pipelines.lock();
-        if pipelines.is_none() {
-            *pipelines = Some(IcbCommandPipelines::new(&self.shared)?);
-        }
-        Ok(pipelines.as_ref().unwrap().clone())
+        // A compile failure is cached so a broken driver doesn't recompile
+        // the generation library on every multi-draw call.
+        pipelines
+            .get_or_insert_with(|| IcbCommandPipelines::new(&self.shared))
+            .clone()
     }
 
     fn get_icb_mesh_command_pipeline(&self) -> Result<IcbCommandPipeline, crate::DeviceError> {
         let mut pipelines = self.shared.icb_command_pipelines.lock();
-        if pipelines.is_none() {
-            *pipelines = Some(IcbCommandPipelines::new(&self.shared)?);
-        }
-        pipelines.as_mut().unwrap().mesh(&self.shared)
+        pipelines
+            .get_or_insert_with(|| IcbCommandPipelines::new(&self.shared))
+            .as_mut()
+            .map_err(|err| err.clone())?
+            .mesh(&self.shared)
     }
 
     fn icb_primitive_type_value(
@@ -568,10 +572,12 @@ impl super::CommandEncoder {
             {
                 // The generated commands reference the index buffer via a
                 // device pointer baked in at generation time, which residency
-                // tracking can't see.
-                encoder.useResource_usage(
+                // tracking can't see. Unlike the ICB, this is an ordinary
+                // vertex-stage read, so the stage-scoped variant is correct.
+                encoder.useResource_usage_stages(
                     ProtocolObject::from_ref(&**index_buffer),
                     MTLResourceUsage::Read,
+                    MTLRenderStages::Vertex,
                 );
             }
             encoder.executeCommandsInBuffer_withRange(
@@ -1342,9 +1348,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
         assert!(self.state.blit.is_none());
         assert!(self.state.compute.is_none());
         assert!(self.state.render.is_none());
-        // Multi-draws deferred by the previous pass must have been encoded via
-        // `encode_deferred_multi_draws` before another pass begins.
-        debug_assert!(self.deferred_multi_draws.is_empty());
 
         autoreleasepool(|_| {
             let descriptor = MTLRenderPassDescriptor::new();

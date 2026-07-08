@@ -583,7 +583,7 @@ const INDIRECT_DRAW_DISPATCH_SUPPORT: &[MTLFeatureSet] = &[
 /// kernels; widen this table as device validation lands.
 const INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily5_v1,
-    MTLFeatureSet::tvOS_GPUFamily1_v2,
+    MTLFeatureSet::tvOS_GPUFamily2_v2,
     MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
@@ -722,8 +722,12 @@ impl super::CapabilitiesQuery {
         // - First-generation Apple TV 4K (A10X, Apple3) is allowed because it
         //   was validated directly on hardware; other Apple3/Apple4 devices
         //   stay excluded until they're validated with this backend.
-        // `MTLIndirectCommandBuffer` and friends need macOS 10.14 / iOS 12.
-        let icb_api_check = available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0);
+        // `MTLIndirectCommandBuffer` needs macOS 10.14 / iOS 12, but the
+        // pieces this backend depends on are newer: `inheritPipelineState`
+        // needs iOS/tvOS 13, and `useResource:usage:` only participates in
+        // hazard tracking from macOS 10.15 / iOS 13 — which the deferred
+        // generation relies on to order the ICB write against its execution.
+        let icb_api_check = available!(macos = 10.15, ios = 13.0, tvos = 13.0, visionos = 1.0);
         let icb_family_support = family_check
             && if os_type == super::OsType::Macos {
                 device.supportsFamily(MTLGPUFamily::Mac2)

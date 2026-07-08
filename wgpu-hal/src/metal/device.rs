@@ -1754,7 +1754,17 @@ impl crate::Device for super::Device {
             // used with indirect command buffers"), so a failed creation is
             // retried without it and the multi-draw ICB lowering then skips
             // draws issued with that pipeline.
-            let request_icb_support = self.shared.private_caps.indirect_command_buffers_rendering;
+            //
+            // On `MTLMeshRenderPipelineDescriptor` the property needs a newer
+            // OS than mesh pipelines themselves (and than the property on the
+            // standard descriptor).
+            let request_icb_support = self.shared.private_caps.indirect_command_buffers_rendering
+                && match descriptor {
+                    MetalGenericRenderPipelineDescriptor::Standard(_) => true,
+                    MetalGenericRenderPipelineDescriptor::Mesh(_) => {
+                        available!(macos = 14.0, ios = 17.0, tvos = 18.1, visionos = 2.1)
+                    }
+                };
             if request_icb_support {
                 descriptor.setSupportIndirectCommandBuffers(true);
             }
@@ -1780,15 +1790,21 @@ impl crate::Device for super::Device {
                 Err(first_err) if request_icb_support => {
                     descriptor.setSupportIndirectCommandBuffers(false);
                     supports_indirect_command_buffers = false;
-                    create(&descriptor).map_err(|_| {
-                        // Report the original error: if the pipeline is
-                        // invalid regardless, the first message is the
-                        // relevant one.
+                    let raw = create(&descriptor).map_err(|retry_err| {
+                        // The retry error is the pipeline's real problem; the
+                        // first attempt may only have failed because of the
+                        // ICB flag.
                         crate::PipelineError::Linkage(
                             wgt::ShaderStages::VERTEX | wgt::ShaderStages::FRAGMENT,
-                            format!("new_render_pipeline_state: {first_err:?}"),
+                            format!("new_render_pipeline_state: {retry_err:?}"),
                         )
-                    })?
+                    })?;
+                    log::debug!(
+                        "created render pipeline {:?} without indirect command buffer support, \
+                         multi-draws recorded with it won't use ICBs: {first_err:?}",
+                        desc.label,
+                    );
+                    raw
                 }
                 Err(e) => {
                     return Err(crate::PipelineError::Linkage(

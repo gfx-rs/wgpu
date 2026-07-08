@@ -44,13 +44,14 @@ Bottom level categories:
 
 ### Added/New Features
 
-#### Hal
-
-- Add `BufferBinding::buffer`, a public read accessor for the bound buffer, which was previously inaccessible to out-of-tree `wgpu_hal::Api` implementations. By @danlehmann in [#9820](https://github.com/gfx-rs/wgpu/pull/9820).
-
 #### Metal
 
 - Metal now lowers fixed-count `multi_draw_indirect` / `multi_draw_indexed_indirect` (and their mesh-task counterpart) with 8 or more draws to GPU-generated indirect command buffers. The generation compute runs in the internal pre-pass command buffer that already carries indirect-draw validation, so the render pass is never interrupted. By @matthargett in [#9640](https://github.com/gfx-rs/wgpu/pull/9640).
+
+#### Hal
+
+- Add `BufferBinding::buffer`, a public read accessor for the bound buffer, which was previously inaccessible to out-of-tree `wgpu_hal::Api` implementations. By @danlehmann in [#9820](https://github.com/gfx-rs/wgpu/pull/9820).
+- Added `CommandEncoder::encode_deferred_multi_draws` (default no-op). Backends may defer part of the work for indirect multi-draws recorded in a render pass; after ending such a pass, callers must invoke this method while recording a command buffer that the queue executes before the pass's. wgpu-core does this in its internal pre-pass. By @matthargett in [#9640](https://github.com/gfx-rs/wgpu/pull/9640).
 
 ### Changes
 

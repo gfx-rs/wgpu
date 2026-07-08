@@ -38,7 +38,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         MULTI_DRAW_INDIRECT_OVER_ICB_WORKGROUP,
         MULTI_DRAW_INDIRECT_FIRST_VERTEX_AND_INSTANCE,
         MULTI_DRAW_INDIRECT_MIXED_SEQUENCE,
-        MULTI_DRAW_INDIRECT_BIND_GROUP_FALLBACK,
+        MULTI_DRAW_INDIRECT_WITH_BIND_GROUPS,
         MULTI_DRAW_INDEXED_INDIRECT_U16,
         MULTI_DRAW_INDEXED_INDIRECT_POSITIVE_BASE_VERTEX,
         MULTI_DRAW_INDEXED_INDIRECT_NEGATIVE_BASE_VERTEX,
@@ -641,6 +641,9 @@ fn create_draw_indexed_indirect_buffer(
     })
 }
 
+/// Kept in sync with `ICB_MIN_DRAW_COUNT` in `wgpu-hal/src/metal/command.rs`
+/// so these tests exercise Metal's indirect-command-buffer lowering rather
+/// than the small-count per-draw loop.
 const ICB_MULTI_DRAW_TEST_COUNT: usize = 8;
 
 async fn run_multi_draw_indirect_over_icb_workgroup(ctx: TestingContext) {
@@ -876,7 +879,9 @@ async fn run_multi_draw_indirect_mixed_sequence(ctx: TestingContext) {
     assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
 }
 
-async fn run_multi_draw_indirect_bind_group_fallback(ctx: TestingContext) {
+/// Multi-draw with an active bind group; on Metal's ICB path the bind-group
+/// bindings must be inherited correctly by the generated commands.
+async fn run_multi_draw_indirect_with_bind_groups(ctx: TestingContext) {
     let shader = ctx
         .device
         .create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -1287,13 +1292,13 @@ static MULTI_DRAW_INDIRECT_MIXED_SEQUENCE: GpuTestConfiguration = GpuTestConfigu
     .run_async(run_multi_draw_indirect_mixed_sequence);
 
 #[gpu_test]
-static MULTI_DRAW_INDIRECT_BIND_GROUP_FALLBACK: GpuTestConfiguration = GpuTestConfiguration::new()
+static MULTI_DRAW_INDIRECT_WITH_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
             .limits(wgpu::Limits::downlevel_defaults()),
     )
-    .run_async(run_multi_draw_indirect_bind_group_fallback);
+    .run_async(run_multi_draw_indirect_with_bind_groups);
 
 #[gpu_test]
 static MULTI_DRAW_INDEXED_INDIRECT_U16: GpuTestConfiguration = GpuTestConfiguration::new()

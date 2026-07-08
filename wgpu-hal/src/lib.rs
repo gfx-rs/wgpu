@@ -1684,12 +1684,20 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         first_instance: u32,
         instance_count: u32,
     );
+    /// # Safety
+    ///
+    /// - If `draw_count > 1`, see the deferred-work obligation on
+    ///   [`encode_deferred_multi_draws`](CommandEncoder::encode_deferred_multi_draws).
     unsafe fn draw_indirect(
         &mut self,
         buffer: &<Self::A as Api>::Buffer,
         offset: wgt::BufferAddress,
         draw_count: u32,
     );
+    /// # Safety
+    ///
+    /// - If `draw_count > 1`, see the deferred-work obligation on
+    ///   [`encode_deferred_multi_draws`](CommandEncoder::encode_deferred_multi_draws).
     unsafe fn draw_indexed_indirect(
         &mut self,
         buffer: &<Self::A as Api>::Buffer,

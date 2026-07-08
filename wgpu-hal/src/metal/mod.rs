@@ -407,7 +407,7 @@ struct AdapterShared {
     private_texture_format_caps: PrivateTextureFormatCapabilities,
     settings: Settings,
     presentation_timer: time::PresentationTimer,
-    icb_command_pipelines: Mutex<Option<command::IcbCommandPipelines>>,
+    icb_command_pipelines: Mutex<Option<Result<command::IcbCommandPipelines, crate::DeviceError>>>,
 }
 
 #[cfg(send_sync)]
