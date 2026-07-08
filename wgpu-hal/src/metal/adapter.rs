@@ -727,8 +727,16 @@ impl super::CapabilitiesQuery {
         // needs iOS/tvOS 13, and `useResource:usage:` only participates in
         // hazard tracking from macOS 10.15 / iOS 13 — which the deferred
         // generation relies on to order the ICB write against its execution.
-        let icb_api_check = available!(macos = 10.15, ios = 13.0, tvos = 13.0, visionos = 1.0);
-        let icb_family_support = family_check
+        // watchOS is gated at 11.0 for the same reason iOS/iPadOS/tvOS 17.x are
+        // excluded: those driver generations mishandle the render-ICB path.
+        let icb_api_check = available!(
+            macos = 10.15,
+            ios = 13.0,
+            tvos = 13.0,
+            visionos = 1.0,
+            watchos = 11.0
+        );
+        let icb_family_support = (family_check
             && if os_type == super::OsType::Macos {
                 device.supportsFamily(MTLGPUFamily::Mac2)
                     || device.supportsFamily(MTLGPUFamily::Metal3)
@@ -737,7 +745,15 @@ impl super::CapabilitiesQuery {
                     || device.supportsFamily(MTLGPUFamily::Metal3)
                     || (os_type == super::OsType::Tvos
                         && device.supportsFamily(MTLGPUFamily::Apple3))
-            };
+            })
+            // objc2-metal exposes no `MTLFeatureSet::watchOS_*` values, so the
+            // feature-set table can't cover watchOS and `family_check` carries
+            // no `watchos` key; detect the Apple Watch (which classifies as
+            // `OsType::Ios` here) purely by GPU family. The S4+ watch GPU
+            // reports Apple5 and supports ICBs — validated on Apple Watch SE 2
+            // (S8, watchOS 11). `available!(watchos = 11.0)` is `false` on every
+            // other platform, so this branch is inert off watchOS.
+            || (available!(watchos = 11.0) && device.supportsFamily(MTLGPUFamily::Apple5));
         let indirect_command_buffers_rendering = !is_virtual
             && icb_api_check
             && (Self::supports_any(device, INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT)
