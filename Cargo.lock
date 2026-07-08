@@ -1713,7 +1713,6 @@ version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51255ea7cfaadb6c5f1528d43e92a82acb2b96c43365989a28b2d44ee38f8795"
 dependencies = [
- "ash",
  "hashbrown 0.16.1",
  "log",
  "presser",
@@ -5001,7 +5000,9 @@ dependencies = [
  "wasm-bindgen",
  "wayland-sys",
  "web-sys",
+ "wgpu-block-pool",
  "wgpu-naga-bridge",
+ "wgpu-offset-allocator",
  "wgpu-sync",
  "wgpu-types",
  "windows",

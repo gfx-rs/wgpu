@@ -4,7 +4,7 @@ use core::{ffi::CStr, marker::PhantomData};
 use ash::{ext, google, khr, vk};
 use wgpu_sync::Mutex;
 
-use crate::{vulkan::semaphore_list::SemaphoreList, AllocationSizes};
+use crate::vulkan::semaphore_list::SemaphoreList;
 
 use super::semaphore_list::SemaphoreListMode;
 
@@ -2962,6 +2962,7 @@ impl super::Adapter {
             drop_guard,
             instance: Arc::clone(&self.instance),
             physical_device: self.raw,
+            device_api_version: self.phd_capabilities.device_api_version,
             enabled_extensions: enabled_extensions.into(),
             extension_fns: super::DeviceExtensionFunctions {
                 debug_utils: debug_utils_fn,
@@ -3001,19 +3002,18 @@ impl super::Adapter {
             next_submit_chain: Mutex::new(None),
         };
 
-        let allocation_sizes = AllocationSizes::from_memory_hints(memory_hints).into();
-
+        let memory_budget_supported = enabled_extensions.contains(&ext::memory_budget::NAME);
         let buffer_device_address = enabled_extensions.contains(&khr::buffer_device_address::NAME);
 
-        let mem_allocator =
-            gpu_allocator::vulkan::Allocator::new(&gpu_allocator::vulkan::AllocatorCreateDesc {
-                instance: self.instance.raw.clone(),
-                device: shared.raw.clone(),
-                physical_device: self.raw,
-                debug_settings: Default::default(),
-                buffer_device_address,
-                allocation_sizes,
-            })?;
+        let mem_allocator = super::suballocation::Allocator::new(
+            &mem_properties,
+            &self.phd_capabilities.properties.limits,
+            valid_ash_memory_types,
+            memory_hints,
+            self.instance.memory_budget_thresholds,
+            memory_budget_supported,
+            buffer_device_address,
+        );
 
         let desc_allocator = super::descriptor::DescriptorAllocator::new(
             if let Some(di) = self.phd_capabilities.descriptor_indexing {
@@ -3027,7 +3027,6 @@ impl super::Adapter {
             shared,
             mem_allocator: Mutex::new(mem_allocator),
             desc_allocator: Mutex::new(desc_allocator),
-            valid_ash_memory_types,
             naga_options,
             #[cfg(feature = "renderdoc")]
             render_doc: Default::default(),

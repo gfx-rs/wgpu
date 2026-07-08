@@ -95,6 +95,12 @@ vulkan = [
     "dep:arrayvec",
     "dep:ash",
     "dep:bytemuck",
+    # The vulkan backend no longer uses gpu-allocator, but the shared
+    # `gpu_allocator`-based glue in `lib.rs` is still gated on `any(dx12, vulkan)`
+    # (the dx12 backend continues to use it). Keep the crate available - without its
+    # `vulkan` feature - so `lib.rs` compiles in vulkan-only builds. Removing that glue
+    # (and this dependency) is a follow-up once dx12 is ported too.
+    "dep:gpu-allocator",
     "dep:libc",
     "dep:libloading",
     "dep:ordered-float",
@@ -103,7 +109,8 @@ vulkan = [
     "dep:smallvec",
     "dep:windows",
     "dep:windows-core",
-    "gpu-allocator/vulkan",
+    "dep:wgpu-block-pool",
+    "dep:wgpu-offset-allocator",
     "windows/Win32",
     "windows/Win32_Devices_Display",
     "windows/Win32_Foundation",
@@ -212,6 +219,9 @@ wgpu-naga-bridge.workspace = true
 naga-types = { workspace = true }
 wgpu-sync = { workspace = true, default-features = false }
 wgpu-types = { workspace = true, default-features = false }
+# Backend: Vulkan (in-repo suballocator)
+wgpu-block-pool = { workspace = true, optional = true }
+wgpu-offset-allocator = { workspace = true, optional = true }
 
 # Dependencies in the lib and empty backend
 bitflags.workspace = true
