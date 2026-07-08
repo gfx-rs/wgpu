@@ -4757,6 +4757,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-block-pool"
+version = "30.0.0"
+dependencies = [
+ "proptest",
+ "wgpu-offset-allocator",
+]
+
+[[package]]
 name = "wgpu-bug-repro-01-texture-atomic-bug"
 version = "0.0.0"
 dependencies = [

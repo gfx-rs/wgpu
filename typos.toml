@@ -42,6 +42,10 @@ Derivate = "Derivate"
 inout = "inout"
 Ect = "Ect"
 bve = "bve"
+# Terse per-instance variable names in wgpu-block-pool's tests: `ba`/`bb` are
+# "backend a/b" (paralleling the `a`/`b` pools), `strat` is a `Strategy` binding.
+ba = "ba"
+strat = "strat"
 
 [type.wgsl]
 extend-glob = ["*.wgsl"]

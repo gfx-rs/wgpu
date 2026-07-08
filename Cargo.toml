@@ -26,6 +26,7 @@ members = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
+    "wgpu-block-pool",
     "wgpu-offset-allocator",
     "wgpu-sync",
     "wgpu-types",
@@ -55,6 +56,7 @@ default-members = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
+    "wgpu-block-pool",
     "wgpu-offset-allocator",
     "wgpu-sync",
     "wgpu-types",
@@ -102,6 +104,7 @@ wgpu-core-remote = { version = "30.0.0", path = "./wgpu-core-remote" }
 wgpu-core-remote-types = { version = "30.0.0", path = "./wgpu-core-remote-types" }
 wgpu-hal = { version = "30.0.0", path = "./wgpu-hal", default-features = false }
 wgpu-naga-bridge = { version = "30.0.0", path = "./wgpu-naga-bridge" }
+wgpu-block-pool = { version = "30.0.0", path = "./wgpu-block-pool" }
 wgpu-offset-allocator = { version = "30.0.0", path = "./wgpu-offset-allocator" }
 wgpu-sync = { version = "30.0.0", path = "./wgpu-sync", default-features = false }
 wgpu-test = { version = "30.0.0", path = "./tests" }
