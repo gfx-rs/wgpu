@@ -95,6 +95,10 @@ impl GPUAdapter {
       // Only expose WebGPU features, not wgpu native-only features
       let mut exposed_features =
         features & wgpu_types::Features::all_webgpu_mask();
+      // Exception: `MULTI_DRAW_INDIRECT_COUNT` is native-only in wgpu, but
+      // Chromium exposes the same capability to WebGPU as the experimental
+      // feature "chromium-experimental-multi-draw-indirect", so we surface it
+      // under that name (see `GPUSupportedFeatures` and `webidl.rs`).
       exposed_features.set(
         wgpu_types::Features::MULTI_DRAW_INDIRECT_COUNT,
         features.contains(wgpu_types::Features::MULTI_DRAW_INDIRECT_COUNT),
