@@ -226,15 +226,15 @@ static COLOR_SPACES: LazyLock<Result<ColorSpaces, crate::SurfaceError>> = LazyLo
     };
     fn lookup(
         lib: &libloading::Library,
-        name: &[u8],
+        name: &core::ffi::CStr,
     ) -> Result<&'static CFString, crate::SurfaceError> {
-        let sym = unsafe { lib.get(name) }
+        let sym = unsafe { lib.get(name.to_bytes_with_nul()) }
             .map_err(|_| crate::SurfaceError::Other("error resolving symbol in CoreGraphics"))?;
         Ok(*sym)
     }
-    let extended_display_p3 = lookup(&lib, b"kCGColorSpaceExtendedDisplayP3\0")?;
-    let itur_bt2100_pq = lookup(&lib, b"kCGColorSpaceITUR_2100_PQ\0")?;
-    let itur_bt2100_hlg = lookup(&lib, b"kCGColorSpaceITUR_2100_HLG\0")?;
+    let extended_display_p3 = lookup(&lib, c"kCGColorSpaceExtendedDisplayP3")?;
+    let itur_bt2100_pq = lookup(&lib, c"kCGColorSpaceITUR_2100_PQ")?;
+    let itur_bt2100_hlg = lookup(&lib, c"kCGColorSpaceITUR_2100_HLG")?;
     Ok(ColorSpaces {
         extended_display_p3,
         itur_bt2100_pq,
@@ -296,7 +296,10 @@ impl crate::Surface for super::Surface {
                 Some(unsafe { objc2_core_graphics::kCGColorSpaceExtendedSRGB })
             }
             wgt::SurfaceColorSpace::ExtendedDisplayP3 => {
-                // TODO: This needs protection in `surface_capabilities` like the BT.2100 cases.
+                // Only reported by `surface_capabilities` on macOS 11.0+/iOS 14.0+.
+                if !available!(macos = 11.0, ios = 14.0, tvos = 14.0, visionos = 1.0) {
+                    unreachable!("ExtendedDisplayP3 color space is only reported on macOS 11.0+/iOS 14.0+/tvOS 14.0+");
+                }
                 Some(
                     COLOR_SPACES
                         .as_ref()

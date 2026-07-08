@@ -411,8 +411,12 @@ impl crate::Adapter for super::Adapter {
                 // linear (scRGB) and encoded (extended nonlinear sRGB) form,
                 // for the BT.709 and Display-P3 gamuts.
                 color_spaces |= wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR
-                    | wgt::SurfaceColorSpaces::EXTENDED_SRGB
-                    | wgt::SurfaceColorSpaces::EXTENDED_DISPLAY_P3;
+                    | wgt::SurfaceColorSpaces::EXTENDED_SRGB;
+                // `kCGColorSpaceExtendedDisplayP3` only exists on macOS 11.0+/
+                // iOS 14.0+, so gate it like the BT.2100 spaces below.
+                if available!(macos = 11.0, ios = 14.0, tvos = 14.0, visionos = 1.0) {
+                    color_spaces |= wgt::SurfaceColorSpaces::EXTENDED_DISPLAY_P3;
+                }
             }
             // PQ/HLG only on the >=10-bit formats: 8-bit PQ would result in unusable
             // banding. The ITUR_2100 color space constants require
