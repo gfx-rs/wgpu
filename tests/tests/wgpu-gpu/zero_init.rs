@@ -6,6 +6,7 @@
 
 use core::num::NonZeroU64;
 
+use wgpu::util::DeviceExt as _;
 use wgpu::*;
 use wgpu_test::{
     gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, GpuTestInitializer,
@@ -66,6 +67,10 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         COPY_TEXTURE_TO_TEXTURE_3D_SOURCE_ORIGIN_Z_UNINIT,
         COPY_BUFFER_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL,
         COPY_TEXTURE_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL,
+        VERTEX_BUFFER_TAIL_INIT_PLAIN,
+        VERTEX_BUFFER_TAIL_INIT_MAP_WRITE,
+        VERTEX_BUFFER_TAIL_INIT_MAPPED_AT_CREATION,
+        VERTEX_BUFFER_TAIL_INIT_MAP_WRITE_MAPPED_AT_CREATION,
     ]);
 }
 
@@ -1251,4 +1256,310 @@ async fn check_3d_copy_dest_init(ctx: &TestingContext, method: WriteMethod) {
     readback_buffers
         .assert_buffer_contents(ctx, &expected)
         .await;
+}
+
+// Tests that the padding (tail) at the end of a buffer allocation is
+// zero-initialized.
+//
+// The test is effective mainly on Vulkan, where it can exploit the fact that
+// `vkCmdBindVertexBuffers` does not specify the end of the binding, so a vertex
+// shader can fetch a vertex whose bytes lie in the tail. Draw-time bounds
+// checking does not limit the vertex count for indexed draws, so we use an
+// indexed draw whose largest index points at the buffer tail.
+
+const VB_TAIL_VERTEX_STRIDE: u64 = 4;
+const VB_TAIL_VISIBLE_VERTS: u32 = 4;
+
+const VB_TAIL_SHADER: &str = "
+    @group(0) @binding(0) var<storage, read_write> result: array<u32>;
+
+    @vertex
+    fn vs_main(@builtin(vertex_index) ix: u32, @location(0) value: u32) -> @builtin(position) vec4f {
+        result[ix] = value;
+        return vec4f(0.0, 0.0, 0.0, 1.0);
+    }
+
+    @fragment
+    fn fs_main() -> @location(0) vec4f {
+        return vec4f(0.0, 0.0, 0.0, 0.0);
+    }
+";
+
+// `MAP_WRITE` + `VERTEX` requires `MAPPABLE_PRIMARY_BUFFERS`.
+#[gpu_test]
+static VERTEX_BUFFER_TAIL_INIT_PLAIN: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::VERTEX_WRITABLE_STORAGE)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| async move {
+        for app_writes in [false, true] {
+            check_vertex_buffer_tail_init(&ctx, false, false, app_writes).await;
+        }
+    });
+
+#[gpu_test]
+static VERTEX_BUFFER_TAIL_INIT_MAP_WRITE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::VERTEX_WRITABLE_STORAGE | Features::MAPPABLE_PRIMARY_BUFFERS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| async move {
+        for app_writes in [false, true] {
+            check_vertex_buffer_tail_init(&ctx, true, false, app_writes).await;
+        }
+    });
+
+#[gpu_test]
+static VERTEX_BUFFER_TAIL_INIT_MAPPED_AT_CREATION: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .features(Features::VERTEX_WRITABLE_STORAGE)
+                .limits(Limits::downlevel_defaults()),
+        )
+        .run_async(|ctx| async move {
+            for app_writes in [false, true] {
+                check_vertex_buffer_tail_init(&ctx, false, true, app_writes).await;
+            }
+        });
+
+#[gpu_test]
+static VERTEX_BUFFER_TAIL_INIT_MAP_WRITE_MAPPED_AT_CREATION: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .features(Features::VERTEX_WRITABLE_STORAGE | Features::MAPPABLE_PRIMARY_BUFFERS)
+                .limits(Limits::downlevel_defaults()),
+        )
+        .run_async(|ctx| async move {
+            for app_writes in [false, true] {
+                check_vertex_buffer_tail_init(&ctx, true, true, app_writes).await;
+            }
+        });
+
+async fn check_vertex_buffer_tail_init(
+    ctx: &TestingContext,
+    map_write: bool,
+    mapped_at_creation: bool,
+    app_writes: bool,
+) {
+    let case_desc = format!(
+        "map_write={map_write}, mapped_at_creation={mapped_at_creation}, app_writes={app_writes}"
+    );
+
+    let vb_size = VB_TAIL_VISIBLE_VERTS as u64 * VB_TAIL_VERTEX_STRIDE;
+    let vertex_data: Vec<u32> = (0..VB_TAIL_VISIBLE_VERTS)
+        .map(|i| 0xA0A0_0000 + i)
+        .collect();
+    let vertex_data_bytes: &[u8] = bytemuck::cast_slice(&vertex_data);
+
+    // Add `COPY_DST` if the application needs it to write via the queue;
+    // it does not affect which tail-init path is taken.
+    let mut usage = BufferUsages::VERTEX;
+    if map_write {
+        usage |= BufferUsages::MAP_WRITE;
+    } else if app_writes && !mapped_at_creation {
+        usage |= BufferUsages::COPY_DST;
+    }
+
+    let vertex_buffer = ctx.device.create_buffer(&BufferDescriptor {
+        label: Some("vertex buffer under test"),
+        size: vb_size,
+        usage,
+        mapped_at_creation,
+    });
+
+    // Fill (or leave zero) the application-visible portion of the buffer.
+    if mapped_at_creation {
+        // The buffer is mapped at creation; write into it if desired, then unmap.
+        if app_writes {
+            let mut view = vertex_buffer.slice(..).get_mapped_range_mut().unwrap();
+            view.copy_from_slice(vertex_data_bytes);
+        }
+        vertex_buffer.unmap();
+    } else if app_writes {
+        if map_write {
+            vertex_buffer.slice(..).map_async(MapMode::Write, |_| ());
+            ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
+            {
+                let mut view = vertex_buffer.slice(..).get_mapped_range_mut().unwrap();
+                view.copy_from_slice(vertex_data_bytes);
+            }
+            vertex_buffer.unmap();
+        } else {
+            ctx.queue.write_buffer(&vertex_buffer, 0, vertex_data_bytes);
+        }
+    }
+
+    // Index buffer whose largest index (`VB_TAIL_VISIBLE_VERTS`) points one vertex
+    // past the visible area, into the tail.
+    let indices: Vec<u32> = (0..=VB_TAIL_VISIBLE_VERTS).collect();
+    let index_buffer = ctx.device.create_buffer_init(&util::BufferInitDescriptor {
+        label: Some("index buffer"),
+        contents: bytemuck::cast_slice(&indices),
+        usage: BufferUsages::INDEX,
+    });
+
+    // The vertex shader writes each fetched value into this buffer at `vertex_index`.
+    let result_len = indices.len();
+    let result_buffer = ctx.device.create_buffer(&BufferDescriptor {
+        label: Some("result buffer"),
+        size: (result_len * core::mem::size_of::<u32>()) as u64,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+    let readback = ctx.device.create_buffer(&BufferDescriptor {
+        label: Some("result readback"),
+        size: result_buffer.size(),
+        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let output_texture = ctx.device.create_texture(&TextureDescriptor {
+        label: Some("unused render attachment"),
+        size: Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: TextureFormat::Rgba8UnormSrgb,
+        usage: TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    let output_view = output_texture.create_view(&Default::default());
+
+    let shader = ctx.device.create_shader_module(ShaderModuleDescriptor {
+        label: Some("vertex buffer tail shader"),
+        source: ShaderSource::Wgsl(VB_TAIL_SHADER.into()),
+    });
+
+    let bgl = ctx
+        .device
+        .create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
+    let pipeline_layout = ctx
+        .device
+        .create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[Some(&bgl)],
+            immediate_size: 0,
+        });
+
+    let pipeline = ctx
+        .device
+        .create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("vertex buffer tail pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[Some(VertexBufferLayout {
+                    array_stride: VB_TAIL_VERTEX_STRIDE,
+                    step_mode: VertexStepMode::Vertex,
+                    attributes: &[VertexAttribute {
+                        format: VertexFormat::Uint32,
+                        offset: 0,
+                        shader_location: 0,
+                    }],
+                })],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(output_texture.format().into())],
+                compilation_options: Default::default(),
+            }),
+            primitive: PrimitiveState {
+                topology: PrimitiveTopology::PointList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
+    let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+        label: None,
+        layout: &bgl,
+        entries: &[BindGroupEntry {
+            binding: 0,
+            resource: result_buffer.as_entire_binding(),
+        }],
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+    {
+        let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("vertex buffer tail pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &output_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(Color::default()),
+                    store: StoreOp::Store,
+                },
+            })],
+            ..Default::default()
+        });
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint32);
+        pass.draw_indexed(0..result_len as u32, 0, 0..1);
+    }
+    encoder.copy_buffer_to_buffer(&result_buffer, 0, &readback, 0, result_buffer.size());
+    ctx.queue.submit([encoder.finish()]);
+
+    let data = map_and_read(ctx, &readback).await;
+    let result: Vec<u32> = bytemuck::cast_slice(&data).to_vec();
+
+    // Visible vertices should match vertex data if the application wrote it, or
+    // be zero if not.
+    for i in 0..VB_TAIL_VISIBLE_VERTS as usize {
+        let got = result[i];
+        if app_writes {
+            assert_eq!(
+                got, vertex_data[i],
+                "did not read expected non-zero data in visible area \
+                 (case: {case_desc}, vertex {i}): expected 0x{:08x}, got 0x{got:08x}",
+                vertex_data[i],
+            );
+        } else {
+            assert_eq!(
+                got, 0,
+                "did not read expected zero (uninitialized) data in visible area \
+                 (case: {case_desc}, vertex {i}): got 0x{got:08x}",
+            );
+        }
+    }
+
+    // Tail vertex: never written by the application, must be zero-initialized.
+    let tail = result[VB_TAIL_VISIBLE_VERTS as usize];
+    assert_eq!(
+        tail, 0,
+        "did not read expected zero data in padding area (case: {case_desc}): got 0x{tail:08x}",
+    );
 }
