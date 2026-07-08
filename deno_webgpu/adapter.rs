@@ -93,17 +93,8 @@ impl GPUAdapter {
     self.features.get(scope, |scope| {
       let features = self.instance.adapter_features(self.id);
       // Only expose WebGPU features, not wgpu native-only features
-      let mut exposed_features =
-        features & wgpu_types::Features::all_webgpu_mask();
-      // Exception: `MULTI_DRAW_INDIRECT_COUNT` is native-only in wgpu, but
-      // Chromium exposes the same capability to WebGPU as the experimental
-      // feature "chromium-experimental-multi-draw-indirect", so we surface it
-      // under that name (see `GPUSupportedFeatures` and `webidl.rs`).
-      exposed_features.set(
-        wgpu_types::Features::MULTI_DRAW_INDIRECT_COUNT,
-        features.contains(wgpu_types::Features::MULTI_DRAW_INDIRECT_COUNT),
-      );
-      GPUSupportedFeatures::new(scope, exposed_features)
+      let features = features & wgpu_types::Features::all_webgpu_mask();
+      GPUSupportedFeatures::new(scope, features)
     })
   }
 
@@ -489,13 +480,7 @@ impl GPUSupportedFeatures {
     let set = v8::Set::new(scope);
 
     for feature in features.iter() {
-      let name = match feature {
-        wgpu_types::Features::MULTI_DRAW_INDIRECT_COUNT => {
-          "chromium-experimental-multi-draw-indirect"
-        }
-        _ => feature.as_str().unwrap(),
-      };
-      let key = v8::String::new(scope, name).unwrap();
+      let key = v8::String::new(scope, feature.as_str().unwrap()).unwrap();
       set.add(scope, key.into());
     }
 
