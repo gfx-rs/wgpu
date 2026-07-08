@@ -358,6 +358,25 @@ impl DxgiLib {
         result__.ok_or(crate::DeviceError::Unexpected).map(Some)
     }
 
+    /// Will error with crate::DeviceError::Unexpected if DXGI 1.1 is not available.
+    pub fn create_factory1(&self) -> Result<Dxgi::IDXGIFactory1, crate::DeviceError> {
+        // Calls windows::Win32::Graphics::Dxgi::CreateDXGIFactory1 on dxgi.dll
+        type Fun = extern "system" fn(
+            riid: *const windows_core::GUID,
+            ppfactory: *mut *mut ffi::c_void,
+        ) -> windows_core::HRESULT;
+        let func: libloading::Symbol<Fun> =
+            unsafe { self.lib.get(c"CreateDXGIFactory1".to_bytes()) }?;
+
+        let mut result__ = None;
+
+        (func)(&Dxgi::IDXGIFactory1::IID, <*mut _>::cast(&mut result__))
+            .ok()
+            .into_device_result("create_factory1")?;
+
+        result__.ok_or(crate::DeviceError::Unexpected)
+    }
+
     /// Will error with crate::DeviceError::Unexpected if DXGI 1.4 is not available.
     pub fn create_factory4(
         &self,
