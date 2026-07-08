@@ -95,12 +95,6 @@ vulkan = [
     "dep:arrayvec",
     "dep:ash",
     "dep:bytemuck",
-    # The vulkan backend no longer uses gpu-allocator, but the shared
-    # `gpu_allocator`-based glue in `lib.rs` is still gated on `any(dx12, vulkan)`
-    # (the dx12 backend continues to use it). Keep the crate available - without its
-    # `vulkan` feature - so `lib.rs` compiles in vulkan-only builds. Removing that glue
-    # (and this dependency) is a follow-up once dx12 is ported too.
-    "dep:gpu-allocator",
     "dep:libc",
     "dep:libloading",
     "dep:ordered-float",
@@ -147,7 +141,6 @@ dx12 = [
     "dep:arrayvec",
     "dep:bit-set",
     "dep:bytemuck",
-    "dep:gpu-allocator",
     "dep:libloading",
     "dep:ordered-float",
     "dep:profiling",
@@ -247,8 +240,6 @@ glow = { workspace = true, optional = true }
 ########################
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-# Backend: Vulkan and Dx12
-gpu-allocator = { workspace = true, optional = true }
 # Backend: Vulkan
 ash = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true, features = ["union"] }

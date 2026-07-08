@@ -301,11 +301,6 @@ mach-dxcompiler-rs = { version = "0.1.4", default-features = false } # remember 
 windows-core = { version = "0.62", default-features = false }
 windows-result = { version = "0.4", default-features = false }
 
-# DX12 and Vulkan dependencies
-gpu-allocator = { version = "0.28", default-features = false, features = [
-    "hashbrown",
-] }
-
 # Gles dependencies
 khronos-egl = "6"
 glow = "0.18"

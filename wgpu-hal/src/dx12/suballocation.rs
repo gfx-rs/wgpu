@@ -79,7 +79,6 @@ use windows::Win32::Graphics::{Direct3D12, Dxgi};
 use crate::{
     auxil::dxgi::{name::ObjectExt as _, result::HResult as _},
     dx12::conv,
-    AllocationSizes,
 };
 
 /// The per-allocation user data stored inside the pool.
@@ -97,9 +96,54 @@ const DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT: u64 =
 
 /// D3D12MA's default preferred block size (64 MiB).
 ///
-/// We merge this with the [`AllocationSizes`] policy replicated from
-/// `wgpu_hal::lib`; see [`Pools::preferred_block_size`].
+/// We merge this with the [`AllocationSizes`] policy derived from the user's
+/// [`wgt::MemoryHints`]; see [`Pools::preferred_block_size`].
 const D3D12MA_DEFAULT_BLOCK_SIZE: u64 = 64 * 1024 * 1024;
+
+/// Block-size policy used by this backend's suballocator to decide how large each
+/// memory block should be, derived from the user's [`wgt::MemoryHints`].
+///
+/// The vulkan backend replicates the same policy locally in
+/// `vulkan::suballocation`.
+struct AllocationSizes {
+    min_device_memblock_size: u64,
+    min_host_memblock_size: u64,
+}
+
+impl AllocationSizes {
+    fn from_memory_hints(memory_hints: &wgt::MemoryHints) -> Self {
+        // TODO: the allocator's configuration should take hardware capability into
+        // account.
+        const MB: u64 = 1024 * 1024;
+
+        match memory_hints {
+            wgt::MemoryHints::Performance => Self {
+                min_device_memblock_size: 128 * MB,
+                min_host_memblock_size: 64 * MB,
+            },
+            wgt::MemoryHints::MemoryUsage => Self {
+                min_device_memblock_size: 8 * MB,
+                min_host_memblock_size: 4 * MB,
+            },
+            wgt::MemoryHints::Manual {
+                suballocated_device_memory_block_size,
+            } => {
+                // TODO: https://github.com/gfx-rs/wgpu/issues/8625
+                // Would it be useful to expose the host size in memory hints
+                // instead of always using half of the device size?
+                let device_size = suballocated_device_memory_block_size;
+                let host_min = device_size.start / 2;
+
+                // Clamp the sizes between 4MiB and 256MiB, since we use the sizes when
+                // detecting high memory pressure and want them to stay within a sane range.
+                Self {
+                    min_device_memblock_size: device_size.start.clamp(4 * MB, 256 * MB),
+                    min_host_memblock_size: host_min.clamp(4 * MB, 256 * MB),
+                }
+            }
+        }
+    }
+}
 
 /// Refresh the DXGI budget query at most once per this many alloc/free
 /// operations, matching D3D12MA's `ShouldUpdateBudget` cadence.
@@ -629,8 +673,8 @@ struct Pools {
 
 impl Pools {
     /// Computes the preferred block size for a heap class, merging D3D12MA's
-    /// 64 MiB default with the [`AllocationSizes`] policy replicated from
-    /// `wgpu_hal::lib` (derived from [`wgt::MemoryHints`]).
+    /// 64 MiB default with the [`AllocationSizes`] policy derived from
+    /// [`wgt::MemoryHints`].
     ///
     /// Merge rule: we take the *larger* of D3D12MA's default and wgpu's
     /// configured min block size for the segment (device vs host), so that:
