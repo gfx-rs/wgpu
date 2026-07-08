@@ -1,7 +1,7 @@
 // Compute kernels that translate `DrawIndirectArgs`/`DrawIndexedIndirectArgs`
 // sequences into Metal indirect-command-buffer (ICB) render commands on the
-// GPU, so `multi_draw_(indexed_)indirect(_count)` never round-trips draw
-// arguments through the CPU.
+// GPU, so `multi_draw_(indexed_)indirect` never round-trips draw arguments
+// through the CPU.
 //
 // The Rust side (`wgpu-hal/src/metal/command.rs`) binds the ICB through an
 // argument buffer (`WgpuIcbArguments`) and dispatches one thread per potential
@@ -31,12 +31,6 @@ struct WgpuDrawIndexedIndirectArgs {
     uint first_index;
     int base_vertex;
     uint first_instance;
-};
-
-// Must match the layout of `MTLIndirectCommandBufferExecutionRange`.
-struct WgpuIcbExecutionRange {
-    uint location;
-    uint length;
 };
 
 // Must match the `ICB_PRIMITIVE_*` constants in
@@ -143,17 +137,4 @@ kernel void wgpu_generate_indexed_mdi_icb_u32(
         args.instance_count,
         args.base_vertex,
         args.first_instance);
-}
-
-// Clamps a GPU-resident draw count to `max_draw_count` and writes the result
-// as the ICB execution range used by
-// `executeCommandsInBuffer:indirectBuffer:indirectBufferOffset:`, keeping
-// `multi_draw_*_indirect_count` counts on the GPU.
-kernel void wgpu_generate_mdi_execution_range(
-    const device uint& draw_count [[buffer(0)]],
-    device WgpuIcbExecutionRange& range [[buffer(1)]],
-    constant uint& max_draw_count [[buffer(2)]])
-{
-    range.location = 0;
-    range.length = min(draw_count, max_draw_count);
 }

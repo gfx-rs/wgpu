@@ -1,6 +1,7 @@
 use objc2::{
     rc::{autoreleasepool, Retained},
     runtime::ProtocolObject,
+    Message as _,
 };
 use objc2_foundation::{NSRange, NSString, NSUInteger};
 use objc2_metal::{
@@ -9,12 +10,11 @@ use objc2_metal::{
     MTLCommandBufferStatus, MTLCommandEncoder, MTLCommandQueue, MTLCompileOptions,
     MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLComputePipelineState,
     MTLCounterDontSample, MTLDevice, MTLFunction, MTLIndexType, MTLIndirectCommandBuffer,
-    MTLIndirectCommandBufferDescriptor, MTLIndirectCommandBufferExecutionRange,
-    MTLIndirectCommandType, MTLLibrary, MTLLoadAction, MTLPrimitiveType, MTLRenderCommandEncoder,
-    MTLRenderPassDescriptor, MTLResidencySet, MTLResidencySetDescriptor, MTLResource,
-    MTLResourceOptions, MTLResourceUsage, MTLSamplerState, MTLScissorRect, MTLSize, MTLStorageMode,
-    MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping, MTLViewport,
-    MTLVisibilityResultMode,
+    MTLIndirectCommandBufferDescriptor, MTLIndirectCommandType, MTLLibrary, MTLLoadAction,
+    MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor, MTLResidencySet,
+    MTLResidencySetDescriptor, MTLResource, MTLResourceOptions, MTLResourceUsage, MTLSamplerState,
+    MTLScissorRect, MTLSize, MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping,
+    MTLViewport, MTLVisibilityResultMode,
 };
 
 use super::{
@@ -27,29 +27,28 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::{mem::size_of, ops::Range, ptr::NonNull, sync::atomic};
+use core::{ops::Range, ptr::NonNull, sync::atomic};
 use smallvec::SmallVec;
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
 
 /// Minimum `draw_count` for which lowering a fixed-count multi-draw to an
-/// indirect command buffer pays off. The ICB path costs a render-pass split
-/// plus blit/compute encoder setup, so below this threshold the plain
-/// per-draw indirect loop is faster. Chosen empirically on A12 through M4
-/// hardware; see `icb_multi_draw_reject_reason`.
+/// indirect command buffer pays off. The ICB path costs an ICB allocation
+/// plus reset/generate/optimize GPU work in the pre-pass, so below this
+/// threshold the plain per-draw indirect loop is faster. Chosen empirically
+/// on A12 through M4 hardware.
 const ICB_MIN_DRAW_COUNT: u32 = 8;
 
-/// Test-only escape hatch: when set to `1`, every silent fallback from the
-/// ICB multi-draw path to the per-draw loop becomes a panic, so device test
-/// runs can prove the ICB path was actually exercised rather than quietly
-/// skipped. Never set this in production.
-const ICB_DIAGNOSTIC_REQUIRE_ENV: &str = "WGPU_METAL_REQUIRE_ICB_MDI";
+/// Upper bound declared for `maxVertexBufferBindCount` when the ICB inherits
+/// buffer bindings: Metal's per-stage buffer argument table has 31 slots, so
+/// 31 covers every possible inherited binding.
+const ICB_MAX_INHERITED_BUFFER_BIND_COUNT: usize = 31;
 
-// Primitive-topology tags passed to the ICB generation kernels. `render_command`
-// in MSL needs the topology per draw, and `MTLPrimitiveType` isn't guaranteed
-// stable as an ABI, so we define our own values; they must match the
-// `WgpuIcbPrimitiveType` enum in `shaders/icb_generation.metal`.
+// Primitive-topology tags passed to the ICB generation kernels.
+// `render_command` in MSL needs the topology per draw, and `MTLPrimitiveType`
+// isn't guaranteed stable as an ABI, so we define our own values; they must
+// match the `WgpuIcbPrimitiveType` enum in `shaders/icb_generation.metal`.
 const ICB_PRIMITIVE_POINT: u32 = 0;
 const ICB_PRIMITIVE_LINE: u32 = 1;
 const ICB_PRIMITIVE_LINE_STRIP: u32 = 2;
@@ -60,12 +59,16 @@ const ICB_GENERATION_SHADER: &str = include_str!("./shaders/icb_generation.metal
 
 const ICB_MESH_GENERATION_SHADER: &str = include_str!("./shaders/icb_mesh_generation.metal");
 
+/// Compute pipelines that translate indirect-draw argument sequences into ICB
+/// commands, compiled lazily once per adapter and shared by all command
+/// encoders (see [`super::AdapterShared::icb_command_pipelines`]).
 #[derive(Clone, Debug)]
 pub(super) struct IcbCommandPipelines {
     draw: IcbCommandPipeline,
     indexed_u16: IcbCommandPipeline,
     indexed_u32: IcbCommandPipeline,
-    execution_range: IcbCommandPipeline,
+    /// Compiled on first use: mesh commands in ICBs need a newer OS baseline
+    /// than plain draws.
     mesh: Option<IcbCommandPipeline>,
 }
 
@@ -147,39 +150,24 @@ impl IcbCommandPipelines {
         Ok(IcbCommandPipeline { function, pipeline })
     }
 
-    fn make_pipeline_from_source(
+    fn make_library(
         shared: &super::AdapterShared,
         source: &str,
-        name: &str,
-    ) -> Result<IcbCommandPipeline, crate::DeviceError> {
+    ) -> Result<Retained<ProtocolObject<dyn MTLLibrary>>, crate::DeviceError> {
         let options = MTLCompileOptions::new();
         options.setLanguageVersion(shared.private_caps.msl_version);
 
-        let library = shared
+        shared
             .device
             .newLibraryWithSource_options_error(&NSString::from_str(source), Some(&options))
             .map_err(|err| {
                 log::error!("failed to compile Metal ICB generation shader: {err}");
                 crate::DeviceError::Unexpected
-            })?;
-
-        Self::make_pipeline_from_library(shared, &library, name)
+            })
     }
 
     fn new(shared: &super::AdapterShared) -> Result<Self, crate::DeviceError> {
-        let options = MTLCompileOptions::new();
-        options.setLanguageVersion(shared.private_caps.msl_version);
-
-        let library = shared
-            .device
-            .newLibraryWithSource_options_error(
-                &NSString::from_str(ICB_GENERATION_SHADER),
-                Some(&options),
-            )
-            .map_err(|err| {
-                log::error!("failed to compile Metal ICB generation shader: {err}");
-                crate::DeviceError::Unexpected
-            })?;
+        let library = Self::make_library(shared, ICB_GENERATION_SHADER)?;
 
         Ok(Self {
             draw: Self::make_pipeline_from_library(shared, &library, "wgpu_generate_mdi_icb")?,
@@ -193,11 +181,6 @@ impl IcbCommandPipelines {
                 &library,
                 "wgpu_generate_indexed_mdi_icb_u32",
             )?,
-            execution_range: Self::make_pipeline_from_library(
-                shared,
-                &library,
-                "wgpu_generate_mdi_execution_range",
-            )?,
             mesh: None,
         })
     }
@@ -207,14 +190,56 @@ impl IcbCommandPipelines {
         shared: &super::AdapterShared,
     ) -> Result<IcbCommandPipeline, crate::DeviceError> {
         if self.mesh.is_none() {
-            self.mesh = Some(Self::make_pipeline_from_source(
+            let library = Self::make_library(shared, ICB_MESH_GENERATION_SHADER)?;
+            self.mesh = Some(Self::make_pipeline_from_library(
                 shared,
-                ICB_MESH_GENERATION_SHADER,
+                &library,
                 "wgpu_generate_mesh_mdi_icb",
             )?);
         }
         Ok(self.mesh.as_ref().unwrap().clone())
     }
+}
+
+/// Which ICB generation kernel a deferred multi-draw needs, along with the
+/// draw-time state that kernel consumes.
+enum IcbDrawKind {
+    Draw,
+    DrawIndexed {
+        index_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+        index_offset: wgt::BufferAddress,
+        raw_index_type: MTLIndexType,
+    },
+    DrawMeshTasks {
+        /// Object (task) and mesh threadgroup sizes of the pipeline bound at
+        /// draw time, `[object_x, object_y, object_z, mesh_x, mesh_y, mesh_z]`.
+        threadgroup_sizes: [u32; 6],
+    },
+}
+
+/// A multi-draw whose ICB execution has been recorded into the render pass but
+/// whose generation compute has not been encoded yet; drained by
+/// `encode_deferred_multi_draws`.
+pub(super) struct IcbGenerationRequest {
+    kind: IcbDrawKind,
+    icb: Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>,
+    /// Argument buffer through which the generation kernel addresses the ICB,
+    /// already encoded at draw time.
+    argument_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+    /// Buffer holding the packed indirect draw arguments.
+    args_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+    args_offset: wgt::BufferAddress,
+    draw_count: u32,
+    /// One of the `ICB_PRIMITIVE_*` values; unused for mesh draws.
+    primitive_type_value: u32,
+}
+
+/// Objects a submitted command buffer must keep alive; see
+/// [`super::CommandBuffer::_icb_resources`].
+#[derive(Debug)]
+pub(super) struct IcbExecutionResources {
+    _icb: Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>,
+    _argument_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
 }
 
 impl Default for super::CommandState {
@@ -224,14 +249,7 @@ impl Default for super::CommandState {
             acceleration_structure_builder: None,
             render: None,
             compute: None,
-            render_pass: None,
-            current_render_pipeline: None,
-            bound_vertex_buffers: Vec::new(),
-            current_viewport: None,
-            current_scissor: None,
-            current_stencil_reference: None,
-            current_blend_color: None,
-            render_bind_groups_active: false,
+            render_pipeline_supports_icb: false,
             raw_primitive_type: MTLPrimitiveType::Point,
             index: None,
             stage_infos: Default::default(),
@@ -353,6 +371,27 @@ impl super::CommandEncoder {
         self.raw_cmd_buf.as_deref()
     }
 
+    fn supports_icb_multi_draw(&self) -> bool {
+        self.shared.private_caps.indirect_command_buffers_rendering
+            && self.shared.private_caps.indirect_command_buffers_compute
+    }
+
+    fn get_icb_command_pipelines(&self) -> Result<IcbCommandPipelines, crate::DeviceError> {
+        let mut pipelines = self.shared.icb_command_pipelines.lock();
+        if pipelines.is_none() {
+            *pipelines = Some(IcbCommandPipelines::new(&self.shared)?);
+        }
+        Ok(pipelines.as_ref().unwrap().clone())
+    }
+
+    fn get_icb_mesh_command_pipeline(&self) -> Result<IcbCommandPipeline, crate::DeviceError> {
+        let mut pipelines = self.shared.icb_command_pipelines.lock();
+        if pipelines.is_none() {
+            *pipelines = Some(IcbCommandPipelines::new(&self.shared)?);
+        }
+        pipelines.as_mut().unwrap().mesh(&self.shared)
+    }
+
     fn icb_primitive_type_value(
         raw_primitive_type: MTLPrimitiveType,
     ) -> Result<u32, crate::DeviceError> {
@@ -366,6 +405,9 @@ impl super::CommandEncoder {
         }
     }
 
+    /// One threadgroup dimensioning for every generation dispatch: uniform
+    /// `threadExecutionWidth`-wide threadgroups, enough of them to cover
+    /// `draw_count`; the kernels bounds-check against `draw_count`.
     fn icb_generation_threadgroups(
         pipeline: &ProtocolObject<dyn MTLComputePipelineState>,
         draw_count: u32,
@@ -384,6 +426,173 @@ impl super::CommandEncoder {
                 depth: 1,
             },
         )
+    }
+
+    /// Try to lower a fixed-count multi-draw to a Metal indirect command
+    /// buffer.
+    ///
+    /// This allocates the ICB and records its execution into the current
+    /// render encoder immediately; the compute work that fills the ICB from
+    /// `args_buffer` is queued on [`super::CommandEncoder::deferred_multi_draws`] and encoded by
+    /// [`encode_deferred_multi_draws`](crate::CommandEncoder::encode_deferred_multi_draws)
+    /// into the command buffer wgpu-core schedules *before* this pass, so the
+    /// render pass is never split. Everything fallible happens up front:
+    /// returns `false` with nothing recorded when the ICB path is unavailable,
+    /// leaving the caller to record the per-draw indirect loop instead.
+    unsafe fn defer_multi_draw_via_icb(
+        &mut self,
+        kind: IcbDrawKind,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+        draw_count: u32,
+    ) -> bool {
+        if draw_count < ICB_MIN_DRAW_COUNT
+            || !self.supports_icb_multi_draw()
+            || !self.state.render_pipeline_supports_icb
+        {
+            return false;
+        }
+
+        // Resolve the generation pipeline now: once execution is recorded
+        // there is no falling back, so `encode_deferred_multi_draws` must not
+        // be able to fail. The adapter-level cache is never cleared, which
+        // makes the later lookups infallible.
+        let (argument_encoder, label) = match kind {
+            IcbDrawKind::Draw => {
+                let Ok(pipelines) = self.get_icb_command_pipelines() else {
+                    return false;
+                };
+                (
+                    self.temp.icb_argument_encoders.draw(&pipelines.draw),
+                    "wgpu multi_draw_indirect ICB",
+                )
+            }
+            IcbDrawKind::DrawIndexed { raw_index_type, .. } => {
+                let Ok(pipelines) = self.get_icb_command_pipelines() else {
+                    return false;
+                };
+                let cache = &mut self.temp.icb_argument_encoders;
+                let state = match raw_index_type {
+                    MTLIndexType::UInt16 => cache.indexed_u16(&pipelines.indexed_u16),
+                    MTLIndexType::UInt32 => cache.indexed_u32(&pipelines.indexed_u32),
+                    _ => return false,
+                };
+                (state, "wgpu multi_draw_indexed_indirect ICB")
+            }
+            IcbDrawKind::DrawMeshTasks { .. } => {
+                let Ok(pipeline) = self.get_icb_mesh_command_pipeline() else {
+                    return false;
+                };
+                (
+                    self.temp.icb_argument_encoders.mesh(&pipeline),
+                    "wgpu multi_draw_mesh_tasks_indirect ICB",
+                )
+            }
+        };
+
+        let primitive_type_value = match kind {
+            IcbDrawKind::DrawMeshTasks { .. } => 0,
+            _ => match Self::icb_primitive_type_value(self.state.raw_primitive_type) {
+                Ok(value) => value,
+                Err(_) => return false,
+            },
+        };
+
+        let descriptor = MTLIndirectCommandBufferDescriptor::new();
+        descriptor.setInheritPipelineState(true);
+        descriptor.setInheritBuffers(true);
+        match kind {
+            IcbDrawKind::Draw => {
+                descriptor.setCommandTypes(MTLIndirectCommandType::Draw);
+                descriptor.setMaxVertexBufferBindCount(ICB_MAX_INHERITED_BUFFER_BIND_COUNT);
+                descriptor.setMaxFragmentBufferBindCount(0);
+            }
+            IcbDrawKind::DrawIndexed { .. } => {
+                descriptor.setCommandTypes(MTLIndirectCommandType::DrawIndexed);
+                descriptor.setMaxVertexBufferBindCount(ICB_MAX_INHERITED_BUFFER_BIND_COUNT);
+                descriptor.setMaxFragmentBufferBindCount(0);
+            }
+            IcbDrawKind::DrawMeshTasks { .. } => {
+                descriptor.setCommandTypes(MTLIndirectCommandType::DrawMeshThreadgroups);
+                descriptor.setMaxFragmentBufferBindCount(0);
+                unsafe {
+                    descriptor.setMaxObjectBufferBindCount(0);
+                    descriptor.setMaxMeshBufferBindCount(0);
+                }
+            }
+        }
+
+        let Some(icb) = (unsafe {
+            self.shared
+                .device
+                .newIndirectCommandBufferWithDescriptor_maxCommandCount_options(
+                    &descriptor,
+                    draw_count as usize,
+                    MTLResourceOptions::StorageModePrivate,
+                )
+        }) else {
+            return false;
+        };
+        // Label the ICB so GPU captures and profilers attribute the executed
+        // draws to wgpu's multi-draw lowering rather than an anonymous ICB.
+        icb.setLabel(Some(&NSString::from_str(label)));
+
+        // Encode the ICB handle into a fresh argument buffer for the
+        // generation kernel.
+        let Some(argument_buffer) = self.shared.device.newBufferWithLength_options(
+            argument_encoder.encoded_length,
+            MTLResourceOptions::StorageModeShared,
+        ) else {
+            return false;
+        };
+        argument_buffer.setLabel(Some(&NSString::from_str("wgpu ICB generation arguments")));
+        unsafe {
+            argument_encoder
+                .encoder
+                .setArgumentBuffer_offset(Some(&argument_buffer), 0);
+            argument_encoder
+                .encoder
+                .setIndirectCommandBuffer_atIndex(Some(&icb), 0);
+        }
+
+        // Record execution into the render pass now; the ICB contents become
+        // defined when the deferred generation runs, in a command buffer the
+        // queue executes before this one.
+        let encoder = self.state.render.as_ref().unwrap();
+        #[allow(deprecated)]
+        unsafe {
+            encoder.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Read);
+            if let IcbDrawKind::DrawIndexed {
+                ref index_buffer, ..
+            } = kind
+            {
+                // The generated commands reference the index buffer via a
+                // device pointer baked in at generation time, which residency
+                // tracking can't see.
+                encoder.useResource_usage(
+                    ProtocolObject::from_ref(&**index_buffer),
+                    MTLResourceUsage::Read,
+                );
+            }
+            encoder.executeCommandsInBuffer_withRange(
+                &icb,
+                NSRange {
+                    location: 0,
+                    length: draw_count as usize,
+                },
+            );
+        }
+
+        self.deferred_multi_draws.push(IcbGenerationRequest {
+            kind,
+            icb,
+            argument_buffer,
+            args_buffer: buffer.raw.clone(),
+            args_offset: offset,
+            draw_count,
+            primitive_type_value,
+        });
+        true
     }
 
     fn enter_blit(&mut self) -> Retained<ProtocolObject<dyn MTLBlitCommandEncoder>> {
@@ -535,997 +744,6 @@ impl super::CommandEncoder {
         self.leave_acceleration_structure_builder();
     }
 
-    fn get_icb_command_pipelines(&self) -> Result<IcbCommandPipelines, crate::DeviceError> {
-        let mut pipelines = self.shared.icb_command_pipelines.lock();
-        if pipelines.is_none() {
-            *pipelines = Some(IcbCommandPipelines::new(&self.shared)?);
-        }
-        Ok(pipelines.as_ref().unwrap().clone())
-    }
-
-    fn get_icb_mesh_command_pipeline(&self) -> Result<IcbCommandPipeline, crate::DeviceError> {
-        let mut pipelines = self.shared.icb_command_pipelines.lock();
-        if pipelines.is_none() {
-            *pipelines = Some(IcbCommandPipelines::new(&self.shared)?);
-        }
-        pipelines.as_mut().unwrap().mesh(&self.shared)
-    }
-
-    fn supports_icb_multi_draw(&self) -> bool {
-        self.shared.private_caps.indirect_command_buffers_compute
-            && self.shared.private_caps.indirect_command_buffers_rendering
-    }
-
-    fn require_icb_multi_draw_for_diagnostics() -> bool {
-        std::env::var(ICB_DIAGNOSTIC_REQUIRE_ENV).is_ok_and(|value| value == "1")
-    }
-
-    fn should_track_icb_render_state(&self) -> bool {
-        self.supports_icb_multi_draw()
-            && !self.state.render_bind_groups_active
-            && self.state.immediates.is_empty()
-            && self
-                .state
-                .render_pass
-                .as_ref()
-                .is_some_and(|pass| pass.can_resume_for_icb)
-    }
-
-    fn clear_icb_render_state(&mut self) {
-        if self.state.current_render_pipeline.is_some() {
-            self.state.current_render_pipeline = None;
-        }
-        if !self.state.bound_vertex_buffers.is_empty() {
-            self.state.bound_vertex_buffers.clear();
-        }
-        if self.state.current_viewport.is_some() {
-            self.state.current_viewport = None;
-        }
-        if self.state.current_scissor.is_some() {
-            self.state.current_scissor = None;
-        }
-        if self.state.current_stencil_reference.is_some() {
-            self.state.current_stencil_reference = None;
-        }
-        if self.state.current_blend_color.is_some() {
-            self.state.current_blend_color = None;
-        }
-    }
-
-    fn mark_render_bind_groups_active_for_icb(&mut self) {
-        if self.supports_icb_multi_draw() && !self.state.render_bind_groups_active {
-            self.state.render_bind_groups_active = true;
-            self.clear_icb_render_state();
-        }
-    }
-
-    fn icb_multi_draw_state_reject_reason(&self, indexed: bool) -> Option<&'static str> {
-        if !self.supports_icb_multi_draw() {
-            return Some("Metal ICB render/compute private capabilities are disabled");
-        }
-        if self.state.render_bind_groups_active {
-            return Some("render bind groups are active");
-        }
-        if !self.state.immediates.is_empty() {
-            return Some("immediates are active");
-        }
-        if !self
-            .state
-            .render_pass
-            .as_ref()
-            .is_some_and(|pass| pass.can_resume_for_icb)
-        {
-            return Some("render pass cannot be resumed for ICB splice");
-        }
-        if self.state.current_render_pipeline.is_none() {
-            return Some("no current render pipeline is tracked for ICB restore");
-        }
-
-        if indexed && self.state.index.is_none() {
-            return Some("indexed ICB path has no tracked index buffer");
-        }
-
-        None
-    }
-
-    fn icb_multi_draw_reject_reason(&self, indexed: bool, draw_count: u32) -> Option<&'static str> {
-        // The Metal ICB path pays a render-pass split plus blit/compute setup.
-        // Keep fixed-count MDI to larger static/baked-geometry batches; smaller
-        // fixed-count draws use the direct Metal indirect loop.
-        if draw_count < ICB_MIN_DRAW_COUNT {
-            return Some("draw count is below ICB setup-cost threshold");
-        }
-
-        self.icb_multi_draw_state_reject_reason(indexed)
-    }
-
-    fn mark_render_pass_store_actions_for_icb_resume(descriptor: &MTLRenderPassDescriptor) {
-        for index in 0..crate::MAX_COLOR_ATTACHMENTS {
-            let attachment = unsafe {
-                descriptor
-                    .colorAttachments()
-                    .objectAtIndexedSubscript(index)
-            };
-            if attachment.texture().is_some() {
-                attachment.setLoadAction(MTLLoadAction::Load);
-                attachment.setStoreAction(MTLStoreAction::Store);
-            }
-        }
-
-        let depth_attachment = descriptor.depthAttachment();
-        if depth_attachment.texture().is_some() {
-            depth_attachment.setLoadAction(MTLLoadAction::Load);
-            depth_attachment.setStoreAction(MTLStoreAction::Store);
-        }
-
-        let stencil_attachment = descriptor.stencilAttachment();
-        if stencil_attachment.texture().is_some() {
-            stencil_attachment.setLoadAction(MTLLoadAction::Load);
-            stencil_attachment.setStoreAction(MTLStoreAction::Store);
-        }
-    }
-
-    fn apply_vertex_amplification(
-        encoder: &ProtocolObject<dyn MTLRenderCommandEncoder>,
-        multiview_mask: Option<core::num::NonZeroU32>,
-    ) {
-        if let Some(mv) = multiview_mask {
-            // Most likely the API just wasn't thought about enough. It's not
-            // like they ever allow you to use enough views to overflow a
-            // 32-bit bitmask.
-            let mv = mv.get();
-            let msb = 32 - mv.leading_zeros();
-            let mut maps: SmallVec<[MTLVertexAmplificationViewMapping; 32]> = SmallVec::new();
-            for i in 0..msb {
-                if (mv & (1 << i)) != 0 {
-                    maps.push(MTLVertexAmplificationViewMapping {
-                        renderTargetArrayIndexOffset: i,
-                        viewportArrayIndexOffset: i,
-                    });
-                }
-            }
-            unsafe {
-                encoder.setVertexAmplificationCount_viewMappings(
-                    mv.count_ones() as usize,
-                    maps.as_ptr(),
-                )
-            };
-        }
-    }
-
-    unsafe fn suspend_render_for_icb(&mut self) -> bool {
-        let Some(render_pass) = self.state.render_pass.as_ref() else {
-            return false;
-        };
-        let Some(encoder) = self.state.render.take() else {
-            return false;
-        };
-
-        Self::mark_render_pass_store_actions_for_icb_resume(&render_pass.descriptor);
-        encoder.endEncoding();
-        true
-    }
-
-    unsafe fn resume_render_after_icb(&mut self) {
-        let render_pass = self.state.render_pass.as_ref().unwrap().clone();
-        let raw = self.raw_cmd_buf.as_ref().unwrap();
-        let encoder = raw
-            .renderCommandEncoderWithDescriptor(&render_pass.descriptor)
-            .unwrap();
-
-        Self::apply_vertex_amplification(&encoder, render_pass.multiview_mask);
-        if let Some(label) = render_pass.label.as_ref() {
-            encoder.setLabel(Some(&NSString::from_str(label)));
-        }
-
-        self.state.render = Some(encoder);
-        unsafe { self.restore_render_state_after_icb() };
-    }
-
-    unsafe fn restore_render_state_after_icb(&mut self) {
-        let encoder = self.state.render.clone().unwrap();
-
-        if let Some(ref pipeline) = self.state.current_render_pipeline {
-            encoder.setRenderPipelineState(&pipeline.raw);
-            encoder.setFrontFacingWinding(pipeline.raw_front_winding);
-            encoder.setCullMode(pipeline.raw_cull_mode);
-            encoder.setTriangleFillMode(pipeline.raw_triangle_fill_mode);
-            if let Some(depth_clip) = pipeline.raw_depth_clip_mode {
-                encoder.setDepthClipMode(depth_clip);
-            }
-            if let Some((ref state, bias)) = pipeline.depth_stencil {
-                encoder.setDepthStencilState(Some(state));
-                encoder.setDepthBias_slopeScale_clamp(
-                    bias.constant as f32,
-                    bias.slope_scale,
-                    bias.clamp,
-                );
-            }
-        }
-
-        for (index, buffer) in self.state.bound_vertex_buffers.iter().enumerate() {
-            if let Some(buffer) = buffer {
-                unsafe {
-                    encoder.setVertexBuffer_offset_atIndex(
-                        Some(&buffer.buffer),
-                        buffer.offset,
-                        index,
-                    )
-                };
-            }
-        }
-
-        if let Some((index, sizes)) = self
-            .state
-            .make_sizes_buffer_update(naga::ShaderStage::Vertex, &mut self.temp.binding_sizes)
-        {
-            unsafe {
-                encoder.setVertexBytes_length_atIndex(
-                    NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
-                    sizes.len() * WORD_SIZE,
-                    index as _,
-                )
-            };
-        }
-        if let Some((index, sizes)) = self
-            .state
-            .make_sizes_buffer_update(naga::ShaderStage::Fragment, &mut self.temp.binding_sizes)
-        {
-            unsafe {
-                encoder.setFragmentBytes_length_atIndex(
-                    NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
-                    sizes.len() * WORD_SIZE,
-                    index as _,
-                )
-            };
-        }
-
-        if let Some(viewport) = self.state.current_viewport {
-            encoder.setViewport(viewport);
-        }
-        if let Some(scissor) = self.state.current_scissor {
-            encoder.setScissorRect(scissor);
-        }
-        if let Some(stencil_reference) = self.state.current_stencil_reference {
-            encoder.setStencilFrontReferenceValue_backReferenceValue(
-                stencil_reference,
-                stencil_reference,
-            );
-        }
-        if let Some(color) = self.state.current_blend_color {
-            encoder.setBlendColorRed_green_blue_alpha(color[0], color[1], color[2], color[3]);
-        }
-    }
-
-    unsafe fn generate_icb_from_draw_args(
-        &mut self,
-        buffer: &super::Buffer,
-        offset: wgt::BufferAddress,
-        draw_count: u32,
-    ) -> Result<Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>, crate::DeviceError> {
-        let pipelines = self.get_icb_command_pipelines()?;
-        let descriptor = MTLIndirectCommandBufferDescriptor::new();
-        descriptor.setCommandTypes(MTLIndirectCommandType::Draw);
-        descriptor.setInheritPipelineState(true);
-        descriptor.setInheritBuffers(true);
-        descriptor.setMaxVertexBufferBindCount(self.state.bound_vertex_buffers.len());
-        descriptor.setMaxFragmentBufferBindCount(0);
-
-        let icb = unsafe {
-            self.shared
-                .device
-                .newIndirectCommandBufferWithDescriptor_maxCommandCount_options(
-                    &descriptor,
-                    draw_count as usize,
-                    MTLResourceOptions::StorageModePrivate,
-                )
-        }
-        .ok_or(crate::DeviceError::Unexpected)?;
-
-        let range = NSRange {
-            location: 0,
-            length: draw_count as usize,
-        };
-
-        unsafe {
-            self.enter_blit()
-                .resetCommandsInBuffer_withRange(&icb, range);
-        }
-        self.leave_blit();
-
-        let argument_encoder = self.temp.icb_argument_encoders.draw(&pipelines.draw);
-        let argument_buffer = self
-            .shared
-            .device
-            .newBufferWithLength_options(
-                argument_encoder.encoded_length,
-                MTLResourceOptions::StorageModeShared,
-            )
-            .ok_or(crate::DeviceError::Unexpected)?;
-        unsafe {
-            argument_encoder
-                .encoder
-                .setArgumentBuffer_offset(Some(&argument_buffer), 0);
-            argument_encoder
-                .encoder
-                .setIndirectCommandBuffer_atIndex(Some(&icb), 0);
-        }
-
-        let raw = self.raw_cmd_buf.as_ref().unwrap();
-        let compute = raw.computeCommandEncoder().unwrap();
-        compute.setComputePipelineState(&pipelines.draw.pipeline);
-        unsafe {
-            compute.setBuffer_offset_atIndex(Some(&argument_buffer), 0, 0);
-            compute.setBuffer_offset_atIndex(Some(&buffer.raw), offset as usize, 1);
-            let primitive_type_value =
-                Self::icb_primitive_type_value(self.state.raw_primitive_type)?;
-            compute.setBytes_length_atIndex(
-                NonNull::from(&primitive_type_value).cast(),
-                size_of::<u32>(),
-                2,
-            );
-            compute.setBytes_length_atIndex(NonNull::from(&draw_count).cast(), size_of::<u32>(), 3);
-            compute.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Write);
-        }
-        let (threadgroups, threads_per_threadgroup) =
-            Self::icb_generation_threadgroups(&pipelines.draw.pipeline, draw_count);
-        compute.dispatchThreadgroups_threadsPerThreadgroup(threadgroups, threads_per_threadgroup);
-        compute.endEncoding();
-
-        unsafe {
-            self.enter_blit()
-                .optimizeIndirectCommandBuffer_withRange(&icb, range);
-        }
-        self.leave_blit();
-
-        Ok(icb)
-    }
-
-    unsafe fn generate_icb_from_indexed_draw_args(
-        &mut self,
-        buffer: &super::Buffer,
-        offset: wgt::BufferAddress,
-        draw_count: u32,
-    ) -> Result<Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>, crate::DeviceError> {
-        let pipelines = self.get_icb_command_pipelines()?;
-        let (index_buffer, index_offset, raw_index_type) = {
-            let index = self.state.index.as_ref().unwrap();
-            (index.buffer_ptr, index.offset, index.raw_type)
-        };
-        let pipeline = match raw_index_type {
-            MTLIndexType::UInt16 => &pipelines.indexed_u16,
-            MTLIndexType::UInt32 => &pipelines.indexed_u32,
-            _ => return Err(crate::DeviceError::Unexpected),
-        };
-
-        let descriptor = MTLIndirectCommandBufferDescriptor::new();
-        descriptor.setCommandTypes(MTLIndirectCommandType::DrawIndexed);
-        descriptor.setInheritPipelineState(true);
-        descriptor.setInheritBuffers(true);
-        descriptor.setMaxVertexBufferBindCount(self.state.bound_vertex_buffers.len());
-        descriptor.setMaxFragmentBufferBindCount(0);
-
-        let icb = unsafe {
-            self.shared
-                .device
-                .newIndirectCommandBufferWithDescriptor_maxCommandCount_options(
-                    &descriptor,
-                    draw_count as usize,
-                    MTLResourceOptions::StorageModePrivate,
-                )
-        }
-        .ok_or(crate::DeviceError::Unexpected)?;
-
-        let range = NSRange {
-            location: 0,
-            length: draw_count as usize,
-        };
-
-        unsafe {
-            self.enter_blit()
-                .resetCommandsInBuffer_withRange(&icb, range);
-        }
-        self.leave_blit();
-
-        let argument_encoder = match raw_index_type {
-            MTLIndexType::UInt16 => self.temp.icb_argument_encoders.indexed_u16(pipeline),
-            MTLIndexType::UInt32 => self.temp.icb_argument_encoders.indexed_u32(pipeline),
-            _ => return Err(crate::DeviceError::Unexpected),
-        };
-        let argument_buffer = self
-            .shared
-            .device
-            .newBufferWithLength_options(
-                argument_encoder.encoded_length,
-                MTLResourceOptions::StorageModeShared,
-            )
-            .ok_or(crate::DeviceError::Unexpected)?;
-        unsafe {
-            argument_encoder
-                .encoder
-                .setArgumentBuffer_offset(Some(&argument_buffer), 0);
-            argument_encoder
-                .encoder
-                .setIndirectCommandBuffer_atIndex(Some(&icb), 0);
-        }
-
-        let raw = self.raw_cmd_buf.as_ref().unwrap();
-        let compute = raw.computeCommandEncoder().unwrap();
-        compute.setComputePipelineState(&pipeline.pipeline);
-        unsafe {
-            compute.setBuffer_offset_atIndex(Some(&argument_buffer), 0, 0);
-            compute.setBuffer_offset_atIndex(Some(&buffer.raw), offset as usize, 1);
-            compute.setBuffer_offset_atIndex(Some(index_buffer.as_ref()), index_offset as usize, 2);
-            let primitive_type_value =
-                Self::icb_primitive_type_value(self.state.raw_primitive_type)?;
-            compute.setBytes_length_atIndex(
-                NonNull::from(&primitive_type_value).cast(),
-                size_of::<u32>(),
-                3,
-            );
-            compute.setBytes_length_atIndex(NonNull::from(&draw_count).cast(), size_of::<u32>(), 4);
-            compute.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Write);
-        }
-        let (threadgroups, threads_per_threadgroup) =
-            Self::icb_generation_threadgroups(&pipeline.pipeline, draw_count);
-        compute.dispatchThreadgroups_threadsPerThreadgroup(threadgroups, threads_per_threadgroup);
-        compute.endEncoding();
-
-        unsafe {
-            self.enter_blit()
-                .optimizeIndirectCommandBuffer_withRange(&icb, range);
-        }
-        self.leave_blit();
-
-        Ok(icb)
-    }
-
-    unsafe fn generate_icb_from_mesh_draw_args(
-        &mut self,
-        buffer: &super::Buffer,
-        offset: wgt::BufferAddress,
-        draw_count: u32,
-    ) -> Result<Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>, crate::DeviceError> {
-        let pipeline = self.get_icb_mesh_command_pipeline()?;
-        let descriptor = MTLIndirectCommandBufferDescriptor::new();
-        descriptor.setCommandTypes(MTLIndirectCommandType::DrawMeshThreadgroups);
-        descriptor.setInheritPipelineState(true);
-        descriptor.setInheritBuffers(true);
-        descriptor.setMaxFragmentBufferBindCount(0);
-        unsafe {
-            descriptor.setMaxObjectBufferBindCount(0);
-            descriptor.setMaxMeshBufferBindCount(0);
-        }
-
-        let icb = unsafe {
-            self.shared
-                .device
-                .newIndirectCommandBufferWithDescriptor_maxCommandCount_options(
-                    &descriptor,
-                    draw_count as usize,
-                    MTLResourceOptions::StorageModePrivate,
-                )
-        }
-        .ok_or(crate::DeviceError::Unexpected)?;
-
-        let range = NSRange {
-            location: 0,
-            length: draw_count as usize,
-        };
-
-        unsafe {
-            self.enter_blit()
-                .resetCommandsInBuffer_withRange(&icb, range);
-        }
-        self.leave_blit();
-
-        let argument_encoder = self.temp.icb_argument_encoders.mesh(&pipeline);
-        let argument_buffer = self
-            .shared
-            .device
-            .newBufferWithLength_options(
-                argument_encoder.encoded_length,
-                MTLResourceOptions::StorageModeShared,
-            )
-            .ok_or(crate::DeviceError::Unexpected)?;
-        unsafe {
-            argument_encoder
-                .encoder
-                .setArgumentBuffer_offset(Some(&argument_buffer), 0);
-            argument_encoder
-                .encoder
-                .setIndirectCommandBuffer_atIndex(Some(&icb), 0);
-        }
-
-        let ts = self.state.stage_infos.ts.raw_wg_size;
-        let ms = self.state.stage_infos.ms.raw_wg_size;
-        let mesh_threadgroup_sizes = [
-            ts.width as u32,
-            ts.height as u32,
-            ts.depth as u32,
-            ms.width as u32,
-            ms.height as u32,
-            ms.depth as u32,
-        ];
-
-        let raw = self.raw_cmd_buf.as_ref().unwrap();
-        let compute = raw.computeCommandEncoder().unwrap();
-        compute.setComputePipelineState(&pipeline.pipeline);
-        unsafe {
-            compute.setBuffer_offset_atIndex(Some(&argument_buffer), 0, 0);
-            compute.setBuffer_offset_atIndex(Some(&buffer.raw), offset as usize, 1);
-            compute.setBytes_length_atIndex(
-                NonNull::new(mesh_threadgroup_sizes.as_ptr().cast_mut().cast()).unwrap(),
-                size_of::<[u32; 6]>(),
-                2,
-            );
-            compute.setBytes_length_atIndex(NonNull::from(&draw_count).cast(), size_of::<u32>(), 3);
-            compute.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Write);
-        }
-        let (threadgroups, threads_per_threadgroup) =
-            Self::icb_generation_threadgroups(&pipeline.pipeline, draw_count);
-        compute.dispatchThreadgroups_threadsPerThreadgroup(threadgroups, threads_per_threadgroup);
-        compute.endEncoding();
-
-        unsafe {
-            self.enter_blit()
-                .optimizeIndirectCommandBuffer_withRange(&icb, range);
-        }
-        self.leave_blit();
-
-        Ok(icb)
-    }
-
-    unsafe fn generate_icb_execution_range_from_count_buffer(
-        &mut self,
-        count_buffer: &super::Buffer,
-        count_offset: wgt::BufferAddress,
-        max_count: u32,
-    ) -> Result<Retained<ProtocolObject<dyn MTLBuffer>>, crate::DeviceError> {
-        let pipelines = self.get_icb_command_pipelines()?;
-        let range_buffer = self
-            .shared
-            .device
-            .newBufferWithLength_options(
-                size_of::<MTLIndirectCommandBufferExecutionRange>(),
-                MTLResourceOptions::StorageModePrivate,
-            )
-            .ok_or(crate::DeviceError::Unexpected)?;
-
-        let raw = self.raw_cmd_buf.as_ref().unwrap();
-        let compute = raw.computeCommandEncoder().unwrap();
-        compute.setComputePipelineState(&pipelines.execution_range.pipeline);
-        unsafe {
-            compute.setBuffer_offset_atIndex(Some(&count_buffer.raw), count_offset as usize, 0);
-            compute.setBuffer_offset_atIndex(Some(&range_buffer), 0, 1);
-            compute.setBytes_length_atIndex(NonNull::from(&max_count).cast(), size_of::<u32>(), 2);
-        }
-        compute.dispatchThreadgroups_threadsPerThreadgroup(
-            MTLSize {
-                width: 1,
-                height: 1,
-                depth: 1,
-            },
-            MTLSize {
-                width: 1,
-                height: 1,
-                depth: 1,
-            },
-        );
-        compute.endEncoding();
-
-        Ok(range_buffer)
-    }
-
-    unsafe fn draw_indirect_via_icb(
-        &mut self,
-        buffer: &super::Buffer,
-        offset: wgt::BufferAddress,
-        draw_count: u32,
-    ) -> bool {
-        if let Some(reason) = self.icb_multi_draw_reject_reason(false, draw_count) {
-            if Self::require_icb_multi_draw_for_diagnostics() {
-                panic!(
-                    "Metal ICB diagnostic required but multi_draw_indirect would use CPU fallback: {reason}"
-                );
-            }
-            return false;
-        }
-
-        unsafe {
-            if !self.suspend_render_for_icb() {
-                if Self::require_icb_multi_draw_for_diagnostics() {
-                    panic!("Metal ICB diagnostic required but render pass suspend failed");
-                }
-                return false;
-            }
-        }
-
-        let icb = match unsafe { self.generate_icb_from_draw_args(buffer, offset, draw_count) } {
-            Ok(icb) => icb,
-            Err(err) => {
-                log::warn!(
-                    "failed to generate Metal ICB for multi_draw_indirect: {err:?}; falling back"
-                );
-                unsafe { self.resume_render_after_icb() };
-                if Self::require_icb_multi_draw_for_diagnostics() {
-                    panic!(
-                        "Metal ICB diagnostic required but multi_draw_indirect ICB generation failed: {err:?}"
-                    );
-                }
-                return false;
-            }
-        };
-
-        unsafe { self.resume_render_after_icb() };
-        let encoder = self.state.render.as_ref().unwrap();
-        if Self::require_icb_multi_draw_for_diagnostics() {
-            eprintln!(
-                "WGPU_METAL_ICB_DIAGNOSTIC: executing multi_draw_indirect through Metal ICB, draw_count={draw_count}"
-            );
-        }
-        #[allow(deprecated)]
-        unsafe {
-            encoder.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Read);
-            encoder.executeCommandsInBuffer_withRange(
-                &icb,
-                NSRange {
-                    location: 0,
-                    length: draw_count as usize,
-                },
-            );
-        }
-        log::info!("executed multi_draw_indirect through Metal ICB, draw_count={draw_count}");
-        true
-    }
-
-    unsafe fn draw_indirect_count_via_icb(
-        &mut self,
-        buffer: &super::Buffer,
-        offset: wgt::BufferAddress,
-        count_buffer: &super::Buffer,
-        count_offset: wgt::BufferAddress,
-        max_count: u32,
-        indexed: bool,
-    ) -> bool {
-        if max_count == 0 {
-            return true;
-        }
-
-        if let Some(reason) = self.icb_multi_draw_state_reject_reason(indexed) {
-            if Self::require_icb_multi_draw_for_diagnostics() {
-                panic!(
-                    "Metal ICB diagnostic required but multi_draw_indirect_count cannot use ICB: {reason}"
-                );
-            }
-            log::warn!("multi_draw_indirect_count requires Metal ICB-compatible state: {reason}");
-            return false;
-        }
-
-        unsafe {
-            if !self.suspend_render_for_icb() {
-                if Self::require_icb_multi_draw_for_diagnostics() {
-                    panic!("Metal ICB diagnostic required but count render pass suspend failed");
-                }
-                return false;
-            }
-        }
-
-        let icb = if indexed {
-            unsafe { self.generate_icb_from_indexed_draw_args(buffer, offset, max_count) }
-        } else {
-            unsafe { self.generate_icb_from_draw_args(buffer, offset, max_count) }
-        };
-        let icb = match icb {
-            Ok(icb) => icb,
-            Err(err) => {
-                log::warn!("failed to generate Metal ICB for multi_draw_indirect_count: {err:?}");
-                unsafe { self.resume_render_after_icb() };
-                if Self::require_icb_multi_draw_for_diagnostics() {
-                    panic!(
-                        "Metal ICB diagnostic required but multi_draw_indirect_count ICB generation failed: {err:?}"
-                    );
-                }
-                return false;
-            }
-        };
-
-        let execution_range = match unsafe {
-            self.generate_icb_execution_range_from_count_buffer(
-                count_buffer,
-                count_offset,
-                max_count,
-            )
-        } {
-            Ok(execution_range) => execution_range,
-            Err(err) => {
-                log::warn!(
-                    "failed to generate Metal ICB execution range for multi_draw_indirect_count: {err:?}"
-                );
-                unsafe { self.resume_render_after_icb() };
-                if Self::require_icb_multi_draw_for_diagnostics() {
-                    panic!(
-                        "Metal ICB diagnostic required but multi_draw_indirect_count range generation failed: {err:?}"
-                    );
-                }
-                return false;
-            }
-        };
-
-        unsafe { self.resume_render_after_icb() };
-        let encoder = self.state.render.as_ref().unwrap();
-        if Self::require_icb_multi_draw_for_diagnostics() {
-            let label = if indexed {
-                "multi_draw_indexed_indirect_count"
-            } else {
-                "multi_draw_indirect_count"
-            };
-            eprintln!(
-                "WGPU_METAL_ICB_DIAGNOSTIC: executing {label} through Metal ICB, max_count={max_count}"
-            );
-        }
-        #[allow(deprecated)]
-        unsafe {
-            encoder.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Read);
-            encoder.useResource_usage(
-                ProtocolObject::from_ref(&*execution_range),
-                MTLResourceUsage::Read,
-            );
-            if indexed {
-                if let Some(index) = self.state.index.as_ref() {
-                    encoder.useResource_usage(
-                        ProtocolObject::from_ref(index.buffer_ptr.as_ref()),
-                        MTLResourceUsage::Read,
-                    );
-                }
-            }
-            encoder.executeCommandsInBuffer_indirectBuffer_indirectBufferOffset(
-                &icb,
-                &execution_range,
-                0,
-            );
-        }
-        log::info!("executed multi_draw_indirect_count through Metal ICB, max_count={max_count}");
-        true
-    }
-
-    unsafe fn draw_mesh_tasks_indirect_count_via_icb(
-        &mut self,
-        buffer: &super::Buffer,
-        offset: wgt::BufferAddress,
-        count_buffer: &super::Buffer,
-        count_offset: wgt::BufferAddress,
-        max_count: u32,
-    ) -> bool {
-        if max_count == 0 {
-            return true;
-        }
-
-        if let Some(reason) = self.icb_multi_draw_state_reject_reason(false) {
-            if Self::require_icb_multi_draw_for_diagnostics() {
-                panic!(
-                    "Metal ICB diagnostic required but multi_draw_mesh_tasks_indirect_count cannot use ICB: {reason}"
-                );
-            }
-            log::warn!(
-                "multi_draw_mesh_tasks_indirect_count requires Metal ICB-compatible state: {reason}"
-            );
-            return false;
-        }
-
-        unsafe {
-            if !self.suspend_render_for_icb() {
-                if Self::require_icb_multi_draw_for_diagnostics() {
-                    panic!(
-                        "Metal ICB diagnostic required but mesh count render pass suspend failed"
-                    );
-                }
-                return false;
-            }
-        }
-
-        let icb = match unsafe { self.generate_icb_from_mesh_draw_args(buffer, offset, max_count) }
-        {
-            Ok(icb) => icb,
-            Err(err) => {
-                log::warn!(
-                    "failed to generate Metal ICB for multi_draw_mesh_tasks_indirect_count: {err:?}"
-                );
-                unsafe { self.resume_render_after_icb() };
-                if Self::require_icb_multi_draw_for_diagnostics() {
-                    panic!(
-                        "Metal ICB diagnostic required but multi_draw_mesh_tasks_indirect_count ICB generation failed: {err:?}"
-                    );
-                }
-                return false;
-            }
-        };
-
-        let execution_range = match unsafe {
-            self.generate_icb_execution_range_from_count_buffer(
-                count_buffer,
-                count_offset,
-                max_count,
-            )
-        } {
-            Ok(execution_range) => execution_range,
-            Err(err) => {
-                log::warn!(
-                    "failed to generate Metal ICB execution range for multi_draw_mesh_tasks_indirect_count: {err:?}"
-                );
-                unsafe { self.resume_render_after_icb() };
-                if Self::require_icb_multi_draw_for_diagnostics() {
-                    panic!(
-                        "Metal ICB diagnostic required but multi_draw_mesh_tasks_indirect_count range generation failed: {err:?}"
-                    );
-                }
-                return false;
-            }
-        };
-
-        unsafe { self.resume_render_after_icb() };
-        let encoder = self.state.render.as_ref().unwrap();
-        if Self::require_icb_multi_draw_for_diagnostics() {
-            eprintln!(
-                "WGPU_METAL_ICB_DIAGNOSTIC: executing multi_draw_mesh_tasks_indirect_count through Metal ICB, max_count={max_count}"
-            );
-        }
-        #[allow(deprecated)]
-        unsafe {
-            encoder.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Read);
-            encoder.useResource_usage(
-                ProtocolObject::from_ref(&*execution_range),
-                MTLResourceUsage::Read,
-            );
-            encoder.executeCommandsInBuffer_indirectBuffer_indirectBufferOffset(
-                &icb,
-                &execution_range,
-                0,
-            );
-        }
-        log::info!(
-            "executed multi_draw_mesh_tasks_indirect_count through Metal ICB, max_count={max_count}"
-        );
-        true
-    }
-
-    unsafe fn draw_indexed_indirect_via_icb(
-        &mut self,
-        buffer: &super::Buffer,
-        offset: wgt::BufferAddress,
-        draw_count: u32,
-    ) -> bool {
-        if let Some(reason) = self.icb_multi_draw_reject_reason(true, draw_count) {
-            if Self::require_icb_multi_draw_for_diagnostics() {
-                panic!(
-                    "Metal ICB diagnostic required but multi_draw_indexed_indirect would use CPU fallback: {reason}"
-                );
-            }
-            return false;
-        }
-
-        unsafe {
-            if !self.suspend_render_for_icb() {
-                if Self::require_icb_multi_draw_for_diagnostics() {
-                    panic!("Metal ICB diagnostic required but indexed render pass suspend failed");
-                }
-                return false;
-            }
-        }
-
-        let icb = match unsafe {
-            self.generate_icb_from_indexed_draw_args(buffer, offset, draw_count)
-        } {
-            Ok(icb) => icb,
-            Err(err) => {
-                log::warn!(
-                    "failed to generate Metal ICB for multi_draw_indexed_indirect: {err:?}; falling back"
-                );
-                unsafe { self.resume_render_after_icb() };
-                if Self::require_icb_multi_draw_for_diagnostics() {
-                    panic!(
-                        "Metal ICB diagnostic required but multi_draw_indexed_indirect ICB generation failed: {err:?}"
-                    );
-                }
-                return false;
-            }
-        };
-
-        unsafe { self.resume_render_after_icb() };
-        let encoder = self.state.render.as_ref().unwrap();
-        if Self::require_icb_multi_draw_for_diagnostics() {
-            eprintln!(
-                "WGPU_METAL_ICB_DIAGNOSTIC: executing multi_draw_indexed_indirect through Metal ICB, draw_count={draw_count}"
-            );
-        }
-        #[allow(deprecated)]
-        unsafe {
-            encoder.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Read);
-            if let Some(index) = self.state.index.as_ref() {
-                encoder.useResource_usage(
-                    ProtocolObject::from_ref(index.buffer_ptr.as_ref()),
-                    MTLResourceUsage::Read,
-                );
-            }
-            encoder.executeCommandsInBuffer_withRange(
-                &icb,
-                NSRange {
-                    location: 0,
-                    length: draw_count as usize,
-                },
-            );
-        }
-        log::info!(
-            "executed multi_draw_indexed_indirect through Metal ICB, draw_count={draw_count}"
-        );
-        true
-    }
-
-    unsafe fn draw_mesh_tasks_indirect_via_icb(
-        &mut self,
-        buffer: &super::Buffer,
-        offset: wgt::BufferAddress,
-        draw_count: u32,
-    ) -> bool {
-        if let Some(reason) = self.icb_multi_draw_reject_reason(false, draw_count) {
-            if Self::require_icb_multi_draw_for_diagnostics() {
-                panic!(
-                    "Metal ICB diagnostic required but multi_draw_mesh_tasks_indirect would use CPU fallback: {reason}"
-                );
-            }
-            return false;
-        }
-
-        unsafe {
-            if !self.suspend_render_for_icb() {
-                if Self::require_icb_multi_draw_for_diagnostics() {
-                    panic!("Metal ICB diagnostic required but mesh render pass suspend failed");
-                }
-                return false;
-            }
-        }
-
-        let icb = match unsafe { self.generate_icb_from_mesh_draw_args(buffer, offset, draw_count) }
-        {
-            Ok(icb) => icb,
-            Err(err) => {
-                log::warn!(
-                    "failed to generate Metal ICB for multi_draw_mesh_tasks_indirect: {err:?}; falling back"
-                );
-                unsafe { self.resume_render_after_icb() };
-                if Self::require_icb_multi_draw_for_diagnostics() {
-                    panic!(
-                        "Metal ICB diagnostic required but multi_draw_mesh_tasks_indirect ICB generation failed: {err:?}"
-                    );
-                }
-                return false;
-            }
-        };
-
-        unsafe { self.resume_render_after_icb() };
-        let encoder = self.state.render.as_ref().unwrap();
-        if Self::require_icb_multi_draw_for_diagnostics() {
-            eprintln!(
-                "WGPU_METAL_ICB_DIAGNOSTIC: executing multi_draw_mesh_tasks_indirect through Metal ICB, draw_count={draw_count}"
-            );
-        }
-        #[allow(deprecated)]
-        unsafe {
-            encoder.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Read);
-            encoder.executeCommandsInBuffer_withRange(
-                &icb,
-                NSRange {
-                    location: 0,
-                    length: draw_count as usize,
-                },
-            );
-        }
-        log::info!(
-            "executed multi_draw_mesh_tasks_indirect through Metal ICB, draw_count={draw_count}"
-        );
-        true
-    }
-
     /// Updates the bindings for a single shader stage, called in `set_bind_group`.
     fn update_bind_group_state(
         &mut self,
@@ -1650,14 +868,7 @@ impl super::CommandEncoder {
 
 impl super::CommandState {
     fn reset(&mut self) {
-        self.render_pass = None;
-        self.current_render_pipeline = None;
-        self.bound_vertex_buffers.clear();
-        self.current_viewport = None;
-        self.current_scissor = None;
-        self.current_stencil_reference = None;
-        self.current_blend_color = None;
-        self.render_bind_groups_active = false;
+        self.render_pipeline_supports_icb = false;
         self.storage_buffer_length_map.clear();
         self.vertex_buffer_size_map.clear();
         self.stage_infos.vs.clear();
@@ -1770,6 +981,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
             encoder.endEncoding();
         }
         self.state.pending_timer_queries.clear();
+        self.deferred_multi_draws.clear();
+        self.deferred_multi_draw_resources.clear();
         let had_command_buffer = self.raw_cmd_buf.is_some();
         // Clear the Option first so the underlying `metal::CommandBuffer` is
         // dropped before we update the counter.
@@ -1797,6 +1010,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         Ok(super::CommandBuffer {
             raw: self.raw_cmd_buf.take().unwrap(),
             queue_shared: Arc::clone(&self.queue_shared),
+            _icb_resources: core::mem::take(&mut self.deferred_multi_draw_resources),
         })
     }
 
@@ -2128,28 +1342,24 @@ impl crate::CommandEncoder for super::CommandEncoder {
         assert!(self.state.blit.is_none());
         assert!(self.state.compute.is_none());
         assert!(self.state.render.is_none());
+        // Multi-draws deferred by the previous pass must have been encoded via
+        // `encode_deferred_multi_draws` before another pass begins.
+        debug_assert!(self.deferred_multi_draws.is_empty());
 
         autoreleasepool(|_| {
             let descriptor = MTLRenderPassDescriptor::new();
-            let mut can_resume_for_icb = self.state.pending_timer_queries.is_empty()
-                && desc.timestamp_writes.is_none()
-                && desc.occlusion_query_set.is_none();
 
             for (i, at) in desc.color_attachments.iter().enumerate() {
                 if let Some(at) = at.as_ref() {
                     let at_descriptor =
                         unsafe { descriptor.colorAttachments().objectAtIndexedSubscript(i) };
                     at_descriptor.setTexture(Some(&at.target.view.raw));
-                    if at.target.view.raw.storageMode() == MTLStorageMode::Memoryless {
-                        can_resume_for_icb = false;
-                    }
                     if let Some(depth_slice) = at.depth_slice {
                         at_descriptor.setDepthPlane(depth_slice as usize);
                     }
                     if let Some(ref resolve) = at.resolve_target {
                         //Note: the selection of levels and slices is already handled by `TextureView`
                         at_descriptor.setResolveTexture(Some(&resolve.view.raw));
-                        can_resume_for_icb = false;
                     }
                     let load_action = if at.ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
@@ -2165,9 +1375,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         at.ops.contains(crate::AttachmentOps::STORE),
                         at.resolve_target.is_some(),
                     );
-                    if !at.ops.contains(crate::AttachmentOps::STORE) {
-                        can_resume_for_icb = false;
-                    }
                     at_descriptor.setLoadAction(load_action);
                     at_descriptor.setStoreAction(store_action);
                 }
@@ -2177,9 +1384,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 if at.target.view.aspects.contains(crate::FormatAspects::DEPTH) {
                     let at_descriptor = descriptor.depthAttachment();
                     at_descriptor.setTexture(Some(&at.target.view.raw));
-                    if at.target.view.raw.storageMode() == MTLStorageMode::Memoryless {
-                        can_resume_for_icb = false;
-                    }
 
                     let load_action = if at.depth_ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
@@ -2194,7 +1398,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     let store_action = if at.depth_ops.contains(crate::AttachmentOps::STORE) {
                         MTLStoreAction::Store
                     } else {
-                        can_resume_for_icb = false;
                         MTLStoreAction::DontCare
                     };
                     at_descriptor.setLoadAction(load_action);
@@ -2208,9 +1411,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 {
                     let at_descriptor = descriptor.stencilAttachment();
                     at_descriptor.setTexture(Some(&at.target.view.raw));
-                    if at.target.view.raw.storageMode() == MTLStorageMode::Memoryless {
-                        can_resume_for_icb = false;
-                    }
 
                     let load_action = if at.stencil_ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
@@ -2228,7 +1428,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     let store_action = if at.stencil_ops.contains(crate::AttachmentOps::STORE) {
                         MTLStoreAction::Store
                     } else {
-                        can_resume_for_icb = false;
                         MTLStoreAction::DontCare
                     };
                     at_descriptor.setLoadAction(load_action);
@@ -2297,17 +1496,31 @@ impl crate::CommandEncoder for super::CommandEncoder {
             }
             let raw = self.raw_cmd_buf.as_ref().unwrap();
             let encoder = raw.renderCommandEncoderWithDescriptor(&descriptor).unwrap();
-            Self::apply_vertex_amplification(&encoder, desc.multiview_mask);
+            if let Some(mv) = desc.multiview_mask {
+                // Most likely the API just wasn't thought about enough. It's not like they ever allow you
+                // to use enough views to overflow a 32-bit bitmask.
+                let mv = mv.get();
+                let msb = 32 - mv.leading_zeros();
+                let mut maps: SmallVec<[MTLVertexAmplificationViewMapping; 32]> = SmallVec::new();
+                for i in 0..msb {
+                    if (mv & (1 << i)) != 0 {
+                        maps.push(MTLVertexAmplificationViewMapping {
+                            renderTargetArrayIndexOffset: i,
+                            viewportArrayIndexOffset: i,
+                        });
+                    }
+                }
+                unsafe {
+                    encoder.setVertexAmplificationCount_viewMappings(
+                        mv.count_ones() as usize,
+                        maps.as_ptr(),
+                    )
+                };
+            }
             if let Some(label) = desc.label {
                 encoder.setLabel(Some(&NSString::from_str(label)));
             }
             self.state.render = Some(encoder);
-            self.state.render_pass = Some(super::RenderPassResumeState {
-                descriptor,
-                can_resume_for_icb,
-                multiview_mask: desc.multiview_mask,
-                label: desc.label.map(str::to_owned),
-            });
         });
 
         Ok(())
@@ -2315,7 +1528,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn end_render_pass(&mut self) {
         self.state.render.take().unwrap().endEncoding();
-        self.state.render_pass = None;
     }
 
     unsafe fn set_bind_group(
@@ -2331,7 +1543,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let render_encoder = self.state.render.clone();
         let compute_encoder = self.state.compute.clone();
         if let Some(encoder) = render_encoder {
-            self.mark_render_bind_groups_active_for_icb();
             self.update_bind_group_state(
                 Encoder::Vertex(&encoder),
                 // All zeros, as vs comes first
@@ -2483,9 +1694,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     }
                 }
             }
-            if self.supports_icb_multi_draw() {
-                self.clear_icb_render_state();
-            }
         }
     }
 
@@ -2511,18 +1719,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         self.state.raw_primitive_type = pipeline.raw_primitive_type;
-        if self.should_track_icb_render_state() {
-            self.state.current_render_pipeline = Some(super::RenderPipelineState {
-                raw: pipeline.raw.clone(),
-                raw_triangle_fill_mode: pipeline.raw_triangle_fill_mode,
-                raw_front_winding: pipeline.raw_front_winding,
-                raw_cull_mode: pipeline.raw_cull_mode,
-                raw_depth_clip_mode: pipeline.raw_depth_clip_mode,
-                depth_stencil: pipeline.depth_stencil.clone(),
-            });
-        } else if self.state.current_render_pipeline.is_some() {
-            self.state.current_render_pipeline = None;
-        }
+        self.state.render_pipeline_supports_icb = pipeline.supports_indirect_command_buffers;
         match pipeline.vs_info {
             Some(ref info) => self.state.stage_infos.vs.assign_from(info),
             None => self.state.stage_infos.vs.clear(),
@@ -2669,20 +1866,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 buffer_index as usize,
             )
         };
-        if self.should_track_icb_render_state() {
-            if self.state.bound_vertex_buffers.len() <= buffer_index as usize {
-                self.state
-                    .bound_vertex_buffers
-                    .resize_with(buffer_index as usize + 1, || None);
-            }
-            self.state.bound_vertex_buffers[buffer_index as usize] =
-                Some(super::VertexBufferState {
-                    buffer: binding.buffer.raw.clone(),
-                    offset: binding.offset as usize,
-                });
-        } else if !self.state.bound_vertex_buffers.is_empty() {
-            self.state.bound_vertex_buffers.clear();
-        }
 
         let buffer_size = binding.resolve_size();
         if buffer_size > 0 {
@@ -2715,18 +1898,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
             depth_range.end
         };
         let encoder = self.state.render.as_ref().unwrap();
-        let viewport = MTLViewport {
+        encoder.setViewport(MTLViewport {
             originX: rect.x as _,
             originY: rect.y as _,
             width: rect.w as _,
             height: rect.h as _,
             znear: depth_range.start as _,
             zfar: zfar as _,
-        };
-        encoder.setViewport(viewport);
-        if self.should_track_icb_render_state() {
-            self.state.current_viewport = Some(viewport);
-        }
+        });
     }
     unsafe fn set_scissor_rect(&mut self, rect: &crate::Rect<u32>) {
         //TODO: support empty scissors by modifying the viewport
@@ -2738,23 +1917,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
         let encoder = self.state.render.as_ref().unwrap();
         encoder.setScissorRect(scissor);
-        if self.should_track_icb_render_state() {
-            self.state.current_scissor = Some(scissor);
-        }
     }
     unsafe fn set_stencil_reference(&mut self, value: u32) {
         let encoder = self.state.render.as_ref().unwrap();
         encoder.setStencilFrontReferenceValue_backReferenceValue(value, value);
-        if self.should_track_icb_render_state() {
-            self.state.current_stencil_reference = Some(value);
-        }
     }
     unsafe fn set_blend_constants(&mut self, color: &[f32; 4]) {
         let encoder = self.state.render.as_ref().unwrap();
         encoder.setBlendColorRed_green_blue_alpha(color[0], color[1], color[2], color[3]);
-        if self.should_track_icb_render_state() {
-            self.state.current_blend_color = Some(*color);
-        }
     }
 
     unsafe fn draw(
@@ -2868,7 +2038,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         mut offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        if unsafe { self.draw_indirect_via_icb(buffer, offset, draw_count) } {
+        if unsafe { self.defer_multi_draw_via_icb(IcbDrawKind::Draw, buffer, offset, draw_count) } {
             return;
         }
         let encoder = self.state.render.as_ref().unwrap();
@@ -2890,7 +2060,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
         mut offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        if unsafe { self.draw_indexed_indirect_via_icb(buffer, offset, draw_count) } {
+        let kind = {
+            let index = self.state.index.as_ref().unwrap();
+            IcbDrawKind::DrawIndexed {
+                index_buffer: unsafe { index.buffer_ptr.as_ref() }.retain(),
+                index_offset: index.offset,
+                raw_index_type: index.raw_type,
+            }
+        };
+        if unsafe { self.defer_multi_draw_via_icb(kind, buffer, offset, draw_count) } {
             return;
         }
         let encoder = self.state.render.as_ref().unwrap();
@@ -2916,7 +2094,21 @@ impl crate::CommandEncoder for super::CommandEncoder {
         mut offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        if unsafe { self.draw_mesh_tasks_indirect_via_icb(buffer, offset, draw_count) } {
+        let kind = {
+            let ts = self.state.stage_infos.ts.raw_wg_size;
+            let ms = self.state.stage_infos.ms.raw_wg_size;
+            IcbDrawKind::DrawMeshTasks {
+                threadgroup_sizes: [
+                    ts.width as u32,
+                    ts.height as u32,
+                    ts.depth as u32,
+                    ms.width as u32,
+                    ms.height as u32,
+                    ms.depth as u32,
+                ],
+            }
+        };
+        if unsafe { self.defer_multi_draw_via_icb(kind, buffer, offset, draw_count) } {
             return;
         }
         let encoder = self.state.render.as_ref().unwrap();
@@ -2935,72 +2127,180 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn draw_indirect_count(
         &mut self,
-        buffer: &super::Buffer,
-        offset: wgt::BufferAddress,
-        count_buffer: &super::Buffer,
-        count_offset: wgt::BufferAddress,
-        max_count: u32,
+        _buffer: &super::Buffer,
+        _offset: wgt::BufferAddress,
+        _count_buffer: &super::Buffer,
+        _count_offset: wgt::BufferAddress,
+        _max_count: u32,
     ) {
-        let used_icb = unsafe {
-            self.draw_indirect_count_via_icb(
-                buffer,
-                offset,
-                count_buffer,
-                count_offset,
-                max_count,
-                false,
-            )
-        };
-        assert!(
-            used_icb,
-            "Metal MULTI_DRAW_INDIRECT_COUNT was enabled without an executable ICB path"
-        );
+        //TODO
     }
     unsafe fn draw_indexed_indirect_count(
         &mut self,
-        buffer: &super::Buffer,
-        offset: wgt::BufferAddress,
-        count_buffer: &super::Buffer,
-        count_offset: wgt::BufferAddress,
-        max_count: u32,
+        _buffer: &super::Buffer,
+        _offset: wgt::BufferAddress,
+        _count_buffer: &super::Buffer,
+        _count_offset: wgt::BufferAddress,
+        _max_count: u32,
     ) {
-        let used_icb = unsafe {
-            self.draw_indirect_count_via_icb(
-                buffer,
-                offset,
-                count_buffer,
-                count_offset,
-                max_count,
-                true,
-            )
-        };
-        assert!(
-            used_icb,
-            "Metal MULTI_DRAW_INDIRECT_COUNT was enabled without an executable indexed ICB path"
-        );
+        //TODO
     }
 
     unsafe fn draw_mesh_tasks_indirect_count(
         &mut self,
-        buffer: &<Self::A as crate::Api>::Buffer,
-        offset: wgt::BufferAddress,
-        count_buffer: &<Self::A as crate::Api>::Buffer,
-        count_offset: wgt::BufferAddress,
-        max_count: u32,
+        _buffer: &<Self::A as crate::Api>::Buffer,
+        _offset: wgt::BufferAddress,
+        _count_buffer: &<Self::A as crate::Api>::Buffer,
+        _count_offset: wgt::BufferAddress,
+        _max_count: u32,
     ) {
-        let used_icb = unsafe {
-            self.draw_mesh_tasks_indirect_count_via_icb(
-                buffer,
-                offset,
-                count_buffer,
-                count_offset,
-                max_count,
-            )
-        };
-        assert!(
-            used_icb,
-            "Metal MULTI_DRAW_INDIRECT_COUNT was enabled without an executable mesh ICB path"
-        );
+        unreachable!()
+    }
+
+    unsafe fn encode_deferred_multi_draws(&mut self) {
+        if self.deferred_multi_draws.is_empty() {
+            return;
+        }
+        let requests = core::mem::take(&mut self.deferred_multi_draws);
+
+        // The pipelines were resolved when each request was queued and the
+        // adapter-level cache is never cleared, so these lookups cannot fail.
+        let pipelines = self.get_icb_command_pipelines().unwrap();
+        let mesh_pipeline = requests
+            .iter()
+            .any(|request| matches!(request.kind, IcbDrawKind::DrawMeshTasks { .. }))
+            .then(|| self.get_icb_mesh_command_pipeline().unwrap());
+
+        // Every target range must be reset before generation writes it.
+        {
+            let blit = self.enter_blit();
+            blit.pushDebugGroup(&NSString::from_str("wgpu reset multi-draw ICBs"));
+            for request in &requests {
+                unsafe {
+                    blit.resetCommandsInBuffer_withRange(
+                        &request.icb,
+                        NSRange {
+                            location: 0,
+                            length: request.draw_count as usize,
+                        },
+                    );
+                }
+            }
+            blit.popDebugGroup();
+        }
+        self.leave_blit();
+
+        // A single labeled compute encoder holds every generation dispatch
+        // for the pass, which keeps encoder switches minimal and gives GPU
+        // captures/profilers one legible "ICB generation" node per pass.
+        let raw = self.raw_cmd_buf.as_ref().unwrap();
+        let compute = raw.computeCommandEncoder().unwrap();
+        compute.setLabel(Some(&NSString::from_str("wgpu multi-draw ICB generation")));
+        for request in &requests {
+            let pipeline = match request.kind {
+                IcbDrawKind::Draw => &pipelines.draw,
+                IcbDrawKind::DrawIndexed { raw_index_type, .. } => {
+                    if raw_index_type == MTLIndexType::UInt16 {
+                        &pipelines.indexed_u16
+                    } else {
+                        &pipelines.indexed_u32
+                    }
+                }
+                IcbDrawKind::DrawMeshTasks { .. } => mesh_pipeline.as_ref().unwrap(),
+            };
+            compute.setComputePipelineState(&pipeline.pipeline);
+            unsafe {
+                compute.setBuffer_offset_atIndex(Some(&request.argument_buffer), 0, 0);
+                compute.setBuffer_offset_atIndex(
+                    Some(&request.args_buffer),
+                    request.args_offset as usize,
+                    1,
+                );
+                match request.kind {
+                    IcbDrawKind::Draw => {
+                        compute.setBytes_length_atIndex(
+                            NonNull::from(&request.primitive_type_value).cast(),
+                            size_of::<u32>(),
+                            2,
+                        );
+                        compute.setBytes_length_atIndex(
+                            NonNull::from(&request.draw_count).cast(),
+                            size_of::<u32>(),
+                            3,
+                        );
+                    }
+                    IcbDrawKind::DrawIndexed {
+                        ref index_buffer,
+                        index_offset,
+                        ..
+                    } => {
+                        compute.setBuffer_offset_atIndex(
+                            Some(index_buffer),
+                            index_offset as usize,
+                            2,
+                        );
+                        compute.setBytes_length_atIndex(
+                            NonNull::from(&request.primitive_type_value).cast(),
+                            size_of::<u32>(),
+                            3,
+                        );
+                        compute.setBytes_length_atIndex(
+                            NonNull::from(&request.draw_count).cast(),
+                            size_of::<u32>(),
+                            4,
+                        );
+                    }
+                    IcbDrawKind::DrawMeshTasks {
+                        ref threadgroup_sizes,
+                    } => {
+                        compute.setBytes_length_atIndex(
+                            NonNull::new(threadgroup_sizes.as_ptr().cast_mut().cast()).unwrap(),
+                            size_of::<[u32; 6]>(),
+                            2,
+                        );
+                        compute.setBytes_length_atIndex(
+                            NonNull::from(&request.draw_count).cast(),
+                            size_of::<u32>(),
+                            3,
+                        );
+                    }
+                }
+                compute.useResource_usage(
+                    ProtocolObject::from_ref(&*request.icb),
+                    MTLResourceUsage::Write,
+                );
+            }
+            let (threadgroups, threads_per_threadgroup) =
+                Self::icb_generation_threadgroups(&pipeline.pipeline, request.draw_count);
+            compute
+                .dispatchThreadgroups_threadsPerThreadgroup(threadgroups, threads_per_threadgroup);
+        }
+        compute.endEncoding();
+
+        // Let Metal strip inherited state the generated commands don't need.
+        {
+            let blit = self.enter_blit();
+            blit.pushDebugGroup(&NSString::from_str("wgpu optimize multi-draw ICBs"));
+            for request in &requests {
+                unsafe {
+                    blit.optimizeIndirectCommandBuffer_withRange(
+                        &request.icb,
+                        NSRange {
+                            location: 0,
+                            length: request.draw_count as usize,
+                        },
+                    );
+                }
+            }
+            blit.popDebugGroup();
+        }
+        self.leave_blit();
+
+        self.deferred_multi_draw_resources
+            .extend(requests.into_iter().map(|request| IcbExecutionResources {
+                _icb: request.icb,
+                _argument_buffer: request.argument_buffer,
+            }));
     }
 
     // compute

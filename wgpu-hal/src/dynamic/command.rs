@@ -178,6 +178,7 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     );
+    unsafe fn encode_deferred_multi_draws(&mut self);
 
     unsafe fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<dyn DynQuerySet>);
     unsafe fn end_compute_pass(&mut self);
@@ -602,6 +603,10 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
                 max_count,
             )
         };
+    }
+
+    unsafe fn encode_deferred_multi_draws(&mut self) {
+        unsafe { C::encode_deferred_multi_draws(self) };
     }
 
     unsafe fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<dyn DynQuerySet>) {

@@ -575,20 +575,20 @@ const INDIRECT_DRAW_DISPATCH_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily1_v1,
 ];
 
-/// "Indirect command buffers (rendering)" in the Metal feature set tables.
-///
-/// A10X/iPadOS 17.7 advertises the older Apple3/iOS GPUFamily3 support but
-/// throws a foreign exception when this backend suspends a render pass for
-/// compute-generated render ICBs. A10X Apple TV 4K on tvOS 18.3 has been
-/// directly validated with GPU-generated indexed and non-indexed MDI through
-/// render ICBs, so the Apple3 expansion stays tvOS 18+ only.
+/// "Indirect command buffers (rendering)" in the Metal feature set tables,
+/// narrowed to the hardware generations this backend's compute-generated
+/// render ICB path has been validated on (A12-class and up on iOS; every
+/// discrete/Apple-silicon Mac). Apple documents render-ICB support on some
+/// older families, but those have not been validated with wgpu's generation
+/// kernels; widen this table as device validation lands.
 const INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v2,
     MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
-/// "Indirect command buffers (compute)" in the Metal feature set tables.
+/// "Indirect command buffers (compute)" in the Metal feature set tables; same
+/// validated floor as the rendering table.
 const INDIRECT_COMMAND_BUFFERS_COMPUTE_SUPPORT: &[MTLFeatureSet] =
     INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT;
 
@@ -664,17 +664,6 @@ impl super::CapabilitiesQuery {
         let os_type = super::OsType::new(version, device);
 
         let family_check = available!(macos = 10.15, ios = 13.0, tvos = 13.0, visionos = 1.0);
-        // ICB support has been empirically validated on A12/iOS 18+ and
-        // S8/watchOS 11+ hardware even where older public tables lag behind.
-        // Keep this narrower than `family_check` so watchOS does not inherit
-        // unrelated family-based feature exposure.
-        let icb_family_check = available!(
-            macos = 10.15,
-            ios = 13.0,
-            tvos = 13.0,
-            visionos = 1.0,
-            watchos = 11.0
-        );
         let metal3 = family_check && device.supportsFamily(MTLGPUFamily::Metal3);
         let metal4 = family_check && device.supportsFamily(MTLGPUFamily::Metal4);
         let mut sample_count_mask = crate::TextureFormatCapabilities::MULTISAMPLE_X4; // 1 and 4 samples are supported on all devices
@@ -724,34 +713,35 @@ impl super::CapabilitiesQuery {
             .then(|| device.argumentBuffersSupport());
 
         let is_virtual = device.name().to_string().to_lowercase().contains("virtual");
-        let force_icb_mdi_on_macos = std::env::var("WGPU_METAL_FORCE_ICB_MDI")
-            .is_ok_and(|value| value == "1")
-            && os_type == super::OsType::Macos
-            && !is_virtual;
-        // The GPU feature tables expose the hardware side of ICB support, but
-        // the MSL/runtime side is only validated on the current OS generation.
-        // Apple3 remains excluded on iOS/iPadOS after A10X/iPadOS 17.7 threw
-        // from the render-ICB splice. Apple3 is allowed on tvOS 18+ only
-        // because first-generation Apple TV 4K hardware passed this path.
-        let icb_modern_mobile_os =
-            available!(ios = 18.0, tvos = 18.0, visionos = 2.0, watchos = 11.0);
-        let icb_tvos_apple3_support = os_type == super::OsType::Tvos && available!(tvos = 18.0);
-        let icb_render_feature_set_support =
-            Self::supports_any(device, INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT)
-                && (os_type == super::OsType::Macos || icb_modern_mobile_os);
-        let icb_compute_feature_set_support =
-            Self::supports_any(device, INDIRECT_COMMAND_BUFFERS_COMPUTE_SUPPORT)
-                && (os_type == super::OsType::Macos || icb_modern_mobile_os);
-        let icb_family_support = icb_family_check
+
+        // Indirect-command-buffer support, from the feature-set tables plus the
+        // equivalent modern GPU-family checks. Two deliberate narrowings:
+        // - Apple's paravirtual Metal device advertises the relevant families
+        //   but aborts when executing render ICBs (observed in CI), so virtual
+        //   devices are excluded.
+        // - First-generation Apple TV 4K (A10X, Apple3) is allowed because it
+        //   was validated directly on hardware; other Apple3/Apple4 devices
+        //   stay excluded until they're validated with this backend.
+        // `MTLIndirectCommandBuffer` and friends need macOS 10.14 / iOS 12.
+        let icb_api_check = available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0);
+        let icb_family_support = family_check
             && if os_type == super::OsType::Macos {
                 device.supportsFamily(MTLGPUFamily::Mac2)
                     || device.supportsFamily(MTLGPUFamily::Metal3)
             } else {
-                icb_modern_mobile_os
-                    && (device.supportsFamily(MTLGPUFamily::Apple5)
-                        || (icb_tvos_apple3_support && device.supportsFamily(MTLGPUFamily::Apple3))
-                        || device.supportsFamily(MTLGPUFamily::Metal3))
+                device.supportsFamily(MTLGPUFamily::Apple5)
+                    || device.supportsFamily(MTLGPUFamily::Metal3)
+                    || (os_type == super::OsType::Tvos
+                        && device.supportsFamily(MTLGPUFamily::Apple3))
             };
+        let indirect_command_buffers_rendering = !is_virtual
+            && icb_api_check
+            && (Self::supports_any(device, INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT)
+                || icb_family_support);
+        let indirect_command_buffers_compute = !is_virtual
+            && icb_api_check
+            && (Self::supports_any(device, INDIRECT_COMMAND_BUFFERS_COMPUTE_SUPPORT)
+                || icb_family_support);
 
         let mesh_shaders = family_check
                 && (device.supportsFamily(MTLGPUFamily::Metal3)
@@ -803,16 +793,8 @@ impl super::CapabilitiesQuery {
             ),
             sampler_clamp_to_border: Self::supports_any(device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
             indirect_draw_dispatch: Self::supports_any(device, INDIRECT_DRAW_DISPATCH_SUPPORT),
-            // Apple's paravirtual Metal device advertises the relevant feature
-            // sets/families but aborts when executing render ICBs in CI. Keep
-            // ICB enablement to real Metal devices until the virtual driver is
-            // validated separately.
-            indirect_command_buffers_rendering: !is_virtual
-                && (icb_render_feature_set_support || icb_family_support || force_icb_mdi_on_macos),
-            indirect_command_buffers_compute: !is_virtual
-                && (icb_compute_feature_set_support
-                    || icb_family_support
-                    || force_icb_mdi_on_macos),
+            indirect_command_buffers_rendering,
+            indirect_command_buffers_compute,
             base_vertex_first_instance_drawing: Self::supports_any(
                 device,
                 BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
@@ -1377,12 +1359,6 @@ impl super::CapabilitiesQuery {
         features.set(
             F::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
             self.supported_vertex_amplification_factor > 1 && self.mesh_shaders,
-        );
-        features.set(
-            F::MULTI_DRAW_INDIRECT_COUNT,
-            std::env::var("WGPU_METAL_ENABLE_ICB_MDI_COUNT").is_ok_and(|value| value == "1")
-                && self.indirect_command_buffers_rendering
-                && self.indirect_command_buffers_compute,
         );
 
         // Cooperative matrix (simdgroup matrix) requires MSL 2.3+

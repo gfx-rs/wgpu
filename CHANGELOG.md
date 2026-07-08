@@ -50,7 +50,7 @@ Bottom level categories:
 
 #### Metal
 
-- Add Metal indirect-command-buffer lowering for fixed-count multi-draw indirect when render state can be safely resumed. By @matthargett in [#9640](https://github.com/gfx-rs/wgpu/pull/9640).
+- Metal now lowers fixed-count `multi_draw_indirect` / `multi_draw_indexed_indirect` (and their mesh-task counterpart) with 8 or more draws to GPU-generated indirect command buffers. The generation compute runs in the internal pre-pass command buffer that already carries indirect-draw validation, so the render pass is never interrupted. By @matthargett in [#9640](https://github.com/gfx-rs/wgpu/pull/9640).
 
 ### Changes
 

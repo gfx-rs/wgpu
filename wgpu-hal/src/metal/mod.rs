@@ -51,9 +51,9 @@ use objc2_metal::{
     MTLComputeCommandEncoder, MTLComputePipelineState, MTLCounterSampleBuffer, MTLCullMode,
     MTLDepthClipMode, MTLDepthStencilState, MTLDevice, MTLDrawable, MTLIndexType,
     MTLLanguageVersion, MTLLibrary, MTLPrimitiveType, MTLReadWriteTextureTier,
-    MTLRenderCommandEncoder, MTLRenderPassDescriptor, MTLRenderPipelineState, MTLRenderStages,
-    MTLResource, MTLResourceUsage, MTLSamplerState, MTLScissorRect, MTLSharedEvent, MTLSize,
-    MTLTexture, MTLTextureType, MTLTriangleFillMode, MTLViewport, MTLWinding,
+    MTLRenderCommandEncoder, MTLRenderPipelineState, MTLRenderStages, MTLResource,
+    MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize, MTLTexture, MTLTextureType,
+    MTLTriangleFillMode, MTLWinding,
 };
 use objc2_quartz_core::CAMetalLayer;
 use parking_lot::{Condvar, Mutex, RwLock};
@@ -346,9 +346,8 @@ struct PrivateCapabilities {
     supports_memoryless_storage: bool,
     mesh_shaders: bool,
     /// Metal ICB rendering is intentionally tracked separately from
-    /// `MULTI_DRAW_INDIRECT_COUNT`: WebGPU indirect-args buffers still need a
-    /// GPU command-generation pass before this can be exposed as non-emulated
-    /// multi-draw.
+    /// `MULTI_DRAW_INDIRECT_COUNT`: this backend uses render ICBs to lower
+    /// fixed-count multi-draws even when the count feature isn't exposed.
     indirect_command_buffers_rendering: bool,
     indirect_command_buffers_compute: bool,
 }
@@ -1211,6 +1210,11 @@ impl PipelineStageInfo {
 #[derive(Debug)]
 pub struct RenderPipeline {
     raw: Retained<ProtocolObject<dyn MTLRenderPipelineState>>,
+    /// Whether this pipeline was created with
+    /// `supportIndirectCommandBuffers`; some shaders are rejected by the
+    /// driver with that flag set, in which case the pipeline is created
+    /// without it and multi-draws recorded under it can't be lowered to ICBs.
+    supports_indirect_command_buffers: bool,
     vs_info: Option<PipelineStageInfo>,
     fs_info: Option<PipelineStageInfo>,
     ts_info: Option<PipelineStageInfo>,
@@ -1224,33 +1228,6 @@ pub struct RenderPipeline {
         Retained<ProtocolObject<dyn MTLDepthStencilState>>,
         wgt::DepthBiasState,
     )>,
-}
-
-#[derive(Clone)]
-struct RenderPipelineState {
-    raw: Retained<ProtocolObject<dyn MTLRenderPipelineState>>,
-    raw_triangle_fill_mode: MTLTriangleFillMode,
-    raw_front_winding: MTLWinding,
-    raw_cull_mode: MTLCullMode,
-    raw_depth_clip_mode: Option<MTLDepthClipMode>,
-    depth_stencil: Option<(
-        Retained<ProtocolObject<dyn MTLDepthStencilState>>,
-        wgt::DepthBiasState,
-    )>,
-}
-
-#[derive(Clone)]
-struct VertexBufferState {
-    buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
-    offset: usize,
-}
-
-#[derive(Clone)]
-struct RenderPassResumeState {
-    descriptor: Retained<MTLRenderPassDescriptor>,
-    can_resume_for_icb: bool,
-    multiview_mask: Option<core::num::NonZeroU32>,
-    label: Option<String>,
 }
 
 #[cfg(send_sync)]
@@ -1353,14 +1330,10 @@ struct CommandState {
         Option<Retained<ProtocolObject<dyn MTLAccelerationStructureCommandEncoder>>>,
     render: Option<Retained<ProtocolObject<dyn MTLRenderCommandEncoder>>>,
     compute: Option<Retained<ProtocolObject<dyn MTLComputeCommandEncoder>>>,
-    render_pass: Option<RenderPassResumeState>,
-    current_render_pipeline: Option<RenderPipelineState>,
-    bound_vertex_buffers: Vec<Option<VertexBufferState>>,
-    current_viewport: Option<MTLViewport>,
-    current_scissor: Option<MTLScissorRect>,
-    current_stencil_reference: Option<u32>,
-    current_blend_color: Option<[f32; 4]>,
-    render_bind_groups_active: bool,
+    /// Whether the currently bound render pipeline was created with
+    /// `supportIndirectCommandBuffers`; see
+    /// [`RenderPipeline::supports_indirect_command_buffers`].
+    render_pipeline_supports_icb: bool,
     raw_primitive_type: MTLPrimitiveType,
     index: Option<IndexState>,
     stage_infos: MultiStageData<PipelineStageInfo>,
@@ -1403,6 +1376,16 @@ pub struct CommandEncoder {
     state: CommandState,
     temp: Temp,
     counters: Arc<wgt::HalCounters>,
+    /// Indirect-command-buffer generation work queued by multi-draw calls
+    /// during render-pass recording, encoded (into the command buffer wgpu-core
+    /// schedules before the pass) by
+    /// [`encode_deferred_multi_draws`](crate::CommandEncoder::encode_deferred_multi_draws).
+    deferred_multi_draws: Vec<command::IcbGenerationRequest>,
+    /// Objects that must stay alive until the command buffers recorded by this
+    /// encoder finish executing; drained into the next finished
+    /// [`CommandBuffer`] so submission keep-alive doesn't depend on
+    /// [`Settings::retain_command_buffer_references`].
+    deferred_multi_draw_resources: Vec<command::IcbExecutionResources>,
 }
 
 impl fmt::Debug for CommandEncoder {
@@ -1420,6 +1403,9 @@ unsafe impl Sync for CommandEncoder {}
 pub struct CommandBuffer {
     raw: Retained<ProtocolObject<dyn MTLCommandBuffer>>,
     queue_shared: Arc<QueueShared>,
+    /// Keeps ICBs and their argument buffers alive for the lifetime of this
+    /// command buffer even when Metal is not retaining encoded references.
+    _icb_resources: Vec<command::IcbExecutionResources>,
 }
 
 impl crate::DynCommandBuffer for CommandBuffer {}
