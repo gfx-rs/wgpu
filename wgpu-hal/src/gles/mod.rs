@@ -465,6 +465,11 @@ impl TextureInner {
 #[derive(Debug)]
 pub struct Texture {
     pub inner: TextureInner,
+    /// The underlying GL object is owned by external code and must never be
+    /// deleted by wgpu-hal. On WebGL, imported handles additionally occupy a
+    /// slot in glow's resource tracker, which `destroy_texture` reclaims via
+    /// `unregister_external_texture`.
+    pub externally_owned: bool,
     pub mip_level_count: u32,
     pub array_layer_count: u32,
     pub format: wgt::TextureFormat,
@@ -489,6 +494,7 @@ impl Texture {
     pub fn default_framebuffer(format: wgt::TextureFormat) -> Self {
         Self {
             inner: TextureInner::DefaultRenderbuffer,
+            externally_owned: false,
             drop_guard: None,
             mip_level_count: 1,
             array_layer_count: 1,
@@ -525,16 +531,23 @@ impl Texture {
         }
     }
 
-    /// More information can be found in issues #1614 and #1574
-    fn log_failing_target_heuristics(view_dimension: wgt::TextureViewDimension, target: u32) {
-        let expected_target = match view_dimension {
-            wgt::TextureViewDimension::D1 => glow::TEXTURE_2D,
-            wgt::TextureViewDimension::D2 => glow::TEXTURE_2D,
+    /// GL bind target corresponding to a view dimension.
+    ///
+    /// 1D collapses to `TEXTURE_2D`: WebGL (1 and 2) as well as some GLES
+    /// versions do not have 1D textures.
+    fn target_for_view_dimension(view_dimension: wgt::TextureViewDimension) -> BindTarget {
+        match view_dimension {
+            wgt::TextureViewDimension::D1 | wgt::TextureViewDimension::D2 => glow::TEXTURE_2D,
             wgt::TextureViewDimension::D2Array => glow::TEXTURE_2D_ARRAY,
             wgt::TextureViewDimension::Cube => glow::TEXTURE_CUBE_MAP,
             wgt::TextureViewDimension::CubeArray => glow::TEXTURE_CUBE_MAP_ARRAY,
             wgt::TextureViewDimension::D3 => glow::TEXTURE_3D,
-        };
+        }
+    }
+
+    /// More information can be found in issues #1614 and #1574
+    fn log_failing_target_heuristics(view_dimension: wgt::TextureViewDimension, target: u32) {
+        let expected_target = Self::target_for_view_dimension(view_dimension);
 
         if expected_target == target {
             return;

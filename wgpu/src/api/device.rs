@@ -427,6 +427,142 @@ impl Device {
         self.inner.as_webgpu_opt().map(|wd| &wd.inner)
     }
 
+    /// Wrap a foreign `web_sys::WebGlTexture` as a [`Texture`] without a copy.
+    ///
+    /// WebGL (GLES-on-wasm) counterpart of
+    /// [`Self::create_texture_from_webgpu_handle`].
+    ///
+    /// `view_dimension` names the WebGL texture type of `texture`
+    /// ([`D2`] → `TEXTURE_2D`, [`D2Array`] → `TEXTURE_2D_ARRAY`, [`Cube`] →
+    /// `TEXTURE_CUBE_MAP`, [`D3`] → `TEXTURE_3D`). It cannot be inferred from
+    /// `desc`: a square 6-layer 2D array and a cube map have identical
+    /// descriptors, but a WebGL texture's type is fixed at its first bind and
+    /// binding it to the wrong target raises `INVALID_OPERATION`.
+    ///
+    /// Returns [`None`] if this device is not backed by the GLES backend on
+    /// WebGL. With both the `webgpu` and `webgl` features enabled the backend
+    /// is chosen at runtime (WebGPU where the browser supports it), so check
+    /// the result rather than assuming the WebGL fallback is in use — the
+    /// sibling accessors [`Self::as_webgl_texture`] and
+    /// [`Self::as_webgl_context`] return [`None`] under the same condition.
+    ///
+    /// The caller must guarantee:
+    ///
+    /// 1. `texture` was created by the same `WebGl2RenderingContext` backing
+    ///    this device.
+    /// 2. `desc` (format / size / dimension / mip / sample) and
+    ///    `view_dimension` match the actual WebGL texture. wgpu stores these
+    ///    verbatim without re-checking the handle; a mismatch yields silently
+    ///    incorrect metadata and GL errors (`INVALID_OPERATION`) downstream
+    ///    rather than memory unsafety — like WebGPU, every WebGL call is
+    ///    validated by the browser, which is why this method is not `unsafe`.
+    /// 3. The handle stays valid until wgpu is finished with the texture (or
+    ///    until `drop_callback` fires, if one is supplied). wgpu never
+    ///    `gl.deleteTexture`s the imported handle; on WebGL the callback need
+    ///    not be `Send`/`Sync`, so it may capture the handle and delete it.
+    ///
+    /// [`D2`]: wgt::TextureViewDimension::D2
+    /// [`D2Array`]: wgt::TextureViewDimension::D2Array
+    /// [`Cube`]: wgt::TextureViewDimension::Cube
+    /// [`D3`]: wgt::TextureViewDimension::D3
+    #[cfg(webgl)]
+    #[must_use]
+    pub fn create_texture_from_webgl_handle(
+        &self,
+        texture: web_sys::WebGlTexture,
+        desc: &TextureDescriptor<'_>,
+        view_dimension: wgt::TextureViewDimension,
+        drop_callback: Option<hal::DropCallback>,
+    ) -> Option<Texture> {
+        use hal::api::Gles;
+
+        // `texture_from_webgl_handle` reads only format / dimension / size / mip
+        // from the hal descriptor; `usage` / `memory_flags` are placeholders
+        // (the real usage flows through `create_texture_from_hal`'s frontend
+        // `desc`).
+        let hal_desc = hal::TextureDescriptor {
+            label: desc.label,
+            size: desc.size,
+            mip_level_count: desc.mip_level_count,
+            sample_count: desc.sample_count,
+            dimension: desc.dimension,
+            format: desc.format,
+            usage: wgt::TextureUses::empty(),
+            memory_flags: hal::MemoryFlags::empty(),
+            view_formats: desc.view_formats.to_vec(),
+        };
+
+        let hal_texture = {
+            // SAFETY: the raw device is only borrowed to register the handle,
+            // never destroyed through the guard.
+            let hal_device = unsafe { self.as_hal::<Gles>() }?;
+            // SAFETY: registering the handle is a pure glow bookkeeping insert,
+            // and every later GL call on it is validated by the browser — a
+            // handle violating the documented caller contract produces GL
+            // errors, not memory unsafety.
+            unsafe {
+                hal_device.texture_from_webgl_handle(
+                    texture,
+                    &hal_desc,
+                    view_dimension,
+                    drop_callback,
+                )
+            }
+        };
+
+        // SAFETY: `hal_texture` was created on this device's raw handle
+        // respecting `desc` just above, and carries no initial state.
+        Some(unsafe {
+            self.create_texture_from_hal::<Gles>(hal_texture, desc, wgt::TextureUses::empty())
+        })
+    }
+
+    /// Borrow the underlying `web_sys::WebGlTexture` for a texture on the GLES
+    /// backend (WebGL platform), or `None` on other backends / non-GL textures
+    /// / textures that were not created on this device.
+    ///
+    /// WebGL counterpart of [`Texture::as_webgpu`]. Unlike WebGPU — where the
+    /// texture directly holds the JS handle — a GLES texture holds a glow
+    /// resource key, so resolving it to a `WebGlTexture` needs this device's
+    /// glow context. Hence this lives on [`Device`] and takes the texture,
+    /// rather than being a `&self` method on [`Texture`].
+    #[cfg(webgl)]
+    pub fn as_webgl_texture(&self, texture: &Texture) -> Option<web_sys::WebGlTexture> {
+        use hal::api::Gles;
+
+        // A glow resource key is only meaningful inside the glow context that
+        // issued it: a foreign texture's key could resolve to an unrelated
+        // `WebGlTexture` in this device's tracker, so reject textures that were
+        // not created on this device.
+        let core_device = self.inner.as_core_opt()?;
+        let core_texture = texture.inner.as_core_opt()?;
+        if !core_device
+            .context
+            .texture_belongs_to_device(core_texture, core_device)
+        {
+            return None;
+        }
+
+        let hal_device = unsafe { self.as_hal::<Gles>() }?;
+        let hal_texture = unsafe { texture.as_hal::<Gles>() }?;
+        hal_device.webgl_texture_handle(&hal_texture)
+    }
+
+    /// Returns the underlying `web_sys::WebGl2RenderingContext` if this `Device`
+    /// is on the GLES backend (WebGL platform), otherwise `None`.
+    ///
+    /// WebGL counterpart of [`Self::as_webgpu`]. Unlike WebGPU — where the
+    /// device directly holds its JS `GPUDevice` — a GLES device holds a glow
+    /// context, so this reflects the `WebGl2RenderingContext` backing it: the
+    /// handle to `Object.is`-compare against a foreign context when deciding
+    /// whether a `WebGlTexture` can be wrapped same-context.
+    #[cfg(webgl)]
+    pub fn as_webgl_context(&self) -> Option<web_sys::WebGl2RenderingContext> {
+        use hal::api::Gles;
+        let hal_device = unsafe { self.as_hal::<Gles>() }?;
+        Some(hal_device.context().webgl2_context.clone())
+    }
+
     /// Creates a new [`ExternalTexture`].
     #[must_use]
     pub fn create_external_texture(

@@ -110,7 +110,12 @@ image.workspace = true
 js-sys.workspace = true
 wasm-bindgen-futures.workspace = true
 wasm-bindgen.workspace = true
-web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "Blob"] }
+web-sys = { workspace = true, features = [
+    "CanvasRenderingContext2d",
+    "Blob",
+    "OffscreenCanvas",
+    "OffscreenCanvasRenderingContext2d",
+] }
 
 [lints.clippy]
 bool_assert_comparison = "allow"

@@ -1189,7 +1189,6 @@ bitflags::bitflags! {
         const VIEW_FORMATS = 1 << 19;
 
         /// With this feature not present, there are the following restrictions on `Queue::copy_external_image_to_texture`:
-        /// - The source must not be [`web_sys::OffscreenCanvas`]
         /// - [`CopyExternalImageSourceInfo::origin`] must be zero.
         /// - [`CopyExternalImageDestInfo::color_space`] must be srgb.
         /// - If the source is an [`web_sys::ImageBitmap`]:

@@ -141,6 +141,7 @@ impl super::Device {
                 raw: glow::NativeTexture(name),
                 target: super::Texture::get_info_from_desc(desc),
             },
+            externally_owned: drop_callback.is_some(),
             drop_guard: crate::DropGuard::from_option(drop_callback),
             mip_level_count: desc.mip_level_count,
             array_layer_count: desc.array_layer_count(),
@@ -167,12 +168,89 @@ impl super::Device {
             inner: super::TextureInner::Renderbuffer {
                 raw: glow::NativeRenderbuffer(name),
             },
+            externally_owned: drop_callback.is_some(),
             drop_guard: crate::DropGuard::from_option(drop_callback),
             mip_level_count: desc.mip_level_count,
             array_layer_count: desc.array_layer_count(),
             format: desc.format,
             format_desc: self.shared.describe_texture_format(desc.format),
             copy_size: desc.copy_extent(),
+        }
+    }
+
+    /// Wrap an externally-owned `WebGlTexture` as a wgpu-hal texture (zero-copy
+    /// import).
+    ///
+    /// The handle is registered with glow's resource tracker via
+    /// [`glow::Context::register_external_texture`], which inserts it into
+    /// glow's slotmap without allocating a new GL texture. wgpu-hal does **not**
+    /// take ownership of the underlying `WebGlTexture`: on destroy it calls
+    /// [`glow::Context::unregister_external_texture`] (which frees the slotmap
+    /// slot but never `gl.deleteTexture`s the handle), so the caller's handle
+    /// outlives the wgpu-hal texture. If `drop_callback` is [`Some`], it fires
+    /// once wgpu-hal is finished with the handle.
+    ///
+    /// `view_dimension` names the WebGL texture type (bind target) of `handle`:
+    /// `D2` → `TEXTURE_2D`, `D2Array` → `TEXTURE_2D_ARRAY`, `Cube` →
+    /// `TEXTURE_CUBE_MAP`, `D3` → `TEXTURE_3D`. It must be passed explicitly
+    /// because a WebGL texture's type is fixed at its first bind and cannot be
+    /// inferred from `desc`: a square 6-layer 2D array and a cube map have
+    /// identical descriptors, and binding a texture to the wrong target raises
+    /// `INVALID_OPERATION`.
+    ///
+    /// # Safety
+    ///
+    /// - `handle` must have been created by the same `WebGl2RenderingContext`
+    ///   this device wraps and must respect `desc`.
+    /// - `view_dimension` must match the texture type `handle` was created
+    ///   with (`CubeArray` does not exist in WebGL2).
+    /// - `handle` must remain valid until wgpu-hal is done with the texture
+    ///   (until the returned texture is destroyed, or the `drop_callback` fires
+    ///   if one is supplied).
+    #[cfg(webgl)]
+    pub unsafe fn texture_from_webgl_handle(
+        &self,
+        handle: web_sys::WebGlTexture,
+        desc: &crate::TextureDescriptor,
+        view_dimension: wgt::TextureViewDimension,
+        drop_callback: Option<crate::DropCallback>,
+    ) -> super::Texture {
+        debug_assert_eq!(
+            view_dimension.compatible_texture_dimension(),
+            desc.dimension,
+            "view_dimension {view_dimension:?} is incompatible with the descriptor's dimension",
+        );
+
+        let raw = unsafe { self.shared.context.lock().register_external_texture(handle) };
+
+        super::Texture {
+            inner: super::TextureInner::Texture {
+                raw,
+                target: super::Texture::target_for_view_dimension(view_dimension),
+            },
+            externally_owned: true,
+            drop_guard: crate::DropGuard::from_option(drop_callback),
+            mip_level_count: desc.mip_level_count,
+            array_layer_count: desc.array_layer_count(),
+            format: desc.format,
+            format_desc: self.shared.describe_texture_format(desc.format),
+            copy_size: desc.copy_extent(),
+        }
+    }
+
+    /// Borrow the underlying `WebGlTexture` for a wgpu-hal texture, if it is a
+    /// plain GL texture on the WebGL backend.
+    ///
+    /// Works for both normally-created textures and textures imported via
+    /// [`Self::texture_from_webgl_handle`]. Returns `None` for renderbuffers /
+    /// framebuffers or if the glow slot is dead.
+    #[cfg(webgl)]
+    pub fn webgl_texture_handle(&self, texture: &super::Texture) -> Option<web_sys::WebGlTexture> {
+        match texture.inner {
+            super::TextureInner::Texture { raw, .. } => {
+                self.shared.context.lock().as_web_gl_texture(raw)
+            }
+            _ => None,
         }
     }
 
@@ -1094,6 +1172,7 @@ impl crate::Device for super::Device {
 
         Ok(super::Texture {
             inner,
+            externally_owned: false,
             drop_guard: None,
             mip_level_count: desc.mip_level_count,
             array_layer_count: desc.array_layer_count(),
@@ -1104,7 +1183,17 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn destroy_texture(&self, texture: super::Texture) {
-        if texture.drop_guard.is_none() {
+        if texture.externally_owned {
+            // Never delete an externally-owned GL object. On WebGL an imported
+            // handle (from `texture_from_webgl_handle`) additionally occupies a
+            // slot in glow's resource tracker; reclaim it via
+            // `unregister_external_texture`, which does *not* `gl.deleteTexture`,
+            // so the caller's handle survives.
+            #[cfg(webgl)]
+            if let super::TextureInner::Texture { raw, .. } = texture.inner {
+                self.shared.context.lock().unregister_external_texture(raw);
+            }
+        } else if texture.drop_guard.is_none() {
             let gl = &self.shared.context.lock();
             match texture.inner {
                 super::TextureInner::Renderbuffer { raw, .. } => {

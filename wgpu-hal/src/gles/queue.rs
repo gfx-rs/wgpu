@@ -537,11 +537,6 @@ impl super::Queue {
                                 v,
                             );
                         },
-                        #[cfg(not(web_sys_unstable_apis))]
-                        wgt::ExternalImageSource::VideoFrame(_) => {
-                            unimplemented!("web_sys_unstable_apis is needed for glow")
-                        }
-                        #[cfg(web_sys_unstable_apis)]
                         wgt::ExternalImageSource::VideoFrame(ref v) => unsafe {
                             gl.tex_sub_image_3d_with_video_frame(
                                 dst_target,
@@ -587,7 +582,27 @@ impl super::Queue {
                                 c,
                             );
                         },
-                        wgt::ExternalImageSource::OffscreenCanvas(_) => unreachable!(),
+                        wgt::ExternalImageSource::OffscreenCanvas(ref c) => unsafe {
+                            // WebGL2's `texSubImage3D` accepts any `TexImageSource`,
+                            // including `OffscreenCanvas`, but web-sys 0.3.x generates
+                            // no typed overload for it. Re-wrap the same JS object as
+                            // `HtmlCanvasElement` — a type-erased pass-through, not a
+                            // conversion; the browser dispatches on the real object.
+                            use wasm_bindgen::JsCast as _;
+                            gl.tex_sub_image_3d_with_html_canvas_element(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                z_offset as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                copy.size.depth as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                c.unchecked_ref(),
+                            );
+                        },
                     }
                 } else {
                     let dst_target = get_2d_target(dst_target, copy.dst_base.array_layer);
@@ -632,11 +647,6 @@ impl super::Queue {
                                 v,
                             )
                         },
-                        #[cfg(not(web_sys_unstable_apis))]
-                        wgt::ExternalImageSource::VideoFrame(_) => {
-                            unimplemented!("web_sys_unstable_apis is needed for glow")
-                        }
-                        #[cfg(web_sys_unstable_apis)]
                         wgt::ExternalImageSource::VideoFrame(ref v) => unsafe {
                             gl.tex_sub_image_2d_with_video_frame_and_width_and_height(
                                 dst_target,
@@ -676,7 +686,23 @@ impl super::Queue {
                                 c,
                             )
                         },
-                        wgt::ExternalImageSource::OffscreenCanvas(_) => unreachable!(),
+                        wgt::ExternalImageSource::OffscreenCanvas(ref c) => unsafe {
+                            // Same `TexImageSource` pass-through as the 3D path above:
+                            // web-sys 0.3.x has no `OffscreenCanvas` overload, so the
+                            // handle rides the `HtmlCanvasElement` binding unchanged.
+                            use wasm_bindgen::JsCast as _;
+                            gl.tex_sub_image_2d_with_html_canvas_and_width_and_height(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                c.unchecked_ref(),
+                            )
+                        },
                     }
                 }
 

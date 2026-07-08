@@ -1540,13 +1540,27 @@ impl Device {
         desc: &resource::TextureDescriptor,
         initial_state: wgt::TextureUses,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
-        self.check_is_valid()?;
-
-        let format_features = self
-            .describe_format_features(desc.format)
-            .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
-
+        // Count the raw texture before validation so the error paths below can
+        // hand it back through `destroy_texture`. Merely dropping a hal texture
+        // does not release what it wraps — e.g. an imported WebGL handle would
+        // stay registered in glow's resource tracker forever.
         unsafe { self.raw().add_raw_texture(&*hal_texture) };
+
+        if let Err(error) = self.check_is_valid() {
+            unsafe { self.raw().destroy_texture(hal_texture) };
+            return Err(error.into());
+        }
+
+        let format_features = match self.describe_format_features(desc.format) {
+            Ok(format_features) => format_features,
+            Err(error) => {
+                unsafe { self.raw().destroy_texture(hal_texture) };
+                return Err(resource::CreateTextureError::MissingFeatures(
+                    desc.format,
+                    error,
+                ));
+            }
+        };
 
         let texture = Texture::new(
             self,
