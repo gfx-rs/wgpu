@@ -198,17 +198,23 @@ impl super::Device {
     /// identical descriptors, and binding a texture to the wrong target raises
     /// `INVALID_OPERATION`.
     ///
-    /// # Safety
+    /// The caller must guarantee:
     ///
-    /// - `handle` must have been created by the same `WebGl2RenderingContext`
-    ///   this device wraps and must respect `desc`.
-    /// - `view_dimension` must match the texture type `handle` was created
-    ///   with (`CubeArray` does not exist in WebGL2).
-    /// - `handle` must remain valid until wgpu-hal is done with the texture
-    ///   (until the returned texture is destroyed, or the `drop_callback` fires
-    ///   if one is supplied).
+    /// 1. `handle` was created by the same `WebGl2RenderingContext` this
+    ///    device wraps and respects `desc`.
+    /// 2. `view_dimension` matches the texture type `handle` was created with
+    ///    (`CubeArray` does not exist in WebGL2).
+    /// 3. `handle` remains valid until wgpu-hal is done with the texture
+    ///    (until the returned texture is destroyed, or the `drop_callback`
+    ///    fires if one is supplied).
+    ///
+    /// Unlike its native counterpart `texture_from_raw` (which hands a raw
+    /// name to an unvalidated native driver), this method is not `unsafe`:
+    /// every WebGL call is validated by the browser, so
+    /// violating the contract yields incorrect metadata and GL errors
+    /// (`INVALID_OPERATION`) rather than memory unsafety.
     #[cfg(webgl)]
-    pub unsafe fn texture_from_webgl_handle(
+    pub fn texture_from_webgl_handle(
         &self,
         handle: web_sys::WebGlTexture,
         desc: &crate::TextureDescriptor,
@@ -221,6 +227,9 @@ impl super::Device {
             "view_dimension {view_dimension:?} is incompatible with the descriptor's dimension",
         );
 
+        // SAFETY: glow marks this `unsafe` as it does all GL entry points, but
+        // it only inserts the handle into glow's slotmap; every later use of
+        // the key goes through browser-validated WebGL calls.
         let raw = unsafe { self.shared.context.lock().register_external_texture(handle) };
 
         super::Texture {

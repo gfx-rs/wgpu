@@ -496,18 +496,7 @@ impl Device {
             // SAFETY: the raw device is only borrowed to register the handle,
             // never destroyed through the guard.
             let hal_device = unsafe { self.as_hal::<Gles>() }?;
-            // SAFETY: registering the handle is a pure glow bookkeeping insert,
-            // and every later GL call on it is validated by the browser — a
-            // handle violating the documented caller contract produces GL
-            // errors, not memory unsafety.
-            unsafe {
-                hal_device.texture_from_webgl_handle(
-                    texture,
-                    &hal_desc,
-                    view_dimension,
-                    drop_callback,
-                )
-            }
+            hal_device.texture_from_webgl_handle(texture, &hal_desc, view_dimension, drop_callback)
         };
 
         // SAFETY: `hal_texture` was created on this device's raw handle
