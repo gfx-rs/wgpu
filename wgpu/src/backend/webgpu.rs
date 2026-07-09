@@ -3497,7 +3497,7 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         buffer: &dispatch::DispatchBuffer,
         index_format: crate::IndexFormat,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.as_webgpu();
         let index_format = map_index_format(index_format);
@@ -3507,7 +3507,7 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
                 &buffer.inner,
                 index_format,
                 offset as f64,
-                size.get() as f64,
+                size as f64,
             );
         } else {
             self.inner
@@ -3520,17 +3520,13 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         slot: u32,
         buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.map(|buffer| &buffer.as_webgpu().inner);
 
         if let Some(size) = size {
-            self.inner.set_vertex_buffer_with_f64_and_f64(
-                slot,
-                buffer,
-                offset as f64,
-                size.get() as f64,
-            );
+            self.inner
+                .set_vertex_buffer_with_f64_and_f64(slot, buffer, offset as f64, size as f64);
         } else {
             self.inner
                 .set_vertex_buffer_with_f64(slot, buffer, offset as f64);
@@ -3788,7 +3784,7 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         buffer: &dispatch::DispatchBuffer,
         index_format: crate::IndexFormat,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.as_webgpu();
         let index_format = map_index_format(index_format);
@@ -3798,7 +3794,7 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
                 &buffer.inner,
                 index_format,
                 offset as f64,
-                size.get() as f64,
+                size as f64,
             );
         } else {
             self.inner
@@ -3811,17 +3807,13 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         slot: u32,
         buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.map(|buffer| &buffer.as_webgpu().inner);
 
         if let Some(size) = size {
-            self.inner.set_vertex_buffer_with_f64_and_f64(
-                slot,
-                buffer,
-                offset as f64,
-                size.get() as f64,
-            );
+            self.inner
+                .set_vertex_buffer_with_f64_and_f64(slot, buffer, offset as f64, size as f64);
         } else {
             self.inner
                 .set_vertex_buffer_with_f64(slot, buffer, offset as f64);
