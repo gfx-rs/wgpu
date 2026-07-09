@@ -134,6 +134,7 @@ define_lock_ranks! {
         TEXTURE_CLEAR_MODE,
         TEXTURE_VIEWS,
         QUERY_SET_INITIALIZED_SLOTS,
+        RESOURCE_TABLE_CONTENTS,
         // Uncomment this to see an interesting cycle.
         // COMMAND_BUFFER_DATA,
     }
@@ -144,6 +145,7 @@ define_lock_ranks! {
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         DEVICE_DEFERRED_DESTROY,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
+        RESOURCE_TABLE_CONTENTS,
     }
     rank QUEUE_PENDING_WRITES "Queue::pending_writes" followed by {
         BUFFER_MAP_STATE,
@@ -158,6 +160,7 @@ define_lock_ranks! {
     }
     rank DEVICE_TRACKERS "Device::trackers" followed by {
         TEXTURE_CLEAR_MODE,
+        RESOURCE_TABLE_CONTENTS,
     }
     rank QUEUE_LIFE_TRACKER "Queue::life_tracker" followed by {
         BUFFER_MAP_STATE,
@@ -166,6 +169,11 @@ define_lock_ranks! {
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         DEVICE_DEFERRED_DESTROY,
         DEVICE_TRACE,
+        // `Texture::destroy` scans in-flight submissions' resource tables under
+        // the life tracker to defer a table-only-referenced texture's teardown
+        // (finding C2), locking each table's `contents`. `RESOURCE_TABLE_CONTENTS`
+        // is a leaf, so this edge introduces no cycle.
+        RESOURCE_TABLE_CONTENTS,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
     rank BUFFER_MAP_STATE "Buffer::map_state" followed by {
@@ -188,6 +196,7 @@ define_lock_ranks! {
     rank DEVICE_USAGE_SCOPES "Device::usage_scopes" followed by { }
     rank SHARED_TRACKER_INDEX_ALLOCATOR_INNER "SharedTrackerIndexAllocator::inner" followed by { }
     rank QUERY_SET_INITIALIZED_SLOTS "QuerySet::initialized_slots" followed by { }
+    rank RESOURCE_TABLE_CONTENTS "ResourceTable::contents" followed by { }
     rank TEXTURE_BIND_GROUPS "Texture::bind_groups" followed by { }
     rank TEXTURE_CLEAR_MODE "Texture::clear_mode" followed by { }
     rank TEXTURE_VIEWS "Texture::views" followed by { }

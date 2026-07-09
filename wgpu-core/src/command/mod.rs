@@ -812,6 +812,25 @@ impl Drop for InnerCommandEncoder {
     }
 }
 
+/// A recorded "gap" (suspension point, D2 in `plans/resource-table.md`) at the
+/// start of a pass that binds a resource table.
+///
+/// At `finish()` the raw command buffer of the pass body is already in
+/// [`InnerCommandEncoder::list`]; this records the index at which a fresh
+/// command buffer holding the pass-start layout transitions (and, in later
+/// milestones, membership/metadata writes) must be spliced at submit time so it
+/// runs immediately before the pass. Realized via
+/// [`InnerCommandEncoder::close_and_insert_at`], generalizing the deferred
+/// query-set-resolve mechanism (see [`query::DeferredQuerySetResolve`]).
+pub(crate) struct ResourceTableGap {
+    /// The resource table bound at this gap. Its *current* bindings are read at
+    /// submit time (so post-`finish()` updates are included).
+    pub(crate) table: Arc<crate::resource_table::ResourceTable>,
+    /// Index into [`InnerCommandEncoder::list`] (as of `finish`) at which the
+    /// spliced barrier command buffer is inserted so it precedes the pass body.
+    pub(crate) insertion_point: usize,
+}
+
 /// Look at the documentation for [`CommandBufferMutable`] for an explanation of
 /// the fields in this struct. This is the "built" counterpart to that type.
 pub(crate) struct BakedCommands {
@@ -823,6 +842,7 @@ pub(crate) struct BakedCommands {
     texture_memory_actions: CommandBufferTextureMemoryActions,
     pub(crate) query_set_writes: query::QuerySetWrites,
     pub(crate) deferred_query_set_resolves: Vec<query::DeferredQuerySetResolve>,
+    pub(crate) resource_table_gaps: Vec<ResourceTableGap>,
 }
 
 /// The mutable state of a [`CommandBuffer`].
@@ -861,6 +881,9 @@ pub struct CommandBufferMutable {
     pub(crate) query_set_writes: query::QuerySetWrites,
     /// Query set resolves that had to be deferred to submit time.
     pub(crate) deferred_query_set_resolves: Vec<query::DeferredQuerySetResolve>,
+    /// Pass-start gaps for table-bound passes, spliced with barriers at submit
+    /// time (work item 0.8, D2). Recorded during pass encoding.
+    pub(crate) resource_table_gaps: Vec<ResourceTableGap>,
 }
 
 impl CommandBufferMutable {
@@ -874,6 +897,7 @@ impl CommandBufferMutable {
             texture_memory_actions: self.texture_memory_actions,
             query_set_writes: self.query_set_writes,
             deferred_query_set_resolves: self.deferred_query_set_resolves,
+            resource_table_gaps: self.resource_table_gaps,
         }
     }
 }
@@ -934,6 +958,7 @@ impl CommandEncoder {
                     commands: Vec::new(),
                     query_set_writes: Default::default(),
                     deferred_query_set_resolves: Default::default(),
+                    resource_table_gaps: Default::default(),
                     #[cfg(feature = "trace")]
                     trace_commands: if device.trace.lock().is_some() {
                         Some(Vec::new())
@@ -1134,6 +1159,7 @@ impl CommandEncoder {
                     debug_scope_depth: &mut debug_scope_depth,
                     query_set_writes: &mut cmd_buf_data.query_set_writes,
                     deferred_query_set_resolves: &mut cmd_buf_data.deferred_query_set_resolves,
+                    resource_table_gaps: &mut cmd_buf_data.resource_table_gaps,
                 };
 
                 match command {
@@ -1144,6 +1170,7 @@ impl CommandEncoder {
                         timestamp_writes,
                         occlusion_query_set,
                         multiview_mask,
+                        resource_table,
                     } => {
                         api_log!(
                             "Begin encoding render pass with '{}' label",
@@ -1157,6 +1184,7 @@ impl CommandEncoder {
                             timestamp_writes,
                             occlusion_query_set,
                             multiview_mask,
+                            resource_table,
                         );
                         match res.as_ref() {
                             Err(err) => {
@@ -1226,6 +1254,7 @@ impl CommandEncoder {
                     debug_scope_depth: &mut debug_scope_depth,
                     query_set_writes: &mut cmd_buf_data.query_set_writes,
                     deferred_query_set_resolves: &mut cmd_buf_data.deferred_query_set_resolves,
+                    resource_table_gaps: &mut cmd_buf_data.resource_table_gaps,
                 };
                 match command {
                     ArcCommand::CopyBufferToBuffer {
@@ -2016,6 +2045,8 @@ pub enum PassErrorScope {
     Pass,
     #[error("In a set_bind_group command")]
     SetBindGroup,
+    #[error("In a set_resource_table command")]
+    SetResourceTable,
     #[error("In a set_pipeline command")]
     SetPipelineRender,
     #[error("In a set_pipeline command")]

@@ -262,6 +262,20 @@ pub struct Device {
     /// [`active_submission_index`]: CommandIndices::active_submission_index
     pub(crate) last_successful_submission_index: hal::AtomicFenceValue,
 
+    /// The fence value of the most recent submission known to have *completed*
+    /// on the GPU, cached from [`hal::DynDevice::get_fence_value`] each time the
+    /// device is maintained.
+    ///
+    /// Unlike [`last_successful_submission_index`], which advances when a
+    /// submission is *recorded*, this only advances when a submission has
+    /// actually finished executing. It lets code cheaply answer "has submission
+    /// N completed?" without a hal round-trip — in particular the resource
+    /// table slot-reuse gate (Invariant 2 in `plans/resource-table.md`) compares
+    /// a slot's `available_after` submission index against this value.
+    ///
+    /// [`last_successful_submission_index`]: Device::last_successful_submission_index
+    pub(crate) last_completed_submission_index: hal::AtomicFenceValue,
+
     pub(crate) fence: ManuallyDrop<Box<dyn hal::DynFence>>,
     pub(crate) snatchable_lock: SnatchLock,
 
@@ -650,6 +664,7 @@ impl Device {
                     },
                 ),
                 last_successful_submission_index: AtomicU64::new(0),
+                last_completed_submission_index: AtomicU64::new(0),
                 fence: ManuallyDrop::new(fence),
                 snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
                 valid: AtomicBool::new(true),
@@ -1050,6 +1065,12 @@ impl Device {
                 return (user_closures, Err(hal_error));
             }
         };
+
+        // Cache the completed submission index so that the resource table
+        // slot-reuse gate can check it without a hal round-trip. `fetch_max`
+        // keeps it monotonic even if two threads maintain concurrently.
+        self.last_completed_submission_index
+            .fetch_max(current_finished_submission, Ordering::AcqRel);
 
         // When a device is marked invalid, we must destroy all its hal resources once its
         // queue is empty, by calling `release_gpu_resources`.
@@ -4196,6 +4217,14 @@ impl Device {
         if desc.immediate_size != 0 {
             self.require_features(wgt::Features::IMMEDIATES)?;
         }
+        if desc.uses_resource_table {
+            // A layout that appends a resource-table descriptor set requires the
+            // sampling resource table feature (work item 0.7). The set binds at
+            // the index following the last bind group (D15); the adapter only
+            // exposes the feature when `maxBoundDescriptorSets` leaves room for
+            // it, so no additional group-count check is needed here.
+            self.require_features(wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE)?;
+        }
         if self.limits.max_immediate_size < desc.immediate_size {
             return Err(Error::ImmediateRangeTooLarge {
                 size: desc.immediate_size,
@@ -4267,9 +4296,7 @@ impl Device {
                 | additional_flags,
             bind_group_layouts: &raw_bind_group_layouts,
             immediate_size: desc.immediate_size,
-            // TODO(resource-table): plumb through from a higher-level descriptor once
-            // wgpu-core gains resource-table pipeline-layout support (work item 0.7).
-            uses_resource_table: false,
+            uses_resource_table: desc.uses_resource_table,
         };
 
         let raw = unsafe { self.raw().create_pipeline_layout(&hal_desc) }
@@ -4284,6 +4311,7 @@ impl Device {
             bind_group_layouts,
             immediate_size: desc.immediate_size,
             buffers_and_acceleration_structures_in_vertex_stage,
+            uses_resource_table: desc.uses_resource_table,
         };
 
         let layout = Arc::new(layout);
@@ -4340,10 +4368,37 @@ impl Device {
             label: None,
             bind_group_layouts: Cow::Owned(bind_group_layouts),
             immediate_size,
+            // Derived (implicit) layouts never declare a resource table; shaders
+            // using `getResource` require an explicit layout (work item 0.7).
+            uses_resource_table: false,
         };
 
         let layout = self.create_pipeline_layout_impl(&layout_desc, true)?;
         Ok(layout)
+    }
+
+    /// Validate that a pipeline whose shaders access a resource table
+    /// (`getResource`) is compatible with its layout and enabled features
+    /// (work item 0.7 of the bindless feature).
+    ///
+    /// When `uses_resource_table` is set (any stage reflected a `getResource`
+    /// access), the pipeline layout must declare `uses_resource_table` and, in
+    /// M0, the device must have enabled
+    /// [`wgt::Features::EXPERIMENTAL_RESOURCE_TABLE_UNCHECKED`]: only the
+    /// unchecked lowering exists so far (D4), so table pipelines are explicitly
+    /// opt-in and unsafe. The checked metadata path arrives in M1.
+    fn validate_resource_table_pipeline(
+        self: &Arc<Self>,
+        layout: &binding_model::PipelineLayout,
+        uses_resource_table: bool,
+    ) -> Result<(), pipeline::ResourceTablePipelineError> {
+        if uses_resource_table {
+            self.require_features(wgt::Features::EXPERIMENTAL_RESOURCE_TABLE_UNCHECKED)?;
+            if !layout.uses_resource_table {
+                return Err(pipeline::ResourceTablePipelineError::LayoutMissingResourceTable);
+            }
+        }
+        Ok(())
     }
 
     /// Creates a compute pipeline. If the creation fails,
@@ -4445,6 +4500,11 @@ impl Device {
             }
         }
 
+        let uses_resource_table = shader_module_state
+            .interface
+            .interface()
+            .is_some_and(|i| i.uses_resource_table());
+
         let pipeline_layout = match binding_layout_source {
             validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
             validation::BindingLayoutSource::Derived(entries) => {
@@ -4459,6 +4519,8 @@ impl Device {
         else {
             unreachable!("Immediates exceeding maxImmediateSize should have been rejected");
         };
+
+        self.validate_resource_table_pipeline(&pipeline_layout, uses_resource_table)?;
 
         let late_sized_buffer_groups =
             Device::make_late_sized_buffer_groups(&minimum_binding_sizes, &pipeline_layout);
@@ -4996,6 +5058,9 @@ impl Device {
         let mut _vertex_entry_point_name = String::new();
         let mut _task_entry_point_name = String::new();
         let mut _mesh_entry_point_name = String::new();
+        // Set if any stage's shader accesses a resource table (`getResource`);
+        // checked against the pipeline layout below (work item 0.7).
+        let mut uses_resource_table = false;
         let mut passthrough_stages = wgt::ShaderStages::empty();
         match desc.vertex {
             pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
@@ -5030,6 +5095,7 @@ impl Device {
                         .map_err(stage_err)?;
 
                     if let Some(interface) = vertex_shader_module_state.interface.interface() {
+                        uses_resource_table |= interface.uses_resource_table();
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -5082,6 +5148,7 @@ impl Device {
                         .map_err(stage_err)?;
 
                     if let Some(interface) = task_shader_module_state.interface.interface() {
+                        uses_resource_table |= interface.uses_resource_table();
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -5132,6 +5199,7 @@ impl Device {
                         .map_err(stage_err)?;
 
                     if let Some(interface) = mesh_shader_module_state.interface.interface() {
+                        uses_resource_table |= interface.uses_resource_table();
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -5191,6 +5259,7 @@ impl Device {
                     .map_err(stage_err)?;
 
                 if let Some(interface) = shader_module_state.interface.interface() {
+                    uses_resource_table |= interface.uses_resource_table();
                     io = interface
                         .check_stage(
                             &mut binding_layout_source,
@@ -5276,6 +5345,8 @@ impl Device {
         else {
             unreachable!("Immediates exceeding maxImmediateSize should have been rejected");
         };
+
+        self.validate_resource_table_pipeline(&pipeline_layout, uses_resource_table)?;
 
         if let pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) = desc.vertex {
             let bind_groups_plus_vertex_buffers =

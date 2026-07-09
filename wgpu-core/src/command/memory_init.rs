@@ -11,8 +11,8 @@ use crate::{
     init_tracker::*,
     resource::{ParentDevice, RawResourceAccess, Texture, Trackable},
     snatch::SnatchGuard,
-    track::{DeviceTracker, TextureTracker},
-    FastHashMap,
+    track::{DeviceTracker, PendingTransition, TextureTracker},
+    FastHashMap, SubmissionIndex,
 };
 
 use super::{clear_texture, BakedCommands, ClearError};
@@ -31,6 +31,11 @@ pub(crate) struct TextureSurfaceDiscard {
 }
 
 pub(crate) type SurfacesInDiscardState = Vec<TextureSurfaceDiscard>;
+
+/// A resource-table member texture paired with the layout transition it needs at
+/// a pass start (finding C1). Resolved against the device tracker in execution
+/// order at submit time, then replayed into a spliced barrier.
+type ResourceTableTransition = (Arc<Texture>, PendingTransition<wgt::TextureUses>);
 
 #[derive(Default)]
 pub(crate) struct CommandBufferTextureMemoryActions {
@@ -558,6 +563,154 @@ impl BakedCommands {
                 let mut initialized = query_set.initialized_slots.lock();
                 initialized.or(slots);
             }
+        }
+
+        Ok(())
+    }
+
+    /// Queue-submit handling for the resource tables this command buffer
+    /// references (work item 0.8, realizing D2 in `plans/resource-table.md`):
+    ///
+    /// 1. **Marking.** Every slot of every referenced table is marked as
+    ///    reachable by `submission_index`, gating later host rewrites until the
+    ///    submission completes (Invariant 2; M0 marks the whole table because
+    ///    unchecked shaders may dynamically index any slot).
+    ///
+    /// 2. **Pass-start splice.** For each recorded pass-start gap, a fresh
+    ///    command buffer is opened, the table's bound textures are transitioned
+    ///    to their sampled steady-state layout (`RESOURCE` /
+    ///    `SHADER_READ_ONLY_OPTIMAL`, D11 — in M0 all table members are sampled),
+    ///    and it is spliced immediately before the pass body via
+    ///    [`close_and_insert_at`]. This gives the pass the exact barriers it
+    ///    needs, computed with full submit-time knowledge, without a second
+    ///    encode pass.
+    ///
+    /// Must run **before** the per-CB "Transit" prologue so the device tracker
+    /// still reflects each table texture's pre-command-buffer layout.
+    /// `query_insertion_points` are the insertion points of the deferred query
+    /// resolves already spliced by [`process_deferred_query_set_resolves`]; they
+    /// shift the recorded gap insertion points and are accounted for here.
+    ///
+    /// # Limitation (M0)
+    ///
+    /// Table textures that are *also* used elsewhere in the same command buffer
+    /// (so they appear in this CB's own tracker) are skipped: their in-CB layout
+    /// is managed by the CB's own transitions, and getting a table sample
+    /// interleaved with other in-CB uses exactly right needs the layout-override
+    /// tracker scheduled across work items 0.8–0.10. The common bindless flow —
+    /// a texture established outside this CB (upload/copy/prior submission) then
+    /// sampled through the table — is handled correctly. See
+    /// `plans/resource-table.md`.
+    ///
+    /// [`close_and_insert_at`]: super::InnerCommandEncoder::close_and_insert_at
+    /// [`process_deferred_query_set_resolves`]: BakedCommands::process_deferred_query_set_resolves
+    pub(crate) fn process_resource_table_gaps(
+        &mut self,
+        device: &Device,
+        device_trackers: &mut DeviceTracker,
+        query_insertion_points: &[usize],
+        submission_index: SubmissionIndex,
+        snatch_guard: &SnatchGuard<'_>,
+    ) -> Result<(), DeviceError> {
+        profiling::scope!("process_resource_table_gaps");
+
+        // 1. Mark every slot of every referenced table in use.
+        for table in self.trackers.resource_tables.used_resources() {
+            table.mark_all_slots_in_use(submission_index);
+        }
+
+        if self.resource_table_gaps.is_empty() {
+            return Ok(());
+        }
+
+        // 2. Splice pass-start layout transitions. Insertion points shift by the
+        //    number of already-spliced query resolves at or before them.
+        //
+        //    Two orderings are in tension here. Each gap's barrier set must be
+        //    computed against the shared device tracker in *execution* order
+        //    (ascending insertion point): a table texture sampled across several
+        //    passes of this command buffer is transitioned to `RESOURCE` by the
+        //    earliest pass that samples it, and later passes then correctly
+        //    observe it already in `RESOURCE` and emit no barrier. Computing the
+        //    barriers in descending order instead would let the *last* pass claim
+        //    the transition and leave the earlier passes sampling the texture in
+        //    its stale (pre-command-buffer) layout — driver UB. The splicing,
+        //    however, must run in *descending* order, so each `close_and_insert_at`
+        //    does not disturb the not-yet-spliced (smaller) insertion points.
+        //
+        //    So the two are decoupled: compute every gap's transitions ascending
+        //    here, remembering `(insertion_point, transitions)`, then splice the
+        //    precomputed barriers descending below.
+        let adjust = |p: usize| p + query_insertion_points.iter().filter(|&&q| q <= p).count();
+
+        let mut gaps = core::mem::take(&mut self.resource_table_gaps);
+        // Stable ascending sort: gaps that share an insertion point (a compute
+        // pass that bound several tables, M1) keep their recorded order, which is
+        // the order the tables were bound — i.e. their execution order within the
+        // pass.
+        gaps.sort_by_key(|gap| adjust(gap.insertion_point));
+
+        let mut textures: Vec<Arc<Texture>> = Vec::new();
+        let mut planned: Vec<(usize, Vec<ResourceTableTransition>)> =
+            Vec::with_capacity(gaps.len());
+        for gap in gaps {
+            let insertion_point = adjust(gap.insertion_point);
+
+            textures.clear();
+            gap.table.collect_bound_textures(&mut textures);
+
+            let mut transitions: Vec<ResourceTableTransition> = Vec::new();
+            for texture in &textures {
+                // See the method-level limitation note.
+                if self.trackers.textures.contains(texture) {
+                    continue;
+                }
+                // A table texture destroyed between binding and submit has had
+                // its raw snatched; it cannot (and need not) be transitioned.
+                if texture.try_raw(snatch_guard).is_err() {
+                    continue;
+                }
+                let selector = texture.full_range.clone();
+                for pending in device_trackers.textures.set_single(
+                    texture,
+                    selector,
+                    wgt::TextureUses::RESOURCE,
+                ) {
+                    transitions.push((texture.clone(), pending));
+                }
+            }
+
+            planned.push((insertion_point, transitions));
+        }
+
+        // Splice the precomputed barriers in descending insertion order. `planned`
+        // is in ascending order, so iterate it in reverse.
+        for (insertion_point, transitions) in planned.into_iter().rev() {
+            // Keep the parent `Arc`s alive (via `textures_alive`) for as long as
+            // `barriers`, which borrows their raw handles, is in use.
+            let (textures_alive, pending_transitions): (
+                Vec<Arc<Texture>>,
+                Vec<PendingTransition<wgt::TextureUses>>,
+            ) = transitions.into_iter().unzip();
+
+            let mut barriers = Vec::with_capacity(pending_transitions.len());
+            for (texture, pending) in textures_alive.iter().zip(pending_transitions) {
+                // The raw is still present: it was resolved successfully above
+                // under this same held snatch guard, and nothing snatches it in
+                // between.
+                if let Ok(raw_texture) = texture.try_raw(snatch_guard) {
+                    barriers.push(pending.into_hal(raw_texture));
+                }
+            }
+
+            let raw_encoder = self.encoder.open_pass(crate::hal_label(
+                Some("(wgpu internal) Resource table pass transitions"),
+                device.instance_flags,
+            ))?;
+            unsafe {
+                raw_encoder.transition_textures(&barriers);
+            }
+            self.encoder.close_and_insert_at(insertion_point)?;
         }
 
         Ok(())

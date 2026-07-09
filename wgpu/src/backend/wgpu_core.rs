@@ -1115,6 +1115,9 @@ impl dispatch::DeviceInterface for CoreDevice {
             label: desc.label.map(Borrowed),
             bind_group_layouts: Borrowed(&temp_layouts),
             immediate_size: desc.immediate_size,
+            // The public `wgpu` resource-table API (work item 0.11) is not wired
+            // up yet, so no layout requests a resource table through it.
+            uses_resource_table: false,
         };
 
         let wgpu_pipeline_layout = self.wgpu_device.create_pipeline_layout(&descriptor);
@@ -2128,6 +2131,9 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                     .occlusion_query_set
                     .map(|qs| qs.inner.as_core().wgpu_query_set.clone()),
                 multiview_mask: desc.multiview_mask,
+                // The public `wgpu` resource-table API (work item 0.11) is not
+                // wired up yet.
+                resource_table: None,
             },
         );
 

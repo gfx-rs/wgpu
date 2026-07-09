@@ -4,6 +4,7 @@ use crate::{
     command::{
         memory_init::CommandBufferTextureMemoryActions,
         query::{DeferredQuerySetResolve, QuerySetWrites},
+        ResourceTableGap,
     },
     device::{queue::TempResource, Device},
     init_tracker::BufferInitTrackerAction,
@@ -56,4 +57,7 @@ pub(crate) struct EncodingState<'snatch_guard, 'cmd_enc, E: ?Sized = dyn hal::Dy
 
     pub(crate) query_set_writes: &'cmd_enc mut QuerySetWrites,
     pub(crate) deferred_query_set_resolves: &'cmd_enc mut Vec<DeferredQuerySetResolve>,
+
+    /// Pass-start gaps recorded for table-bound passes (work item 0.8).
+    pub(crate) resource_table_gaps: &'cmd_enc mut Vec<ResourceTableGap>,
 }

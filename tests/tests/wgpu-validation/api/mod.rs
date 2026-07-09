@@ -13,4 +13,5 @@ mod instance;
 mod mesh_shader;
 mod ray_tracing_pipeline;
 mod render_pipeline;
+mod resource_table;
 mod texture;

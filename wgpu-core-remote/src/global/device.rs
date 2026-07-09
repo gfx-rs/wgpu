@@ -20,7 +20,7 @@ use wgpu_core::{
     resource::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
     },
-    Label, LabelHelpers, SubmissionIndex,
+    resource_table, Label, LabelHelpers, SubmissionIndex,
 };
 
 use crate::{
@@ -507,6 +507,7 @@ impl Global {
             label: desc.label.as_ref().map(|l| Cow::Borrowed(l.as_ref())),
             bind_group_layouts: Cow::Owned(bind_group_layouts),
             immediate_size: desc.immediate_size,
+            uses_resource_table: desc.uses_resource_table,
         };
 
         let layout = device.create_pipeline_layout(&desc);
@@ -802,6 +803,89 @@ impl Global {
         let mut hub = self.hub.borrow_mut();
 
         hub.query_sets.remove(query_set_id)
+    }
+
+    pub fn device_create_resource_table(
+        &self,
+        device_id: DeviceId,
+        desc: &resource_table::ResourceTableDescriptor,
+        id_in: id::ResourceTableId,
+    ) -> (
+        id::ResourceTableId,
+        Option<resource_table::CreateResourceTableError>,
+    ) {
+        let mut hub = self.hub.borrow_mut();
+        let Hub {
+            resource_tables,
+            devices,
+            ..
+        } = &mut *hub;
+
+        let device = devices.get(device_id);
+
+        let (table, error) = device.create_resource_table(desc);
+
+        let id = resource_tables.assign(id_in, table);
+
+        (id, error)
+    }
+
+    /// Bind a texture view into `slot` of a resource table (queue/device
+    /// timeline; `docs/bindless.md` `update`).
+    pub fn resource_table_update(
+        &self,
+        resource_table_id: id::ResourceTableId,
+        slot: u32,
+        texture_view_id: id::TextureViewId,
+    ) -> Result<(), resource_table::UpdateResourceTableError> {
+        let hub = self.hub.borrow();
+
+        let table = hub.resource_tables.get(resource_table_id);
+        let view = hub.texture_views.get(texture_view_id);
+
+        table.update_slot(slot, &view)
+    }
+
+    /// Bind a texture view into the lowest available slot of a resource table
+    /// and return the chosen slot (`docs/bindless.md` `insert_binding`, D8).
+    pub fn resource_table_insert_binding(
+        &self,
+        resource_table_id: id::ResourceTableId,
+        texture_view_id: id::TextureViewId,
+    ) -> Result<u32, resource_table::UpdateResourceTableError> {
+        let hub = self.hub.borrow();
+
+        let table = hub.resource_tables.get(resource_table_id);
+        let view = hub.texture_views.get(texture_view_id);
+
+        table.insert_binding(&view)
+    }
+
+    /// Clear a resource table slot (`docs/bindless.md` `remove_binding`).
+    pub fn resource_table_remove_binding(
+        &self,
+        resource_table_id: id::ResourceTableId,
+        slot: u32,
+    ) -> Result<(), resource_table::UpdateResourceTableError> {
+        let hub = self.hub.borrow();
+
+        let table = hub.resource_tables.get(resource_table_id);
+
+        table.remove_binding(slot)
+    }
+
+    pub fn resource_table_destroy(&self, resource_table_id: id::ResourceTableId) {
+        let hub = self.hub.borrow();
+
+        let table = hub.resource_tables.get(resource_table_id);
+
+        table.destroy();
+    }
+
+    pub fn resource_table_drop(&self, resource_table_id: id::ResourceTableId) {
+        let mut hub = self.hub.borrow_mut();
+
+        let _table = hub.resource_tables.remove(resource_table_id);
     }
 
     pub fn device_create_render_pipeline(

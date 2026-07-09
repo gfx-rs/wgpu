@@ -23,6 +23,7 @@ pub trait ReferenceType {
     type ComputePipeline: Clone + core::fmt::Debug;
     type Blas: Clone + core::fmt::Debug;
     type Tlas: Clone + core::fmt::Debug;
+    type ResourceTable: Clone + core::fmt::Debug;
 }
 
 /// Reference wgpu objects via the integer value of pointers.
@@ -53,6 +54,7 @@ impl ReferenceType for PointerReferences {
     type ComputePipeline = crate::id::PointerId<crate::id::markers::ComputePipeline>;
     type Blas = crate::id::PointerId<crate::id::markers::Blas>;
     type Tlas = crate::id::PointerId<crate::id::markers::Tlas>;
+    type ResourceTable = crate::id::PointerId<crate::id::markers::ResourceTable>;
 }
 
 impl ReferenceType for ArcReferences {
@@ -68,6 +70,7 @@ impl ReferenceType for ArcReferences {
     type ComputePipeline = Arc<crate::pipeline::ComputePipeline>;
     type Blas = Arc<crate::resource::Blas>;
     type Tlas = Arc<crate::resource::Tlas>;
+    type ResourceTable = Arc<crate::resource_table::ResourceTable>;
 }
 
 #[cfg(feature = "serde")]
@@ -87,6 +90,7 @@ attribute_alias! {
           R::ComputePipeline: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           R::Blas: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           R::Tlas: serde::Serialize + for<'d> serde::Deserialize<'d>,\
+          R::ResourceTable: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           wgt::BufferTransition<R::Buffer>: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           wgt::TextureTransition<R::Texture>: serde::Serialize + for<'d> serde::Deserialize<'d>"
     )];
@@ -152,6 +156,9 @@ pub enum Command<R: ReferenceType> {
         timestamp_writes: Option<crate::command::PassTimestampWrites<R::QuerySet>>,
         occlusion_query_set: Option<R::QuerySet>,
         multiview_mask: Option<NonZero<u32>>,
+        /// The resource table bound as pass-level encoder state, if any (work
+        /// item 0.7 of the bindless feature).
+        resource_table: Option<R::ResourceTable>,
     },
     BuildAccelerationStructures {
         blas: Vec<crate::ray_tracing::OwnedBlasBuildEntry<R>>,

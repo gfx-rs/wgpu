@@ -265,6 +265,7 @@ impl IntoTrace for ArcCommand {
                 timestamp_writes,
                 occlusion_query_set,
                 multiview_mask,
+                resource_table,
             } => Command::RunRenderPass {
                 pass: pass.into_trace(),
                 color_attachments: color_attachments.into_trace(),
@@ -272,6 +273,7 @@ impl IntoTrace for ArcCommand {
                 timestamp_writes: timestamp_writes.map(|tw| tw.into_trace()),
                 occlusion_query_set: occlusion_query_set.map(|q| q.to_trace()),
                 multiview_mask,
+                resource_table: resource_table.map(|t| t.to_trace()),
             },
             ArcCommand::BuildAccelerationStructures { blas, tlas } => {
                 Command::BuildAccelerationStructures {
@@ -468,6 +470,9 @@ impl IntoTrace for ArcComputeCommand {
                 bind_group: bind_group.map(|bg| bg.into_trace()),
             },
             C::SetPipeline(id) => C::SetPipeline(id.into_trace()),
+            C::SetResourceTable { resource_table } => C::SetResourceTable {
+                resource_table: resource_table.map(|t| t.to_trace()),
+            },
             C::SetImmediate { offset, data } => C::SetImmediate { offset, data },
             C::DispatchWorkgroups(groups) => C::DispatchWorkgroups(groups),
             C::DispatchWorkgroupsIndirect { buffer, offset } => C::DispatchWorkgroupsIndirect {
@@ -668,6 +673,7 @@ impl IntoTrace for crate::binding_model::PipelineLayoutDescriptor<'_> {
                 .map(|bgl| bgl.to_trace())
                 .collect(),
             immediate_size: self.immediate_size,
+            uses_resource_table: self.uses_resource_table,
         }
     }
 }
@@ -939,6 +945,18 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         },
         A::DropBlas(blas) => A::DropBlas(blas),
         A::DropTlas(tlas) => A::DropTlas(tlas),
+        A::DestroyResourceTable(table) => A::DestroyResourceTable(table),
+        A::DropResourceTable(table) => A::DropResourceTable(table),
+        A::UpdateResourceTableSlot {
+            id,
+            slot,
+            texture_view,
+        } => A::UpdateResourceTableSlot {
+            id,
+            slot,
+            texture_view,
+        },
+        A::RemoveResourceTableBinding { id, slot } => A::RemoveResourceTableBinding { id, slot },
 
         A::CreateTexture(id, desc) => A::CreateTexture(id, desc.map_label(owned_label)),
         A::CreateTextureError(id, desc) => A::CreateTextureError(id, desc.map_label(owned_label)),
@@ -986,6 +1004,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
                 label: owned_label(&desc.label),
                 bind_group_layouts: Cow::Owned(desc.bind_group_layouts.into_owned()),
                 immediate_size: desc.immediate_size,
+                uses_resource_table: desc.uses_resource_table,
             },
         ),
         A::CreateBindGroup(id, desc) => A::CreateBindGroup(
@@ -1153,6 +1172,10 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
             sizes,
         },
         A::CreateTlas { id, desc } => A::CreateTlas {
+            id,
+            desc: desc.map_label(owned_label),
+        },
+        A::CreateResourceTable { id, desc } => A::CreateResourceTable {
             id,
             desc: desc.map_label(owned_label),
         },

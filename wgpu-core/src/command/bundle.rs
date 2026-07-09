@@ -376,6 +376,7 @@ impl RenderBundleEncoder {
         let mut state = State {
             trackers: RenderBundleScope::new(),
             pipeline: None,
+            uses_resource_table: false,
             vertex: Default::default(),
             index: None,
             flat_dynamic_offsets: Vec::new(),
@@ -545,10 +546,20 @@ impl RenderBundleEncoder {
             flat_dynamic_offsets,
             device,
             commands,
+            uses_resource_table,
             buffer_memory_init_actions,
             texture_memory_init_actions,
             ..
         } = state;
+
+        // M0 rejects table-using render bundles outright (2026-07-09 user
+        // decision): the queue-submit pass-start splice (work item 0.8) binds
+        // the table around a real pass, but bundle replay via `execute_bundle`
+        // has no equivalent re-emission, so a table would silently not be bound
+        // during replay. Full bundle support is a later milestone.
+        if uses_resource_table {
+            return Err(CreateRenderBundleError::ResourceTableUnsupported).map_pass_err(scope);
+        }
 
         let tracker_indices = device.tracker_indices.bundles.clone();
         let discard_hal_labels = device
@@ -577,6 +588,7 @@ impl RenderBundleEncoder {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(tracker_indices),
             discard_hal_labels,
+            uses_resource_table,
         };
 
         let render_bundle = Arc::new(render_bundle);
@@ -989,9 +1001,12 @@ fn set_pipeline(
 
     state.pipeline = Some(pipeline.clone());
 
+    let layout = pipeline.layout()?;
+    state.uses_resource_table |= layout.uses_resource_table;
+
     state
         .binder
-        .change_pipeline_layout(pipeline.layout()?, &pipeline.late_sized_buffer_groups);
+        .change_pipeline_layout(layout, &pipeline.late_sized_buffer_groups);
 
     state.vertex.update_limits(&pipeline.vertex_steps);
 
@@ -1336,6 +1351,12 @@ pub enum CreateRenderBundleError {
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
     Device(#[from] DeviceError),
+    #[error(
+        "Render bundles that use a resource table are not supported yet (a pipeline recorded in \
+         the bundle declares `uses_resource_table`). Bind resource-table pipelines directly in a \
+         render pass instead."
+    )]
+    ResourceTableUnsupported,
 }
 
 impl WebGpuError for CreateRenderBundleError {
@@ -1346,7 +1367,8 @@ impl WebGpuError for CreateRenderBundleError {
             | Self::FormatNotRenderable(_)
             | Self::FormatNotDepthOrStencil(_)
             | Self::NoAttachment
-            | Self::InvalidSampleCount(_) => ErrorType::Validation,
+            | Self::InvalidSampleCount(_)
+            | Self::ResourceTableUnsupported => ErrorType::Validation,
             Self::MissingFeatures(e) => e.webgpu_error_type(),
             Self::Device(e) => e.webgpu_error_type(),
         }
@@ -1403,6 +1425,10 @@ pub struct RenderBundle {
     label: String,
     pub(crate) tracking_data: TrackingData,
     discard_hal_labels: bool,
+    /// Whether any pipeline recorded in this bundle uses a resource table
+    /// (`getResource`). Checked at `executeBundles` time: the render pass must
+    /// have a resource table bound (`docs/bindless.md`, work item 0.7).
+    pub(super) uses_resource_table: bool,
 }
 
 impl Drop for RenderBundle {
@@ -1454,6 +1480,7 @@ impl RenderBundle {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(device.tracker_indices.bundles.clone()),
             discard_hal_labels: false,
+            uses_resource_table: false,
             device,
         })
     }
@@ -1769,6 +1796,9 @@ struct State {
 
     device: Arc<Device>,
     commands: Vec<ArcRenderCommand>,
+    /// Set if any pipeline recorded so far uses a resource table (work item
+    /// 0.7). Becomes [`RenderBundle::uses_resource_table`].
+    uses_resource_table: bool,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     next_dynamic_offset: usize,

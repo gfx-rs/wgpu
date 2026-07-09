@@ -10,6 +10,7 @@ use crate::{
     },
     ray_tracing::BlasCompactReadyPendingClosure,
     resource::{Blas, Buffer, QuerySet, Texture, Trackable},
+    resource_table::ResourceTable,
     snatch::SnatchGuard,
     SubmissionIndex,
 };
@@ -82,8 +83,15 @@ impl ActiveSubmission {
 
     /// Returns true if this submission contains the given texture.
     ///
-    /// This only uses constant-time operations.
+    /// The tracker/pending-list checks are constant-time. The resource-table
+    /// scan below is not: it is `O(referenced tables)` and locks each table's
+    /// contents. That is acceptable because the only caller
+    /// ([`get_texture_latest_submission_index`]) is on the cold texture-destroy
+    /// path.
+    ///
+    /// [`get_texture_latest_submission_index`]: LifetimeTracker::get_texture_latest_submission_index
     pub fn contains_texture(&self, texture: &Texture) -> bool {
+        let texture_index = texture.tracker_index();
         for encoder in &self.encoders {
             // The ownership location of textures depends on where the command encoder
             // came from. If it is the staging command encoder on the queue, it is
@@ -94,11 +102,20 @@ impl ActiveSubmission {
                 return true;
             }
 
-            if encoder
-                .pending_textures
-                .contains_key(&texture.tracker_index())
-            {
+            if encoder.pending_textures.contains_key(&texture_index) {
                 return true;
+            }
+
+            // A texture reachable only through a bound resource table (the core
+            // bindless case) never enters the trackers above: `set_resource_table`
+            // records only the table, and the submit-time splice adds member
+            // textures to the *device* tracker, not this per-submission one. Scan
+            // each referenced table's live membership so such a texture's teardown
+            // is still deferred until this submission completes (finding C2).
+            for table in encoder.trackers.resource_tables.used_resources() {
+                if table.contains_texture(texture_index) {
+                    return true;
+                }
             }
         }
 
@@ -125,6 +142,21 @@ impl ActiveSubmission {
     pub fn contains_query_set(&self, query_set: &QuerySet) -> bool {
         for encoder in &self.encoders {
             if encoder.trackers.query_sets.contains(query_set) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn contains_resource_table(&self, resource_table: &ResourceTable) -> bool {
+        // A submission references every resource table bound (via
+        // `set_resource_table`) in any of its command buffers; queue submit
+        // records them in the per-encoder tracker (work item 0.7/0.8). Checking
+        // them here lets `ResourceTable::destroy` defer hal teardown until the
+        // in-flight submissions using the table have completed (Invariant 5).
+        for encoder in &self.encoders {
+            if encoder.trackers.resource_tables.contains(resource_table) {
                 return true;
             }
         }
@@ -303,6 +335,23 @@ impl LifetimeTracker {
         // as we find a hit.
         self.active.iter().rev().find_map(|submission| {
             if submission.contains_query_set(query_set) {
+                Some(submission.index)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Returns the submission index of the most recent submission that uses the
+    /// given resource table.
+    pub fn get_resource_table_latest_submission_index(
+        &self,
+        resource_table: &ResourceTable,
+    ) -> Option<SubmissionIndex> {
+        // We iterate in reverse order, so that we can bail out early as soon
+        // as we find a hit.
+        self.active.iter().rev().find_map(|submission| {
+            if submission.contains_resource_table(resource_table) {
                 Some(submission.index)
             } else {
                 None

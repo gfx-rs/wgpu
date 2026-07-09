@@ -325,6 +325,31 @@ pub struct ComputePipelineDescriptor<
     pub cache: Option<PLC>,
 }
 
+/// Error validating that a pipeline whose shaders access a resource table
+/// (`getResource`) is compatible with its layout and the enabled features.
+///
+/// See work item 0.7 of the bindless feature (`plans/resource-table.md`).
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum ResourceTablePipelineError {
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
+    #[error(
+        "A shader in this pipeline accesses a resource table (`getResource`), but its pipeline \
+         layout was not created with `uses_resource_table` enabled"
+    )]
+    LayoutMissingResourceTable,
+}
+
+impl WebGpuError for ResourceTablePipelineError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
+            Self::LayoutMissingResourceTable => ErrorType::Validation,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateComputePipelineError {
@@ -342,6 +367,8 @@ pub enum CreateComputePipelineError {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+    #[error(transparent)]
+    ResourceTable(#[from] ResourceTablePipelineError),
 }
 
 impl WebGpuError for CreateComputePipelineError {
@@ -352,6 +379,7 @@ impl WebGpuError for CreateComputePipelineError {
             Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
             Self::Implicit(e) => e.webgpu_error_type(),
             Self::Stage(e) => e.webgpu_error_type(),
+            Self::ResourceTable(e) => e.webgpu_error_type(),
             Self::Internal(_) => ErrorType::Internal,
             Self::PipelineConstants(_) => ErrorType::Validation,
         }
@@ -945,6 +973,8 @@ pub enum CreateRenderPipelineError {
     NoTargetSpecified,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+    #[error(transparent)]
+    ResourceTable(#[from] ResourceTablePipelineError),
 }
 
 impl WebGpuError for CreateRenderPipelineError {
@@ -954,6 +984,7 @@ impl WebGpuError for CreateRenderPipelineError {
             Self::InvalidResource(e) => e.webgpu_error_type(),
             Self::MissingFeatures(e) => e.webgpu_error_type(),
             Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
+            Self::ResourceTable(e) => e.webgpu_error_type(),
 
             Self::Internal { .. } => ErrorType::Internal,
 

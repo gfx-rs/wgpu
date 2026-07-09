@@ -39,6 +39,7 @@ use crate::{
         StagingBuffer, Texture, TextureInner, Trackable, TrackingData,
     },
     resource_log,
+    resource_table::DestroyedResourceTable,
     scratch::ScratchBuffer,
     snatch::{SnatchGuard, Snatchable},
     track::{self, Tracker, TrackerIndex},
@@ -334,6 +335,7 @@ pub enum TempResource {
     DestroyedBuffer(DestroyedBuffer),
     DestroyedTexture(DestroyedTexture),
     DestroyedQuerySet(DestroyedQuerySet),
+    DestroyedResourceTable(DestroyedResourceTable),
 }
 
 /// A series of raw [`CommandBuffer`]s that have been submitted to a
@@ -1603,13 +1605,22 @@ impl Queue {
                         }
                     };
 
+                    // Capture the deferred query-resolve insertion points before
+                    // they are drained; the resource-table gap splice needs them
+                    // to correct its own insertion points.
+                    let query_insertion_points: Vec<usize> = baked
+                        .deferred_query_set_resolves
+                        .iter()
+                        .map(|resolve| resolve.insertion_point)
+                        .collect();
+
                     if let Err(e) = baked
                         .process_deferred_query_set_resolves(&self.device, &submission.snatch_guard)
                     {
                         break 'error Err(e.into());
                     }
 
-                    baked_command_buffers.push(baked);
+                    baked_command_buffers.push((baked, query_insertion_points));
                 }
 
                 if let Some(first_error) = first_error {
@@ -1633,8 +1644,23 @@ impl Queue {
                 // Note: locking the trackers has to be done after the storages
                 let mut trackers = self.device.trackers.lock();
 
-                for mut baked in baked_command_buffers {
+                for (mut baked, query_insertion_points) in baked_command_buffers {
                     profiling::scope!("process baked commands");
+
+                    // Mark referenced resource tables in use and splice the
+                    // pass-start layout transitions (work item 0.8, D2). Done
+                    // before the "Transit" prologue below so the device tracker
+                    // still reflects each table texture's pre-command-buffer
+                    // layout.
+                    if let Err(e) = baked.process_resource_table_gaps(
+                        &self.device,
+                        &mut trackers,
+                        &query_insertion_points,
+                        submit_index,
+                        &submission.snatch_guard,
+                    ) {
+                        break 'error Err(e.into());
+                    }
 
                     // execute resource transitions
                     if let Err(e) = baked.encoder.open_pass(hal_label(

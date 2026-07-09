@@ -187,6 +187,10 @@ pub fn features_to_naga_capabilities(
         Caps::LINEAR_INTERPOLATION,
         downlevel.contains(wgt::DownlevelFlags::LINEAR_INTERPOLATION),
     );
+    caps.set(
+        Caps::RESOURCE_TABLE,
+        features.intersects(wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE),
+    );
     caps
 }
 

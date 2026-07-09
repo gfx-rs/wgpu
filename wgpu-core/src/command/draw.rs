@@ -75,6 +75,11 @@ pub enum DrawError {
     MissingImmediateData {
         missing: naga::valid::ImmediateSlots,
     },
+    #[error(
+        "The bound pipeline's layout declares a resource table (`uses_resource_table`), but no \
+         resource table was bound via the render pass descriptor"
+    )]
+    MissingResourceTable,
     #[error("The number of bind groups + vertex buffers {given} exceeds the limit {limit}")]
     TooManyBindGroupsPlusVertexBuffers { given: u32, limit: u32 },
 }

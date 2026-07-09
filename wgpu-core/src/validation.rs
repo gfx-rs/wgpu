@@ -396,6 +396,11 @@ pub struct Interface {
     /// allowed to contain multiple entry points with the same name, as long as
     /// they are for different shader stages.
     entry_points: FastHashMap<EntryPointKey, EntryPoint>,
+    /// Whether any entry point in this module accesses a resource table via the
+    /// `getResource` WGSL builtin (work item 0.7 of the bindless feature). Used
+    /// at pipeline creation to require an appropriate pipeline layout and the
+    /// unchecked feature (M0).
+    uses_resource_table: bool,
 }
 
 #[derive(Debug)]
@@ -1479,7 +1484,13 @@ impl Interface {
             limits,
             resources,
             entry_points,
+            uses_resource_table: info.uses_resource_table(),
         }
+    }
+
+    /// Whether this module accesses a resource table via `getResource`.
+    pub fn uses_resource_table(&self) -> bool {
+        self.uses_resource_table
     }
 
     fn immediate_usage(

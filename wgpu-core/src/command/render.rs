@@ -28,7 +28,7 @@ use crate::{
         CommandEncoder, CommandEncoderError, DebugGroupError, DrawCommandFamily, DrawError,
         DrawKind, EncoderStateError, EncodingState, ExecutionError, InnerCommandEncoder,
         MapPassErr, PassErrorScope, PassStateError, PassTimestampWrites, QueryUseError, Rect,
-        RenderBundle, RenderCommandError, StateChange, TimestampWritesError,
+        RenderBundle, RenderCommandError, ResourceTableGap, StateChange, TimestampWritesError,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
@@ -266,6 +266,9 @@ pub struct ResolvedRenderPassDescriptor<'a> {
     pub occlusion_query_set: Option<Arc<QuerySet>>,
     /// The multiview array layers that will be used
     pub multiview_mask: Option<NonZeroU32>,
+    /// The resource table bound as pass-level encoder state, if any (work item
+    /// 0.7 of the bindless feature).
+    pub resource_table: Option<Arc<crate::resource_table::ResourceTable>>,
 }
 
 /// Describes the attachments of a render pass.
@@ -283,6 +286,9 @@ struct ArcRenderPassDescriptor<'a> {
     pub occlusion_query_set: Option<Arc<QuerySet>>,
     /// The multiview array layers that will be used
     pub multiview_mask: Option<NonZeroU32>,
+    /// The resource table bound as pass-level encoder state, if any (work item
+    /// 0.7 of the bindless feature).
+    pub resource_table: Option<Arc<crate::resource_table::ResourceTable>>,
 }
 
 pub type RenderBasePass = BasePass<ArcRenderCommand, RenderPassError>;
@@ -312,6 +318,7 @@ pub struct RenderPass {
     timestamp_writes: Option<PassTimestampWrites>,
     occlusion_query_set: Option<Arc<QuerySet>>,
     multiview_mask: Option<NonZeroU32>,
+    resource_table: Option<Arc<crate::resource_table::ResourceTable>>,
 
     // Resource binding dedupe state.
     current_bind_groups: BindGroupStateChange,
@@ -334,6 +341,7 @@ impl RenderPass {
             depth_stencil_attachment,
             occlusion_query_set,
             multiview_mask,
+            resource_table,
         } = desc;
 
         Self {
@@ -345,6 +353,7 @@ impl RenderPass {
             timestamp_writes,
             occlusion_query_set,
             multiview_mask,
+            resource_table,
 
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
@@ -361,6 +370,7 @@ impl RenderPass {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
         }
@@ -669,6 +679,15 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
 
     active_occlusion_query: Option<(Arc<QuerySet>, u32)>,
     active_pipeline_statistics_query: Option<(Arc<QuerySet>, u32)>,
+
+    /// The resource table bound as pass-level encoder state, if any (work item
+    /// 0.7 of the bindless feature). Set once from the render pass descriptor.
+    resource_table: Option<Arc<crate::resource_table::ResourceTable>>,
+
+    /// Whether the bound resource table still needs to be (re)emitted to the hal
+    /// before the next draw (e.g. after a pipeline-layout change or a render
+    /// bundle disturbed the descriptor set that binds at the highest set index).
+    resource_table_dirty: bool,
 }
 
 impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
@@ -718,6 +737,13 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
                         .difference(self.pass.immediate_state.immediate_slots_set),
                 });
             }
+            // If the pipeline's layout declares a resource table, one must be
+            // bound via the render pass descriptor (work item 0.7).
+            if let Ok(layout) = pipeline.layout() {
+                if layout.uses_resource_table && self.resource_table.is_none() {
+                    return Err(DrawError::MissingResourceTable);
+                }
+            }
             Ok(())
         } else {
             Err(DrawError::MissingPipeline(pass::MissingPipeline))
@@ -738,6 +764,37 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
     /// `flush_bindings` differs between the two types of passes.
     fn flush_bindings(&mut self) -> Result<(), RenderPassErrorInner> {
         flush_bindings_helper(&mut self.pass)?;
+        self.flush_resource_table()?;
+        Ok(())
+    }
+
+    /// Emit the hal binding for the resource table if the current pipeline needs
+    /// one and it has not yet been (re)bound (work item 0.7). The table binds at
+    /// the set index following the last bind group (D15), i.e. the bound
+    /// pipeline layout's bind-group count.
+    fn flush_resource_table(&mut self) -> Result<(), RenderPassErrorInner> {
+        if !self.resource_table_dirty {
+            return Ok(());
+        }
+        let Some(pipeline) = self.pipeline.as_ref() else {
+            return Ok(());
+        };
+        let layout = pipeline.layout()?;
+        if !layout.uses_resource_table {
+            return Ok(());
+        }
+        let Some(resource_table) = self.resource_table.as_ref() else {
+            return Ok(());
+        };
+        let index = layout.bind_group_layouts.len() as u32;
+        let raw_table = resource_table.try_raw(self.pass.base.snatch_guard)?;
+        unsafe {
+            self.pass
+                .base
+                .raw_encoder
+                .set_resource_table(layout.raw()?, index, raw_table);
+        }
+        self.resource_table_dirty = false;
         Ok(())
     }
 
@@ -2132,6 +2189,12 @@ impl CommandEncoder {
 
             arc_desc.multiview_mask = desc.multiview_mask;
 
+            if let Some(resource_table) = desc.resource_table {
+                resource_table.check_is_valid()?;
+                resource_table.same_device(device)?;
+                arc_desc.resource_table = Some(resource_table);
+            }
+
             Ok(())
         }
 
@@ -2149,6 +2212,7 @@ impl CommandEncoder {
                     depth_stencil_attachment: None,
                     occlusion_query_set: None,
                     multiview_mask: None,
+                    resource_table: None,
                 };
                 match fill_arc_desc(desc, &mut arc_desc, &self.device) {
                     Ok(()) => (RenderPass::new(self.clone(), arc_desc), None),
@@ -2250,6 +2314,7 @@ impl RenderPass {
                 timestamp_writes: self.timestamp_writes.take(),
                 occlusion_query_set: self.occlusion_query_set.take(),
                 multiview_mask: self.multiview_mask,
+                resource_table: self.resource_table.take(),
             })
         })
     }
@@ -2272,10 +2337,21 @@ pub(super) fn encode_render_pass(
     mut timestamp_writes: Option<PassTimestampWrites>,
     occlusion_query_set: Option<Arc<QuerySet>>,
     multiview_mask: Option<NonZeroU32>,
+    resource_table: Option<Arc<crate::resource_table::ResourceTable>>,
 ) -> Result<(), RenderPassError> {
     let pass_scope = PassErrorScope::Pass;
 
     let device = parent_state.device;
+
+    // Record the pass-level resource table (work item 0.7) so it stays alive for
+    // the command buffer and can be marked in use by queue submit (work item
+    // 0.8). Its device was validated when the pass was opened.
+    if let Some(ref resource_table) = resource_table {
+        parent_state
+            .tracker
+            .resource_tables
+            .insert_single(Arc::clone(resource_table));
+    }
 
     let mut indirect_draw_validation_batcher = crate::indirect_validation::DrawBatcher::new();
 
@@ -2291,7 +2367,7 @@ pub(super) fn encode_render_pass(
         .open_pass(base.label.as_deref())
         .map_pass_err(pass_scope)?;
 
-    let (scope, pending_discard_init_fixups, mut pending_query_resets) = {
+    let (scope, pending_discard_init_fixups, mut pending_query_resets, resource_table) = {
         let mut pending_query_resets = QueryResetMap::new();
         let mut pending_discard_init_fixups = SurfacesInDiscardState::new();
 
@@ -2352,6 +2428,7 @@ pub(super) fn encode_render_pass(
                     debug_scope_depth: &mut debug_scope_depth,
                     query_set_writes: parent_state.query_set_writes,
                     deferred_query_set_resolves: parent_state.deferred_query_set_resolves,
+                    resource_table_gaps: parent_state.resource_table_gaps,
                 },
                 pending_discard_init_fixups,
                 scope: device.new_usage_scope(),
@@ -2367,6 +2444,10 @@ pub(super) fn encode_render_pass(
 
             active_occlusion_query: None,
             active_pipeline_statistics_query: None,
+
+            // A table bound before any pipeline still needs its first emission.
+            resource_table_dirty: resource_table.is_some(),
+            resource_table,
         };
 
         for command in base.commands.drain(..) {
@@ -2683,9 +2764,15 @@ pub(super) fn encode_render_pass(
         let trackers = state.pass.scope;
 
         let pending_discard_init_fixups = state.pass.pending_discard_init_fixups;
+        let resource_table = state.resource_table;
 
         parent_state.raw_encoder.close().map_pass_err(pass_scope)?;
-        (trackers, pending_discard_init_fixups, pending_query_resets)
+        (
+            trackers,
+            pending_discard_init_fixups,
+            pending_query_resets,
+            resource_table,
+        )
     };
 
     let encoder = &mut parent_state.raw_encoder;
@@ -2736,6 +2823,16 @@ pub(super) fn encode_render_pass(
     }
 
     encoder.close_and_swap().map_pass_err(pass_scope)?;
+
+    // Record a pass-start gap (D2) for the table bound in this pass, if any.
+    // The pass body is now the last element of the list; the barrier command
+    // buffer will be spliced at submit time immediately before it.
+    if let Some(resource_table) = resource_table {
+        parent_state.resource_table_gaps.push(ResourceTableGap {
+            table: resource_table,
+            insertion_point: parent_state.raw_encoder.list.len() - 1,
+        });
+    }
 
     Ok(())
 }
@@ -2802,6 +2899,11 @@ fn set_pipeline(
         pipeline.layout()?,
         &pipeline.late_sized_buffer_groups,
     )?;
+
+    // Binding a pipeline with a (potentially) different layout may disturb the
+    // resource table's descriptor set (highest set index), so re-emit it before
+    // the next draw (work item 0.7).
+    state.resource_table_dirty = true;
 
     // Update vertex buffer limits.
     state.vertex.update_limits(&pipeline.vertex_steps);
@@ -3563,6 +3665,12 @@ fn execute_bundle(
         );
     }
 
+    // Table-using render bundles are rejected at bundle creation in M0
+    // (`RenderBundleEncoder::finish`), so `bundle.uses_resource_table` is always
+    // false here and needs no execute-time check. Full bundle support (which
+    // would re-emit `set_resource_table` around replay) is a later milestone.
+    debug_assert!(!bundle.uses_resource_table);
+
     state.pass.base.buffer_memory_init_actions.extend(
         bundle
             .buffer_memory_init_actions
@@ -3610,6 +3718,10 @@ fn execute_bundle(
         state.pass.scope.merge_render_bundle(&bundle_state.used)?;
     };
     state.reset_bundle();
+    // Executing a bundle re-binds pipelines/bind groups and thus may disturb the
+    // resource table's descriptor set (highest set index); re-emit it before the
+    // next in-pass draw (work item 0.7).
+    state.resource_table_dirty = true;
     Ok(())
 }
 

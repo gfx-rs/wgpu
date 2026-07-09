@@ -236,6 +236,7 @@ pub(crate) struct TrackerIndexAllocators {
     pub query_sets: Arc<SharedTrackerIndexAllocator>,
     pub blas_s: Arc<SharedTrackerIndexAllocator>,
     pub tlas_s: Arc<SharedTrackerIndexAllocator>,
+    pub resource_tables: Arc<SharedTrackerIndexAllocator>,
 }
 
 impl TrackerIndexAllocators {
@@ -252,6 +253,7 @@ impl TrackerIndexAllocators {
             query_sets: Arc::new(SharedTrackerIndexAllocator::new()),
             blas_s: Arc::new(SharedTrackerIndexAllocator::new()),
             tlas_s: Arc::new(SharedTrackerIndexAllocator::new()),
+            resource_tables: Arc::new(SharedTrackerIndexAllocator::new()),
         }
     }
 }
@@ -650,6 +652,10 @@ pub(crate) struct Tracker {
     pub render_pipelines: StatelessTracker<pipeline::RenderPipeline>,
     pub bundles: StatelessTracker<command::RenderBundle>,
     pub query_sets: QuerySetTracker,
+    /// Resource tables referenced by `set_resource_table` in this command buffer
+    /// (work item 0.7). Kept alive here; queue submit (work item 0.8) iterates
+    /// this to mark slots in use and answer `contains_resource_table`.
+    pub resource_tables: StatelessTracker<crate::resource_table::ResourceTable>,
 }
 
 impl Tracker {
@@ -668,6 +674,7 @@ impl Tracker {
             render_pipelines: StatelessTracker::new(),
             bundles: StatelessTracker::new(),
             query_sets: QuerySetTracker::new(),
+            resource_tables: StatelessTracker::new(),
         }
     }
 

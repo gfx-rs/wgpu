@@ -19,6 +19,14 @@ pub enum ComputeCommand<R: ReferenceType> {
 
     SetPipeline(R::ComputePipeline),
 
+    /// Bind (or, with `None`, unbind) a resource table as compute-pass encoder
+    /// state (work item 0.7 of the bindless feature). The hal binding is emitted
+    /// at dispatch time, using the bound pipeline layout's group count as the
+    /// set index (D15).
+    SetResourceTable {
+        resource_table: Option<R::ResourceTable>,
+    },
+
     /// Set a range of immediates to values stored in `immediates_data`.
     SetImmediate {
         /// The byte offset within the immediate data storage to write to. This

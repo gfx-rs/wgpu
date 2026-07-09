@@ -165,6 +165,9 @@ pub struct RenderPassDescriptor<'a> {
     pub occlusion_query_set: Option<id::QuerySetId>,
     /// Defines where and when timestamp values will be written for this pass.
     pub timestamp_writes: Option<PassTimestampWrites>,
+    /// The resource table bound as pass-level encoder state, if any (work item
+    /// 0.7 of the bindless feature).
+    pub resource_table: Option<id::ResourceTableId>,
 }
 
 /// Corresponds to [`GPUComputePassDescriptor`](https://gpuweb.github.io/gpuweb/#dictdef-gpucomputepassdescriptor)
