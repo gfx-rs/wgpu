@@ -46,6 +46,7 @@ pub mod math;
 mod origin_extent;
 mod ray_tracing;
 mod render;
+mod resource_table;
 #[doc(hidden)] // without this we get spurious missing_docs warnings
 mod send_sync;
 mod shader;
@@ -70,6 +71,7 @@ pub use limits::*;
 pub use origin_extent::*;
 pub use ray_tracing::*;
 pub use render::*;
+pub use resource_table::*;
 #[doc(hidden)]
 pub use send_sync::*;
 pub use shader::*;
