@@ -219,6 +219,7 @@ impl super::Device {
                         image_load: bounds_check_policy,
                         // TODO: support bounds checks on binding arrays
                         binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
+                        resource_table: naga::proc::BoundsCheckPolicy::Unchecked,
                     },
                     zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
                     force_loop_bounding: stage.module.runtime_checks.force_loop_bounding,

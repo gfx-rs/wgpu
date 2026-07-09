@@ -2886,6 +2886,9 @@ impl super::Adapter {
                 },
                 flags,
                 capabilities: Some(capabilities.iter().cloned().collect()),
+                // Wired per-pipeline at shader creation time by work item 0.5
+                // once the table's descriptor set index is known.
+                resource_table_target: None,
                 bounds_check_policies: naga::proc::BoundsCheckPolicies {
                     index: naga::proc::BoundsCheckPolicy::Restrict,
                     buffer: if self.private_caps.robust_buffer_access2 {
@@ -2900,6 +2903,9 @@ impl super::Adapter {
                     },
                     // TODO: support bounds checks on binding arrays
                     binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
+                    // M0 resource tables are unchecked-only; the checked
+                    // lowering arrives with the M1 metadata buffer.
+                    resource_table: naga::proc::BoundsCheckPolicy::Unchecked,
                 },
                 zero_initialize_workgroup_memory: if self
                     .private_caps

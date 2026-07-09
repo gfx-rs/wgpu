@@ -1,0 +1,273 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Sampler(
+                comparison: false,
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Bi,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Quad,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: false,
+                class: Sampled(
+                    kind: Float,
+                    multi: false,
+                ),
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        ray_vertex_return: None,
+        external_texture_params: None,
+        external_texture_transfer_function: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [],
+    global_variables: [
+        (
+            name: Some("samp"),
+            space: Handle,
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 0,
+            init: None,
+            memory_decorations: (""),
+        ),
+    ],
+    global_expressions: [],
+    functions: [
+        (
+            name: Some("sample_table"),
+            arguments: [
+                (
+                    name: Some("index"),
+                    ty: 1,
+                    binding: None,
+                ),
+                (
+                    name: Some("uv"),
+                    ty: 2,
+                    binding: None,
+                ),
+            ],
+            result: Some((
+                ty: 3,
+                binding: None,
+            )),
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                FunctionArgument(1),
+                ResourceTableGet(
+                    ty: 4,
+                    index: 0,
+                ),
+                GlobalVariable(0),
+                ImageSample(
+                    image: 2,
+                    sampler: 3,
+                    gather: None,
+                    coordinate: 1,
+                    array_index: None,
+                    offset: None,
+                    level: Auto,
+                    depth_ref: None,
+                    clamp_to_edge: false,
+                ),
+            ],
+            named_expressions: {
+                0: "index",
+                1: "uv",
+                2: "tex",
+            },
+            body: [
+                Emit((
+                    start: 2,
+                    end: 3,
+                )),
+                Emit((
+                    start: 4,
+                    end: 5,
+                )),
+                Return(
+                    value: Some(4),
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+    ],
+    entry_points: [
+        (
+            name: "vs_main",
+            stage: Vertex,
+            early_depth_test: None,
+            workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("vs_main"),
+                arguments: [
+                    (
+                        name: Some("pos"),
+                        ty: 2,
+                        binding: Some(Location(
+                            location: 0,
+                            interpolation: Some(Perspective),
+                            sampling: Some(Center),
+                            blend_src: None,
+                            per_primitive: false,
+                        )),
+                    ),
+                ],
+                result: Some((
+                    ty: 3,
+                    binding: Some(BuiltIn(Position(
+                        invariant: false,
+                    ))),
+                )),
+                local_variables: [],
+                expressions: [
+                    FunctionArgument(0),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 3,
+                        components: [
+                            0,
+                            1,
+                            2,
+                        ],
+                    ),
+                ],
+                named_expressions: {
+                    0: "pos",
+                },
+                body: [
+                    Emit((
+                        start: 3,
+                        end: 4,
+                    )),
+                    Return(
+                        value: Some(3),
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+            mesh_info: None,
+            task_payload: None,
+            incoming_ray_payload: None,
+        ),
+        (
+            name: "fs_main",
+            stage: Fragment,
+            early_depth_test: None,
+            workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("fs_main"),
+                arguments: [
+                    (
+                        name: Some("pos"),
+                        ty: 3,
+                        binding: Some(BuiltIn(Position(
+                            invariant: false,
+                        ))),
+                    ),
+                    (
+                        name: Some("index"),
+                        ty: 1,
+                        binding: Some(Location(
+                            location: 0,
+                            interpolation: Some(Flat),
+                            sampling: None,
+                            blend_src: None,
+                            per_primitive: false,
+                        )),
+                    ),
+                ],
+                result: Some((
+                    ty: 3,
+                    binding: Some(Location(
+                        location: 0,
+                        interpolation: Some(Perspective),
+                        sampling: Some(Center),
+                        blend_src: None,
+                        per_primitive: false,
+                    )),
+                )),
+                local_variables: [],
+                expressions: [
+                    FunctionArgument(0),
+                    FunctionArgument(1),
+                    Swizzle(
+                        size: Bi,
+                        vector: 0,
+                        pattern: (X, Y, X, X),
+                    ),
+                    CallResult(0),
+                ],
+                named_expressions: {
+                    0: "pos",
+                    1: "index",
+                },
+                body: [
+                    Emit((
+                        start: 2,
+                        end: 3,
+                    )),
+                    Call(
+                        function: 0,
+                        arguments: [
+                            1,
+                            2,
+                        ],
+                        result: Some(3),
+                    ),
+                    Return(
+                        value: Some(3),
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+            mesh_info: None,
+            task_payload: None,
+            incoming_ray_payload: None,
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+    doc_comments: None,
+)

@@ -1,0 +1,85 @@
+; SPIR-V
+; Version: 1.4
+; Generator: rspirv
+; Bound: 52
+OpCapability Shader
+OpCapability RuntimeDescriptorArray
+OpCapability ShaderNonUniform
+OpExtension "SPV_EXT_descriptor_indexing"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Vertex %33 "vs_main" %28 %31 %13
+OpEntryPoint Fragment %47 "fs_main" %40 %43 %46 %9 %13
+OpExecutionMode %47 OriginUpperLeft
+OpDecorate %9 DescriptorSet 0
+OpDecorate %9 Binding 0
+OpDecorate %13 DescriptorSet 1
+OpDecorate %13 Binding 0
+OpDecorate %23 NonUniform
+OpDecorate %28 Location 0
+OpDecorate %31 BuiltIn Position
+OpDecorate %40 BuiltIn FragCoord
+OpDecorate %43 Location 0
+OpDecorate %43 Flat
+OpDecorate %46 Location 0
+%2 = OpTypeVoid
+%3 = OpTypeSampler
+%4 = OpTypeInt 32 0
+%6 = OpTypeFloat 32
+%5 = OpTypeVector %6 2
+%7 = OpTypeVector %6 4
+%8 = OpTypeImage %6 2D 0 0 0 1 Unknown
+%10 = OpTypePointer UniformConstant %3
+%9 = OpVariable  %10  UniformConstant
+%11 = OpTypeRuntimeArray %8
+%12 = OpTypePointer UniformConstant %11
+%13 = OpVariable  %12  UniformConstant
+%18 = OpTypeFunction %7 %4 %5
+%21 = OpTypePointer UniformConstant %8
+%24 = OpTypeSampledImage %8
+%29 = OpTypePointer Input %5
+%28 = OpVariable  %29  Input
+%32 = OpTypePointer Output %7
+%31 = OpVariable  %32  Output
+%34 = OpTypeFunction %2
+%35 = OpConstant  %6  0
+%36 = OpConstant  %6  1
+%41 = OpTypePointer Input %7
+%40 = OpVariable  %41  Input
+%44 = OpTypePointer Input %4
+%43 = OpVariable  %44  Input
+%46 = OpVariable  %32  Output
+%17 = OpFunction  %7  None %18
+%15 = OpFunctionParameter  %4
+%16 = OpFunctionParameter  %5
+%14 = OpLabel
+%19 = OpLoad  %3  %9
+OpBranch %20
+%20 = OpLabel
+%22 = OpAccessChain  %21  %13 %15
+%23 = OpLoad  %8  %22
+%25 = OpSampledImage  %24  %23 %19
+%26 = OpImageSampleImplicitLod  %7  %25 %16
+OpReturnValue %26
+OpFunctionEnd
+%33 = OpFunction  %2  None %34
+%27 = OpLabel
+%30 = OpLoad  %5  %28
+OpBranch %37
+%37 = OpLabel
+%38 = OpCompositeConstruct  %7  %30 %35 %36
+OpStore %31 %38
+OpReturn
+OpFunctionEnd
+%47 = OpFunction  %2  None %34
+%39 = OpLabel
+%42 = OpLoad  %7  %40
+%45 = OpLoad  %4  %43
+%48 = OpLoad  %3  %9
+OpBranch %49
+%49 = OpLabel
+%50 = OpVectorShuffle  %5  %42 %42 0 1
+%51 = OpFunctionCall  %7  %17 %45 %50
+OpStore %46 %51
+OpReturn
+OpFunctionEnd

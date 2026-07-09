@@ -748,6 +748,7 @@ impl super::Device {
                             buffer: naga::proc::BoundsCheckPolicy::Unchecked,
                             image_load: naga::proc::BoundsCheckPolicy::Unchecked,
                             binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
+                            resource_table: naga::proc::BoundsCheckPolicy::Unchecked,
                         };
                     }
                     if !runtime_checks.force_loop_bounding {
@@ -1897,6 +1898,7 @@ impl crate::Device for super::Device {
                         buffer: naga::proc::BoundsCheckPolicy::Unchecked,
                         image_load: naga::proc::BoundsCheckPolicy::Unchecked,
                         binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
+                        resource_table: naga::proc::BoundsCheckPolicy::Unchecked,
                     };
                 }
                 let spv = naga::back::spv::write_vec(

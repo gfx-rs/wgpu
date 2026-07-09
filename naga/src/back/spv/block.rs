@@ -2282,12 +2282,54 @@ impl BlockContext<'_> {
                 ));
                 id
             }
-            // Lowering is implemented by work item 0.3 of the resource table
-            // feature (`plans/resource-table.md`).
-            crate::Expression::ResourceTableGet { .. } => {
-                return Err(Error::FeatureNotImplemented(
-                    "resource tables are not supported by the SPIR-V backend yet",
-                ))
+            crate::Expression::ResourceTableGet { ty, index } => {
+                // M0 only implements the unchecked policy. The checked
+                // lowering (metadata type-class compare + visibility mask test
+                // + select) arrives with the metadata buffer in M1.
+                if self.writer.bounds_check_policies.resource_table
+                    != crate::proc::BoundsCheckPolicy::Unchecked
+                {
+                    return Err(Error::FeatureNotImplemented(
+                        "checked resource-table lowering arrives with the metadata buffer (M1)",
+                    ));
+                }
+
+                // The table's descriptor array for this `T` was synthesized in
+                // `write_resource_table_globals`, before any function was
+                // written.
+                let var_id = *self
+                    .writer
+                    .resource_table_globals
+                    .get(&ty)
+                    .expect("resource table global should be synthesized for every used type");
+
+                // `result_type_id` is the image type `T` (the typifier resolves
+                // `ResourceTableGet` to `Handle(ty)`).
+                let index_id = self.cached[index];
+                let pointer_type_id =
+                    self.get_pointer_type_id(result_type_id, spirv::StorageClass::UniformConstant);
+
+                let pointer_id = self.gen_id();
+                block.body.push(Instruction::access_chain(
+                    pointer_type_id,
+                    pointer_id,
+                    var_id,
+                    &[index_id],
+                ));
+
+                let load_id = self.gen_id();
+                block
+                    .body
+                    .push(Instruction::load(result_type_id, load_id, pointer_id, None));
+
+                // v0 always decorates the descriptor-indexing access as
+                // `NonUniform`, regardless of the index's uniformity (see the
+                // resource-table design doc). This also requires
+                // `ShaderNonUniform` + `SPV_EXT_descriptor_indexing`.
+                self.writer
+                    .decorate_non_uniform_binding_array_access(load_id)?;
+
+                load_id
             }
         };
 

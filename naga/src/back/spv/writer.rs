@@ -109,6 +109,8 @@ impl Writer {
             std140_compat_uniform_types: crate::FastHashMap::default(),
             fake_missing_bindings: options.fake_missing_bindings,
             binding_map: options.binding_map.clone(),
+            resource_table_target: options.resource_table_target,
+            resource_table_globals: crate::FastHashMap::default(),
             saved_cached: CachedExpressions::default(),
             gl450_ext_inst_id,
             temp_list: Vec::new(),
@@ -137,6 +139,7 @@ impl Writer {
         self.force_loop_bounding = options.force_loop_bounding;
         self.use_storage_input_output_16 = options.use_storage_input_output_16;
         self.binding_map = options.binding_map.clone();
+        self.resource_table_target = options.resource_table_target;
         self.io_f16_polyfills =
             super::f16_polyfill::F16IoPolyfill::new(options.use_storage_input_output_16);
         self.task_dispatch_limits = options.task_dispatch_limits;
@@ -180,6 +183,7 @@ impl Writer {
             capabilities_available: take(&mut self.capabilities_available),
             fake_missing_bindings: self.fake_missing_bindings,
             binding_map: take(&mut self.binding_map),
+            resource_table_target: self.resource_table_target,
             task_dispatch_limits: self.task_dispatch_limits,
             mesh_shader_primitive_indices_clamp: self.mesh_shader_primitive_indices_clamp,
             emit_int_div_checks: self.emit_int_div_checks,
@@ -206,6 +210,7 @@ impl Writer {
             cached_constants: take(&mut self.cached_constants).reclaim(),
             global_variables: take(&mut self.global_variables).reclaim(),
             std140_compat_uniform_types: take(&mut self.std140_compat_uniform_types).reclaim(),
+            resource_table_globals: take(&mut self.resource_table_globals).reclaim(),
             saved_cached: take(&mut self.saved_cached).reclaim(),
             temp_list: take(&mut self.temp_list).reclaim(),
             ray_query_functions: take(&mut self.ray_query_functions).reclaim(),
@@ -1581,6 +1586,25 @@ impl Writer {
 
             // work around borrow checking in the presence of `self.xxx()` calls
             self.global_variables[handle] = gv;
+        }
+
+        // The resource table's synthesized descriptor arrays have no
+        // `GlobalVariable`, so the loop above never sees them. At SPIR-V >= 1.4
+        // every global an entry point's static call tree references must appear
+        // in its interface. Rather than reconstruct which table types this
+        // entry point reaches transitively (a `getResource` may live in a
+        // called helper), list *all* synthesized table globals: spirv-val
+        // tolerates interface entries a shader happens not to use, so this is
+        // always a safe superset.
+        if let Some(ref mut iface) = interface {
+            if self.physical_layout.version >= 0x10400 {
+                // Sort for deterministic output: the ids are assigned in
+                // source order during synthesis, so sorting reproduces it
+                // regardless of the (unordered) map's iteration order.
+                let mut ids: Vec<Word> = self.resource_table_globals.values().copied().collect();
+                ids.sort_unstable();
+                iface.varying_ids.extend(ids);
+            }
         }
 
         // Create a `BlockContext` for generating SPIR-V for the function's
@@ -3606,6 +3630,107 @@ impl Writer {
         Ok(id)
     }
 
+    /// Synthesize the resource table's descriptor array globals.
+    ///
+    /// The resource table (`getResource<T>`) has no Naga [`GlobalVariable`], so
+    /// there is nothing in [`Module::global_variables`] for the SPIR-V backend
+    /// to emit. Instead, for each *distinct* resource type `T` reached by a
+    /// [`ResourceTableGet`] expression anywhere in the module, this synthesizes
+    /// one `OpVariable` of type `OpTypeRuntimeArray<T>` in the `UniformConstant`
+    /// storage class, and decorates all of them with the *same* descriptor set
+    /// and binding taken from [`Options::resource_table_target`] (descriptor
+    /// aliasing; two `getResource<texture_2d<f32>>` uses share one global).
+    ///
+    /// The resulting variable ids are recorded in
+    /// [`Writer::resource_table_globals`] so that `ResourceTableGet` lowering
+    /// can `OpAccessChain` + `OpLoad` from them.
+    ///
+    /// Must run before any function is written, and after all types have been
+    /// declared.
+    ///
+    /// [`GlobalVariable`]: crate::GlobalVariable
+    /// [`Module::global_variables`]: crate::Module::global_variables
+    /// [`ResourceTableGet`]: crate::Expression::ResourceTableGet
+    fn write_resource_table_globals(&mut self, ir_module: &crate::Module) -> Result<(), Error> {
+        use spirv::Decoration;
+
+        // Collect the distinct resource types `T` used across the whole module.
+        // A `FastIndexSet` keeps the emission order deterministic.
+        let mut table_types = crate::FastIndexSet::default();
+        let mut collect = |expressions: &crate::arena::Arena<crate::Expression>| {
+            for (_, expr) in expressions.iter() {
+                if let crate::Expression::ResourceTableGet { ty, .. } = *expr {
+                    table_types.insert(ty);
+                }
+            }
+        };
+        for (_, func) in ir_module.functions.iter() {
+            collect(&func.expressions);
+        }
+        for ep in ir_module.entry_points.iter() {
+            collect(&ep.function.expressions);
+        }
+
+        if table_types.is_empty() {
+            return Ok(());
+        }
+
+        let target = self
+            .resource_table_target
+            .ok_or(Error::MissingResourceTableTarget)?;
+
+        // A runtime array of descriptors in `UniformConstant` requires the
+        // `RuntimeDescriptorArray` capability, gated by the descriptor-indexing
+        // extension. `ResourceTableGet` lowering additionally decorates each
+        // access `NonUniform` (which pulls in `ShaderNonUniform`).
+        self.require_any(
+            "resource tables",
+            &[spirv::Capability::RuntimeDescriptorArray],
+        )?;
+        self.use_extension("SPV_EXT_descriptor_indexing");
+
+        for ty in table_types {
+            let image_type_id = self.get_handle_type_id(ty);
+
+            // `OpTypeRuntimeArray<T>`.
+            let array_type_id = self.id_gen.next();
+            Instruction::type_runtime_array(array_type_id, image_type_id)
+                .to_words(&mut self.logical_layout.declarations);
+
+            // `OpTypePointer UniformConstant <array>`.
+            let array_ptr_type_id = self.id_gen.next();
+            Instruction::type_pointer(
+                array_ptr_type_id,
+                spirv::StorageClass::UniformConstant,
+                array_type_id,
+            )
+            .to_words(&mut self.logical_layout.declarations);
+
+            // `OpVariable <ptr> UniformConstant`.
+            let var_id = self.id_gen.next();
+            Instruction::variable(
+                array_ptr_type_id,
+                var_id,
+                spirv::StorageClass::UniformConstant,
+                None,
+            )
+            .to_words(&mut self.logical_layout.declarations);
+
+            // Every synthesized global aliases the same descriptor set/binding.
+            self.decorate(var_id, Decoration::DescriptorSet, &[target.descriptor_set]);
+            self.decorate(var_id, Decoration::Binding, &[target.binding]);
+
+            if self.flags.contains(WriterFlags::DEBUG) {
+                self.debugs
+                    .push(Instruction::name(var_id, "nagaResourceTable"));
+            }
+
+            self.resource_table_globals.insert(ty, var_id);
+        }
+
+        Ok(())
+    }
+
     /// Write the necessary decorations for a struct member.
     ///
     /// Emit decorations for the `index`'th member of the struct type
@@ -3827,6 +3952,11 @@ impl Writer {
             };
             self.global_variables.insert(handle, gvar);
         }
+
+        // Synthesize the resource table's descriptor array globals. These have
+        // no Naga `GlobalVariable`, so they must be emitted here, before any
+        // function that lowers a `ResourceTableGet` needs to reference them.
+        self.write_resource_table_globals(ir_module)?;
 
         // write all functions
         for (handle, ir_function) in ir_module.functions.iter() {

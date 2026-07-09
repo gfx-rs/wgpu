@@ -126,6 +126,7 @@ pub struct SpirvOutParameters {
     pub separate_entry_points: bool,
     #[serde(deserialize_with = "deserialize_binding_map")]
     pub binding_map: naga::back::spv::BindingMap,
+    pub resource_table_target: Option<naga::back::spv::ResourceTableBindTarget>,
     pub ray_query_initialization_tracking: bool,
     pub use_storage_input_output_16: bool,
     pub emit_int_div_checks: bool,
@@ -144,6 +145,7 @@ impl Default for SpirvOutParameters {
             use_storage_input_output_16: true,
             emit_int_div_checks: true,
             binding_map: naga::back::spv::BindingMap::default(),
+            resource_table_target: None,
         }
     }
 }
@@ -170,6 +172,7 @@ impl SpirvOutParameters {
             } else {
                 Some(self.capabilities.clone())
             },
+            resource_table_target: self.resource_table_target,
             bounds_check_policies: shared_info.bounds_checks_policies,
             fake_missing_bindings: true,
             binding_map: self.binding_map.clone(),

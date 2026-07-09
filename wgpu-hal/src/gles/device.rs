@@ -415,6 +415,7 @@ impl super::Device {
                 buffer: BoundsCheckPolicy::Unchecked,
                 image_load: image_check,
                 binding_array: BoundsCheckPolicy::Unchecked,
+                resource_table: BoundsCheckPolicy::Unchecked,
             };
 
             let mut output = String::new();
