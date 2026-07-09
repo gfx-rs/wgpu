@@ -47,10 +47,18 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
     } else {
         wgpu::Dx12Compiler::from_env().unwrap_or(wgpu::Dx12Compiler::StaticDxc)
     };
+    assert!(
+        params
+            .required_instance_flags
+            .intersection(params.forbidden_instance_flags)
+            .is_empty(),
+        "overlapping required_instance_flags and forbidden_instance_flags does not make sense"
+    );
     // The defaults for debugging, overridden by the environment, overridden by the test parameters.
     let flags = wgpu::InstanceFlags::debugging()
         .with_env()
-        .union(params.required_instance_flags);
+        .union(params.required_instance_flags)
+        .difference(params.forbidden_instance_flags);
 
     Instance::new(wgpu::InstanceDescriptor {
         backends,
