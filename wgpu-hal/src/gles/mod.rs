@@ -155,6 +155,7 @@ impl crate::Api for Api {
     type QuerySet = QuerySet;
     type Fence = Fence;
     type AccelerationStructure = AccelerationStructure;
+    type ResourceTable = ResourceTable;
     type PipelineCache = PipelineCache;
 
     type BindGroupLayout = BindGroupLayout;
@@ -184,6 +185,7 @@ crate::impl_dyn_resource!(
     Queue,
     RenderPipeline,
     RayTracingPipeline,
+    ResourceTable,
     Sampler,
     ShaderModule,
     Surface,
@@ -847,6 +849,13 @@ impl crate::DynQuerySet for QuerySet {}
 pub struct AccelerationStructure;
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
+
+/// Placeholder resource-table type. GLES has no committed resource-table
+/// implementation plan; this only exists so the backend compiles.
+#[derive(Debug)]
+pub struct ResourceTable;
+
+impl crate::DynResourceTable for ResourceTable {}
 
 #[derive(Debug)]
 pub struct PipelineCache;

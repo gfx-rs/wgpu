@@ -983,6 +983,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
             )
         };
     }
+    unsafe fn set_resource_table(
+        &mut self,
+        _layout: &super::PipelineLayout,
+        _index: u32,
+        _table: &super::ResourceTable,
+    ) {
+        unimplemented!("resource tables land in the next change")
+    }
+
     unsafe fn set_immediates(
         &mut self,
         layout: &super::PipelineLayout,

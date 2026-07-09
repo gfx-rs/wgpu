@@ -51,6 +51,7 @@ impl crate::Api for Api {
     type QuerySet = Resource;
     type Fence = Fence;
     type AccelerationStructure = Resource;
+    type ResourceTable = Resource;
     type PipelineCache = Resource;
 
     type BindGroupLayout = Resource;
@@ -76,6 +77,7 @@ impl crate::DynPipelineLayout for Resource {}
 impl crate::DynQuerySet for Resource {}
 impl crate::DynRenderPipeline for Resource {}
 impl crate::DynRayTracingPipeline for Resource {}
+impl crate::DynResourceTable for Resource {}
 impl crate::DynSampler for Resource {}
 impl crate::DynShaderModule for Resource {}
 impl crate::DynSurfaceTexture for Resource {}
@@ -472,6 +474,21 @@ impl crate::Device for Context {
     unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: Resource) {}
 
     fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>) {}
+
+    unsafe fn create_resource_table(
+        &self,
+        _desc: &crate::ResourceTableDescriptor,
+    ) -> DeviceResult<Resource> {
+        Ok(Resource)
+    }
+    unsafe fn destroy_resource_table(&self, _table: Resource) {}
+    unsafe fn update_table_slot(
+        &self,
+        _table: &Resource,
+        _slot: u32,
+        _update: crate::ResourceTableUpdate<'_, Resource>,
+    ) {
+    }
 
     fn get_internal_counters(&self) -> wgt::HalCounters {
         Default::default()

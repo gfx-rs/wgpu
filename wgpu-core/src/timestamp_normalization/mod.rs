@@ -198,6 +198,7 @@ impl TimestampNormalizer {
                     bind_group_layouts: &[Some(temporary_bind_group_layout.as_ref())],
                     immediate_size: 8,
                     flags: hal::PipelineLayoutFlags::empty(),
+                    uses_resource_table: false,
                 })
                 .map_err(|e| {
                     TimestampNormalizerInitError::PipelineLayout(device.handle_hal_error(e))

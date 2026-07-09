@@ -811,6 +811,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.rebind_sampler_states(dirty_textures, dirty_samplers);
     }
 
+    unsafe fn set_resource_table(
+        &mut self,
+        _layout: &super::PipelineLayout,
+        _index: u32,
+        _table: &super::ResourceTable,
+    ) {
+        unimplemented!()
+    }
+
     unsafe fn set_immediates(
         &mut self,
         _layout: &super::PipelineLayout,

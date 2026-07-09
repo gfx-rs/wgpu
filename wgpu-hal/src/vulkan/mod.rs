@@ -87,6 +87,7 @@ impl crate::Api for Api {
     type QuerySet = QuerySet;
     type Fence = Fence;
     type AccelerationStructure = AccelerationStructure;
+    type ResourceTable = ResourceTable;
     type PipelineCache = PipelineCache;
 
     type BindGroupLayout = BindGroupLayout;
@@ -116,6 +117,7 @@ crate::impl_dyn_resource!(
     Queue,
     RenderPipeline,
     RayTracingPipeline,
+    ResourceTable,
     Sampler,
     ShaderModule,
     Surface,
@@ -900,6 +902,15 @@ pub struct AccelerationStructure {
 }
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
+
+/// Placeholder resource-table type.
+///
+/// Real Vulkan support (a device-wide, shared descriptor-set-backed table)
+/// lands in the next change; see `plans/resource-table.md` work item 0.5.
+#[derive(Debug)]
+pub struct ResourceTable;
+
+impl crate::DynResourceTable for ResourceTable {}
 
 #[derive(Debug)]
 pub enum TextureMemory {

@@ -116,6 +116,7 @@ impl Draw {
                 Some(dst_bind_group_layout.as_ref()),
             ],
             immediate_size: 8,
+            uses_resource_table: false,
         };
         let pipeline_layout = unsafe {
             device

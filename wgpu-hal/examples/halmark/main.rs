@@ -250,6 +250,7 @@ impl<A: hal::Api> Example<A> {
             flags: hal::PipelineLayoutFlags::empty(),
             bind_group_layouts: &[Some(&global_group_layout), Some(&local_group_layout)],
             immediate_size: 0,
+            uses_resource_table: false,
         };
         let pipeline_layout = unsafe {
             device

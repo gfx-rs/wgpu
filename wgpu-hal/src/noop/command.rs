@@ -162,6 +162,7 @@ impl crate::CommandEncoder for CommandBuffer {
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
     }
+    unsafe fn set_resource_table(&mut self, layout: &Resource, index: u32, table: &Resource) {}
     unsafe fn set_immediates(&mut self, layout: &Resource, offset_bytes: u32, data: &[u32]) {}
 
     unsafe fn insert_debug_marker(&mut self, label: &str) {}

@@ -4267,6 +4267,9 @@ impl Device {
                 | additional_flags,
             bind_group_layouts: &raw_bind_group_layouts,
             immediate_size: desc.immediate_size,
+            // TODO(resource-table): plumb through from a higher-level descriptor once
+            // wgpu-core gains resource-table pipeline-layout support (work item 0.7).
+            uses_resource_table: false,
         };
 
         let raw = unsafe { self.raw().create_pipeline_layout(&hal_desc) }

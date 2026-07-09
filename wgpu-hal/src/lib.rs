@@ -289,8 +289,8 @@ pub use dynamic::{
     DynBindGroupLayout, DynBuffer, DynCommandBuffer, DynCommandEncoder, DynComputePipeline,
     DynDevice, DynExposedAdapter, DynFence, DynInstance, DynOpenDevice, DynPipelineCache,
     DynPipelineLayout, DynQuerySet, DynQueue, DynRayTracingPipeline, DynRenderPipeline,
-    DynResource, DynSampler, DynShaderModule, DynSurface, DynSurfaceTexture, DynTexture,
-    DynTextureView,
+    DynResource, DynResourceTable, DynSampler, DynShaderModule, DynSurface, DynSurfaceTexture,
+    DynTexture, DynTextureView,
 };
 
 #[allow(unused)]
@@ -669,6 +669,13 @@ pub trait Api: Clone + fmt::Debug + Sized + WasmNotSendSync + 'static {
     type PipelineCache: DynPipelineCache;
 
     type AccelerationStructure: DynAccelerationStructure + 'static;
+
+    /// A resource table (see the WebGPU bindless proposal, `docs/bindless.md`).
+    ///
+    /// Created with [`Device::create_resource_table`], updated slot-by-slot
+    /// with [`Device::update_table_slot`], and bound to a compute or render
+    /// pass with [`CommandEncoder::set_resource_table`].
+    type ResourceTable: DynResourceTable + 'static;
 }
 
 pub trait Instance: Sized + WasmNotSendSync {
@@ -1225,6 +1232,61 @@ pub trait Device: WasmNotSendSync {
     /// `Alignments::raw_tlas_instance_size`
     fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>);
 
+    /// Create a new resource table (see the WebGPU bindless proposal).
+    ///
+    /// The table is created empty; every slot is unpopulated until a
+    /// [`Device::update_table_slot`] call targets it.
+    unsafe fn create_resource_table(
+        &self,
+        desc: &ResourceTableDescriptor,
+    ) -> Result<<Self::A as Api>::ResourceTable, DeviceError>;
+
+    /// Destroy `table` and any GPU resources it owns.
+    ///
+    /// # Safety
+    ///
+    /// - `table` must not be currently in use by any submitted, unfinished
+    ///   command buffers.
+    unsafe fn destroy_resource_table(&self, table: <Self::A as Api>::ResourceTable);
+
+    /// Write `update` into `table` at `slot`, overwriting whatever the slot
+    /// previously held.
+    ///
+    /// This is a plain, immediate CPU-timeline descriptor write: `wgpu-hal`
+    /// does not defer, batch, or otherwise synchronize this call against
+    /// other uses of `table`. All of that is the caller's responsibility, per
+    /// the safety section below. (Compare [`Device::create_bind_group`],
+    /// which builds a whole bind group up front; resource tables are instead
+    /// mutated slot-by-slot over their lifetime, which is what makes them
+    /// bindless.)
+    ///
+    /// # Safety
+    ///
+    /// - This call must only target a `slot` that no *in-flight* submission
+    ///   (i.e. one that has been submitted to a [`Queue`] but whose fence has
+    ///   not yet signaled completion) can *dynamically* reach through
+    ///   `table` — regardless of whether that submission's shaders actually
+    ///   read the slot at runtime. The caller (`wgpu-core`) is responsible
+    ///   for enforcing this using submission indices; see Invariant 2 in
+    ///   `plans/resource-table.md`. This is what makes the write legal under
+    ///   Vulkan's `UPDATE_UNUSED_WHILE_PENDING` + `PARTIALLY_BOUND`
+    ///   descriptor-indexing rules (VUID-vkUpdateDescriptorSets-pDescriptorWrites-03047)
+    ///   and the analogous DX12/Metal rules.
+    /// - Because updates land on the CPU timeline strictly between
+    ///   submissions (never spliced into one), backends must allocate the
+    ///   table's descriptor storage with update-after-bind / partially-bound
+    ///   semantics up front, at [`Device::create_resource_table`] time, so
+    ///   that writes here never race a driver-side validation assumption
+    ///   that the whole set is static.
+    ///
+    /// [`Queue`]: Queue
+    unsafe fn update_table_slot(
+        &self,
+        table: &<Self::A as Api>::ResourceTable,
+        slot: u32,
+        update: ResourceTableUpdate<'_, <Self::A as Api>::TextureView>,
+    );
+
     fn get_internal_counters(&self) -> wgt::HalCounters;
 
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
@@ -1584,6 +1646,32 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         index: u32,
         group: &<Self::A as Api>::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
+    );
+
+    /// Binds `table` at `index` for subsequent draws/dispatches, mirroring
+    /// [`set_bind_group`](Self::set_bind_group) but for the single,
+    /// device-wide resource table slot of a `uses_resource_table` pipeline
+    /// layout.
+    ///
+    /// # Safety
+    ///
+    /// - This [`CommandEncoder`] must be within a render or compute pass.
+    /// - `layout` must have been created with
+    ///   [`PipelineLayoutDescriptor::uses_resource_table`] set to `true`.
+    /// - `index` must equal `layout`'s bind-group-layout count (i.e. the
+    ///   table binds immediately after the last bind group slot). Unlike
+    ///   [`set_bind_group`](Self::set_bind_group), `wgpu-hal` does not
+    ///   compute this index itself — the caller (`wgpu-core`) always passes
+    ///   it explicitly.
+    /// - Every slot of `table` that is dynamically accessed by work recorded
+    ///   after this call, up until end of pass, must have been populated by
+    ///   a prior [`Device::update_table_slot`] call whose write is complete
+    ///   before this submission executes on the GPU timeline.
+    unsafe fn set_resource_table(
+        &mut self,
+        layout: &<Self::A as Api>::PipelineLayout,
+        index: u32,
+        table: &<Self::A as Api>::ResourceTable,
     );
 
     /// Sets a range in immediate data.
@@ -2300,6 +2388,19 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
     pub flags: PipelineLayoutFlags,
     pub bind_group_layouts: &'a [Option<&'a B>],
     pub immediate_size: u32,
+
+    /// Whether this layout reserves a slot, immediately after
+    /// `bind_group_layouts`, for a device-wide resource table (see the
+    /// WebGPU bindless proposal).
+    ///
+    /// When `true`, [`CommandEncoder::set_resource_table`] may be called
+    /// with `index == bind_group_layouts.len()` against pipelines using this
+    /// layout.
+    ///
+    /// As of this writing, only the Vulkan backend consumes this field (it
+    /// appends the device's shared resource-table descriptor-set layout to
+    /// the `VkPipelineLayout`); other backends currently ignore it.
+    pub uses_resource_table: bool,
 }
 
 /// A region of a buffer made visible to shaders via a [`BindGroup`].
@@ -2984,6 +3085,35 @@ pub struct ComputePassDescriptor<'a, Q: DynQuerySet + ?Sized> {
 #[derive(Clone, Debug)]
 pub struct RayTracingPassDescriptor<'a> {
     pub label: Label<'a>,
+}
+
+/// Describes a resource table (see the WebGPU bindless proposal,
+/// `docs/bindless.md`) to be created with [`Device::create_resource_table`].
+#[derive(Clone, Debug)]
+pub struct ResourceTableDescriptor<'a> {
+    pub label: Label<'a>,
+
+    /// Number of slots in the table.
+    ///
+    /// Must be less than or equal to 65536.
+    pub size: u32,
+}
+
+/// A single slot's new contents, as passed to [`Device::update_table_slot`].
+///
+/// This is an extensible enum: M0 only supports binding a sampled (or
+/// depth) texture view. Storage textures and storage buffers are added in a
+/// later milestone (M4); samplers never appear here — per the sampler-heap
+/// design (D7 in `plans/resource-table.md`), sampler table slots are
+/// metadata-only and never touch backend descriptor storage.
+///
+/// In dynamic (`Dyn*`) contexts, `T` is instantiated as `dyn DynTextureView`;
+/// see [`DynTextureView`] and the sibling [`TextureBinding`] type, which
+/// follows the same pattern.
+#[derive(Debug)]
+pub enum ResourceTableUpdate<'a, T: DynTextureView + ?Sized> {
+    /// Bind a sampled or depth texture view into the slot.
+    SampledTextureView(&'a T),
 }
 
 #[test]
