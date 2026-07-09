@@ -742,7 +742,13 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         // SAFETY: The range of immediates written was validated in `is_ready`.
         unsafe {
             self.pass.immediate_state.flush_immediates(
-                self.pipeline.as_ref().unwrap().layout().unwrap().raw(),
+                self.pipeline
+                    .as_ref()
+                    .unwrap()
+                    .layout()
+                    .unwrap()
+                    .raw()
+                    .unwrap(),
                 self.pass.base.raw_encoder,
             );
         }
@@ -2502,10 +2508,7 @@ pub(super) fn encode_render_pass(
                     let scope = PassErrorScope::SetViewport;
                     set_viewport(&mut state, rect, depth_min, depth_max).map_pass_err(scope)?;
                 }
-                ArcRenderCommand::SetImmediate {
-                    offset,
-                    data: data_bytes,
-                } => {
+                ArcRenderCommand::SetImmediate { offset, data } => {
                     let scope = PassErrorScope::SetImmediate;
                     state
                         .pass
@@ -2513,7 +2516,7 @@ pub(super) fn encode_render_pass(
                         .set_immediates::<RenderPassErrorInner>(
                             &state.pass.base.device.limits,
                             offset,
-                            &data_bytes,
+                            &data,
                         )
                         .map_pass_err(scope)?;
                 }
@@ -3877,12 +3880,12 @@ impl RenderPass {
         pass_try!(
             base,
             scope,
-            pass::validate_immediates_alignment(offset, data_bytes.len())
+            pass::validate_immediates_alignment(offset, data.len())
         );
 
         base.commands.push(ArcRenderCommand::SetImmediate {
             offset,
-            data: data_bytes
+            data: data
                 .chunks_exact(size_of::<u32>())
                 .map(|ck| u32::from_le_bytes(ck.try_into().unwrap()))
                 .collect(),

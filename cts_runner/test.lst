@@ -192,38 +192,7 @@ webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoder
 webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="render%20pass";state="valid";*
 webgpu:api,validation,encoding,cmds,setImmediates:*
 webgpu:api,validation,encoding,createRenderBundleEncoder:*
-webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:command="dispatchWorkgroups"
-webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:command="dispatchWorkgroupsIndirect"
-webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:command="insertDebugMarker"
-webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:command="popDebugGroup"
-webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:command="pushDebugGroup"
-webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:command="setBindGroup"
-webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:command="setImmediates"
-webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:command="setPipeline"
-webgpu:api,validation,encoding,encoder_open_state:non_pass_commands:*
-//FAIL: webgpu:api,validation,encoding,encoder_open_state:render_bundle_commands:*
-// https://github.com/gfx-rs/wgpu/issues/7857
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="beginOcclusionQuery"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="draw"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="drawIndexed"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="drawIndexedIndirect"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="drawIndirect"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="endOcclusionQuery"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="executeBundles"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="insertDebugMarker"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="multiDrawIndexedIndirect"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="multiDrawIndirect"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="popDebugGroup"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="pushDebugGroup"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setBindGroup"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setBlendConstant"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setImmediates"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setIndexBuffer"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setPipeline"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setScissorRect"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setStencilReference"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setVertexBuffer"
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:command="setViewport"
+webgpu:api,validation,encoding,encoder_open_state:*
 webgpu:api,validation,encoding,encoder_state:*
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:*
 // On dx12, Error: Unexpected internal error occurred: undefined

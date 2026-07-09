@@ -102,12 +102,14 @@ use wgt::error::{ErrorType, WebGpuError};
 #[cfg(feature = "trace")]
 use crate::command::ArcReferences;
 use crate::{
+    api_log,
     binding_model::{BindError, BindGroup, ImmediateUploadError, PipelineLayout},
     command::{
         bind::Binder,
         pass::{validate_immediates_alignment, ImmediateState},
-        BasePass, BindGroupStateChange, ColorAttachmentError, DrawError, IdReferences, MapPassErr,
-        PassErrorScope, RenderCommand, RenderCommandError, StateChange,
+        pass_base, BasePass, BindGroupStateChange, ColorAttachmentError, DrawError,
+        EncoderStateError, IdReferences, MapPassErr, PassErrorScope, PassStateError, RenderCommand,
+        RenderCommandError, StateChange,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
@@ -604,7 +606,6 @@ impl RenderBundleEncoder {
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS);
 
         let string_data = mem::take(&mut self.base.string_data);
-        let immediates_data = mem::take(&mut self.base.immediates_data);
         let context = mem::take(&mut self.context);
         let render_bundle = RenderBundle {
             state: ResourceState::Valid(RenderBundleState {
@@ -708,15 +709,18 @@ impl RenderBundleEncoder {
         Ok(())
     }
 
-    pub fn set_immediates(&mut self, offset: u32, data_bytes: &[u8]) {
-        assert!(data_bytes.len().is_multiple_of(4));
-        // `bytemuck::cast_slice` panics when input is empty.
-        if data_bytes.is_empty() {
-            return;
-        }
+    pub fn set_immediates(&mut self, offset: u32, data: &[u8]) -> Result<(), PassStateError> {
+        pass_base!(self, PassErrorScope::SetImmediate);
+
+        // This should have been validated in content timeline
+        assert!(data.len().is_multiple_of(4));
+
         self.base.commands.push(RenderCommand::SetImmediate {
             offset,
-            data: bytemuck::cast_slice(data_bytes).to_vec(),
+            data: data
+                .chunks_exact(size_of::<u32>())
+                .map(|ck| u32::from_le_bytes(ck.try_into().unwrap()))
+                .collect(),
         });
         Ok(())
     }
@@ -1365,7 +1369,6 @@ impl RenderBundle {
                 commands: Vec::new(),
                 dynamic_offsets: Vec::new(),
                 string_data: Vec::new(),
-                immediates_data: Vec::new(),
             },
             is_depth_read_only: false,
             is_stencil_read_only: false,
@@ -1474,7 +1477,7 @@ impl RenderBundle {
                     let pipeline_layout = pipeline_layout.as_ref().unwrap();
 
                     // SAFETY: The range of immediates written was validated in `is_ready` before each `flush_immediates`.
-                    unsafe { raw.set_immediates(pipeline_layout.raw(), *offset, data) }
+                    unsafe { raw.set_immediates(pipeline_layout.raw().unwrap(), *offset, data) }
                 }
                 Cmd::Draw {
                     vertex_count,

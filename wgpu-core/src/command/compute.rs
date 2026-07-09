@@ -305,7 +305,13 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         // SAFETY: The range of immediates written was validated in `is_ready`.
         unsafe {
             self.pass.immediate_state.flush_immediates(
-                self.pipeline.as_ref().unwrap().layout.raw(),
+                self.pipeline
+                    .as_ref()
+                    .unwrap()
+                    .layout()
+                    .unwrap()
+                    .raw()
+                    .unwrap(),
                 self.pass.base.raw_encoder,
             );
         }
@@ -987,6 +993,7 @@ fn set_pipeline(
     }
 
     // Rebind resources
+    let pipeline_layout = pipeline.layout()?;
     pass::change_pipeline_layout::<ComputePassErrorInner>(
         &mut state.pass,
         pipeline_layout,
@@ -1152,7 +1159,7 @@ fn dispatch_workgroups_indirect(
                     .pass
                     .base
                     .raw_encoder
-                    .set_compute_pipeline(pipeline.layout()?.raw());
+                    .set_compute_pipeline(state.pipeline.as_ref().unwrap().raw()?);
             }
 
             // Immediates are dirty because we used them for the validation pipeline
@@ -1163,7 +1170,7 @@ fn dispatch_workgroups_indirect(
                 let raw_bg = group.try_raw(state.pass.base.snatch_guard)?;
                 unsafe {
                     state.pass.base.raw_encoder.set_bind_group(
-                        pipeline.layout()?.raw(),
+                        state.pipeline.as_ref().unwrap().layout()?.raw()?,
                         i as u32,
                         raw_bg,
                         dynamic_offsets,
@@ -1294,12 +1301,12 @@ impl ComputePass {
         pass_try!(
             base,
             scope,
-            pass::validate_immediates_alignment(offset, data_bytes.len())
+            pass::validate_immediates_alignment(offset, data.len())
         );
 
         base.commands.push(ArcComputeCommand::SetImmediate {
             offset,
-            data: data_bytes
+            data: data
                 .chunks_exact(size_of::<u32>())
                 .map(|ck| u32::from_le_bytes(ck.try_into().unwrap()))
                 .collect(),
