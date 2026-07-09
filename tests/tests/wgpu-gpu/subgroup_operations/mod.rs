@@ -65,6 +65,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
             label: Some("main"),
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {

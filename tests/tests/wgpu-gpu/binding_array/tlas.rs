@@ -197,6 +197,7 @@ async fn binding_array_tlas(ctx: TestingContext) {
             label: Some("TLAS array pipeline layout"),
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     let pipeline = ctx

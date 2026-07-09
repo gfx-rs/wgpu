@@ -329,6 +329,7 @@ impl crate::framework::Example for Example {
             label: Some("main"),
             bind_group_layouts: &[Some(&bind_group_layout), Some(&uniform_bind_group_layout)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
         let index_format = wgpu::IndexFormat::Uint16;

@@ -410,6 +410,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     label: None,
                     bind_group_layouts: &[Some(&invalid_bind_group_layout)],
                     immediate_size: 0,
+                    uses_resource_table: false,
                 });
 
         let _ = ctx

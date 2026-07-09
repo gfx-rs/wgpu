@@ -2046,6 +2046,7 @@ static DYNAMIC_OFFSET_BUFFER_BINDING_INIT: GpuTestConfiguration = GpuTestConfigu
                 label: None,
                 bind_group_layouts: &[Some(&bgl)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
         let pipeline = ctx
             .device
@@ -2573,6 +2574,7 @@ async fn check_vertex_buffer_tail_init(
             label: None,
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     let pipeline = ctx

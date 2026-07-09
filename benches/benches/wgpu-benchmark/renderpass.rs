@@ -152,6 +152,7 @@ impl RenderpassState {
                     label: None,
                     bind_group_layouts: &[Some(&bind_group_layout)],
                     immediate_size: 0,
+                    uses_resource_table: false,
                 });
 
         let mut vertex_buffers = Vec::with_capacity(vertex_buffer_count as usize);
@@ -288,6 +289,7 @@ impl RenderpassState {
                         label: None,
                         bind_group_layouts: &[Some(&bindless_bind_group_layout)],
                         immediate_size: 0,
+                        uses_resource_table: false,
                     });
 
             bindless_pipeline = Some(device_state.device.create_render_pipeline(

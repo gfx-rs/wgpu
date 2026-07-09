@@ -113,6 +113,7 @@ impl MultiTargetRenderer {
             label: None,
             bind_group_layouts: &[Some(&texture_bind_group_layout)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -233,6 +234,7 @@ impl TargetRenderer {
             label: None,
             bind_group_layouts: &[Some(&texture_bind_group_layout)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {

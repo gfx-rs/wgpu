@@ -99,6 +99,7 @@ async fn pipeline_cache_test(ctx: TestingContext) {
             label: Some("pipeline_layout"),
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     let first_cache_data;

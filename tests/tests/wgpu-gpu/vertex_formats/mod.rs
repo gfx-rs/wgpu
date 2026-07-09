@@ -255,6 +255,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
             label: None,
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     let dummy = ctx

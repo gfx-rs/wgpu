@@ -52,6 +52,7 @@ fn setup_compute() -> (
         label: None,
         bind_group_layouts: &[Some(&bgl)],
         immediate_size: 16,
+        uses_resource_table: false,
     });
 
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -193,6 +194,7 @@ fn struct_padding_slots_not_required() {
         label: None,
         bind_group_layouts: &[Some(&bgl)],
         immediate_size: 32,
+        uses_resource_table: false,
     });
 
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -270,6 +272,7 @@ fn pipeline_without_immediates_needs_none() {
         label: None,
         bind_group_layouts: &[Some(&bgl)],
         immediate_size: 0,
+        uses_resource_table: false,
     });
 
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -454,6 +457,7 @@ fn render_multi_immediates_with_smaller_layout_immediate_size_fails() {
                     label: None,
                     bind_group_layouts: &[],
                     immediate_size,
+                    uses_resource_table: false,
                 }),
             ),
             vertex: wgpu::VertexState {

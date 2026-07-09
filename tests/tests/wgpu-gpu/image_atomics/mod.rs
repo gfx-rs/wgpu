@@ -102,6 +102,7 @@ async fn test_format(
             label: None,
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
     let shader = ctx.device.create_shader_module(desc);
     let pipeline = ctx

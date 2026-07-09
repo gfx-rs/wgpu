@@ -317,6 +317,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
                 label: None,
                 bind_group_layouts: &[Some(&bind_group_layout)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
         wgpu_test::fail(
@@ -391,6 +392,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 label: None,
                 bind_group_layouts: &[Some(&bind_group_layout)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
         let pipeline = ctx

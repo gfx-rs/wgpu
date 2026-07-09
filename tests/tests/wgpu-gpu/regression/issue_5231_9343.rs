@@ -104,6 +104,7 @@ fn read_only_depth_test(ctx: &TestingContext, sample_depth: bool) {
             label: None,
             bind_group_layouts: &[],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     let color_target = ColorTargetState {
@@ -180,6 +181,7 @@ fn read_only_depth_test(ctx: &TestingContext, sample_depth: bool) {
                 label: None,
                 bind_group_layouts: &[Some(&bgl)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
         sample_shader = ctx.device.create_shader_module(ShaderModuleDescriptor {

@@ -176,6 +176,7 @@ async fn binding_array_storage_textures(ctx: TestingContext, partially_bound: bo
             label: Some("Pipeline Layout"),
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     let pipeline = ctx

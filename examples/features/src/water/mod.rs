@@ -429,6 +429,7 @@ impl crate::framework::Example for Example {
                 label: Some("water"),
                 bind_group_layouts: &[Some(&water_bind_group_layout)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
         let terrain_pipeline_layout =
@@ -436,6 +437,7 @@ impl crate::framework::Example for Example {
                 label: Some("terrain"),
                 bind_group_layouts: &[Some(&terrain_bind_group_layout)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
         let water_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {

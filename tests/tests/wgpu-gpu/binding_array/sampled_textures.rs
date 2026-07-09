@@ -196,6 +196,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
             label: Some("Pipeline Layout"),
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     let pipeline = ctx
@@ -422,6 +423,7 @@ async fn partial_binding_array_followed_by_storage_buffer(ctx: TestingContext) {
             label: Some("Pipeline Layout"),
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     let pipeline = ctx

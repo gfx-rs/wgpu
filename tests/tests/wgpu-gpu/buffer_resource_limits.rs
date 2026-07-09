@@ -107,6 +107,7 @@ static BUFFERS_AND_ACCEL_STRUCTS_VALID_WITHIN_LIMIT: GpuTestConfiguration =
                         label: None,
                         bind_group_layouts: &[Some(&bgl)],
                         immediate_size: 0,
+                        uses_resource_table: false,
                     });
             });
         });
@@ -136,6 +137,7 @@ static BUFFERS_AND_ACCEL_STRUCTS_VALID_VERTEX_STAGE_AT_LIMIT: GpuTestConfigurati
                         label: None,
                         bind_group_layouts: &[Some(&bgl)],
                         immediate_size: 0,
+                        uses_resource_table: false,
                     });
 
             let shader = ctx
@@ -253,6 +255,7 @@ static BUFFERS_AND_ACCEL_STRUCTS_EXCEEDS_ACROSS_BGLS: GpuTestConfiguration =
                             label: None,
                             bind_group_layouts: &[Some(&bgl_a), Some(&bgl_b)],
                             immediate_size: 0,
+                            uses_resource_table: false,
                         });
                 },
                 Some("max_buffers_and_acceleration_structures_per_shader_stage"),
@@ -284,6 +287,7 @@ static BUFFERS_AND_ACCEL_STRUCTS_VERTEX_STAGE_EXCEEDS_WITH_VERTEX_BUFFERS: GpuTe
                         label: None,
                         bind_group_layouts: &[Some(&bgl)],
                         immediate_size: 0,
+                        uses_resource_table: false,
                     });
 
             let shader = ctx

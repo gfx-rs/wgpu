@@ -193,6 +193,7 @@ impl TestResources {
                 label: None,
                 bind_group_layouts: &[Some(&bgl)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
         let pipeline = ctx
@@ -357,6 +358,7 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
             label: None,
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     let pipeline = ctx
@@ -595,6 +597,7 @@ async fn dynamic_storage_buffer_binding_size(ctx: TestingContext) {
             label: None,
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     let pipeline = ctx

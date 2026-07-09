@@ -466,6 +466,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             label: Some("pipeline_layout"),
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     let target_size = wgpu::Extent3d {

@@ -254,6 +254,7 @@ impl ComputepassState {
                     label: None,
                     bind_group_layouts: &[Some(&bind_group_layout)],
                     immediate_size: 0,
+                    uses_resource_table: false,
                 });
 
         let pipeline =
@@ -349,6 +350,7 @@ impl ComputepassState {
                         label: None,
                         bind_group_layouts: &[Some(&bindless_bind_group_layout)],
                         immediate_size: 0,
+                        uses_resource_table: false,
                     });
 
             let bindless_pipeline =

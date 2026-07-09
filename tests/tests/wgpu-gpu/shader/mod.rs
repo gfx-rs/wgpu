@@ -284,6 +284,7 @@ async fn shader_input_output_test(
                 InputStorageType::Immediate => MAX_BUFFER_SIZE as u32,
                 _ => 0,
             },
+            uses_resource_table: false,
         });
 
     let mut fail = false;

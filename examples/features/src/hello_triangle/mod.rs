@@ -162,6 +162,7 @@ impl ApplicationHandler<TriangleAction> for App {
                 label: None,
                 bind_group_layouts: &[],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
             let swapchain_capabilities = surface.get_capabilities(&adapter);

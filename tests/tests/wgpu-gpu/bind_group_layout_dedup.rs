@@ -82,6 +82,7 @@ async fn bgl_dedupe(ctx: TestingContext) {
             label: None,
             bind_group_layouts: &[Some(&bgl_1b)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     let module = ctx
@@ -146,6 +147,7 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
             label: None,
             bind_group_layouts: &[Some(&bgl_1)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     // We drop bgl_1 here. As bgl_1 is still alive, referenced by the pipeline layout,

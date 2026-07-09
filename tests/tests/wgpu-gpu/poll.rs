@@ -154,6 +154,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 label: None,
                 bind_group_layouts: &[Some(&bind_group_layout)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
         let pipeline = ctx
             .device

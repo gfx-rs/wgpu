@@ -340,6 +340,7 @@ fn render_pass(
         label: None,
         bind_group_layouts: &[],
         immediate_size: 0,
+        uses_resource_table: false,
     });
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

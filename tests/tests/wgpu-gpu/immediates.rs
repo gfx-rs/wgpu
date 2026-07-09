@@ -100,6 +100,7 @@ async fn partial_update_test(ctx: TestingContext) {
             label: Some("pipeline_layout"),
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: 32,
+            uses_resource_table: false,
         });
 
     let pipeline = ctx
@@ -270,6 +271,7 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
             label: None,
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 8 * size_of::<u32>() as u32,
+            uses_resource_table: false,
         });
 
     let pipeline = ctx

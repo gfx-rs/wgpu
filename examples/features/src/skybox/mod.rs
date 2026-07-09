@@ -189,6 +189,7 @@ impl crate::framework::Example for Example {
             label: None,
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
         // Create the render pipelines

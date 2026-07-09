@@ -94,6 +94,7 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
             label: Some("pll"),
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: 16,
+            uses_resource_table: false,
         });
 
     let pipeline = ctx

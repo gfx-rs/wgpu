@@ -13,6 +13,7 @@ impl crate::framework::Example for Example {
             label: None,
             bind_group_layouts: &[],
             immediate_size: 0,
+            uses_resource_table: false,
         });
         let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
             label: None,

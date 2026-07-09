@@ -92,6 +92,7 @@ async fn run(_path: Option<String>) {
         label: None,
         bind_group_layouts: &[Some(&bind_group_layout)],
         immediate_size: 0,
+        uses_resource_table: false,
     });
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: None,

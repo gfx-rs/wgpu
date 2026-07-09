@@ -164,6 +164,7 @@ impl crate::framework::Example for Example {
             label: None,
             bind_group_layouts: &[],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
         let multisampled_framebuffer =
