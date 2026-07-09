@@ -27,9 +27,11 @@ use crate::{
         ArcTlasInstance, ArcTlasPackage, BlasBuildEntry, BlasGeometries,
         BuildAccelerationStructureError, OwnedBlasBuildEntry, OwnedTlasPackage, TlasPackage,
     },
-    resource::{Blas, BlasCompactState, Labeled, StagingBuffer, Tlas},
+    resource::{Blas, BlasCompactState, Labeled, StagingBuffer, Tlas, Trackable},
     scratch::ScratchBuffer,
     snatch::SnatchGuard,
+    track::TrackerIndex,
+    FastHashSet,
 };
 use crate::{lock::RwLockWriteGuard, resource::RawResourceAccess};
 
@@ -308,6 +310,7 @@ pub(crate) fn build_acceleration_structures(
         let first_byte_index = instance_buffer_staging_source.len();
 
         let mut dependencies = Vec::new();
+        let mut seen_dependencies = FastHashSet::<TrackerIndex>::default();
 
         let mut instance_count = 0;
         for instance in package.instances.iter().flatten() {
@@ -346,7 +349,9 @@ pub(crate) fn build_acceleration_structures(
 
             instance_count += 1;
 
-            dependencies.push(blas.clone());
+            if seen_dependencies.insert(blas.tracker_index()) {
+                dependencies.push(blas.clone());
+            }
         }
 
         build_command.tlas_s_built.push(TlasBuild {

@@ -68,6 +68,12 @@ Bottom level categories:
 
 - Fixed signed integer `%` (and `%=`) returning the wrong result for negative operands in the GLSL (OpenGL/GLES) backend, e.g. `-1 % 768` yielding `255` instead of `-1`. GLSL's `%` is undefined when either operand is negative, so signed remainder is now lowered as `a - b * (a / b)`, matching the SPIR-V, HLSL, and Metal backends. By @mstampfli in [#9687](https://github.com/gfx-rs/wgpu/pull/9687).
 
+### Performance
+
+#### General
+
+- `Queue::submit` no longer scales with TLAS instance count: a built TLAS now records one dependency per unique BLAS instead of one per instance, so acceleration-structure validation and residency tracking are `O(unique BLASes)` rather than `O(instances)`. Heavilty instanced scenes, e.g. forests previously spent tens to hundreds of ms per frame in `Queue::submit`. By @AntonWagnerCAU in [#9835](https://github.com/gfx-rs/wgpu/pull/9835).
+
 ## v30.0.0 (2026-07-01)
 
 ### Major changes
