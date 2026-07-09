@@ -4,6 +4,9 @@
 #[cfg(any(dx12, all(vulkan, windows)))]
 pub(super) mod dxgi;
 
+#[cfg(any(dx12, all(vulkan, windows)))]
+pub(super) mod dyn_lib;
+
 #[cfg(all(native, feature = "renderdoc"))]
 pub(super) mod renderdoc;
 

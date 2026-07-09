@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use alloc::borrow::ToOwned as _;
 
 use objc2::{
@@ -204,6 +206,42 @@ impl super::Surface {
     }
 }
 
+// objc2 strings are not, in general, thread-safe, but these should be constants.
+unsafe impl Send for ColorSpaces {}
+unsafe impl Sync for ColorSpaces {}
+
+struct ColorSpaces {
+    extended_display_p3: &'static CFString,
+    itur_bt2100_pq: &'static CFString,
+    itur_bt2100_hlg: &'static CFString,
+}
+
+static COLOR_SPACES: LazyLock<Result<ColorSpaces, crate::SurfaceError>> = LazyLock::new(|| {
+    // Stable Rust doesn't support weak linkage, so objc2 doesn't
+    // offer it. To avoid link errors on old OS versions, resolve
+    // these dynamically.
+    let lib = unsafe {
+        libloading::Library::new("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
+            .map_err(|_| crate::SurfaceError::Other("error loading CoreGraphics"))?
+    };
+    fn lookup(
+        lib: &libloading::Library,
+        name: &core::ffi::CStr,
+    ) -> Result<&'static CFString, crate::SurfaceError> {
+        let sym = unsafe { lib.get(name.to_bytes_with_nul()) }
+            .map_err(|_| crate::SurfaceError::Other("error resolving symbol in CoreGraphics"))?;
+        Ok(*sym)
+    }
+    let extended_display_p3 = lookup(&lib, c"kCGColorSpaceExtendedDisplayP3")?;
+    let itur_bt2100_pq = lookup(&lib, c"kCGColorSpaceITUR_2100_PQ")?;
+    let itur_bt2100_hlg = lookup(&lib, c"kCGColorSpaceITUR_2100_HLG")?;
+    Ok(ColorSpaces {
+        extended_display_p3,
+        itur_bt2100_pq,
+        itur_bt2100_hlg,
+    })
+});
+
 impl crate::Surface for super::Surface {
     type A = super::Api;
 
@@ -258,7 +296,16 @@ impl crate::Surface for super::Surface {
                 Some(unsafe { objc2_core_graphics::kCGColorSpaceExtendedSRGB })
             }
             wgt::SurfaceColorSpace::ExtendedDisplayP3 => {
-                Some(unsafe { objc2_core_graphics::kCGColorSpaceExtendedDisplayP3 })
+                // Only reported by `surface_capabilities` on macOS 11.0+/iOS 14.0+.
+                if !available!(macos = 11.0, ios = 14.0, tvos = 14.0, visionos = 1.0) {
+                    unreachable!("ExtendedDisplayP3 color space is only reported on macOS 11.0+/iOS 14.0+/tvOS 14.0+");
+                }
+                Some(
+                    COLOR_SPACES
+                        .as_ref()
+                        .map_err(|e| e.clone())?
+                        .extended_display_p3,
+                )
             }
             wgt::SurfaceColorSpace::DisplayP3 => {
                 Some(unsafe { objc2_core_graphics::kCGColorSpaceDisplayP3 })
@@ -270,9 +317,12 @@ impl crate::Surface for super::Surface {
                     unreachable!("BT.2100 PQ/HLG color spaces are only reported on macOS 11.0+/iOS 14.0+/tvOS 14.0+");
                 }
                 Some(if config.color_space == wgt::SurfaceColorSpace::Bt2100Pq {
-                    unsafe { objc2_core_graphics::kCGColorSpaceITUR_2100_PQ }
+                    COLOR_SPACES.as_ref().map_err(|e| e.clone())?.itur_bt2100_pq
                 } else {
-                    unsafe { objc2_core_graphics::kCGColorSpaceITUR_2100_HLG }
+                    COLOR_SPACES
+                        .as_ref()
+                        .map_err(|e| e.clone())?
+                        .itur_bt2100_hlg
                 })
             }
         };

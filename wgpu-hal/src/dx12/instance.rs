@@ -62,7 +62,7 @@ impl crate::Instance for super::Instance {
                 crate::InstanceError::with_source(String::from("Failed to load FXC"), e)
             })?,
             wgt::Dx12Compiler::Auto => {
-                if cfg!(feature = "static-dxc") {
+                if cfg!(static_dxc) {
                     // Prefer static DXC if its compiled in
                     CompilerContainer::new_static_dxc().map_err(|e| {
                         crate::InstanceError::with_source(

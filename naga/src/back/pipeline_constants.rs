@@ -1,5 +1,6 @@
 use alloc::{
     borrow::Cow,
+    boxed::Box,
     string::{String, ToString},
     vec::Vec,
 };
@@ -40,7 +41,7 @@ pub enum PipelineConstantError {
     #[error(transparent)]
     ConstantEvaluatorError(#[from] ConstantEvaluatorError),
     #[error(transparent)]
-    ValidationError(#[from] WithSpan<ValidationError>),
+    ValidationError(#[from] Box<WithSpan<ValidationError>>),
     #[error("workgroup_size override isn't strictly positive")]
     NegativeWorkgroupSize,
     #[error("max vertices or max primitives is negative")]

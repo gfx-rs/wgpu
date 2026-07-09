@@ -404,8 +404,13 @@ impl super::Instance {
                 .dpy(dpy);
 
             unsafe { xlib_loader.create_xlib_surface(&info, None) }
-                .expect("XlibSurface::create_xlib_surface() failed")
-        };
+        }
+        .map_err(|err| {
+            crate::InstanceError::with_source(
+                String::from("XlibSurface::create_xlib_surface() failed"),
+                err,
+            )
+        })?;
 
         Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
@@ -429,8 +434,13 @@ impl super::Instance {
                 .connection(connection);
 
             unsafe { xcb_loader.create_xcb_surface(&info, None) }
-                .expect("XcbSurface::create_xcb_surface() failed")
-        };
+        }
+        .map_err(|err| {
+            crate::InstanceError::with_source(
+                String::from("XcbSurface::create_xcb_surface() failed"),
+                err,
+            )
+        })?;
 
         Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
@@ -454,8 +464,11 @@ impl super::Instance {
                 .display(display)
                 .surface(surface);
 
-            unsafe { w_loader.create_wayland_surface(&info, None) }.expect("WaylandSurface failed")
-        };
+            unsafe { w_loader.create_wayland_surface(&info, None) }
+        }
+        .map_err(|err| {
+            crate::InstanceError::with_source(String::from("WaylandSurface failed"), err)
+        })?;
 
         Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
@@ -477,8 +490,11 @@ impl super::Instance {
                 .flags(vk::AndroidSurfaceCreateFlagsKHR::empty())
                 .window(window);
 
-            unsafe { a_loader.create_android_surface(&info, None) }.expect("AndroidSurface failed")
-        };
+            unsafe { a_loader.create_android_surface(&info, None) }
+        }
+        .map_err(|err| {
+            crate::InstanceError::with_source(String::from("AndroidSurface failed"), err)
+        })?;
 
         Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
@@ -501,12 +517,11 @@ impl super::Instance {
                 .hwnd(hwnd);
             let win32_loader =
                 khr::win32_surface::Instance::new(&self.shared.entry, &self.shared.raw);
-            unsafe {
-                win32_loader
-                    .create_win32_surface(&info, None)
-                    .expect("Unable to create Win32 surface")
-            }
-        };
+            unsafe { win32_loader.create_win32_surface(&info, None) }
+        }
+        .map_err(|err| {
+            crate::InstanceError::with_source(String::from("Unable to create Win32 surface"), err)
+        })?;
 
         // Wrap ash's `isize` `HWND` in `WindowHandle`; on Windows the
         // `NativeSurface` builds its DXGI HDR source from it.

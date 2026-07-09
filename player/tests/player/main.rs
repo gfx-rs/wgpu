@@ -81,7 +81,7 @@ impl Test<'_> {
         adapter: Arc<wgc::instance::Adapter>,
     ) {
         let (device, queue) = adapter
-            .create_device_and_queue(
+            .request_device(
                 &wgt::DeviceDescriptor {
                     label: None,
                     required_features: self.features,
@@ -188,7 +188,7 @@ impl Corpus {
                     &wgt::RequestAdapterOptions::default(),
                     wgt::Backends::from(backend),
                 ) {
-                    Ok(adapter) => Arc::new(adapter),
+                    Ok(adapter) => adapter,
                     Err(_) => continue,
                 };
 

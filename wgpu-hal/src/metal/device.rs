@@ -24,7 +24,7 @@ use objc2_metal::{
 };
 use parking_lot::{Condvar, Mutex, RwLock};
 
-use super::{adapter::VERTEX_BUFFER_SLOT_START, conv, PassthroughShader, ShaderModuleSource};
+use super::{adapter::MAX_BUFFERS, conv, PassthroughShader, ShaderModuleSource};
 use crate::{auxil::map_naga_stage, DropCallback, DropGuard, TlasInstance};
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
@@ -1423,7 +1423,7 @@ impl crate::Device for super::Device {
                         }
 
                         let mapping = naga::back::msl::VertexBufferMapping {
-                            id: VERTEX_BUFFER_SLOT_START + i as u32,
+                            id: MAX_BUFFERS - 1 - i as u32,
                             stride: if vbl.array_stride > 0 {
                                 vbl.array_stride.try_into().unwrap()
                             } else {
@@ -1491,7 +1491,7 @@ impl crate::Device for super::Device {
                                 continue;
                             };
 
-                            let buffer_index = VERTEX_BUFFER_SLOT_START as usize + i;
+                            let buffer_index = MAX_BUFFERS as usize - 1 - i;
                             let buffer_desc = unsafe {
                                 vertex_descriptor
                                     .layouts()

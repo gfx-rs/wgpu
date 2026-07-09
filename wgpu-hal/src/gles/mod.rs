@@ -1,7 +1,9 @@
 /*!
 # OpenGL ES3 API (aka GLES3).
 
-Designed to work on Linux and Android, with context provided by EGL.
+Designed to work on platforms with context provided by EGL or WGL, including
+Linux and Android via EGL, and Windows via WGL by default or ANGLE/EGL with
+`cfg(windows_angle)`.
 
 ## Texture views
 
@@ -79,39 +81,33 @@ we don't bother with that combination.
 
 */
 
-///cbindgen:ignore
-#[cfg(not(any(windows, webgl)))]
-mod egl;
-#[cfg(Emscripten)]
-mod emscripten;
-#[cfg(webgl)]
-mod web;
-#[cfg(windows)]
-mod wgl;
-
 mod adapter;
 mod command;
 mod conv;
 mod device;
+///cbindgen:ignore
+#[cfg(all(not(webgl), any(not(windows), windows_angle)))]
+mod egl;
+#[cfg(all(not(webgl), any(not(windows), windows_angle)))]
+pub use self::egl::{AdapterContext, AdapterContextLock, Instance, Surface};
+
+#[cfg(Emscripten)]
+mod emscripten;
+
 mod fence;
 mod queue;
 
+#[cfg(webgl)]
+mod web;
+#[cfg(webgl)]
+pub use self::web::{AdapterContext, Instance, Surface};
+
+#[cfg(all(windows, not(webgl), not(windows_angle)))]
+mod wgl;
+#[cfg(all(windows, not(webgl), not(windows_angle)))]
+pub use self::wgl::{AdapterContext, AdapterContextLock, Instance, Surface};
+
 pub use fence::Fence;
-
-#[cfg(not(any(windows, webgl)))]
-pub use self::egl::{AdapterContext, AdapterContextLock};
-#[cfg(not(any(windows, webgl)))]
-pub use self::egl::{Instance, Surface};
-
-#[cfg(webgl)]
-pub use self::web::AdapterContext;
-#[cfg(webgl)]
-pub use self::web::{Instance, Surface};
-
-#[cfg(windows)]
-use self::wgl::AdapterContext;
-#[cfg(windows)]
-pub use self::wgl::{Instance, Surface};
 
 use alloc::{boxed::Box, string::String, string::ToString as _, sync::Arc, vec::Vec};
 use core::{

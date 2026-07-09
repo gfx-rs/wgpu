@@ -17,7 +17,7 @@
 //!
 //! We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) which has information on useful architecture patterns, debugging tips, and more getting started information.
 //!
-//! There are examples for this version [available on GitHub](https://github.com/gfx-rs/wgpu/tree/v29/examples#readme).
+//! There are examples for this version [available on GitHub](https://github.com/gfx-rs/wgpu/tree/v30/examples#readme).
 //!
 //! The API is refcounted, so all handles are cloneable, and if you create a resource which references another,
 //! it will automatically keep dependent resources alive.
@@ -32,8 +32,8 @@
 //!
 //! [Learn Wgpu]: https://sotrh.github.io/learn-wgpu/
 //! [WebGPU Fundamentals]: https://webgpufundamentals.org/
-//! [render_coordinates]: https://raw.githubusercontent.com/gfx-rs/wgpu/refs/heads/v29/docs/render_coordinates.png
-//! [texture_coordinates]: https://raw.githubusercontent.com/gfx-rs/wgpu/refs/heads/v29/docs/texture_coordinates.png
+//! [render_coordinates]: https://raw.githubusercontent.com/gfx-rs/wgpu/refs/heads/v30/docs/render_coordinates.png
+//! [texture_coordinates]: https://raw.githubusercontent.com/gfx-rs/wgpu/refs/heads/v30/docs/texture_coordinates.png
 //!
 //! ## Extension Specifications
 //!
@@ -42,8 +42,8 @@
 //!
 //! 🧪EXPERIMENTAL🧪 APIs are subject to change and may allow undefined behavior if used incorrectly.
 //!
-//! - 🧪EXPERIMENTAL🧪 [Ray Tracing](https://github.com/gfx-rs/wgpu/blob/v29/docs/api-specs/ray_tracing.md).
-//! - 🧪EXPERIMENTAL🧪 [Mesh Shading](https://github.com/gfx-rs/wgpu/blob/v29/docs/api-specs/mesh_shading.md).
+//! - 🧪EXPERIMENTAL🧪 [Ray Tracing](https://github.com/gfx-rs/wgpu/blob/v30/docs/api-specs/ray_tracing.md).
+//! - 🧪EXPERIMENTAL🧪 [Mesh Shading](https://github.com/gfx-rs/wgpu/blob/v30/docs/api-specs/mesh_shading.md).
 //!
 //! ## Shader Support
 //!
@@ -205,7 +205,7 @@
 //!   [`ExtendedSrgb`](SurfaceColorSpace::ExtendedSrgb) is the same range but
 //!   sRGB-*encoded* (gamma), the web's HDR path.
 //!
-//! [HDR surface example]: https://github.com/gfx-rs/wgpu/tree/v29/examples/standalone/03_hdr_surface
+//! [HDR surface example]: https://github.com/gfx-rs/wgpu/tree/v30/examples/standalone/03_hdr_surface
 //! [BT.709]: https://www.itu.int/rec/R-REC-BT.709
 //! [BT.2020]: https://www.itu.int/rec/R-REC-BT.2020
 //! [Display P3]: https://en.wikipedia.org/wiki/DCI-P3#Display_P3
@@ -332,6 +332,24 @@ pub use raw_window_handle as rwh;
 ///
 #[cfg(web)]
 pub use web_sys;
+
+/// Vendored WebGPU JS-handle types used by the WebGPU backend.
+///
+/// They are exposed publicly so that interop crates can read the JS handle
+/// behind a [`Texture`] / [`Buffer`] / etc. (via [`Texture::as_webgpu`] and
+/// siblings), and pass a foreign handle in (via
+/// [`Device::create_texture_from_webgpu_handle`]).
+///
+/// A `web_sys::GpuTexture` from a consumer's own `web-sys` dependency wraps
+/// the same JS object as a `wgpu::webgpu::GpuTexture`; convert between them
+/// with [`wasm_bindgen::JsCast::unchecked_into`].
+#[cfg(webgpu)]
+pub mod webgpu {
+    pub use crate::backend::webgpu::webgpu_sys::{
+        GpuBuffer, GpuDevice, GpuQueue, GpuTexture, GpuTextureView,
+    };
+    pub use crate::backend::webgpu::DropCallback;
+}
 
 #[doc(hidden)]
 pub use macros::helpers as __macro_helpers;

@@ -1042,6 +1042,8 @@ struct TempTextureViewKey {
     depth_slice: u32,
 }
 
+// Any state in this struct that may be dirty after an abandoned encoding must
+// be reset for reused encoders in `begin_encoding`.
 pub struct CommandEncoder {
     raw: vk::CommandPool,
     device: Arc<DeviceShared>,

@@ -1145,10 +1145,10 @@ macro_rules! check_extension_validation {
         // Don't check with explicitly allowed caps, as certain things (currently just
         // `acceleration_structure`s) can be enabled by multiple extensions
         let error = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), !(caps | other_caps))
-            .validate(&module)
-            .map_err(|e| e.into_inner()); // TODO(https://github.com/gfx-rs/wgpu/issues/8153): Add tests for spans
+            .validate(&module).map_err(|e|e.into_inner());
+        let error = error.as_ref(); // TODO(https://github.com/gfx-rs/wgpu/issues/8153): Add tests for spans
         #[allow(clippy::redundant_pattern_matching)]
-        if !matches!(&error, $val_err_pat) {
+        if !matches!(error, $val_err_pat) {
             eprintln!(
                 concat!(
                     "validation error without {:?} does not match pattern:\n",
@@ -1212,6 +1212,16 @@ macro_rules! check_validation {
     }
 }
 
+#[cfg_attr(
+    not(target_pointer_width = "32"),
+    expect(
+        clippy::result_large_err,
+        reason = "`ValidationError` is large enough that it should usually be boxed, \
+              but this is only a test, and it makes the `match` expressions \
+              in the callers a bit cleaner. \
+              This lint does not trigger on 32-bit builds."
+    )
+)]
 #[track_caller]
 fn validation_error(
     source: &str,
@@ -5078,7 +5088,7 @@ fn binding_array_requires_capability() {
 
     check_validation! {
         r#"
-            enable wgpu_binding_array; 
+            enable wgpu_binding_array;
             struct Buffer { data: u32 }
             @group(0) @binding(0)
             var<uniform> uniform_array: binding_array<Buffer, 10>;

@@ -930,6 +930,22 @@ impl<'a, W: Write> Writer<'a, W> {
                     _ => {}
                 }
             }
+
+            if let Expression::Binary {
+                op: crate::BinaryOperator::Modulo,
+                left,
+                right,
+            } = *expr
+            {
+                // Integer `%` is lowered to `left - right * (left / right)` in
+                // write_expr (`BinaryOperation::ModuloInt`), which references each
+                // operand twice, so bake both to avoid re-evaluating them.
+                if let Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint) = inner.scalar_kind()
+                {
+                    self.need_bake_expressions.insert(left);
+                    self.need_bake_expressions.insert(right);
+                }
+            }
         }
 
         for statement in func.body.iter() {
@@ -2878,6 +2894,9 @@ impl<'a, W: Write> Writer<'a, W> {
                         | Bo::Equal
                         | Bo::NotEqual => BinaryOperation::VectorCompare,
                         Bo::Modulo if scalar.kind == Sk::Float => BinaryOperation::Modulo,
+                        Bo::Modulo if scalar.kind == Sk::Sint || scalar.kind == Sk::Uint => {
+                            BinaryOperation::ModuloInt
+                        }
                         Bo::And if scalar.kind == Sk::Bool => {
                             op = crate::BinaryOperator::LogicalAnd;
                             BinaryOperation::VectorComponentWise
@@ -2893,6 +2912,11 @@ impl<'a, W: Write> Writer<'a, W> {
                             Bo::Modulo => BinaryOperation::Modulo,
                             _ => BinaryOperation::Other,
                         },
+                        (Some(Sk::Sint | Sk::Uint), _) | (_, Some(Sk::Sint | Sk::Uint))
+                            if op == Bo::Modulo =>
+                        {
+                            BinaryOperation::ModuloInt
+                        }
                         (Some(Sk::Bool), Some(Sk::Bool)) => match op {
                             Bo::InclusiveOr => {
                                 op = crate::BinaryOperator::LogicalOr;
@@ -2950,18 +2974,11 @@ impl<'a, W: Write> Writer<'a, W> {
 
                         write!(self.out, ")")?;
                     }
-                    // TODO: handle undefined behavior of BinaryOperator::Modulo
-                    //
-                    // sint:
-                    // if right == 0 return 0
-                    // if left == min(type_of(left)) && right == -1 return 0
-                    // if sign(left) == -1 || sign(right) == -1 return result as defined by WGSL
-                    //
-                    // uint:
-                    // if right == 0 return 0
-                    //
-                    // float:
-                    // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
+                    // Signed/unsigned integer `%` with a negative operand is handled by
+                    // `BinaryOperation::ModuloInt` below. Remaining TODO: the degenerate
+                    // div-by-zero / `INT_MIN % -1` cases (this backend also leaves integer
+                    // `/` unguarded), and float `% 0` (see
+                    // https://github.com/gpuweb/gpuweb/issues/2798).
                     BinaryOperation::Modulo => {
                         write!(self.out, "(")?;
 
@@ -2977,6 +2994,23 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(self.out, ")")?;
 
                         write!(self.out, ")")?;
+                    }
+                    BinaryOperation::ModuloInt => {
+                        // GLSL's `%` is undefined when either operand is negative.
+                        // Integer division truncates toward zero (which is well
+                        // defined), so reconstruct the remainder as `e1 - e2 * (e1 / e2)`.
+                        // This matches WGSL's truncated `%` for all operands; the
+                        // degenerate `x % 0` / `INT_MIN % -1` cases stay consistent
+                        // with this backend's unguarded integer `/`.
+                        write!(self.out, "(")?;
+                        self.write_expr(left, ctx)?;
+                        write!(self.out, " - ")?;
+                        self.write_expr(right, ctx)?;
+                        write!(self.out, " * (")?;
+                        self.write_expr(left, ctx)?;
+                        write!(self.out, " / ")?;
+                        self.write_expr(right, ctx)?;
+                        write!(self.out, "))")?;
                     }
                     BinaryOperation::Other => {
                         write!(self.out, "(")?;

@@ -419,9 +419,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
             list.set_name(label)?;
         }
 
-        self.list = Some(list);
+        // Ensure clean state even if the last encoding did not complete normally.
         self.temp.clear();
         self.pass.clear();
+        self.end_of_pass_timer_query = None;
+
+        self.list = Some(list);
         Ok(())
     }
     unsafe fn discard_encoding(&mut self) {

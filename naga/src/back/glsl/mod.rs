@@ -457,6 +457,10 @@ enum BinaryOperation {
     VectorComponentWise,
     /// GLSL `%` is SPIR-V `OpUMod/OpSMod` and `mod()` is `OpFMod`, but [`BinaryOperator::Modulo`](crate::BinaryOperator::Modulo) is `OpFRem`.
     Modulo,
+    /// Integer modulo. GLSL's `%` operator is undefined when either operand is
+    /// negative, so it is reconstructed as `a - b * (a / b)` (integer division
+    /// truncates toward zero, which is well defined), matching WGSL's truncated `%`.
+    ModuloInt,
     /// Any plain operation. No additional logic required.
     Other,
 }

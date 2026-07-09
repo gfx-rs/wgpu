@@ -34,6 +34,15 @@ impl Queue {
             inner: dispatch::DispatchQueue::custom(queue),
         }
     }
+
+    /// Returns the underlying [`webgpu::GpuQueue`] handle if this `Queue`
+    /// is on the WebGPU backend, otherwise `None`.
+    ///
+    /// [`webgpu::GpuQueue`]: crate::webgpu::GpuQueue
+    #[cfg(webgpu)]
+    pub fn as_webgpu(&self) -> Option<&webgpu::GpuQueue> {
+        self.inner.as_webgpu_opt().map(|wq| &wq.inner)
+    }
 }
 
 /// Identifier for a particular call to [`Queue::submit`]. Can be used
@@ -336,6 +345,8 @@ impl Queue {
     /// This method will return None if:
     /// - The queue is not from the backend specified by `A`.
     /// - The queue is from the `webgpu` or `custom` backend.
+    ///
+    /// On the `webgpu` backend, use `as_webgpu` instead.
     ///
     /// # Safety
     ///

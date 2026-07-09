@@ -2868,7 +2868,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 }
             };
             wgc::ray_tracing::BlasBuildEntry {
-                blas_id: e.blas.inner.as_core().id,
+                blas: e.blas.inner.as_core().id,
                 geometries,
             }
         });
@@ -2881,14 +2881,14 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                     instance
                         .as_ref()
                         .map(|instance| wgc::ray_tracing::TlasInstance {
-                            blas_id: instance.blas.as_core().id,
+                            blas: instance.blas.as_core().id,
                             transform: &instance.transform,
                             custom_data: instance.custom_data,
                             mask: instance.mask,
                         })
                 });
             wgc::ray_tracing::TlasPackage {
-                tlas_id: e.inner.as_core().id,
+                tlas: e.inner.as_core().id,
                 instances: Box::new(instances),
                 lowest_unmodified: e.lowest_unmodified,
             }
@@ -3799,7 +3799,8 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
 
         self.context
             .0
-            .render_bundle_encoder_set_pipeline(&mut self.encoder, pipeline.id);
+            .render_bundle_encoder_set_pipeline(&mut self.encoder, pipeline.id)
+            .expect("RenderBundleEncoder should not have ended")
     }
 
     fn set_bind_group(
@@ -3813,6 +3814,7 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
         self.context
             .0
             .render_bundle_encoder_set_bind_group(&mut self.encoder, index, bg, offsets)
+            .expect("RenderBundleEncoder should not have ended");
     }
 
     fn set_index_buffer(
@@ -3824,13 +3826,16 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     ) {
         let buffer = buffer.as_core();
 
-        self.context.0.render_bundle_encoder_set_index_buffer(
-            &mut self.encoder,
-            buffer.id,
-            index_format,
-            offset,
-            size,
-        );
+        self.context
+            .0
+            .render_bundle_encoder_set_index_buffer(
+                &mut self.encoder,
+                buffer.id,
+                index_format,
+                offset,
+                size,
+            )
+            .expect("RenderBundleEncoder should not have ended");
     }
 
     fn set_vertex_buffer(
@@ -3842,13 +3847,10 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     ) {
         let buffer = buffer.map(|buffer| buffer.as_core().id);
 
-        self.context.0.render_bundle_encoder_set_vertex_buffer(
-            &mut self.encoder,
-            slot,
-            buffer,
-            offset,
-            size,
-        );
+        self.context
+            .0
+            .render_bundle_encoder_set_vertex_buffer(&mut self.encoder, slot, buffer, offset, size)
+            .expect("RenderBundleEncoder should not have ended");
     }
 
     fn set_immediates(&mut self, offset: u32, data: &[u8]) {
@@ -3867,28 +3869,35 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
 
         self.context
             .0
-            .render_bundle_encoder_set_immediates(&mut self.encoder, offset, data);
+            .render_bundle_encoder_set_immediates(&mut self.encoder, offset, data)
+            .expect("RenderBundleEncoder should not have ended");
     }
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
-        self.context.0.render_bundle_encoder_draw(
-            &mut self.encoder,
-            vertices.end - vertices.start,
-            instances.end - instances.start,
-            vertices.start,
-            instances.start,
-        );
+        self.context
+            .0
+            .render_bundle_encoder_draw(
+                &mut self.encoder,
+                vertices.end - vertices.start,
+                instances.end - instances.start,
+                vertices.start,
+                instances.start,
+            )
+            .expect("RenderBundleEncoder should not have ended");
     }
 
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
-        self.context.0.render_bundle_encoder_draw_indexed(
-            &mut self.encoder,
-            indices.end - indices.start,
-            instances.end - instances.start,
-            indices.start,
-            base_vertex,
-            instances.start,
-        );
+        self.context
+            .0
+            .render_bundle_encoder_draw_indexed(
+                &mut self.encoder,
+                indices.end - indices.start,
+                instances.end - instances.start,
+                indices.start,
+                base_vertex,
+                instances.start,
+            )
+            .expect("RenderBundleEncoder should not have ended");
     }
 
     fn draw_indirect(
@@ -3898,11 +3907,14 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     ) {
         let indirect_buffer = indirect_buffer.as_core();
 
-        self.context.0.render_bundle_encoder_draw_indirect(
-            &mut self.encoder,
-            indirect_buffer.id,
-            indirect_offset,
-        )
+        self.context
+            .0
+            .render_bundle_encoder_draw_indirect(
+                &mut self.encoder,
+                indirect_buffer.id,
+                indirect_offset,
+            )
+            .expect("RenderBundleEncoder should not have ended");
     }
 
     fn draw_indexed_indirect(
@@ -3912,20 +3924,23 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     ) {
         let indirect_buffer = indirect_buffer.as_core();
 
-        self.context.0.render_bundle_encoder_draw_indexed_indirect(
-            &mut self.encoder,
-            indirect_buffer.id,
-            indirect_offset,
-        )
+        self.context
+            .0
+            .render_bundle_encoder_draw_indexed_indirect(
+                &mut self.encoder,
+                indirect_buffer.id,
+                indirect_offset,
+            )
+            .expect("RenderBundleEncoder should not have ended");
     }
 
-    fn finish(self, desc: &crate::RenderBundleDescriptor<'_>) -> dispatch::DispatchRenderBundle
+    fn finish(mut self, desc: &crate::RenderBundleDescriptor<'_>) -> dispatch::DispatchRenderBundle
     where
         Self: Sized,
     {
         let label = self.encoder.label().map(alloc::string::ToString::to_string);
         let (id, error) = self.context.0.render_bundle_encoder_finish(
-            self.encoder,
+            &mut self.encoder,
             &desc.map_label(|l| l.map(Borrowed)),
             None,
         );

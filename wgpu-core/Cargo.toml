@@ -130,28 +130,35 @@ portable-atomic = ["dep:portable-atomic", "wgpu-hal/portable-atomic"]
 # platform crates collude to provide platform-specific behavior.
 
 ## DX12 backend
-dx12 = ["wgpu-core-deps-windows-linux-android/dx12"]
+dx12 = ["wgpu-core-deps-windows/dx12"]
 ## Metal backend
 metal = ["wgpu-core-deps-apple/metal"]
 ## Vulkan backend, only available on Windows, Linux, Android
-vulkan = ["wgpu-core-deps-windows-linux-android/vulkan"]
+vulkan = [
+    "wgpu-core-deps-linux-android-bsd/vulkan",
+    "wgpu-core-deps-windows/vulkan",
+]
 ## OpenGL backend, only available on Windows, Linux, Android, and Emscripten
 gles = [
-    "wgpu-core-deps-windows-linux-android/gles",
+    "wgpu-core-deps-linux-android-bsd/gles",
+    "wgpu-core-deps-windows/gles",
     "wgpu-core-deps-emscripten/gles",
 ]
 
 ## WebGL backend, only available on Emscripten
 webgl = ["wgpu-core-deps-wasm/webgl", "wgpu-types/web"]
-## OpenGL backend, on macOS only
+## OpenGL backend via ANGLE, only available on macOS
 angle = ["wgpu-core-deps-apple/angle"]
 ## Vulkan portability backend, only available on macOS
 vulkan-portability = ["wgpu-core-deps-apple/vulkan-portability"]
 ## Renderdoc integration, only available on Windows, Linux, and Android
-renderdoc = ["wgpu-core-deps-windows-linux-android/renderdoc"]
+renderdoc = [
+    "wgpu-core-deps-linux-android-bsd/renderdoc",
+    "wgpu-core-deps-windows/renderdoc",
+]
 
 ## Support creating textures from DRM display/window handles.
-drm = ["wgpu-core-deps-windows-linux-android/drm"]
+drm = ["wgpu-core-deps-windows/drm", "wgpu-core-deps-linux-android-bsd/drm"]
 
 ## Enable the `noop` backend.
 # TODO(https://github.com/gfx-rs/wgpu/issues/7120): there should be a hal feature
@@ -169,8 +176,11 @@ wgpu-core-deps-emscripten = { workspace = true, optional = true }
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wgpu-core-deps-wasm = { workspace = true, optional = true }
 
-[target.'cfg(any(windows, target_os = "linux", target_os = "android", target_os = "freebsd"))'.dependencies]
-wgpu-core-deps-windows-linux-android = { workspace = true, optional = true }
+[target.'cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))'.dependencies]
+wgpu-core-deps-linux-android-bsd = { workspace = true, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+wgpu-core-deps-windows = { workspace = true, optional = true }
 
 [dependencies]
 naga.workspace = true

@@ -1,7 +1,6 @@
 use core::{cell::UnsafeCell, fmt, mem::ManuallyDrop};
 
 use crate::lock::{rank, RankData, RwLock, RwLockReadGuard, RwLockWriteGuard};
-use crate::resource::DestructibleResourceState;
 
 /// A guard that provides read access to snatchable data.
 pub struct SnatchGuard<'a>(RwLockReadGuard<'a, ()>);
@@ -62,46 +61,6 @@ impl<T> fmt::Debug for SnatchableInner<T> {
 }
 
 unsafe impl<T> Sync for SnatchableInner<T> {}
-
-/// A value that is mostly immutable but can be "snatched" if we need to destroy
-/// it early.
-///
-/// In order to safely access the underlying data, the device's global snatchable
-/// lock must be taken. To guarantee it, methods take a read or write guard of that
-/// special lock.
-pub type Snatchable2<T> = SnatchableInner<DestructibleResourceState<T>>;
-
-impl<T> Snatchable2<T> {
-    pub fn new(val: T) -> Self {
-        SnatchableInner {
-            value: UnsafeCell::new(DestructibleResourceState::Valid(val)),
-        }
-    }
-
-    pub fn invalid() -> Self {
-        SnatchableInner {
-            value: UnsafeCell::new(DestructibleResourceState::Invalid),
-        }
-    }
-
-    /// Get read access to the value. Requires a the snatchable lock's read guard.
-    pub fn get<'a>(&'a self, _guard: &'a SnatchGuard) -> DestructibleResourceState<&'a T> {
-        unsafe { (*self.value.get()).as_ref() }
-    }
-
-    /// Take the value. Requires a the snatchable lock's write guard.
-    pub fn snatch(&self, _guard: &mut ExclusiveSnatchGuard) -> DestructibleResourceState<T> {
-        unsafe { (*self.value.get()).take() }
-    }
-
-    /// Take the value without a guard. This can only be used with exclusive access
-    /// to self, so it does not require locking.
-    ///
-    /// Typically useful in a drop implementation.
-    pub fn take(&mut self) -> DestructibleResourceState<T> {
-        self.value.get_mut().take()
-    }
-}
 
 use trace::LockTrace;
 #[cfg(all(debug_assertions, feature = "std"))]
