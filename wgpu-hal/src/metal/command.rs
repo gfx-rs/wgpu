@@ -23,7 +23,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::{ops::Range, ptr::NonNull};
+use core::{num::NonZeroU64, ops::Range, ptr::NonNull};
 use smallvec::SmallVec;
 use wgpu_sync::atomic;
 
@@ -1408,7 +1408,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: crate::BufferBinding<'a, super::Buffer, wgt::BufferSize>,
+        binding: crate::BufferBinding<'a, super::Buffer, wgt::BufferAddress>,
         format: wgt::IndexFormat,
     ) {
         let (stride, raw_type) = conv::map_index_format(format);
@@ -1423,7 +1423,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
-        binding: crate::BufferBinding<'a, super::Buffer, wgt::BufferSize>,
+        binding: crate::BufferBinding<'a, super::Buffer, wgt::BufferAddress>,
     ) {
         let buffer_index = MAX_BUFFERS - 1 - index;
         let encoder = self.state.render.as_ref().unwrap();
@@ -1435,14 +1435,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
             )
         };
 
-        // TODO(#3170): temporary
-        //if let Some(size) = NonZeroU64::new(binding.size) {
-        self.state
-            .vertex_buffer_size_map
-            .insert(buffer_index, binding.size);
-        //} else {
-        //    self.state.vertex_buffer_size_map.remove(&buffer_index);
-        //}
+        // The size map uses `NonZeroU64` mostly because it did so in the past when
+        // `hal::BufferBinding` tried to disallow zero-length bindings. Zero-length bindings
+        // are valid for vertex buffers, so there isn't really a significance of a
+        // zero-length buffer being removed from the map (vs. the map storing `u64`).
+        if let Some(size) = NonZeroU64::new(binding.size) {
+            self.state.vertex_buffer_size_map.insert(buffer_index, size);
+        } else {
+            // `make_sizes_buffer_update` uses zero for buffers that are not in the map.
+            self.state.vertex_buffer_size_map.remove(&buffer_index);
+        }
 
         if let Some((index, sizes)) = self
             .state

@@ -300,7 +300,7 @@ use core::{
     borrow::Borrow,
     error::Error,
     fmt,
-    num::{NonZeroU32, NonZeroU64},
+    num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
 };
@@ -1677,13 +1677,13 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: BufferBinding<'a, <Self::A as Api>::Buffer, wgt::BufferSize>,
+        binding: BufferBinding<'a, <Self::A as Api>::Buffer, wgt::BufferAddress>,
         format: wgt::IndexFormat,
     );
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
-        binding: BufferBinding<'a, <Self::A as Api>::Buffer, wgt::BufferSize>,
+        binding: BufferBinding<'a, <Self::A as Api>::Buffer, wgt::BufferAddress>,
     );
     unsafe fn set_viewport(&mut self, rect: &Rect<f32>, depth_range: Range<f32>);
     unsafe fn set_scissor_rect(&mut self, rect: &Rect<u32>);
@@ -2350,16 +2350,18 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
 ///
 /// ## Zero-length bindings
 ///
-/// Some back ends cannot tolerate zero-length regions; for example, see
-/// [VUID-VkDescriptorBufferInfo-offset-00340][340] and
+/// Some platform APIs do not accept zero-length regions; for example, see
+/// [VUID-VkDescriptorBufferInfo-offset-00340][340],
 /// [VUID-VkDescriptorBufferInfo-range-00341][341], or the
-/// documentation for GLES's [glBindBufferRange][bbr]. This documentation
-/// previously stated that a `BufferBinding` must have `offset` strictly less
-/// than the size of the buffer, but this restriction was not honored elsewhere
-/// in the code, so has been removed. However, it remains the case that
-/// some backends do not support zero-length bindings, so additional
-/// logic is needed somewhere to handle this properly. See
-/// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
+/// documentation for GLES's [glBindBufferRange][bbr]. For
+/// [VUID-VkCmdBindVertexBuffers-pOffsets-00626][626], no size is specified,
+/// the binding extends from the offset to the end of the buffer, and the offset
+/// must be strictly less than the buffer size.
+///
+/// WebGPU does not allow zero-length storage/uniform buffer bindings, but does
+/// allow zero-length vertex/index buffer bindings. `wgpu-core` ensures that
+/// buffers supporting vertex/index usage have 4B of naturally-aligned padding at
+/// the end, to enable simulating a zero-length binding at the end of the buffer.
 ///
 /// [`offset`]: BufferBinding::offset
 /// [`size`]: BufferBinding::size
@@ -2367,6 +2369,7 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
 /// [`Uniform`]: wgt::BufferBindingType::Uniform
 /// [340]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-offset-00340
 /// [341]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-range-00341
+/// [626]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-vkCmdBindVertexBuffers-pOffsets-00626
 /// [bbr]: https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glBindBufferRange.xhtml
 /// [woob]: https://gpuweb.github.io/gpuweb/wgsl/#out-of-bounds-access-sec
 #[derive(Debug)]
@@ -2395,34 +2398,6 @@ impl<B: DynBuffer + ?Sized, S: Copy> Clone for BufferBinding<'_, B, S> {
             buffer: self.buffer,
             offset: self.offset,
             size: self.size,
-        }
-    }
-}
-
-/// Temporary convenience trait to let us call `.get()` on `u64`s in code that
-/// really wants to be using `NonZeroU64`.
-/// TODO(<https://github.com/gfx-rs/wgpu/issues/3170>): remove this
-pub trait ShouldBeNonZeroExt {
-    fn get(&self) -> u64;
-}
-
-impl ShouldBeNonZeroExt for NonZeroU64 {
-    fn get(&self) -> u64 {
-        NonZeroU64::get(*self)
-    }
-}
-
-impl ShouldBeNonZeroExt for u64 {
-    fn get(&self) -> u64 {
-        *self
-    }
-}
-
-impl ShouldBeNonZeroExt for Option<NonZeroU64> {
-    fn get(&self) -> u64 {
-        match *self {
-            Some(non_zero) => non_zero.get(),
-            None => 0,
         }
     }
 }
