@@ -1221,18 +1221,21 @@ impl Device {
 
         // The great thing about buffer sizes is there are so many to choose from!
         //  - The application may request an arbitrary byte-aligned size.
-        //  - We add an extra byte if it's a vertex or index buffer so that we can simulate
-        //    binding an empty range at the end of the buffer, which Vulkan does not natively
-        //    allow.
-        //  - The overall buffer size must generally be a non-zero multiple of
-        //    COPY_BUFFER_ALIGNMENT (4), but in special cases an additional platform-dependent
-        //    requirement may apply (e.g. 256 for D3D12 constant buffers).
+        //  - If the buffer supports usage as a vertex or index buffer, we must ensure there
+        //    is a naturally aligned block of 4B at the end of the buffer. Zero-size bindings
+        //    are not supported by hal and are redirected to this block by
+        //    `resolve_vertex_or_index_binding_range`.
+        //  - The overall buffer size must be a non-zero multiple of COPY_BUFFER_ALIGNMENT (4).
+        //    In some cases additional platform-dependent requirements may apply. The actual
+        //    allocated size of the buffer is returned by hal along with the buffer object from
+        //    `create_buffer`. `wgpu-core` is responsible for ensuring that any region of the
+        //    buffer, including hal-added padding, is initialized before it may be accessed.
         //
-        // Because initialization operates at multiples of COPY_BUFFER_ALIGNMENT, and
-        // initialization tracking will never determine that it is necessary to initialize a
-        // region outside the application-visible range, round the tracked initialization range
-        // down to a multiple of COPY_BUFFER_ALIGNMENT (tail_start), and eagerly zero-initialize
-        // from there to the buffer's true end offset.
+        // Because buffer writes for initialization operate at multiples of COPY_BUFFER_ALIGNMENT,
+        // and because initialization tracking will never determine that it is necessary to
+        // initialize a region outside the application-visible range, round the tracked
+        // initialization range down to a multiple of COPY_BUFFER_ALIGNMENT (tail_start), and
+        // eagerly zero-initialize from there to the buffer's true end.
 
         let padded_size = if desc.size == 0 {
             wgt::COPY_BUFFER_ALIGNMENT
@@ -1240,9 +1243,10 @@ impl Device {
             .usage
             .intersects(wgt::BufferUsages::VERTEX | wgt::BufferUsages::INDEX)
         {
-            desc.size + 1
+            // We require 4B of padding with 4B alignment. See above.
+            align_to(desc.size, wgt::COPY_BUFFER_ALIGNMENT) + wgt::COPY_BUFFER_ALIGNMENT
         } else {
-            desc.size
+            align_to(desc.size, wgt::COPY_BUFFER_ALIGNMENT)
         };
         let tail_start = desc.size & !(wgt::COPY_BUFFER_ALIGNMENT - 1);
 
