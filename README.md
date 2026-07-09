@@ -75,7 +75,7 @@ Contributors are welcome! See [CONTRIBUTING.md][contrib] for more information.
 
 ✅ = First Class Support  
 🆗 = Downlevel/Best Effort Support  
-📐 = Requires the [ANGLE](https://github.com/gfx-rs/wgpu/wiki/Running-on-ANGLE) translation layer (GL ES 3.0 only)  
+📐 = Requires the [ANGLE](https://github.com/gfx-rs/wgpu/wiki/Running-on-ANGLE) translation layer (GL ES 3.0 only). Use the `angle` feature on macOS/iOS. On Windows, `gles` uses WGL by default; build with `cfg(windows_angle)` to use ANGLE instead.
 🌋 = Requires the [MoltenVK](https://vulkan.lunarg.com/sdk/home#mac) translation layer  
 🛠️ = Unsupported, though open to contributions
 

@@ -4720,8 +4720,9 @@ dependencies = [
  "thiserror 2.0.18",
  "wgpu-core-deps-apple",
  "wgpu-core-deps-emscripten",
+ "wgpu-core-deps-linux-android-bsd",
  "wgpu-core-deps-wasm",
- "wgpu-core-deps-windows-linux-android",
+ "wgpu-core-deps-windows",
  "wgpu-hal",
  "wgpu-naga-bridge",
  "wgpu-types",
@@ -4742,6 +4743,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-core-deps-linux-android-bsd"
+version = "30.0.0"
+dependencies = [
+ "wgpu-hal",
+]
+
+[[package]]
 name = "wgpu-core-deps-wasm"
 version = "30.0.0"
 dependencies = [
@@ -4749,7 +4757,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-core-deps-windows-linux-android"
+name = "wgpu-core-deps-windows"
 version = "30.0.0"
 dependencies = [
  "wgpu-hal",

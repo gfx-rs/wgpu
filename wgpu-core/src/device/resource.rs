@@ -1133,25 +1133,28 @@ impl Device {
             usage |= wgt::BufferUses::COPY_DST;
         }
 
+        // The great thing about buffer sizes is there are so many to choose from!
+        //  - The application may request an arbitrary byte-aligned size.
+        //  - We add an extra byte if it's a vertex buffer so that we can simulate binding an
+        //    empty range at the end of the buffer, which Vulkan does not natively allow.
+        //  - The overall buffer size must be a non-zero multiple of 4.
+        // Because initialization operates at multiples of 4 bytes, and initialization
+        // tracking will never determine that it is necessary to initialize a region outside
+        // the application-visible range, we eagerly zero-initialize anything beyond that.
         let actual_size = if desc.size == 0 {
             wgt::COPY_BUFFER_ALIGNMENT
         } else if desc.usage.contains(wgt::BufferUsages::VERTEX) {
-            // Bumping the size by 1 so that we can bind an empty range at the
-            // end of the buffer.
             desc.size + 1
         } else {
             desc.size
         };
-        let clear_remainder = actual_size % wgt::COPY_BUFFER_ALIGNMENT;
-        let aligned_size = if clear_remainder != 0 {
-            actual_size + wgt::COPY_BUFFER_ALIGNMENT - clear_remainder
-        } else {
-            actual_size
-        };
+        let actual_size = align_to(actual_size, wgt::COPY_BUFFER_ALIGNMENT);
+        let tail_start = desc.size & !(wgt::COPY_BUFFER_ALIGNMENT - 1);
+        debug_assert!(actual_size - 4 <= tail_start);
 
         let hal_desc = hal::BufferDescriptor {
             label: desc.label.to_hal(self.instance_flags),
-            size: aligned_size,
+            size: actual_size,
             usage,
             memory_flags: hal::MemoryFlags::empty(),
         };
@@ -1184,7 +1187,7 @@ impl Device {
             size: desc.size,
             initialization_status: RwLock::new(
                 rank::BUFFER_INITIALIZATION_STATUS,
-                BufferInitTracker::new(aligned_size),
+                BufferInitTracker::new(tail_start),
             ),
             map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
             label: desc.label.to_string(),
@@ -1196,10 +1199,64 @@ impl Device {
 
         let buffer = Arc::new(buffer);
 
+        let init_buffer_tail = |buffer, snatch_guard| {
+            let mapping = map_buffer(
+                buffer,
+                tail_start,
+                actual_size - tail_start,
+                HostMap::Write,
+                snatch_guard,
+            )?;
+            let raw = buffer
+                .raw(snatch_guard)
+                .expect("newly-created buffer cannot be destroyed");
+            unsafe {
+                // SAFETY: The buffer tail is valid and aligned.
+                mapping.ptr.cast::<u32>().as_ptr().write(0);
+                if !mapping.is_coherent {
+                    #[allow(clippy::single_range_in_vec_init)]
+                    self.raw()
+                        .flush_mapped_ranges(raw, &[tail_start..actual_size]);
+                }
+                self.raw().unmap_buffer(raw);
+            }
+            Ok::<_, resource::CreateBufferError>(())
+        };
+
         let buffer_use = if !desc.mapped_at_creation {
+            if tail_start == actual_size {
+                // No tail init necessary
+            } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
+                // Tail init by mapping
+                let snatch_guard = self.snatchable_lock.read();
+                init_buffer_tail(&buffer, &snatch_guard)?;
+            } else if let Some(queue) = self.get_queue() {
+                // Schedule tail init in pending writes
+                let snatch_guard = self.snatchable_lock.read();
+                let mut pending_writes = queue.pending_writes.lock();
+                self.trackers
+                    .lock()
+                    .buffers
+                    .insert_single(&buffer, wgt::BufferUses::COPY_DST);
+                pending_writes.clear_buffer(
+                    self,
+                    &buffer,
+                    tail_start..actual_size,
+                    &snatch_guard,
+                )?;
+                return Ok(buffer);
+            } else {
+                // Queue is gone, buffer will not be used.
+            }
             wgt::BufferUses::empty()
         } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
-            // buffer is mappable, so we are just doing that at start
+            // Mapped-at-creation with MAP_WRITE. Tail init by mapping, then map the
+            // application-visible portion of the buffer. Don't do both in the same
+            // mapping, because the application shouldn't see the tail.
+            let snatch_guard = self.snatchable_lock.read();
+            if tail_start != actual_size {
+                init_buffer_tail(&buffer, &snatch_guard)?;
+            }
             let map_size = buffer.size;
             let mapping = if map_size == 0 {
                 hal::BufferMapping {
@@ -1207,9 +1264,9 @@ impl Device {
                     is_coherent: true,
                 }
             } else {
-                let snatch_guard: SnatchGuard = self.snatchable_lock.read();
                 map_buffer(&buffer, 0, map_size, HostMap::Write, &snatch_guard)?
             };
+            drop(snatch_guard);
             *buffer.map_state.lock() = resource::BufferMapState::Active {
                 mapping,
                 range: 0..map_size,
@@ -1217,17 +1274,26 @@ impl Device {
             };
             wgt::BufferUses::MAP_WRITE
         } else {
+            // Mapped-at-creation without MAP_WRITE. Create and zero-initialize a staging
+            // buffer for the entire buffer (including tail). It is okay to use a single
+            // mapping, `get_mapped_range` will still only expose the application-visible
+            // range. The application could corrupt the tail with an out-of-bounds write,
+            // which may cause problems for its shaders if they read out-of-bounds, but
+            // won't cause problems in wgpu.
             let mut staging_buffer =
-                StagingBuffer::new(self, wgt::BufferSize::new(aligned_size).unwrap())?;
+                StagingBuffer::new(self, wgt::BufferSize::new(actual_size).unwrap())?;
 
             // Zero initialize memory and then mark the buffer as initialized
             // (it's guaranteed that this is the case by the time the buffer is usable)
             staging_buffer.write_zeros();
-            buffer.initialization_status.write().drain(0..aligned_size);
+            buffer.initialization_status.write().drain(0..actual_size);
 
             *buffer.map_state.lock() = resource::BufferMapState::Init { staging_buffer };
             wgt::BufferUses::COPY_DST
         };
+
+        // If we didn't add the buffer to the tracker already for initialization via
+        // PendingWrites, do so now.
 
         self.trackers
             .lock()

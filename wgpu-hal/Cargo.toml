@@ -38,6 +38,7 @@ missing_debug_implementations = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(feature, values("cargo-clippy"))', # objc's `msg_send` macro injects this in our code https://github.com/SSheldon/rust-objc/issues/125
     'cfg(web_sys_unstable_apis)', # web-sys uses this
+    'cfg(windows_angle)',
 ] }
 
 [lib]
@@ -58,7 +59,7 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 # wgpu-core's features are defined to enable the backends on their "default" platforms. For example we
 # exclude the Vulkan backend on MacOS unless a separate feature `vulkan-portability` is enabled. In response
 # to these features, it enables features of platform specific crates. For example, the `vulkan` feature in wgpu-core
-# enables the `vulkan` feature in `wgpu-core-deps-windows-linux-android` which in turn enables the
+# enables the `vulkan` feature in `wgpu-core-deps-linux-android-bsd` which in turn enables the
 # `vulkan` feature in `wgpu-hal` _only_ on those platforms. If you enable the `vulkan-portability` feature, it
 # will enable the `vulkan` feature in `wgpu-core-deps-apple`. The only way to do this is unfortunately to have
 # a separate crate for each platform category that participates in the feature unification.
@@ -102,6 +103,7 @@ vulkan = [
     "dep:raw-window-metal",
     "dep:smallvec",
     "dep:windows",
+    "dep:windows-core",
     "gpu-allocator/vulkan",
     "windows/Win32",
     "windows/Win32_Devices_Display",

@@ -706,13 +706,6 @@ impl Instance {
             .expect("Could not lock instance. This is most-likely a deadlock.")
             .version
     }
-
-    pub fn egl_config(&self) -> khronos_egl::Config {
-        self.inner
-            .try_lock()
-            .expect("Could not lock instance. This is most-likely a deadlock.")
-            .config
-    }
 }
 
 #[cfg(send_sync)]
@@ -767,6 +760,31 @@ impl crate::Instance for Instance {
         let egl1_5: Option<&Arc<EglInstance>> = Some(&egl);
 
         let (display, wsi_kind) = match (desc.display.map(|d| d.as_raw()), egl1_5) {
+            (Some(Rdh::Windows(_)) | None, Some(egl))
+                if cfg!(windows)
+                    && client_ext_str.contains("EGL_ANGLE_platform_angle")
+                    && client_ext_str.contains("EGL_ANGLE_platform_angle_d3d") =>
+            {
+                log::debug!("Using Angle platform with D3D11");
+                const EGL_PLATFORM_ANGLE_TYPE_ANGLE: u32 = 0x3203;
+                const EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE: u32 = 0x3208;
+                let display_attributes = [
+                    EGL_PLATFORM_ANGLE_TYPE_ANGLE as khronos_egl::Attrib,
+                    EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE as khronos_egl::Attrib,
+                    EGL_PLATFORM_ANGLE_DEBUG_LAYERS_ENABLED as khronos_egl::Attrib,
+                    usize::from(desc.flags.contains(wgt::InstanceFlags::VALIDATION)),
+                    khronos_egl::ATTRIB_NONE,
+                ];
+                let display = unsafe {
+                    egl.get_platform_display(
+                        EGL_PLATFORM_ANGLE_ANGLE,
+                        khronos_egl::DEFAULT_DISPLAY,
+                        &display_attributes,
+                    )
+                }
+                .map_err(instance_err("failed to get Angle D3D11 display"))?;
+                (display, WindowKind::Unknown)
+            }
             (Some(Rdh::Wayland(wayland_display_handle)), Some(egl))
                 if client_ext_str.contains("EGL_EXT_platform_wayland") =>
             {
@@ -1083,7 +1101,7 @@ impl super::Device {
 #[derive(Debug)]
 pub struct Swapchain {
     surface: khronos_egl::Surface,
-    wl_window: Option<*mut wayland_sys::egl::wl_egl_window>,
+    wl_window: Option<*mut ffi::c_void>,
     framebuffer: glow::Framebuffer,
     renderbuffer: glow::Renderbuffer,
     /// Extent because the window lies
@@ -1191,10 +1209,7 @@ impl Surface {
     unsafe fn unconfigure_impl(
         &self,
         device: &super::Device,
-    ) -> Option<(
-        khronos_egl::Surface,
-        Option<*mut wayland_sys::egl::wl_egl_window>,
-    )> {
+    ) -> Option<(khronos_egl::Surface, Option<*mut ffi::c_void>)> {
         let gl = &device.shared.context.lock();
         match self.swapchain.write().take() {
             Some(sc) => {
@@ -1226,11 +1241,12 @@ impl crate::Surface for Surface {
 
         let (surface, wl_window) = match unsafe { self.unconfigure_impl(device) } {
             Some((sc, wl_window)) => {
+                #[cfg(unix)]
                 if let Some(window) = wl_window {
                     wayland_sys::ffi_dispatch!(
                         wayland_sys::egl::wayland_egl_handle(),
                         wl_egl_window_resize,
-                        window,
+                        window.cast(),
                         config.extent.width as i32,
                         config.extent.height as i32,
                         0,
@@ -1241,6 +1257,7 @@ impl crate::Surface for Surface {
                 (sc, wl_window)
             }
             None => {
+                #[cfg_attr(not(unix), expect(unused_mut))]
                 let mut wl_window = None;
                 let (mut temp_xlib_handle, mut temp_xcb_handle);
                 let native_window_ptr = match (self.wsi.kind, self.raw_window_handle) {
@@ -1269,7 +1286,7 @@ impl crate::Surface for Surface {
                             config.extent.width as i32,
                             config.extent.height as i32,
                         );
-                        wl_window = Some(window);
+                        wl_window = Some(window.cast());
                         window.cast()
                     }
                     #[cfg(Emscripten)]
@@ -1427,11 +1444,12 @@ impl crate::Surface for Surface {
                 .instance
                 .destroy_surface(self.egl.display, surface)
                 .unwrap();
-            if let Some(window) = wl_window {
+            if let Some(_window) = wl_window {
+                #[cfg(unix)]
                 wayland_sys::ffi_dispatch!(
                     wayland_sys::egl::wayland_egl_handle(),
                     wl_egl_window_destroy,
-                    window,
+                    _window.cast(),
                 );
             }
         }

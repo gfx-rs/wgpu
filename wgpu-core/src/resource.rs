@@ -1034,10 +1034,12 @@ impl Buffer {
                 let staging_buffer = staging_buffer.flush();
 
                 if let Some(queue) = device.get_queue() {
-                    let region = wgt::BufferSize::new(self.size).map(|size| hal::BufferCopy {
+                    // Copy the entire staging buffer, including any
+                    // zero-initialized padding.
+                    let region = Some(hal::BufferCopy {
                         src_offset: 0,
                         dst_offset: 0,
-                        size,
+                        size: staging_buffer.size,
                     });
                     let transition_src = hal::BufferBarrier {
                         buffer: staging_buffer.raw(),
@@ -1057,13 +1059,13 @@ impl Buffer {
                     let encoder = pending_writes.activate();
                     unsafe {
                         encoder.transition_buffers(&[transition_src, transition_dst]);
-                        if self.size > 0 {
-                            encoder.copy_buffer_to_buffer(
-                                staging_buffer.raw(),
-                                raw_buf,
-                                region.as_slice(),
-                            );
-                        }
+                        // Buffers allocate at least `COPY_BUFFER_ALIGNMENT` bytes, so
+                        // there's always something to copy here.
+                        encoder.copy_buffer_to_buffer(
+                            staging_buffer.raw(),
+                            raw_buf,
+                            region.as_slice(),
+                        );
                     }
                     pending_writes.consume(staging_buffer);
                     pending_writes.insert_buffer(self);
@@ -1202,6 +1204,8 @@ pub enum CreateBufferError {
     MissingFeatures(#[from] MissingFeatures),
     #[error("Failed to create bind group for indirect buffer validation: {0}")]
     IndirectValidationBindGroup(DeviceError),
+    #[error("Error initializing buffer: {0}")]
+    QueueWrite(#[from] queue::QueueWriteError),
 }
 
 crate::impl_resource_type!(Buffer);
@@ -1218,6 +1222,7 @@ impl WebGpuError for CreateBufferError {
             Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
             Self::IndirectValidationBindGroup(e) => e.webgpu_error_type(),
             Self::MissingFeatures(e) => e.webgpu_error_type(),
+            Self::QueueWrite(e) => e.webgpu_error_type(),
 
             Self::UnalignedSize
             | Self::InvalidUsage(_)
