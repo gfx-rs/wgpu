@@ -161,6 +161,13 @@ pub enum ExpressionError {
     },
     #[error("Division by zero")]
     DivideByZero,
+    #[error(
+        "Resource table access type {0:?} is not supported; \
+         only sampled and depth textures can be fetched from a resource table"
+    )]
+    InvalidResourceTableType(Handle<crate::Type>),
+    #[error("Resource table index {0:?} is not a u32 scalar")]
+    InvalidResourceTableIndexType(Handle<crate::Expression>),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -1427,6 +1434,38 @@ impl super::Validator {
                 }
                 ShaderStages::COMPUTE
             }
+            E::ResourceTableGet { ty, index } => {
+                if !self
+                    .capabilities
+                    .contains(crate::valid::Capabilities::RESOURCE_TABLE)
+                {
+                    return Err(ExpressionError::MissingCapabilities(
+                        crate::valid::Capabilities::RESOURCE_TABLE,
+                    ));
+                }
+
+                // In M0, only sampled and depth textures may be fetched from a
+                // resource table. Storage textures, samplers, and non-resource
+                // types are rejected here (and, with friendlier messages, by
+                // the WGSL front end).
+                match module.types[ty].inner {
+                    Ti::Image {
+                        class: crate::ImageClass::Sampled { .. } | crate::ImageClass::Depth { .. },
+                        ..
+                    } => {}
+                    _ => return Err(ExpressionError::InvalidResourceTableType(ty)),
+                }
+
+                match resolver[index] {
+                    Ti::Scalar(Sc {
+                        kind: Sk::Uint,
+                        width: 4,
+                    }) => {}
+                    _ => return Err(ExpressionError::InvalidResourceTableIndexType(index)),
+                }
+
+                ShaderStages::all()
+            }
         };
         Ok(stages)
     }
@@ -1441,6 +1480,9 @@ impl super::Validator {
         match function.expressions[expr] {
             Ex::GlobalVariable(var_handle) => Ok(module.global_variables[var_handle].ty),
             Ex::FunctionArgument(i) => Ok(function.arguments[i as usize].ty),
+            // Resource table fetches carry their resolved type and are valid
+            // image (and, in later milestones, sampler) operands.
+            Ex::ResourceTableGet { ty, .. } => Ok(ty),
             Ex::Access { base, .. } | Ex::AccessIndex { base, .. } => {
                 match function.expressions[base] {
                     Ex::GlobalVariable(var_handle) => {

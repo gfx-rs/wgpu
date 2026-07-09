@@ -3108,6 +3108,11 @@ impl<W: Write> Writer<W> {
                 self.put_expression(c, context, true)?;
                 write!(self.out, ")")?;
             }
+            crate::Expression::ResourceTableGet { .. } => {
+                return Err(Error::FeatureNotImplemented(
+                    "resource tables are not supported by the MSL backend".into(),
+                ))
+            }
         }
         Ok(())
     }

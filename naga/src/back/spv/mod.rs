@@ -1227,4 +1227,8 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::MEMORY_DECORATION_COHERENT
         | Caps::MEMORY_DECORATION_VOLATILE
         | Caps::LINEAR_INTERPOLATION
+        // Note: `ResourceTableGet` lowering is not implemented yet, but the
+        // capability is listed here so that resource-table snapshot tests can
+        // target SPIR-V once work item 0.3 lands.
+        | Caps::RESOURCE_TABLE
 }

@@ -1,0 +1,4 @@
+# Every text backend currently errors on `ResourceTableGet`; work item 0.3
+# (SPIR-V lowering) will add the SPIRV target here.
+targets = "IR"
+capabilities = "RESOURCE_TABLE"

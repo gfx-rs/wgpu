@@ -604,6 +604,12 @@ pub(crate) enum Error<'a> {
     MissingIncomingPayload(Span),
     UnterminatedBlockComment(Span),
     RayQueryWithInitializer(Span),
+    ResourceTableSamplerUnsupported(Span),
+    ResourceTableStorageTextureUnsupported(Span),
+    ResourceTableInvalidType {
+        span: Span,
+        ty: String,
+    },
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -1690,6 +1696,39 @@ impl<'a> Error<'a> {
                     "variables with type `ray_query` are special and so cannot have initializers".into(),
                 )],
                 notes: vec![],
+            },
+            Error::ResourceTableSamplerUnsupported(span) => ParseError {
+                message: "samplers cannot be fetched from a resource table yet".into(),
+                labels: vec![(
+                    *span,
+                    "sampler type used as `getResource` template argument".into(),
+                )],
+                notes: vec![
+                    "sampler support requires the sampler heap and resource table metadata, \
+                     which arrive in a later milestone of the resource table feature."
+                        .into(),
+                    "only sampled and depth textures are currently supported.".into(),
+                ],
+            },
+            Error::ResourceTableStorageTextureUnsupported(span) => ParseError {
+                message: "storage textures cannot be fetched from a resource table yet".into(),
+                labels: vec![(
+                    *span,
+                    "storage texture type used as `getResource` template argument".into(),
+                )],
+                notes: vec![
+                    "storage textures require the heterogeneous resource table feature, \
+                     which arrives in a later milestone of the resource table feature."
+                        .into(),
+                    "only sampled and depth textures are currently supported.".into(),
+                ],
+            },
+            Error::ResourceTableInvalidType { span, ref ty } => ParseError {
+                message: format!("the type `{ty}` cannot be fetched from a resource table").into(),
+                labels: vec![(*span, "not a resource type".into())],
+                notes: vec![
+                    "only sampled and depth textures are currently supported.".into(),
+                ],
             },
         }
     }

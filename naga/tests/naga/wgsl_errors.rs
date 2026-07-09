@@ -5653,6 +5653,139 @@ fn bitwise_shift_errors() {
 }
 
 #[test]
+fn resource_table_capability_and_enable() {
+    check_extension_validation! {
+        Capabilities::RESOURCE_TABLE,
+        r#"fn foo() {
+            let tex = getResource<texture_2d<f32>>(0u);
+        }
+        "#,
+        r#"error: the `resource_table` enable extension is not enabled
+  ┌─ wgsl:2:23
+  │
+2 │             let tex = getResource<texture_2d<f32>>(0u);
+  │                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the `resource_table` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable resource_table;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::Expression {
+                source: naga::valid::ExpressionError::MissingCapabilities(_),
+                ..
+            },
+            ..
+        })
+    }
+}
+
+#[test]
+fn resource_table_valid_use_succeeds() {
+    // Sampled, depth, and multisampled textures are all valid `T`s in M0, and
+    // the abstract-int index converts to `u32`.
+    let source = r#"
+        enable resource_table;
+
+        @group(0) @binding(0) var samp: sampler;
+        @group(0) @binding(1) var samp_cmp: sampler_comparison;
+
+        @fragment
+        fn fs(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
+            let tex = getResource<texture_2d<f32>>(0u);
+            let color = textureSample(tex, samp, pos.xy);
+
+            let depth = getResource<texture_depth_2d>(1);
+            let cmp = textureSampleCompare(depth, samp_cmp, pos.xy, 0.5);
+
+            let ms = getResource<texture_multisampled_2d<f32>>(u32(pos.x));
+            let sample = textureLoad(ms, vec2<i32>(0, 0), 0);
+
+            return color + sample + vec4(cmp);
+        }
+    "#;
+    check_success(source);
+    no_validation_error(
+        source,
+        Capabilities::default() | Capabilities::RESOURCE_TABLE,
+    );
+}
+
+#[test]
+fn resource_table_unsupported_types() {
+    // Samplers arrive with the sampler heap (M1).
+    check_error_matches(
+        "enable resource_table;
+        fn foo() {
+            let s = getResource<sampler>(0u);
+        }",
+        "samplers cannot be fetched from a resource table yet",
+    );
+
+    // Storage textures arrive with the heterogeneous resource table feature.
+    check_error_matches(
+        "enable resource_table;
+        fn foo() {
+            let t = getResource<texture_storage_2d<rgba8unorm, write>>(0u);
+        }",
+        "storage textures cannot be fetched from a resource table yet",
+    );
+
+    // Non-resource types are never valid.
+    check_error_matches(
+        "enable resource_table;
+        fn foo() {
+            let x = getResource<u32>(0u);
+        }",
+        "the type `u32` cannot be fetched from a resource table",
+    );
+}
+
+#[test]
+fn resource_table_bad_arguments() {
+    // Missing template argument.
+    check_error_matches(
+        "enable resource_table;
+        fn foo() {
+            let t = getResource(0u);
+        }",
+        "`getResource` needs a template argument specified",
+    );
+
+    // Wrong argument counts.
+    check_error_matches(
+        "enable resource_table;
+        fn foo() {
+            let t = getResource<texture_2d<f32>>();
+        }",
+        "wrong number of arguments",
+    );
+    check_error_matches(
+        "enable resource_table;
+        fn foo() {
+            let t = getResource<texture_2d<f32>>(0u, 1u);
+        }",
+        "wrong number of arguments",
+    );
+
+    // The index must be a `u32` (or automatically convert to one); `i32` and
+    // floats are rejected.
+    check_error_matches(
+        "enable resource_table;
+        fn foo() {
+            let t = getResource<texture_2d<f32>>(0i);
+        }",
+        "automatic conversions cannot convert elements of `i32` to `u32`",
+    );
+    check_error_matches(
+        "enable resource_table;
+        fn foo() {
+            let t = getResource<texture_2d<f32>>(1.5);
+        }",
+        "automatic conversions cannot convert elements of `{AbstractFloat}` to `u32`",
+    );
+}
+
+#[test]
 fn unterminated_block_comment_errors() {
     check_success("/* Closed */");
 

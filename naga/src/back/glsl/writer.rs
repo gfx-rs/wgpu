@@ -3867,6 +3867,11 @@ impl<'a, W: Write> Writer<'a, W> {
             | Expression::RayQueryVertexPositions { .. }
             | Expression::CooperativeLoad { .. }
             | Expression::CooperativeMultiplyAdd { .. } => unreachable!(),
+            Expression::ResourceTableGet { .. } => {
+                return Err(Error::Custom(
+                    "resource tables are not supported by the GLSL backend".into(),
+                ))
+            }
         }
 
         Ok(())

@@ -2282,6 +2282,13 @@ impl BlockContext<'_> {
                 ));
                 id
             }
+            // Lowering is implemented by work item 0.3 of the resource table
+            // feature (`plans/resource-table.md`).
+            crate::Expression::ResourceTableGet { .. } => {
+                return Err(Error::FeatureNotImplemented(
+                    "resource tables are not supported by the SPIR-V backend yet",
+                ))
+            }
         };
 
         self.cached[expr_handle] = id;

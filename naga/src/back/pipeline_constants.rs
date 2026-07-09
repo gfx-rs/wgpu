@@ -705,6 +705,12 @@ fn adjust_expr(new_pos: &HandleVec<Expression, Handle<Expression>>, expr: &mut E
             adjust(b);
             adjust(c);
         }
+        Expression::ResourceTableGet {
+            ty: _,
+            ref mut index,
+        } => {
+            adjust(index);
+        }
     }
 }
 

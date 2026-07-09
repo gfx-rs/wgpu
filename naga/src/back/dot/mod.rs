@@ -781,6 +781,10 @@ fn write_function_expressions(
                 edges.insert("c", c);
                 ("cooperativeMultiplyAdd".into(), 4)
             }
+            E::ResourceTableGet { ty: _, index } => {
+                edges.insert("index", index);
+                ("resourceTableGet".into(), 4)
+            }
         };
 
         // give uniform expressions an outline

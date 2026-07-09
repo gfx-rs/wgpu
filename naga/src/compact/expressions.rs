@@ -262,6 +262,10 @@ impl ExpressionTracer<'_> {
                 self.expressions_used.insert(b);
                 self.expressions_used.insert(c);
             }
+            Ex::ResourceTableGet { ty, index } => {
+                self.types_used.insert(ty);
+                self.expressions_used.insert(index);
+            }
         }
     }
 }
@@ -440,6 +444,13 @@ impl ModuleMap {
                 adjust(a);
                 adjust(b);
                 adjust(c);
+            }
+            Ex::ResourceTableGet {
+                ref mut ty,
+                ref mut index,
+            } => {
+                self.types.adjust(ty);
+                adjust(index);
             }
         }
     }

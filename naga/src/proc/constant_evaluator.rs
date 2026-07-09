@@ -952,6 +952,8 @@ pub enum ConstantEvaluatorError {
     SelectAcceptRejectTypeMismatch,
     #[error("Cooperative operations can't be constant")]
     CooperativeOperation,
+    #[error("Resource table accesses can't be constant")]
+    ResourceTableAccess,
     #[error("Type is too large")]
     TypeTooLarge(Handle<Type>),
 }
@@ -1353,6 +1355,7 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::CooperativeLoad { .. } | Expression::CooperativeMultiplyAdd { .. } => {
                 Err(ConstantEvaluatorError::CooperativeOperation)
             }
+            Expression::ResourceTableGet { .. } => Err(ConstantEvaluatorError::ResourceTableAccess),
         }
     }
 

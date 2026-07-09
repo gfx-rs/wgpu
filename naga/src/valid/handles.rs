@@ -673,6 +673,10 @@ impl super::Validator {
             crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
                 handle.check_dep(a)?.check_dep(b)?.check_dep(c)?;
             }
+            crate::Expression::ResourceTableGet { ty, index } => {
+                validate_type(ty)?;
+                handle.check_dep(index)?;
+            }
         }
         Ok(())
     }

@@ -1945,3 +1945,190 @@ fn functions_share_name() {
     .validate(&module)
     .expect("module should be valid");
 }
+
+#[test]
+fn resource_table_requires_capability() {
+    let module = naga::front::wgsl::parse_str(
+        "enable resource_table;
+         fn foo() {
+             let tex = getResource<texture_2d<f32>>(0u);
+         }",
+    )
+    .expect("module should parse");
+
+    // Without `RESOURCE_TABLE`, validation must reject the module.
+    let err = valid::Validator::new(ValidationFlags::default(), !Capabilities::RESOURCE_TABLE)
+        .validate(&module)
+        .expect_err("should fail without capability");
+    assert!(matches!(
+        err.into_inner(),
+        valid::ValidationError::Function {
+            source: valid::FunctionError::Expression {
+                source: valid::ExpressionError::MissingCapabilities(Capabilities::RESOURCE_TABLE),
+                ..
+            },
+            ..
+        }
+    ));
+
+    // With it, validation succeeds.
+    let result = valid::Validator::new(
+        ValidationFlags::default(),
+        Capabilities::default() | Capabilities::RESOURCE_TABLE,
+    )
+    .validate(&module);
+    assert!(result.is_ok(), "should succeed with capability: {result:?}");
+}
+
+#[test]
+fn resource_table_reflection() {
+    let caps = Capabilities::default() | Capabilities::RESOURCE_TABLE;
+
+    // A module that uses the resource table, from a helper function.
+    let module = naga::front::wgsl::parse_str(
+        "enable resource_table;
+         fn load(i: u32) -> vec4<f32> {
+             let tex = getResource<texture_2d<f32>>(i);
+             return textureLoad(tex, vec2<i32>(0, 0), 0);
+         }
+         @fragment
+         fn fs() -> @location(0) vec4<f32> {
+             return load(0u);
+         }",
+    )
+    .expect("module should parse");
+    let info = valid::Validator::new(ValidationFlags::default(), caps)
+        .validate(&module)
+        .unwrap();
+    assert!(info.uses_resource_table());
+    // Always false in M0: writable table types are rejected by the front end.
+    assert!(!info.requests_writable_table_types());
+
+    // A module that doesn't touch the resource table.
+    let module = naga::front::wgsl::parse_str(
+        "@fragment
+         fn fs() -> @location(0) vec4<f32> {
+             return vec4<f32>(0.0);
+         }",
+    )
+    .expect("module should parse");
+    let info = valid::Validator::new(ValidationFlags::default(), caps)
+        .validate(&module)
+        .unwrap();
+    assert!(!info.uses_resource_table());
+    assert!(!info.requests_writable_table_types());
+}
+
+/// `ResourceTableGet::index` must resolve to a `u32` scalar (m0-notes.md
+/// deviation 4: unlike the proposal text, a concrete `i32` is rejected, not
+/// just accepted-and-converted). Hand-built IR, bypassing the WGSL front end
+/// (which separately rejects this), to pin the validator's own check.
+#[test]
+fn resource_table_get_rejects_non_u32_index() {
+    use naga::{Module, Type, TypeInner};
+
+    let span = naga::Span::default();
+    let mut module = Module::default();
+    let ty_tex = module.types.insert(
+        Type {
+            name: Some("texture_2d<f32>".into()),
+            inner: TypeInner::Image {
+                dim: naga::ImageDimension::D2,
+                arrayed: false,
+                class: naga::ImageClass::Sampled {
+                    kind: naga::ScalarKind::Float,
+                    multi: false,
+                },
+            },
+        },
+        span,
+    );
+
+    let mut fun = Function::default();
+    let ex_index = fun
+        .expressions
+        .append(Expression::Literal(naga::Literal::I32(0)), span);
+    let ex_get = fun.expressions.append(
+        Expression::ResourceTableGet {
+            ty: ty_tex,
+            index: ex_index,
+        },
+        span,
+    );
+    fun.body.push(
+        naga::Statement::Emit(naga::Range::new_from_bounds(ex_get, ex_get)),
+        span,
+    );
+    module.functions.append(fun, span);
+
+    let err = valid::Validator::new(
+        ValidationFlags::default(),
+        Capabilities::default() | Capabilities::RESOURCE_TABLE,
+    )
+    .validate(&module)
+    .expect_err("non-u32 index should be rejected");
+    assert!(matches!(
+        err.into_inner(),
+        valid::ValidationError::Function {
+            source: valid::FunctionError::Expression {
+                source: valid::ExpressionError::InvalidResourceTableIndexType(_),
+                ..
+            },
+            ..
+        }
+    ));
+}
+
+/// `ResourceTableGet::ty` must be a sampled or depth texture (m0-notes.md
+/// deviation 3: M0 only implements `getResource` for those; storage
+/// textures, samplers, and unrelated types are all rejected the same way).
+/// Hand-built IR to pin the validator's own check independent of the front
+/// end / analyzer.
+#[test]
+fn resource_table_get_rejects_non_sampled_texture_type() {
+    use naga::{Module, Scalar, Type, TypeInner};
+
+    let span = naga::Span::default();
+    let mut module = Module::default();
+    let ty_u32 = module.types.insert(
+        Type {
+            name: Some("u32".into()),
+            inner: TypeInner::Scalar(Scalar::U32),
+        },
+        span,
+    );
+
+    let mut fun = Function::default();
+    let ex_index = fun
+        .expressions
+        .append(Expression::Literal(naga::Literal::U32(0)), span);
+    let ex_get = fun.expressions.append(
+        Expression::ResourceTableGet {
+            ty: ty_u32,
+            index: ex_index,
+        },
+        span,
+    );
+    fun.body.push(
+        naga::Statement::Emit(naga::Range::new_from_bounds(ex_get, ex_get)),
+        span,
+    );
+    module.functions.append(fun, span);
+
+    let err = valid::Validator::new(
+        ValidationFlags::default(),
+        Capabilities::default() | Capabilities::RESOURCE_TABLE,
+    )
+    .validate(&module)
+    .expect_err("non-image resource-table type should be rejected");
+    assert!(matches!(
+        err.into_inner(),
+        valid::ValidationError::Function {
+            source: valid::FunctionError::Expression {
+                source: valid::ExpressionError::InvalidResourceTableType(_),
+                ..
+            },
+            ..
+        }
+    ));
+}
