@@ -447,11 +447,8 @@ impl super::Device {
         }
     }
 
-    pub unsafe fn buffer_from_raw(
-        raw: Retained<ProtocolObject<dyn MTLBuffer>>,
-        size: wgt::BufferAddress,
-    ) -> super::Buffer {
-        super::Buffer { raw, size }
+    pub unsafe fn buffer_from_raw(raw: Retained<ProtocolObject<dyn MTLBuffer>>) -> super::Buffer {
+        super::Buffer { raw }
     }
 
     pub fn raw_device(&self) -> &Retained<ProtocolObject<dyn MTLDevice>> {
@@ -462,7 +459,10 @@ impl super::Device {
 impl crate::Device for super::Device {
     type A = super::Api;
 
-    unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<super::Buffer> {
+    unsafe fn create_buffer(
+        &self,
+        desc: &crate::BufferDescriptor,
+    ) -> DeviceResult<(super::Buffer, wgt::BufferAddress)> {
         let map_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
         let map_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
 
@@ -487,10 +487,7 @@ impl crate::Device for super::Device {
                 raw.setLabel(Some(&NSString::from_str(label)));
             }
             self.counters.buffers.add(1);
-            Ok(super::Buffer {
-                raw,
-                size: desc.size,
-            })
+            Ok((super::Buffer { raw }, desc.size))
         })
     }
     unsafe fn destroy_buffer(&self, _buffer: super::Buffer) {
@@ -1147,12 +1144,7 @@ impl crate::Device for super::Device {
                                     }
 
                                     if let wgt::BufferBindingType::Storage { .. } = ty {
-                                        let remaining_size = wgt::BufferSize::new(
-                                            source.buffer.size - source.offset,
-                                        );
-                                        if let Some(binding_size) = source.size.or(remaining_size) {
-                                            array_element_sizes.push((idx as u32, binding_size));
-                                        }
+                                        array_element_sizes.push((idx as u32, source.size));
                                     }
 
                                     let use_info = bg
@@ -1241,14 +1233,9 @@ impl crate::Device for super::Device {
                                 let end = start + 1;
                                 bg.buffers
                                     .extend(desc.buffers[start..end].iter().map(|source| {
-                                        // Given the restrictions on `BufferBinding::offset`,
-                                        // this should never be `None`.
-                                        let remaining_size = wgt::BufferSize::new(
-                                            source.buffer.size - source.offset,
-                                        );
                                         let binding_size = match ty {
                                             wgt::BufferBindingType::Storage { .. } => {
-                                                source.size.or(remaining_size)
+                                                Some(source.size)
                                             }
                                             _ => None,
                                         };
