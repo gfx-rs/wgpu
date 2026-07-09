@@ -291,6 +291,12 @@ impl PhysicalDeviceFeatures {
         );
         let needs_partially_bound =
             requested_features.intersects(wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY);
+        // The resource table needs the same descriptor-indexing machinery as
+        // binding arrays, plus a runtime array that is partially bound and can
+        // be updated (after bind) while unused-but-pending, with a variable
+        // descriptor count.
+        let needs_resource_table =
+            requested_features.contains(wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE);
 
         Self {
             // vk::PhysicalDeviceFeatures is a struct composed of Bool32's while
@@ -364,16 +370,27 @@ impl PhysicalDeviceFeatures {
                 .geometry_shader(requested_features.contains(wgt::Features::PRIMITIVE_INDEX))
                 .depth_clamp(requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL))
                 .dual_src_blend(requested_features.contains(wgt::Features::DUAL_SOURCE_BLENDING)),
-            descriptor_indexing: if requested_features.intersects(INDEXING_FEATURES) {
+            descriptor_indexing: if requested_features.intersects(INDEXING_FEATURES)
+                || needs_resource_table
+            {
                 Some(
                     vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default()
-                        .shader_sampled_image_array_non_uniform_indexing(needs_bindless)
+                        .shader_sampled_image_array_non_uniform_indexing(
+                            needs_bindless || needs_resource_table,
+                        )
                         .shader_storage_image_array_non_uniform_indexing(needs_bindless)
                         .shader_storage_buffer_array_non_uniform_indexing(needs_bindless)
-                        .descriptor_binding_sampled_image_update_after_bind(needs_bindless)
+                        .descriptor_binding_sampled_image_update_after_bind(
+                            needs_bindless || needs_resource_table,
+                        )
                         .descriptor_binding_storage_image_update_after_bind(needs_bindless)
                         .descriptor_binding_storage_buffer_update_after_bind(needs_bindless)
-                        .descriptor_binding_partially_bound(needs_partially_bound),
+                        .descriptor_binding_partially_bound(
+                            needs_partially_bound || needs_resource_table,
+                        )
+                        .runtime_descriptor_array(needs_resource_table)
+                        .descriptor_binding_variable_descriptor_count(needs_resource_table)
+                        .descriptor_binding_update_unused_while_pending(needs_resource_table),
                 )
             } else {
                 None
@@ -861,6 +878,37 @@ impl PhysicalDeviceFeatures {
                 descriptor_indexing.descriptor_binding_partially_bound != 0;
 
             features.set(F::PARTIALLY_BOUND_BINDING_ARRAY, supports_partially_bound);
+
+            // Resource tables (the bindless proposal, M0 sampling-only path).
+            //
+            // We need a runtime SAMPLED_IMAGE descriptor array that is
+            // partially bound and can be written update-after-bind while
+            // pending, with a variable descriptor count (see
+            // `plans/resource-table.md`, Vulkan section + invariants 1/2). D15
+            // additionally requires headroom for the table's own descriptor
+            // set, which binds at set index == the pipeline layout's bind-group
+            // count: `maxBoundDescriptorSets` must exceed the number of bind
+            // groups wgpu exposes (`min(raw, MAX_BIND_GROUPS)`) by at least one.
+            let raw_max_bound_descriptor_sets = caps.properties.limits.max_bound_descriptor_sets;
+            let exposed_max_bind_groups =
+                raw_max_bound_descriptor_sets.min(crate::MAX_BIND_GROUPS as u32);
+            let supports_resource_table = descriptor_indexing.runtime_descriptor_array != 0
+                && descriptor_indexing.shader_sampled_image_array_non_uniform_indexing != 0
+                && descriptor_indexing.descriptor_binding_sampled_image_update_after_bind != 0
+                && descriptor_indexing.descriptor_binding_partially_bound != 0
+                && descriptor_indexing.descriptor_binding_update_unused_while_pending != 0
+                && descriptor_indexing.descriptor_binding_variable_descriptor_count != 0
+                // i.e. `maxBoundDescriptorSets >= exposed_max_bind_groups + 1`
+                // (one set of headroom for the table itself, D15).
+                && raw_max_bound_descriptor_sets > exposed_max_bind_groups;
+
+            // M0 only ships the unchecked sampling path, so we expose the
+            // unchecked add-on alongside the sampling bit; the checked path and
+            // the heterogeneous bit arrive in later milestones.
+            features.set(
+                F::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE | F::EXPERIMENTAL_RESOURCE_TABLE_UNCHECKED,
+                supports_resource_table,
+            );
         }
 
         features.set(F::DEPTH_CLIP_CONTROL, self.core.depth_clamp != 0);
@@ -1291,8 +1339,11 @@ impl PhysicalDeviceProperties {
                 extensions.push(khr::timeline_semaphore::NAME);
             }
 
-            // Require `VK_EXT_descriptor_indexing` if one of the associated features was requested
-            if requested_features.intersects(INDEXING_FEATURES) {
+            // Require `VK_EXT_descriptor_indexing` if one of the associated
+            // features was requested. Resource tables use the same extension.
+            if requested_features.intersects(INDEXING_FEATURES)
+                || requested_features.contains(wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE)
+            {
                 extensions.push(ext::descriptor_indexing::NAME);
             }
 
@@ -2770,6 +2821,15 @@ impl super::Adapter {
             ) {
                 capabilities.push(spv::Capability::ShaderNonUniform);
             }
+            if features.contains(wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE) {
+                // The resource-table SPIR-V lowering declares a
+                // `UniformConstant` runtime array of descriptors
+                // (`RuntimeDescriptorArray`) and decorates every access
+                // `NonUniform` (`ShaderNonUniform`); both must be in the
+                // allowed capability set for `write_vec` to emit them.
+                capabilities.push(spv::Capability::RuntimeDescriptorArray);
+                capabilities.push(spv::Capability::ShaderNonUniform);
+            }
             if features.contains(wgt::Features::BGRA8UNORM_STORAGE) {
                 capabilities.push(spv::Capability::StorageImageWriteWithoutFormat);
             }
@@ -2959,6 +3019,62 @@ impl super::Adapter {
                 .map_err(super::map_host_device_oom_err)?
         };
 
+        // Create the device-wide shared resource-table set layout only when the
+        // feature was requested (and therefore the descriptor-indexing device
+        // features were enabled above). See `plans/resource-table.md` (Vulkan
+        // section): a single binding 0 = variable-count SAMPLED_IMAGE runtime
+        // array, all supported stages, update-after-bind / partially-bound /
+        // update-unused-while-pending / variable-count binding flags, and the
+        // update-after-bind pool layout flag.
+        let resource_table = if features
+            .contains(wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE)
+        {
+            // Cap the runtime array's descriptorCount by the device's
+            // update-after-bind sampled-image limits, never exceeding the
+            // resource-table API's own `size ≤ 65536` cap. (M0 defines no
+            // separate hal limit; this device-derived cap is documented in the
+            // work-item report.)
+            let device_cap = self.phd_capabilities.descriptor_indexing.as_ref().map_or(
+                super::ResourceTable::MAX_SIZE,
+                |di| {
+                    di.max_descriptor_set_update_after_bind_sampled_images
+                        .min(di.max_per_stage_descriptor_update_after_bind_sampled_images)
+                },
+            );
+            let max_size = device_cap.min(super::ResourceTable::MAX_SIZE);
+
+            let binding_flags = [vk::DescriptorBindingFlags::UPDATE_AFTER_BIND
+                | vk::DescriptorBindingFlags::PARTIALLY_BOUND
+                | vk::DescriptorBindingFlags::UPDATE_UNUSED_WHILE_PENDING
+                | vk::DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT];
+            let mut binding_flags_info = vk::DescriptorSetLayoutBindingFlagsCreateInfo::default()
+                .binding_flags(&binding_flags);
+
+            let bindings = [vk::DescriptorSetLayoutBinding::default()
+                .binding(0)
+                .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+                .descriptor_count(max_size)
+                .stage_flags(vk::ShaderStageFlags::ALL)];
+
+            let layout_info = vk::DescriptorSetLayoutCreateInfo::default()
+                .flags(vk::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL)
+                .bindings(&bindings)
+                .push_next(&mut binding_flags_info);
+
+            let set_layout = unsafe {
+                raw_device
+                    .create_descriptor_set_layout(&layout_info, None)
+                    .map_err(super::map_host_device_oom_err)?
+            };
+
+            Some(super::ResourceTableShared {
+                set_layout,
+                max_size,
+            })
+        } else {
+            None
+        };
+
         let shared = Arc::new(super::DeviceShared {
             raw: raw_device,
             family_index,
@@ -2993,6 +3109,7 @@ impl super::Adapter {
             texture_identity_factory: super::ResourceIdentityFactory::new(),
             texture_view_identity_factory: super::ResourceIdentityFactory::new(),
             empty_descriptor_set_layout,
+            resource_table,
         });
 
         let relay_semaphores = super::RelaySemaphores::new(&shared)?;

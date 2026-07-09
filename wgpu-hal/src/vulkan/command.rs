@@ -985,11 +985,27 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
     unsafe fn set_resource_table(
         &mut self,
-        _layout: &super::PipelineLayout,
-        _index: u32,
-        _table: &super::ResourceTable,
+        layout: &super::PipelineLayout,
+        index: u32,
+        table: &super::ResourceTable,
     ) {
-        unimplemented!("resource tables land in the next change")
+        debug_assert_eq!(
+            index, layout.binding_group_count,
+            "the resource table must bind at the set index following the last bind group (D15)"
+        );
+        // Same bind-point handling as `set_bind_group`, but a single set and no
+        // dynamic offsets.
+        let sets = [table.set];
+        unsafe {
+            self.device.raw.cmd_bind_descriptor_sets(
+                self.active,
+                self.bind_point,
+                layout.raw,
+                index,
+                &sets,
+                &[],
+            )
+        };
     }
 
     unsafe fn set_immediates(
