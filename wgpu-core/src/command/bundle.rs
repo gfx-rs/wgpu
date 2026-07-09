@@ -704,7 +704,10 @@ fn set_index_buffer(
         }
         .into());
     }
-    let end = offset + buffer.resolve_binding_size(offset, size)?;
+    let end = offset
+        + buffer
+            .resolve_binding_size::<NonZeroU64>(offset, size)?
+            .get();
 
     state
         .buffer_memory_init_actions
@@ -750,7 +753,7 @@ fn set_vertex_buffer(
             return Err(RenderCommandError::UnalignedVertexBuffer { slot, offset }.into());
         }
         let binding_size = buffer.resolve_binding_size(offset, size)?;
-        let buffer_range = offset..(offset + binding_size);
+        let buffer_range = offset..(offset + binding_size.get());
 
         state
             .buffer_memory_init_actions
@@ -1136,7 +1139,13 @@ impl RenderBundle {
                     let buffer = buffer.try_raw(snatch_guard)?;
                     // SAFETY: The binding size was checked against the buffer size
                     // in `set_index_buffer` and again in `IndexState::flush`.
-                    let bb = hal::BufferBinding::new_unchecked(buffer, *offset, *size);
+                    let bb = hal::BufferBinding::new_unchecked(
+                        buffer,
+                        *offset,
+                        size.expect(
+                            "Index buffer binding size should already be resolved when executing bundle",
+                        ),
+                    );
                     unsafe { raw.set_index_buffer(bb, *index_format) };
                 }
                 Cmd::SetVertexBuffer {
@@ -1148,7 +1157,13 @@ impl RenderBundle {
                     let buffer = buffer.as_ref().unwrap().try_raw(snatch_guard)?;
                     // SAFETY: The binding size was checked against the buffer size
                     // in `set_vertex_buffer` and again in `VertexState::flush`.
-                    let bb = hal::BufferBinding::new_unchecked(buffer, *offset, *size);
+                    let bb = hal::BufferBinding::new_unchecked(
+                        buffer,
+                        *offset,
+                        size.expect(
+                            "Vertex buffer binding size should already be resolved when executing bundle",
+                        ),
+                    );
                     unsafe { raw.set_vertex_buffer(*slot, bb) };
                 }
                 Cmd::SetImmediate {
@@ -1445,7 +1460,7 @@ impl State {
                 slot,
                 buffer: Some(buffer.clone()),
                 offset,
-                size,
+                size: Some(size),
             });
         });
     }

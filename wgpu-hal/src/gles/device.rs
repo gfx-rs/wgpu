@@ -549,7 +549,7 @@ impl crate::Device for super::Device {
     unsafe fn create_buffer(
         &self,
         desc: &crate::BufferDescriptor,
-    ) -> Result<super::Buffer, crate::DeviceError> {
+    ) -> Result<(super::Buffer, wgt::BufferAddress), crate::DeviceError> {
         let target = if desc.usage.contains(wgt::BufferUses::INDEX) {
             glow::ELEMENT_ARRAY_BUFFER
         } else {
@@ -566,17 +566,19 @@ impl crate::Device for super::Device {
                 .contains(PrivateCapabilities::BUFFER_ALLOCATION);
 
         if emulate_map && desc.usage.intersects(wgt::BufferUses::MAP_WRITE) {
-            return Ok(super::Buffer {
-                raw: None,
-                target,
-                size: desc.size,
-                map_flags: 0,
-                map_state: Arc::new(MaybeMutex::new(super::BufferMapState {
-                    mapped: false,
-                    data: Some(vec![0; desc.size as usize]),
-                    offset_of_current_mapping: 0,
-                })),
-            });
+            return Ok((
+                super::Buffer {
+                    raw: None,
+                    target,
+                    map_flags: 0,
+                    map_state: Arc::new(MaybeMutex::new(super::BufferMapState {
+                        mapped: false,
+                        data: Some(vec![0; desc.size as usize]),
+                        offset_of_current_mapping: 0,
+                    })),
+                },
+                desc.size,
+            ));
         }
 
         let gl = &self.shared.context.lock();
@@ -669,17 +671,19 @@ impl crate::Device for super::Device {
 
         self.counters.buffers.add(1);
 
-        Ok(super::Buffer {
-            raw,
-            target,
-            size: desc.size,
-            map_flags,
-            map_state: Arc::new(MaybeMutex::new(super::BufferMapState {
-                mapped: false,
-                data,
-                offset_of_current_mapping: 0,
-            })),
-        })
+        Ok((
+            super::Buffer {
+                raw,
+                target,
+                map_flags,
+                map_state: Arc::new(MaybeMutex::new(super::BufferMapState {
+                    mapped: false,
+                    data,
+                    offset_of_current_mapping: 0,
+                })),
+            },
+            desc.size,
+        ))
     }
 
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
@@ -1335,10 +1339,7 @@ impl crate::Device for super::Device {
                     super::RawBinding::Buffer {
                         raw: bb.buffer.raw.unwrap(),
                         offset: bb.offset as i32,
-                        size: match bb.size {
-                            Some(s) => s.get() as i32,
-                            None => (bb.buffer.size - bb.offset) as i32,
-                        },
+                        size: bb.size.get() as i32,
                     }
                 }
                 wgt::BindingType::Sampler { .. } => {

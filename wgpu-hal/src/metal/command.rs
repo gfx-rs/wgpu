@@ -1364,7 +1364,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: crate::BufferBinding<'a, super::Buffer>,
+        binding: crate::BufferBinding<'a, super::Buffer, wgt::BufferSize>,
         format: wgt::IndexFormat,
     ) {
         let (stride, raw_type) = conv::map_index_format(format);
@@ -1379,7 +1379,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
-        binding: crate::BufferBinding<'a, super::Buffer>,
+        binding: crate::BufferBinding<'a, super::Buffer, wgt::BufferSize>,
     ) {
         let buffer_index = VERTEX_BUFFER_SLOT_START + index;
         let encoder = self.state.render.as_ref().unwrap();
@@ -1391,15 +1391,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
             )
         };
 
-        let buffer_size = binding.resolve_size();
-        if buffer_size > 0 {
-            self.state.vertex_buffer_size_map.insert(
-                buffer_index,
-                core::num::NonZeroU64::new(buffer_size).unwrap(),
-            );
-        } else {
-            self.state.vertex_buffer_size_map.remove(&buffer_index);
-        }
+        // TODO(#3170): temporary
+        //if let Some(size) = NonZeroU64::new(binding.size) {
+        self.state
+            .vertex_buffer_size_map
+            .insert(buffer_index, binding.size);
+        //} else {
+        //    self.state.vertex_buffer_size_map.remove(&buffer_index);
+        //}
 
         if let Some((index, sizes)) = self
             .state
