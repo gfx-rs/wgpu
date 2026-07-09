@@ -234,7 +234,7 @@ glow = { workspace = true, optional = true }
 ### Platform: Native ###
 ########################
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
 # Backend: Vulkan and Dx12
 gpu-allocator = { workspace = true, optional = true }
 # Backend: Vulkan
@@ -317,7 +317,7 @@ ndk-sys = { workspace = true, optional = true }
 ### Platform: Webassembly ###
 #############################
 
-[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
+[target.'cfg(all(target_family = "wasm", not(target_os = "emscripten")))'.dependencies]
 # Backend: GLES
 wasm-bindgen = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true, features = [
@@ -361,6 +361,6 @@ naga = { workspace = true, features = ["wgsl-in", "termcolor"] }
 winit.workspace = true # for "halmark" example
 
 ### Platform: Windows + MacOS + Linux for "raw-gles" example ###
-[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos", target_env = "ohos")))'.dev-dependencies]
+[target.'cfg(not(any(target_family = "wasm", target_os = "ios", target_os = "visionos", target_env = "ohos")))'.dev-dependencies]
 glutin-winit = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
 glutin = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }

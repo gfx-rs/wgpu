@@ -188,6 +188,13 @@ jobs:
             tier: 2
             kind: web
 
+          - name: WebAssembly 64-bit
+            os: ubuntu-24.04
+            target: wasm64-unknown-unknown
+            kind: wgpu-only
+            tier: 3
+            extra-flags: -Zbuild-std=std,panic_abort
+
           - name: Emscripten
             os: ubuntu-24.04
             target: wasm32-unknown-emscripten

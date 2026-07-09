@@ -172,7 +172,7 @@ wgpu-core-deps-apple = { workspace = true, optional = true }
 [target.'cfg(target_os = "emscripten")'.dependencies]
 wgpu-core-deps-emscripten = { workspace = true, optional = true }
 
-[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
+[target.'cfg(all(target_family = "wasm", not(target_os = "emscripten")))'.dependencies]
 wgpu-core-deps-wasm = { workspace = true, optional = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))'.dependencies]

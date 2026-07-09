@@ -294,7 +294,7 @@ gpu-allocator = { version = "0.28", default-features = false, features = [
 
 # Gles dependencies
 khronos-egl = "6"
-glow = "0.17"
+glow = "0.18"
 glutin = { version = "0.32", default-features = false }
 glutin-winit = { version = "0.5", default-features = false }
 glutin_wgl_sys = "0.6"
@@ -302,13 +302,13 @@ glutin_wgl_sys = "0.6"
 # DX12 and GLES dependencies
 windows = { version = "0.62", default-features = false }
 
-# wasm32 dependencies
+# wasm dependencies
 console_error_panic_hook = "0.1.5"
 console_log = "1"
-js-sys = { version = "0.3.85", default-features = false }
-wasm-bindgen = { version = "0.2.108", default-features = false }
-wasm-bindgen-futures = { version = "0.4.58", default-features = false }
-web-sys = { version = "0.3.85", default-features = false }
+js-sys = { version = "0.3.100", default-features = false }
+wasm-bindgen = { version = "0.2.123", default-features = false }
+wasm-bindgen-futures = { version = "0.4.73", default-features = false }
+web-sys = { version = "0.3.100", default-features = false }
 web-time = "1.1.0"
 
 # deno dependencies

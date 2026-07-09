@@ -229,7 +229,7 @@ static_assertions.workspace = true
 ###################
 # Not Webassembly #
 ###################
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
 # Needed for only wgpu-core backend. Not optional as only wgpu-core backend exists on native platforms.
 wgpu-core = { workspace = true, features = [
     "renderdoc",
@@ -243,7 +243,7 @@ smallvec.workspace = true
 ###############
 # Webassembly #
 ###############
-[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
+[target.'cfg(all(target_family = "wasm", not(target_os = "emscripten")))'.dependencies]
 # Needed for all backends
 js-sys = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }

@@ -68,7 +68,7 @@ serde = { workspace = true, default-features = false, features = [
 ], optional = true }
 static_assertions.workspace = true
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+[target.'cfg(target_family = "wasm")'.dependencies]
 js-sys = { workspace = true, optional = true, default-features = false }
 web-sys = { workspace = true, optional = true, default-features = false, features = [
     "ImageBitmap",
