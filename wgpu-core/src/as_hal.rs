@@ -10,7 +10,7 @@ use crate::{
         TextureViewId, TlasId,
     },
     lock::RankData,
-    resource::RawResourceAccess,
+    resource::{ParentDevice, RawResourceAccess},
     snatch::SnatchGuard,
 };
 
@@ -310,7 +310,7 @@ impl Global {
     pub fn texture_belongs_to_device(&self, texture_id: TextureId, device_id: DeviceId) -> bool {
         let texture = self.hub.textures.get(texture_id);
         let device = self.hub.devices.get(device_id);
-        Arc::ptr_eq(&texture.device, &device)
+        texture.same_device(&device).is_ok()
     }
 
     /// # Safety
