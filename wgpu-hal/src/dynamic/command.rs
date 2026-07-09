@@ -101,14 +101,14 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: BufferBinding<'a, dyn DynBuffer>,
+        binding: BufferBinding<'a, dyn DynBuffer, wgt::BufferSize>,
         format: wgt::IndexFormat,
     );
 
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
-        binding: BufferBinding<'a, dyn DynBuffer>,
+        binding: BufferBinding<'a, dyn DynBuffer, wgt::BufferSize>,
     );
     unsafe fn set_viewport(&mut self, rect: &Rect<f32>, depth_range: Range<f32>);
     unsafe fn set_scissor_rect(&mut self, rect: &Rect<u32>);
@@ -645,7 +645,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: BufferBinding<'a, dyn DynBuffer>,
+        binding: BufferBinding<'a, dyn DynBuffer, wgt::BufferSize>,
         format: wgt::IndexFormat,
     ) {
         let binding = binding.expect_downcast();
@@ -655,7 +655,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
-        binding: BufferBinding<'a, dyn DynBuffer>,
+        binding: BufferBinding<'a, dyn DynBuffer, wgt::BufferSize>,
     ) {
         let binding = binding.expect_downcast();
         unsafe { self.set_vertex_buffer(index, binding) };

@@ -636,7 +636,7 @@ impl VertexState {
     /// Call `f` for each dirty slot with `(slot_index, buffer, offset, size)` and mark them clean.
     pub(crate) fn flush<F>(&mut self, mut f: F)
     where
-        F: FnMut(u32, &Arc<Buffer>, BufferAddress, Option<BufferSize>),
+        F: FnMut(u32, &Arc<Buffer>, BufferAddress, BufferSize),
     {
         for (i, slot) in self.slots.iter_mut().enumerate() {
             let Some(slot) = slot.as_mut() else { continue };
@@ -649,7 +649,8 @@ impl VertexState {
                 i as u32,
                 &slot.buffer,
                 slot.range.start,
-                BufferSize::new(size),
+                BufferSize::new(size)
+                    .expect("TODO(#3170): empty vertex buffer bindings temporarily unsupported"),
             );
         }
     }
@@ -2836,10 +2837,10 @@ fn set_index_buffer(
         }
         .into());
     }
-    let (binding, resolved_size) = buffer
+    let binding = buffer
         .binding(offset, size, state.pass.base.snatch_guard)
         .map_err(RenderCommandError::from)?;
-    let end = offset + resolved_size;
+    let end = offset + binding.size.get();
     state.index.update_buffer(offset..end, index_format);
 
     state.pass.base.buffer_memory_init_actions.extend(
@@ -2897,7 +2898,7 @@ fn set_vertex_buffer(
         let binding_size = buffer
             .resolve_binding_size(offset, size)
             .map_err(RenderCommandError::from)?;
-        let buffer_range = offset..(offset + binding_size);
+        let buffer_range = offset..(offset + binding_size.get());
 
         state
             .pass

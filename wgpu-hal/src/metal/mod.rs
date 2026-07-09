@@ -844,7 +844,6 @@ impl crate::Queue for Queue {
 #[derive(Debug)]
 pub struct Buffer {
     raw: Retained<ProtocolObject<dyn MTLBuffer>>,
-    size: wgt::BufferAddress,
 }
 
 unsafe impl Send for Buffer {}
@@ -855,15 +854,6 @@ impl crate::DynBuffer for Buffer {}
 impl Buffer {
     fn as_raw(&self) -> NonNull<ProtocolObject<dyn MTLBuffer>> {
         unsafe { NonNull::new_unchecked(Retained::as_ptr(&self.raw) as *mut _) }
-    }
-}
-
-impl crate::BufferBinding<'_, Buffer> {
-    fn resolve_size(&self) -> wgt::BufferAddress {
-        match self.size {
-            Some(size) => size.get(),
-            None => self.buffer.size - self.offset,
-        }
     }
 }
 

@@ -384,7 +384,6 @@ impl Drop for Queue {
 pub struct Buffer {
     raw: Option<glow::Buffer>,
     target: BindTarget,
-    size: wgt::BufferAddress,
     /// Flags to use within calls to [`Device::map_buffer`](crate::Device::map_buffer).
     map_flags: u32,
     /// Buffer mapping state.

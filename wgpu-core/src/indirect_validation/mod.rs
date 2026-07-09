@@ -80,6 +80,10 @@ pub(crate) struct BindGroups {
 }
 
 impl BindGroups {
+    /// Creates the bind groups for indirect validation shaders to read from `buffer`.
+    ///
+    /// `buffer_size` is the user-requested size of the buffer.
+    ///
     /// `Ok(None)` will only be returned if `buffer_size` is `0`.
     pub(crate) fn new(
         indirect_validation: &IndirectValidation,

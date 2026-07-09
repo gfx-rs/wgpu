@@ -323,6 +323,7 @@ pub const MAX_MIP_LEVELS: u32 = 16;
 /// Size of a single occlusion/timestamp query, when copied into a buffer, in bytes.
 /// cbindgen:ignore
 pub const QUERY_SIZE: wgt::BufferAddress = 8;
+pub const EXTERNAL_TEXTURE_PARAMS_SIZE: wgt::BufferAddress = 208;
 
 pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
@@ -924,7 +925,7 @@ pub trait Device: WasmNotSendSync {
     unsafe fn create_buffer(
         &self,
         desc: &BufferDescriptor,
-    ) -> Result<<Self::A as Api>::Buffer, DeviceError>;
+    ) -> Result<(<Self::A as Api>::Buffer, wgt::BufferAddress), DeviceError>;
 
     /// Free `buffer` and any GPU resources it owns.
     ///
@@ -1676,13 +1677,13 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: BufferBinding<'a, <Self::A as Api>::Buffer>,
+        binding: BufferBinding<'a, <Self::A as Api>::Buffer, wgt::BufferSize>,
         format: wgt::IndexFormat,
     );
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
-        binding: BufferBinding<'a, <Self::A as Api>::Buffer>,
+        binding: BufferBinding<'a, <Self::A as Api>::Buffer, wgt::BufferSize>,
     );
     unsafe fn set_viewport(&mut self, rect: &Rect<f32>, depth_range: Range<f32>);
     unsafe fn set_scissor_rect(&mut self, rect: &Rect<u32>);
@@ -2211,6 +2212,15 @@ pub struct BufferMapping {
 #[derive(Clone, Debug)]
 pub struct BufferDescriptor<'a> {
     pub label: Label<'a>,
+
+    /// The requested size of the buffer.
+    ///
+    /// `wgpu-hal` may allocate more bytes than requested, if required by the
+    /// platform. The actual allocation size is returned by `create_buffer`.
+    /// Where platforms offer bounds checking, it will operate based on the
+    /// allocated size, not the requested size, so other means may be necessary
+    /// to prevent access beyond the original requested size. The content of
+    /// newly-created buffers is undefined.
     pub size: wgt::BufferAddress,
     pub usage: wgt::BufferUses,
     pub memory_flags: MemoryFlags,
@@ -2360,7 +2370,7 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
 /// [bbr]: https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glBindBufferRange.xhtml
 /// [woob]: https://gpuweb.github.io/gpuweb/wgsl/#out-of-bounds-access-sec
 #[derive(Debug)]
-pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
+pub struct BufferBinding<'a, B: DynBuffer + ?Sized, S> {
     /// The buffer being bound.
     ///
     /// This is not fully `pub` to prevent direct construction of
@@ -2375,15 +2385,11 @@ pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
     pub offset: wgt::BufferAddress,
 
     /// The size of the region bound, in bytes.
-    ///
-    /// If `None`, the region extends from `offset` to the end of the
-    /// buffer. Given the restrictions on `offset`, this means that
-    /// the size is always greater than zero.
-    pub size: Option<wgt::BufferSize>,
+    pub size: S,
 }
 
 // We must implement this manually because `B` is not necessarily `Clone`.
-impl<B: DynBuffer + ?Sized> Clone for BufferBinding<'_, B> {
+impl<B: DynBuffer + ?Sized, S: Copy> Clone for BufferBinding<'_, B, S> {
     fn clone(&self) -> Self {
         BufferBinding {
             buffer: self.buffer,
@@ -2421,7 +2427,7 @@ impl ShouldBeNonZeroExt for Option<NonZeroU64> {
     }
 }
 
-impl<'a, B: DynBuffer + ?Sized> BufferBinding<'a, B> {
+impl<'a, B: DynBuffer + ?Sized, S> BufferBinding<'a, B, S> {
     /// Construct a `BufferBinding` with the given contents.
     ///
     /// When possible, use the `binding` method on a wgpu-core `Buffer` instead
@@ -2432,21 +2438,13 @@ impl<'a, B: DynBuffer + ?Sized> BufferBinding<'a, B> {
     /// not having direct access to the size of a `DynBuffer`.
     ///
     /// SAFETY: The caller is responsible for ensuring that a binding of `size`
-    /// bytes starting at `offset` is contained within the buffer.
-    ///
-    /// The `S` type parameter is a temporary convenience to allow callers to
-    /// pass a zero size. When the zero-size binding issue is resolved, the
-    /// argument should just match the type of the member.
-    /// TODO(<https://github.com/gfx-rs/wgpu/issues/3170>): remove the parameter
-    pub fn new_unchecked<S: Into<Option<NonZeroU64>>>(
-        buffer: &'a B,
-        offset: wgt::BufferAddress,
-        size: S,
-    ) -> Self {
+    /// bytes starting at `offset` is contained within the buffer. `size`
+    /// may be zero only for vertex/index buffer bindings.
+    pub fn new_unchecked(buffer: &'a B, offset: wgt::BufferAddress, size: S) -> Self {
         Self {
             buffer,
             offset,
-            size: size.into(),
+            size,
         }
     }
 
@@ -2474,7 +2472,7 @@ impl<'a, T: DynTextureView + ?Sized> Clone for TextureBinding<'a, T> {
 #[derive(Debug)]
 pub struct ExternalTextureBinding<'a, B: DynBuffer + ?Sized, T: DynTextureView + ?Sized> {
     pub planes: [TextureBinding<'a, T>; 3],
-    pub params: BufferBinding<'a, B>,
+    pub params: BufferBinding<'a, B, wgt::BufferSize>,
 }
 
 impl<'a, B: DynBuffer + ?Sized, T: DynTextureView + ?Sized> Clone
@@ -2516,7 +2514,7 @@ pub struct BindGroupDescriptor<
 > {
     pub label: Label<'a>,
     pub layout: &'a Bgl,
-    pub buffers: &'a [BufferBinding<'a, B>],
+    pub buffers: &'a [BufferBinding<'a, B, wgt::BufferSize>],
     pub samplers: &'a [&'a S],
     pub textures: &'a [TextureBinding<'a, T>],
     pub entries: &'a [BindGroupEntry],
