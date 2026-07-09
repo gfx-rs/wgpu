@@ -120,6 +120,17 @@ pub enum BindingError {
         offset: wgt::BufferAddress,
         buffer_size: u64,
     },
+    /// The supplied binding offset was equal to the buffer size.
+    ///
+    /// A binding offset equal to the buffer size is legal for vertex and index buffer
+    /// bindings, but not for storage/uniform buffer bindings, thus this error should only
+    /// be raised for the latter.
+    #[error("Buffer {buffer}: Binding offset {offset} must be strictly less than buffer size {buffer_size}")]
+    BindingOffsetEqualsSize {
+        buffer: ResourceErrorIdent,
+        offset: wgt::BufferAddress,
+        buffer_size: u64,
+    },
     #[error("Unbinding vertex buffer at slot {slot} expects offset to be 0. However an offset of {offset} was provided.")]
     UnbindingVertexBufferOffsetNotZero { slot: u32, offset: u64 },
     #[error("Unbinding vertex buffer at slot {slot} expects size to be 0. However a size of {size} was provided.")]
@@ -132,6 +143,7 @@ impl WebGpuError for BindingError {
             Self::DestroyedResource(e) => e.webgpu_error_type(),
             Self::BindingRangeTooLarge { .. }
             | Self::BindingOffsetTooLarge { .. }
+            | Self::BindingOffsetEqualsSize { .. }
             | BindingError::UnbindingVertexBufferOffsetNotZero { .. }
             | BindingError::UnbindingVertexBufferSizeNotZero { .. } => ErrorType::Validation,
         }

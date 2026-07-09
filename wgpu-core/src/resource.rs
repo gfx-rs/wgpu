@@ -601,32 +601,44 @@ impl Buffer {
     /// zero-size bindings are permitted by WebGPU, they are not permitted by
     /// some backends. See [`Buffer::binding`] and
     /// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
-    pub fn resolve_binding_size(
+    pub fn resolve_binding_size<
+        S: Copy + Into<wgt::BufferAddress> + TryFrom<wgt::BufferAddress>,
+    >(
         &self,
         offset: wgt::BufferAddress,
-        binding_size: Option<wgt::BufferSize>,
-    ) -> Result<u64, BindingError> {
+        binding_size: Option<S>,
+    ) -> Result<S, BindingError> {
         let buffer_size = self.size;
 
         match binding_size {
-            Some(binding_size) => match offset.checked_add(binding_size.get()) {
-                Some(end) if end <= buffer_size => Ok(binding_size.get()),
+            Some(binding_size) => match offset.checked_add(binding_size.into()) {
+                Some(end) if end <= buffer_size => Ok(binding_size),
                 _ => Err(BindingError::BindingRangeTooLarge {
                     buffer: self.error_ident(),
                     offset,
-                    binding_size: binding_size.get(),
+                    binding_size: binding_size.into(),
                     buffer_size,
                 }),
             },
-            None => {
-                buffer_size
-                    .checked_sub(offset)
-                    .ok_or_else(|| BindingError::BindingOffsetTooLarge {
-                        buffer: self.error_ident(),
-                        offset,
-                        buffer_size,
-                    })
-            }
+            None => buffer_size
+                .checked_sub(offset)
+                .and_then(|remaining| S::try_from(remaining).ok())
+                .ok_or_else(|| {
+                    if offset <= buffer_size {
+                        debug_assert_eq!(offset, buffer_size);
+                        BindingError::BindingOffsetEqualsSize {
+                            buffer: self.error_ident(),
+                            offset,
+                            buffer_size,
+                        }
+                    } else {
+                        BindingError::BindingOffsetTooLarge {
+                            buffer: self.error_ident(),
+                            offset,
+                            buffer_size,
+                        }
+                    }
+                }),
         }
     }
 
@@ -655,13 +667,14 @@ impl Buffer {
         offset: wgt::BufferAddress,
         binding_size: Option<wgt::BufferSize>,
         snatch_guard: &'a SnatchGuard,
-    ) -> Result<(hal::BufferBinding<'a, dyn hal::DynBuffer>, u64), BindingError> {
+    ) -> Result<hal::BufferBinding<'a, dyn hal::DynBuffer, wgt::BufferSize>, BindingError> {
         let buf_raw = self.try_raw(snatch_guard)?;
         let resolved_size = self.resolve_binding_size(offset, binding_size)?;
         // SAFETY: The offset and size passed to hal::BufferBinding::new_unchecked must
         // define a binding contained within the buffer.
-        Ok((
-            hal::BufferBinding::new_unchecked(buf_raw, offset, binding_size),
+        Ok(hal::BufferBinding::new_unchecked(
+            buf_raw,
+            offset,
             resolved_size,
         ))
     }
@@ -1341,7 +1354,7 @@ impl StagingBuffer {
             memory_flags: hal::MemoryFlags::TRANSIENT,
         };
 
-        let raw = unsafe { device.raw().create_buffer(&stage_desc) }
+        let (raw, _) = unsafe { device.raw().create_buffer(&stage_desc) }
             .map_err(|e| device.handle_hal_error(e))?;
         let mapping = unsafe { device.raw().map_buffer(raw.as_ref(), 0..size.get()) }
             .map_err(|e| device.handle_hal_error(e))?;

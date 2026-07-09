@@ -2921,7 +2921,7 @@ async fn check_mark_externally_initialized_case<A: hal::Api>(ctx: &TestingContex
         let hal_device = ctx.device.as_hal::<A>().expect("adapter backend mismatch");
         let hal_texture = texture.as_hal::<A>().expect("adapter backend mismatch");
 
-        let staging_buffer = hal_device
+        let (staging_buffer, _allocated_size) = hal_device
             .create_buffer(&hal::BufferDescriptor {
                 label: Some("mark_externally_initialized staging"),
                 size: buffer_size,
