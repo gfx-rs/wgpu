@@ -105,13 +105,14 @@ naga shader.wgsl out.metal --metal-version 2.0
 ```
 
 **Config file** — provides access to the full set of options via a JSON document.
-Flags and config are **mutually exclusive**: passing any option flag alongside `--config`
-is a hard error (clap enforces it at parse time). This includes the processing flags
-`--compact`, `-g`/`--generate-debug-symbols`, `--spirv-val`, `--spirv-opt`, and `--dxc`, which
-are config keys too — set them in the JSON instead. Only **I/O** — where data comes from and
-goes to — composes with `--config`: the input/output paths, `--input-kind`, `--shader-stage`,
-`--output-kind`, `--before-compaction`, and `--format`. Everything else is an option (a config
-key). (`--input-kind` in particular must compose, since reading stdin under `--config` needs it.)
+Flags and config are **mutually exclusive**: passing *any* flag alongside `--config` is a hard
+error (clap enforces it at parse time). In config mode only the positional input/output file
+paths are accepted on the command line — everything else goes in the JSON.
+
+Because the format specifiers are themselves flags, config mode reads and writes **files by
+extension only**: reading stdin / writing stdout via `-` (which need `--input-kind` /
+`--output-kind`), `--format json`, and `--before-compaction` are flag-mode-only features and
+cannot be combined with `--config`.
 
 ```sh
 # Use a config file.

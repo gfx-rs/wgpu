@@ -35,13 +35,13 @@ EXAMPLES
   naga --print-config-schema
 
 OPTIONS: FLAGS vs CONFIG
-  Options can be set either as individual flags OR via a JSON config (--config <file> /
-  --config-json <string>); the two are mutually exclusive — passing any option flag
-  (including --compact, -g, --spirv-val, --spirv-opt, --dxc) alongside --config is an error.
-  Each of those is a key in the config JSON instead. Run `naga --print-config-schema` to see
-  every config key and its type. Only I/O — where data comes from and goes to — composes with
-  either mode: the input/output paths, --input-kind, --shader-stage, --output-kind,
-  --before-compaction, and --format. Everything else is an option (a config key).
+  Options can be set as individual flags OR via a JSON config (--config <file> /
+  --config-json <string>), never both: passing ANY flag alongside --config is an error. In
+  config mode only the positional input/output file paths are accepted on the command line;
+  everything else lives in the JSON. Run `naga --print-config-schema` to see every config key
+  and its type. (Because the format specifiers are themselves flags, config mode reads and
+  writes files by extension only — stdin/stdout via `-`, --input-kind/--output-kind,
+  --format json, and --before-compaction are flag-mode features.)
 
 STRUCTURED OUTPUT
   --format json emits one JSON document on stdout with `diagnostics`
@@ -104,12 +104,12 @@ Options:
           SPIR-V version, e.g. `1.0`, `1.4`
 
       --shader-stage <SHADER_STAGE>
-          Shader stage; derived from the file extension if unspecified. Selects the input stage for GLSL (an input concern, so it composes with `--config`)
+          Shader stage; derived from the file extension if unspecified. Selects the input stage for GLSL
           
           [possible values: vert, frag, comp]
 
       --input-kind <INPUT_KIND>
-          Kind of input: `glsl`, `wgsl`, `spv`, or `bin` (overrides extension detection; required for stdin `-`). An input concern, so it composes with `--config`
+          Kind of input: `glsl`, `wgsl`, `spv`, or `bin` (overrides extension detection; required for stdin `-`)
           
           [possible values: bin, glsl, spv, wgsl]
 
