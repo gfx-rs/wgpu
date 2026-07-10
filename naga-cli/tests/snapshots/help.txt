@@ -14,9 +14,13 @@ EXAMPLES
   # (--compact) and without debug symbols (omit -g).
   naga shader.wgsl out.spv --entry-point main --compact
 
-  # Translate WGSL to HLSL / MSL / GLSL (format follows the output extension).
+  # Translate WGSL to HLSL / MSL (format follows the output extension).
   naga shader.wgsl out.hlsl
   naga shader.wgsl out.metal
+
+  # GLSL output picks the stage from the extension (.vert / .frag / .comp); it emits one
+  # entry point (defaults to `main`, else pass --entry-point).
+  naga shader.wgsl out.frag --entry-point fs_main
 
   # Read from stdin (`-`); --input-kind names the format.
   cat shader.wgsl | naga - --input-kind wgsl out.spv
