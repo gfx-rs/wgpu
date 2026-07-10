@@ -273,7 +273,7 @@ impl<W: core::fmt::Write> super::Writer<W> {
             writeln!(self.out, "{indent}if ({local_invocation_index} == 0u) {{")?;
             {
                 let level2 = back::Level(2);
-                if let Some(limits) = options.task_dispatch_limits {
+                if let Some(limits) = options.common.task_dispatch_limits {
                     let level3 = back::Level(3);
                     let max_per_dim = limits.max_mesh_workgroups_per_dim;
                     let max_total = limits.max_mesh_workgroups_total;
