@@ -67,7 +67,7 @@ pub fn build_parameters(args: &Args) -> anyhow::Result<Parameters<'static>> {
         params.glsl.version = version;
     }
     if let Some(ref model) = args.shader_model {
-        params.hlsl.shader_model = model.clone();
+        params.hlsl.shader_model = *model;
     }
     if let Some(version) = args.metal_version {
         params.msl.lang_version = version;
