@@ -109,15 +109,17 @@ Flags and config are **mutually exclusive**: passing *any* flag alongside `--con
 error (clap enforces it at parse time). In config mode only the positional input/output file
 paths are accepted on the command line — everything else goes in the JSON.
 
-Reading stdin / writing stdout via `-` still works in config mode — since the `--input-kind` /
-`--output-kind` flags are exclusive with `--config`, set the format with the `input_kind` /
-`output_kind` (and `shader_stage`) **config keys** instead:
+**Every flag has a corresponding config key**, so config is a complete single source — including
+things that are otherwise flags. For example, reading stdin / writing stdout via `-` works in
+config mode by setting the format in the JSON (the `--input-kind` / `--output-kind` flags
+themselves are exclusive with `--config`):
 
 ```sh
 cat shader.wgsl | naga - - --config-json '{"input_kind":"wgsl","output_kind":"spv"}' > out.spv
 ```
 
-(`--format json` and `--before-compaction` remain flag-mode-only.)
+Likewise `format` (`"json"` for structured diagnostics + reflection), `before_compaction`, and
+`bulk_validate` are all config keys.
 
 ```sh
 # Use a config file.
