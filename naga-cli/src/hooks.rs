@@ -38,7 +38,6 @@ fn find_tool(name: &str) -> anyhow::Result<std::path::PathBuf> {
     })
 }
 
-#[allow(dead_code)]
 pub fn run_spirv_val(spv_path: &Path) -> anyhow::Result<()> {
     let tool = find_tool("spirv-val")?;
     let output = Command::new(&tool)
@@ -55,7 +54,6 @@ pub fn run_spirv_val(spv_path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[allow(dead_code)]
 pub fn run_spirv_opt(spv_path: &Path) -> anyhow::Result<()> {
     let tool = find_tool("spirv-opt")?;
     // Optimize in place: read from spv_path, write back to spv_path.
@@ -76,7 +74,6 @@ pub fn run_spirv_opt(spv_path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[allow(dead_code)]
 pub fn run_dxc(
     hlsl_path: &Path,
     entry_points: &[(String, naga::ShaderStage)],
