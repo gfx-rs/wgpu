@@ -363,7 +363,7 @@ fn write_output(
                 "vert" => naga::ShaderStage::Vertex,
                 "frag" => naga::ShaderStage::Fragment,
                 "comp" => naga::ShaderStage::Compute,
-                _ => unreachable!(),
+                _ => unreachable!(), // exhaustive: guarded by outer match on "vert" | "frag" | "comp"
             };
 
             let (ep_stage, ep_name) = match entry_point {
@@ -502,9 +502,9 @@ fn bulk_validate(files: &[String], params: &Parameters) -> anyhow::Result<()> {
             &mut formatted,
             "Validation failed for the following inputs:"
         )
-        .unwrap();
+        .unwrap(); // infallible: writeln! to an in-memory String never fails
         for path in invalid {
-            writeln!(&mut formatted, "  {path}").unwrap();
+            writeln!(&mut formatted, "  {path}").unwrap(); // infallible: writeln! to an in-memory String never fails
         }
         return Err(anyhow!(formatted));
     }
