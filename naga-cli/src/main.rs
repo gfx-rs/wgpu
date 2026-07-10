@@ -2,6 +2,7 @@ mod cli;
 mod config;
 mod core;
 mod error;
+mod output;
 mod params;
 
 use anyhow::Context as _;
