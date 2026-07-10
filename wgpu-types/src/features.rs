@@ -1483,6 +1483,10 @@ bitflags_array! {
         #[name("wgpu-memory-decoration-volatile")]
         const MEMORY_DECORATION_VOLATILE = 1 << 62;
 
+        /// Allows for constructing ray tracing pipelines.
+        #[name("wgpu-ray-tracing-pipelines")]
+        const EXPERIMENTAL_RAY_TRACING_PIPELINES = 1 << 24;
+
         // Adding a new feature? All bits in the first u64 are used. Use the second u64 (bits 64+).
     }
 
@@ -1855,7 +1859,8 @@ impl Features {
                 | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_POINTS.bits()
                 | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
                 | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
-                | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits(),
+                | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits()
+                | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_PIPELINES.bits(),
             FeaturesWebGPU::empty().bits(),
         ]))
     }
@@ -1864,7 +1869,8 @@ impl Features {
     #[must_use]
     pub fn allowed_vertex_formats_for_blas(&self) -> Vec<VertexFormat> {
         let mut formats = Vec::new();
-        if self.intersects(Self::EXPERIMENTAL_RAY_QUERY) {
+        if self.intersects(Self::EXPERIMENTAL_RAY_QUERY | Self::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+        {
             formats.push(VertexFormat::Float32x3);
         }
         if self.contains(Self::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS) {

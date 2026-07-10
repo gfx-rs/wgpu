@@ -374,6 +374,36 @@ impl crate::TypeInner {
         }
     }
 
+    /// True when host code may need a storage buffer byte size for this type, for bounds checks
+    /// or WGSL `arrayLength`. Includes runtime-sized arrays and `binding_array` of element types
+    /// that qualify.
+    ///
+    /// The Metal backend treats this like “needs array length metadata”: it decides which globals
+    /// get entries in the synthesized `_mslBufferSizes` struct that those entry points take.
+    ///
+    /// A struct matches only if its last field is a runtime-sized array. This method does not open
+    /// a trailing struct to look at its members. [`Self::is_dynamically_sized`] does.
+    pub fn needs_host_buffer_byte_size(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
+        use crate::TypeInner as Ti;
+        match *self {
+            Ti::Struct { ref members, .. } => members.last().is_some_and(|m| {
+                matches!(
+                    types[m.ty].inner,
+                    Ti::Array {
+                        size: crate::ArraySize::Dynamic,
+                        ..
+                    }
+                )
+            }),
+            Ti::Array {
+                size: crate::ArraySize::Dynamic,
+                ..
+            } => true,
+            Ti::BindingArray { base, .. } => types[base].inner.needs_host_buffer_byte_size(types),
+            _ => false,
+        }
+    }
+
     /// Returns true if `self` is a constructible type.
     pub fn is_constructible(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
         use crate::TypeInner as Ti;

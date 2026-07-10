@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>wgpu HDR surface test</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #111;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- The example looks the canvas up by this id. -->
+    <canvas id="canvas"></canvas>
+    <script type="module">
+      // Open the developer console to see the reported surface
+      // capabilities. Add ?mode=extended-srgb|extended-display-p3|srgb to
+      // force a color space; on the web the HDR modes are extended-srgb and
+      // extended-display-p3 (scrgb/hdr10/hlg are native-only).
+      import init from "./hdr_surface.js";
+      init();
+    </script>
+  </body>
+</html>

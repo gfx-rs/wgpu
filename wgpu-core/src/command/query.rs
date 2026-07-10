@@ -13,7 +13,7 @@ use crate::{
         ParentDevice, QuerySet, RawResourceAccess, Trackable,
     },
     snatch::SnatchGuard,
-    track::{StatelessTracker, TrackerIndex},
+    track::{QuerySetTracker, TrackerIndex},
     FastHashMap,
 };
 use thiserror::Error;
@@ -321,7 +321,7 @@ impl QuerySet {
 pub(super) fn validate_and_begin_occlusion_query(
     query_set: Arc<QuerySet>,
     raw_encoder: &mut dyn hal::DynCommandEncoder,
-    tracker: &mut StatelessTracker<QuerySet>,
+    tracker: &mut QuerySetTracker,
     query_index: u32,
     reset_state: Option<&mut QueryResetMap>,
     active_query: &mut Option<(Arc<QuerySet>, u32)>,
@@ -372,7 +372,7 @@ pub(super) fn end_occlusion_query(
 pub(super) fn validate_and_begin_pipeline_statistics_query(
     query_set: Arc<QuerySet>,
     raw_encoder: &mut dyn hal::DynCommandEncoder,
-    tracker: &mut StatelessTracker<QuerySet>,
+    tracker: &mut QuerySetTracker,
     device: &Arc<Device>,
     query_index: u32,
     reset_state: Option<&mut QueryResetMap>,
@@ -427,6 +427,47 @@ pub(super) fn end_pipeline_statistics_query(
     }
 }
 
+impl super::CommandEncoder {
+    pub fn write_timestamp(
+        self: &Arc<Self>,
+        query_set: Arc<QuerySet>,
+        query_index: u32,
+    ) -> Result<(), EncoderStateError> {
+        let mut cmd_buf_data = self.data.lock();
+
+        cmd_buf_data.push_with(|| -> Result<_, QueryError> {
+            query_set.check_is_valid()?;
+            Ok(ArcCommand::WriteTimestamp {
+                query_set,
+                query_index,
+            })
+        })
+    }
+
+    pub fn resolve_query_set(
+        self: &Arc<Self>,
+        query_set: Arc<QuerySet>,
+        start_query: u32,
+        query_count: u32,
+        destination: Arc<Buffer>,
+        destination_offset: BufferAddress,
+    ) -> Result<(), EncoderStateError> {
+        let mut cmd_buf_data = self.data.lock();
+
+        cmd_buf_data.push_with(|| -> Result<_, QueryError> {
+            query_set.check_is_valid()?;
+            destination.check_is_valid()?;
+            Ok(ArcCommand::ResolveQuerySet {
+                query_set,
+                start_query,
+                query_count,
+                destination,
+                destination_offset,
+            })
+        })
+    }
+}
+
 impl Global {
     pub fn command_encoder_write_timestamp(
         &self,
@@ -437,14 +478,7 @@ impl Global {
         let hub = &self.hub;
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
-        let mut cmd_buf_data = cmd_enc.data.lock();
-
-        cmd_buf_data.push_with(|| -> Result<_, QueryError> {
-            Ok(ArcCommand::WriteTimestamp {
-                query_set: self.resolve_query_set(query_set_id)?,
-                query_index,
-            })
-        })
+        cmd_enc.write_timestamp(hub.query_sets.get(query_set_id), query_index)
     }
 
     pub fn command_encoder_resolve_query_set(
@@ -459,17 +493,14 @@ impl Global {
         let hub = &self.hub;
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
-        let mut cmd_buf_data = cmd_enc.data.lock();
 
-        cmd_buf_data.push_with(|| -> Result<_, QueryError> {
-            Ok(ArcCommand::ResolveQuerySet {
-                query_set: self.resolve_query_set(query_set_id)?,
-                start_query,
-                query_count,
-                destination: self.resolve_buffer_id(destination)?,
-                destination_offset,
-            })
-        })
+        cmd_enc.resolve_query_set(
+            hub.query_sets.get(query_set_id),
+            start_query,
+            query_count,
+            hub.buffers.get(destination),
+            destination_offset,
+        )
     }
 }
 

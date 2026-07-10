@@ -1,5 +1,5 @@
 use alloc::{borrow::Cow, string::ToString, sync::Arc, vec::Vec};
-use core::{any::Any, convert::Infallible};
+use core::{any::Any, convert::Infallible, marker::PhantomData};
 use std::io::Write as _;
 
 use crate::{
@@ -173,6 +173,15 @@ impl<T: StorageItem> IntoTrace for Arc<T> {
     fn to_trace(&self) -> Self::Output {
         PointerId::from(self)
     }
+}
+
+/// This will work as expected on heap-allocated types that are not moved around.
+pub(crate) unsafe fn to_trace<T: StorageItem>(t: &T) -> PointerId<T::Marker> {
+    PointerId::PointerId(
+        #[expect(trivial_casts)]
+        core::num::NonZeroUsize::new(t as *const T as usize).unwrap(),
+        PhantomData,
+    )
 }
 
 impl IntoTrace for ArcCommand {
@@ -861,39 +870,18 @@ impl<T: IntoTrace> IntoTrace for Option<T> {
     }
 }
 
-/// For selected `Action`s (mostly actions containing only owned data), return a
-/// copy with `'static` lifetime.
+/// Return a copy of [`Action`] with `'static` lifetime.
 ///
 /// This is used for in-memory tracing.
-///
-/// # Panics
-///
-/// If `action` is not supported for in-memory tracing (likely because it
-/// contains borrowed data).
 fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, PointerReferences> {
     use Action as A;
     match action {
         A::Init { desc, backend } => A::Init {
-            desc: wgt::DeviceDescriptor {
-                label: desc.label.map(|l| Cow::Owned(l.into_owned())),
-                required_features: desc.required_features,
-                required_limits: desc.required_limits,
-                experimental_features: desc.experimental_features,
-                memory_hints: desc.memory_hints,
-                trace: desc.trace,
-            },
+            desc: desc.map_label(owned_label),
             backend,
         },
         A::ConfigureSurface(surface, config) => A::ConfigureSurface(surface, config),
-        A::CreateBuffer(buffer, desc) => A::CreateBuffer(
-            buffer,
-            wgt::BufferDescriptor {
-                label: desc.label.map(|l| Cow::Owned(l.into_owned())),
-                size: desc.size,
-                usage: desc.usage,
-                mapped_at_creation: desc.mapped_at_creation,
-            },
-        ),
+        A::CreateBuffer(buffer, desc) => A::CreateBuffer(buffer, desc.map_label(owned_label)),
         A::DestroyBuffer(buffer) => A::DestroyBuffer(buffer),
         A::DropBuffer(buffer) => A::DropBuffer(buffer),
         A::DestroyTexture(texture) => A::DestroyTexture(texture),
@@ -905,6 +893,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         A::GetSurfaceTexture { id, parent } => A::GetSurfaceTexture { id, parent },
         A::Present(surface) => A::Present(surface),
         A::DiscardSurfaceTexture(surface) => A::DiscardSurfaceTexture(surface),
+        A::ReleaseSurfaceTexture(surface) => A::ReleaseSurfaceTexture(surface),
         A::DropBindGroupLayout(layout) => A::DropBindGroupLayout(layout),
         A::GetRenderPipelineBindGroupLayout {
             id,
@@ -970,21 +959,236 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         A::DropBlas(blas) => A::DropBlas(blas),
         A::DropTlas(tlas) => A::DropTlas(tlas),
 
-        A::CreateTexture(..)
-        | A::CreateTextureView { .. }
-        | A::CreateExternalTexture { .. }
-        | A::CreateSampler(..)
-        | A::CreateBindGroupLayout(..)
-        | A::CreatePipelineLayout(..)
-        | A::CreateBindGroup(..)
-        | A::CreateShaderModule { .. }
-        | A::CreateShaderModulePassthrough { .. }
-        | A::CreateComputePipeline { .. }
-        | A::CreateGeneralRenderPipeline { .. }
-        | A::CreatePipelineCache { .. }
-        | A::CreateRenderBundle { .. }
-        | A::CreateQuerySet { .. }
-        | A::CreateBlas { .. }
-        | A::CreateTlas { .. } => panic!("Unsupported action for tracing: {action:?}"),
+        A::CreateTexture(id, desc) => A::CreateTexture(id, desc.map_label(owned_label)),
+        A::CreateTextureError(id, desc) => A::CreateTextureError(id, desc.map_label(owned_label)),
+        A::CreateTextureView { id, parent, desc } => A::CreateTextureView {
+            id,
+            parent,
+            desc: crate::resource::TextureViewDescriptor {
+                label: owned_label(&desc.label),
+                format: desc.format,
+                dimension: desc.dimension,
+                usage: desc.usage,
+                range: desc.range,
+            },
+        },
+        A::CreateExternalTexture { id, desc, planes } => A::CreateExternalTexture {
+            id,
+            desc: desc.map_label(owned_label),
+            planes,
+        },
+        A::CreateSampler(id, desc) => A::CreateSampler(
+            id,
+            crate::resource::SamplerDescriptor {
+                label: owned_label(&desc.label),
+                address_modes: desc.address_modes,
+                mag_filter: desc.mag_filter,
+                min_filter: desc.min_filter,
+                mipmap_filter: desc.mipmap_filter,
+                lod_min_clamp: desc.lod_min_clamp,
+                lod_max_clamp: desc.lod_max_clamp,
+                compare: desc.compare,
+                anisotropy_clamp: desc.anisotropy_clamp,
+                border_color: desc.border_color,
+            },
+        ),
+        A::CreateBindGroupLayout(id, desc) => A::CreateBindGroupLayout(
+            id,
+            crate::binding_model::BindGroupLayoutDescriptor {
+                label: owned_label(&desc.label),
+                entries: Cow::Owned(desc.entries.into_owned()),
+            },
+        ),
+        A::CreatePipelineLayout(id, desc) => A::CreatePipelineLayout(
+            id,
+            crate::binding_model::PipelineLayoutDescriptor {
+                label: owned_label(&desc.label),
+                bind_group_layouts: Cow::Owned(desc.bind_group_layouts.into_owned()),
+                immediate_size: desc.immediate_size,
+            },
+        ),
+        A::CreateBindGroup(id, desc) => A::CreateBindGroup(
+            id,
+            crate::binding_model::BindGroupDescriptor {
+                label: owned_label(&desc.label),
+                layout: desc.layout,
+                entries: desc
+                    .entries
+                    .iter()
+                    .map(|e| crate::binding_model::BindGroupEntry {
+                        binding: e.binding,
+                        resource: match &e.resource {
+                            crate::binding_model::BindingResource::Buffer(buffer_binding) => {
+                                crate::binding_model::BindingResource::Buffer(
+                                    buffer_binding.clone(),
+                                )
+                            }
+                            crate::binding_model::BindingResource::BufferArray(cow) => {
+                                crate::binding_model::BindingResource::BufferArray(Cow::Owned(
+                                    cow.clone().into_owned(),
+                                ))
+                            }
+                            crate::binding_model::BindingResource::Sampler(sampler) => {
+                                crate::binding_model::BindingResource::Sampler(*sampler)
+                            }
+                            crate::binding_model::BindingResource::SamplerArray(cow) => {
+                                crate::binding_model::BindingResource::SamplerArray(Cow::Owned(
+                                    cow.clone().into_owned(),
+                                ))
+                            }
+                            crate::binding_model::BindingResource::TextureView(texture_view) => {
+                                crate::binding_model::BindingResource::TextureView(*texture_view)
+                            }
+                            crate::binding_model::BindingResource::TextureViewArray(cow) => {
+                                crate::binding_model::BindingResource::TextureViewArray(Cow::Owned(
+                                    cow.clone().into_owned(),
+                                ))
+                            }
+                            crate::binding_model::BindingResource::AccelerationStructure(
+                                acceleration_structure,
+                            ) => crate::binding_model::BindingResource::AccelerationStructure(
+                                *acceleration_structure,
+                            ),
+                            crate::binding_model::BindingResource::AccelerationStructureArray(
+                                cow,
+                            ) => crate::binding_model::BindingResource::AccelerationStructureArray(
+                                Cow::Owned(cow.clone().into_owned()),
+                            ),
+                            crate::binding_model::BindingResource::ExternalTexture(
+                                external_texture,
+                            ) => crate::binding_model::BindingResource::ExternalTexture(
+                                *external_texture,
+                            ),
+                        },
+                    })
+                    .collect(),
+            },
+        ),
+        A::CreateShaderModule { id, desc, data } => A::CreateShaderModule {
+            id,
+            desc: crate::pipeline::ShaderModuleDescriptor {
+                label: owned_label(&desc.label),
+                runtime_checks: desc.runtime_checks,
+            },
+            data,
+        },
+        A::CreateShaderModulePassthrough {
+            id,
+            data,
+            label,
+            entry_points,
+        } => A::CreateShaderModulePassthrough {
+            id,
+            data,
+            label: owned_label(&label),
+            entry_points: entry_points
+                .iter()
+                .map(|ep| wgt::PassthroughShaderEntryPoint {
+                    name: Cow::Owned(ep.name.to_string()),
+                    workgroup_size: ep.workgroup_size,
+                })
+                .collect(),
+        },
+        A::CreateComputePipeline { id, desc } => A::CreateComputePipeline {
+            id,
+            desc: crate::pipeline::ComputePipelineDescriptor {
+                label: owned_label(&desc.label),
+                layout: desc.layout,
+                stage: owned_stage(desc.stage),
+                cache: desc.cache,
+            },
+        },
+        A::CreateGeneralRenderPipeline { id, desc } => A::CreateGeneralRenderPipeline {
+            id,
+            desc: crate::pipeline::GeneralRenderPipelineDescriptor {
+                label: owned_label(&desc.label),
+                layout: desc.layout,
+                vertex: match desc.vertex {
+                    crate::pipeline::RenderPipelineVertexProcessor::Vertex(
+                        crate::pipeline::VertexState { stage, buffers },
+                    ) => crate::pipeline::RenderPipelineVertexProcessor::Vertex(
+                        crate::pipeline::VertexState {
+                            stage: owned_stage(stage),
+                            buffers: buffers
+                                .iter()
+                                .map(|b| {
+                                    b.clone().map(|buffer| crate::pipeline::VertexBufferLayout {
+                                        array_stride: buffer.array_stride,
+                                        step_mode: buffer.step_mode,
+                                        attributes: Cow::Owned(buffer.attributes.into_owned()),
+                                    })
+                                })
+                                .collect(),
+                        },
+                    ),
+                    crate::pipeline::RenderPipelineVertexProcessor::Mesh(task, mesh) => {
+                        crate::pipeline::RenderPipelineVertexProcessor::Mesh(
+                            task.map(|t| crate::pipeline::TaskState {
+                                stage: owned_stage(t.stage),
+                            }),
+                            crate::pipeline::MeshState {
+                                stage: owned_stage(mesh.stage),
+                            },
+                        )
+                    }
+                },
+                primitive: desc.primitive,
+                depth_stencil: desc.depth_stencil,
+                multisample: desc.multisample,
+                fragment: desc.fragment.map(|f| crate::pipeline::FragmentState {
+                    stage: owned_stage(f.stage),
+                    targets: Cow::Owned(f.targets.into_owned()),
+                }),
+                multiview_mask: desc.multiview_mask,
+                cache: desc.cache,
+            },
+        },
+        A::CreatePipelineCache { id, desc } => A::CreatePipelineCache {
+            id,
+            desc: crate::pipeline::PipelineCacheDescriptor {
+                label: owned_label(&desc.label),
+                data: desc.data.map(|d| Cow::Owned(d.to_vec())),
+                fallback: desc.fallback,
+            },
+        },
+        A::CreateRenderBundle { id, desc, base } => A::CreateRenderBundle {
+            id,
+            desc: crate::command::RenderBundleEncoderDescriptor {
+                label: owned_label(&desc.label),
+                color_formats: Cow::Owned(desc.color_formats.into_owned()),
+                depth_stencil: desc.depth_stencil,
+                sample_count: desc.sample_count,
+                multiview: desc.multiview,
+            },
+            base,
+        },
+        A::CreateQuerySet { id, desc } => A::CreateQuerySet {
+            id,
+            desc: desc.map_label(owned_label),
+        },
+        A::CreateBlas { id, desc, sizes } => A::CreateBlas {
+            id,
+            desc: desc.map_label(owned_label),
+            sizes,
+        },
+        A::CreateTlas { id, desc } => A::CreateTlas {
+            id,
+            desc: desc.map_label(owned_label),
+        },
     }
+}
+
+fn owned_stage<SM>(
+    stage: crate::pipeline::ProgrammableStageDescriptor<'_, SM>,
+) -> crate::pipeline::ProgrammableStageDescriptor<'static, SM> {
+    crate::pipeline::ProgrammableStageDescriptor {
+        module: stage.module,
+        entry_point: owned_label(&stage.entry_point),
+        constants: stage.constants,
+        zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
+    }
+}
+
+fn owned_label(l: &Option<Cow<'_, str>>) -> Option<Cow<'static, str>> {
+    l.as_ref().map(|l| Cow::Owned(l.to_string()))
 }

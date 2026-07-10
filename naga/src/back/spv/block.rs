@@ -1180,8 +1180,13 @@ impl BlockContext<'_> {
                         crate::BinaryOperator::Modulo => match left_ty_inner.scalar_kind() {
                             Some(crate::ScalarKind::Float) => spirv::Op::FRem,
                             Some(crate::ScalarKind::Sint) => {
-                                assert!(!self.writer.emit_int_div_checks);
-                                spirv::Op::SRem
+                                // Signed `%` is always lowered to `a - b * (a / b)`
+                                // through a wrapper function (see
+                                // `write_wrapped_functions`), because `OpSRem` with a
+                                // negative operand is poison in the Vulkan SPIR-V
+                                // environment without `VK_KHR_maintenance8`. So this raw
+                                // path is never reached for signed modulo.
+                                unreachable!("signed modulo must be lowered via the wrapped path")
                             }
                             Some(crate::ScalarKind::Uint) => {
                                 assert!(!self.writer.emit_int_div_checks);

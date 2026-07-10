@@ -365,6 +365,13 @@ pub fn map_resource_usage(ty: &wgt::BindingType) -> MTLResourceUsage {
             }
         },
         wgt::BindingType::Sampler(..) => MTLResourceUsage::empty(),
+        wgt::BindingType::Buffer { ty, .. } => match ty {
+            wgt::BufferBindingType::Uniform
+            | wgt::BufferBindingType::Storage { read_only: true } => MTLResourceUsage::Read,
+            wgt::BufferBindingType::Storage { read_only: false } => {
+                MTLResourceUsage::Read | MTLResourceUsage::Write
+            }
+        },
         _ => unreachable!(),
     }
 }

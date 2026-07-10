@@ -1,5 +1,6 @@
 //! Implementation of `Validator::validate_module_handles`.
 
+use alloc::boxed::Box;
 use core::{convert::TryInto, hash::Hash};
 
 use super::{TypeError, ValidationError};
@@ -30,7 +31,9 @@ impl super::Validator {
     /// Errors returned by this method are intentionally sparse, for simplicity of implementation.
     /// It is expected that only buggy frontends or fuzzers should ever emit IR that fails this
     /// validation pass.
-    pub(super) fn validate_module_handles(module: &crate::Module) -> Result<(), ValidationError> {
+    pub(super) fn validate_module_handles(
+        module: &crate::Module,
+    ) -> Result<(), Box<ValidationError>> {
         let &crate::Module {
             ref constants,
             ref overrides,
@@ -312,14 +315,14 @@ impl super::Validator {
                     _ => {
                         // TODO: internal error ? We should never get here.
                         // If entering there, it's probably that we forgot to adjust a handle in the compact phase.
-                        return Err(ValidationError::Type {
+                        return Err(Box::new(ValidationError::Type {
                             handle: ty,
                             name: struct_type
                                 .name
                                 .as_ref()
                                 .map_or_else(|| "Unknown".to_string(), |name| name.to_string()),
                             source: TypeError::InvalidData(ty),
-                        });
+                        }));
                     }
                 }
                 for (&function, _) in doc_comments_for_functions.iter() {
@@ -885,21 +888,27 @@ impl super::Validator {
     }
 }
 
-impl From<BadHandle> for ValidationError {
+impl From<BadHandle> for Box<ValidationError> {
     fn from(source: BadHandle) -> Self {
-        Self::InvalidHandle(source.into())
+        Box::new(ValidationError::InvalidHandle(source.into()))
     }
 }
 
-impl From<FwdDepError> for ValidationError {
+impl From<FwdDepError> for Box<ValidationError> {
     fn from(source: FwdDepError) -> Self {
-        Self::InvalidHandle(source.into())
+        Box::new(ValidationError::InvalidHandle(source.into()))
     }
 }
 
-impl From<BadRangeError> for ValidationError {
+impl From<BadRangeError> for Box<ValidationError> {
     fn from(source: BadRangeError) -> Self {
-        Self::InvalidHandle(source.into())
+        Box::new(ValidationError::InvalidHandle(source.into()))
+    }
+}
+
+impl From<InvalidHandleError> for Box<ValidationError> {
+    fn from(source: InvalidHandleError) -> Self {
+        Box::new(ValidationError::InvalidHandle(source))
     }
 }
 

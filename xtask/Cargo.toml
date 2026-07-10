@@ -14,9 +14,11 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # The dependencies in this config have no transitive dependencies.
 anyhow.workspace = true
+cfg-if.workspace = true
 env_logger.workspace = true
 regex-lite.workspace = true
 log.workspace = true
 pico-args.workspace = true
 serde_json.workspace = true
 xshell.workspace = true
+ureq.workspace = true

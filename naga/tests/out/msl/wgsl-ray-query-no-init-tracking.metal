@@ -32,7 +32,8 @@ struct Output {
     metal::float3 normal;
 };
 
-RayIntersection ray_query_get_intersection_true(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector) {
+RayIntersection ray_query_get_intersection_true(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector
+) {
     RayIntersection intersection = RayIntersection {};
     metal::raytracing::intersection_type ty = intersector.get_committed_intersection_type();
     if (ty == metal::raytracing::intersection_type::triangle) {
@@ -63,11 +64,11 @@ RayIntersection query_loop(
     {
         RayDesc desc = _e8;
         metal::raytracing::intersection_params params;
-        params.set_opacity_cull_mode(
+        metal::raytracing::opacity_cull_mode cull_mode = 
             (desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (
                 (desc.flags & 128) != 0 ? metal::raytracing::opacity_cull_mode::non_opaque : metal::raytracing::opacity_cull_mode::none
-            )
-        );
+            );
+        params.set_opacity_cull_mode(cull_mode);
         params.force_opacity(
             (desc.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (
                 (desc.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none
@@ -81,7 +82,8 @@ RayIntersection query_loop(
     while(true) {
         if (metal::all(loop_bound == uint2(0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
-        bool _e9 = rq_1.next();
+        bool _e9 = false;
+        _e9 = rq_1.next();
         if (_e9) {
         } else {
             break;
@@ -113,7 +115,8 @@ metal::float3 get_torus_normal(
     return;
 }
 
-RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector) {
+RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector
+) {
     RayIntersection intersection = RayIntersection {};
     metal::raytracing::intersection_type ty = intersector.get_candidate_intersection_type();
     if (ty == metal::raytracing::intersection_type::triangle) {
@@ -145,11 +148,11 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
     {
         RayDesc desc = _e12;
         metal::raytracing::intersection_params params;
-        params.set_opacity_cull_mode(
+        metal::raytracing::opacity_cull_mode cull_mode = 
             (desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (
                 (desc.flags & 128) != 0 ? metal::raytracing::opacity_cull_mode::non_opaque : metal::raytracing::opacity_cull_mode::none
-            )
-        );
+            );
+        params.set_opacity_cull_mode(cull_mode);
         params.force_opacity(
             (desc.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (
                 (desc.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none
@@ -161,7 +164,10 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
     }
     RayIntersection intersection_1 = ray_query_get_intersection_false(rq);
     if (intersection_1.kind == 3u) {
-        rq.commit_bounding_box_intersection(10.0);
+        {
+            float t = 10.0;
+            rq.commit_bounding_box_intersection(t);
+        }
         return;
     } else {
         if (intersection_1.kind == 1u) {

@@ -3,8 +3,7 @@ use core::ops::Deref;
 
 use windows::{core::Interface as _, Win32::Graphics::Dxgi};
 
-use crate::dx12::DxgiLib;
-
+use super::dxgi_lib::DxgiLib;
 use super::result::HResult as _;
 
 // We can rely on the presence of DXGI 1.4 since D3D12 requires WDDM 2.0, Windows 10 (1507), and so does DXGI 1.4.

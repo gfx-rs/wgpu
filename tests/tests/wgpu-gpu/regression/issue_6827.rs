@@ -33,10 +33,12 @@ async fn run_test(ctx: TestingContext, use_many_writes: bool) {
     let device = ctx.device;
     let queue = ctx.queue;
 
+    // Deliberately distinct in every dimension so that an axis swap (width vs.
+    // height vs. depth) in the copy or the readback would be caught.
     let size = wgpu::Extent3d {
         width: 4,
-        height: 4,
-        depth_or_array_layers: 4,
+        height: 5,
+        depth_or_array_layers: 6,
     };
     let texture = {
         device.create_texture(&wgpu::TextureDescriptor {
