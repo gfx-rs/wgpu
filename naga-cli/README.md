@@ -104,8 +104,12 @@ naga shader.wgsl out.hlsl --shader-model 60
 naga shader.wgsl out.metal --metal-version 2.0
 ```
 
-**Config file** — provides access to the full set of backend options via a JSON document.
-Flags and config are mutually exclusive; use one or the other.
+**Config file** — provides access to the full set of options via a JSON document.
+Flags and config are **mutually exclusive**: passing any option flag alongside `--config`
+is a hard error (clap enforces it at parse time). This includes the processing flags
+`--compact`, `-g`/`--generate-debug-symbols`, `--spirv-val`, `--spirv-opt`, and `--dxc`, which
+are config keys too — set them in the JSON instead. Only I/O (the input/output paths and
+`--before-compaction`) and `--format` are orthogonal and may be combined with `--config`.
 
 ```sh
 # Use a config file.
@@ -119,6 +123,8 @@ A partial config (only the specified keys are applied; everything else uses defa
 
 ```json
 {
+  "compact": true,
+  "spirv_val": true,
   "spv_out": {
     "lang_version": [1, 3],
     "force_loop_bounding": false
@@ -199,7 +205,9 @@ validation errors). SPIR-V parse errors have no source location.
 
 ## External tool hooks
 
-naga can hand off output files to external tools. The tools must be on `PATH`.
+naga can hand off output files to external tools. The tools must be on `PATH`. These are also
+config keys (`spirv_val` / `spirv_opt` / `dxc`), so set them in `--config` rather than as flags
+when using a config file.
 
 ```sh
 # Validate SPIR-V output with spirv-val (Khronos SPIRV-Tools).

@@ -106,7 +106,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
     // from input_text and file_name (which are locals) without requiring them
     // to outlive params (which may have a 'static lifetime parameter).
     let spv_out_with_debug: Option<naga::back::spv::Options<'_>>;
-    if args.generate_debug_symbols {
+    if params.generate_debug_symbols {
         if let Some(ref input_text) = input_text {
             let mut opts = params.spv_out.clone();
             opts.flags.set(naga::back::spv::WriterFlags::DEBUG, true);
@@ -144,9 +144,9 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
     // Build hooks and pre-check: if a hook is requested, at least one output must have
     // a matching extension. This is a hard error in both text and json modes.
     let hooks = Hooks {
-        spirv_val: args.spirv_val,
-        spirv_opt: args.spirv_opt,
-        dxc: args.dxc,
+        spirv_val: params.spirv_val,
+        spirv_opt: params.spirv_opt,
+        dxc: params.dxc,
     };
 
     // Constraints on stdout (`-`) output.

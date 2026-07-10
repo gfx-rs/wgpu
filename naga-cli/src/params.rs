@@ -23,6 +23,12 @@ pub struct Parameters<'a> {
     pub capabilities: naga::valid::Capabilities,
     /// Whether to pass the entry point to `process_overrides` (drops unreachable items).
     pub compact: bool,
+    /// Generate debug symbols (spv-out). Settable via flag or config.
+    pub generate_debug_symbols: bool,
+    /// Post-output tool hooks (settable via flag or config).
+    pub spirv_val: bool,
+    pub spirv_opt: bool,
+    pub dxc: bool,
 }
 
 pub fn build_parameters(args: &Args) -> anyhow::Result<Parameters<'static>> {
@@ -89,6 +95,10 @@ pub fn build_parameters(args: &Args) -> anyhow::Result<Parameters<'static>> {
     );
 
     params.compact = args.compact || args.before_compaction.is_some();
+    params.generate_debug_symbols = args.generate_debug_symbols;
+    params.spirv_val = args.spirv_val;
+    params.spirv_opt = args.spirv_opt;
+    params.dxc = args.dxc;
     params.capabilities = args.capabilities;
 
     // Apply CommonBackendOptions (fake_missing_bindings, force_loop_bounding,
