@@ -1009,6 +1009,8 @@ pub struct Writer {
 }
 
 bitflags::bitflags! {
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct WriterFlags: u32 {
         /// Include debug labels for everything.
@@ -1055,6 +1057,8 @@ bitflags::bitflags! {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum ZeroInitializeWorkgroupMemoryMode {
     /// Via `VK_KHR_zero_initialize_workgroup_memory` or Vulkan 1.3
     Native,
@@ -1240,4 +1244,30 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::MEMORY_DECORATION_VOLATILE
         | Caps::LINEAR_INTERPOLATION
         | Caps::DEBUG_PRINTF
+}
+
+#[cfg(all(test, feature = "serialize", feature = "deserialize"))]
+mod serde_tests {
+    use super::*;
+
+    #[test]
+    fn writer_flags_round_trip() {
+        let flags = WriterFlags::DEBUG | WriterFlags::ADJUST_COORDINATE_SPACE;
+        let json = serde_json::to_string(&flags).unwrap();
+        let back: WriterFlags = serde_json::from_str(&json).unwrap();
+        assert_eq!(flags, back);
+    }
+
+    #[test]
+    fn zero_init_mode_round_trip() {
+        for mode in [
+            ZeroInitializeWorkgroupMemoryMode::Native,
+            ZeroInitializeWorkgroupMemoryMode::Polyfill,
+            ZeroInitializeWorkgroupMemoryMode::None,
+        ] {
+            let json = serde_json::to_string(&mode).unwrap();
+            let back: ZeroInitializeWorkgroupMemoryMode = serde_json::from_str(&json).unwrap();
+            assert_eq!(mode, back);
+        }
+    }
 }
