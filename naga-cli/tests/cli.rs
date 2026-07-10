@@ -584,9 +584,9 @@ fn help_lists_all_options() {
         "--spirv-version",
         "--shader-stage",
         "--input-kind",
+        "--output-kind",
         "--metal-version",
         "--keep-coordinate-space",
-        "--stdin-file-path",
         "--compact",
         "--bulk-validate",
         "--override",
@@ -645,8 +645,9 @@ fn compiles_wgsl_to_spv() {
 #[test]
 fn reads_wgsl_from_stdin() {
     use std::io::Write;
+    // `-` reads from stdin; --input-kind names the format (no extension to infer).
     let mut child = naga()
-        .args(["--stdin-file-path", "in.wgsl"])
+        .args(["-", "--input-kind", "wgsl"])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .spawn()
@@ -664,6 +665,14 @@ fn reads_wgsl_from_stdin() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains("Validation successful"));
+}
+
+#[test]
+fn stdin_requires_input_kind() {
+    // `-` with no --input-kind has no way to know the format.
+    let out = naga().arg("-").output().unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("input-kind"));
 }
 
 #[test]

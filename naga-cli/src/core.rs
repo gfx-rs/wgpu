@@ -41,15 +41,26 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
 
     let mut files = args.files.iter();
 
-    let (input_path, input) = if let Some(path) = args.stdin_file_path.as_ref() {
-        let mut input = vec![];
-        std::io::stdin().lock().read_to_end(&mut input)?;
-        (Path::new(path), input)
-    } else if let Some(path) = files.next() {
-        let path = Path::new(path);
-        (path, fs::read(path)?)
-    } else {
-        return Err(CliError("Input file path is not specified").into());
+    let (input_path, input) = match files.next() {
+        // `-` reads from stdin. There is no filename to infer the format from, so
+        // --input-kind is required (and --shader-stage for GLSL).
+        Some(path) if path == "-" => {
+            if params.input_kind.is_none() {
+                return Err(anyhow!(
+                    "reading from stdin (`-`) requires --input-kind <wgsl|glsl|spv|bin>"
+                ));
+            }
+            let mut input = vec![];
+            std::io::stdin().lock().read_to_end(&mut input)?;
+            (Path::new("<stdin>"), input)
+        }
+        Some(path) => {
+            let path = Path::new(path);
+            (path, fs::read(path)?)
+        }
+        None => {
+            return Err(CliError("No input file specified (use `-` to read from stdin)").into())
+        }
     };
 
     let file_name = input_path.to_string_lossy().into_owned();
