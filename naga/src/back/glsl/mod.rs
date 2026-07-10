@@ -172,11 +172,22 @@ bitflags::bitflags! {
     }
 }
 
+#[cfg(feature = "schemars")]
+impl schemars::JsonSchema for WriterFlags {
+    fn schema_name() -> alloc::borrow::Cow<'static, str> {
+        "GlslWriterFlags".into()
+    }
+    fn json_schema(g: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        u32::json_schema(g)
+    }
+}
+
 /// Configuration used in the [`Writer`].
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "deserialize", serde(default))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct Options {
     /// The GLSL version to be used.
     pub version: Version,

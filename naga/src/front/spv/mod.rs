@@ -409,6 +409,7 @@ enum ExtendedClass {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "deserialize", serde(default))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct Options {
     /// The IR coordinate space matches all the APIs except SPIR-V,
     /// so by default we flip the Y coordinate of the `BuiltIn::Position`.

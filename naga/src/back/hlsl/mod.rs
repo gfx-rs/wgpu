@@ -193,6 +193,7 @@ use crate::{
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct BindTarget {
     pub space: u8,
     /// For regular bindings this is the register number.
@@ -213,6 +214,7 @@ pub struct BindTarget {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 /// BindTarget for dynamic storage buffer offsets
 pub struct OffsetsBindTarget {
     pub space: u8,
@@ -249,6 +251,7 @@ pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindT
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum ShaderModel {
     V5_0,
     V5_1,
@@ -311,6 +314,7 @@ impl crate::ImageDimension {
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct SamplerIndexBufferKey {
     pub group: u32,
 }
@@ -319,6 +323,7 @@ pub struct SamplerIndexBufferKey {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "deserialize", serde(default))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct SamplerHeapBindTargets {
     pub standard_samplers: BindTarget,
     pub comparison_samplers: BindTarget,
@@ -411,6 +416,7 @@ pub type DynamicStorageBufferOffsetsTargets = alloc::collections::BTreeMap<u32, 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct ExternalTextureBindTarget {
     /// HLSL binding information for the individual plane textures.
     ///
@@ -473,6 +479,7 @@ pub enum EntryPointError {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "deserialize", serde(default))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct Options {
     /// The hlsl shader model to be used
     pub shader_model: ShaderModel,

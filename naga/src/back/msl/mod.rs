@@ -91,6 +91,7 @@ pub type InlineSamplerIndex = u8;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum BindSamplerTarget {
     Resource(Slot),
     Inline(InlineSamplerIndex),
@@ -104,6 +105,7 @@ pub enum BindSamplerTarget {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct BindExternalTextureTarget {
     pub planes: [Slot; 3],
     pub params: Slot,
@@ -113,6 +115,7 @@ pub struct BindExternalTextureTarget {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct BindTarget {
     pub buffer: Option<Slot>,
     pub texture: Option<Slot>,
@@ -150,6 +153,7 @@ pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindT
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct EntryPointResources {
     #[cfg_attr(
         feature = "deserialize",
@@ -296,6 +300,7 @@ enum LocationMode {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "deserialize", serde(default))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct Options {
     /// (Major, Minor) target version of the Metal Shading Language.
     pub lang_version: (u8, u8),
@@ -351,6 +356,7 @@ impl Default for Options {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum VertexBufferStepMode {
     Constant,
     #[default]
@@ -363,6 +369,7 @@ pub enum VertexBufferStepMode {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct AttributeMapping {
     /// Shader location associated with this attribute
     pub shader_location: u32,
@@ -381,6 +388,7 @@ pub struct AttributeMapping {
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct VertexBufferMapping {
     /// Shader location associated with this buffer
     pub id: u32,
@@ -880,4 +888,17 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
 #[test]
 fn test_error_size() {
     assert_eq!(size_of::<Error>(), 40);
+}
+
+#[cfg(all(test, feature = "schemars"))]
+mod schema_tests {
+    use super::Options;
+
+    #[test]
+    fn msl_options_schema_generates() {
+        let schema = schemars::schema_for!(Options);
+        let json = serde_json::to_string(&schema).unwrap();
+        // lang_version must appear in the schema.
+        assert!(json.contains("lang_version"), "schema: {json}");
+    }
 }

@@ -36,6 +36,7 @@ msl-out = []
 ## If you want to enable MSL output it regardless of the target platform, use `naga/msl-out`.
 msl-out-if-target-apple = []
 
+schemars = ["dep:schemars", "naga-types/schemars"]
 serialize = [
     "dep:serde",
     "bitflags/serde",
@@ -103,6 +104,7 @@ num-traits.workspace = true
 once_cell = { workspace = true, features = ["alloc", "race"] }
 spirv = { workspace = true, optional = true }
 thiserror.workspace = true
+schemars = { workspace = true, optional = true }
 serde = { workspace = true, features = ["alloc", "derive"], optional = true }
 petgraph = { workspace = true, optional = true }
 pp-rs = { workspace = true, optional = true }

@@ -1044,9 +1044,20 @@ bitflags::bitflags! {
     }
 }
 
+#[cfg(feature = "schemars")]
+impl schemars::JsonSchema for WriterFlags {
+    fn schema_name() -> alloc::borrow::Cow<'static, str> {
+        "SpvWriterFlags".into()
+    }
+    fn json_schema(g: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        u32::json_schema(g)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum ZeroInitializeWorkgroupMemoryMode {
     /// Via `VK_KHR_zero_initialize_workgroup_memory` or Vulkan 1.3
     Native,
@@ -1059,6 +1070,7 @@ pub enum ZeroInitializeWorkgroupMemoryMode {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "deserialize", serde(default, bound(deserialize = "")))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct Options<'a> {
     /// (Major, Minor) target version of the SPIR-V.
     pub lang_version: (u8, u8),
@@ -1077,6 +1089,9 @@ pub struct Options<'a> {
     /// requires capabilities beyond these is rejected with an error.
     ///
     /// If this is `None`, all capabilities are permitted.
+    // Skipped for schemars: FastHashSet<spirv::Capability> has no JsonSchema impl
+    // (spirv crate does not enable schemars).
+    #[cfg_attr(feature = "schemars", schemars(skip))]
     pub capabilities: Option<crate::FastHashSet<Capability>>,
 
     /// How should generate code handle array, vector, matrix, or image texel
@@ -1104,6 +1119,7 @@ pub struct Options<'a> {
     // Skipped: lifetime-bearing, runtime-populated from `-g`, never in config.
     #[cfg_attr(feature = "serialize", serde(skip_serializing))]
     #[cfg_attr(feature = "deserialize", serde(skip_deserializing))]
+    #[cfg_attr(feature = "schemars", schemars(skip))]
     pub debug_info: Option<DebugInfo<'a>>,
 
     /// Limits to the mesh shader dispatch group a task workgroup can dispatch.
@@ -1161,6 +1177,7 @@ impl Default for Options<'_> {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct PipelineOptions {
     /// The stage of the entry point.
     pub shader_stage: crate::ShaderStage,
@@ -1298,5 +1315,19 @@ mod serde_tests {
         assert_eq!(back.capabilities, Some(caps));
         // debug_info is always skipped regardless
         assert!(back.debug_info.is_none());
+    }
+}
+
+#[cfg(all(test, feature = "schemars"))]
+mod schema_tests {
+    use super::Options;
+
+    #[test]
+    fn spv_options_schema_generates() {
+        let schema = schemars::schema_for!(Options);
+        let json = serde_json::to_string(&schema).unwrap();
+        // debug_info is skipped; lang_version must appear.
+        assert!(json.contains("lang_version"), "schema: {json}");
+        assert!(!json.contains("debug_info"), "debug_info must be skipped: {json}");
     }
 }
