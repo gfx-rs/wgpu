@@ -7,6 +7,7 @@
 //! [`common::table_params`]. The negative feature-gating tests use their own
 //! parameters (they must run with the feature *off*).
 
+mod binding;
 mod common;
 mod compute;
 mod features;
@@ -16,6 +17,7 @@ mod regression;
 mod render;
 
 pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    binding::all_tests(tests);
     compute::all_tests(tests);
     features::all_tests(tests);
     lifecycle::all_tests(tests);

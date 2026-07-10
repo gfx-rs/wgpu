@@ -305,6 +305,24 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
     /// accumulate them here rather than recording only the final binding
     /// (`resource_table`), which would silently drop earlier tables' transitions.
     resource_tables_seen: Vec<Arc<crate::resource_table::ResourceTable>>,
+
+    /// Resource-table hazard dirty bits (work item 0.10; see
+    /// `plans/resource-table.md`, the *Barriers → Inside table-bound compute
+    /// passes* section).
+    ///
+    /// Inside a table-bound compute pass, a bindful storage write in one
+    /// dispatch may be read through the table by a later dispatch (or a table
+    /// read may be clobbered by a later bindful write). These two bits track
+    /// whether such a hazard is outstanding so that a single conservative
+    /// compute→compute memory barrier can be emitted before the dependent
+    /// dispatch and both bits cleared. The barrier is a plain memory barrier
+    /// with no image layout transition — layout correctness never depends on
+    /// it (Invariant 3).
+    ///
+    /// `dirty_write` is set by any dispatch with a writable bindful binding;
+    /// `dirty_table_read` by any dispatch that reads through the table.
+    dirty_write: bool,
+    dirty_table_read: bool,
 }
 
 impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
@@ -470,7 +488,51 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
             &mut self.intermediate_trackers,
             self.pass.base.snatch_guard,
         );
+
+        self.flush_resource_table_barrier();
+
         Ok(())
+    }
+
+    /// Emit the resource-table hazard barrier for the upcoming dispatch, if
+    /// needed, and update the dirty bits (work item 0.10).
+    ///
+    /// Called from `flush_bindings`, i.e. once per user dispatch. Internal
+    /// injected dispatches (e.g. indirect-dispatch validation) do not go
+    /// through here and so never affect the dirty bits, matching the design
+    /// (their writes are not part of a user usage scope).
+    fn flush_resource_table_barrier(&mut self) {
+        // Does this dispatch read through the resource table? `is_ready` (called
+        // before every dispatch) guarantees a table is bound whenever the
+        // pipeline layout declares one, so the layout flag alone is decisive.
+        let uses_table = self.resource_table.is_some()
+            && self
+                .pipeline
+                .as_ref()
+                .and_then(|pipeline| pipeline.layout().ok())
+                .is_some_and(|layout| layout.uses_resource_table);
+
+        // Does this dispatch write through a bindful storage binding?
+        let has_writable = self
+            .pass
+            .binder
+            .list_active()
+            .any(|bind_group| bind_group.used.has_writable_bindings());
+
+        // A prior write feeding this table read (RAW), or a prior table read
+        // clobbered by this write (WAR), needs a single global compute→compute
+        // memory barrier. One barrier discharges both bits.
+        if (uses_table && self.dirty_write) || (has_writable && self.dirty_table_read) {
+            unsafe {
+                self.pass.base.raw_encoder.resource_table_memory_barrier();
+            }
+            self.dirty_write = false;
+            self.dirty_table_read = false;
+        }
+
+        // Record this dispatch's own effects for the next dispatch.
+        self.dirty_write |= has_writable;
+        self.dirty_table_read |= uses_table;
     }
 }
 
@@ -748,6 +810,8 @@ pub(super) fn encode_compute_pass(
         resource_table: None,
         resource_table_dirty: false,
         resource_tables_seen: Vec::new(),
+        dirty_write: false,
+        dirty_table_read: false,
     };
 
     let indices = &device.tracker_indices;

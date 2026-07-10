@@ -455,6 +455,14 @@ impl BindGroupStates {
         }
     }
 
+    /// Whether this bind group binds any resource with a writable storage
+    /// usage. Feeds the resource-table hazard dirty bits (work item 0.10):
+    /// a dispatch with a writable bindful binding may produce data that a
+    /// later table-reading dispatch consumes.
+    pub(crate) fn has_writable_bindings(&self) -> bool {
+        self.buffers.has_writable_usage() || self.views.has_writable_usage()
+    }
+
     /// Optimize the bind group states by sorting them by ID.
     ///
     /// When this list of states is merged into a tracker, the memory

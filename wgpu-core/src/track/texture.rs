@@ -197,6 +197,17 @@ impl TextureViewBindGroupState {
     pub fn used_textures(&self) -> impl Iterator<Item = &Arc<Texture>> {
         self.views.iter().map(|(v, _)| &v.parent)
     }
+
+    /// Whether any view in this bind group is bound with a writable storage
+    /// usage. Feeds the resource-table hazard dirty bits (work item 0.10).
+    pub(crate) fn has_writable_usage(&self) -> bool {
+        const WRITABLE: TextureUses = TextureUses::STORAGE_WRITE_ONLY
+            .union(TextureUses::STORAGE_READ_WRITE)
+            .union(TextureUses::STORAGE_ATOMIC);
+        self.views
+            .iter()
+            .any(|(_, state)| state.intersects(WRITABLE))
+    }
 }
 
 /// Container for corresponding simple and complex texture states.
