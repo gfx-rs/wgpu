@@ -16,17 +16,24 @@ fn main() {
 
     let args = cli::Args::parse();
 
-    if let Err(e) = real_main(&args) {
-        error::print_err(e.as_ref());
-        std::process::exit(1);
+    match real_main(&args) {
+        Ok(true) => {}
+        Ok(false) => {
+            // Handled failure already emitted (JSON to stdout or text to stderr).
+            std::process::exit(1);
+        }
+        Err(e) => {
+            error::print_err(e.as_ref());
+            std::process::exit(1);
+        }
     }
 }
 
-fn real_main(args: &cli::Args) -> anyhow::Result<()> {
+fn real_main(args: &cli::Args) -> anyhow::Result<bool> {
     if args.print_config_schema {
         let schema = schemars::schema_for!(crate::config::Config);
         println!("{}", serde_json::to_string_pretty(&schema)?);
-        return Ok(());
+        return Ok(true);
     }
 
     let mut params = params::build_parameters(args)?;

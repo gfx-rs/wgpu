@@ -129,8 +129,19 @@ pub struct Args {
     #[arg(long)]
     pub print_config_schema: bool,
 
+    /// Output format for diagnostics and reflection: `text` (human, default) or `json`.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+    pub format: OutputFormat,
+
     /// Input file (stdin if omitted), then output files. In bulk mode, all are inputs.
     pub files: Vec<String>,
+}
+
+#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OutputFormat {
+    #[default]
+    Text,
+    Json,
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
