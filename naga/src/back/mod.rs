@@ -403,16 +403,33 @@ pub enum RayIntersectionType {
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "deserialize", serde(default))]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct CommonBackendOptions {
     /// Bind fake resources for shaders that reference missing bindings.
+    #[cfg_attr(
+        feature = "clap",
+        arg(long, action = clap::ArgAction::Set, default_value_t = true)
+    )]
     pub fake_missing_bindings: bool,
     /// Add a bound to all loops that might not terminate.
+    #[cfg_attr(
+        feature = "clap",
+        arg(long, action = clap::ArgAction::Set, default_value_t = true)
+    )]
     pub force_loop_bounding: bool,
     /// Track ray query initialization.
+    #[cfg_attr(
+        feature = "clap",
+        arg(long, action = clap::ArgAction::Set, default_value_t = true)
+    )]
     pub ray_query_initialization_tracking: bool,
     /// Limits on mesh-shader task dispatch size.
+    /// (Parsed separately by the CLI via --task-limits.)
+    #[cfg_attr(feature = "clap", arg(skip = None))]
     pub task_dispatch_limits: Option<TaskDispatchLimits>,
     /// Clamp mesh shader primitive indices.
+    /// (Controlled separately by the CLI via --validate-mesh-output.)
+    #[cfg_attr(feature = "clap", arg(skip = true))]
     pub mesh_shader_primitive_indices_clamp: bool,
 }
 
@@ -435,6 +452,7 @@ impl Default for CommonBackendOptions {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum ZeroInitializeWorkgroupMemoryMode {
     /// Via `VK_KHR_zero_initialize_workgroup_memory` or Vulkan 1.3
     Native,
