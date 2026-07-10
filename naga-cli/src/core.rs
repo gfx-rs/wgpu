@@ -81,7 +81,11 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
         language,
     }) = parsed
     else {
-        let out = JsonOutput { success: false, diagnostics: json_diagnostics, reflection: None };
+        let out = JsonOutput {
+            success: false,
+            diagnostics: json_diagnostics,
+            reflection: None,
+        };
         println!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(false);
     };
@@ -176,8 +180,10 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
         Ok(info) => Some(info),
         Err(error) => {
             if is_json {
-                json_diagnostics
-                    .push(validation_error_to_diagnostic(&error, input_text.as_deref()));
+                json_diagnostics.push(validation_error_to_diagnostic(
+                    &error,
+                    input_text.as_deref(),
+                ));
             } else {
                 // Validation failure is not fatal. Just report the error.
                 if let Some(input) = &input_text {
@@ -203,7 +209,16 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
             // Tool hooks (dxc/spirv-opt/spirv-val) must NOT fire on this debug dump;
             // pass a no-op Hooks so only the real output paths invoke them.
             if let Some(ref before_compaction) = args.before_compaction {
-                write_output(&module, &info, params, spv_out_with_debug.as_ref(), before_compaction, &crate::hooks::Hooks::default(), &mut Vec::new(), is_json)?;
+                write_output(
+                    &module,
+                    &info,
+                    params,
+                    spv_out_with_debug.as_ref(),
+                    before_compaction,
+                    &crate::hooks::Hooks::default(),
+                    &mut Vec::new(),
+                    is_json,
+                )?;
             }
 
             naga::compact::compact(&mut module, KeepUnused::No);
@@ -222,8 +237,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
                     } else {
                         eprintln!("Error validating compacted module:");
                         if let Some(input) = &input_text {
-                            let filename =
-                                input_path.file_name().and_then(std::ffi::OsStr::to_str);
+                            let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
                             error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
                         } else {
                             crate::error::print_err(&error);
@@ -274,14 +288,34 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
 
     for output_path in output_paths {
         if is_json {
-            write_output(&module, &info, params, spv_out_with_debug.as_ref(), output_path, &hooks, &mut json_diagnostics, true)?;
+            write_output(
+                &module,
+                &info,
+                params,
+                spv_out_with_debug.as_ref(),
+                output_path,
+                &hooks,
+                &mut json_diagnostics,
+                true,
+            )?;
         } else {
-            write_output(&module, &info, params, spv_out_with_debug.as_ref(), output_path, &hooks, &mut Vec::new(), false)?;
+            write_output(
+                &module,
+                &info,
+                params,
+                spv_out_with_debug.as_ref(),
+                output_path,
+                &hooks,
+                &mut Vec::new(),
+                false,
+            )?;
         }
     }
 
     if is_json {
-        let success = !json_diagnostics.iter().any(|d| matches!(d.severity, crate::output::Severity::Error));
+        let success = !json_diagnostics
+            .iter()
+            .any(|d| matches!(d.severity, crate::output::Severity::Error));
         let out = JsonOutput {
             success,
             diagnostics: json_diagnostics,
@@ -446,10 +480,8 @@ fn parse_input_json(
             }
         }
         InputKind::Spv => {
-            let module =
-                naga::front::spv::parse_u8_slice(&input, &params.spv_in).map_err(|e| {
-                    vec![spv_error_to_diagnostic(&e)]
-                })?;
+            let module = naga::front::spv::parse_u8_slice(&input, &params.spv_in)
+                .map_err(|e| vec![spv_error_to_diagnostic(&e)])?;
             Parsed {
                 module,
                 input_text: None,
@@ -483,41 +515,37 @@ fn parse_input_json(
             }
         }
         InputKind::Glsl => {
-            let shader_stage: Result<naga::ShaderStage, Vec<Diagnostic>> =
-                match params.shader_stage {
-                    Some(stage) => Ok(stage.to_stage()),
-                    None => {
-                        let result: anyhow::Result<naga::ShaderStage> = (|| {
-                            let file_stem = input_path
-                                .file_stem()
-                                .context("Unable to determine file stem from input filename.")?;
-                            let inner_ext = Path::new(file_stem)
-                                .extension()
-                                .context(
-                                    "Unable to determine inner extension from input filename.",
-                                )?
-                                .to_str()
-                                .context("Input filename not valid unicode")?;
-                            Ok(match inner_ext {
-                                "vert" => naga::ShaderStage::Vertex,
-                                "frag" => naga::ShaderStage::Fragment,
-                                "comp" => naga::ShaderStage::Compute,
-                                other => {
-                                    return Err(anyhow!("Unknown GLSL stage extension: {other}"))
-                                }
-                            })
-                        })();
-                        result.map_err(|e| {
-                            vec![Diagnostic {
-                                severity: crate::output::Severity::Error,
-                                message: e.to_string(),
-                                location: None,
-                                labels: Vec::new(),
-                                notes: Vec::new(),
-                            }]
+            let shader_stage: Result<naga::ShaderStage, Vec<Diagnostic>> = match params.shader_stage
+            {
+                Some(stage) => Ok(stage.to_stage()),
+                None => {
+                    let result: anyhow::Result<naga::ShaderStage> = (|| {
+                        let file_stem = input_path
+                            .file_stem()
+                            .context("Unable to determine file stem from input filename.")?;
+                        let inner_ext = Path::new(file_stem)
+                            .extension()
+                            .context("Unable to determine inner extension from input filename.")?
+                            .to_str()
+                            .context("Input filename not valid unicode")?;
+                        Ok(match inner_ext {
+                            "vert" => naga::ShaderStage::Vertex,
+                            "frag" => naga::ShaderStage::Fragment,
+                            "comp" => naga::ShaderStage::Compute,
+                            other => return Err(anyhow!("Unknown GLSL stage extension: {other}")),
                         })
-                    }
-                };
+                    })();
+                    result.map_err(|e| {
+                        vec![Diagnostic {
+                            severity: crate::output::Severity::Error,
+                            message: e.to_string(),
+                            location: None,
+                            labels: Vec::new(),
+                            notes: Vec::new(),
+                        }]
+                    })
+                }
+            };
             let shader_stage = shader_stage?;
             let input = String::from_utf8(input).map_err(|e| {
                 vec![Diagnostic {
@@ -613,8 +641,7 @@ fn write_output(
             )?;
 
             let pipeline_options = msl::PipelineOptions::default();
-            let (msl, _) =
-                msl::write_string(&module, &info, &options, &pipeline_options)?;
+            let (msl, _) = msl::write_string(&module, &info, &options, &pipeline_options)?;
             fs::write(output_path, msl)?;
         }
         "spv" | "spirv" => {
