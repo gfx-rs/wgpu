@@ -241,6 +241,9 @@ async fn main() {
     {
         install_unhandled_exception_filter();
     }
-    env_logger::init();
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .parse_default_env()
+        .init();
     unwrap_or_exit(run().await)
 }

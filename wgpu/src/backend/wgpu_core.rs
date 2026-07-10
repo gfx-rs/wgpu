@@ -21,7 +21,7 @@ use hashbrown::HashMap;
 use arrayvec::ArrayVec;
 use smallvec::SmallVec;
 use wgc::{
-    command::bundle_ffi::*, error::ContextErrorSource, pipeline::CreateShaderModuleError,
+    error::ContextErrorSource, pipeline::CreateShaderModuleError,
     resource::BlasPrepareCompactResult,
 };
 use wgt::{
@@ -2866,7 +2866,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 }
             };
             wgc::ray_tracing::BlasBuildEntry {
-                blas_id: e.blas.inner.as_core().id,
+                blas: e.blas.inner.as_core().id,
                 geometries,
             }
         });
@@ -2879,14 +2879,14 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                     instance
                         .as_ref()
                         .map(|instance| wgc::ray_tracing::TlasInstance {
-                            blas_id: instance.blas.as_core().id,
+                            blas: instance.blas.as_core().id,
                             transform: &instance.transform,
                             custom_data: instance.custom_data,
                             mask: instance.mask,
                         })
                 });
             wgc::ray_tracing::TlasPackage {
-                tlas_id: e.inner.as_core().id,
+                tlas: e.inner.as_core().id,
                 instances: Box::new(instances),
                 lowest_unmodified: e.lowest_unmodified,
             }
@@ -3795,7 +3795,10 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     fn set_pipeline(&mut self, pipeline: &dispatch::DispatchRenderPipeline) {
         let pipeline = pipeline.as_core();
 
-        wgpu_render_bundle_set_pipeline(&mut self.encoder, pipeline.id)
+        self.context
+            .0
+            .render_bundle_encoder_set_pipeline(&mut self.encoder, pipeline.id)
+            .expect("RenderBundleEncoder should not have ended")
     }
 
     fn set_bind_group(
@@ -3806,15 +3809,10 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     ) {
         let bg = bind_group.map(|bg| bg.as_core().id);
 
-        unsafe {
-            wgpu_render_bundle_set_bind_group(
-                &mut self.encoder,
-                index,
-                bg,
-                offsets.as_ptr(),
-                offsets.len(),
-            )
-        }
+        self.context
+            .0
+            .render_bundle_encoder_set_bind_group(&mut self.encoder, index, bg, offsets)
+            .expect("RenderBundleEncoder should not have ended");
     }
 
     fn set_index_buffer(
@@ -3826,8 +3824,16 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     ) {
         let buffer = buffer.as_core();
 
-        self.encoder
-            .set_index_buffer(buffer.id, index_format, offset, size)
+        self.context
+            .0
+            .render_bundle_encoder_set_index_buffer(
+                &mut self.encoder,
+                buffer.id,
+                index_format,
+                offset,
+                size,
+            )
+            .expect("RenderBundleEncoder should not have ended");
     }
 
     fn set_vertex_buffer(
@@ -3839,39 +3845,44 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     ) {
         let buffer = buffer.map(|buffer| buffer.as_core().id);
 
-        wgpu_render_bundle_set_vertex_buffer(&mut self.encoder, slot, buffer, offset, size)
+        self.context
+            .0
+            .render_bundle_encoder_set_vertex_buffer(&mut self.encoder, slot, buffer, offset, size)
+            .expect("RenderBundleEncoder should not have ended");
     }
 
     fn set_immediates(&mut self, offset: u32, data: &[u8]) {
-        unsafe {
-            wgpu_core::command::bundle_ffi::wgpu_render_bundle_set_immediates(
-                &mut self.encoder,
-                offset,
-                data.len().try_into().unwrap(),
-                data.as_ptr(),
-            );
-        }
+        self.context
+            .0
+            .render_bundle_encoder_set_immediates(&mut self.encoder, offset, data)
+            .expect("RenderBundleEncoder should not have ended");
     }
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
-        wgpu_render_bundle_draw(
-            &mut self.encoder,
-            vertices.end - vertices.start,
-            instances.end - instances.start,
-            vertices.start,
-            instances.start,
-        )
+        self.context
+            .0
+            .render_bundle_encoder_draw(
+                &mut self.encoder,
+                vertices.end - vertices.start,
+                instances.end - instances.start,
+                vertices.start,
+                instances.start,
+            )
+            .expect("RenderBundleEncoder should not have ended");
     }
 
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
-        wgpu_render_bundle_draw_indexed(
-            &mut self.encoder,
-            indices.end - indices.start,
-            instances.end - instances.start,
-            indices.start,
-            base_vertex,
-            instances.start,
-        )
+        self.context
+            .0
+            .render_bundle_encoder_draw_indexed(
+                &mut self.encoder,
+                indices.end - indices.start,
+                instances.end - instances.start,
+                indices.start,
+                base_vertex,
+                instances.start,
+            )
+            .expect("RenderBundleEncoder should not have ended");
     }
 
     fn draw_indirect(
@@ -3881,7 +3892,14 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     ) {
         let indirect_buffer = indirect_buffer.as_core();
 
-        wgpu_render_bundle_draw_indirect(&mut self.encoder, indirect_buffer.id, indirect_offset)
+        self.context
+            .0
+            .render_bundle_encoder_draw_indirect(
+                &mut self.encoder,
+                indirect_buffer.id,
+                indirect_offset,
+            )
+            .expect("RenderBundleEncoder should not have ended");
     }
 
     fn draw_indexed_indirect(
@@ -3891,19 +3909,22 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     ) {
         let indirect_buffer = indirect_buffer.as_core();
 
-        wgpu_render_bundle_draw_indexed_indirect(
-            &mut self.encoder,
-            indirect_buffer.id,
-            indirect_offset,
-        )
+        self.context
+            .0
+            .render_bundle_encoder_draw_indexed_indirect(
+                &mut self.encoder,
+                indirect_buffer.id,
+                indirect_offset,
+            )
+            .expect("RenderBundleEncoder should not have ended");
     }
 
-    fn finish(self, desc: &crate::RenderBundleDescriptor<'_>) -> dispatch::DispatchRenderBundle
+    fn finish(mut self, desc: &crate::RenderBundleDescriptor<'_>) -> dispatch::DispatchRenderBundle
     where
         Self: Sized,
     {
         let (id, error) = self.context.0.render_bundle_encoder_finish(
-            self.encoder,
+            &mut self.encoder,
             &desc.map_label(|l| l.map(Borrowed)),
             None,
         );
@@ -3943,6 +3964,12 @@ impl dispatch::SurfaceInterface for CoreSurface {
             .0
             .surface_get_capabilities(self.id, adapter.id)
             .unwrap_or_default()
+    }
+
+    fn display_hdr_info(&self, adapter: &dispatch::DispatchAdapter) -> wgt::DisplayHdrInfo {
+        let adapter = adapter.as_core();
+
+        self.context.0.surface_display_hdr_info(self.id, adapter.id)
     }
 
     fn configure(&self, device: &dispatch::DispatchDevice, config: &crate::SurfaceConfiguration) {
@@ -4026,6 +4053,16 @@ impl dispatch::SurfaceOutputDetailInterface for CoreSurfaceOutputDetail {
             Err(err) => {
                 self.context
                     .handle_error_nolabel(&self.error_sink, err, "Surface::discard_texture")
+            }
+        }
+    }
+
+    fn texture_release(&self) {
+        match self.context.0.surface_texture_release(self.surface_id) {
+            Ok(_status) => (),
+            Err(err) => {
+                self.context
+                    .handle_error_nolabel(&self.error_sink, err, "Surface::release_texture")
             }
         }
     }

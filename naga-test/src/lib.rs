@@ -48,7 +48,7 @@ impl Targets {
     }
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 pub struct SpvOutVersion(pub u8, pub u8);
 impl Default for SpvOutVersion {
     fn default() -> Self {
@@ -56,7 +56,7 @@ impl Default for SpvOutVersion {
     }
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 pub struct BindingMapSerialization {
     pub resource_binding: naga::ResourceBinding,
     pub bind_target: naga::back::spv::BindingInfo,
@@ -78,7 +78,7 @@ where
     Ok(map)
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize)]
 #[serde(default)]
 pub struct WriterSharedOptions {
     pub mesh_output_validation: bool,
@@ -86,7 +86,7 @@ pub struct WriterSharedOptions {
     pub bounds_checks_policies: naga::proc::BoundsCheckPolicies,
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize)]
 #[serde(default)]
 pub struct WgslInParameters {
     pub parse_doc_comments: bool,
@@ -100,7 +100,7 @@ impl From<&WgslInParameters> for naga::front::wgsl::Options {
     }
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize)]
 #[serde(default)]
 pub struct SpirvInParameters {
     pub adjust_coordinate_space: bool,
@@ -114,7 +114,7 @@ impl From<&SpirvInParameters> for naga::front::spv::Options {
     }
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 #[serde(default)]
 pub struct SpirvOutParameters {
     pub version: SpvOutVersion,
@@ -186,7 +186,7 @@ impl SpirvOutParameters {
     }
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize)]
 #[serde(default)]
 pub struct WgslOutParameters {
     pub explicit_types: bool,
@@ -199,13 +199,13 @@ impl From<&WgslOutParameters> for naga::back::wgsl::WriterFlags {
     }
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize)]
 pub struct FragmentModule {
     pub path: String,
     pub entry_point: String,
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize)]
 #[serde(default)]
 pub struct Parameters {
     // -- validation options --

@@ -88,6 +88,7 @@ impl crate::Api for Api {
     type PipelineLayout = PipelineLayout;
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
+    type RayTracingPipeline = RayTracingPipeline;
     type ComputePipeline = ComputePipeline;
     type PipelineCache = PipelineCache;
 
@@ -111,6 +112,7 @@ crate::impl_dyn_resource!(
     QuerySet,
     Queue,
     RenderPipeline,
+    RayTracingPipeline,
     Sampler,
     ShaderModule,
     Surface,
@@ -134,7 +136,10 @@ impl OsFeatures {
     }
 }
 
-pub struct Instance {}
+#[derive(Debug)]
+pub struct Instance {
+    flags: wgt::InstanceFlags,
+}
 
 impl Instance {
     pub fn create_surface_from_layer(&self, layer: &CAMetalLayer) -> Surface {
@@ -145,11 +150,11 @@ impl Instance {
 impl crate::Instance for Instance {
     type A = Api;
 
-    unsafe fn init(_desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
+    unsafe fn init(desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init Metal Backend");
         // We do not enable metal validation based on the validation flags as it affects the entire
         // process. Instead, we enable the validation inside the test harness itself in tests/src/native.rs.
-        Ok(Instance {})
+        Ok(Instance { flags: desc.flags })
     }
 
     unsafe fn create_surface(
@@ -187,8 +192,11 @@ impl crate::Instance for Instance {
         _surface_hint: Option<&Surface>,
     ) -> Vec<crate::ExposedAdapter<Api>> {
         let devices = objc2_metal::MTLCopyAllDevices();
-        let mut adapters: Vec<crate::ExposedAdapter<Api>> =
-            devices.into_iter().map(AdapterShared::expose).collect();
+        let instance_flags = self.flags;
+        let mut adapters: Vec<crate::ExposedAdapter<Api>> = devices
+            .into_iter()
+            .map(|d| AdapterShared::expose(d, instance_flags))
+            .collect();
         adapters.sort_by_key(|ad| {
             (
                 ad.adapter.shared.private_caps.low_power,
@@ -384,6 +392,7 @@ impl Default for Settings {
     }
 }
 
+#[derive(Debug)]
 struct AdapterShared {
     device: Retained<ProtocolObject<dyn MTLDevice>>,
     disabilities: PrivateDisabilities,
@@ -416,13 +425,16 @@ impl AdapterShared {
         }
     }
 
-    fn expose(device: Retained<ProtocolObject<dyn MTLDevice>>) -> crate::ExposedAdapter<Api> {
+    fn expose(
+        device: Retained<ProtocolObject<dyn MTLDevice>>,
+        instance_flags: wgt::InstanceFlags,
+    ) -> crate::ExposedAdapter<Api> {
         autoreleasepool(|_| {
             let name = device.name().to_string();
             let capabilities_query = CapabilitiesQuery::new(&device);
             let shared = AdapterShared::new(device, &capabilities_query);
             let features = capabilities_query.features();
-            let capabilities = capabilities_query.capabilities();
+            let capabilities = capabilities_query.capabilities(instance_flags);
             crate::ExposedAdapter {
                 info: wgt::AdapterInfo {
                     name,
@@ -432,7 +444,7 @@ impl AdapterShared {
                     // for more information.
                     subgroup_min_size: 4,
                     subgroup_max_size: 64,
-                    transient_saves_memory: shared.private_caps.supports_memoryless_storage,
+                    transient_saves_memory: Some(shared.private_caps.supports_memoryless_storage),
                     ..wgt::AdapterInfo::new(shared.private_caps.device_type(), wgt::Backend::Metal)
                 },
                 features,
@@ -443,6 +455,7 @@ impl AdapterShared {
     }
 }
 
+#[derive(Debug)]
 pub struct Adapter {
     shared: Arc<AdapterShared>,
 }
@@ -450,6 +463,7 @@ pub struct Adapter {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Adapter: Send, Sync);
 
+#[derive(Debug)]
 pub struct Queue {
     shared: Arc<QueueShared>,
     timestamp_period: f32,
@@ -617,6 +631,7 @@ pub struct QueueShared {
     relay: OnceLock<Relay>,
 }
 
+#[derive(Debug)]
 pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
@@ -624,6 +639,7 @@ pub struct Device {
     limits: wgt::Limits,
 }
 
+#[derive(Debug)]
 pub struct Surface {
     render_layer: Mutex<Retained<CAMetalLayer>>,
     swapchain_format: RwLock<Option<wgt::TextureFormat>>,
@@ -1012,6 +1028,7 @@ pub struct PipelineLayout {
     immediates_infos: MultiStageData<Option<ImmediateDataInfo>>,
     total_immediates: u32,
     per_stage_map: MultiStageResources,
+    binding_array_length_map: FastHashMap<naga::ResourceBinding, u32>,
 }
 
 impl crate::DynPipelineLayout for PipelineLayout {}
@@ -1033,6 +1050,16 @@ enum BufferLikeResource {
         /// [`Storage`]: wgt::BufferBindingType::Storage
         binding_size: Option<wgt::BufferSize>,
 
+        binding_location: u32,
+    },
+
+    /// Bindless storage `binding_array`: one argument [`MTLBuffer`] (pointer table) plus element
+    /// byte sizes `(array index, size)` for `_buffer_sizes` / runtime-sized arrays.
+    ///
+    /// [`MTLBuffer`]: objc2_metal::MTLBuffer
+    StorageBindingArray {
+        ptr: NonNull<ProtocolObject<dyn MTLBuffer>>,
+        array_element_sizes: Vec<(u32, wgt::BufferSize)>,
         binding_location: u32,
     },
     AccelerationStructure(NonNull<ProtocolObject<dyn MTLAccelerationStructure>>),
@@ -1108,7 +1135,7 @@ struct PipelineStageInfo {
     /// Bindings of all WGSL `storage` globals that contain runtime-sized arrays.
     ///
     /// See `device::CompiledShader::sized_bindings` for more details.
-    sized_bindings: Vec<naga::ResourceBinding>,
+    sized_bindings: Vec<(naga::ResourceBinding, u32)>,
 
     /// Info on all bound vertex buffers.
     vertex_buffer_mappings: Vec<naga::back::msl::VertexBufferMapping>,
@@ -1205,6 +1232,11 @@ static_assertions::assert_impl_all!(ComputePipeline: Send, Sync);
 
 impl crate::DynComputePipeline for ComputePipeline {}
 
+#[derive(Debug)]
+pub struct RayTracingPipeline {}
+
+impl crate::DynRayTracingPipeline for RayTracingPipeline {}
+
 #[derive(Debug, Clone)]
 pub struct QuerySet {
     raw_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
@@ -1275,6 +1307,8 @@ struct Temp {
     binding_sizes: Vec<u32>,
 }
 
+// Any state in this struct that may be dirty after an abandoned encoding must
+// be reset in `discard_encoding` for possible encoder reuse.
 struct CommandState {
     blit: Option<Retained<ProtocolObject<dyn MTLBlitCommandEncoder>>>,
     acceleration_structure_builder:
@@ -1304,7 +1338,7 @@ struct CommandState {
     /// See `device::CompiledShader::sized_bindings` for more details.
     ///
     /// [`ResourceBinding`]: naga::ResourceBinding
-    storage_buffer_length_map: FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
+    storage_buffer_length_map: FastHashMap<(naga::ResourceBinding, u32), wgt::BufferSize>,
 
     vertex_buffer_size_map: FastHashMap<u32, wgt::BufferSize>,
 
@@ -1314,6 +1348,8 @@ struct CommandState {
     pending_timer_queries: Vec<(QuerySet, u32)>,
 }
 
+// Any state in this struct that may be dirty after an abandoned encoding must
+// be reset in `discard_encoding` for possible encoder reuse.
 pub struct CommandEncoder {
     shared: Arc<AdapterShared>,
     queue_shared: Arc<QueueShared>,

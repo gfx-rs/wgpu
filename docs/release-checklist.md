@@ -43,12 +43,12 @@ Day of Release:
   ```bash
     cargo publish --workspace --all-features --exclude deno_webgpu
   ```
-- If there were any newly published crates, ensure `github:gfx-rs/wgpu` is added as an owner of that crate.
-- Create a new tag called `vX.Y.Z` and push it to the repo.
+- If there were any newly published crates, ensure `github:gfx-rs:wgpu` is added as an owner of that crate.
+- Create a new signed tag called `vX.Y.Z` and push it to the repo.
   - For each crate being released (viz., every `publish`-able crate that is not `deno*`), create a new tag of the form `{crate_name}-vX.Y.X`.
 - Create a new release on the `wgpu` repo with the changelog from this version, targeting that tag
 - Create a branch with the with the new version `vX` and push it to the repo.
-  - On this branch, remove the [!NOTE] at the top of [wgpu/examples/README.md].
+  - On this branch, remove the [!NOTE] at the top of [examples/README.md].
 - Complete the release's milestone on GitHub.
 - Create a new milestone for the next release, in 12 weeks time.
 - Update the release checklist with any needed changes.
@@ -70,16 +70,17 @@ Day of Release:
 - On _your own branch_ based on the latest release branch. Cherry-pick the PRs that need to be backported. When modifying the commits, use --append to retain their original authorship.
 - Remove the `needs-backport` label from the PRs.
 - Fix the changelogs items and add a new header for the patch release with the release version and date.
-  - The release section should start with a header saying the following (for example)
-    ```markdown
-    This release includes `crate1`, `crate2` and `crate3` version `X.Y.Z`. All other crates remain at their previous versions.
-    ```
-- Once all the PRs are cherry-picked, look at the diff between HEAD and the previous patch release. See what crates changed.
-- Bump all the versions of the crates that changed.
 - Create a PR with all of the version changes and changelog updates into the release branch.
-- Once the PR is CI clean, (force) rebase merge it.
-- Checkout the release branch with the merged PR.
-- Publish all relevant crates (see list above).
+- While waiting on the PR, do a dry run of publishing.
+  ```bash
+    cargo publish --dry-run --workspace --all-features --exclude deno_webgpu
+  ```
+- Once the PR is CI clean and publish worked, (force) merge it.
+- Checkout the version branch with the merged PR.
+- Publish! These commands can be pasted directly into your terminal in a single command, and they will publish everything.
+  ```bash
+    cargo publish --workspace --all-features --exclude deno_webgpu
+  ```
 - Create a new release on the `wgpu` repo with the relevant changelog included, based on a new tag called `vX.Y.Z` in the release branch.
   - For each crate released, also create a tag `{crate_name}-vX.Y.Z`.
 - Backport the changelog and version bumps to the `trunk` branch.

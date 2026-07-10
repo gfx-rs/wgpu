@@ -8,7 +8,9 @@ use crate::command::{
 };
 use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::pipeline::LateSizedBufferGroup;
-use crate::resource::{DestroyedResourceError, Labeled, ParentDevice, QuerySet};
+use crate::resource::{
+    DestroyedResourceError, InvalidOrDestroyedResourceError, Labeled, ParentDevice, QuerySet,
+};
 use crate::track::{ResourceUsageCompatibilityError, UsageScope};
 use crate::{api_log, binding_model};
 use alloc::sync::Arc;
@@ -141,7 +143,9 @@ where
 ///
 /// See the compute pass version of `State::flush_bindings` for an explanation
 /// of some differences in handling the two types of passes.
-pub(super) fn flush_bindings_helper(state: &mut PassState) -> Result<(), DestroyedResourceError> {
+pub(super) fn flush_bindings_helper(
+    state: &mut PassState,
+) -> Result<(), InvalidOrDestroyedResourceError> {
     let start = state.binder.take_rebind_start_index();
     let entries = state.binder.list_valid_with_start(start);
     let pipeline_layout = state.binder.pipeline_layout.as_ref().unwrap();
@@ -176,7 +180,9 @@ pub(super) fn flush_bindings_helper(state: &mut PassState) -> Result<(), Destroy
         let raw_bg = bind_group.try_raw(state.base.snatch_guard)?;
         unsafe {
             state.base.raw_encoder.set_bind_group(
-                pipeline_layout.raw(),
+                pipeline_layout
+                    .raw()
+                    .expect("Pipeline layout should be valid at this point"),
                 i as u32,
                 raw_bg,
                 dynamic_offsets,
@@ -207,7 +213,9 @@ where
             pipeline_layout.immediate_size,
             |clear_offset, clear_data| unsafe {
                 state.base.raw_encoder.set_immediates(
-                    pipeline_layout.raw(),
+                    pipeline_layout
+                        .raw()
+                        .expect("Pipeline layout should be valid at this point"),
                     clear_offset,
                     clear_data,
                 );
@@ -288,10 +296,13 @@ where
     f(data_slice);
 
     unsafe {
-        state
-            .base
-            .raw_encoder
-            .set_immediates(pipeline_layout.raw(), offset, data_slice)
+        state.base.raw_encoder.set_immediates(
+            pipeline_layout
+                .raw()
+                .expect("Pipeline layout should be valid at this point"),
+            offset,
+            data_slice,
+        )
     }
     Ok(())
 }
