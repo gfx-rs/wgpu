@@ -626,24 +626,82 @@ impl WebGpuError for QueueSubmitError {
     }
 }
 
-/// A partially-assembled submission.
+/// A command submission in the process of being assembled.
+///
+/// Within `wgpu_core`, enqueuing commands for execution on the GPU is a
+/// three-step process:
+///
+/// 1) Call [`Queue::allocate_submission`] to acquire the necessary locks,
+///    assign a submission index, wrap them all up as a [`PendingSubmission`],
+///    and return it.
+///
+/// 2) Add the command buffers to be submitted to [`executions`], and note any
+///    surface textures they reference in [`surface_textures`]. Contribute to
+///    [`Queue::pending_writes`] as necessary.
+///
+/// 3) Acquire the pending writes lock. This may be done at any point between
+///    the return from [`Queue::allocate_submission`] and the call to
+///    [`submit`]. Typically it should be done as late as is possible given
+///    any necessary pending writes activity.
+///
+/// 4) Call the `PendingSubmission`'s [`submit`] method (which is a convenience
+///    wrapper around [`Queue::submit_pending_submission`]). Pass the pending
+///    writes mutex guard to [`submit`].
+///
+/// It is also acceptable to drop the `PendingSubmission` without submitting;
+/// this frees its locks in the appropriate order. This may be necessary when
+/// those locks are required to access the state that determines whether a
+/// submission is needed at all.
+///
+/// This split allows the various places in `wgpu_core` that need to submit
+/// commands to the GPU to share the common initial code for locking and final
+/// code for actually submitting the commands to `wgpu_hal`:
+///
+/// - [`Queue::submit`] just submits user-constructed [`CommandBuffer`]s.
+///
+/// - [`Queue::prepare_surface_texture_for_present`] examines the surface
+///   texture being presented, and submits deferred initialization commands and
+///   barriers to get it ready.
+///
+/// - [`Queue::flush_writes_for_buffer`] and [`Queue::flush_pending_writes`]
+///   simply submit the operations already staged in [`Queue::pending_writes`].
 ///
 /// Returned from [`Queue::allocate_submission`] and consumed by [`submit`].
 /// These are internal APIs used in `Queue::submit` and other places within
 /// `wgpu-core` that need to submit work.
 ///
-/// [`submit`]: `PendingSubmission::submit`
+/// [`submit`]: PendingSubmission::submit
+/// [`executions`]: PendingSubmission::executions
+/// [`surface_textures`]: PendingSubmission::surface_textures
 pub(crate) struct PendingSubmission<'a> {
     queue: &'a Queue,
-    // The lock ordering checker cares about the drop order for these guards.
+
+    // These lock guards must appear in this struct in the order given.
+    //
+    // The instrumented locks in [`lock::ranked`] require that locks be acquired
+    // and released in a stack-like order. Since `rank::DEVICE_COMMAND_INDICES`
+    // follows `rank::DEVICE_SNATCHABLE_LOCK`, the lock on
+    // `Device::command_indices` must be released before the lock on
+    // `Device::snatchable_lock`. Rust drops struct members from first to last,
+    // so this ordering of fields ensures the order we want.
+    /// A guard for the lock on `Device::command_indices`.
     command_index_guard: RwLockWriteGuard<'a, CommandIndices>,
+
+    /// A guard for the lock on `Device::snatchable_lock`.
     snatch_guard: SnatchGuard<'a>,
-    // Command buffers to be executed, along with trackers for the resources they use.
+
+    /// Command buffers to be submitted, along with trackers for the resources
+    /// they use.
     pub executions: Vec<EncoderInFlight>,
-    // Surface textures referenced by command buffers in this submission. These need to be
-    // passed to the HAL `submit` call. Deduplicated using a hashmap to avoid vulkan
-    // deadlocking from the same surface texture being submitted multiple times.
+
+    /// Surface textures referenced by command buffers in this submission.
+    ///
+    /// These need to be passed to [`wgpu_hal::Queue::submit`], which
+    /// requires that the list contains no duplicates, so we store them in a
+    /// `HashMap` keyed by `SurfaceTexture` address.
     surface_textures: FastHashMap<*const Texture, Arc<Texture>>,
+
+    /// The index this submission has been assigned.
     pub index: SubmissionIndex,
 }
 
@@ -1685,7 +1743,7 @@ impl Queue {
     /// Returns the index and a [`PendingSubmission`].
     ///
     /// The caller passes in the already-acquired [`SnatchGuard`]. This function acquires
-    /// the fence lock and the command index lock.
+    /// the command index lock.
     ///
     /// The caller should update [`PendingSubmission::executions`] with details of the
     /// submission.

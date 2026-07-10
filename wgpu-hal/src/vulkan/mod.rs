@@ -1382,8 +1382,12 @@ impl crate::Queue for Queue {
         let mut wait_semaphores = SemaphoreList::new(SemaphoreListMode::Wait);
         let mut signal_semaphores = SemaphoreList::new(SemaphoreListMode::Signal);
 
-        // Double check that the same swapchain image isn't being given to us multiple times,
-        // as that will deadlock when we try to lock them all.
+        // Assert that we will not deadlock as we try to lock each `SurfaceTexture`'s
+        // metadata.
+        //
+        // The documentation for [`wgpu_hal::Queue::submit`] requires that
+        // `surface_textures` must not contain duplicates, so simply iterating over
+        // the slice and locking each one should be fine.
         debug_assert!(
             {
                 let mut check = HashSet::with_capacity(surface_textures.len());
