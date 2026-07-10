@@ -136,4 +136,30 @@ mod tests {
         // 255 has bits outside ValidationFlags (all() = 0x3F = 63); build should error rather than panic.
         assert!(build_parameters(&args).is_err());
     }
+
+    #[test]
+    fn validate_mesh_output_false_disables_clamp() {
+        // --validate-mesh-output false must be accepted as a valued option and propagate to all
+        // three backend options.
+        let args =
+            Args::try_parse_from(["naga", "--validate-mesh-output", "false", "in.wgsl"]).unwrap();
+        assert!(!args.validate_mesh_output);
+        let params = build_parameters(&args).unwrap();
+        assert!(!params.spv_out.mesh_shader_primitive_indices_clamp);
+        assert!(!params.msl.mesh_shader_primitive_indices_clamp);
+        assert!(!params.hlsl.mesh_shader_primitive_indices_clamp);
+
+        // default (omitted) stays true
+        let args_default = Args::try_parse_from(["naga", "in.wgsl"]).unwrap();
+        assert!(args_default.validate_mesh_output);
+        let params_default = build_parameters(&args_default).unwrap();
+        assert!(params_default.spv_out.mesh_shader_primitive_indices_clamp);
+        assert!(params_default.msl.mesh_shader_primitive_indices_clamp);
+        assert!(params_default.hlsl.mesh_shader_primitive_indices_clamp);
+
+        // explicit true also works
+        let args_true =
+            Args::try_parse_from(["naga", "--validate-mesh-output", "true", "in.wgsl"]).unwrap();
+        assert!(args_true.validate_mesh_output);
+    }
 }
