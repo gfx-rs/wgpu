@@ -81,7 +81,10 @@ pub fn run_dxc(
 ) -> anyhow::Result<()> {
     let tool = find_tool("dxc")?;
     if entry_points.is_empty() {
-        bail!("--dxc: no entry points to compile in {}", hlsl_path.display());
+        bail!(
+            "--dxc: no entry points to compile in {}",
+            hlsl_path.display()
+        );
     }
     for (name, stage) in entry_points {
         let profile = dxc_profile(*stage, model);
@@ -116,9 +119,18 @@ mod tests {
 
     #[test]
     fn profile_mapping() {
-        assert_eq!(dxc_profile(ShaderStage::Vertex, ShaderModel::V6_0), "vs_6_0");
-        assert_eq!(dxc_profile(ShaderStage::Fragment, ShaderModel::V6_2), "ps_6_2");
-        assert_eq!(dxc_profile(ShaderStage::Compute, ShaderModel::V6_0), "cs_6_0");
+        assert_eq!(
+            dxc_profile(ShaderStage::Vertex, ShaderModel::V6_0),
+            "vs_6_0"
+        );
+        assert_eq!(
+            dxc_profile(ShaderStage::Fragment, ShaderModel::V6_2),
+            "ps_6_2"
+        );
+        assert_eq!(
+            dxc_profile(ShaderStage::Compute, ShaderModel::V6_0),
+            "cs_6_0"
+        );
         assert_eq!(dxc_profile(ShaderStage::Mesh, ShaderModel::V6_5), "ms_6_5");
         assert_eq!(dxc_profile(ShaderStage::Task, ShaderModel::V6_5), "as_6_5");
     }

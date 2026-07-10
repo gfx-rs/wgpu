@@ -7,7 +7,9 @@ fn naga() -> Command {
 
 /// Resolve an example file relative to the naga-cli manifest directory.
 fn example_path(name: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples").join(name)
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("examples")
+        .join(name)
 }
 
 #[test]
@@ -17,11 +19,28 @@ fn force_loop_bounding_flag_applies_to_spv() {
     let dir = std::env::temp_dir().join("naga_cli_p3_flb");
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("s.wgsl");
-    std::fs::write(&src, "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }").unwrap();
+    std::fs::write(
+        &src,
+        "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }",
+    )
+    .unwrap();
     let out = dir.join("s.spv");
-    let r = naga().arg(&src).arg(&out).arg("--force-loop-bounding").arg("false").output().unwrap();
-    assert!(r.status.success(), "stderr: {}", String::from_utf8_lossy(&r.stderr));
-    assert_eq!(&std::fs::read(&out).unwrap()[0..4], &[0x03, 0x02, 0x23, 0x07]);
+    let r = naga()
+        .arg(&src)
+        .arg(&out)
+        .arg("--force-loop-bounding")
+        .arg("false")
+        .output()
+        .unwrap();
+    assert!(
+        r.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&r.stderr)
+    );
+    assert_eq!(
+        &std::fs::read(&out).unwrap()[0..4],
+        &[0x03, 0x02, 0x23, 0x07]
+    );
 }
 
 #[test]
@@ -35,9 +54,18 @@ fn zero_init_flag_accepts_modes() {
         let src = dir.join("s.wgsl");
         std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
         let dst = dir.join(format!("s_{mode}.spv"));
-        let r = naga().arg(&src).arg(&dst)
-            .arg("--zero-initialize-workgroup-memory").arg(mode).output().unwrap();
-        assert!(r.status.success(), "mode {mode} stderr: {}", String::from_utf8_lossy(&r.stderr));
+        let r = naga()
+            .arg(&src)
+            .arg(&dst)
+            .arg("--zero-initialize-workgroup-memory")
+            .arg(mode)
+            .output()
+            .unwrap();
+        assert!(
+            r.status.success(),
+            "mode {mode} stderr: {}",
+            String::from_utf8_lossy(&r.stderr)
+        );
     }
 }
 
@@ -46,25 +74,43 @@ fn config_nested_common_flat_json() {
     let dir = std::env::temp_dir().join("naga_cli_p3_cfg");
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("s.wgsl");
-    std::fs::write(&src, "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }").unwrap();
+    std::fs::write(
+        &src,
+        "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }",
+    )
+    .unwrap();
     let out = dir.join("s.spv");
     // serde(flatten) keeps common keys flat inside spv_out:
-    let r = naga().arg(&src).arg(&out)
-        .arg("--config-json").arg(r#"{"spv_out":{"force_loop_bounding":false}}"#)
-        .output().unwrap();
-    assert!(r.status.success(), "stderr: {}", String::from_utf8_lossy(&r.stderr));
+    let r = naga()
+        .arg(&src)
+        .arg(&out)
+        .arg("--config-json")
+        .arg(r#"{"spv_out":{"force_loop_bounding":false}}"#)
+        .output()
+        .unwrap();
+    assert!(
+        r.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&r.stderr)
+    );
 }
 
 #[test]
 fn config_json_and_common_flag_are_exclusive() {
     let out = naga()
         .arg("in.wgsl")
-        .arg("--config-json").arg("{}")
-        .arg("--force-loop-bounding").arg("false")
-        .output().unwrap();
+        .arg("--config-json")
+        .arg("{}")
+        .arg("--force-loop-bounding")
+        .arg("false")
+        .output()
+        .unwrap();
     assert!(!out.status.success());
-    assert!(String::from_utf8_lossy(&out.stderr).contains("cannot be used with"),
-        "expected clap conflict error, got: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("cannot be used with"),
+        "expected clap conflict error, got: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 #[test]
@@ -72,46 +118,74 @@ fn config_json_matches_equivalent_flag() {
     let dir = std::env::temp_dir().join("naga_cli_p2_config");
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("s.wgsl");
-    std::fs::write(&src, "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }").unwrap();
+    std::fs::write(
+        &src,
+        "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }",
+    )
+    .unwrap();
     let out_flag = dir.join("flag.spv");
     let out_cfg = dir.join("cfg.spv");
 
     // Via flag:
-    let a = naga().arg(&src).arg(&out_flag).arg("--spirv-version").arg("1.5").output().unwrap();
+    let a = naga()
+        .arg(&src)
+        .arg(&out_flag)
+        .arg("--spirv-version")
+        .arg("1.5")
+        .output()
+        .unwrap();
     assert!(a.status.success(), "{}", String::from_utf8_lossy(&a.stderr));
 
     // Via config-json (same lang_version):
     let b = naga()
-        .arg(&src).arg(&out_cfg)
-        .arg("--config-json").arg(r#"{"spv_out":{"lang_version":[1,5]}}"#)
-        .output().unwrap();
+        .arg(&src)
+        .arg(&out_cfg)
+        .arg("--config-json")
+        .arg(r#"{"spv_out":{"lang_version":[1,5]}}"#)
+        .output()
+        .unwrap();
     assert!(b.status.success(), "{}", String::from_utf8_lossy(&b.stderr));
 
-    assert_eq!(std::fs::read(&out_flag).unwrap(), std::fs::read(&out_cfg).unwrap());
+    assert_eq!(
+        std::fs::read(&out_flag).unwrap(),
+        std::fs::read(&out_cfg).unwrap()
+    );
 }
 
 #[test]
 fn config_conflicts_with_option_flag() {
     let out = naga()
         .arg("in.wgsl")
-        .arg("--config-json").arg("{}")
-        .arg("--spirv-version").arg("1.5")
-        .output().unwrap();
+        .arg("--config-json")
+        .arg("{}")
+        .arg("--spirv-version")
+        .arg("1.5")
+        .output()
+        .unwrap();
     assert!(!out.status.success());
-    assert!(String::from_utf8_lossy(&out.stderr).contains("cannot be used with"),
-        "expected clap conflict error, got: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("cannot be used with"),
+        "expected clap conflict error, got: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 #[test]
 fn config_and_config_json_mutually_exclusive() {
     let out = naga()
         .arg("in.wgsl")
-        .arg("--config").arg("x.json")
-        .arg("--config-json").arg("{}")
-        .output().unwrap();
+        .arg("--config")
+        .arg("x.json")
+        .arg("--config-json")
+        .arg("{}")
+        .output()
+        .unwrap();
     assert!(!out.status.success());
-    assert!(String::from_utf8_lossy(&out.stderr).contains("cannot be used with"),
-        "expected clap conflict error, got: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("cannot be used with"),
+        "expected clap conflict error, got: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 #[test]
@@ -119,15 +193,26 @@ fn config_composes_with_compact_flag() {
     let dir = std::env::temp_dir().join("naga_cli_p2_cfg_compact");
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("s.wgsl");
-    std::fs::write(&src, "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }").unwrap();
+    std::fs::write(
+        &src,
+        "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }",
+    )
+    .unwrap();
     let out = dir.join("o.spv");
     let r = naga()
-        .arg(&src).arg(&out)
-        .arg("--config-json").arg(r#"{"spv_out":{"lang_version":[1,3]}}"#)
+        .arg(&src)
+        .arg(&out)
+        .arg("--config-json")
+        .arg(r#"{"spv_out":{"lang_version":[1,3]}}"#)
         .arg("--compact")
-        .output().unwrap();
+        .output()
+        .unwrap();
     // Must NOT be a clap conflict error; compaction + config compose.
-    assert!(r.status.success(), "stderr: {}", String::from_utf8_lossy(&r.stderr));
+    assert!(
+        r.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&r.stderr)
+    );
     assert!(!String::from_utf8_lossy(&r.stderr).contains("cannot be used with"));
 }
 
@@ -167,10 +252,18 @@ fn validates_wgsl_from_file() {
     let dir = std::env::temp_dir().join("naga_cli_phase1_validate");
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("ok.wgsl");
-    std::fs::write(&src, "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }").unwrap();
+    std::fs::write(
+        &src,
+        "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }",
+    )
+    .unwrap();
 
     let out = naga().arg(&src).output().unwrap();
-    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(String::from_utf8_lossy(&out.stdout).contains("Validation successful"));
 }
 
@@ -180,10 +273,18 @@ fn compiles_wgsl_to_spv() {
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("s.wgsl");
     let dst = dir.join("s.spv");
-    std::fs::write(&src, "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }").unwrap();
+    std::fs::write(
+        &src,
+        "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }",
+    )
+    .unwrap();
 
     let out = naga().arg(&src).arg(&dst).output().unwrap();
-    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let bytes = std::fs::read(&dst).unwrap();
     // SPIR-V magic number 0x07230203, little-endian.
     assert_eq!(&bytes[0..4], &[0x03, 0x02, 0x23, 0x07]);
@@ -205,7 +306,11 @@ fn reads_wgsl_from_stdin() {
         .write_all(b"@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }")
         .unwrap();
     let out = child.wait_with_output().unwrap();
-    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(String::from_utf8_lossy(&out.stdout).contains("Validation successful"));
 }
 
@@ -215,13 +320,25 @@ fn generates_debug_symbols_spv() {
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("debug.wgsl");
     let dst = dir.join("debug.spv");
-    std::fs::write(&src, "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }").unwrap();
+    std::fs::write(
+        &src,
+        "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }",
+    )
+    .unwrap();
 
     let out = naga().arg(&src).arg(&dst).arg("-g").output().unwrap();
-    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let bytes = std::fs::read(&dst).unwrap();
     // SPIR-V magic number 0x07230203, little-endian.
-    assert_eq!(&bytes[0..4], &[0x03, 0x02, 0x23, 0x07], "output is not valid SPIR-V");
+    assert_eq!(
+        &bytes[0..4],
+        &[0x03, 0x02, 0x23, 0x07],
+        "output is not valid SPIR-V"
+    );
 }
 
 #[test]
@@ -255,11 +372,18 @@ fn glsl_input_stage_from_flag() {
 #[test]
 fn prints_config_schema() {
     let out = naga().arg("--print-config-schema").output().unwrap();
-    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let schema = String::from_utf8(out.stdout).unwrap();
     let v: serde_json::Value = serde_json::from_str(&schema).unwrap();
     assert!(v.is_object());
-    assert!(schema.contains("spv_out") || schema.contains("lang_version"), "schema: {schema}");
+    assert!(
+        schema.contains("spv_out") || schema.contains("lang_version"),
+        "schema: {schema}"
+    );
 }
 
 #[test]
@@ -281,7 +405,11 @@ fn json_format_valid_shader_reflection() {
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("s.wgsl");
     std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
-    let out = naga().arg(&src).args(["--format", "json"]).output().unwrap();
+    let out = naga()
+        .arg(&src)
+        .args(["--format", "json"])
+        .output()
+        .unwrap();
     assert!(out.status.success());
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(v["success"], true);
@@ -295,7 +423,11 @@ fn json_format_parse_error() {
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("bad.wgsl");
     std::fs::write(&src, "fn f( { }").unwrap(); // parse error
-    let out = naga().arg(&src).args(["--format", "json"]).output().unwrap();
+    let out = naga()
+        .arg(&src)
+        .args(["--format", "json"])
+        .output()
+        .unwrap();
     assert!(!out.status.success());
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(v["success"], false);
@@ -324,10 +456,15 @@ fn json_unknown_output_extension_keeps_stdout_pure() {
     let src = dir.join("s.wgsl");
     std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
     let out = dir.join("s.xyz"); // unknown output extension
-    let r = naga().arg(&src).arg(&out).args(["--format", "json"]).output().unwrap();
+    let r = naga()
+        .arg(&src)
+        .arg(&out)
+        .args(["--format", "json"])
+        .output()
+        .unwrap();
     // stdout must be exactly one parseable JSON doc (the notice goes to stderr):
-    let v: serde_json::Value = serde_json::from_slice(&r.stdout)
-        .expect("stdout must be a single JSON document");
+    let v: serde_json::Value =
+        serde_json::from_slice(&r.stdout).expect("stdout must be a single JSON document");
     assert!(v.get("success").is_some());
 }
 
@@ -347,8 +484,17 @@ fn spirv_val_hook_when_available() {
     let src = dir.join("s.wgsl");
     std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
     let out = dir.join("s.spv");
-    let r = naga().arg(&src).arg(&out).arg("--spirv-val").output().unwrap();
-    assert!(r.status.success(), "stderr: {}", String::from_utf8_lossy(&r.stderr));
+    let r = naga()
+        .arg(&src)
+        .arg(&out)
+        .arg("--spirv-val")
+        .output()
+        .unwrap();
+    assert!(
+        r.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&r.stderr)
+    );
     assert!(out.exists());
 }
 
@@ -363,10 +509,22 @@ fn spirv_opt_hook_when_available() {
     let src = dir.join("s.wgsl");
     std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
     let out = dir.join("s.spv");
-    let r = naga().arg(&src).arg(&out).arg("--spirv-opt").output().unwrap();
-    assert!(r.status.success(), "stderr: {}", String::from_utf8_lossy(&r.stderr));
+    let r = naga()
+        .arg(&src)
+        .arg(&out)
+        .arg("--spirv-opt")
+        .output()
+        .unwrap();
+    assert!(
+        r.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&r.stderr)
+    );
     // Still valid SPIR-V after optimization.
-    assert_eq!(&std::fs::read(&out).unwrap()[0..4], &[0x03, 0x02, 0x23, 0x07]);
+    assert_eq!(
+        &std::fs::read(&out).unwrap()[0..4],
+        &[0x03, 0x02, 0x23, 0x07]
+    );
 }
 
 #[test]
@@ -380,8 +538,17 @@ fn dxc_hook_when_available() {
     let src = dir.join("s.wgsl");
     std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
     let out = dir.join("s.hlsl");
-    let r = naga().arg(&src).arg(&out).args(["--dxc", "--shader-model", "60"]).output().unwrap();
-    assert!(r.status.success(), "stderr: {}", String::from_utf8_lossy(&r.stderr));
+    let r = naga()
+        .arg(&src)
+        .arg(&out)
+        .args(["--dxc", "--shader-model", "60"])
+        .output()
+        .unwrap();
+    assert!(
+        r.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&r.stderr)
+    );
     assert!(dir.join("s.main.dxil").exists());
 }
 
@@ -394,7 +561,9 @@ fn spirv_val_without_spv_output_errors() {
     // No .spv output path → --spirv-val should error (not silently no-op).
     let r = naga().arg(&src).arg("--spirv-val").output().unwrap();
     assert!(!r.status.success());
-    assert!(String::from_utf8_lossy(&r.stderr).to_lowercase().contains("spir"));
+    assert!(String::from_utf8_lossy(&r.stderr)
+        .to_lowercase()
+        .contains("spir"));
 }
 
 #[test]
@@ -405,7 +574,9 @@ fn spirv_opt_without_spv_output_errors() {
     std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
     let r = naga().arg(&src).arg("--spirv-opt").output().unwrap();
     assert!(!r.status.success());
-    assert!(String::from_utf8_lossy(&r.stderr).to_lowercase().contains("spir"));
+    assert!(String::from_utf8_lossy(&r.stderr)
+        .to_lowercase()
+        .contains("spir"));
 }
 
 #[test]
@@ -416,7 +587,9 @@ fn dxc_without_hlsl_output_errors() {
     std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
     let r = naga().arg(&src).arg("--dxc").output().unwrap();
     assert!(!r.status.success());
-    assert!(String::from_utf8_lossy(&r.stderr).to_lowercase().contains("hlsl"));
+    assert!(String::from_utf8_lossy(&r.stderr)
+        .to_lowercase()
+        .contains("hlsl"));
 }
 
 #[test]
@@ -425,10 +598,16 @@ fn bulk_validate_json_is_rejected() {
     std::fs::create_dir_all(&dir).unwrap();
     let a = dir.join("a.wgsl");
     std::fs::write(&a, "@compute @workgroup_size(1) fn main() {}").unwrap();
-    let out = naga().args(["--bulk-validate", "--format", "json"]).arg(&a).output().unwrap();
+    let out = naga()
+        .args(["--bulk-validate", "--format", "json"])
+        .arg(&a)
+        .output()
+        .unwrap();
     assert!(!out.status.success());
     assert!(
-        String::from_utf8_lossy(&out.stderr).to_lowercase().contains("bulk"),
+        String::from_utf8_lossy(&out.stderr)
+            .to_lowercase()
+            .contains("bulk"),
         "expected a clear bulk+json error, got: {}",
         String::from_utf8_lossy(&out.stderr)
     );
@@ -444,9 +623,17 @@ fn json_debug_symbols_warning_is_a_diagnostic() {
     std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
     let bin = dir.join("s.bin");
     let mk = naga().arg(&src).arg(&bin).output().unwrap();
-    assert!(mk.status.success(), "stderr: {}", String::from_utf8_lossy(&mk.stderr));
+    assert!(
+        mk.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&mk.stderr)
+    );
 
-    let out = naga().arg(&bin).args(["--format", "json", "-g"]).output().unwrap();
+    let out = naga()
+        .arg(&bin)
+        .args(["--format", "json", "-g"])
+        .output()
+        .unwrap();
     // Producing a .bin re-import with -g: validation still succeeds → success true,
     // but a warning diagnostic about -g on non-human-readable input is present.
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
@@ -472,22 +659,48 @@ fn readme_config_file_example() {
     let r = naga()
         .arg(example_path("triangle.wgsl"))
         .arg(&out)
-        .arg("--config").arg(example_path("options.json"))
-        .output().unwrap();
-    assert!(r.status.success(), "stderr: {}", String::from_utf8_lossy(&r.stderr));
-    assert_eq!(&std::fs::read(&out).unwrap()[0..4], &[0x03, 0x02, 0x23, 0x07]);
+        .arg("--config")
+        .arg(example_path("options.json"))
+        .output()
+        .unwrap();
+    assert!(
+        r.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&r.stderr)
+    );
+    assert_eq!(
+        &std::fs::read(&out).unwrap()[0..4],
+        &[0x03, 0x02, 0x23, 0x07]
+    );
 }
 
 #[test]
 fn readme_json_reflection_example() {
-    let r = naga().arg(example_path("triangle.wgsl")).args(["--format", "json"]).output().unwrap();
-    assert!(r.status.success(), "stderr: {}", String::from_utf8_lossy(&r.stderr));
+    let r = naga()
+        .arg(example_path("triangle.wgsl"))
+        .args(["--format", "json"])
+        .output()
+        .unwrap();
+    assert!(
+        r.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&r.stderr)
+    );
     let v: serde_json::Value = serde_json::from_slice(&r.stdout).unwrap();
     assert_eq!(v["success"], true);
     let names: Vec<&str> = v["reflection"]["entry_points"]
-        .as_array().unwrap().iter()
-        .map(|e| e["name"].as_str().unwrap()).collect();
-    assert!(names.contains(&"vs_main") && names.contains(&"fs_main"), "names: {names:?}");
-    assert!(v["reflection"]["resources"].as_array().unwrap().iter()
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["name"].as_str().unwrap())
+        .collect();
+    assert!(
+        names.contains(&"vs_main") && names.contains(&"fs_main"),
+        "names: {names:?}"
+    );
+    assert!(v["reflection"]["resources"]
+        .as_array()
+        .unwrap()
+        .iter()
         .any(|res| res["name"] == "tint"));
 }
