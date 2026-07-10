@@ -269,3 +269,45 @@ fn help_matches_snapshot() {
          cargo run -q -p naga-cli -- --help > naga-cli/tests/snapshots/help.txt"
     );
 }
+
+#[test]
+fn json_format_valid_shader_reflection() {
+    let dir = std::env::temp_dir().join("naga_cli_p4_ok");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
+    let out = naga().arg(&src).args(["--format", "json"]).output().unwrap();
+    assert!(out.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["success"], true);
+    assert_eq!(v["reflection"]["entry_points"][0]["name"], "main");
+    assert_eq!(v["diagnostics"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn json_format_parse_error() {
+    let dir = std::env::temp_dir().join("naga_cli_p4_err");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("bad.wgsl");
+    std::fs::write(&src, "fn f( { }").unwrap(); // parse error
+    let out = naga().arg(&src).args(["--format", "json"]).output().unwrap();
+    assert!(!out.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["success"], false);
+    let diags = v["diagnostics"].as_array().unwrap();
+    assert!(!diags.is_empty());
+    assert_eq!(diags[0]["severity"], "error");
+    assert!(!diags[0]["message"].as_str().unwrap().is_empty());
+}
+
+#[test]
+fn text_format_unchanged_default() {
+    // Without --format, behavior is text (validation success message on stdout).
+    let dir = std::env::temp_dir().join("naga_cli_p4_text");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
+    let out = naga().arg(&src).output().unwrap();
+    assert!(out.status.success());
+    assert!(String::from_utf8_lossy(&out.stdout).contains("Validation successful"));
+}
