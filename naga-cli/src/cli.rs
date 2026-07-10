@@ -25,6 +25,10 @@ EXAMPLES
   # Read from stdin.
   cat shader.wgsl | naga --stdin-file-path shader.wgsl out.spv
 
+  # Write to stdout instead of a file (`-` needs --output-kind for the format).
+  naga shader.wgsl - --output-kind hlsl
+  naga shader.wgsl - --output-kind spv > out.spv
+
   # Machine-readable diagnostics + reflection for tooling.
   naga shader.wgsl --format json
 
@@ -111,6 +115,11 @@ pub struct Args {
     /// Kind of input: `glsl`, `wgsl`, `spv`, or `bin`.
     #[arg(long, group = "options")]
     pub input_kind: Option<InputKind>,
+
+    /// Output format when writing to stdout (output path `-`), which has no extension
+    /// to infer from. Ignored when the output is a regular file.
+    #[arg(long, value_enum)]
+    pub output_kind: Option<OutputKind>,
 
     /// Metal language version, e.g. `1.0`, `1.1`, `1.2`.
     #[arg(long, value_parser = parse_metal_version, group = "options")]
@@ -252,6 +261,43 @@ pub enum InputKind {
     Glsl,
     Spv,
     Wgsl,
+}
+
+/// Output format for stdout writes, mapping to the same format keys the output-file
+/// extension would select.
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputKind {
+    Wgsl,
+    Spv,
+    Hlsl,
+    Metal,
+    Dot,
+    Txt,
+    Bin,
+    /// GLSL vertex shader.
+    Vert,
+    /// GLSL fragment shader.
+    Frag,
+    /// GLSL compute shader.
+    Comp,
+}
+
+impl OutputKind {
+    /// The output-file extension this format corresponds to (the key used by `write_output`).
+    pub fn as_ext(self) -> &'static str {
+        match self {
+            OutputKind::Wgsl => "wgsl",
+            OutputKind::Spv => "spv",
+            OutputKind::Hlsl => "hlsl",
+            OutputKind::Metal => "metal",
+            OutputKind::Dot => "dot",
+            OutputKind::Txt => "txt",
+            OutputKind::Bin => "bin",
+            OutputKind::Vert => "vert",
+            OutputKind::Frag => "frag",
+            OutputKind::Comp => "comp",
+        }
+    }
 }
 
 impl std::str::FromStr for InputKind {
