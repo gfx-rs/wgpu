@@ -264,7 +264,12 @@ impl Frontend {
                         value: PPTokenValue::Integer(int),
                         location,
                     }) => match int.value {
-                        440 | 450 | 460 => self.meta.version = int.value as u16,
+                        // Desktop `core` versions from 330 up share the same
+                        // grammar and builtins we support; the version number
+                        // itself does not gate any of our parsing.
+                        330 | 400 | 410 | 420 | 430 | 440 | 450 | 460 => {
+                            self.meta.version = int.value as u16
+                        }
                         _ => self.errors.push(Error {
                             kind: ErrorKind::InvalidVersion(int.value),
                             meta: location.into(),

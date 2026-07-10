@@ -205,6 +205,12 @@ impl Frontend {
                     "gl_BaryCoordNoPerspEXT" => BuiltIn::Barycentric { perspective: false },
                     "gl_InstanceIndex" => BuiltIn::InstanceIndex,
                     "gl_VertexIndex" => BuiltIn::VertexIndex,
+                    // OpenGL-style aliases. Note that `gl_InstanceID` is
+                    // strictly `gl_InstanceIndex - gl_BaseInstance`, but since
+                    // we don't model a base instance offset here they map to
+                    // the same builtin (identical when base instance is 0).
+                    "gl_VertexID" => BuiltIn::VertexIndex,
+                    "gl_InstanceID" => BuiltIn::InstanceIndex,
                     "gl_SampleID" => BuiltIn::SampleIndex,
                     "gl_LocalInvocationIndex" => BuiltIn::LocalInvocationIndex,
                     "gl_DrawID" => BuiltIn::DrawIndex,

@@ -1,4 +1,4 @@
-use alloc::{borrow::ToOwned, vec};
+use alloc::{borrow::ToOwned, format, vec};
 
 use pp_rs::token::PreprocessorError;
 
@@ -125,6 +125,74 @@ fn version() {
         (frontend.metadata().version, frontend.metadata().profile),
         (450, Profile::Core)
     );
+}
+
+#[test]
+fn older_versions() {
+    let mut frontend = Frontend::default();
+
+    // Desktop core versions below 440 share the same grammar we already
+    // support, so they should parse and report their version in the metadata.
+    for version in [330u16, 400, 410, 420, 430] {
+        let source = format!("#version {version}\nvoid main() {{}}");
+        frontend
+            .parse(&Options::from(ShaderStage::Vertex), &source)
+            .unwrap_or_else(|e| panic!("#version {version} failed to parse: {e:?}"));
+        assert_eq!(
+            (frontend.metadata().version, frontend.metadata().profile),
+            (version, Profile::Core)
+        );
+
+        // The optional `core` profile token must also be accepted.
+        let source = format!("#version {version} core\nvoid main() {{}}");
+        frontend
+            .parse(&Options::from(ShaderStage::Vertex), &source)
+            .unwrap_or_else(|e| panic!("#version {version} core failed to parse: {e:?}"));
+        assert_eq!(
+            (frontend.metadata().version, frontend.metadata().profile),
+            (version, Profile::Core)
+        );
+    }
+
+    // Versions we still don't support must keep reporting `InvalidVersion`
+    // (all three-digit, so the version token spans columns 9..12).
+    for version in [300u64, 310, 320, 435] {
+        let source = format!("#version {version}\nvoid main() {{}}");
+        let err = frontend
+            .parse(&Options::from(ShaderStage::Vertex), &source)
+            .expect_err("unsupported version unexpectedly parsed");
+        assert_eq!(
+            err,
+            ParseErrors {
+                errors: vec![Error {
+                    kind: ErrorKind::InvalidVersion(version),
+                    meta: Span::new(9, 12),
+                }],
+            },
+        );
+    }
+}
+
+#[test]
+fn vertex_instance_id_aliases() {
+    let mut frontend = Frontend::default();
+
+    // The OpenGL-style `gl_VertexID` / `gl_InstanceID` names are accepted as
+    // aliases of the Vulkan-style `gl_VertexIndex` / `gl_InstanceIndex`.
+    frontend
+        .parse(
+            &Options::from(ShaderStage::Vertex),
+            "#version 450\nvoid main() {\n    gl_Position = vec4(float(gl_VertexID + gl_InstanceID));\n}",
+        )
+        .unwrap();
+
+    // The Vulkan-style names still work.
+    frontend
+        .parse(
+            &Options::from(ShaderStage::Vertex),
+            "#version 450\nvoid main() {\n    gl_Position = vec4(float(gl_VertexIndex + gl_InstanceIndex));\n}",
+        )
+        .unwrap();
 }
 
 #[test]
