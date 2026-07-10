@@ -51,6 +51,7 @@ type Result<T> = core::result::Result<T, Error>;
 #[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct Options {
     /// The shader stage in the pipeline.
     pub stage: ShaderStage,
@@ -59,6 +60,8 @@ pub struct Options {
     /// #define key value
     /// ```
     /// for each key value pair in the map.
+    // Skipped for schemars: FastHashMap uses a custom hasher not supported by schemars.
+    #[cfg_attr(feature = "schemars", schemars(skip))]
     pub defines: FastHashMap<String, String>,
 }
 
