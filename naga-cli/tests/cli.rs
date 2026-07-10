@@ -735,14 +735,46 @@ fn stdin_requires_input_kind() {
 
 #[test]
 fn input_kind_conflicts_with_config() {
-    // Every flag is exclusive with --config, including --input-kind. (Consequence: reading
-    // stdin, which needs --input-kind, is a flag-mode-only feature.)
+    // The --input-kind FLAG is exclusive with --config (like every flag). The format is
+    // set via the config's `input_kind` key instead (see config_drives_stdin_stdout).
     let out = naga()
         .args(["-", "--input-kind", "wgsl", "--config-json", "{}"])
         .output()
         .unwrap();
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("cannot be used with"));
+}
+
+#[test]
+fn config_drives_stdin_stdout() {
+    // stdin/stdout `-` work in config mode: the input/output formats come from the config's
+    // `input_kind`/`output_kind` keys (the flags stay exclusive with --config).
+    use std::io::Write;
+    let mut child = naga()
+        .args([
+            "-",
+            "-",
+            "--config-json",
+            r#"{"input_kind":"wgsl","output_kind":"spv"}"#,
+        ])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"@compute @workgroup_size(1) fn main() {}")
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(&out.stdout[0..4], &[0x03, 0x02, 0x23, 0x07]);
 }
 
 #[test]

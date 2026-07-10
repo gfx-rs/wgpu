@@ -107,6 +107,18 @@
       ],
       "default": null
     },
+    "input_kind": {
+      "description": "Input format (overrides extension detection; required to read stdin `-`).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/InputKind"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "keep_coordinate_space": {
       "description": "If `true`, suppress coordinate-space conversions in frontends/backends.",
       "type": [
@@ -127,6 +139,18 @@
       ],
       "default": null
     },
+    "output_kind": {
+      "description": "Output format when writing to stdout `-` (which has no extension to infer from).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OutputKind"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "overrides": {
       "description": "Pipeline-constant overrides (`name → value`).",
       "type": [
@@ -137,6 +161,18 @@
         "type": "number",
         "format": "double"
       },
+      "default": null
+    },
+    "shader_stage": {
+      "description": "Shader stage for GLSL input.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ShaderStageArg"
+        },
+        {
+          "type": "null"
+        }
+      ],
       "default": null
     },
     "spirv_opt": {
@@ -599,6 +635,15 @@
         "compare_func"
       ]
     },
+    "InputKind": {
+      "type": "string",
+      "enum": [
+        "bin",
+        "glsl",
+        "spv",
+        "wgsl"
+      ]
+    },
     "OffsetsBindTarget": {
       "description": "BindTarget for dynamic storage buffer offsets",
       "type": "object",
@@ -1036,6 +1081,38 @@
         }
       }
     },
+    "OutputKind": {
+      "description": "Output format for stdout writes, mapping to the same format keys the output-file\nextension would select.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "wgsl",
+            "spv",
+            "hlsl",
+            "metal",
+            "dot",
+            "txt",
+            "bin"
+          ]
+        },
+        {
+          "description": "GLSL vertex shader.",
+          "type": "string",
+          "const": "vert"
+        },
+        {
+          "description": "GLSL fragment shader.",
+          "type": "string",
+          "const": "frag"
+        },
+        {
+          "description": "GLSL compute shader.",
+          "type": "string",
+          "const": "comp"
+        }
+      ]
+    },
     "Range_of_float": {
       "type": "object",
       "properties": {
@@ -1094,6 +1171,14 @@
         "V6_7",
         "V6_8",
         "V6_9"
+      ]
+    },
+    "ShaderStageArg": {
+      "type": "string",
+      "enum": [
+        "vert",
+        "frag",
+        "comp"
       ]
     },
     "SpvWriterFlags": {
