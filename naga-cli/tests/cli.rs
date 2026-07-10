@@ -311,3 +311,17 @@ fn text_format_unchanged_default() {
     assert!(out.status.success());
     assert!(String::from_utf8_lossy(&out.stdout).contains("Validation successful"));
 }
+
+#[test]
+fn json_unknown_output_extension_keeps_stdout_pure() {
+    let dir = std::env::temp_dir().join("naga_cli_p4_unkext");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
+    let out = dir.join("s.xyz"); // unknown output extension
+    let r = naga().arg(&src).arg(&out).args(["--format", "json"]).output().unwrap();
+    // stdout must be exactly one parseable JSON doc (the notice goes to stderr):
+    let v: serde_json::Value = serde_json::from_slice(&r.stdout)
+        .expect("stdout must be a single JSON document");
+    assert!(v.get("success").is_some());
+}
