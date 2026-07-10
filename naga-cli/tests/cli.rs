@@ -191,6 +191,16 @@ fn glsl_input_stage_from_flag() {
 }
 
 #[test]
+fn prints_config_schema() {
+    let out = naga().arg("--print-config-schema").output().unwrap();
+    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    let schema = String::from_utf8(out.stdout).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&schema).unwrap();
+    assert!(v.is_object());
+    assert!(schema.contains("spv_out") || schema.contains("lang_version"), "schema: {schema}");
+}
+
+#[test]
 fn help_matches_snapshot() {
     let expected = include_str!("snapshots/help.txt");
     let out = naga().arg("--help").output().unwrap();
