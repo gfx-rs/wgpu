@@ -391,3 +391,25 @@ fn spirv_val_without_spv_output_errors() {
     assert!(!r.status.success());
     assert!(String::from_utf8_lossy(&r.stderr).to_lowercase().contains("spir"));
 }
+
+#[test]
+fn spirv_opt_without_spv_output_errors() {
+    let dir = std::env::temp_dir().join("naga_cli_p5_noopt");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
+    let r = naga().arg(&src).arg("--spirv-opt").output().unwrap();
+    assert!(!r.status.success());
+    assert!(String::from_utf8_lossy(&r.stderr).to_lowercase().contains("spir"));
+}
+
+#[test]
+fn dxc_without_hlsl_output_errors() {
+    let dir = std::env::temp_dir().join("naga_cli_p5_nodxc");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
+    let r = naga().arg(&src).arg("--dxc").output().unwrap();
+    assert!(!r.status.success());
+    assert!(String::from_utf8_lossy(&r.stderr).to_lowercase().contains("hlsl"));
+}
