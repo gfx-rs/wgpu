@@ -10,6 +10,7 @@
 mod binding;
 mod common;
 mod compute;
+mod conflict;
 mod features;
 mod lifecycle;
 mod negative;
@@ -19,6 +20,7 @@ mod render;
 pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
     binding::all_tests(tests);
     compute::all_tests(tests);
+    conflict::all_tests(tests);
     features::all_tests(tests);
     lifecycle::all_tests(tests);
     negative::all_tests(tests);

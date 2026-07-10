@@ -502,6 +502,15 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
     /// through here and so never affect the dirty bits, matching the design
     /// (their writes are not part of a user usage scope).
     fn flush_resource_table_barrier(&mut self) {
+        // Fast path: if no resource table has ever been bound in this pass, there
+        // is no table hazard to track, so the common (non-bindless) dispatch pays
+        // ~nothing — we skip the per-dispatch `has_writable` bind-group scan and
+        // the dirty-bit bookkeeping entirely (work item 0.10 / finding fix). Once
+        // a table is bound the hazard scheme engages for the rest of the pass.
+        if self.resource_tables_seen.is_empty() {
+            return;
+        }
+
         // Does this dispatch read through the resource table? `is_ready` (called
         // before every dispatch) guarantees a table is bound whenever the
         // pipeline layout declares one, so the layout flag alone is decisive.
@@ -791,6 +800,7 @@ pub(super) fn encode_compute_pass(
                 query_set_writes: parent_state.query_set_writes,
                 deferred_query_set_resolves: parent_state.deferred_query_set_resolves,
                 resource_table_gaps: parent_state.resource_table_gaps,
+                resource_table_member_usages: parent_state.resource_table_member_usages,
             },
             binder: Binder::new(),
             temp_offsets: Vec::new(),
@@ -1050,6 +1060,22 @@ pub(super) fn encode_compute_pass(
         .raw_encoder
         .close_and_swap()
         .map_pass_err(pass_scope)?;
+
+    // Record the textures this pass used in a resource-table-incompatible layout
+    // for usage-conflict validation (work item 0.9). Gated on the feature that
+    // permits binding a table at all, so the common (non-bindless) path pays
+    // nothing. The tracker method folds the pass's start *and* end states, so a
+    // texture written in one dispatch and read in a later one (end-state flips to
+    // a read) is still reported; see its docs for the residual completeness
+    // limitation.
+    if device
+        .features
+        .contains(wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE)
+    {
+        intermediate_trackers
+            .textures
+            .collect_table_incompatible_usages(parent_state.resource_table_member_usages);
+    }
 
     // Record a pass-start gap (D2) per distinct table bound during this pass. The
     // pass body is now the last element of the list; each barrier command buffer

@@ -2,9 +2,9 @@
 //! the bindless feature), its encoder-state plumbing (work item 0.7), and the
 //! queue machinery / host slot-update flows (work item 0.8).
 //!
-//! These run against the `noop` backend through the `wgpu-core` [`Global`] API
-//! directly (like [`limit_buckets`]), because the public `wgpu` resource-table
-//! API does not exist yet (work item 0.11).
+//! These run against the `noop` backend through the `wgpu-core` resource
+//! methods directly (like [`limit_buckets`]), so that the validation surface is
+//! exercised without going through the public `wgpu` wrappers.
 //!
 //! # noop coverage limits (work item 0.8)
 //!
@@ -21,25 +21,29 @@
 //! marking + pass-start gap splice without error and leaves slots reusable once
 //! completed.
 //!
-//! [`Global`]: wgpu_core::global::Global
 //! [`limit_buckets`]: crate::limit_buckets
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use wgpu_core as wgc;
 use wgpu_types as wgt;
 
-use wgc::binding_model::CreatePipelineLayoutError;
-use wgc::command::CommandEncoderError;
+use wgc::binding_model::PipelineLayout;
+use wgc::device::queue::Queue;
+use wgc::device::Device;
+use wgc::instance::{Adapter, Instance};
 use wgc::pipeline::{
-    CreateComputePipelineError, CreateShaderModuleError, ResourceTablePipelineError,
+    ComputePipeline, CreateComputePipelineError, CreateShaderModuleError,
+    ResourceTablePipelineError, ShaderModule,
 };
+use wgc::resource::{Texture, TextureView};
 use wgc::resource_table::{
-    CreateResourceTableError, UpdateResourceTableError, MAX_RESOURCE_TABLE_SIZE,
+    CreateResourceTableError, ResourceTable, UpdateResourceTableError, MAX_RESOURCE_TABLE_SIZE,
 };
 
-fn create_noop_global() -> wgc::global::Global {
-    wgc::global::Global::new(
+fn create_noop_instance() -> Arc<Instance> {
+    Instance::new(
         "resource_table_test",
         wgt::instance::InstanceDescriptor {
             backends: wgt::Backends::NOOP,
@@ -56,26 +60,25 @@ fn create_noop_global() -> wgc::global::Global {
     )
 }
 
-fn noop_adapter(global: &wgc::global::Global) -> wgc::id::AdapterId {
-    global
-        .request_adapter(
-            &wgt::RequestAdapterOptions::default(),
-            wgt::Backends::NOOP,
-            None,
-        )
+fn noop_adapter(instance: &Arc<Instance>) -> Arc<Adapter> {
+    instance
+        .request_adapter(&wgt::RequestAdapterOptions::default(), wgt::Backends::NOOP)
         .expect("noop adapter should be available")
 }
 
-/// Request a device with the given required features enabled.
+/// Request a device and its queue with the given required features enabled.
+///
+/// The queue is returned because a [`Device`] only holds a weak reference to
+/// it, and dropping it makes the device unusable for command encoding.
 ///
 /// Any resource-table feature is experimental, so the unsafe experimental gate
 /// is passed whenever `features` is non-empty (all features requested by these
 /// tests are experimental resource-table bits).
 fn request_device_features(
-    global: &wgc::global::Global,
+    instance: &Arc<Instance>,
     features: wgt::Features,
-) -> wgc::id::DeviceId {
-    let adapter_id = noop_adapter(global);
+) -> (Arc<Device>, Arc<Queue>) {
+    let adapter = noop_adapter(instance);
 
     let experimental_features = if features.is_empty() {
         wgt::ExperimentalFeatures::disabled()
@@ -85,110 +88,90 @@ fn request_device_features(
         unsafe { wgt::ExperimentalFeatures::enabled() }
     };
 
-    let (device_id, _queue_id) = global
-        .adapter_request_device(
-            adapter_id,
-            &wgt::DeviceDescriptor {
-                required_features: features,
-                experimental_features,
-                ..Default::default()
-            },
-            None,
-            None,
-        )
-        .expect("device creation should succeed");
-    device_id
+    adapter
+        .request_device(&wgt::DeviceDescriptor {
+            required_features: features,
+            experimental_features,
+            ..Default::default()
+        })
+        .expect("device creation should succeed")
 }
 
-/// Request a device, optionally enabling the sampling resource table feature.
-fn request_device(global: &wgc::global::Global, with_feature: bool) -> wgc::id::DeviceId {
+/// Request a device and its queue, optionally enabling the sampling resource
+/// table feature.
+fn request_device(instance: &Arc<Instance>, with_feature: bool) -> (Arc<Device>, Arc<Queue>) {
     let features = if with_feature {
         wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE
     } else {
         wgt::Features::empty()
     };
-    request_device_features(global, features)
+    request_device_features(instance, features)
+}
+
+/// Run `f` inside a validation error scope, returning its value along with the
+/// error it reported to the device, if any.
+///
+/// `wgpu-core` reports creation and submission errors to the device error sink
+/// instead of returning them, so tests observe them the same way an application
+/// would.
+fn with_error_scope<R>(
+    device: &Arc<Device>,
+    f: impl FnOnce() -> R,
+) -> (R, Option<wgt::error::Error>) {
+    device.push_error_scope(wgt::error::ErrorFilter::Validation);
+    let value = f();
+    let error = device
+        .pop_error_scope()
+        .expect("error scope stack should not be empty");
+    (value, error)
 }
 
 fn descriptor(size: u32) -> wgc::resource_table::ResourceTableDescriptor<'static> {
     wgt::ResourceTableDescriptor { label: None, size }
 }
 
-/// Request a device and its queue with the sampling resource table feature.
-fn request_device_and_queue(global: &wgc::global::Global) -> (wgc::id::DeviceId, wgc::id::QueueId) {
-    let adapter_id = noop_adapter(global);
-    global
-        .adapter_request_device(
-            adapter_id,
-            &wgt::DeviceDescriptor {
-                required_features: wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE,
-                // SAFETY: test-only; the noop backend has no unsafe behavior.
-                experimental_features: unsafe { wgt::ExperimentalFeatures::enabled() },
-                ..Default::default()
-            },
-            None,
-            None,
-        )
-        .expect("device creation should succeed")
-}
-
 /// Create a texture with the given usage and a default view of it. Returns both
-/// the texture and view ids.
+/// the texture and the view.
 fn create_texture_and_view(
-    global: &wgc::global::Global,
-    device_id: wgc::id::DeviceId,
+    device: &Arc<Device>,
     usage: wgt::TextureUsages,
-) -> (wgc::id::TextureId, wgc::id::TextureViewId) {
-    let (texture_id, error) = global.device_create_texture(
-        device_id,
-        &wgt::TextureDescriptor {
-            label: None,
-            size: wgt::Extent3d {
-                width: 4,
-                height: 4,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgt::TextureDimension::D2,
-            format: wgt::TextureFormat::Rgba8Unorm,
-            usage,
-            view_formats: Vec::new(),
+) -> (Arc<Texture>, Arc<TextureView>) {
+    let (texture, error) = device.create_texture(&wgt::TextureDescriptor {
+        label: None,
+        size: wgt::Extent3d {
+            width: 4,
+            height: 4,
+            depth_or_array_layers: 1,
         },
-        None,
-    );
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgt::TextureDimension::D2,
+        format: wgt::TextureFormat::Rgba8Unorm,
+        usage,
+        view_formats: Vec::new(),
+    });
     assert!(error.is_none(), "texture creation failed: {error:?}");
 
-    let (view_id, error) = global.texture_create_view(
-        texture_id,
-        &wgc::resource::TextureViewDescriptor {
-            label: None,
-            format: None,
-            dimension: None,
-            usage: None,
-            range: wgt::ImageSubresourceRange::default(),
-        },
-        None,
-    );
+    let (view, error) = texture.create_view(&wgc::resource::TextureViewDescriptor {
+        label: None,
+        format: None,
+        dimension: None,
+        usage: None,
+        range: wgt::ImageSubresourceRange::default(),
+    });
     assert!(error.is_none(), "texture view creation failed: {error:?}");
-    (texture_id, view_id)
+    (texture, view)
 }
 
-/// A texture view with the given usage.
-fn create_texture_view(
-    global: &wgc::global::Global,
-    device_id: wgc::id::DeviceId,
-    usage: wgt::TextureUsages,
-) -> wgc::id::TextureViewId {
-    create_texture_and_view(global, device_id, usage).1
+/// A texture view with the given usage. The view keeps its parent texture
+/// alive, so the caller need not hold on to it.
+fn create_texture_view(device: &Arc<Device>, usage: wgt::TextureUsages) -> Arc<TextureView> {
+    create_texture_and_view(device, usage).1
 }
 
 /// A sampled (`TEXTURE_BINDING`) texture view, valid for binding into a table.
-fn create_sampled_view(
-    global: &wgc::global::Global,
-    device_id: wgc::id::DeviceId,
-) -> wgc::id::TextureViewId {
-    create_texture_view(global, device_id, wgt::TextureUsages::TEXTURE_BINDING)
+fn create_sampled_view(device: &Arc<Device>) -> Arc<TextureView> {
+    create_texture_view(device, wgt::TextureUsages::TEXTURE_BINDING)
 }
 
 /// Both resource-table features needed to create a pipeline whose shaders use
@@ -239,67 +222,48 @@ const TABLE_RENDER_WGSL: &str = "\
 ";
 
 fn create_shader(
-    global: &wgc::global::Global,
-    device_id: wgc::id::DeviceId,
+    device: &Arc<Device>,
     wgsl: &str,
-) -> (wgc::id::ShaderModuleId, Option<CreateShaderModuleError>) {
-    global.device_create_shader_module(
-        device_id,
+) -> (Arc<ShaderModule>, Option<CreateShaderModuleError>) {
+    device.create_shader_module(
         &wgc::pipeline::ShaderModuleDescriptor {
             label: None,
             runtime_checks: wgt::ShaderRuntimeChecks::default(),
         },
         wgc::pipeline::ShaderModuleSource::Wgsl(Cow::Borrowed(wgsl)),
-        None,
     )
 }
 
-fn create_pipeline_layout(
-    global: &wgc::global::Global,
-    device_id: wgc::id::DeviceId,
-    uses_resource_table: bool,
-) -> (wgc::id::PipelineLayoutId, Option<CreatePipelineLayoutError>) {
-    global.device_create_pipeline_layout(
-        device_id,
-        &pipeline_layout_desc(uses_resource_table),
-        None,
-    )
+fn create_pipeline_layout(device: &Arc<Device>, uses_resource_table: bool) -> Arc<PipelineLayout> {
+    device.create_pipeline_layout(&pipeline_layout_desc(uses_resource_table))
 }
 
 fn create_compute_pipeline(
-    global: &wgc::global::Global,
-    device_id: wgc::id::DeviceId,
-    layout: Option<wgc::id::PipelineLayoutId>,
-    module: wgc::id::ShaderModuleId,
-) -> (
-    wgc::id::ComputePipelineId,
-    Option<CreateComputePipelineError>,
-) {
-    global.device_create_compute_pipeline(
-        device_id,
-        &wgc::pipeline::ComputePipelineDescriptor {
-            label: None,
-            layout,
-            stage: wgc::pipeline::ProgrammableStageDescriptor {
-                module,
-                entry_point: Some(Cow::Borrowed("main")),
-                constants: Default::default(),
-                zero_initialize_workgroup_memory: false,
-            },
-            cache: None,
+    device: &Arc<Device>,
+    layout: Option<Arc<PipelineLayout>>,
+    module: Arc<ShaderModule>,
+) -> Result<Arc<ComputePipeline>, CreateComputePipelineError> {
+    device.create_compute_pipeline_or_error(wgc::pipeline::ComputePipelineDescriptor {
+        label: None,
+        layout,
+        stage: wgc::pipeline::ProgrammableStageDescriptor {
+            module,
+            entry_point: Some(Cow::Borrowed("main")),
+            constants: Default::default(),
+            zero_initialize_workgroup_memory: false,
         },
-        None,
-    )
+        cache: None,
+    })
 }
 
 /// Creating a resource table without the feature enabled fails with
 /// `MissingFeatures`.
 #[test]
 fn create_without_feature_fails() {
-    let global = create_noop_global();
-    let device_id = request_device(&global, false);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device(&instance, false);
 
-    let (_id, error) = global.device_create_resource_table(device_id, &descriptor(8), None);
+    let (_table, error) = device.create_resource_table(&descriptor(8));
 
     assert!(
         matches!(error, Some(CreateResourceTableError::MissingFeatures(_))),
@@ -310,25 +274,25 @@ fn create_without_feature_fails() {
 /// Creating a resource table with the feature enabled succeeds.
 #[test]
 fn create_with_feature_succeeds() {
-    let global = create_noop_global();
-    let device_id = request_device(&global, true);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device(&instance, true);
 
-    let (id, error) = global.device_create_resource_table(device_id, &descriptor(8), None);
+    let (table, error) = device.create_resource_table(&descriptor(8));
 
     assert!(error.is_none(), "unexpected error: {error:?}");
 
     // Cleanup: destroy and drop should both be no-panic.
-    global.resource_table_destroy(id);
-    global.resource_table_drop(id);
+    table.destroy();
+    drop(table);
 }
 
 /// A zero-slot resource table is rejected.
 #[test]
 fn create_zero_size_fails() {
-    let global = create_noop_global();
-    let device_id = request_device(&global, true);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device(&instance, true);
 
-    let (_id, error) = global.device_create_resource_table(device_id, &descriptor(0), None);
+    let (_table, error) = device.create_resource_table(&descriptor(0));
 
     assert!(
         matches!(error, Some(CreateResourceTableError::ZeroSize)),
@@ -340,21 +304,16 @@ fn create_zero_size_fails() {
 /// while exactly `MAX_RESOURCE_TABLE_SIZE` is allowed.
 #[test]
 fn create_size_bounds() {
-    let global = create_noop_global();
-    let device_id = request_device(&global, true);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device(&instance, true);
 
     // The maximum is allowed.
-    let (max_id, error) =
-        global.device_create_resource_table(device_id, &descriptor(MAX_RESOURCE_TABLE_SIZE), None);
+    let (max_table, error) = device.create_resource_table(&descriptor(MAX_RESOURCE_TABLE_SIZE));
     assert!(error.is_none(), "max size should be allowed, got {error:?}");
-    global.resource_table_drop(max_id);
+    drop(max_table);
 
     // One past the maximum is rejected.
-    let (_id, error) = global.device_create_resource_table(
-        device_id,
-        &descriptor(MAX_RESOURCE_TABLE_SIZE + 1),
-        None,
-    );
+    let (_table, error) = device.create_resource_table(&descriptor(MAX_RESOURCE_TABLE_SIZE + 1));
     assert!(
         matches!(
             error,
@@ -369,30 +328,30 @@ fn create_size_bounds() {
 /// afterwards does not panic.
 #[test]
 fn destroy_is_idempotent() {
-    let global = create_noop_global();
-    let device_id = request_device(&global, true);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device(&instance, true);
 
-    let (id, error) = global.device_create_resource_table(device_id, &descriptor(4), None);
+    let (table, error) = device.create_resource_table(&descriptor(4));
     assert!(error.is_none(), "unexpected error: {error:?}");
 
-    global.resource_table_destroy(id);
+    table.destroy();
     // Destroying again must not panic.
-    global.resource_table_destroy(id);
+    table.destroy();
     // Dropping after destroy must not panic.
-    global.resource_table_drop(id);
+    drop(table);
 }
 
 /// Dropping a resource table without destroying it first is fine (drop-based
 /// cleanup path).
 #[test]
 fn drop_without_destroy() {
-    let global = create_noop_global();
-    let device_id = request_device(&global, true);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device(&instance, true);
 
-    let (id, error) = global.device_create_resource_table(device_id, &descriptor(4), None);
+    let (table, error) = device.create_resource_table(&descriptor(4));
     assert!(error.is_none(), "unexpected error: {error:?}");
 
-    global.resource_table_drop(id);
+    drop(table);
 }
 
 // ---------------------------------------------------------------------------
@@ -404,14 +363,15 @@ fn drop_without_destroy() {
 /// sampling resource table feature.
 #[test]
 fn pipeline_layout_flag_requires_feature() {
-    let global = create_noop_global();
-    let device_id = request_device_features(&global, wgt::Features::empty());
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device_features(&instance, wgt::Features::empty());
 
-    let (_id, error) = create_pipeline_layout(&global, device_id, true);
+    let (_layout, error) = with_error_scope(&device, || create_pipeline_layout(&device, true));
 
+    let debug = format!("{error:?}");
     assert!(
-        matches!(error, Some(CreatePipelineLayoutError::MissingFeatures(_))),
-        "expected MissingFeatures, got {error:?}"
+        debug.contains("MissingFeatures"),
+        "expected MissingFeatures, got {debug}"
     );
 }
 
@@ -419,11 +379,13 @@ fn pipeline_layout_flag_requires_feature() {
 /// successfully.
 #[test]
 fn pipeline_layout_flag_with_feature_succeeds() {
-    let global = create_noop_global();
-    let device_id =
-        request_device_features(&global, wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device_features(
+        &instance,
+        wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE,
+    );
 
-    let (_id, error) = create_pipeline_layout(&global, device_id, true);
+    let (_layout, error) = with_error_scope(&device, || create_pipeline_layout(&device, true));
 
     assert!(error.is_none(), "unexpected error: {error:?}");
 }
@@ -432,10 +394,10 @@ fn pipeline_layout_flag_with_feature_succeeds() {
 /// feature enabled (the `RESOURCE_TABLE` naga capability is gated on it).
 #[test]
 fn table_shader_requires_feature() {
-    let global = create_noop_global();
-    let device_id = request_device_features(&global, wgt::Features::empty());
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device_features(&instance, wgt::Features::empty());
 
-    let (_id, error) = create_shader(&global, device_id, TABLE_COMPUTE_WGSL);
+    let (_module, error) = create_shader(&device, TABLE_COMPUTE_WGSL);
 
     assert!(
         error.is_some(),
@@ -447,17 +409,16 @@ fn table_shader_requires_feature() {
 /// declares `uses_resource_table`; otherwise pipeline creation fails.
 #[test]
 fn table_shader_requires_table_layout() {
-    let global = create_noop_global();
-    let device_id = request_device_features(&global, sampling_and_unchecked());
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device_features(&instance, sampling_and_unchecked());
 
-    let (module, error) = create_shader(&global, device_id, TABLE_COMPUTE_WGSL);
+    let (module, error) = create_shader(&device, TABLE_COMPUTE_WGSL);
     assert!(error.is_none(), "shader should compile: {error:?}");
 
     // A layout that does *not* declare a resource table.
-    let (layout, error) = create_pipeline_layout(&global, device_id, false);
-    assert!(error.is_none(), "layout creation failed: {error:?}");
+    let layout = create_pipeline_layout(&device, false);
 
-    let (_pipeline, error) = create_compute_pipeline(&global, device_id, Some(layout), module);
+    let error = create_compute_pipeline(&device, Some(layout), module).err();
 
     assert!(
         matches!(
@@ -474,19 +435,20 @@ fn table_shader_requires_table_layout() {
 /// feature (only the unchecked lowering exists so far, D4).
 #[test]
 fn table_shader_requires_unchecked_feature() {
-    let global = create_noop_global();
+    let instance = create_noop_instance();
     // Sampling only: enough to create the layout and validate the shader, but
     // not to create the (unchecked-only) pipeline.
-    let device_id =
-        request_device_features(&global, wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE);
+    let (device, _queue) = request_device_features(
+        &instance,
+        wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE,
+    );
 
-    let (module, error) = create_shader(&global, device_id, TABLE_COMPUTE_WGSL);
+    let (module, error) = create_shader(&device, TABLE_COMPUTE_WGSL);
     assert!(error.is_none(), "shader should compile: {error:?}");
 
-    let (layout, error) = create_pipeline_layout(&global, device_id, true);
-    assert!(error.is_none(), "layout creation failed: {error:?}");
+    let layout = create_pipeline_layout(&device, true);
 
-    let (_pipeline, error) = create_compute_pipeline(&global, device_id, Some(layout), module);
+    let error = create_compute_pipeline(&device, Some(layout), module).err();
 
     assert!(
         matches!(
@@ -503,78 +465,60 @@ fn table_shader_requires_unchecked_feature() {
 /// features enabled creates a pipeline successfully (positive control).
 #[test]
 fn table_shader_with_table_layout_succeeds() {
-    let global = create_noop_global();
-    let device_id = request_device_features(&global, sampling_and_unchecked());
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device_features(&instance, sampling_and_unchecked());
 
-    let (module, error) = create_shader(&global, device_id, TABLE_COMPUTE_WGSL);
+    let (module, error) = create_shader(&device, TABLE_COMPUTE_WGSL);
     assert!(error.is_none(), "shader should compile: {error:?}");
 
-    let (layout, error) = create_pipeline_layout(&global, device_id, true);
-    assert!(error.is_none(), "layout creation failed: {error:?}");
+    let layout = create_pipeline_layout(&device, true);
 
-    let (_pipeline, error) = create_compute_pipeline(&global, device_id, Some(layout), module);
+    let error = create_compute_pipeline(&device, Some(layout), module).err();
 
     assert!(error.is_none(), "expected success, got {error:?}");
 }
 
 /// Dispatching with a pipeline whose layout declares a resource table, without
 /// binding one via `set_resource_table`, is a validation error (surfaced at
-/// `command_encoder_finish`). The shader itself need not use `getResource`: the
+/// `CommandEncoder::finish`). The shader itself need not use `getResource`: the
 /// check is on the layout flag, because the table's descriptor set is reserved
 /// at the highest set index regardless.
 #[test]
 fn dispatch_without_bound_table_fails() {
-    let global = create_noop_global();
-    let device_id =
-        request_device_features(&global, wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device_features(
+        &instance,
+        wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE,
+    );
 
-    let (module, error) = create_shader(&global, device_id, TRIVIAL_COMPUTE_WGSL);
+    let (module, error) = create_shader(&device, TRIVIAL_COMPUTE_WGSL);
     assert!(error.is_none(), "shader should compile: {error:?}");
 
-    let (layout, error) = create_pipeline_layout(&global, device_id, true);
-    assert!(error.is_none(), "layout creation failed: {error:?}");
+    let layout = create_pipeline_layout(&device, true);
 
-    let (pipeline, error) = create_compute_pipeline(&global, device_id, Some(layout), module);
-    assert!(error.is_none(), "pipeline creation failed: {error:?}");
+    let pipeline = create_compute_pipeline(&device, Some(layout), module)
+        .expect("pipeline creation should succeed");
 
-    let (encoder_id, error) = global.device_create_command_encoder(
-        device_id,
-        &wgt::CommandEncoderDescriptor { label: None },
-        None,
-    );
-    assert!(error.is_none(), "encoder creation failed: {error:?}");
+    let encoder = device.create_command_encoder(&wgt::CommandEncoderDescriptor { label: None });
 
-    let (mut pass, error) = global.command_encoder_begin_compute_pass(
-        encoder_id,
-        &wgc::command::ComputePassDescriptor {
-            label: None,
-            timestamp_writes: None,
-        },
-    );
-    assert!(error.is_none(), "begin compute pass failed: {error:?}");
+    let mut pass = encoder.begin_compute_pass(&wgc::command::ComputePassDescriptor {
+        label: None,
+        timestamp_writes: None,
+    });
 
-    global
-        .compute_pass_set_pipeline(&mut pass, pipeline)
-        .expect("set_pipeline should record");
-    global
-        .compute_pass_dispatch_workgroups(&mut pass, 1, 1, 1)
-        .expect("dispatch should record");
-    global
-        .compute_pass_end(&mut pass)
-        .expect("compute_pass_end should record");
+    pass.set_pipeline(pipeline);
+    pass.dispatch_workgroups(1, 1, 1);
+    pass.end();
 
-    let (_cb, finish_error) = global.command_encoder_finish(
-        encoder_id,
-        &wgt::CommandBufferDescriptor { label: None },
-        None,
-    );
+    let (_cb, error) = with_error_scope(&device, || {
+        encoder.finish(&wgt::CommandBufferDescriptor { label: None })
+    });
 
-    let (_label, error) = finish_error.expect("expected a finish error");
-    assert!(
-        matches!(error, CommandEncoderError::ComputePass(_)),
-        "expected a compute-pass error, got {error:?}"
-    );
     let debug = format!("{error:?}");
+    assert!(
+        debug.contains("ComputePass"),
+        "expected a compute-pass error, got {debug}"
+    );
     assert!(
         debug.contains("MissingResourceTable"),
         "expected MissingResourceTable, got {debug}"
@@ -586,113 +530,80 @@ fn dispatch_without_bound_table_fails() {
 /// exercises the hal `set_resource_table` emission path on the noop backend).
 #[test]
 fn dispatch_with_bound_table_succeeds() {
-    let global = create_noop_global();
-    let device_id =
-        request_device_features(&global, wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device_features(
+        &instance,
+        wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE,
+    );
 
-    let (module, error) = create_shader(&global, device_id, TRIVIAL_COMPUTE_WGSL);
+    let (module, error) = create_shader(&device, TRIVIAL_COMPUTE_WGSL);
     assert!(error.is_none(), "shader should compile: {error:?}");
 
-    let (layout, error) = create_pipeline_layout(&global, device_id, true);
-    assert!(error.is_none(), "layout creation failed: {error:?}");
+    let layout = create_pipeline_layout(&device, true);
 
-    let (pipeline, error) = create_compute_pipeline(&global, device_id, Some(layout), module);
-    assert!(error.is_none(), "pipeline creation failed: {error:?}");
+    let pipeline = create_compute_pipeline(&device, Some(layout), module)
+        .expect("pipeline creation should succeed");
 
-    let (table_id, error) = global.device_create_resource_table(device_id, &descriptor(4), None);
+    let (table, error) = device.create_resource_table(&descriptor(4));
     assert!(error.is_none(), "table creation failed: {error:?}");
 
-    let (encoder_id, error) = global.device_create_command_encoder(
-        device_id,
-        &wgt::CommandEncoderDescriptor { label: None },
-        None,
-    );
-    assert!(error.is_none(), "encoder creation failed: {error:?}");
+    let encoder = device.create_command_encoder(&wgt::CommandEncoderDescriptor { label: None });
 
-    let (mut pass, error) = global.command_encoder_begin_compute_pass(
-        encoder_id,
-        &wgc::command::ComputePassDescriptor {
-            label: None,
-            timestamp_writes: None,
-        },
-    );
-    assert!(error.is_none(), "begin compute pass failed: {error:?}");
+    let mut pass = encoder.begin_compute_pass(&wgc::command::ComputePassDescriptor {
+        label: None,
+        timestamp_writes: None,
+    });
 
-    global
-        .compute_pass_set_resource_table(&mut pass, Some(table_id))
-        .expect("set_resource_table should record");
-    global
-        .compute_pass_set_pipeline(&mut pass, pipeline)
-        .expect("set_pipeline should record");
-    global
-        .compute_pass_dispatch_workgroups(&mut pass, 1, 1, 1)
-        .expect("dispatch should record");
-    global
-        .compute_pass_end(&mut pass)
-        .expect("compute_pass_end should record");
+    pass.set_resource_table(Some(table));
+    pass.set_pipeline(pipeline);
+    pass.dispatch_workgroups(1, 1, 1);
+    pass.end();
 
-    let (_cb, finish_error) = global.command_encoder_finish(
-        encoder_id,
-        &wgt::CommandBufferDescriptor { label: None },
-        None,
-    );
+    let (_cb, error) = with_error_scope(&device, || {
+        encoder.finish(&wgt::CommandBufferDescriptor { label: None })
+    });
 
-    assert!(
-        finish_error.is_none(),
-        "expected finish to succeed, got {finish_error:?}"
-    );
+    assert!(error.is_none(), "expected finish to succeed, got {error:?}");
 }
 
 /// Binding a resource table created on a different device to a pass is a
-/// validation error (surfaced at `command_encoder_finish`).
+/// validation error (surfaced at `CommandEncoder::finish`).
 #[test]
 fn resource_table_wrong_device_fails() {
-    let global = create_noop_global();
-    let device_a =
-        request_device_features(&global, wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE);
-    let device_b =
-        request_device_features(&global, wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE);
+    let instance = create_noop_instance();
+    let (device_a, _queue_a) = request_device_features(
+        &instance,
+        wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE,
+    );
+    let (device_b, _queue_b) = request_device_features(
+        &instance,
+        wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE,
+    );
 
     // Table on device A.
-    let (table_id, error) = global.device_create_resource_table(device_a, &descriptor(4), None);
+    let (table, error) = device_a.create_resource_table(&descriptor(4));
     assert!(error.is_none(), "table creation failed: {error:?}");
 
     // Encoder / pass on device B.
-    let (encoder_id, error) = global.device_create_command_encoder(
-        device_b,
-        &wgt::CommandEncoderDescriptor { label: None },
-        None,
-    );
-    assert!(error.is_none(), "encoder creation failed: {error:?}");
+    let encoder = device_b.create_command_encoder(&wgt::CommandEncoderDescriptor { label: None });
 
-    let (mut pass, error) = global.command_encoder_begin_compute_pass(
-        encoder_id,
-        &wgc::command::ComputePassDescriptor {
-            label: None,
-            timestamp_writes: None,
-        },
-    );
-    assert!(error.is_none(), "begin compute pass failed: {error:?}");
+    let mut pass = encoder.begin_compute_pass(&wgc::command::ComputePassDescriptor {
+        label: None,
+        timestamp_writes: None,
+    });
 
-    global
-        .compute_pass_set_resource_table(&mut pass, Some(table_id))
-        .expect("set_resource_table should record");
-    global
-        .compute_pass_end(&mut pass)
-        .expect("compute_pass_end should record");
+    pass.set_resource_table(Some(table));
+    pass.end();
 
-    let (_cb, finish_error) = global.command_encoder_finish(
-        encoder_id,
-        &wgt::CommandBufferDescriptor { label: None },
-        None,
-    );
+    let (_cb, error) = with_error_scope(&device_b, || {
+        encoder.finish(&wgt::CommandBufferDescriptor { label: None })
+    });
 
-    let (_label, error) = finish_error.expect("expected a finish error");
-    assert!(
-        matches!(error, CommandEncoderError::ComputePass(_)),
-        "expected a compute-pass error, got {error:?}"
-    );
     let debug = format!("{error:?}");
+    assert!(
+        debug.contains("ComputePass"),
+        "expected a compute-pass error, got {debug}"
+    );
     assert!(
         debug.contains("DeviceMismatch"),
         "expected DeviceMismatch, got {debug}"
@@ -708,35 +619,31 @@ fn resource_table_wrong_device_fails() {
 /// Binding a sampled texture view into an in-bounds slot succeeds.
 #[test]
 fn update_slot_happy_path() {
-    let global = create_noop_global();
-    let device_id = request_device(&global, true);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device(&instance, true);
 
-    let (table_id, error) = global.device_create_resource_table(device_id, &descriptor(4), None);
+    let (table, error) = device.create_resource_table(&descriptor(4));
     assert!(error.is_none(), "table creation failed: {error:?}");
 
-    let view_id = create_sampled_view(&global, device_id);
+    let view = create_sampled_view(&device);
 
-    global
-        .resource_table_update(table_id, 0, view_id)
-        .expect("update should succeed");
+    table.update_slot(0, &view).expect("update should succeed");
     // Overwriting a still-available slot is fine.
-    global
-        .resource_table_update(table_id, 3, view_id)
-        .expect("update should succeed");
+    table.update_slot(3, &view).expect("update should succeed");
 }
 
 /// Updating a slot outside the table's range fails with `SlotOutOfBounds`.
 #[test]
 fn update_slot_out_of_bounds() {
-    let global = create_noop_global();
-    let device_id = request_device(&global, true);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device(&instance, true);
 
-    let (table_id, error) = global.device_create_resource_table(device_id, &descriptor(4), None);
+    let (table, error) = device.create_resource_table(&descriptor(4));
     assert!(error.is_none(), "table creation failed: {error:?}");
 
-    let view_id = create_sampled_view(&global, device_id);
+    let view = create_sampled_view(&device);
 
-    let result = global.resource_table_update(table_id, 4, view_id);
+    let result = table.update_slot(4, &view);
     assert!(
         matches!(
             result,
@@ -750,20 +657,19 @@ fn update_slot_out_of_bounds() {
 /// texture) cannot be bound into a table in M0 (sampled/depth only).
 #[test]
 fn update_slot_wrong_texture_type() {
-    let global = create_noop_global();
-    let device_id = request_device(&global, true);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device(&instance, true);
 
-    let (table_id, error) = global.device_create_resource_table(device_id, &descriptor(4), None);
+    let (table, error) = device.create_resource_table(&descriptor(4));
     assert!(error.is_none(), "table creation failed: {error:?}");
 
     // Renderable but not sampleable: has a view but no `TEXTURE_BINDING`.
-    let view_id = create_texture_view(
-        &global,
-        device_id,
+    let view = create_texture_view(
+        &device,
         wgt::TextureUsages::RENDER_ATTACHMENT | wgt::TextureUsages::COPY_DST,
     );
 
-    let result = global.resource_table_update(table_id, 0, view_id);
+    let result = table.update_slot(0, &view);
     assert!(
         matches!(
             result,
@@ -776,16 +682,16 @@ fn update_slot_wrong_texture_type() {
 /// Binding a texture view from a different device fails with a device mismatch.
 #[test]
 fn update_slot_wrong_device() {
-    let global = create_noop_global();
-    let device_a = request_device(&global, true);
-    let device_b = request_device(&global, true);
+    let instance = create_noop_instance();
+    let (device_a, _queue_a) = request_device(&instance, true);
+    let (device_b, _queue_b) = request_device(&instance, true);
 
-    let (table_id, error) = global.device_create_resource_table(device_a, &descriptor(4), None);
+    let (table, error) = device_a.create_resource_table(&descriptor(4));
     assert!(error.is_none(), "table creation failed: {error:?}");
 
-    let view_id = create_sampled_view(&global, device_b);
+    let view = create_sampled_view(&device_b);
 
-    let result = global.resource_table_update(table_id, 0, view_id);
+    let result = table.update_slot(0, &view);
     assert!(
         matches!(result, Err(UpdateResourceTableError::Device(_))),
         "expected a device error, got {result:?}"
@@ -795,17 +701,17 @@ fn update_slot_wrong_device() {
 /// Updating a slot of a destroyed table fails with `DestroyedResource`.
 #[test]
 fn update_destroyed_table() {
-    let global = create_noop_global();
-    let device_id = request_device(&global, true);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device(&instance, true);
 
-    let (table_id, error) = global.device_create_resource_table(device_id, &descriptor(4), None);
+    let (table, error) = device.create_resource_table(&descriptor(4));
     assert!(error.is_none(), "table creation failed: {error:?}");
 
-    let view_id = create_sampled_view(&global, device_id);
+    let view = create_sampled_view(&device);
 
-    global.resource_table_destroy(table_id);
+    table.destroy();
 
-    let result = global.resource_table_update(table_id, 0, view_id);
+    let result = table.update_slot(0, &view);
     assert!(
         matches!(result, Err(UpdateResourceTableError::DestroyedResource(_))),
         "expected DestroyedResource, got {result:?}"
@@ -816,18 +722,17 @@ fn update_destroyed_table() {
 /// `DestroyedResource`.
 #[test]
 fn update_with_destroyed_texture() {
-    let global = create_noop_global();
-    let device_id = request_device(&global, true);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device(&instance, true);
 
-    let (table_id, error) = global.device_create_resource_table(device_id, &descriptor(4), None);
+    let (table, error) = device.create_resource_table(&descriptor(4));
     assert!(error.is_none(), "table creation failed: {error:?}");
 
-    let (texture_id, view_id) =
-        create_texture_and_view(&global, device_id, wgt::TextureUsages::TEXTURE_BINDING);
+    let (texture, view) = create_texture_and_view(&device, wgt::TextureUsages::TEXTURE_BINDING);
 
-    global.texture_destroy(texture_id);
+    texture.destroy();
 
-    let result = global.resource_table_update(table_id, 0, view_id);
+    let result = table.update_slot(0, &view);
     assert!(
         matches!(result, Err(UpdateResourceTableError::DestroyedResource(_))),
         "expected DestroyedResource, got {result:?}"
@@ -838,26 +743,26 @@ fn update_with_destroyed_texture() {
 /// `NoAvailableSlot` once the table is full.
 #[test]
 fn insert_binding_assigns_lowest_available() {
-    let global = create_noop_global();
-    let device_id = request_device(&global, true);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device(&instance, true);
 
-    let (table_id, error) = global.device_create_resource_table(device_id, &descriptor(2), None);
+    let (table, error) = device.create_resource_table(&descriptor(2));
     assert!(error.is_none(), "table creation failed: {error:?}");
 
-    let view_id = create_sampled_view(&global, device_id);
+    let view = create_sampled_view(&device);
 
-    let slot0 = global
-        .resource_table_insert_binding(table_id, view_id)
+    let slot0 = table
+        .insert_binding(&view)
         .expect("first insert should succeed");
     assert_eq!(slot0, 0);
 
-    let slot1 = global
-        .resource_table_insert_binding(table_id, view_id)
+    let slot1 = table
+        .insert_binding(&view)
         .expect("second insert should succeed");
     assert_eq!(slot1, 1);
 
     // Table is now full.
-    let result = global.resource_table_insert_binding(table_id, view_id);
+    let result = table.insert_binding(&view);
     assert!(
         matches!(result, Err(UpdateResourceTableError::NoAvailableSlot)),
         "expected NoAvailableSlot, got {result:?}"
@@ -867,50 +772,33 @@ fn insert_binding_assigns_lowest_available() {
 /// Removing a binding frees its slot so the next `insert_binding` reuses it.
 #[test]
 fn remove_binding_frees_slot() {
-    let global = create_noop_global();
-    let device_id = request_device(&global, true);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device(&instance, true);
 
-    let (table_id, error) = global.device_create_resource_table(device_id, &descriptor(2), None);
+    let (table, error) = device.create_resource_table(&descriptor(2));
     assert!(error.is_none(), "table creation failed: {error:?}");
 
-    let view_id = create_sampled_view(&global, device_id);
+    let view = create_sampled_view(&device);
 
-    assert_eq!(
-        global
-            .resource_table_insert_binding(table_id, view_id)
-            .unwrap(),
-        0
-    );
-    assert_eq!(
-        global
-            .resource_table_insert_binding(table_id, view_id)
-            .unwrap(),
-        1
-    );
+    assert_eq!(table.insert_binding(&view).unwrap(), 0);
+    assert_eq!(table.insert_binding(&view).unwrap(), 1);
 
-    global
-        .resource_table_remove_binding(table_id, 0)
-        .expect("remove should succeed");
+    table.remove_binding(0).expect("remove should succeed");
 
     // The freed slot is the lowest available again.
-    assert_eq!(
-        global
-            .resource_table_insert_binding(table_id, view_id)
-            .unwrap(),
-        0
-    );
+    assert_eq!(table.insert_binding(&view).unwrap(), 0);
 }
 
 /// Removing an out-of-bounds slot is a validation error.
 #[test]
 fn remove_binding_out_of_bounds() {
-    let global = create_noop_global();
-    let device_id = request_device(&global, true);
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device(&instance, true);
 
-    let (table_id, error) = global.device_create_resource_table(device_id, &descriptor(2), None);
+    let (table, error) = device.create_resource_table(&descriptor(2));
     assert!(error.is_none(), "table creation failed: {error:?}");
 
-    let result = global.resource_table_remove_binding(table_id, 2);
+    let result = table.remove_binding(2);
     assert!(
         matches!(
             result,
@@ -931,57 +819,35 @@ fn remove_binding_out_of_bounds() {
 /// direction is not observable here (see the module docs).
 #[test]
 fn submit_marks_and_splices_then_slot_reusable() {
-    let global = create_noop_global();
-    let (device_id, queue_id) = request_device_and_queue(&global);
+    let instance = create_noop_instance();
+    let (device, queue) = request_device(&instance, true);
 
-    let (table_id, error) = global.device_create_resource_table(device_id, &descriptor(4), None);
+    let (table, error) = device.create_resource_table(&descriptor(4));
     assert!(error.is_none(), "table creation failed: {error:?}");
 
-    let view_id = create_sampled_view(&global, device_id);
-    global
-        .resource_table_update(table_id, 0, view_id)
-        .expect("update should succeed");
+    let view = create_sampled_view(&device);
+    table.update_slot(0, &view).expect("update should succeed");
 
-    let (encoder_id, error) = global.device_create_command_encoder(
-        device_id,
-        &wgt::CommandEncoderDescriptor { label: None },
-        None,
-    );
-    assert!(error.is_none(), "encoder creation failed: {error:?}");
+    let encoder = device.create_command_encoder(&wgt::CommandEncoderDescriptor { label: None });
 
-    let (mut pass, error) = global.command_encoder_begin_compute_pass(
-        encoder_id,
-        &wgc::command::ComputePassDescriptor {
-            label: None,
-            timestamp_writes: None,
-        },
-    );
-    assert!(error.is_none(), "begin compute pass failed: {error:?}");
+    let mut pass = encoder.begin_compute_pass(&wgc::command::ComputePassDescriptor {
+        label: None,
+        timestamp_writes: None,
+    });
 
-    global
-        .compute_pass_set_resource_table(&mut pass, Some(table_id))
-        .expect("set_resource_table should record");
-    global
-        .compute_pass_end(&mut pass)
-        .expect("compute_pass_end should record");
+    pass.set_resource_table(Some(Arc::clone(&table)));
+    pass.end();
 
-    let (cb_id, finish_error) = global.command_encoder_finish(
-        encoder_id,
-        &wgt::CommandBufferDescriptor { label: None },
-        None,
-    );
-    assert!(finish_error.is_none(), "finish failed: {finish_error:?}");
+    let cb = encoder.finish(&wgt::CommandBufferDescriptor { label: None });
 
-    global
-        .queue_submit(queue_id, &[cb_id])
-        .expect("submit should succeed");
+    queue.submit(&[cb]);
 
     // The noop submission has completed; the slot is reusable.
-    global
-        .device_poll(device_id, wgt::PollType::Poll)
+    device
+        .poll(wgt::PollType::Poll)
         .expect("poll should succeed");
-    global
-        .resource_table_update(table_id, 0, view_id)
+    table
+        .update_slot(0, &view)
         .expect("slot should be reusable after the submission completes");
 }
 
@@ -997,73 +863,51 @@ fn submit_marks_and_splices_then_slot_reusable() {
 /// is exercised end-to-end by the GPU suite.
 #[test]
 fn compute_pass_rebound_tables_each_marked_and_spliced() {
-    let global = create_noop_global();
-    let (device_id, queue_id) = request_device_and_queue(&global);
+    let instance = create_noop_instance();
+    let (device, queue) = request_device(&instance, true);
 
-    let (table_a, error) = global.device_create_resource_table(device_id, &descriptor(4), None);
+    let (table_a, error) = device.create_resource_table(&descriptor(4));
     assert!(error.is_none(), "table A creation failed: {error:?}");
-    let (table_b, error) = global.device_create_resource_table(device_id, &descriptor(4), None);
+    let (table_b, error) = device.create_resource_table(&descriptor(4));
     assert!(error.is_none(), "table B creation failed: {error:?}");
 
     // Distinct member textures so each table's gap has a barrier to compute.
-    let view_a = create_sampled_view(&global, device_id);
-    let view_b = create_sampled_view(&global, device_id);
-    global
-        .resource_table_update(table_a, 0, view_a)
+    let view_a = create_sampled_view(&device);
+    let view_b = create_sampled_view(&device);
+    table_a
+        .update_slot(0, &view_a)
         .expect("update A should succeed");
-    global
-        .resource_table_update(table_b, 0, view_b)
+    table_b
+        .update_slot(0, &view_b)
         .expect("update B should succeed");
 
-    let (encoder_id, error) = global.device_create_command_encoder(
-        device_id,
-        &wgt::CommandEncoderDescriptor { label: None },
-        None,
-    );
-    assert!(error.is_none(), "encoder creation failed: {error:?}");
+    let encoder = device.create_command_encoder(&wgt::CommandEncoderDescriptor { label: None });
 
-    let (mut pass, error) = global.command_encoder_begin_compute_pass(
-        encoder_id,
-        &wgc::command::ComputePassDescriptor {
-            label: None,
-            timestamp_writes: None,
-        },
-    );
-    assert!(error.is_none(), "begin compute pass failed: {error:?}");
+    let mut pass = encoder.begin_compute_pass(&wgc::command::ComputePassDescriptor {
+        label: None,
+        timestamp_writes: None,
+    });
 
     // Bind A, then rebind B within the same pass. Before finding M1 only B (the
     // final binding) would have had a gap recorded.
-    global
-        .compute_pass_set_resource_table(&mut pass, Some(table_a))
-        .expect("set_resource_table A should record");
-    global
-        .compute_pass_set_resource_table(&mut pass, Some(table_b))
-        .expect("set_resource_table B should record");
-    global
-        .compute_pass_end(&mut pass)
-        .expect("compute_pass_end should record");
+    pass.set_resource_table(Some(Arc::clone(&table_a)));
+    pass.set_resource_table(Some(Arc::clone(&table_b)));
+    pass.end();
 
-    let (cb_id, finish_error) = global.command_encoder_finish(
-        encoder_id,
-        &wgt::CommandBufferDescriptor { label: None },
-        None,
-    );
-    assert!(finish_error.is_none(), "finish failed: {finish_error:?}");
+    let cb = encoder.finish(&wgt::CommandBufferDescriptor { label: None });
 
-    global
-        .queue_submit(queue_id, &[cb_id])
-        .expect("submit should succeed");
-    global
-        .device_poll(device_id, wgt::PollType::Poll)
+    queue.submit(&[cb]);
+    device
+        .poll(wgt::PollType::Poll)
         .expect("poll should succeed");
 
     // Both tables were marked and their gaps spliced; both slots are reusable
     // once the submission completes.
-    global
-        .resource_table_update(table_a, 0, view_a)
+    table_a
+        .update_slot(0, &view_a)
         .expect("table A slot should be reusable after completion");
-    global
-        .resource_table_update(table_b, 0, view_b)
+    table_b
+        .update_slot(0, &view_b)
         .expect("table B slot should be reusable after completion");
 }
 
@@ -1079,67 +923,47 @@ fn compute_pass_rebound_tables_each_marked_and_spliced() {
 /// reusable; the ordering itself is verified on real GPUs by the smoke suite.
 #[test]
 fn table_member_texture_shared_across_passes_splices_cleanly() {
-    let global = create_noop_global();
-    let (device_id, queue_id) = request_device_and_queue(&global);
+    let instance = create_noop_instance();
+    let (device, queue) = request_device(&instance, true);
 
-    let (table1, error) = global.device_create_resource_table(device_id, &descriptor(4), None);
+    let (table1, error) = device.create_resource_table(&descriptor(4));
     assert!(error.is_none(), "table 1 creation failed: {error:?}");
-    let (table2, error) = global.device_create_resource_table(device_id, &descriptor(4), None);
+    let (table2, error) = device.create_resource_table(&descriptor(4));
     assert!(error.is_none(), "table 2 creation failed: {error:?}");
 
     // One shared texture/view bound into both tables.
-    let view_id = create_sampled_view(&global, device_id);
-    global
-        .resource_table_update(table1, 0, view_id)
+    let view = create_sampled_view(&device);
+    table1
+        .update_slot(0, &view)
         .expect("update table 1 should succeed");
-    global
-        .resource_table_update(table2, 0, view_id)
+    table2
+        .update_slot(0, &view)
         .expect("update table 2 should succeed");
 
-    let (encoder_id, error) = global.device_create_command_encoder(
-        device_id,
-        &wgt::CommandEncoderDescriptor { label: None },
-        None,
-    );
-    assert!(error.is_none(), "encoder creation failed: {error:?}");
+    let encoder = device.create_command_encoder(&wgt::CommandEncoderDescriptor { label: None });
 
     // Pass 1 binds table1; pass 2 binds table2 — both reference the same texture.
-    for table in [table1, table2] {
-        let (mut pass, error) = global.command_encoder_begin_compute_pass(
-            encoder_id,
-            &wgc::command::ComputePassDescriptor {
-                label: None,
-                timestamp_writes: None,
-            },
-        );
-        assert!(error.is_none(), "begin compute pass failed: {error:?}");
-        global
-            .compute_pass_set_resource_table(&mut pass, Some(table))
-            .expect("set_resource_table should record");
-        global
-            .compute_pass_end(&mut pass)
-            .expect("compute_pass_end should record");
+    for table in [&table1, &table2] {
+        let mut pass = encoder.begin_compute_pass(&wgc::command::ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
+        pass.set_resource_table(Some(Arc::clone(table)));
+        pass.end();
     }
 
-    let (cb_id, finish_error) = global.command_encoder_finish(
-        encoder_id,
-        &wgt::CommandBufferDescriptor { label: None },
-        None,
-    );
-    assert!(finish_error.is_none(), "finish failed: {finish_error:?}");
+    let cb = encoder.finish(&wgt::CommandBufferDescriptor { label: None });
 
-    global
-        .queue_submit(queue_id, &[cb_id])
-        .expect("submit should succeed");
-    global
-        .device_poll(device_id, wgt::PollType::Poll)
+    queue.submit(&[cb]);
+    device
+        .poll(wgt::PollType::Poll)
         .expect("poll should succeed");
 
-    global
-        .resource_table_update(table1, 0, view_id)
+    table1
+        .update_slot(0, &view)
         .expect("table 1 slot should be reusable after completion");
-    global
-        .resource_table_update(table2, 0, view_id)
+    table2
+        .update_slot(0, &view)
         .expect("table 2 slot should be reusable after completion");
 }
 
@@ -1147,26 +971,24 @@ fn table_member_texture_shared_across_passes_splices_cleanly() {
 /// table is rejected at bundle creation in M0 (2026-07-09 user decision).
 #[test]
 fn table_using_render_bundle_rejected() {
-    let global = create_noop_global();
-    let device_id = request_device_features(&global, sampling_and_unchecked());
+    let instance = create_noop_instance();
+    let (device, _queue) = request_device_features(&instance, sampling_and_unchecked());
 
     // A trivial render pipeline whose *layout* uses a resource table (its shader
     // need not; the bundle flag comes from the layout).
-    let (module, error) = create_shader(&global, device_id, TABLE_RENDER_WGSL);
+    let (module, error) = create_shader(&device, TABLE_RENDER_WGSL);
     assert!(error.is_none(), "shader should compile: {error:?}");
 
-    let (layout, error) = create_pipeline_layout(&global, device_id, true);
-    assert!(error.is_none(), "layout creation failed: {error:?}");
+    let layout = create_pipeline_layout(&device, true);
 
     let format = wgt::TextureFormat::Rgba8Unorm;
-    let (pipeline, error) = global.device_create_render_pipeline(
-        device_id,
-        &wgc::pipeline::RenderPipelineDescriptor {
+    let (pipeline, error) = device.create_render_pipeline(
+        wgc::pipeline::RenderPipelineDescriptor {
             label: None,
             layout: Some(layout),
             vertex: wgc::pipeline::VertexState {
                 stage: wgc::pipeline::ProgrammableStageDescriptor {
-                    module,
+                    module: Arc::clone(&module),
                     entry_point: Some(Cow::Borrowed("vs")),
                     constants: Default::default(),
                     zero_initialize_workgroup_memory: false,
@@ -1191,40 +1013,247 @@ fn table_using_render_bundle_rejected() {
             }),
             multiview_mask: None,
             cache: None,
-        },
-        None,
+        }
+        .into(),
     );
     assert!(
         error.is_none(),
         "render pipeline creation failed: {error:?}"
     );
 
-    let (mut bundle_encoder, error) = global.device_create_render_bundle_encoder(
-        device_id,
-        &wgc::command::RenderBundleEncoderDescriptor {
+    let mut bundle_encoder = device
+        .create_render_bundle_encoder(&wgc::command::RenderBundleEncoderDescriptor {
             label: None,
             color_formats: Cow::Owned(vec![Some(format)]),
             depth_stencil: None,
             sample_count: 1,
             multiview: None,
-        },
-    );
-    assert!(error.is_none(), "bundle encoder creation failed: {error:?}");
+        })
+        .expect("bundle encoder creation should succeed");
 
-    global
-        .render_bundle_encoder_set_pipeline(&mut bundle_encoder, pipeline)
-        .expect("set_pipeline should record");
+    bundle_encoder.set_pipeline(pipeline);
 
-    let (_bundle_id, finish_error) = global.render_bundle_encoder_finish(
-        &mut bundle_encoder,
-        &wgc::command::RenderBundleDescriptor { label: None },
-        None,
-    );
-
-    let error = finish_error.expect("expected a bundle finish error");
+    let (_bundle, error) = with_error_scope(&device, || {
+        bundle_encoder.finish(&wgc::command::RenderBundleDescriptor { label: None })
+    });
     let debug = format!("{error:?}");
     assert!(
         debug.contains("ResourceTableUnsupported"),
         "expected ResourceTableUnsupported, got {debug}"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Work item 0.9: submit-time usage-conflict validation. A texture bound in a
+// resource table that is also used, in a submission that binds the table, in a
+// way that forces an image layout incompatible with sampling it (written,
+// storage-read, copied, attached, …) is rejected under the M0 strict (v0)
+// semantics (D3/D9). Pure bindful sampling and read-only depth use are benign.
+// ---------------------------------------------------------------------------
+
+/// Create a texture usable as both a render attachment and a sampled resource,
+/// plus a default view of it. The view is thus valid both as a color attachment
+/// (a writable usage) and as a resource-table member.
+fn create_renderable_sampled_view(device: &Arc<Device>) -> Arc<TextureView> {
+    create_texture_view(
+        device,
+        wgt::TextureUsages::RENDER_ATTACHMENT | wgt::TextureUsages::TEXTURE_BINDING,
+    )
+}
+
+/// Record an empty render pass whose single color attachment is `color_view`,
+/// binding `table` through the render-pass descriptor, then finish and submit.
+/// Returns the error the submit reported, so the caller can assert whether a
+/// conflict fired.
+fn submit_render_pass_with_color_and_table(
+    device: &Arc<Device>,
+    queue: &Arc<Queue>,
+    color_view: &Arc<TextureView>,
+    table: &Arc<ResourceTable>,
+) -> Option<wgt::error::Error> {
+    let encoder = device.create_command_encoder(&wgt::CommandEncoderDescriptor { label: None });
+
+    let mut pass = encoder.begin_render_pass(wgc::command::ResolvedRenderPassDescriptor {
+        label: None,
+        color_attachments: Cow::Owned(vec![Some(wgc::command::RenderPassColorAttachment {
+            view: Arc::clone(color_view),
+            depth_slice: None,
+            resolve_target: None,
+            load_op: wgt::LoadOp::Clear(wgt::Color::BLACK),
+            store_op: wgt::StoreOp::Store,
+        })]),
+        depth_stencil_attachment: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: None,
+        resource_table: Some(Arc::clone(table)),
+    });
+    pass.end();
+
+    let cb = encoder.finish(&wgt::CommandBufferDescriptor { label: None });
+
+    with_error_scope(device, || queue.submit(&[cb])).1
+}
+
+/// Submitting a command buffer that both binds a table containing a texture and
+/// writes that same texture as a render-pass color target is rejected at submit
+/// with a resource-table usage conflict (work item 0.9).
+#[test]
+fn submit_table_member_written_as_color_target_conflicts() {
+    let instance = create_noop_instance();
+    let (device, queue) = request_device(&instance, true);
+
+    let (table, error) = device.create_resource_table(&descriptor(4));
+    assert!(error.is_none(), "table creation failed: {error:?}");
+
+    // One texture used both as the table member and as the color target.
+    let view = create_renderable_sampled_view(&device);
+    table
+        .update_slot(0, &view)
+        .expect("bind member should succeed");
+
+    let error = submit_render_pass_with_color_and_table(&device, &queue, &view, &table);
+
+    let debug = format!("{error:?}");
+    assert!(
+        debug.contains("IncompatibleMemberUsage"),
+        "expected a resource-table usage conflict, got {debug}"
+    );
+}
+
+/// Submitting a command buffer that binds a table containing a texture and also
+/// copies *from* that same texture with a top-level `copy_texture_to_buffer`
+/// (`COPY_SRC`, which forces `TRANSFER_SRC_OPTIMAL`) is rejected at submit (work
+/// item 0.9, finding fix). Unlike the color-target case, the copy records directly
+/// on the command-buffer tracker rather than through a pass, exercising the
+/// top-level-transfer collection path.
+#[test]
+fn submit_table_member_copied_from_conflicts() {
+    let instance = create_noop_instance();
+    let (device, queue) = request_device(&instance, true);
+
+    let (table, error) = device.create_resource_table(&descriptor(4));
+    assert!(error.is_none(), "table creation failed: {error:?}");
+
+    // A texture usable both as a sampled table member and as a copy source.
+    let (texture, view) = create_texture_and_view(
+        &device,
+        wgt::TextureUsages::TEXTURE_BINDING | wgt::TextureUsages::COPY_SRC,
+    );
+    table
+        .update_slot(0, &view)
+        .expect("bind member should succeed");
+
+    let (buffer, error) = device.create_buffer(&wgt::BufferDescriptor {
+        label: None,
+        size: 1024,
+        usage: wgt::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    assert!(error.is_none(), "buffer creation failed: {error:?}");
+
+    let encoder = device.create_command_encoder(&wgt::CommandEncoderDescriptor { label: None });
+
+    // An empty compute pass that binds the table, so the command buffer references
+    // it (and the early exit in the conflict check is passed).
+    let mut pass = encoder.begin_compute_pass(&wgc::command::ComputePassDescriptor {
+        label: None,
+        timestamp_writes: None,
+    });
+    pass.set_resource_table(Some(Arc::clone(&table)));
+    pass.end();
+
+    // Top-level copy *from* the member texture (records `COPY_SRC` on the command
+    // buffer's own tracker).
+    encoder.copy_texture_to_buffer(
+        &wgt::TexelCopyTextureInfo {
+            texture,
+            mip_level: 0,
+            origin: wgt::Origin3d::ZERO,
+            aspect: wgt::TextureAspect::All,
+        },
+        &wgt::TexelCopyBufferInfo {
+            buffer,
+            layout: wgt::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(256),
+                rows_per_image: Some(4),
+            },
+        },
+        &wgt::Extent3d {
+            width: 4,
+            height: 4,
+            depth_or_array_layers: 1,
+        },
+    );
+
+    let cb = encoder.finish(&wgt::CommandBufferDescriptor { label: None });
+
+    let (_index, error) = with_error_scope(&device, || queue.submit(&[cb]));
+    let debug = format!("{error:?}");
+    assert!(
+        debug.contains("IncompatibleMemberUsage"),
+        "expected a resource-table usage conflict for COPY_SRC, got {debug}"
+    );
+}
+
+/// Positive control: writing a texture that is *not* a member of the bound table
+/// (the common "render to a target while a table is bound for sampling" flow) is
+/// not a conflict, even though the table is referenced and has a member.
+#[test]
+fn submit_written_texture_not_in_table_no_conflict() {
+    let instance = create_noop_instance();
+    let (device, queue) = request_device(&instance, true);
+
+    let (table, error) = device.create_resource_table(&descriptor(4));
+    assert!(error.is_none(), "table creation failed: {error:?}");
+
+    // The table's member is a distinct texture from the color target.
+    let member_view = create_sampled_view(&device);
+    table
+        .update_slot(0, &member_view)
+        .expect("bind member should succeed");
+
+    let color_view = create_renderable_sampled_view(&device);
+
+    let error = submit_render_pass_with_color_and_table(&device, &queue, &color_view, &table);
+    assert!(
+        error.is_none(),
+        "writing a non-member texture must not conflict: {error:?}"
+    );
+}
+
+/// Positive control: a table member that is only *sampled* (read) in the
+/// submission — never written — is not a conflict. Here the table is bound in an
+/// empty render pass with an unrelated color target; the member is not touched by
+/// any writable usage, so submit succeeds and the slot stays reusable.
+#[test]
+fn submit_table_member_read_only_no_conflict() {
+    let instance = create_noop_instance();
+    let (device, queue) = request_device(&instance, true);
+
+    let (table, error) = device.create_resource_table(&descriptor(4));
+    assert!(error.is_none(), "table creation failed: {error:?}");
+
+    let member_view = create_sampled_view(&device);
+    table
+        .update_slot(0, &member_view)
+        .expect("bind member should succeed");
+
+    // A separate, non-member color target keeps the pass valid without writing
+    // the member.
+    let color_view = create_renderable_sampled_view(&device);
+    let error = submit_render_pass_with_color_and_table(&device, &queue, &color_view, &table);
+    assert!(
+        error.is_none(),
+        "read-only member must not conflict: {error:?}"
+    );
+
+    // The member's slot is reusable after the (synchronous) submission completes.
+    device
+        .poll(wgt::PollType::Poll)
+        .expect("poll should succeed");
+    table
+        .update_slot(0, &member_view)
+        .expect("member slot should be reusable after completion");
 }

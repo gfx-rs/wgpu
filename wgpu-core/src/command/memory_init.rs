@@ -9,7 +9,8 @@ use hashbrown::hash_map::Entry;
 use crate::{
     device::{Device, DeviceError},
     init_tracker::*,
-    resource::{ParentDevice, RawResourceAccess, Texture, Trackable},
+    resource::{Labeled as _, ParentDevice, RawResourceAccess, Texture, Trackable},
+    resource_table::ResourceTableConflictError,
     snatch::SnatchGuard,
     track::{DeviceTracker, PendingTransition, TextureTracker},
     FastHashMap, SubmissionIndex,
@@ -568,6 +569,70 @@ impl BakedCommands {
         Ok(())
     }
 
+    /// Reject any resource-table usage conflict for the tables this command
+    /// buffer references (work item 0.9): a texture bound in a referenced table
+    /// that is also used, anywhere in this command buffer, in a way that forces an
+    /// image layout incompatible with sampling it through the table (a write, a
+    /// storage read, a copy, an attachment, …). Pure bindful sampling and
+    /// read-only depth use of a depth member are benign and never rejected.
+    ///
+    /// The offending usages are gathered as the union — over the whole command
+    /// buffer, not just the tracker end-state — of the layout-incompatible bits:
+    /// the per-pass accumulations in `resource_table_member_usages`, plus this
+    /// command buffer's own texture tracker (via
+    /// [`TextureTracker::collect_table_incompatible_usages`]), which additionally
+    /// captures top-level transfer commands (`COPY_SRC`/`COPY_DST`) that never flow
+    /// through a render or compute pass.
+    ///
+    /// Must run **before** [`process_resource_table_gaps`] — before any slot is
+    /// marked in use or any barrier spliced — so a conflicting submission aborts
+    /// cleanly. See [`ResourceTable::find_incompatible_member`] for the
+    /// strict-semantics (v0) rationale and the residual completeness limitation.
+    ///
+    /// [`process_resource_table_gaps`]: BakedCommands::process_resource_table_gaps
+    /// [`ResourceTable::find_incompatible_member`]: crate::resource_table::ResourceTable::find_incompatible_member
+    /// [`TextureTracker::collect_table_incompatible_usages`]: crate::track::TextureTracker::collect_table_incompatible_usages
+    pub(crate) fn check_resource_table_conflicts(&self) -> Result<(), ResourceTableConflictError> {
+        // No table is referenced by this command buffer → no possible conflict.
+        // The common (non-bindless) path takes this early exit: the stateless
+        // `resource_tables` tracker is only populated by `set_resource_table`,
+        // which requires the sampling feature.
+        if self
+            .trackers
+            .resource_tables
+            .used_resources()
+            .next()
+            .is_none()
+        {
+            return Ok(());
+        }
+
+        // Union of layout-incompatible usages over the whole command buffer: the
+        // per-pass accumulations, plus this command buffer's own texture tracker,
+        // which is where top-level transfer commands (copies/clears) record — they
+        // never flow through a render or compute pass.
+        let mut incompatible = self.resource_table_member_usages.clone();
+        self.trackers
+            .textures
+            .collect_table_incompatible_usages(&mut incompatible);
+
+        if incompatible.is_empty() {
+            return Ok(());
+        }
+
+        for table in self.trackers.resource_tables.used_resources() {
+            if let Some((texture, usage)) = table.find_incompatible_member(&incompatible) {
+                return Err(ResourceTableConflictError::IncompatibleMemberUsage {
+                    table: table.error_ident(),
+                    texture: texture.error_ident(),
+                    usage,
+                });
+            }
+        }
+
+        Ok(())
+    }
+
     /// Queue-submit handling for the resource tables this command buffer
     /// references (work item 0.8, realizing D2 in `plans/resource-table.md`):
     ///
@@ -594,16 +659,21 @@ impl BakedCommands {
     /// # Limitation (M0)
     ///
     /// Table textures that are *also* used elsewhere in the same command buffer
-    /// (so they appear in this CB's own tracker) are skipped: their in-CB layout
-    /// is managed by the CB's own transitions, and getting a table sample
-    /// interleaved with other in-CB uses exactly right needs the layout-override
-    /// tracker scheduled across work items 0.8–0.10. The common bindless flow —
-    /// a texture established outside this CB (upload/copy/prior submission) then
-    /// sampled through the table — is handled correctly. See
+    /// (so they appear in this CB's own tracker) are skipped here: their in-CB
+    /// layout is managed by the CB's own transitions. This is sound because
+    /// [`check_resource_table_conflicts`] has already aborted the submission if any
+    /// such in-CB use left a member in a layout incompatible with sampling it (work
+    /// item 0.9); the members that survive to here are used only in
+    /// layout-compatible ways (pure bindful sampling, or read-only depth use of a
+    /// depth member), so they are already in the layout the table descriptor
+    /// declares and need no splice. The common bindless flow — a texture
+    /// established outside this CB (upload/copy/prior submission) then sampled
+    /// through the table — is handled by the transition computed here. See
     /// `plans/resource-table.md`.
     ///
     /// [`close_and_insert_at`]: super::InnerCommandEncoder::close_and_insert_at
     /// [`process_deferred_query_set_resolves`]: BakedCommands::process_deferred_query_set_resolves
+    /// [`check_resource_table_conflicts`]: BakedCommands::check_resource_table_conflicts
     pub(crate) fn process_resource_table_gaps(
         &mut self,
         device: &Device,

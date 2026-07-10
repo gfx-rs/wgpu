@@ -22,8 +22,8 @@ use crate::{
     lock::{rank, Mutex},
     resource::{
         DestroyedResourceError, InvalidResourceError, Labeled as _, MissingTextureUsageError,
-        ParentDevice as _, RawResourceAccess, ResourceState, Texture, TextureView, Trackable as _,
-        TrackingData,
+        ParentDevice as _, RawResourceAccess, ResourceErrorIdent, ResourceState, Texture,
+        TextureView, Trackable as _, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -389,6 +389,35 @@ impl ResourceTable {
             .contains_key(&texture_index)
     }
 
+    /// If any texture currently bound in this table appears in `incompatible` —
+    /// the set of textures a command buffer used in a way that forces an image
+    /// layout other than a sampled table member's steady-state — return that
+    /// texture and the offending usage bits.
+    ///
+    /// Powers submit-time usage-conflict validation (work item 0.9): under the M0
+    /// strict (v0) semantics (D3) a table-member texture may not be used in a
+    /// layout-incompatible way (written, storage-read, copied, attached, …) in any
+    /// submission that binds the table, because M0 cannot yet *hide* the
+    /// conflicting slot as the spec's per-scope visibility requires, and leaving
+    /// the member in the wrong layout while its table descriptor declares
+    /// `SHADER_READ_ONLY_OPTIMAL` would be driver UB (Invariant 3). Pure bindful
+    /// sampling (`RESOURCE`) and read-only depth use of a depth member are benign
+    /// (same layout) and never appear in `incompatible`. Reads *live* membership
+    /// (so post-`finish()` updates count), keyed by tracker index; whole-resource
+    /// granularity (D9) means a single conflicting slot is enough.
+    pub(crate) fn find_incompatible_member(
+        &self,
+        incompatible: &FastHashMap<TrackerIndex, wgt::TextureUses>,
+    ) -> Option<(Arc<Texture>, wgt::TextureUses)> {
+        let contents = self.contents.lock();
+        for view in contents.slots.iter().flatten() {
+            if let Some(&usage) = incompatible.get(&view.parent.tracker_index()) {
+                return Some((view.parent.clone(), usage));
+            }
+        }
+        None
+    }
+
     /// Validate a candidate texture view for binding into this table in M0:
     /// same device, still valid, and sampleable (`TEXTURE_BINDING`). Storage or
     /// other non-sampled views fail here, pointing at the heterogeneous
@@ -678,6 +707,42 @@ impl WebGpuError for UpdateResourceTableError {
                 ErrorType::Validation
             }
         }
+    }
+}
+
+/// A resource-table usage conflict detected at `queue.submit`: a texture bound in
+/// a resource table is also used, in the same submission, in a way that forces an
+/// image layout incompatible with sampling it through the table.
+///
+/// M0 rejects this under the strict (v0) semantics (D3 in
+/// `plans/resource-table.md`): the spec hides such a slot per usage scope, but M0
+/// has no visibility mechanism yet and cannot re-transition the member's layout,
+/// so accepting the program would either silently diverge from the spec or sample
+/// the member in the wrong image layout (driver UB, Invariant 3). A later
+/// milestone (M2) replaces this error with exact per-scope hiding plus the
+/// layout-override tracker (D11). Conflicts are checked at whole-resource
+/// granularity (D9). Pure bindful sampling of a member, and read-only depth use of
+/// a depth member, produce the same layout the table declares and are *not*
+/// rejected.
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum ResourceTableConflictError {
+    #[error(
+        "{texture} is reachable through bound resource table {table} while also used \
+         (usage {usage:?}) in the same submission in a way that forces an incompatible image \
+         layout. In this milestone a resource-table member texture may only be sampled (or, for \
+         a depth member, read as a depth attachment) in a submission that binds the table."
+    )]
+    IncompatibleMemberUsage {
+        table: ResourceErrorIdent,
+        texture: ResourceErrorIdent,
+        usage: wgt::TextureUses,
+    },
+}
+
+impl WebGpuError for ResourceTableConflictError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
     }
 }
 

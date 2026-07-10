@@ -96,8 +96,10 @@ use crate::resource::{
     DestroyedResourceError, InvalidOrDestroyedResourceError, InvalidResourceError, Labeled,
     ParentDevice as _, QuerySet,
 };
-use crate::track::{DeviceTracker, ResourceUsageCompatibilityError, Tracker, UsageScope};
-use crate::{api_log, resource_log, Label};
+use crate::track::{
+    DeviceTracker, ResourceUsageCompatibilityError, Tracker, TrackerIndex, UsageScope,
+};
+use crate::{api_log, resource_log, FastHashMap, Label};
 use crate::{hal_label, LabelHelpers};
 
 use wgt::error::{ErrorType, WebGpuError};
@@ -843,6 +845,7 @@ pub(crate) struct BakedCommands {
     pub(crate) query_set_writes: query::QuerySetWrites,
     pub(crate) deferred_query_set_resolves: Vec<query::DeferredQuerySetResolve>,
     pub(crate) resource_table_gaps: Vec<ResourceTableGap>,
+    pub(crate) resource_table_member_usages: FastHashMap<TrackerIndex, wgt::TextureUses>,
 }
 
 /// The mutable state of a [`CommandBuffer`].
@@ -884,6 +887,18 @@ pub struct CommandBufferMutable {
     /// Pass-start gaps for table-bound passes, spliced with barriers at submit
     /// time (work item 0.8, D2). Recorded during pass encoding.
     pub(crate) resource_table_gaps: Vec<ResourceTableGap>,
+    /// Textures used in some render or compute pass of this command buffer in a
+    /// way that forces an image layout incompatible with sampling them through a
+    /// resource table, keyed by tracker index and OR-ing the offending
+    /// [`TextureUses`] bits (work item 0.9). Populated at pass-encode time (only
+    /// when the sampling resource-table feature is enabled). At submit it is
+    /// unioned with this command buffer's own tracker (which also covers top-level
+    /// transfers) and intersected with each referenced table's live membership to
+    /// reject a layout-incompatible use of a table member (v0 strict semantics,
+    /// D3/D9 in `plans/resource-table.md`).
+    ///
+    /// [`TextureUses`]: wgt::TextureUses
+    pub(crate) resource_table_member_usages: FastHashMap<TrackerIndex, wgt::TextureUses>,
 }
 
 impl CommandBufferMutable {
@@ -898,6 +913,7 @@ impl CommandBufferMutable {
             query_set_writes: self.query_set_writes,
             deferred_query_set_resolves: self.deferred_query_set_resolves,
             resource_table_gaps: self.resource_table_gaps,
+            resource_table_member_usages: self.resource_table_member_usages,
         }
     }
 }
@@ -959,6 +975,7 @@ impl CommandEncoder {
                     query_set_writes: Default::default(),
                     deferred_query_set_resolves: Default::default(),
                     resource_table_gaps: Default::default(),
+                    resource_table_member_usages: Default::default(),
                     #[cfg(feature = "trace")]
                     trace_commands: if device.trace.lock().is_some() {
                         Some(Vec::new())
@@ -1160,6 +1177,7 @@ impl CommandEncoder {
                     query_set_writes: &mut cmd_buf_data.query_set_writes,
                     deferred_query_set_resolves: &mut cmd_buf_data.deferred_query_set_resolves,
                     resource_table_gaps: &mut cmd_buf_data.resource_table_gaps,
+                    resource_table_member_usages: &mut cmd_buf_data.resource_table_member_usages,
                 };
 
                 match command {
@@ -1255,6 +1273,7 @@ impl CommandEncoder {
                     query_set_writes: &mut cmd_buf_data.query_set_writes,
                     deferred_query_set_resolves: &mut cmd_buf_data.deferred_query_set_resolves,
                     resource_table_gaps: &mut cmd_buf_data.resource_table_gaps,
+                    resource_table_member_usages: &mut cmd_buf_data.resource_table_member_usages,
                 };
                 match command {
                     ArcCommand::CopyBufferToBuffer {

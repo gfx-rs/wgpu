@@ -604,6 +604,8 @@ pub enum QueueSubmitError {
     CommandEncoder(#[from] CommandEncoderError),
     #[error(transparent)]
     ValidateAsActionsError(#[from] crate::ray_tracing::ValidateAsActionsError),
+    #[error(transparent)]
+    ResourceTableConflict(#[from] crate::resource_table::ResourceTableConflictError),
 }
 
 impl From<InvalidOrDestroyedResourceError> for QueueSubmitError {
@@ -622,6 +624,7 @@ impl WebGpuError for QueueSubmitError {
             Self::CommandEncoder(e) => e.webgpu_error_type(),
             Self::ValidateAsActionsError(e) => e.webgpu_error_type(),
             Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::ResourceTableConflict(e) => e.webgpu_error_type(),
             Self::DestroyedResource(_) | Self::BufferStillMapped(_) => ErrorType::Validation,
         }
     }
@@ -1604,6 +1607,14 @@ impl Queue {
                             continue;
                         }
                     };
+
+                    // Reject resource-table usage conflicts (work item 0.9): a
+                    // table-visible texture written in a scope of this command
+                    // buffer. Done before any slot marking or barrier splicing so
+                    // a conflicting submission aborts cleanly.
+                    if let Err(e) = baked.check_resource_table_conflicts() {
+                        break 'error Err(e.into());
+                    }
 
                     // Capture the deferred query-resolve insertion points before
                     // they are drained; the resource-table gap splice needs them

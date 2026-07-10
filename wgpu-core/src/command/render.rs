@@ -2429,6 +2429,7 @@ pub(super) fn encode_render_pass(
                     query_set_writes: parent_state.query_set_writes,
                     deferred_query_set_resolves: parent_state.deferred_query_set_resolves,
                     resource_table_gaps: parent_state.resource_table_gaps,
+                    resource_table_member_usages: parent_state.resource_table_member_usages,
                 },
                 pending_discard_init_fixups,
                 scope: device.new_usage_scope(),
@@ -2823,6 +2824,20 @@ pub(super) fn encode_render_pass(
     }
 
     encoder.close_and_swap().map_pass_err(pass_scope)?;
+
+    // Record the textures this pass used in a resource-table-incompatible layout
+    // (attachments, storage bindings, copies; a render pass is a single usage
+    // scope, so `scope` is a complete per-pass union) for usage-conflict
+    // validation (work item 0.9). Gated on the feature that permits binding a
+    // table at all.
+    if device
+        .features
+        .contains(wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE)
+    {
+        scope
+            .textures
+            .collect_table_incompatible_usages(parent_state.resource_table_member_usages);
+    }
 
     // Record a pass-start gap (D2) for the table bound in this pass, if any.
     // The pass body is now the last element of the list; the barrier command

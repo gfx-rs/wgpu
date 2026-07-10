@@ -232,13 +232,11 @@ impl Sampler {
     }
 
     /// Record the sampling pass (binding `table`) plus the output→readback copy
-    /// into a fresh encoder and submit it. Does not poll; call [`read`](Self::read)
-    /// afterwards to retrieve the results.
-    pub fn submit(&self, ctx: &TestingContext, table: &ResourceTable) -> SubmissionIndex {
+    /// into `encoder`, without submitting. Lets a caller record other commands
+    /// (e.g. a top-level transfer that touches a table member) into the same
+    /// command buffer before submitting it.
+    pub fn record(&self, encoder: &mut CommandEncoder, table: &ResourceTable) {
         let count = (self.size / 4) as u32;
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&CommandEncoderDescriptor { label: None });
         {
             let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor {
                 label: Some("resource-table sampling pass"),
@@ -250,6 +248,16 @@ impl Sampler {
             cpass.dispatch_workgroups(count, 1, 1);
         }
         encoder.copy_buffer_to_buffer(&self.output_buffer, 0, &self.readback_buffer, 0, self.size);
+    }
+
+    /// Record the sampling pass (binding `table`) plus the output→readback copy
+    /// into a fresh encoder and submit it. Does not poll; call [`read`](Self::read)
+    /// afterwards to retrieve the results.
+    pub fn submit(&self, ctx: &TestingContext, table: &ResourceTable) -> SubmissionIndex {
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor { label: None });
+        self.record(&mut encoder, table);
         ctx.queue.submit(Some(encoder.finish()))
     }
 
