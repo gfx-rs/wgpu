@@ -100,7 +100,7 @@ pub struct Args {
     pub task_limits: Option<naga::back::TaskDispatchLimits>,
 
     /// Whether the mesh shader output should be validated.
-    #[arg(long, default_value_t = true)]
+    #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
     pub validate_mesh_output: bool,
 
     /// Input file (stdin if omitted), then output files. In bulk mode, all are inputs.
