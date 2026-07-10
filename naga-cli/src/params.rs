@@ -18,6 +18,7 @@ pub struct Parameters<'a> {
     pub glsl: naga::back::glsl::Options,
     pub hlsl: naga::back::hlsl::Options,
     pub input_kind: Option<InputKind>,
+    pub output_kind: Option<crate::cli::OutputKind>,
     pub shader_stage: Option<ShaderStageArg>,
     pub defines: FastHashMap<String, String>,
     pub capabilities: naga::valid::Capabilities,
@@ -125,6 +126,7 @@ pub fn build_parameters(args: &Args) -> anyhow::Result<Parameters<'static>> {
     params.hlsl.common.task_dispatch_limits = args.task_limits;
 
     params.input_kind = args.input_kind;
+    params.output_kind = args.output_kind;
     params.shader_stage = args.shader_stage;
 
     Ok(params)

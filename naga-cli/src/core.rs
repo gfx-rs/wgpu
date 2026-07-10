@@ -187,7 +187,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
             use naga::valid::Capabilities as C;
             // Resolve `-` to its --output-kind extension so stdout output picks the same
             // capability set a file of that format would.
-            let ext = resolve_output_ext(path, args.output_kind).ok();
+            let ext = resolve_output_ext(path, params.output_kind).ok();
             let allowed = match ext.as_deref() {
                 Some("wgsl") => naga::back::wgsl::supported_capabilities(),
                 Some("metal") => naga::back::msl::supported_capabilities(),
@@ -324,7 +324,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
                 params,
                 spv_out_with_debug.as_ref(),
                 output_path,
-                args.output_kind,
+                params.output_kind,
                 &hooks,
                 &mut json_diagnostics,
                 true,
@@ -336,7 +336,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
                 params,
                 spv_out_with_debug.as_ref(),
                 output_path,
-                args.output_kind,
+                params.output_kind,
                 &hooks,
                 &mut Vec::new(),
                 false,
