@@ -397,6 +397,37 @@ pub enum RayIntersectionType {
     BoundingBox = 4,
 }
 
+/// Backend options shared by the SPIR-V, MSL, and HLSL backends.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct CommonBackendOptions {
+    /// Bind fake resources for shaders that reference missing bindings.
+    pub fake_missing_bindings: bool,
+    /// Add a bound to all loops that might not terminate.
+    pub force_loop_bounding: bool,
+    /// Track ray query initialization.
+    pub ray_query_initialization_tracking: bool,
+    /// Limits on mesh-shader task dispatch size.
+    pub task_dispatch_limits: Option<TaskDispatchLimits>,
+    /// Clamp mesh shader primitive indices.
+    pub mesh_shader_primitive_indices_clamp: bool,
+}
+
+impl Default for CommonBackendOptions {
+    fn default() -> Self {
+        Self {
+            fake_missing_bindings: true,
+            force_loop_bounding: true,
+            ray_query_initialization_tracking: true,
+            task_dispatch_limits: None,
+            mesh_shader_primitive_indices_clamp: true,
+        }
+    }
+}
+
 /// How to handle zero-initialization of workgroup-address-space variables.
 ///
 /// This is shared across all backends that support workgroup memory initialization.

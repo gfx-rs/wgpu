@@ -1068,9 +1068,12 @@ pub struct Options<'a> {
     /// Configuration flags for the writer.
     pub flags: WriterFlags,
 
-    /// Don't panic on missing bindings. Instead use fake values for `Binding`
-    /// and `DescriptorSet` decorations. This may result in invalid SPIR-V.
-    pub fake_missing_bindings: bool,
+    /// Options shared across spv/msl/hlsl backends.
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(flatten)
+    )]
+    pub common: crate::back::CommonBackendOptions,
 
     /// Map of resources to information about the binding.
     pub binding_map: BindingMap,
@@ -1091,14 +1094,6 @@ pub struct Options<'a> {
     /// Dictates the way workgroup variables should be zero initialized
     pub zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode,
 
-    /// If set, loops will have code injected into them, forcing the compiler
-    /// to think the number of iterations is bounded.
-    pub force_loop_bounding: bool,
-
-    /// if set, ray queries will get a variable to track their state to prevent
-    /// misuse.
-    pub ray_query_initialization_tracking: bool,
-
     /// If set, arguments to `traceRays` calls will be validated.
     pub trace_ray_argument_validation: bool,
 
@@ -1111,17 +1106,6 @@ pub struct Options<'a> {
     #[cfg_attr(feature = "deserialize", serde(skip_deserializing))]
     #[cfg_attr(feature = "schemars", schemars(skip))]
     pub debug_info: Option<DebugInfo<'a>>,
-
-    /// Limits to the mesh shader dispatch group a task workgroup can dispatch.
-    ///
-    /// Metal for example limits to 1024 workgroups per task shader dispatch. Dispatching more is
-    /// undefined behavior, so this would validate that to dispatch zero workgroups.
-    pub task_dispatch_limits: Option<TaskDispatchLimits>,
-
-    /// If true, naga may generate checks that the primitive indices are valid in the output.
-    ///
-    /// Currently this validation is unimplemented.
-    pub mesh_shader_primitive_indices_clamp: bool,
 
     /// If true (the default), integer division and modulo operations emit
     /// wrapper functions that replace a zero divisor with one, and for signed
@@ -1146,18 +1130,14 @@ impl Default for Options<'_> {
         Options {
             lang_version: (1, 0),
             flags,
-            fake_missing_bindings: true,
+            common: crate::back::CommonBackendOptions::default(),
             binding_map: BindingMap::default(),
             capabilities: None,
             bounds_check_policies: BoundsCheckPolicies::default(),
             zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode::Polyfill,
-            force_loop_bounding: true,
-            ray_query_initialization_tracking: true,
             trace_ray_argument_validation: true,
             use_storage_input_output_16: true,
             debug_info: None,
-            task_dispatch_limits: None,
-            mesh_shader_primitive_indices_clamp: true,
             emit_int_div_checks: true,
         }
     }
@@ -1274,13 +1254,16 @@ mod serde_tests {
     fn spv_options_round_trip_skips_debug_info() {
         let opts = Options {
             lang_version: (1, 5),
-            force_loop_bounding: false,
+            common: crate::back::CommonBackendOptions {
+                force_loop_bounding: false,
+                ..crate::back::CommonBackendOptions::default()
+            },
             ..Options::default()
         };
         let json = serde_json::to_string(&opts).unwrap();
         let back: Options = serde_json::from_str(&json).unwrap();
         assert_eq!(back.lang_version, (1, 5));
-        assert_eq!(back.force_loop_bounding, false);
+        assert_eq!(back.common.force_loop_bounding, false);
         assert!(back.debug_info.is_none());
 
         // partial JSON works via serde(default)

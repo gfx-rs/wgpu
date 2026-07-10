@@ -157,7 +157,7 @@ use core::fmt::Error as FmtError;
 use thiserror::Error;
 
 use crate::{
-    back::{self, TaskDispatchLimits},
+    back,
     ir, proc, Handle,
 };
 
@@ -504,8 +504,6 @@ pub struct Options {
     )]
     pub binding_map: BindingMap,
 
-    /// Don't panic on missing bindings, instead generate any HLSL.
-    pub fake_missing_bindings: bool,
     /// Add special constants to `SV_VertexIndex` and `SV_InstanceIndex`,
     /// to make them work like in Vulkan/Metal, with help of the host.
     pub special_constants_binding: Option<BindTarget>,
@@ -552,23 +550,12 @@ pub struct Options {
     pub zero_initialize_workgroup_memory: super::ZeroInitializeWorkgroupMemoryMode,
     /// Should we restrict indexing of vectors, matrices and arrays?
     pub restrict_indexing: bool,
-    /// If set, loops will have code injected into them, forcing the compiler
-    /// to think the number of iterations is bounded.
-    pub force_loop_bounding: bool,
-
-    /// Limits to the mesh shader dispatch group a task workgroup can dispatch.
-    ///
-    /// Metal for example limits to 1024 workgroups per task shader dispatch. Dispatching more is
-    /// undefined behavior, so this would validate that to dispatch zero workgroups.
-    pub task_dispatch_limits: Option<TaskDispatchLimits>,
-
-    /// If true, naga may generate checks that the primitive indices are valid in the output.
-    ///
-    /// Currently this validation is unimplemented.
-    pub mesh_shader_primitive_indices_clamp: bool,
-    /// if set, ray queries will get a variable to track their state to prevent
-    /// misuse.
-    pub ray_query_initialization_tracking: bool,
+    /// Options shared across spv/msl/hlsl backends.
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(flatten)
+    )]
+    pub common: back::CommonBackendOptions,
 }
 
 impl Default for Options {
@@ -576,7 +563,6 @@ impl Default for Options {
         Options {
             shader_model: ShaderModel::V5_1,
             binding_map: BindingMap::default(),
-            fake_missing_bindings: true,
             special_constants_binding: None,
             sampler_heap_target: SamplerHeapBindTargets::default(),
             sampler_buffer_binding_map: alloc::collections::BTreeMap::default(),
@@ -585,10 +571,7 @@ impl Default for Options {
             external_texture_binding_map: ExternalTextureBindingMap::default(),
             zero_initialize_workgroup_memory: super::ZeroInitializeWorkgroupMemoryMode::Polyfill,
             restrict_indexing: true,
-            force_loop_bounding: true,
-            task_dispatch_limits: None,
-            mesh_shader_primitive_indices_clamp: true,
-            ray_query_initialization_tracking: true,
+            common: back::CommonBackendOptions::default(),
         }
     }
 }
@@ -600,7 +583,7 @@ impl Options {
     ) -> Result<BindTarget, EntryPointError> {
         match self.binding_map.get(res_binding) {
             Some(target) => Ok(*target),
-            None if self.fake_missing_bindings => Ok(BindTarget {
+            None if self.common.fake_missing_bindings => Ok(BindTarget {
                 space: res_binding.group as u8,
                 register: res_binding.binding,
                 binding_array_size: None,
@@ -617,7 +600,7 @@ impl Options {
     ) -> Result<ExternalTextureBindTarget, EntryPointError> {
         match self.external_texture_binding_map.get(res_binding) {
             Some(target) => Ok(*target),
-            None if self.fake_missing_bindings => {
+            None if self.common.fake_missing_bindings => {
                 let fake = BindTarget {
                     space: res_binding.group as u8,
                     register: res_binding.binding,

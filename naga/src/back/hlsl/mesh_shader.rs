@@ -269,7 +269,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
             "{}GroupMemoryBarrierWithGroupSync();",
             back::INDENT
         )?;
-        if let Some(limits) = self.options.task_dispatch_limits {
+        if let Some(limits) = self.options.common.task_dispatch_limits {
             let level = back::Level(2);
             writeln!(self.out, "{}if (", back::INDENT)?;
 

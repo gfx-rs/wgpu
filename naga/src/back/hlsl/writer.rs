@@ -202,7 +202,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         &mut self,
         level: back::Level,
     ) -> Option<(String, String)> {
-        if !self.options.force_loop_bounding {
+        if !self.options.common.force_loop_bounding {
             return None;
         }
 
@@ -458,7 +458,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             let info = &module_info[handle];
 
             // Check if all of the globals are accessible
-            if !self.options.fake_missing_bindings {
+            if !self.options.common.fake_missing_bindings {
                 if let Some((var_handle, _)) =
                     module
                         .global_variables
@@ -506,7 +506,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             let ep = &module.entry_points[index];
             let info = module_info.get_entry_point(index);
 
-            if !self.options.fake_missing_bindings {
+            if !self.options.common.fake_missing_bindings {
                 let mut ep_error = None;
                 for (var_handle, var) in module.global_variables.iter() {
                     match var.binding {

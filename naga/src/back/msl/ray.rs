@@ -80,7 +80,7 @@ impl<W: Write> Writer<W> {
             "{intersection} {INTERSECTION_FUNCTION_NAME}_{committed}({} intersector",
             metal_intersector_ty()
         )?;
-        if options.ray_query_initialization_tracking {
+        if options.common.ray_query_initialization_tracking {
             writeln!(self.out, ", uint intersector_tracker")?;
         }
         writeln!(self.out, ") {{")?;
@@ -90,7 +90,7 @@ impl<W: Write> Writer<W> {
             "{base_level}{intersection} intersection = {intersection} {{}};"
         )?;
 
-        if options.ray_query_initialization_tracking {
+        if options.common.ray_query_initialization_tracking {
             write!(self.out, "{base_level}if (")?;
             if committed {
                 self.write_contains_flags(
@@ -185,7 +185,7 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "{base_level}{INDENT}intersection.world_to_object = intersector.get_{ty}_world_to_object_transform();")?;
         writeln!(self.out, "{base_level}}}")?;
 
-        if options.ray_query_initialization_tracking {
+        if options.common.ray_query_initialization_tracking {
             writeln!(self.out, "{INDENT}}}")?;
         }
 

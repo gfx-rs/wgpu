@@ -298,12 +298,12 @@ impl super::Device {
                 .runtime_checks
                 .mesh_shader_primitive_indices_clamp
             || stage.module.runtime_checks.force_loop_bounding
-                != layout.naga_options.force_loop_bounding
+                != layout.naga_options.common.force_loop_bounding
             || stage
                 .module
                 .runtime_checks
                 .ray_query_initialization_tracking
-                != layout.naga_options.ray_query_initialization_tracking;
+                != layout.naga_options.common.ray_query_initialization_tracking;
         let mut temp_options;
         let naga_options = if needs_temp_options {
             temp_options = layout.naga_options.clone();
@@ -313,15 +313,16 @@ impl super::Device {
                 naga::back::ZeroInitializeWorkgroupMemoryMode::None
             };
             temp_options.restrict_indexing = stage.module.runtime_checks.bounds_checks;
-            temp_options.force_loop_bounding = stage.module.runtime_checks.force_loop_bounding;
+            temp_options.common.force_loop_bounding =
+                stage.module.runtime_checks.force_loop_bounding;
             if !stage.module.runtime_checks.task_shader_dispatch_tracking {
-                temp_options.task_dispatch_limits = None;
+                temp_options.common.task_dispatch_limits = None;
             }
-            temp_options.mesh_shader_primitive_indices_clamp = stage
+            temp_options.common.mesh_shader_primitive_indices_clamp = stage
                 .module
                 .runtime_checks
                 .mesh_shader_primitive_indices_clamp;
-            temp_options.ray_query_initialization_tracking = stage
+            temp_options.common.ray_query_initialization_tracking = stage
                 .module
                 .runtime_checks
                 .ray_query_initialization_tracking;
@@ -1486,7 +1487,6 @@ impl crate::Device for super::Device {
             naga_options: hlsl::Options {
                 shader_model: self.shared.private_caps.shader_model,
                 binding_map,
-                fake_missing_bindings: false,
                 special_constants_binding,
                 immediates_target,
                 dynamic_storage_buffer_offsets_targets,
@@ -1495,13 +1495,16 @@ impl crate::Device for super::Device {
                 sampler_heap_target,
                 sampler_buffer_binding_map,
                 external_texture_binding_map,
-                force_loop_bounding: true,
-                task_dispatch_limits: Some(naga::back::TaskDispatchLimits {
-                    max_mesh_workgroups_per_dim: self.limits.max_mesh_workgroups_per_dimension,
-                    max_mesh_workgroups_total: self.limits.max_mesh_workgroup_total_count,
-                }),
-                mesh_shader_primitive_indices_clamp: true,
-                ray_query_initialization_tracking: true,
+                common: naga::back::CommonBackendOptions {
+                    fake_missing_bindings: false,
+                    force_loop_bounding: true,
+                    task_dispatch_limits: Some(naga::back::TaskDispatchLimits {
+                        max_mesh_workgroups_per_dim: self.limits.max_mesh_workgroups_per_dimension,
+                        max_mesh_workgroups_total: self.limits.max_mesh_workgroup_total_count,
+                    }),
+                    mesh_shader_primitive_indices_clamp: true,
+                    ray_query_initialization_tracking: true,
+                },
             },
         })
     }

@@ -208,7 +208,6 @@ impl super::Device {
                     },
                     inline_samplers: Default::default(),
                     spirv_cross_compatibility: false,
-                    fake_missing_bindings: false,
                     per_entry_point_map: naga::back::msl::EntryPointResourceMap::from([(
                         stage.entry_point.to_owned(),
                         ep_resources.clone(),
@@ -225,26 +224,31 @@ impl super::Device {
                     } else {
                         naga::back::ZeroInitializeWorkgroupMemoryMode::None
                     },
-                    force_loop_bounding: stage.module.runtime_checks.force_loop_bounding,
-                    task_dispatch_limits: stage
-                        .module
-                        .runtime_checks
-                        .task_shader_dispatch_tracking
-                        .then_some(naga::back::TaskDispatchLimits {
-                            max_mesh_workgroups_per_dim: self
-                                .limits
-                                .max_mesh_workgroups_per_dimension,
-                            max_mesh_workgroups_total: self.limits.max_mesh_workgroup_total_count,
-                        }),
-                    mesh_shader_primitive_indices_clamp: stage
-                        .module
-                        .runtime_checks
-                        .mesh_shader_primitive_indices_clamp,
                     emit_int_div_checks: stage.module.runtime_checks.int_div_checks,
-                    ray_query_initialization_tracking: stage
-                        .module
-                        .runtime_checks
-                        .ray_query_initialization_tracking,
+                    common: naga::back::CommonBackendOptions {
+                        fake_missing_bindings: false,
+                        force_loop_bounding: stage.module.runtime_checks.force_loop_bounding,
+                        task_dispatch_limits: stage
+                            .module
+                            .runtime_checks
+                            .task_shader_dispatch_tracking
+                            .then_some(naga::back::TaskDispatchLimits {
+                                max_mesh_workgroups_per_dim: self
+                                    .limits
+                                    .max_mesh_workgroups_per_dimension,
+                                max_mesh_workgroups_total: self
+                                    .limits
+                                    .max_mesh_workgroup_total_count,
+                            }),
+                        mesh_shader_primitive_indices_clamp: stage
+                            .module
+                            .runtime_checks
+                            .mesh_shader_primitive_indices_clamp,
+                        ray_query_initialization_tracking: stage
+                            .module
+                            .runtime_checks
+                            .ray_query_initialization_tracking,
+                    },
                 };
 
                 let pipeline_options = naga::back::msl::PipelineOptions {

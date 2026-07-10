@@ -75,7 +75,7 @@ use alloc::{
 };
 use core::fmt::{Error as FmtError, Write};
 
-use crate::{arena::Handle, back::TaskDispatchLimits, ir, proc::index, valid::ModuleInfo};
+use crate::{arena::Handle, ir, proc::index, valid::ModuleInfo};
 
 mod keywords;
 mod mesh_shader;
@@ -310,27 +310,21 @@ pub struct Options {
     pub inline_samplers: Vec<sampler::InlineSampler>,
     /// Make it possible to link different stages via SPIRV-Cross.
     pub spirv_cross_compatibility: bool,
-    /// Don't panic on missing bindings, instead generate invalid MSL.
-    pub fake_missing_bindings: bool,
     /// Bounds checking policies.
     pub bounds_check_policies: index::BoundsCheckPolicies,
     /// Should workgroup variables be zero initialized (by polyfilling)?
     pub zero_initialize_workgroup_memory: super::ZeroInitializeWorkgroupMemoryMode,
-    /// If set, loops will have code injected into them, forcing the compiler
-    /// to think the number of iterations is bounded.
-    pub force_loop_bounding: bool,
-    /// Whether and how checks in the task shader should verify the dispatched
-    /// mesh grid size.
-    pub task_dispatch_limits: Option<TaskDispatchLimits>,
-    /// Whether to validate the output of a mesh shader workgroup.
-    pub mesh_shader_primitive_indices_clamp: bool,
     /// If true (the default), integer division and modulo operations use
     /// wrapper functions that guard against division by zero and signed
     /// overflow. Set to false to emit raw division for faster compute shaders
     /// where the developer guarantees non-zero divisors.
     pub emit_int_div_checks: bool,
-    /// Whether to validate ray query calls
-    pub ray_query_initialization_tracking: bool,
+    /// Options shared across spv/msl/hlsl backends.
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(flatten)
+    )]
+    pub common: crate::back::CommonBackendOptions,
 }
 
 impl Default for Options {
@@ -340,14 +334,10 @@ impl Default for Options {
             per_entry_point_map: EntryPointResourceMap::default(),
             inline_samplers: Vec::new(),
             spirv_cross_compatibility: false,
-            fake_missing_bindings: true,
             bounds_check_policies: index::BoundsCheckPolicies::default(),
             zero_initialize_workgroup_memory: super::ZeroInitializeWorkgroupMemoryMode::Polyfill,
-            force_loop_bounding: true,
-            task_dispatch_limits: None,
-            mesh_shader_primitive_indices_clamp: true,
-            ray_query_initialization_tracking: true,
             emit_int_div_checks: true,
+            common: crate::back::CommonBackendOptions::default(),
         }
     }
 }
@@ -586,7 +576,7 @@ impl Options {
         let target = self.get_resource_binding_target(ep, res_binding);
         match target {
             Some(target) => Ok(ResolvedBinding::Resource(target.clone())),
-            None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
+            None if self.common.fake_missing_bindings => Ok(ResolvedBinding::User {
                 prefix: "fake",
                 index: 0,
                 interpolation: None,
@@ -607,7 +597,7 @@ impl Options {
                 buffer: Some(slot),
                 ..Default::default()
             })),
-            None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
+            None if self.common.fake_missing_bindings => Ok(ResolvedBinding::User {
                 prefix: "fake",
                 index: 0,
                 interpolation: None,
@@ -628,7 +618,7 @@ impl Options {
                 buffer: Some(slot),
                 ..Default::default()
             })),
-            None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
+            None if self.common.fake_missing_bindings => Ok(ResolvedBinding::User {
                 prefix: "fake",
                 index: 0,
                 interpolation: None,
