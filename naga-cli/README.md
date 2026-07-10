@@ -108,8 +108,10 @@ naga shader.wgsl out.metal --metal-version 2.0
 Flags and config are **mutually exclusive**: passing any option flag alongside `--config`
 is a hard error (clap enforces it at parse time). This includes the processing flags
 `--compact`, `-g`/`--generate-debug-symbols`, `--spirv-val`, `--spirv-opt`, and `--dxc`, which
-are config keys too — set them in the JSON instead. Only I/O (the input/output paths and
-`--before-compaction`) and `--format` are orthogonal and may be combined with `--config`.
+are config keys too — set them in the JSON instead. Only **I/O** — where data comes from and
+goes to — composes with `--config`: the input/output paths, `--input-kind`, `--shader-stage`,
+`--output-kind`, `--before-compaction`, and `--format`. Everything else is an option (a config
+key). (`--input-kind` in particular must compose, since reading stdin under `--config` needs it.)
 
 ```sh
 # Use a config file.
