@@ -35,6 +35,7 @@ naga = { workspace = true, features = [
     "dot-out",
     "serialize",
     "deserialize",
+    "schemars",
     "termcolor",
     "stderr",
     "fs",
@@ -49,6 +50,9 @@ env_logger.workspace = true
 clap = { workspace = true }
 anyhow = { workspace = true, features = ["std"] }
 log.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+schemars = { workspace = true }
 
 [lints]
 workspace = true

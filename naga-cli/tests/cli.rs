@@ -6,6 +6,51 @@ fn naga() -> Command {
 }
 
 #[test]
+fn config_json_matches_equivalent_flag() {
+    let dir = std::env::temp_dir().join("naga_cli_p2_config");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }").unwrap();
+    let out_flag = dir.join("flag.spv");
+    let out_cfg = dir.join("cfg.spv");
+
+    // Via flag:
+    let a = naga().arg(&src).arg(&out_flag).arg("--spirv-version").arg("1.5").output().unwrap();
+    assert!(a.status.success(), "{}", String::from_utf8_lossy(&a.stderr));
+
+    // Via config-json (same lang_version):
+    let b = naga()
+        .arg(&src).arg(&out_cfg)
+        .arg("--config-json").arg(r#"{"spv_out":{"lang_version":[1,5]}}"#)
+        .output().unwrap();
+    assert!(b.status.success(), "{}", String::from_utf8_lossy(&b.stderr));
+
+    assert_eq!(std::fs::read(&out_flag).unwrap(), std::fs::read(&out_cfg).unwrap());
+}
+
+#[test]
+fn config_conflicts_with_option_flag() {
+    let out = naga()
+        .arg("in.wgsl")
+        .arg("--config-json").arg("{}")
+        .arg("--spirv-version").arg("1.5")
+        .output().unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("cannot be used with"),
+        "expected clap conflict error, got: {}", String::from_utf8_lossy(&out.stderr));
+}
+
+#[test]
+fn config_and_config_json_mutually_exclusive() {
+    let out = naga()
+        .arg("in.wgsl")
+        .arg("--config").arg("x.json")
+        .arg("--config-json").arg("{}")
+        .output().unwrap();
+    assert!(!out.status.success());
+}
+
+#[test]
 fn help_lists_all_options() {
     let out = naga().arg("--help").output().unwrap();
     assert!(out.status.success());
