@@ -73,6 +73,15 @@ pub struct Config {
 
     /// Shader stage for GLSL input.
     pub shader_stage: Option<crate::cli::ShaderStageArg>,
+
+    /// Output format for diagnostics and reflection: `text` or `json`.
+    pub format: Option<crate::cli::OutputFormat>,
+
+    /// Write the module's IR before compaction to this path (implies compaction).
+    pub before_compaction: Option<String>,
+
+    /// Bulk-validation mode: treat all positional files as inputs to validate.
+    pub bulk_validate: Option<bool>,
 }
 
 /// Apply a loaded [`Config`] on top of already-built [`crate::params::Parameters`].
@@ -198,5 +207,16 @@ pub fn apply_config(config: Config, params: &mut crate::params::Parameters<'stat
     }
     if let Some(stage) = config.shader_stage {
         params.shader_stage = Some(stage);
+    }
+    if let Some(format) = config.format {
+        params.format = format;
+    }
+    if let Some(path) = config.before_compaction {
+        params.before_compaction = Some(path);
+        // --before-compaction implies compaction.
+        params.compact = true;
+    }
+    if let Some(bulk) = config.bulk_validate {
+        params.bulk_validate = bulk;
     }
 }

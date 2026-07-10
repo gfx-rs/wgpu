@@ -4,6 +4,14 @@
   "description": "All translation options that can be set via `--config` / `--config-json`.\n\nEvery field is `Option<…>` so that partial configs (\"just set `spv_out`\")\nwork without specifying everything else. Unknown JSON keys are rejected\n(`deny_unknown_fields`) to catch typos early.",
   "type": "object",
   "properties": {
+    "before_compaction": {
+      "description": "Write the module's IR before compaction to this path (implies compaction).",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
     "bounds_check_policies": {
       "description": "Bounds-check policies for generated code.",
       "anyOf": [
@@ -13,6 +21,14 @@
         {
           "type": "null"
         }
+      ],
+      "default": null
+    },
+    "bulk_validate": {
+      "description": "Bulk-validation mode: treat all positional files as inputs to validate.",
+      "type": [
+        "boolean",
+        "null"
       ],
       "default": null
     },
@@ -72,6 +88,18 @@
       "type": [
         "string",
         "null"
+      ],
+      "default": null
+    },
+    "format": {
+      "description": "Output format for diagnostics and reflection: `text` or `json`.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OutputFormat"
+        },
+        {
+          "type": "null"
+        }
       ],
       "default": null
     },
@@ -1080,6 +1108,13 @@
           "default": false
         }
       }
+    },
+    "OutputFormat": {
+      "type": "string",
+      "enum": [
+        "text",
+        "json"
+      ]
     },
     "OutputKind": {
       "description": "Output format for stdout writes, mapping to the same format keys the output-file\nextension would select.",

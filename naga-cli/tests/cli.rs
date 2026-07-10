@@ -778,6 +778,30 @@ fn config_drives_stdin_stdout() {
 }
 
 #[test]
+fn config_drives_json_format() {
+    // The --format flag is exclusive with --config, but `format` is a config key, so
+    // structured JSON output is reachable in config mode (the editor-integration case).
+    let src = write_tmp(
+        "naga_cli_cfg_format_json",
+        "s.wgsl",
+        "@compute @workgroup_size(1) fn main() {}",
+    );
+    let r = naga()
+        .arg(&src)
+        .args(["--config-json", r#"{"format":"json"}"#])
+        .output()
+        .unwrap();
+    assert!(
+        r.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&r.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&r.stdout).unwrap();
+    assert_eq!(v["success"], true);
+    assert_eq!(v["reflection"]["entry_points"][0]["name"], "main");
+}
+
+#[test]
 fn generates_debug_symbols_spv() {
     let dir = std::env::temp_dir().join("naga_cli_phase1_debug_spv");
     std::fs::create_dir_all(&dir).unwrap();
