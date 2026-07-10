@@ -48,7 +48,17 @@ cat shader.wgsl | naga --stdin-file-path shader.wgsl
 naga --bulk-validate a.wgsl b.wgsl c.spv
 ```
 
-The example shader used in this README lives at `examples/triangle.wgsl`.
+The examples below use this small WGSL shader, `triangle.wgsl`:
+
+```wgsl
+@group(0) @binding(0) var<uniform> tint: vec4<f32>;
+
+@vertex fn vs_main(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
+    return vec4<f32>(f32(i), 0.0, 0.0, 1.0);
+}
+
+@fragment fn fs_main() -> @location(0) vec4<f32> { return tint; }
+```
 
 ---
 
@@ -95,8 +105,7 @@ naga shader.wgsl out.spv --config options.json
 naga shader.wgsl out.spv --config-json '{"spv_out":{"lang_version":[1,3]}}'
 ```
 
-`examples/options.json` shows a partial config (only specified keys are applied; everything else
-uses defaults):
+A partial config (only the specified keys are applied; everything else uses defaults):
 
 ```json
 {
@@ -132,7 +141,7 @@ machine-readable JSON document containing diagnostics **and** reflection data. T
 editor integrations, CI pipelines, and tooling that needs to inspect entry points or resources.
 
 ```sh
-naga examples/triangle.wgsl --format json
+naga triangle.wgsl --format json
 ```
 
 Real output (the full document is printed to stdout):
@@ -203,42 +212,21 @@ DXIL binary to `<hlsl-stem>.<entry-point-name>.dxil`. For example, a shader with
 
 ## Notes / gotchas
 
-- **Coordinate space.** Coordinate-space conversions are controlled by the top-level
-  `--keep-coordinate-space` flag (or config key `keep_coordinate_space`), **not** by the
-  per-backend `spv_out.flags` bitmask. Setting `ADJUST_COORDINATE_SPACE` directly in
-  `spv_out.flags` will be overwritten by the top-level flag.
+Run `naga --help` for the full list of behavioural notes (coordinate-space handling,
+task/mesh limit fan-out, schema omissions, `Native` zero-init being SPIR-V-only, JSON
+diagnostic details). One config-authoring detail worth repeating here: `--task-limits` and
+`--validate-mesh-output` are conveniences that fan out to every applicable backend; in a
+config, set the flat per-backend keys directly (there is **no** `common` sub-object in the
+JSON). `task_dispatch_limits` is a struct with two required `u32` fields:
 
-- **Task/mesh shader limits.** `--task-limits` and `--validate-mesh-output` are convenience
-  flags that set options across all applicable backends. The underlying config keys are flat
-  fields directly under each backend (there is no `common` sub-object in the JSON):
-  - `--task-limits` sets `task_dispatch_limits`, which is a struct with two required fields:
-    `max_mesh_workgroups_per_dim` (u32) and `max_mesh_workgroups_total` (u32).
-  - `--validate-mesh-output` controls `mesh_shader_primitive_indices_clamp` (bool).
-
-  Example (set these directly under the backend key):
-  ```json
-  {
-    "spv_out": {
-      "task_dispatch_limits": {
-        "max_mesh_workgroups_per_dim": 65535,
-        "max_mesh_workgroups_total": 65535
-      },
-      "mesh_shader_primitive_indices_clamp": true
-    }
+```json
+{
+  "spv_out": {
+    "task_dispatch_limits": {
+      "max_mesh_workgroups_per_dim": 65535,
+      "max_mesh_workgroups_total": 65535
+    },
+    "mesh_shader_primitive_indices_clamp": true
   }
-  ```
-
-- **`--print-config-schema` omissions.** The SPIR-V capabilities set
-  (`spv_out.capabilities`, type `FastHashSet<spirv::Capability>` — the SPIR-V writer's
-  capability allow-list, distinct from the top-level `capabilities` validator/WGSL-frontend
-  filter which IS in the schema) is excluded from the printed schema because its type lacks
-  a `JsonSchema` impl. It is still accepted by `--config` and `--config-json`. The top-level
-  `defines` map and all other fields are present in the schema.
-
-- **JSON diagnostics detail.** In `--format json` output, every diagnostic has severity
-  `"error"` or `"warning"`. The `notes` array may be empty for validation errors. SPIR-V
-  parse errors carry no source location.
-
-- **`ZeroInitializeWorkgroupMemoryMode::Native`** is honoured only by the SPIR-V backend
-  (via `VK_KHR_zero_initialize_workgroup_memory` / Vulkan 1.3). Other backends fall back to
-  the polyfill.
+}
+```
