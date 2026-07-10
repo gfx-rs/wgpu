@@ -22,6 +22,12 @@ fn main() {
 }
 
 fn real_main(args: &cli::Args) -> anyhow::Result<()> {
+    if args.print_config_schema {
+        let schema = schemars::schema_for!(crate::config::Config);
+        println!("{}", serde_json::to_string_pretty(&schema)?);
+        return Ok(());
+    }
+
     let mut params = params::build_parameters(args)?;
 
     // Load config from file or inline JSON and apply on top of the defaults.
