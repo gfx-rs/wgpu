@@ -231,6 +231,10 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 - `GPUTextureDescriptor` accepts `textureBindingViewDimension`. By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
+#### naga-cli
+
+- Rewrote `naga-cli`: migrated to `clap`, added `--config`/`--config-json` for full option coverage, `--print-config-schema`, `--format json` (structured diagnostics + reflection), and external tool hooks (`--spirv-val`, `--spirv-opt`, `--dxc`). The `.spirv` output extension now writes SPIR-V. By @Inner-Daemons in [#XXXX](https://github.com/gfx-rs/wgpu/pull/XXXX).
+
 ### Changes
 
 #### General
