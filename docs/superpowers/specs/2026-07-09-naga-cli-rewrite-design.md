@@ -32,14 +32,14 @@ Rewrite `naga-cli` to serve four drivers (all first-class):
 
 Chosen approach is a **hybrid of config-driven exposure and auto-derived flags** ("A+B"): every option is reachable either as an auto-derived clap flag (scalars) or through a JSON config (everything, including complex fields). clap coupling into naga core is acceptable to the maintainer and gated behind a feature.
 
-### 1. Crate layout
+### 1. Structure — single binary, internal core boundary
 
-Split responsibilities so the core is testable and panic-free:
+Ship a **single `naga` binary** (no separate library crate). Inside it, keep a disciplined *module* boundary so the robustness/JSON/testing benefits still hold:
 
-- **`naga-cli` library** — pure core. Functions along the lines of `parse → validate → compile / reflect`, each returning `Result<T, Diagnostic>`. No file IO, no `process::exit`, no panics on user input. All input/output types are serde-serializable.
-- **`naga` binary** — thin shell. clap parsing, file/stdin IO, subprocess invocation, and rendering (human text vs JSON). The binary is the *only* site that exits the process or prints.
+- **core modules** — pure functions along the lines of `parse → validate → compile / reflect`, each returning `Result<T, Diagnostic>`. No file IO, no `process::exit`, no panics on user input. All result types are serde-serializable.
+- **shell (`main` + arg/IO/render modules)** — clap parsing, file/stdin IO, subprocess invocation, and rendering (human text vs JSON). This layer is the *only* site that exits the process or prints.
 
-Rationale: robustness (§6), JSON output (§4), and testing (§6) all fall out of a pure, serde-able library boundary.
+Rationale: robustness (§6), JSON output (§4), and testing (§6) all fall out of keeping core logic data-first (return values, not prints) with a single rendering site — a crate split is not required to get that, and the maintainer prefers one binary.
 
 ### 2. Options exposure (config + auto flags)
 
@@ -107,7 +107,7 @@ Extract these into a shared `CommonOptions` struct that backends embed, so clap 
 
 | Original requirement | Covered by |
 |---|---|
-| Testing | §1 (pure lib), §6 (unit + snapshot + golden + config tests) |
+| Testing | §1 (pure core modules), §6 (unit + snapshot + golden + config tests) |
 | All options exposed all the time | §2 (auto flags), §7 (`--print-config-schema`, snapshot guard) |
 | Up-to-date help menu | §7 (clap auto-help + schema), §8 (doc comments) |
 | Reduce panics | §1, §6 (typed errors; bin is sole exit site) |
@@ -124,9 +124,10 @@ Extract these into a shared `CommonOptions` struct that backends embed, so clap 
 - Individual flags for complex map/vec fields (config-only for now; add later as needed).
 - Linking DXC / SPIRV-Tools as libraries (subprocess only).
 - The `CommonOptions` extraction may ship as a later phase without blocking the CLI rewrite.
+- Separate library crate for the CLI core (single binary chosen; core stays an internal module boundary).
 
-## Open items for the planning phase
+## Resolved during review
 
-- Exact JSON schema for diagnostics and reflection output.
-- Whether the naga clap-derive feature is new or folded into existing features.
-- Migration plan for naga's existing test harness that shells out to the CLI.
+- **JSON schema is emergent.** No fixed schema up front; the diagnostics/reflection JSON shape may start minimal and evolve over time. `--print-config-schema` reflects whatever the structs currently are.
+- **clap-derive is a new naga feature** (e.g. `clap`), separate from `serialize`/`deserialize`.
+- **Existing CLI-shelling test harness deferred.** Migrated later, most likely by switching those tests to depend on the `naga` crate directly rather than shelling out.
