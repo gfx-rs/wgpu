@@ -1059,6 +1059,7 @@ fn create_3d_texture(ctx: &TestingContext, label: &str, depth: u32) -> Texture {
         format: TextureFormat::R8Uint,
         usage: TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
         view_formats: &[],
+        mapped_at_creation: false,
     })
 }
 
@@ -1434,6 +1435,7 @@ async fn check_vertex_buffer_tail_init(
         format: TextureFormat::Rgba8UnormSrgb,
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        mapped_at_creation: false,
     });
     let output_view = output_texture.create_view(&Default::default());
 

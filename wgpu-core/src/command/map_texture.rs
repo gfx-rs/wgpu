@@ -48,7 +48,8 @@ impl Global {
         cmd_buf_data.with_buffer(
             EncodingApi::Wgpu,
             |buf| -> Result<(), MapTextureOnCompletionError> {
-                let texture = self.resolve_texture_id(texture_id)?;
+                let texture = self.resolve_texture_id(texture_id);
+                texture.check_valid()?;
                 texture
                     .device
                     .require_features(wgt::Features::HOST_IMAGE_COPY)?;

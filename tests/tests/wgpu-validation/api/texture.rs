@@ -723,6 +723,7 @@ fn no_overflow_in_texture_selector() {
         format: wgpu::TextureFormat::R8Unorm,
         usage: wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        mapped_at_creation: false,
     });
     let _view = texture.create_view(&wgpu::TextureViewDescriptor {
         base_array_layer: 3385121660,

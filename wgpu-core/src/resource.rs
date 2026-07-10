@@ -1586,6 +1586,8 @@ impl Texture {
             clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, TextureClearMode::None),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
+            map_state: Mutex::new(rank::TEXTURE_MAP_STATE, TextureMapState::Unmapped),
+            host_copy_lock: RwLock::new(rank::TEXTURE_HOST_COPY, ()),
         })
     }
 
@@ -1921,6 +1923,8 @@ pub enum CreateTextureError {
     CreateTextureView(#[from] CreateTextureViewError),
     #[error("Invalid usage flags {0:?}")]
     InvalidUsage(wgt::TextureUsages),
+    #[error("Texture usage {0:?} is not compatible with texture usage {1:?}")]
+    IncompatibleUsage(wgt::TextureUsages, wgt::TextureUsages),
     #[error(transparent)]
     InvalidDimension(#[from] TextureDimensionError),
     #[error("Depth texture ({1:?}) can't be created as {0:?}")]
@@ -1998,22 +2002,27 @@ impl WebGpuError for CreateTextureError {
             Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
 
             Self::InvalidUsage(_)
+            | Self::IncompatibleUsage(_, _)
             | Self::InvalidDepthDimension(_, _)
             | Self::InvalidCompressedDimension(_, _)
             | Self::InvalidMipLevelCount { .. }
             | Self::InvalidFormatUsages(_, _, _)
             | Self::InvalidViewFormat(_, _)
+            | Self::InvalidTransientTextureUsage(_)
             | Self::InvalidDimensionUsages(_, _)
             | Self::InvalidMultisampledStorageBinding
             | Self::InvalidMultisampledFormat(_)
             | Self::InvalidSampleCount(..)
             | Self::InvalidTransientTextureViewFormats
             | Self::MultisampledNotRenderAttachment
+            | Self::InvalidTransientTextureMipLevelCount(_)
+            | Self::InvalidTransientTextureLayerCount(_)
             | Self::MappedAtCreationRequiresHostVisible
             | Self::HostVisibleMultisampled(_)
             | Self::HostVisibleUnsupportedFormat(_) => ErrorType::Validation,
         }
     }
+}
 
 /// Describes a [`TextureView`].
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

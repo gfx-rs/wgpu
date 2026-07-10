@@ -337,6 +337,7 @@ async fn partial_binding_array_followed_by_storage_buffer(ctx: TestingContext) {
         format: TextureFormat::Rgba8Unorm,
         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
         view_formats: &[],
+        mapped_at_creation: false,
     });
     let input_view = input_texture.create_view(&TextureViewDescriptor::default());
 
@@ -364,6 +365,7 @@ async fn partial_binding_array_followed_by_storage_buffer(ctx: TestingContext) {
         format: TextureFormat::Rgba8Unorm,
         usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
         view_formats: &[],
+        mapped_at_creation: false,
     });
     let output_view = output_texture.create_view(&TextureViewDescriptor::default());
 
