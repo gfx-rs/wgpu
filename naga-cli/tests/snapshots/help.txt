@@ -129,6 +129,15 @@ Options:
       --print-config-schema
           Print the JSON Schema for the config document and exit
 
+      --spirv-val
+          After writing SPIR-V output, validate it with `spirv-val` (must be on PATH)
+
+      --spirv-opt
+          After writing SPIR-V output, optimize it in place with `spirv-opt -O` (must be on PATH)
+
+      --dxc
+          After writing HLSL output, compile each entry point to DXIL with `dxc` (must be on PATH)
+
       --format <FORMAT>
           Output format for diagnostics and reflection: `text` (human, default) or `json`
           

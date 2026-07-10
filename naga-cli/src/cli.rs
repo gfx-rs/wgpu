@@ -129,6 +129,18 @@ pub struct Args {
     #[arg(long)]
     pub print_config_schema: bool,
 
+    /// After writing SPIR-V output, validate it with `spirv-val` (must be on PATH).
+    #[arg(long)]
+    pub spirv_val: bool,
+
+    /// After writing SPIR-V output, optimize it in place with `spirv-opt -O` (must be on PATH).
+    #[arg(long)]
+    pub spirv_opt: bool,
+
+    /// After writing HLSL output, compile each entry point to DXIL with `dxc` (must be on PATH).
+    #[arg(long)]
+    pub dxc: bool,
+
     /// Output format for diagnostics and reflection: `text` (human, default) or `json`.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
     pub format: OutputFormat,

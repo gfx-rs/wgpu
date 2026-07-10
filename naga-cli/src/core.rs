@@ -2,6 +2,7 @@
 
 use crate::cli::{Args, InputKind, OutputFormat};
 use crate::error::CliError;
+use crate::hooks::{run_dxc, run_spirv_opt, run_spirv_val, Hooks};
 use crate::output::{
     glsl_parse_errors_to_diagnostics, spv_error_to_diagnostic, validation_error_to_diagnostic,
     wgsl_parse_error_to_diagnostic, Diagnostic, JsonOutput, Reflection,
@@ -109,6 +110,30 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
 
     let output_paths = files;
 
+    // Build hooks and pre-check: if a hook is requested, at least one output must have
+    // a matching extension. This is a hard error in both text and json modes.
+    let hooks = Hooks {
+        spirv_val: args.spirv_val,
+        spirv_opt: args.spirv_opt,
+        dxc: args.dxc,
+    };
+    if hooks.any() {
+        let exts: Vec<&str> = output_paths
+            .clone()
+            .filter_map(|p| Path::new(p).extension().and_then(|e| e.to_str()))
+            .collect();
+        let has_spv = exts.contains(&"spv") || exts.contains(&"spirv");
+        if hooks.spirv_val && !has_spv {
+            return Err(anyhow!("--spirv-val requires a SPIR-V (.spv) output file"));
+        }
+        if hooks.spirv_opt && !has_spv {
+            return Err(anyhow!("--spirv-opt requires a SPIR-V (.spv) output file"));
+        }
+        if hooks.dxc && !exts.contains(&"hlsl") {
+            return Err(anyhow!("--dxc requires an HLSL (.hlsl) output file"));
+        }
+    }
+
     // Decide which capabilities our output formats can support.
     let validation_caps = output_paths
         .clone()
@@ -160,7 +185,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
         if info.is_some() {
             // Write out the module state before compaction, if requested.
             if let Some(ref before_compaction) = args.before_compaction {
-                write_output(&module, &info, params, spv_out_with_debug.as_ref(), before_compaction)?;
+                write_output(&module, &info, params, spv_out_with_debug.as_ref(), before_compaction, &hooks)?;
             }
 
             naga::compact::compact(&mut module, KeepUnused::No);
@@ -230,7 +255,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
     }
 
     for output_path in output_paths {
-        write_output(&module, &info, params, spv_out_with_debug.as_ref(), output_path)?;
+        write_output(&module, &info, params, spv_out_with_debug.as_ref(), output_path, &hooks)?;
     }
 
     if is_json {
@@ -508,6 +533,7 @@ fn write_output(
     params: &Parameters,
     spv_out_override: Option<&naga::back::spv::Options<'_>>,
     output_path: &str,
+    hooks: &Hooks,
 ) -> anyhow::Result<()> {
     let entry_point = match params.entry_point.as_deref() {
         Some(name) => {
@@ -564,7 +590,7 @@ fn write_output(
                 msl::write_string(&module, &info, &options, &pipeline_options)?;
             fs::write(output_path, msl)?;
         }
-        "spv" => {
+        "spv" | "spirv" => {
             use naga::back::spv;
 
             let pipeline_options = entry_point.map(|(shader_stage, name)| spv::PipelineOptions {
@@ -594,6 +620,12 @@ fn write_output(
                 });
 
             fs::write(output_path, bytes.as_slice())?;
+            if hooks.spirv_opt {
+                run_spirv_opt(Path::new(output_path))?;
+            }
+            if hooks.spirv_val {
+                run_spirv_val(Path::new(output_path))?;
+            }
         }
         stage @ ("vert" | "frag" | "comp") => {
             use naga::back::glsl;
@@ -673,8 +705,21 @@ fn write_output(
             let mut buffer = String::new();
             let pipeline_options = Default::default();
             let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl, &pipeline_options);
-            writer.write(&module, &info, None)?;
+            let reflection = writer.write(&module, &info, None)?;
+            // Drop the writer borrow on `buffer` before fs::write consumes it.
+            drop(writer);
             fs::write(output_path, buffer)?;
+            if hooks.dxc {
+                let entries: Vec<(String, naga::ShaderStage)> = reflection
+                    .entry_point_names
+                    .iter()
+                    .zip(module.entry_points.iter())
+                    .filter_map(|(name_res, ep)| {
+                        name_res.as_ref().ok().map(|n| (n.clone(), ep.stage))
+                    })
+                    .collect();
+                run_dxc(Path::new(output_path), &entries, params.hlsl.shader_model)?;
+            }
         }
         "wgsl" => {
             use naga::back::wgsl;
