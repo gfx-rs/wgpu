@@ -69,15 +69,15 @@ pub struct Args {
     pub stdin_file_path: Option<String>,
 
     /// Generate debug symbols (spv-out only, for now).
-    #[arg(short = 'g', long, group = "options")]
+    #[arg(short = 'g', long)]
     pub generate_debug_symbols: bool,
 
     /// Compact the module's IR and revalidate.
-    #[arg(long, group = "options")]
+    #[arg(long)]
     pub compact: bool,
 
     /// Write the module's IR before compaction to the given file. Implies `--compact`.
-    #[arg(long, group = "options")]
+    #[arg(long)]
     pub before_compaction: Option<String>,
 
     /// Bulk validation mode: all filenames are inputs to read and validate.

@@ -48,6 +48,25 @@ fn config_and_config_json_mutually_exclusive() {
         .arg("--config-json").arg("{}")
         .output().unwrap();
     assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("cannot be used with"),
+        "expected clap conflict error, got: {}", String::from_utf8_lossy(&out.stderr));
+}
+
+#[test]
+fn config_composes_with_compact_flag() {
+    let dir = std::env::temp_dir().join("naga_cli_p2_cfg_compact");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }").unwrap();
+    let out = dir.join("o.spv");
+    let r = naga()
+        .arg(&src).arg(&out)
+        .arg("--config-json").arg(r#"{"spv_out":{"lang_version":[1,3]}}"#)
+        .arg("--compact")
+        .output().unwrap();
+    // Must NOT be a clap conflict error; compaction + config compose.
+    assert!(r.status.success(), "stderr: {}", String::from_utf8_lossy(&r.stderr));
+    assert!(!String::from_utf8_lossy(&r.stderr).contains("cannot be used with"));
 }
 
 #[test]
