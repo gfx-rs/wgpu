@@ -88,6 +88,44 @@ pub struct JsonOutput {
     pub reflection: Option<Reflection>,
 }
 
+impl Reflection {
+    pub fn from_module(module: &naga::Module) -> Reflection {
+        let entry_points = module
+            .entry_points
+            .iter()
+            .map(|ep| EntryPointReflection {
+                name: ep.name.clone(),
+                stage: ep.stage,
+                workgroup_size: ep.workgroup_size,
+            })
+            .collect();
+
+        let resources = module
+            .global_variables
+            .iter()
+            .filter_map(|(_, gv)| {
+                gv.binding.as_ref().map(|b| ResourceReflection {
+                    name: gv.name.clone(),
+                    group: b.group,
+                    binding: b.binding,
+                    address_space: format!("{:?}", gv.space),
+                })
+            })
+            .collect();
+
+        let overrides = module
+            .overrides
+            .iter()
+            .map(|(_, ov)| OverrideReflection {
+                name: ov.name.clone(),
+                id: ov.id,
+            })
+            .collect();
+
+        Reflection { entry_points, resources, overrides }
+    }
+}
+
 /// Build a `Location` from a `naga::Span` against the source.
 fn location_from_span(span: naga::Span, source: &str) -> Option<Location> {
     span.is_defined().then(|| Location::from(span.location(source)))
@@ -231,5 +269,23 @@ mod tests {
         let sl = naga::SourceLocation { line_number: 3, line_position: 7, offset: 20, length: 4 };
         let loc = Location::from(sl);
         assert_eq!((loc.line, loc.column, loc.byte_offset, loc.length), (3, 7, 20, 4));
+    }
+
+    #[test]
+    fn reflection_from_module() {
+        let src = r#"
+            @group(0) @binding(1) var<uniform> u: vec4<f32>;
+            override scale: f32 = 2.0;
+            @compute @workgroup_size(8, 4, 1)
+            fn main() { _ = u; }
+        "#;
+        let module = naga::front::wgsl::Frontend::new().parse(src).unwrap();
+        let r = Reflection::from_module(&module);
+        assert_eq!(r.entry_points.len(), 1);
+        assert_eq!(r.entry_points[0].name, "main");
+        assert_eq!(r.entry_points[0].workgroup_size, [8, 4, 1]);
+        assert_eq!(r.entry_points[0].stage, naga::ShaderStage::Compute);
+        assert!(r.resources.iter().any(|res| res.group == 0 && res.binding == 1));
+        assert!(r.overrides.iter().any(|o| o.name.as_deref() == Some("scale")));
     }
 }
