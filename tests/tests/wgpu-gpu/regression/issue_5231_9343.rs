@@ -265,6 +265,7 @@ fn read_only_depth_test(ctx: &TestingContext, sample_depth: bool) {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
         rpass.set_pipeline(&write_pipeline);
         rpass.draw(0..1, 0..1);
@@ -293,6 +294,7 @@ fn read_only_depth_test(ctx: &TestingContext, sample_depth: bool) {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
         rpass.set_pipeline(&readonly_pipeline);
         if let Some(bg) = &bind_group {

@@ -99,6 +99,7 @@ async fn scissor_test_impl(
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
+                resource_table: None,
             });
             render_pass.set_pipeline(&pipeline);
             render_pass.set_scissor_rect(

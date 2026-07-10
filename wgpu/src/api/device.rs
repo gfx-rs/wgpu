@@ -969,6 +969,23 @@ impl fmt::Display for NotWebGpuBackendError {
 #[cfg(webgpu)]
 impl error::Error for NotWebGpuBackendError {}
 
+/// [`Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE`] must be enabled on the device in order to
+/// call these functions.
+impl Device {
+    /// Creates a new [`ResourceTable`].
+    ///
+    /// Requires [`Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE`].
+    #[must_use]
+    pub fn create_resource_table(&self, desc: &ResourceTableDescriptor<'_>) -> ResourceTable {
+        let table = self.inner.create_resource_table(desc);
+
+        ResourceTable {
+            inner: table,
+            size: desc.size,
+        }
+    }
+}
+
 /// Requesting a device from an [`Adapter`] failed.
 #[derive(Clone, Debug)]
 pub struct RequestDeviceError {

@@ -473,6 +473,7 @@ impl ApplicationHandler<UniformAction> for App {
                         occlusion_query_set: None,
                         timestamp_writes: None,
                         multiview_mask: None,
+                        resource_table: None,
                     });
                     render_pass.set_pipeline(&wgpu_ctx.pipeline);
                     // (9)

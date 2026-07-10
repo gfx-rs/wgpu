@@ -96,6 +96,7 @@ static USED_EMPTY_OCCLUSION_RESOLVES_TO_ZERO: GpuTestConfiguration = GpuTestConf
                 timestamp_writes: None,
                 occlusion_query_set: Some(&qs),
                 multiview_mask: None,
+                resource_table: None,
             });
             pass.begin_occlusion_query(0);
             pass.end_occlusion_query();
@@ -546,6 +547,7 @@ fn write_occlusion_query(
         timestamp_writes: None,
         occlusion_query_set: Some(qs),
         multiview_mask: None,
+        resource_table: None,
     });
     pass.set_pipeline(pipeline);
     pass.begin_occlusion_query(slot);

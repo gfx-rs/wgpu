@@ -399,6 +399,7 @@ fn render_pass(
         }),
         occlusion_query_set: None,
         multiview_mask: None,
+        resource_table: None,
     });
     *next_unused_query += 2;
 

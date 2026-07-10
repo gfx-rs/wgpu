@@ -87,6 +87,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
                 timestamp_writes: None,
                 occlusion_query_set: Some(&query_set),
                 multiview_mask: None,
+                resource_table: None,
             });
             render_pass.set_pipeline(&pipeline);
 

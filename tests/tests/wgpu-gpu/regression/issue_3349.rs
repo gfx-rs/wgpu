@@ -165,6 +165,7 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
 
         rpass.set_pipeline(&pipeline);

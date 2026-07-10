@@ -1451,6 +1451,12 @@ pub struct WebQuerySet {
 }
 
 #[derive(Debug, Clone)]
+pub struct WebResourceTable {
+    /// Unique identifier for this ResourceTable.
+    ident: crate::cmp::Identifier,
+}
+
+#[derive(Debug, Clone)]
 pub struct WebPipelineLayout {
     pub(crate) inner: webgpu_sys::GpuPipelineLayout,
     /// Unique identifier for this PipelineLayout.
@@ -1577,6 +1583,7 @@ impl_send_sync!(WebExternalTexture);
 impl_send_sync!(WebBlas);
 impl_send_sync!(WebTlas);
 impl_send_sync!(WebQuerySet);
+impl_send_sync!(WebResourceTable);
 impl_send_sync!(WebPipelineLayout);
 impl_send_sync!(WebRenderPipeline);
 impl_send_sync!(WebComputePipeline);
@@ -1607,6 +1614,7 @@ crate::cmp::impl_eq_ord_hash_proxy!(WebExternalTexture => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebBlas => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebTlas => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebQuerySet => .ident);
+crate::cmp::impl_eq_ord_hash_proxy!(WebResourceTable => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebPipelineLayout => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebRenderPipeline => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebComputePipeline => .ident);
@@ -2648,6 +2656,13 @@ impl dispatch::DeviceInterface for WebDevice {
         .into()
     }
 
+    fn create_resource_table(
+        &self,
+        _desc: &crate::ResourceTableDescriptor<'_>,
+    ) -> dispatch::DispatchResourceTable {
+        unimplemented!("Resource tables not implemented for web");
+    }
+
     fn create_command_encoder(
         &self,
         desc: &crate::CommandEncoderDescriptor<'_>,
@@ -3203,6 +3218,37 @@ impl Drop for WebQuerySet {
     }
 }
 
+impl dispatch::ResourceTableInterface for WebResourceTable {
+    fn destroy(&self) {
+        unimplemented!("Resource tables not implemented for web");
+    }
+
+    fn update(
+        &self,
+        _slot: u32,
+        _texture_view: &dispatch::DispatchTextureView,
+    ) -> Result<(), crate::ResourceTableError> {
+        unimplemented!("Resource tables not implemented for web");
+    }
+
+    fn insert_binding(
+        &self,
+        _texture_view: &dispatch::DispatchTextureView,
+    ) -> Result<u32, crate::ResourceTableError> {
+        unimplemented!("Resource tables not implemented for web");
+    }
+
+    fn remove_binding(&self, _slot: u32) -> Result<(), crate::ResourceTableError> {
+        unimplemented!("Resource tables not implemented for web");
+    }
+}
+
+impl Drop for WebResourceTable {
+    fn drop(&mut self) {
+        // no-op
+    }
+}
+
 impl dispatch::PipelineLayoutInterface for WebPipelineLayout {}
 impl Drop for WebPipelineLayout {
     fn drop(&mut self) {
@@ -3630,6 +3676,10 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
 
     fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
         panic!("IMMEDIATES feature must be enabled to call set_immediates")
+    }
+
+    fn set_resource_table(&mut self, _resource_table: Option<&dispatch::DispatchResourceTable>) {
+        unimplemented!("Resource tables not implemented for web");
     }
 
     fn insert_debug_marker(&mut self, label: &str) {

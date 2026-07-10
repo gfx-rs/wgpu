@@ -195,6 +195,10 @@ pub trait DeviceInterface: CommonTraits {
     fn create_tlas(&self, desc: &crate::CreateTlasDescriptor<'_>) -> DispatchTlas;
     fn create_sampler(&self, desc: &crate::SamplerDescriptor<'_>) -> DispatchSampler;
     fn create_query_set(&self, desc: &crate::QuerySetDescriptor<'_>) -> DispatchQuerySet;
+    fn create_resource_table(
+        &self,
+        desc: &crate::ResourceTableDescriptor<'_>,
+    ) -> DispatchResourceTable;
     fn create_command_encoder(
         &self,
         desc: &crate::CommandEncoderDescriptor<'_>,
@@ -324,6 +328,19 @@ pub trait QuerySetInterface: CommonTraits {
 
     fn count(&self) -> u32;
 }
+pub trait ResourceTableInterface: CommonTraits {
+    fn destroy(&self);
+    fn update(
+        &self,
+        slot: u32,
+        texture_view: &DispatchTextureView,
+    ) -> Result<(), crate::ResourceTableError>;
+    fn insert_binding(
+        &self,
+        texture_view: &DispatchTextureView,
+    ) -> Result<u32, crate::ResourceTableError>;
+    fn remove_binding(&self, slot: u32) -> Result<(), crate::ResourceTableError>;
+}
 pub trait PipelineLayoutInterface: CommonTraits {}
 pub trait RenderPipelineInterface: CommonTraits {
     fn get_bind_group_layout(&self, index: u32) -> DispatchBindGroupLayout;
@@ -418,6 +435,7 @@ pub trait ComputePassInterface: CommonTraits + Drop {
         offsets: &[crate::DynamicOffset],
     );
     fn set_immediates(&mut self, offset: u32, data: &[u8]);
+    fn set_resource_table(&mut self, resource_table: Option<&DispatchResourceTable>);
 
     fn insert_debug_marker(&mut self, label: &str);
     fn push_debug_group(&mut self, group_label: &str);
@@ -1080,6 +1098,7 @@ dispatch_types! {ref type DispatchExternalTexture: ExternalTextureInterface = Co
 dispatch_types! {ref type DispatchBlas: BlasInterface = CoreBlas, WebBlas, DynBlas}
 dispatch_types! {ref type DispatchTlas: TlasInterface = CoreTlas, WebTlas, DynTlas}
 dispatch_types! {ref type DispatchQuerySet: QuerySetInterface = CoreQuerySet, WebQuerySet, DynQuerySet}
+dispatch_types! {ref type DispatchResourceTable: ResourceTableInterface = CoreResourceTable, WebResourceTable, DynResourceTable}
 dispatch_types! {ref type DispatchPipelineLayout: PipelineLayoutInterface = CorePipelineLayout, WebPipelineLayout, DynPipelineLayout}
 dispatch_types! {ref type DispatchRenderPipeline: RenderPipelineInterface = CoreRenderPipeline, WebRenderPipeline, DynRenderPipeline}
 dispatch_types! {ref type DispatchComputePipeline: ComputePipelineInterface = CoreComputePipeline, WebComputePipeline, DynComputePipeline}

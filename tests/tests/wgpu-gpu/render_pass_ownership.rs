@@ -93,6 +93,7 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
             timestamp_writes: None,
             occlusion_query_set: Some(&occlusion_query_set),
             multiview_mask: None,
+            resource_table: None,
         });
 
         // Drop render pass attachments right away.

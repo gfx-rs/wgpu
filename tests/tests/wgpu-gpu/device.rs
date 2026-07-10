@@ -324,6 +324,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
         drop(pass);
         ctx.queue.submit([encoder_for_render_pass.finish()]);

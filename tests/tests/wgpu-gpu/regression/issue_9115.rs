@@ -147,6 +147,7 @@ async fn immediates_with_uniform_in_single_module(ctx: TestingContext) {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
 
         rpass.set_pipeline(&pipeline);

@@ -680,6 +680,7 @@ fn transient_invalid_storeop() {
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
+                resource_table: None,
             });
 
             drop(invalid_render_pass);

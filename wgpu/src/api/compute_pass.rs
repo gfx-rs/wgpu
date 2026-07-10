@@ -173,6 +173,25 @@ impl ComputePass<'_> {
     }
 }
 
+/// [`Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE`] must be enabled on the device in order to
+/// call these functions.
+impl ComputePass<'_> {
+    /// Sets the active resource table.
+    ///
+    /// Subsequent dispatch calls' shader executions will be able to access resources in this
+    /// table via the WGSL `getResource<T>(index)` builtin, provided the active pipeline's layout
+    /// was created with [`PipelineLayoutDescriptor::uses_resource_table`] set.
+    ///
+    /// Pass `None` to unbind any currently-set resource table.
+    ///
+    /// Requires [`Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE`]. This is a native-only,
+    /// experimental feature.
+    pub fn set_resource_table(&mut self, resource_table: Option<&ResourceTable>) {
+        let resource_table = resource_table.map(|table| &table.inner);
+        self.inner.set_resource_table(resource_table);
+    }
+}
+
 /// [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
 impl ComputePass<'_> {
     /// Issue a timestamp command at this point in the queue. The timestamp will be written to the specified query set, at the specified index.

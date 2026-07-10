@@ -372,6 +372,7 @@ impl RenderpassState {
             timestamp_writes: None,
             depth_stencil_attachment: None,
             multiview_mask: None,
+            resource_table: None,
         });
 
         let start_idx = pass_number * draws_per_pass;
@@ -421,6 +422,7 @@ impl RenderpassState {
             timestamp_writes: None,
             depth_stencil_attachment: None,
             multiview_mask: None,
+            resource_table: None,
         });
 
         render_pass.set_pipeline(self.bindless_pipeline.as_ref().unwrap());
