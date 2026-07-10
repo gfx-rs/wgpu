@@ -1,7 +1,11 @@
 //! Pure translation core: parse, validate, and emit output.
 
-use crate::cli::{Args, InputKind};
+use crate::cli::{Args, InputKind, OutputFormat};
 use crate::error::CliError;
+use crate::output::{
+    glsl_parse_errors_to_diagnostics, spv_error_to_diagnostic, validation_error_to_diagnostic,
+    wgsl_parse_error_to_diagnostic, Diagnostic, JsonOutput, Reflection,
+};
 use crate::params::Parameters;
 use anyhow::{anyhow, Context as _};
 use naga::compact::KeepUnused;
@@ -15,10 +19,19 @@ pub struct Parsed {
     pub language: naga::back::spv::SourceLanguage,
 }
 
-pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<()> {
+/// Run the naga-cli pipeline.
+///
+/// Returns `Ok(true)` on success, `Ok(false)` when a handled failure has already
+/// been emitted (JSON to stdout in json mode, or stderr diagnostics in text mode),
+/// and `Err(e)` for hard/unexpected errors.
+pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
     if args.bulk_validate {
-        return bulk_validate(&args.files, params);
+        // bulk_validate is text-only for v1; json mode is not supported there.
+        bulk_validate(&args.files, params)?;
+        return Ok(true);
     }
+
+    let is_json = args.format == OutputFormat::Json;
 
     let mut files = args.files.iter();
 
@@ -35,11 +48,37 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<()> {
 
     let file_name = input_path.to_string_lossy().into_owned();
 
-    let Parsed {
+    // In JSON mode we collect diagnostics and a success flag instead of
+    // short-circuiting on errors.
+    let mut json_diagnostics: Vec<Diagnostic> = Vec::new();
+    let mut json_reflection: Option<Reflection> = None;
+
+    // --- Parse step ---
+    // In JSON mode, parse_input_json returns typed parse failures as diagnostics.
+    // In text mode, we propagate the anyhow error upward normally.
+    let parsed = if is_json {
+        match parse_input_json(input_path, input, params) {
+            Ok(p) => Some(p),
+            Err(diags) => {
+                json_diagnostics.extend(diags);
+                None
+            }
+        }
+    } else {
+        Some(parse_input(input_path, input, params)?)
+    };
+
+    // If parse failed in json mode, emit JSON and return.
+    let Some(Parsed {
         mut module,
         input_text,
         language,
-    } = parse_input(input_path, input, params)?;
+    }) = parsed
+    else {
+        let out = JsonOutput { success: false, diagnostics: json_diagnostics, reflection: None };
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(false);
+    };
 
     // Include debugging information if requested.
     // We build a local copy of spv_out with debug_info set, so we can borrow
@@ -95,13 +134,17 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<()> {
     {
         Ok(info) => Some(info),
         Err(error) => {
-            // TODO(phase 4): route through structured diagnostics
-            // Validation failure is not fatal. Just report the error.
-            if let Some(input) = &input_text {
-                let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
+            if is_json {
+                json_diagnostics
+                    .push(validation_error_to_diagnostic(&error, input_text.as_deref()));
             } else {
-                crate::error::print_err(&error);
+                // Validation failure is not fatal. Just report the error.
+                if let Some(input) = &input_text {
+                    let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
+                    error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
+                } else {
+                    crate::error::print_err(&error);
+                }
             }
             None
         }
@@ -128,44 +171,80 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<()> {
             {
                 Ok(info) => Some(info),
                 Err(error) => {
-                    // TODO(phase 4): route through structured diagnostics
-                    // Validation failure is not fatal. Just report the error.
-                    eprintln!("Error validating compacted module:");
-                    if let Some(input) = &input_text {
-                        let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                        error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
+                    if is_json {
+                        json_diagnostics.push(validation_error_to_diagnostic(
+                            &error,
+                            input_text.as_deref(),
+                        ));
                     } else {
-                        crate::error::print_err(&error);
+                        eprintln!("Error validating compacted module:");
+                        if let Some(input) = &input_text {
+                            let filename =
+                                input_path.file_name().and_then(std::ffi::OsStr::to_str);
+                            error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
+                        } else {
+                            crate::error::print_err(&error);
+                        }
                     }
                     None
                 }
             }
         } else {
-            eprintln!("Skipping compaction due to validation failure.");
+            if !is_json {
+                eprintln!("Skipping compaction due to validation failure.");
+            }
             None
         }
     } else {
         info
     };
 
-    // If no output was requested, then report validation results and stop here.
+    // If no output was requested, report validation results and stop here.
     //
     // If the user asked for output, don't stop: some output formats (".txt",
     // ".dot", ".bin") can be generated even without a `ModuleInfo`.
     if output_paths.clone().next().is_none() {
-        if info.is_some() {
+        if is_json {
+            let success = info.is_some();
+            if success {
+                json_reflection = Some(Reflection::from_module(&module));
+            }
+            let out = JsonOutput {
+                success,
+                diagnostics: json_diagnostics,
+                reflection: json_reflection,
+            };
+            println!("{}", serde_json::to_string_pretty(&out)?);
+            return Ok(success);
+        } else if info.is_some() {
             println!("Validation successful");
-            return Ok(());
+            return Ok(true);
         } else {
-            return Err(CliError("Validation failed").into());
+            return Ok(false);
         }
+    }
+
+    // There are output paths; run them.
+    if is_json && info.is_some() {
+        json_reflection = Some(Reflection::from_module(&module));
     }
 
     for output_path in output_paths {
         write_output(&module, &info, params, spv_out_with_debug.as_ref(), output_path)?;
     }
 
-    Ok(())
+    if is_json {
+        let success = !json_diagnostics.iter().any(|d| matches!(d.severity, crate::output::Severity::Error));
+        let out = JsonOutput {
+            success,
+            diagnostics: json_diagnostics,
+            reflection: json_reflection,
+        };
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(success);
+    }
+
+    Ok(true)
 }
 
 fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow::Result<Parsed> {
@@ -258,6 +337,166 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
                 module,
                 input_text: Some(input),
                 language: naga::back::spv::SourceLanguage::GLSL,
+            }
+        }
+    })
+}
+
+/// JSON-mode variant of `parse_input`: on parse failure, returns structured
+/// diagnostics instead of an anyhow error. Hard errors (I/O, UTF-8) that
+/// are not parse failures are still returned as `anyhow::Error` by using
+/// a nested result; we convert them to a single diagnostic message here.
+fn parse_input_json(
+    input_path: &Path,
+    input: Vec<u8>,
+    params: &Parameters,
+) -> Result<Parsed, Vec<Diagnostic>> {
+    let input_kind = match params.input_kind {
+        Some(kind) => kind,
+        None => {
+            // Extension detection errors are hard errors; convert to a single diagnostic.
+            let result: anyhow::Result<InputKind> = (|| {
+                input_path
+                    .extension()
+                    .context("Input filename has no extension")?
+                    .to_str()
+                    .context("Input filename not valid unicode")?
+                    .parse::<InputKind>()
+                    .map_err(|e| anyhow!("Unable to determine --input-kind from filename: {e}"))
+            })();
+            match result {
+                Ok(k) => k,
+                Err(e) => {
+                    return Err(vec![Diagnostic {
+                        severity: crate::output::Severity::Error,
+                        message: e.to_string(),
+                        location: None,
+                        labels: Vec::new(),
+                        notes: Vec::new(),
+                    }]);
+                }
+            }
+        }
+    };
+
+    Ok(match input_kind {
+        InputKind::Bin => {
+            let module = bincode::serde::decode_from_slice(&input, bincode::config::standard())
+                .map_err(|e| {
+                    vec![Diagnostic {
+                        severity: crate::output::Severity::Error,
+                        message: e.to_string(),
+                        location: None,
+                        labels: Vec::new(),
+                        notes: Vec::new(),
+                    }]
+                })?
+                .0;
+            Parsed {
+                module,
+                input_text: None,
+                language: naga::back::spv::SourceLanguage::Unknown,
+            }
+        }
+        InputKind::Spv => {
+            let module =
+                naga::front::spv::parse_u8_slice(&input, &params.spv_in).map_err(|e| {
+                    vec![spv_error_to_diagnostic(&e)]
+                })?;
+            Parsed {
+                module,
+                input_text: None,
+                language: naga::back::spv::SourceLanguage::Unknown,
+            }
+        }
+        InputKind::Wgsl => {
+            let input = String::from_utf8(input).map_err(|e| {
+                vec![Diagnostic {
+                    severity: crate::output::Severity::Error,
+                    message: e.to_string(),
+                    location: None,
+                    labels: Vec::new(),
+                    notes: Vec::new(),
+                }]
+            })?;
+            let options = naga::front::wgsl::Options {
+                parse_doc_comments: false,
+                capabilities: params.capabilities,
+            };
+            let mut frontend = naga::front::wgsl::Frontend::new_with_options(options);
+            match frontend.parse(&input) {
+                Ok(module) => Parsed {
+                    module,
+                    input_text: Some(input),
+                    language: naga::back::spv::SourceLanguage::WGSL,
+                },
+                Err(ref e) => {
+                    return Err(vec![wgsl_parse_error_to_diagnostic(e, &input)]);
+                }
+            }
+        }
+        InputKind::Glsl => {
+            let shader_stage: Result<naga::ShaderStage, Vec<Diagnostic>> =
+                match params.shader_stage {
+                    Some(stage) => Ok(stage.to_stage()),
+                    None => {
+                        let result: anyhow::Result<naga::ShaderStage> = (|| {
+                            let file_stem = input_path
+                                .file_stem()
+                                .context("Unable to determine file stem from input filename.")?;
+                            let inner_ext = Path::new(file_stem)
+                                .extension()
+                                .context(
+                                    "Unable to determine inner extension from input filename.",
+                                )?
+                                .to_str()
+                                .context("Input filename not valid unicode")?;
+                            Ok(match inner_ext {
+                                "vert" => naga::ShaderStage::Vertex,
+                                "frag" => naga::ShaderStage::Fragment,
+                                "comp" => naga::ShaderStage::Compute,
+                                other => {
+                                    return Err(anyhow!("Unknown GLSL stage extension: {other}"))
+                                }
+                            })
+                        })();
+                        result.map_err(|e| {
+                            vec![Diagnostic {
+                                severity: crate::output::Severity::Error,
+                                message: e.to_string(),
+                                location: None,
+                                labels: Vec::new(),
+                                notes: Vec::new(),
+                            }]
+                        })
+                    }
+                };
+            let shader_stage = shader_stage?;
+            let input = String::from_utf8(input).map_err(|e| {
+                vec![Diagnostic {
+                    severity: crate::output::Severity::Error,
+                    message: e.to_string(),
+                    location: None,
+                    labels: Vec::new(),
+                    notes: Vec::new(),
+                }]
+            })?;
+            let mut parser = naga::front::glsl::Frontend::default();
+            match parser.parse(
+                &naga::front::glsl::Options {
+                    stage: shader_stage,
+                    defines: params.defines.clone(),
+                },
+                &input,
+            ) {
+                Ok(module) => Parsed {
+                    module,
+                    input_text: Some(input),
+                    language: naga::back::spv::SourceLanguage::GLSL,
+                },
+                Err(ref errors) => {
+                    return Err(glsl_parse_errors_to_diagnostics(errors, &input));
+                }
             }
         }
     })

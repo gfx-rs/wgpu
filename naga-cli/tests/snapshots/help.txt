@@ -129,6 +129,12 @@ Options:
       --print-config-schema
           Print the JSON Schema for the config document and exit
 
+      --format <FORMAT>
+          Output format for diagnostics and reflection: `text` (human, default) or `json`
+          
+          [default: text]
+          [possible values: text, json]
+
   -h, --help
           Print help (see a summary with '-h')
 
