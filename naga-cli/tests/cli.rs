@@ -607,28 +607,23 @@ fn config_drives_compact() {
 }
 
 #[test]
-fn before_compaction_composes_with_config() {
-    // --before-compaction is I/O (an output path), so it still composes with --config.
+fn before_compaction_conflicts_with_config() {
+    // Every flag is exclusive with --config, including --before-compaction.
     let dir = std::env::temp_dir().join("naga_cli_cfg_before_compaction");
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("s.wgsl");
     std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
     let out = dir.join("o.spv");
-    let pre = dir.join("pre.txt");
     let r = naga()
         .arg(&src)
         .arg(&out)
         .args(["--config-json", "{}"])
         .arg("--before-compaction")
-        .arg(&pre)
+        .arg(dir.join("pre.txt"))
         .output()
         .unwrap();
-    assert!(
-        r.status.success(),
-        "stderr: {}",
-        String::from_utf8_lossy(&r.stderr)
-    );
-    assert!(pre.exists() && std::fs::metadata(&pre).unwrap().len() > 0);
+    assert!(!r.status.success());
+    assert!(String::from_utf8_lossy(&r.stderr).contains("cannot be used with"));
 }
 
 #[test]
@@ -739,30 +734,15 @@ fn stdin_requires_input_kind() {
 }
 
 #[test]
-fn stdin_input_composes_with_config() {
-    // --input-kind / --shader-stage are I/O concerns, so they must compose with --config
-    // (needed to read stdin at all). This must NOT be a clap conflict.
-    use std::io::Write;
-    let mut child = naga()
+fn input_kind_conflicts_with_config() {
+    // Every flag is exclusive with --config, including --input-kind. (Consequence: reading
+    // stdin, which needs --input-kind, is a flag-mode-only feature.)
+    let out = naga()
         .args(["-", "--input-kind", "wgsl", "--config-json", "{}"])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
+        .output()
         .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(b"@compute @workgroup_size(1) fn main() {}")
-        .unwrap();
-    let out = child.wait_with_output().unwrap();
-    assert!(
-        out.status.success(),
-        "stderr: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    assert!(!String::from_utf8_lossy(&out.stderr).contains("cannot be used with"));
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("cannot be used with"));
 }
 
 #[test]
