@@ -325,3 +325,69 @@ fn json_unknown_output_extension_keeps_stdout_pure() {
         .expect("stdout must be a single JSON document");
     assert!(v.get("success").is_some());
 }
+
+/// True if a tool is on PATH (tests skip when absent).
+fn tool_on_path(name: &str) -> bool {
+    which::which(name).is_ok()
+}
+
+#[test]
+fn spirv_val_hook_when_available() {
+    if !tool_on_path("spirv-val") {
+        eprintln!("skipping spirv_val_hook_when_available: spirv-val not on PATH");
+        return;
+    }
+    let dir = std::env::temp_dir().join("naga_cli_p5_val");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
+    let out = dir.join("s.spv");
+    let r = naga().arg(&src).arg(&out).arg("--spirv-val").output().unwrap();
+    assert!(r.status.success(), "stderr: {}", String::from_utf8_lossy(&r.stderr));
+    assert!(out.exists());
+}
+
+#[test]
+fn spirv_opt_hook_when_available() {
+    if !tool_on_path("spirv-opt") {
+        eprintln!("skipping spirv_opt_hook_when_available: spirv-opt not on PATH");
+        return;
+    }
+    let dir = std::env::temp_dir().join("naga_cli_p5_opt");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
+    let out = dir.join("s.spv");
+    let r = naga().arg(&src).arg(&out).arg("--spirv-opt").output().unwrap();
+    assert!(r.status.success(), "stderr: {}", String::from_utf8_lossy(&r.stderr));
+    // Still valid SPIR-V after optimization.
+    assert_eq!(&std::fs::read(&out).unwrap()[0..4], &[0x03, 0x02, 0x23, 0x07]);
+}
+
+#[test]
+fn dxc_hook_when_available() {
+    if !tool_on_path("dxc") {
+        eprintln!("skipping dxc_hook_when_available: dxc not on PATH");
+        return;
+    }
+    let dir = std::env::temp_dir().join("naga_cli_p5_dxc");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
+    let out = dir.join("s.hlsl");
+    let r = naga().arg(&src).arg(&out).args(["--dxc", "--shader-model", "60"]).output().unwrap();
+    assert!(r.status.success(), "stderr: {}", String::from_utf8_lossy(&r.stderr));
+    assert!(dir.join("s.main.dxil").exists());
+}
+
+#[test]
+fn spirv_val_without_spv_output_errors() {
+    let dir = std::env::temp_dir().join("naga_cli_p5_noout");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
+    // No .spv output path → --spirv-val should error (not silently no-op).
+    let r = naga().arg(&src).arg("--spirv-val").output().unwrap();
+    assert!(!r.status.success());
+    assert!(String::from_utf8_lossy(&r.stderr).to_lowercase().contains("spir"));
+}
