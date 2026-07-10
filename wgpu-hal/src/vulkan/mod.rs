@@ -38,7 +38,14 @@ mod swapchain;
 pub use adapter::PhysicalDeviceFeatures;
 
 use alloc::{boxed::Box, ffi::CString, sync::Arc, vec::Vec};
-use core::{borrow::Borrow, ffi::CStr, fmt, marker::PhantomData, mem, num::NonZeroU32};
+use core::{
+    borrow::Borrow,
+    ffi::{c_void, CStr},
+    fmt,
+    marker::PhantomData,
+    mem,
+    num::NonZeroU32,
+};
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
@@ -274,6 +281,44 @@ impl Surface {
             .downcast_mut::<swapchain::NativeSwapchain>()
             .expect("Surface should have a native Vulkan swapchain")
             .set_next_present_time(present_timing);
+    }
+
+    /// Set a `pNext` chain of extension structs to be attached to the [`vk::PresentInfoKHR`]
+    /// of the next [presentation](crate::Queue::present()) of this surface.
+    ///
+    /// This supports presentation extensions that `wgpu-hal` has no dedicated support
+    /// for, such as [VK_NV_present_metering]. The corresponding device extension must be
+    /// enabled at device creation, e.g. with
+    /// [`Adapter::open_with_callback()`](super::vulkan::Adapter::open_with_callback).
+    ///
+    /// The chain is consumed by the next presentation: it replaces any chain set by a
+    /// previous call that hasn't been presented yet, and is discarded unread if the
+    /// surface is reconfigured first.
+    ///
+    /// # Safety
+    ///
+    /// - `chain` must point to a valid `pNext` chain of structs that can extend
+    ///   [`vk::PresentInfoKHR`], whose extensions are enabled on the device.
+    /// - The chain must stay valid, and must not be read or written, until the next
+    ///   presentation of this surface completes or the surface is reconfigured. Fields
+    ///   the driver wrote during presentation may be read afterwards.
+    ///
+    /// # Panics
+    ///
+    /// - If the surface hasn't been configured.
+    /// - If the surface has been configured for a DXGI swapchain.
+    ///
+    /// [VK_NV_present_metering]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_present_metering.html
+    #[track_caller]
+    pub unsafe fn set_next_present_chain(&self, chain: *mut c_void) {
+        let mut swapchain = self.swapchain.write();
+        let swapchain = swapchain
+            .as_mut()
+            .expect("Surface should have been configured")
+            .as_any_mut()
+            .downcast_mut::<swapchain::NativeSwapchain>()
+            .expect("Surface should have a native Vulkan swapchain");
+        unsafe { swapchain.set_next_present_chain(chain) };
     }
 }
 
