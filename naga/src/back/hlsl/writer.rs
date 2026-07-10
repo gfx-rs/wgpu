@@ -1999,7 +1999,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         func_ctx: &back::FunctionCtx,
         module: &Module,
     ) -> bool {
-        self.options.zero_initialize_workgroup_memory
+        self.options.zero_initialize_workgroup_memory != back::ZeroInitializeWorkgroupMemoryMode::None
             && func_ctx.ty.is_compute_like_entry_point(module)
             && module.global_variables.iter().any(|(handle, var)| {
                 !func_ctx.info[handle].is_empty() && var.space.is_workgroup_like()

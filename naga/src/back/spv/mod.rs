@@ -1054,17 +1054,7 @@ impl schemars::JsonSchema for WriterFlags {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
-pub enum ZeroInitializeWorkgroupMemoryMode {
-    /// Via `VK_KHR_zero_initialize_workgroup_memory` or Vulkan 1.3
-    Native,
-    /// Via assignments + barrier
-    Polyfill,
-    None,
-}
+pub use crate::back::ZeroInitializeWorkgroupMemoryMode;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]

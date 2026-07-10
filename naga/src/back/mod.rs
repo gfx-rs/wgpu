@@ -396,3 +396,18 @@ pub enum RayIntersectionType {
     Triangle = 1,
     BoundingBox = 4,
 }
+
+/// How to handle zero-initialization of workgroup-address-space variables.
+///
+/// This is shared across all backends that support workgroup memory initialization.
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub enum ZeroInitializeWorkgroupMemoryMode {
+    /// Via `VK_KHR_zero_initialize_workgroup_memory` or Vulkan 1.3
+    Native,
+    /// Via assignments + barrier
+    Polyfill,
+    None,
+}

@@ -8439,7 +8439,7 @@ mod workgroup_mem_init {
             fun_info: &valid::FunctionInfo,
         ) -> bool {
             let is_task = ep.stage == crate::ShaderStage::Task;
-            options.zero_initialize_workgroup_memory
+            options.zero_initialize_workgroup_memory != back::ZeroInitializeWorkgroupMemoryMode::None
                 && ep.stage.compute_like()
                 && module.global_variables.iter().any(|(handle, var)| {
                     let is_right_address_space = var.space == crate::AddressSpace::WorkGroup

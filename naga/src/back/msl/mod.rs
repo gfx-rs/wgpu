@@ -315,7 +315,7 @@ pub struct Options {
     /// Bounds checking policies.
     pub bounds_check_policies: index::BoundsCheckPolicies,
     /// Should workgroup variables be zero initialized (by polyfilling)?
-    pub zero_initialize_workgroup_memory: bool,
+    pub zero_initialize_workgroup_memory: super::ZeroInitializeWorkgroupMemoryMode,
     /// If set, loops will have code injected into them, forcing the compiler
     /// to think the number of iterations is bounded.
     pub force_loop_bounding: bool,
@@ -342,7 +342,7 @@ impl Default for Options {
             spirv_cross_compatibility: false,
             fake_missing_bindings: true,
             bounds_check_policies: index::BoundsCheckPolicies::default(),
-            zero_initialize_workgroup_memory: true,
+            zero_initialize_workgroup_memory: super::ZeroInitializeWorkgroupMemoryMode::Polyfill,
             force_loop_bounding: true,
             task_dispatch_limits: None,
             mesh_shader_primitive_indices_clamp: true,

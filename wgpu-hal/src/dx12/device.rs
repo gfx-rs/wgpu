@@ -289,7 +289,8 @@ impl super::Device {
         let stage_bit = auxil::map_naga_stage(naga_stage);
 
         let needs_temp_options = stage.zero_initialize_workgroup_memory
-            != layout.naga_options.zero_initialize_workgroup_memory
+            != (layout.naga_options.zero_initialize_workgroup_memory
+                != naga::back::ZeroInitializeWorkgroupMemoryMode::None)
             || stage.module.runtime_checks.bounds_checks != layout.naga_options.restrict_indexing
             || !stage.module.runtime_checks.task_shader_dispatch_tracking
             || !stage
@@ -306,7 +307,11 @@ impl super::Device {
         let mut temp_options;
         let naga_options = if needs_temp_options {
             temp_options = layout.naga_options.clone();
-            temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
+            temp_options.zero_initialize_workgroup_memory = if stage.zero_initialize_workgroup_memory {
+                naga::back::ZeroInitializeWorkgroupMemoryMode::Polyfill
+            } else {
+                naga::back::ZeroInitializeWorkgroupMemoryMode::None
+            };
             temp_options.restrict_indexing = stage.module.runtime_checks.bounds_checks;
             temp_options.force_loop_bounding = stage.module.runtime_checks.force_loop_bounding;
             if !stage.module.runtime_checks.task_shader_dispatch_tracking {
@@ -1485,7 +1490,7 @@ impl crate::Device for super::Device {
                 special_constants_binding,
                 immediates_target,
                 dynamic_storage_buffer_offsets_targets,
-                zero_initialize_workgroup_memory: true,
+                zero_initialize_workgroup_memory: naga::back::ZeroInitializeWorkgroupMemoryMode::Polyfill,
                 restrict_indexing: true,
                 sampler_heap_target,
                 sampler_buffer_binding_map,

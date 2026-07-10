@@ -349,14 +349,19 @@ impl super::Device {
 
             let mut output = String::new();
             let needs_temp_options = stage.zero_initialize_workgroup_memory
-                != context.layout.naga_options.zero_initialize_workgroup_memory;
+                != (context.layout.naga_options.zero_initialize_workgroup_memory
+                    != naga::back::ZeroInitializeWorkgroupMemoryMode::None);
             let mut temp_options;
             let naga_options = if needs_temp_options {
                 // We use a conditional here, as cloning the naga_options could be expensive
                 // That is, we want to avoid doing that unless we cannot avoid it
                 temp_options = context.layout.naga_options.clone();
                 temp_options.zero_initialize_workgroup_memory =
-                    stage.zero_initialize_workgroup_memory;
+                    if stage.zero_initialize_workgroup_memory {
+                        naga::back::ZeroInitializeWorkgroupMemoryMode::Polyfill
+                    } else {
+                        naga::back::ZeroInitializeWorkgroupMemoryMode::None
+                    };
                 &temp_options
             } else {
                 &context.layout.naga_options
@@ -1372,7 +1377,7 @@ impl crate::Device for super::Device {
                 version: self.shared.shading_language_version,
                 writer_flags,
                 binding_map,
-                zero_initialize_workgroup_memory: true,
+                zero_initialize_workgroup_memory: naga::back::ZeroInitializeWorkgroupMemoryMode::Polyfill,
             },
         })
     }

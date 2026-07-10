@@ -220,7 +220,11 @@ impl super::Device {
                         // TODO: support bounds checks on binding arrays
                         binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                     },
-                    zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
+                    zero_initialize_workgroup_memory: if stage.zero_initialize_workgroup_memory {
+                        naga::back::ZeroInitializeWorkgroupMemoryMode::Polyfill
+                    } else {
+                        naga::back::ZeroInitializeWorkgroupMemoryMode::None
+                    },
                     force_loop_bounding: stage.module.runtime_checks.force_loop_bounding,
                     task_dispatch_limits: stage
                         .module

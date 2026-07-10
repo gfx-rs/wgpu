@@ -549,7 +549,7 @@ pub struct Options {
     pub external_texture_binding_map: ExternalTextureBindingMap,
 
     /// Should workgroup variables be zero initialized (by polyfilling)?
-    pub zero_initialize_workgroup_memory: bool,
+    pub zero_initialize_workgroup_memory: super::ZeroInitializeWorkgroupMemoryMode,
     /// Should we restrict indexing of vectors, matrices and arrays?
     pub restrict_indexing: bool,
     /// If set, loops will have code injected into them, forcing the compiler
@@ -583,7 +583,7 @@ impl Default for Options {
             immediates_target: None,
             dynamic_storage_buffer_offsets_targets: alloc::collections::BTreeMap::new(),
             external_texture_binding_map: ExternalTextureBindingMap::default(),
-            zero_initialize_workgroup_memory: true,
+            zero_initialize_workgroup_memory: super::ZeroInitializeWorkgroupMemoryMode::Polyfill,
             restrict_indexing: true,
             force_loop_bounding: true,
             task_dispatch_limits: None,
