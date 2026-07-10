@@ -30,7 +30,6 @@ impl From<naga::SourceLocation> for Location {
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
     Error,
-    #[allow(dead_code)]
     Warning,
 }
 

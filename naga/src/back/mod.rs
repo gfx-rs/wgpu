@@ -448,6 +448,14 @@ impl Default for CommonBackendOptions {
 /// How to handle zero-initialization of workgroup-address-space variables.
 ///
 /// This is shared across all backends that support workgroup memory initialization.
+///
+/// Only the SPIR-V backend honors [`Native`]; the MSL, HLSL, and GLSL backends
+/// have no native zero-init path and treat [`Native`] identically to [`Polyfill`]
+/// (they emit zeroing code whenever the mode is not [`None`]).
+///
+/// [`Native`]: ZeroInitializeWorkgroupMemoryMode::Native
+/// [`Polyfill`]: ZeroInitializeWorkgroupMemoryMode::Polyfill
+/// [`None`]: ZeroInitializeWorkgroupMemoryMode::None
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]

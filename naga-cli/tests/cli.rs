@@ -413,3 +413,42 @@ fn dxc_without_hlsl_output_errors() {
     assert!(!r.status.success());
     assert!(String::from_utf8_lossy(&r.stderr).to_lowercase().contains("hlsl"));
 }
+
+#[test]
+fn bulk_validate_json_is_rejected() {
+    let dir = std::env::temp_dir().join("naga_cli_p6_bulkjson");
+    std::fs::create_dir_all(&dir).unwrap();
+    let a = dir.join("a.wgsl");
+    std::fs::write(&a, "@compute @workgroup_size(1) fn main() {}").unwrap();
+    let out = naga().args(["--bulk-validate", "--format", "json"]).arg(&a).output().unwrap();
+    assert!(!out.status.success());
+    assert!(
+        String::from_utf8_lossy(&out.stderr).to_lowercase().contains("bulk"),
+        "expected a clear bulk+json error, got: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn json_debug_symbols_warning_is_a_diagnostic() {
+    // `-g` with non-human-readable (bincode) input triggers the advisory warning.
+    // First produce a .bin module, then feed it back with -g in json mode.
+    let dir = std::env::temp_dir().join("naga_cli_p6_gwarn");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
+    let bin = dir.join("s.bin");
+    let mk = naga().arg(&src).arg(&bin).output().unwrap();
+    assert!(mk.status.success(), "stderr: {}", String::from_utf8_lossy(&mk.stderr));
+
+    let out = naga().arg(&bin).args(["--format", "json", "-g"]).output().unwrap();
+    // Producing a .bin re-import with -g: validation still succeeds → success true,
+    // but a warning diagnostic about -g on non-human-readable input is present.
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let diags = v["diagnostics"].as_array().unwrap();
+    assert!(
+        diags.iter().any(|d| d["severity"] == "warning"),
+        "expected a warning diagnostic in json mode, got: {}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+}
