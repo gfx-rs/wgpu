@@ -541,15 +541,13 @@ fn config_and_config_json_mutually_exclusive() {
 }
 
 #[test]
-fn config_composes_with_compact_flag() {
-    let dir = std::env::temp_dir().join("naga_cli_p2_cfg_compact");
+fn config_conflicts_with_compact_flag() {
+    // Processing flags (compact/-g/spirv-*/dxc) are config keys now, so passing them
+    // as flags alongside --config is a hard conflict.
+    let dir = std::env::temp_dir().join("naga_cli_cfg_compact_conflict");
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("s.wgsl");
-    std::fs::write(
-        &src,
-        "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }",
-    )
-    .unwrap();
+    std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
     let out = dir.join("o.spv");
     let r = naga()
         .arg(&src)
@@ -559,13 +557,78 @@ fn config_composes_with_compact_flag() {
         .arg("--compact")
         .output()
         .unwrap();
-    // Must NOT be a clap conflict error; compaction + config compose.
+    assert!(!r.status.success());
+    assert!(String::from_utf8_lossy(&r.stderr).contains("cannot be used with"));
+}
+
+#[test]
+fn config_conflicts_with_dxc_flag() {
+    let dir = std::env::temp_dir().join("naga_cli_cfg_dxc_conflict");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
+    let out = dir.join("o.hlsl");
+    let r = naga()
+        .arg(&src)
+        .arg(&out)
+        .args(["--config-json", "{}", "--dxc"])
+        .output()
+        .unwrap();
+    assert!(!r.status.success());
+    assert!(String::from_utf8_lossy(&r.stderr).contains("cannot be used with"));
+}
+
+#[test]
+fn config_drives_compact() {
+    // Setting compact via the config JSON (rather than the flag) still works.
+    let dir = std::env::temp_dir().join("naga_cli_cfg_drives_compact");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
+    let out = dir.join("o.spv");
+    let r = naga()
+        .arg(&src)
+        .arg(&out)
+        .args([
+            "--config-json",
+            r#"{"compact":true,"spv_out":{"lang_version":[1,3]}}"#,
+        ])
+        .output()
+        .unwrap();
     assert!(
         r.status.success(),
         "stderr: {}",
         String::from_utf8_lossy(&r.stderr)
     );
-    assert!(!String::from_utf8_lossy(&r.stderr).contains("cannot be used with"));
+    assert_eq!(
+        &std::fs::read(&out).unwrap()[0..4],
+        &[0x03, 0x02, 0x23, 0x07]
+    );
+}
+
+#[test]
+fn before_compaction_composes_with_config() {
+    // --before-compaction is I/O (an output path), so it still composes with --config.
+    let dir = std::env::temp_dir().join("naga_cli_cfg_before_compaction");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
+    let out = dir.join("o.spv");
+    let pre = dir.join("pre.txt");
+    let r = naga()
+        .arg(&src)
+        .arg(&out)
+        .args(["--config-json", "{}"])
+        .arg("--before-compaction")
+        .arg(&pre)
+        .output()
+        .unwrap();
+    assert!(
+        r.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&r.stderr)
+    );
+    assert!(pre.exists() && std::fs::metadata(&pre).unwrap().len() > 0);
 }
 
 #[test]

@@ -41,10 +41,12 @@ EXAMPLES
   naga --print-config-schema
 
 OPTIONS: FLAGS vs CONFIG
-  Translation options can be set either as individual flags OR via a JSON config
-  (--config <file> / --config-json <string>); the two are mutually exclusive. Run
-  `naga --print-config-schema` to see every config key and its type. Processing flags
-  (--compact, --before-compaction, -g, --spirv-val, --spirv-opt, --dxc) compose with either.
+  Options can be set either as individual flags OR via a JSON config (--config <file> /
+  --config-json <string>); the two are mutually exclusive — passing any option flag
+  (including --compact, -g, --spirv-val, --spirv-opt, --dxc) alongside --config is an error.
+  Each of those is a key in the config JSON instead. Run `naga --print-config-schema` to see
+  every config key and its type. Only I/O (the input/output paths, --before-compaction) and
+  --format are orthogonal and compose with either mode.
 
 STRUCTURED OUTPUT
   --format json emits one JSON document on stdout with `diagnostics`
@@ -139,11 +141,11 @@ pub struct Args {
     pub dot_cfg_only: bool,
 
     /// Generate debug symbols (spv-out only, for now).
-    #[arg(short = 'g', long)]
+    #[arg(short = 'g', long, group = "options")]
     pub generate_debug_symbols: bool,
 
     /// Compact the module's IR and revalidate.
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub compact: bool,
 
     /// Write the module's IR before compaction to the given file. Implies `--compact`.
@@ -195,15 +197,15 @@ pub struct Args {
     pub print_config_schema: bool,
 
     /// After writing SPIR-V output, validate it with `spirv-val` (must be on PATH).
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub spirv_val: bool,
 
     /// After writing SPIR-V output, optimize it in place with `spirv-opt -O` (must be on PATH).
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub spirv_opt: bool,
 
     /// After writing HLSL output, compile each entry point to DXIL with `dxc` (must be on PATH).
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub dxc: bool,
 
     /// Output format for diagnostics and reflection: `text` (human, default) or `json`.
