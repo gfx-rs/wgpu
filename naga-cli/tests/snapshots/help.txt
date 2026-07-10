@@ -19,6 +19,10 @@ EXAMPLES
   # Read from stdin.
   cat shader.wgsl | naga --stdin-file-path shader.wgsl out.spv
 
+  # Write to stdout instead of a file (`-` needs --output-kind for the format).
+  naga shader.wgsl - --output-kind hlsl
+  naga shader.wgsl - --output-kind spv > out.spv
+
   # Machine-readable diagnostics + reflection for tooling.
   naga shader.wgsl --format json
 
@@ -100,6 +104,21 @@ Options:
           Kind of input: `glsl`, `wgsl`, `spv`, or `bin`
           
           [possible values: bin, glsl, spv, wgsl]
+
+      --output-kind <OUTPUT_KIND>
+          Output format when writing to stdout (output path `-`), which has no extension to infer from. Ignored when the output is a regular file
+
+          Possible values:
+          - wgsl
+          - spv
+          - hlsl
+          - metal
+          - dot
+          - txt
+          - bin
+          - vert:  GLSL vertex shader
+          - frag:  GLSL fragment shader
+          - comp:  GLSL compute shader
 
       --metal-version <METAL_VERSION>
           Metal language version, e.g. `1.0`, `1.1`, `1.2`

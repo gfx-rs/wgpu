@@ -137,6 +137,21 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
         spirv_opt: args.spirv_opt,
         dxc: args.dxc,
     };
+
+    // Constraints on stdout (`-`) output.
+    let writes_stdout = output_paths.clone().any(|p| p == "-");
+    if writes_stdout && hooks.any() {
+        return Err(anyhow!(
+            "tool hooks (--dxc/--spirv-opt/--spirv-val) require a file output, not stdout (`-`)"
+        ));
+    }
+    if writes_stdout && is_json {
+        return Err(anyhow!(
+            "cannot write shader output to stdout (`-`) together with --format json \
+             (both use stdout)"
+        ));
+    }
+
     if hooks.any() {
         let exts: Vec<&str> = output_paths
             .clone()
@@ -159,7 +174,10 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
         .clone()
         .fold(params.capabilities, |caps, path| {
             use naga::valid::Capabilities as C;
-            let allowed = match Path::new(path).extension().and_then(|ex| ex.to_str()) {
+            // Resolve `-` to its --output-kind extension so stdout output picks the same
+            // capability set a file of that format would.
+            let ext = resolve_output_ext(path, args.output_kind).ok();
+            let allowed = match ext.as_deref() {
                 Some("wgsl") => naga::back::wgsl::supported_capabilities(),
                 Some("metal") => naga::back::msl::supported_capabilities(),
                 Some("hlsl") => naga::back::hlsl::supported_capabilities(),
@@ -215,6 +233,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
                     params,
                     spv_out_with_debug.as_ref(),
                     before_compaction,
+                    None,
                     &crate::hooks::Hooks::default(),
                     &mut Vec::new(),
                     is_json,
@@ -294,6 +313,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
                 params,
                 spv_out_with_debug.as_ref(),
                 output_path,
+                args.output_kind,
                 &hooks,
                 &mut json_diagnostics,
                 true,
@@ -305,6 +325,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
                 params,
                 spv_out_with_debug.as_ref(),
                 output_path,
+                args.output_kind,
                 &hooks,
                 &mut Vec::new(),
                 false,
@@ -577,6 +598,37 @@ fn parse_input_json(
     })
 }
 
+/// Resolve the format key (an output-file extension) for a given output target.
+///
+/// For stdout (`-`) there is no extension, so the format comes from `--output-kind`.
+fn resolve_output_ext(
+    output_path: &str,
+    output_kind: Option<crate::cli::OutputKind>,
+) -> anyhow::Result<String> {
+    if output_path == "-" {
+        output_kind
+            .map(|k| k.as_ext().to_string())
+            .ok_or_else(|| anyhow!("writing to stdout (`-`) requires --output-kind <format>"))
+    } else {
+        Path::new(output_path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_string)
+            .ok_or_else(|| anyhow!("Output filename has no extension"))
+    }
+}
+
+/// Write `bytes` either to stdout (when `to_stdout`) or to the file at `path`.
+fn write_out(path: &str, to_stdout: bool, bytes: &[u8]) -> anyhow::Result<()> {
+    if to_stdout {
+        use std::io::Write as _;
+        std::io::stdout().lock().write_all(bytes)?;
+    } else {
+        fs::write(path, bytes)?;
+    }
+    Ok(())
+}
+
 // TODO(refactor): bundle params/hooks/format/warnings into a WriteCtx<'_> struct
 // to reduce argument count. Out of scope for this task per task-1-brief.
 #[allow(clippy::too_many_arguments)]
@@ -586,6 +638,7 @@ fn write_output(
     params: &Parameters,
     spv_out_override: Option<&naga::back::spv::Options<'_>>,
     output_path: &str,
+    output_kind: Option<crate::cli::OutputKind>,
     hooks: &Hooks,
     warnings: &mut Vec<crate::output::Diagnostic>,
     is_json: bool,
@@ -602,25 +655,24 @@ fn write_output(
         None => None,
     };
 
-    match Path::new(&output_path)
-        .extension()
-        .ok_or(CliError("Output filename has no extension"))?
-        .to_str()
-        .ok_or(CliError("Output filename not valid unicode"))?
-    {
-        "txt" => {
-            use std::io::Write;
+    // Output path `-` writes to stdout; its format comes from `--output-kind` since there
+    // is no extension to infer from. Otherwise the format is the output-file extension.
+    let to_stdout = output_path == "-";
+    let ext = resolve_output_ext(output_path, output_kind)?;
 
-            let mut file = fs::File::create(output_path)?;
-            writeln!(file, "{module:#?}")?;
+    match ext.as_str() {
+        "txt" => {
+            use std::fmt::Write as _;
+
+            let mut text = format!("{module:#?}\n");
             if let Some(ref info) = *info {
-                writeln!(file)?;
-                writeln!(file, "{info:#?}")?;
+                write!(text, "\n{info:#?}\n")?;
             }
+            write_out(output_path, to_stdout, text.as_bytes())?;
         }
         "bin" => {
-            let mut file = fs::File::create(output_path)?;
-            bincode::serde::encode_into_std_write(module, &mut file, bincode::config::standard())?;
+            let bytes = bincode::serde::encode_to_vec(module, bincode::config::standard())?;
+            write_out(output_path, to_stdout, &bytes)?;
         }
         "metal" => {
             use naga::back::msl;
@@ -642,7 +694,7 @@ fn write_output(
 
             let pipeline_options = msl::PipelineOptions::default();
             let (msl, _) = msl::write_string(&module, &info, &options, &pipeline_options)?;
-            fs::write(output_path, msl)?;
+            write_out(output_path, to_stdout, msl.as_bytes())?;
         }
         "spv" | "spirv" => {
             use naga::back::spv;
@@ -673,7 +725,7 @@ fn write_output(
                     v
                 });
 
-            fs::write(output_path, bytes.as_slice())?;
+            write_out(output_path, to_stdout, bytes.as_slice())?;
             if hooks.spirv_opt {
                 run_spirv_opt(Path::new(output_path))?;
             }
@@ -744,13 +796,13 @@ fn write_output(
                 params.bounds_check_policies,
             )?;
             writer.write()?;
-            fs::write(output_path, buffer)?;
+            write_out(output_path, to_stdout, buffer.as_bytes())?;
         }
         "dot" => {
             use naga::back::dot;
 
             let output = dot::write(module, info.as_ref(), params.dot.clone())?;
-            fs::write(output_path, output)?;
+            write_out(output_path, to_stdout, output.as_bytes())?;
         }
         "hlsl" => {
             use naga::back::hlsl;
@@ -771,9 +823,9 @@ fn write_output(
             let pipeline_options = Default::default();
             let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl, &pipeline_options);
             let reflection = writer.write(&module, &info, None)?;
-            // Drop the writer borrow on `buffer` before fs::write consumes it.
+            // Drop the writer borrow on `buffer` before we consume it.
             drop(writer);
-            fs::write(output_path, buffer)?;
+            write_out(output_path, to_stdout, buffer.as_bytes())?;
             if hooks.dxc {
                 let entries: Vec<(String, naga::ShaderStage)> = reflection
                     .entry_point_names
@@ -797,7 +849,7 @@ fn write_output(
                 ))?,
                 wgsl::WriterFlags::empty(),
             )?;
-            fs::write(output_path, wgsl)?;
+            write_out(output_path, to_stdout, wgsl.as_bytes())?;
         }
         other => {
             eprintln!("Unknown output extension: {other}");

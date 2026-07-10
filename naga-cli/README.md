@@ -24,7 +24,17 @@ The binary is called `naga` and is placed in `target/debug/naga` (or `target/rel
 
 The input format is inferred from the file extension (`wgsl`, `spv`, `glsl`, `hlsl`, `bin`).
 The output format is inferred from the output file extension. When no output file is given, the
-shader is validated only.
+shader is validated only. To write to **stdout** instead of a file, use `-` as the output path
+and give the format explicitly with `--output-kind` (there is no extension to infer from):
+
+```sh
+naga shader.wgsl - --output-kind hlsl      # print HLSL to stdout
+naga shader.wgsl - --output-kind spv > out.spv
+```
+
+Stdout output cannot be combined with `--format json` or the external-tool hooks below (those
+need a real file); `--dxc` in particular always writes files, since `dxc` reads an HLSL file and
+emits DXIL to a file.
 
 ```sh
 # Validate a WGSL shader (no output file → validation only).

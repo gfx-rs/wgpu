@@ -31,6 +31,76 @@ const SAMPLE_CONFIG_JSON: &str = r#"{
   "msl": { "lang_version": [2, 0] }
 }"#;
 
+// ── stdout output (`-` + --output-kind) ──────────────────────────────────────
+
+#[test]
+fn stdout_output_wgsl() {
+    let src = write_tmp("naga_cli_stdout_wgsl", "in.wgsl", TRIANGLE_WGSL);
+    let r = naga()
+        .arg(&src)
+        .args(["-", "--output-kind", "wgsl"])
+        .output()
+        .unwrap();
+    assert!(
+        r.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&r.stderr)
+    );
+    assert!(String::from_utf8_lossy(&r.stdout).contains("fn "));
+}
+
+#[test]
+fn stdout_output_spv_magic() {
+    let src = write_tmp("naga_cli_stdout_spv", "in.wgsl", TRIANGLE_WGSL);
+    let r = naga()
+        .arg(&src)
+        .args(["-", "--output-kind", "spv"])
+        .output()
+        .unwrap();
+    assert!(
+        r.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&r.stderr)
+    );
+    assert_eq!(&r.stdout[0..4], &[0x03, 0x02, 0x23, 0x07]);
+}
+
+#[test]
+fn stdout_requires_output_kind() {
+    let src = write_tmp("naga_cli_stdout_nokind", "in.wgsl", TRIANGLE_WGSL);
+    let r = naga().arg(&src).arg("-").output().unwrap();
+    assert!(!r.status.success());
+    assert!(String::from_utf8_lossy(&r.stderr).contains("output-kind"));
+}
+
+#[test]
+fn stdout_rejects_tool_hooks() {
+    let src = write_tmp("naga_cli_stdout_dxc", "in.wgsl", TRIANGLE_WGSL);
+    let r = naga()
+        .arg(&src)
+        .args(["-", "--output-kind", "hlsl", "--dxc"])
+        .output()
+        .unwrap();
+    assert!(!r.status.success());
+    assert!(String::from_utf8_lossy(&r.stderr)
+        .to_lowercase()
+        .contains("stdout"));
+}
+
+#[test]
+fn stdout_rejects_json_format() {
+    let src = write_tmp("naga_cli_stdout_json", "in.wgsl", TRIANGLE_WGSL);
+    let r = naga()
+        .arg(&src)
+        .args(["-", "--output-kind", "spv", "--format", "json"])
+        .output()
+        .unwrap();
+    assert!(!r.status.success());
+    assert!(String::from_utf8_lossy(&r.stderr)
+        .to_lowercase()
+        .contains("stdout"));
+}
+
 #[test]
 fn output_language_matrix_from_wgsl() {
     let src = write_tmp("naga_cli_p7_out", "in.wgsl", TRIANGLE_WGSL);
