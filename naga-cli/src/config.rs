@@ -64,6 +64,15 @@ pub struct Config {
 
     /// After writing HLSL output, compile each entry point to DXIL with `dxc` (must be on PATH).
     pub dxc: Option<bool>,
+
+    /// Input format (overrides extension detection; required to read stdin `-`).
+    pub input_kind: Option<crate::cli::InputKind>,
+
+    /// Output format when writing to stdout `-` (which has no extension to infer from).
+    pub output_kind: Option<crate::cli::OutputKind>,
+
+    /// Shader stage for GLSL input.
+    pub shader_stage: Option<crate::cli::ShaderStageArg>,
 }
 
 /// Apply a loaded [`Config`] on top of already-built [`crate::params::Parameters`].
@@ -178,5 +187,16 @@ pub fn apply_config(config: Config, params: &mut crate::params::Parameters<'stat
     }
     if let Some(d) = config.dxc {
         params.dxc = d;
+    }
+
+    // I/O format specifiers (let stdin/stdout `-` work in config mode).
+    if let Some(kind) = config.input_kind {
+        params.input_kind = Some(kind);
+    }
+    if let Some(kind) = config.output_kind {
+        params.output_kind = Some(kind);
+    }
+    if let Some(stage) = config.shader_stage {
+        params.shader_stage = Some(stage);
     }
 }

@@ -45,9 +45,10 @@ OPTIONS: FLAGS vs CONFIG
   --config-json <string>), never both: passing ANY flag alongside --config is an error. In
   config mode only the positional input/output file paths are accepted on the command line;
   everything else lives in the JSON. Run `naga --print-config-schema` to see every config key
-  and its type. (Because the format specifiers are themselves flags, config mode reads and
-  writes files by extension only — stdin/stdout via `-`, --input-kind/--output-kind,
-  --format json, and --before-compaction are flag-mode features.)
+  and its type. Reading stdin / writing stdout via `-` works in config mode too — set the
+  format with the `input_kind` / `output_kind` (and `shader_stage`) config keys, since the
+  matching flags are exclusive with --config. (--format json and --before-compaction remain
+  flag-mode-only.)
 
 STRUCTURED OUTPUT
   --format json emits one JSON document on stdout with `diagnostics`
@@ -244,7 +245,18 @@ impl BoundsCheckPolicyArg {
     }
 }
 
-#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(
+    ValueEnum,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
 pub enum ShaderStageArg {
     Vert,
     Frag,
@@ -261,7 +273,18 @@ impl ShaderStageArg {
     }
 }
 
-#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(
+    ValueEnum,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
 pub enum InputKind {
     Bin,
     Glsl,
@@ -271,7 +294,18 @@ pub enum InputKind {
 
 /// Output format for stdout writes, mapping to the same format keys the output-file
 /// extension would select.
-#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(
+    ValueEnum,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
 pub enum OutputKind {
     Wgsl,
     Spv,
