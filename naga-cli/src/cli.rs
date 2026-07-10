@@ -45,10 +45,10 @@ OPTIONS: FLAGS vs CONFIG
   --config-json <string>), never both: passing ANY flag alongside --config is an error. In
   config mode only the positional input/output file paths are accepted on the command line;
   everything else lives in the JSON. Run `naga --print-config-schema` to see every config key
-  and its type. Reading stdin / writing stdout via `-` works in config mode too — set the
-  format with the `input_kind` / `output_kind` (and `shader_stage`) config keys, since the
-  matching flags are exclusive with --config. (--format json and --before-compaction remain
-  flag-mode-only.)
+  and its type — every flag has a corresponding config key, so config is a complete single
+  source. Reading stdin / writing stdout via `-` works in config mode too: set the format with
+  the `input_kind` / `output_kind` (and `shader_stage`) config keys, since the matching flags
+  are exclusive with --config.
 
 STRUCTURED OUTPUT
   --format json emits one JSON document on stdout with `diagnostics`
@@ -220,7 +220,19 @@ pub struct Args {
     pub files: Vec<String>,
 }
 
-#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(
+    clap::ValueEnum,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Default,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
 pub enum OutputFormat {
     #[default]
     Text,

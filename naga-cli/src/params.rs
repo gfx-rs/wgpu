@@ -30,6 +30,12 @@ pub struct Parameters<'a> {
     pub spirv_val: bool,
     pub spirv_opt: bool,
     pub dxc: bool,
+    /// Output format for diagnostics/reflection (text or json).
+    pub format: crate::cli::OutputFormat,
+    /// Write the pre-compaction IR to this path (implies compaction).
+    pub before_compaction: Option<String>,
+    /// Bulk-validation mode: treat all positional files as inputs to validate.
+    pub bulk_validate: bool,
 }
 
 pub fn build_parameters(args: &Args) -> anyhow::Result<Parameters<'static>> {
@@ -95,11 +101,14 @@ pub fn build_parameters(args: &Args) -> anyhow::Result<Parameters<'static>> {
         !params.keep_coordinate_space,
     );
 
+    params.before_compaction = args.before_compaction.clone();
     params.compact = args.compact || args.before_compaction.is_some();
     params.generate_debug_symbols = args.generate_debug_symbols;
     params.spirv_val = args.spirv_val;
     params.spirv_opt = args.spirv_opt;
     params.dxc = args.dxc;
+    params.format = args.format;
+    params.bulk_validate = args.bulk_validate;
     params.capabilities = args.capabilities;
 
     // Apply CommonBackendOptions (fake_missing_bindings, force_loop_bounding,

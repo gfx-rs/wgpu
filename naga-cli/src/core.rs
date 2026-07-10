@@ -26,8 +26,8 @@ pub struct Parsed {
 /// been emitted (JSON to stdout in json mode, or stderr diagnostics in text mode),
 /// and `Err(e)` for hard/unexpected errors.
 pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
-    if args.bulk_validate {
-        if args.format == OutputFormat::Json {
+    if params.bulk_validate {
+        if params.format == OutputFormat::Json {
             return Err(anyhow!(
                 "`--format json` is not supported with `--bulk-validate`"
             ));
@@ -37,7 +37,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
         return Ok(true);
     }
 
-    let is_json = args.format == OutputFormat::Json;
+    let is_json = params.format == OutputFormat::Json;
 
     let mut files = args.files.iter();
 
@@ -237,7 +237,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
             // Write out the module state before compaction, if requested.
             // Tool hooks (dxc/spirv-opt/spirv-val) must NOT fire on this debug dump;
             // pass a no-op Hooks so only the real output paths invoke them.
-            if let Some(ref before_compaction) = args.before_compaction {
+            if let Some(ref before_compaction) = params.before_compaction {
                 write_output(
                     &module,
                     &info,
