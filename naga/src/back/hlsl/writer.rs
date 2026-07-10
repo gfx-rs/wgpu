@@ -220,7 +220,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         &mut self,
         level: back::Level,
     ) -> Option<(String, String)> {
-        if !self.options.force_loop_bounding {
+        if !self.options.common.force_loop_bounding {
             return None;
         }
 
@@ -482,7 +482,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             let info = &module_info[handle];
 
             // Check if all of the globals are accessible
-            if !self.options.fake_missing_bindings {
+            if !self.options.common.fake_missing_bindings {
                 if let Some((var_handle, _)) =
                     module
                         .global_variables
@@ -530,7 +530,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             let ep = &module.entry_points[index];
             let info = module_info.get_entry_point(index);
 
-            if !self.options.fake_missing_bindings {
+            if !self.options.common.fake_missing_bindings {
                 let mut ep_error = None;
                 for (var_handle, var) in module.global_variables.iter() {
                     match var.binding {
@@ -3114,7 +3114,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_terminate(module, level, query, &tracker_expr_name, func_ctx)?;
                     }
                     RayQueryFunction::Begin => {
-                        if self.options.ray_query_initialization_tracking {
+                        if self.options.common.ray_query_initialization_tracking {
                             writeln!(self.out, "{level}{tracker_expr_name} = 0u;")?;
                         }
                     }
