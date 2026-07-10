@@ -27,7 +27,12 @@ pub struct Parsed {
 /// and `Err(e)` for hard/unexpected errors.
 pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
     if args.bulk_validate {
-        // bulk_validate is text-only for v1; json mode is not supported there.
+        if args.format == OutputFormat::Json {
+            return Err(anyhow!(
+                "`--format json` is not supported with `--bulk-validate`"
+            ));
+        }
+        // bulk_validate is text-only for v1; json mode rejected above.
         bulk_validate(&args.files, params)?;
         return Ok(true);
     }
@@ -97,11 +102,22 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
             });
             spv_out_with_debug = Some(opts);
         } else {
-            eprintln!(
-                "warning: `--generate-debug-symbols` was passed, \
+            let msg = format!(
+                "`--generate-debug-symbols` was passed, \
                        but input is not human-readable: {}",
                 input_path.display()
             );
+            if is_json {
+                json_diagnostics.push(crate::output::Diagnostic {
+                    severity: crate::output::Severity::Warning,
+                    message: msg,
+                    location: None,
+                    labels: Vec::new(),
+                    notes: Vec::new(),
+                });
+            } else {
+                eprintln!("warning: {msg}");
+            }
             spv_out_with_debug = None;
         }
     } else {
@@ -187,7 +203,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
             // Tool hooks (dxc/spirv-opt/spirv-val) must NOT fire on this debug dump;
             // pass a no-op Hooks so only the real output paths invoke them.
             if let Some(ref before_compaction) = args.before_compaction {
-                write_output(&module, &info, params, spv_out_with_debug.as_ref(), before_compaction, &crate::hooks::Hooks::default())?;
+                write_output(&module, &info, params, spv_out_with_debug.as_ref(), before_compaction, &crate::hooks::Hooks::default(), &mut Vec::new(), is_json)?;
             }
 
             naga::compact::compact(&mut module, KeepUnused::No);
@@ -257,7 +273,11 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
     }
 
     for output_path in output_paths {
-        write_output(&module, &info, params, spv_out_with_debug.as_ref(), output_path, &hooks)?;
+        if is_json {
+            write_output(&module, &info, params, spv_out_with_debug.as_ref(), output_path, &hooks, &mut json_diagnostics, true)?;
+        } else {
+            write_output(&module, &info, params, spv_out_with_debug.as_ref(), output_path, &hooks, &mut Vec::new(), false)?;
+        }
     }
 
     if is_json {
@@ -529,6 +549,9 @@ fn parse_input_json(
     })
 }
 
+// TODO(refactor): bundle params/hooks/format/warnings into a WriteCtx<'_> struct
+// to reduce argument count. Out of scope for this task per task-1-brief.
+#[allow(clippy::too_many_arguments)]
 fn write_output(
     module: &naga::Module,
     info: &Option<naga::valid::ModuleInfo>,
@@ -536,6 +559,8 @@ fn write_output(
     spv_out_override: Option<&naga::back::spv::Options<'_>>,
     output_path: &str,
     hooks: &Hooks,
+    warnings: &mut Vec<crate::output::Diagnostic>,
+    is_json: bool,
 ) -> anyhow::Result<()> {
     let entry_point = match params.entry_point.as_deref() {
         Some(name) => {
@@ -642,11 +667,22 @@ fn write_output(
             let (ep_stage, ep_name) = match entry_point {
                 Some((stage, name)) => {
                     if stage != file_ext_stage {
-                        eprintln!(
-                            "warning: the shader stage `{stage:?}` of the selected entry point \
+                        let msg = format!(
+                            "the shader stage `{stage:?}` of the selected entry point \
                                 `{name}` in the input file does not match the shader stage \
                                 implied by the file name",
                         );
+                        if is_json {
+                            warnings.push(crate::output::Diagnostic {
+                                severity: crate::output::Severity::Warning,
+                                message: msg,
+                                location: None,
+                                labels: Vec::new(),
+                                notes: Vec::new(),
+                            });
+                        } else {
+                            eprintln!("warning: {msg}");
+                        }
                     }
                     (stage, name.to_string())
                 }
