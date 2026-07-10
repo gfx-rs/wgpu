@@ -41,6 +41,7 @@ serialize = [
     "half/serde",
     "hashbrown/serde",
     "naga-types/serialize",
+    "spirv?/serialize",
 ]
 deserialize = [
     "dep:serde",
@@ -48,6 +49,7 @@ deserialize = [
     "half/serde",
     "hashbrown/serde",
     "naga-types/deserialize",
+    "spirv?/deserialize",
 ]
 arbitrary = [
     "dep:arbitrary",
