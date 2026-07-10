@@ -6,9 +6,11 @@ use clap::{ArgGroup, Parser, ValueEnum};
 const LONG_ABOUT: &str = "\
 Translate and validate shaders between WGSL, SPIR-V, GLSL, MSL, HLSL, and DOT.
 
-The input format is inferred from the input file extension (override with --input-kind, or
---stdin-file-path when reading stdin); the output format is inferred from the output file
-extension. With no output file, the shader is only validated.
+The input format is inferred from the input file extension (override with --input-kind); the
+output format is inferred from the output file extension. Use `-` as the input and/or output
+path to read from stdin / write to stdout — since `-` has no extension, give the format with
+--input-kind / --output-kind (and --shader-stage for GLSL). With no output file, the shader is
+only validated.
 
 EXAMPLES
   # Validate a WGSL shader (no output file).
@@ -22,12 +24,15 @@ EXAMPLES
   naga shader.wgsl out.hlsl
   naga shader.wgsl out.metal
 
-  # Read from stdin.
-  cat shader.wgsl | naga --stdin-file-path shader.wgsl out.spv
+  # Read from stdin (`-`); --input-kind names the format.
+  cat shader.wgsl | naga - --input-kind wgsl out.spv
 
   # Write to stdout instead of a file (`-` needs --output-kind for the format).
   naga shader.wgsl - --output-kind hlsl
   naga shader.wgsl - --output-kind spv > out.spv
+
+  # Full pipe: stdin to stdout.
+  cat shader.wgsl | naga - --input-kind wgsl - --output-kind spv > out.spv
 
   # Machine-readable diagnostics + reflection for tooling.
   naga shader.wgsl --format json
@@ -132,10 +137,6 @@ pub struct Args {
     /// In dot output, include only the control flow graph.
     #[arg(long, group = "options")]
     pub dot_cfg_only: bool,
-
-    /// Treat STDIN as if it were this file path (needed for extension-based detection).
-    #[arg(long)]
-    pub stdin_file_path: Option<String>,
 
     /// Generate debug symbols (spv-out only, for now).
     #[arg(short = 'g', long)]

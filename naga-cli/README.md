@@ -51,8 +51,8 @@ naga shader.wgsl out.metal
 naga shader.wgsl out.hlsl
 naga shader.wgsl out.glsl
 
-# Read from stdin (--stdin-file-path tells naga which extension to use for format detection).
-cat shader.wgsl | naga --stdin-file-path shader.wgsl
+# Read from stdin: use `-` as the input path and name the format with --input-kind.
+cat shader.wgsl | naga - --input-kind wgsl
 
 # Bulk-validate every file listed.
 naga --bulk-validate a.wgsl b.wgsl c.spv
