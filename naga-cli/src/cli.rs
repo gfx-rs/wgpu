@@ -150,6 +150,20 @@ pub enum InputKind {
     Wgsl,
 }
 
+impl std::str::FromStr for InputKind {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.to_lowercase().as_str() {
+            "bin" => InputKind::Bin,
+            "glsl" => InputKind::Glsl,
+            "spv" => InputKind::Spv,
+            "wgsl" => InputKind::Wgsl,
+            _ => return Err(format!("Unknown input kind: {s}")),
+        })
+    }
+}
+
 /// Newtype wrapper so clap can collect repeated `--override` values.
 #[derive(Clone, Debug)]
 pub struct Overrides {
@@ -202,7 +216,7 @@ fn parse_spirv_version(s: &str) -> Result<(u8, u8), String> {
 
 fn parse_metal_version(s: &str) -> Result<(u8, u8), String> {
     let mut iter = s.split('.');
-    let mut next = |iter: &mut core::str::Split<char>| {
+    let next = |iter: &mut core::str::Split<char>| {
         iter.next()
             .ok_or_else(|| format!("Invalid value for --metal-version: {s}"))?
             .parse::<u8>()
