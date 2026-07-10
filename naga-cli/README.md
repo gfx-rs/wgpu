@@ -117,9 +117,11 @@ naga --print-config-schema
 ```
 
 > **Note:** `--print-config-schema` omits one field that cannot be expressed in JSON Schema —
-> the SPIR-V capabilities set (`spv_out.capabilities`, type `FastHashSet<spirv::Capability>`) —
-> but it is still accepted by `--config` and `--config-json`. All other fields, including the
-> top-level `defines` map, are present in the schema.
+> the SPIR-V capabilities set (`spv_out.capabilities`, type `FastHashSet<spirv::Capability>`,
+> the SPIR-V writer's capability allow-list — distinct from the top-level `capabilities`
+> validator/WGSL-frontend filter, which IS present in the schema) — but it is still accepted
+> by `--config` and `--config-json`. All other fields, including the top-level `defines` map,
+> are present in the schema.
 
 ---
 
@@ -227,10 +229,11 @@ DXIL binary to `<hlsl-stem>.<entry-point-name>.dxil`. For example, a shader with
   ```
 
 - **`--print-config-schema` omissions.** The SPIR-V capabilities set
-  (`spv_out.capabilities`, type `FastHashSet<spirv::Capability>`) is excluded from the
-  printed schema because its type lacks a `JsonSchema` impl. It is still accepted by `--config`
-  and `--config-json`. The top-level `defines` map and all other fields are present in the
-  schema.
+  (`spv_out.capabilities`, type `FastHashSet<spirv::Capability>` — the SPIR-V writer's
+  capability allow-list, distinct from the top-level `capabilities` validator/WGSL-frontend
+  filter which IS in the schema) is excluded from the printed schema because its type lacks
+  a `JsonSchema` impl. It is still accepted by `--config` and `--config-json`. The top-level
+  `defines` map and all other fields are present in the schema.
 
 - **JSON diagnostics detail.** In `--format json` output, every diagnostic has severity
   `"error"` or `"warning"`. The `notes` array may be empty for validation errors. SPIR-V

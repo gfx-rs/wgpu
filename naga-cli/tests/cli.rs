@@ -452,8 +452,14 @@ fn json_debug_symbols_warning_is_a_diagnostic() {
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     let diags = v["diagnostics"].as_array().unwrap();
     assert!(
-        diags.iter().any(|d| d["severity"] == "warning"),
-        "expected a warning diagnostic in json mode, got: {}",
+        diags.iter().any(|d| {
+            d["severity"] == "warning"
+                && d["message"]
+                    .as_str()
+                    .unwrap_or("")
+                    .contains("--generate-debug-symbols")
+        }),
+        "expected a --generate-debug-symbols warning diagnostic in json mode, got: {}",
         String::from_utf8_lossy(&out.stdout)
     );
 }
