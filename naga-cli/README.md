@@ -22,8 +22,10 @@ The binary is called `naga` and is placed in `target/debug/naga` (or `target/rel
 
 ## Basic usage
 
-The input format is inferred from the file extension (`wgsl`, `spv`, `glsl`, `hlsl`, `bin`).
-The output format is inferred from the output file extension. When no output file is given, the
+The input format is inferred from the file extension (`wgsl`, `glsl`, `spv`, `bin` — there is no
+HLSL or MSL frontend). The output format is inferred from the output file extension (`spv`,
+`metal`, `hlsl`, `wgsl`, `dot`, `txt` for the IR, `bin` for the serialized IR, and `vert`/`frag`/
+`comp` for GLSL). When no output file is given, the
 shader is validated only. To write to **stdout** instead of a file, use `-` as the output path
 and give the format explicitly with `--output-kind` (there is no extension to infer from):
 
@@ -46,10 +48,14 @@ naga shader.wgsl out.spv
 # Translate SPIR-V back to WGSL.
 naga in.spv out.wgsl
 
-# Translate WGSL to MSL, HLSL, or GLSL.
+# Translate WGSL to MSL or HLSL.
 naga shader.wgsl out.metal
 naga shader.wgsl out.hlsl
-naga shader.wgsl out.glsl
+
+# Translate to GLSL — the output extension picks the stage (.vert / .frag / .comp),
+# since the GLSL backend emits one stage/entry point at a time. The entry point defaults
+# to `main`; pass --entry-point to select another.
+naga shader.wgsl out.frag --entry-point fs_main
 
 # Read from stdin: use `-` as the input path and name the format with --input-kind.
 cat shader.wgsl | naga - --input-kind wgsl
@@ -203,9 +209,10 @@ Real output (the full document is printed to stdout):
 ```
 
 **Diagnostics shape:** each entry in `diagnostics` carries `severity` (`"error"` or
-`"warning"`), `message`, an optional `location` (`file`, `line`, `column`, `length`), zero or
-more `labels` (each with `message` and `location`), and a `notes` array (may be empty for
-validation errors). SPIR-V parse errors have no source location.
+`"warning"`), `message`, an optional `location` (`line`, `column`, `byte_offset`, `length` — no
+file name, since the input is a single file/stream), zero or more `labels` (each with `message`
+and an optional `location`), and a `notes` array (may be empty for validation errors). SPIR-V
+parse errors have no source location.
 
 **Reflection shape:** `entry_points` lists every shader stage with its `name`, `stage`, and
 `workgroup_size`; `resources` lists every global binding with its `name`, `group`, `binding`, and
