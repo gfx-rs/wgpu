@@ -5,6 +5,11 @@ fn naga() -> Command {
     Command::new(env!("CARGO_BIN_EXE_naga"))
 }
 
+/// Resolve an example file relative to the naga-cli manifest directory.
+fn example_path(name: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples").join(name)
+}
+
 #[test]
 fn force_loop_bounding_flag_applies_to_spv() {
     // A shader whose SPIR-V differs when loop bounding is off vs on would be ideal,
@@ -451,4 +456,32 @@ fn json_debug_symbols_warning_is_a_diagnostic() {
         "expected a warning diagnostic in json mode, got: {}",
         String::from_utf8_lossy(&out.stdout)
     );
+}
+
+#[test]
+fn readme_config_file_example() {
+    let dir = std::env::temp_dir().join("naga_cli_p6_readme_cfg");
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join("tri.spv");
+    let r = naga()
+        .arg(example_path("triangle.wgsl"))
+        .arg(&out)
+        .arg("--config").arg(example_path("options.json"))
+        .output().unwrap();
+    assert!(r.status.success(), "stderr: {}", String::from_utf8_lossy(&r.stderr));
+    assert_eq!(&std::fs::read(&out).unwrap()[0..4], &[0x03, 0x02, 0x23, 0x07]);
+}
+
+#[test]
+fn readme_json_reflection_example() {
+    let r = naga().arg(example_path("triangle.wgsl")).args(["--format", "json"]).output().unwrap();
+    assert!(r.status.success(), "stderr: {}", String::from_utf8_lossy(&r.stderr));
+    let v: serde_json::Value = serde_json::from_slice(&r.stdout).unwrap();
+    assert_eq!(v["success"], true);
+    let names: Vec<&str> = v["reflection"]["entry_points"]
+        .as_array().unwrap().iter()
+        .map(|e| e["name"].as_str().unwrap()).collect();
+    assert!(names.contains(&"vs_main") && names.contains(&"fs_main"), "names: {names:?}");
+    assert!(v["reflection"]["resources"].as_array().unwrap().iter()
+        .any(|res| res["name"] == "tint"));
 }
