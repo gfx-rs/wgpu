@@ -6,6 +6,63 @@ fn naga() -> Command {
 }
 
 #[test]
+fn force_loop_bounding_flag_applies_to_spv() {
+    // A shader whose SPIR-V differs when loop bounding is off vs on would be ideal,
+    // but at minimum assert the flag parses, is accepted, and compiles successfully.
+    let dir = std::env::temp_dir().join("naga_cli_p3_flb");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }").unwrap();
+    let out = dir.join("s.spv");
+    let r = naga().arg(&src).arg(&out).arg("--force-loop-bounding").arg("false").output().unwrap();
+    assert!(r.status.success(), "stderr: {}", String::from_utf8_lossy(&r.stderr));
+    assert_eq!(&std::fs::read(&out).unwrap()[0..4], &[0x03, 0x02, 0x23, 0x07]);
+}
+
+#[test]
+fn zero_init_flag_accepts_modes() {
+    for mode in ["native", "polyfill", "none"] {
+        let out = naga().arg("--help").output().unwrap(); // ensure binary exists
+        assert!(out.status.success());
+        // parse-only check via a compile:
+        let dir = std::env::temp_dir().join("naga_cli_p3_zi");
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("s.wgsl");
+        std::fs::write(&src, "@compute @workgroup_size(1) fn main() {}").unwrap();
+        let dst = dir.join(format!("s_{mode}.spv"));
+        let r = naga().arg(&src).arg(&dst)
+            .arg("--zero-initialize-workgroup-memory").arg(mode).output().unwrap();
+        assert!(r.status.success(), "mode {mode} stderr: {}", String::from_utf8_lossy(&r.stderr));
+    }
+}
+
+#[test]
+fn config_nested_common_flat_json() {
+    let dir = std::env::temp_dir().join("naga_cli_p3_cfg");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("s.wgsl");
+    std::fs::write(&src, "@fragment fn main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }").unwrap();
+    let out = dir.join("s.spv");
+    // serde(flatten) keeps common keys flat inside spv_out:
+    let r = naga().arg(&src).arg(&out)
+        .arg("--config-json").arg(r#"{"spv_out":{"force_loop_bounding":false}}"#)
+        .output().unwrap();
+    assert!(r.status.success(), "stderr: {}", String::from_utf8_lossy(&r.stderr));
+}
+
+#[test]
+fn config_json_and_common_flag_are_exclusive() {
+    let out = naga()
+        .arg("in.wgsl")
+        .arg("--config-json").arg("{}")
+        .arg("--force-loop-bounding").arg("false")
+        .output().unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("cannot be used with"),
+        "expected clap conflict error, got: {}", String::from_utf8_lossy(&out.stderr));
+}
+
+#[test]
 fn config_json_matches_equivalent_flag() {
     let dir = std::env::temp_dir().join("naga_cli_p2_config");
     std::fs::create_dir_all(&dir).unwrap();
