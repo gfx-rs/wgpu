@@ -186,23 +186,24 @@ mod tests {
 
     #[test]
     fn validation_error_becomes_diagnostic() {
-        // Construct a module that parses but fails validation.
-        let src = "@fragment fn main() { let x = 1 / 0; }";
-        let mut fe = naga::front::wgsl::Frontend::new();
-        // If this source doesn't fail validation on your naga version, swap for another
-        // known-invalid-but-parseable snippet; the point is a WithSpan<ValidationError>.
-        if let Ok(module) = fe.parse(src) {
-            let res = naga::valid::Validator::new(
-                naga::valid::ValidationFlags::all(),
-                naga::valid::Capabilities::all(),
-            )
-            .validate(&module);
-            if let Err(e) = res {
-                let d = validation_error_to_diagnostic(&e, Some(src));
-                assert!(matches!(d.severity, Severity::Error));
-                assert!(!d.message.is_empty());
-            }
-        }
+        // A fragment entry point returning f32 without a @location annotation
+        // parses successfully but fails naga validation with
+        // "Entry point main at Fragment is invalid".
+        let src = "@fragment fn main() -> f32 { return 0.0; }";
+        let module = naga::front::wgsl::Frontend::new()
+            .parse(src)
+            .expect("snippet must PARSE (validation-only failure)");
+        let err = naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        )
+        .validate(&module)
+        .expect_err("snippet must FAIL validation");
+        let d = validation_error_to_diagnostic(&err, Some(src));
+        assert!(matches!(d.severity, Severity::Error));
+        assert!(!d.message.is_empty());
+        // Location may or may not be present depending on the error's span,
+        // but a validation error must carry at least a message.
     }
 
     #[test]
