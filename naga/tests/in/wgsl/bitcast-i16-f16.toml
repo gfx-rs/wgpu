@@ -9,4 +9,4 @@ version = [1, 0]
 shader_model = "V6_2"
 special_constants_binding = { space = 1, register = 0 }
 immediates_target = { space = 0, register = 0 }
-zero_initialize_workgroup_memory = true
+zero_initialize_workgroup_memory = "Polyfill"
