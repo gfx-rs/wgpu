@@ -54,6 +54,12 @@ Options:
           Mesh shader task dispatch limits, as "X,Y"
       --validate-mesh-output <VALIDATE_MESH_OUTPUT>
           Whether the mesh shader output should be validated [default: true] [possible values: true, false]
+      --config <CONFIG>
+          Read all translation options from a JSON config file (mutually exclusive with option flags)
+      --config-json <CONFIG_JSON>
+          Read all translation options from an inline JSON string (mutually exclusive with option flags)
+      --print-config-schema
+          Print the JSON Schema for the config document and exit
   -h, --help
           Print help
   -V, --version

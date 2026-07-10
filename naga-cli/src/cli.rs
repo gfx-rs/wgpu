@@ -1,66 +1,67 @@
 //! Command-line argument definitions.
 
-use clap::{Parser, ValueEnum};
+use clap::{ArgGroup, Parser, ValueEnum};
 
 /// Translate shaders to different formats.
 #[derive(Parser, Debug, Clone)]
 #[command(version, about, long_about = None)]
+#[command(group(ArgGroup::new("options").multiple(true).conflicts_with("config_input")))]
 pub struct Args {
     /// Bitmask of the ValidationFlags to be used; use 0 to disable validation.
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub validate: Option<u8>,
 
     /// Policy for index bounds checking of arrays, vectors, and matrices.
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub index_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
     /// Bounds-check policy for arrays/vectors/matrices in `storage`/`uniform` globals.
     /// Defaults to the index bounds check policy.
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub buffer_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
     /// Bounds-check policy for texture loads. Defaults to the index bounds check policy.
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub image_load_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
     /// Directory to dump the SPIR-V block context dump to.
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub block_ctx_dir: Option<String>,
 
     /// The shader entrypoint. With `--compact`, anything unreachable from it is dropped.
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub entry_point: Option<String>,
 
     /// GLSL profile to target, e.g. `es`, `core`, `es330`.
-    #[arg(long, value_parser = parse_glsl_profile)]
+    #[arg(long, value_parser = parse_glsl_profile, group = "options")]
     pub profile: Option<GlslProfile>,
 
     /// HLSL shader model, e.g. `50`, `51`, `60`..`67`.
-    #[arg(long, value_parser = parse_shader_model)]
+    #[arg(long, value_parser = parse_shader_model, group = "options")]
     pub shader_model: Option<naga::back::hlsl::ShaderModel>,
 
     /// SPIR-V version, e.g. `1.0`, `1.4`.
-    #[arg(long, value_parser = parse_spirv_version)]
+    #[arg(long, value_parser = parse_spirv_version, group = "options")]
     pub spirv_version: Option<(u8, u8)>,
 
     /// Shader stage; derived from the file extension if unspecified.
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub shader_stage: Option<ShaderStageArg>,
 
     /// Kind of input: `glsl`, `wgsl`, `spv`, or `bin`.
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub input_kind: Option<InputKind>,
 
     /// Metal language version, e.g. `1.0`, `1.1`, `1.2`.
-    #[arg(long, value_parser = parse_metal_version)]
+    #[arg(long, value_parser = parse_metal_version, group = "options")]
     pub metal_version: Option<(u8, u8)>,
 
     /// Disable coordinate-space conversions where the frontend/backend supports them.
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub keep_coordinate_space: bool,
 
     /// In dot output, include only the control flow graph.
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub dot_cfg_only: bool,
 
     /// Treat STDIN as if it were this file path (needed for extension-based detection).
@@ -68,15 +69,15 @@ pub struct Args {
     pub stdin_file_path: Option<String>,
 
     /// Generate debug symbols (spv-out only, for now).
-    #[arg(short = 'g', long)]
+    #[arg(short = 'g', long, group = "options")]
     pub generate_debug_symbols: bool,
 
     /// Compact the module's IR and revalidate.
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub compact: bool,
 
     /// Write the module's IR before compaction to the given file. Implies `--compact`.
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub before_compaction: Option<String>,
 
     /// Bulk validation mode: all filenames are inputs to read and validate.
@@ -84,24 +85,36 @@ pub struct Args {
     pub bulk_validate: bool,
 
     /// Pipeline-constant override, of the form "foo=N,bar=M"; repeatable.
-    #[arg(long = "override", value_parser = parse_overrides)]
+    #[arg(long = "override", value_parser = parse_overrides, group = "options")]
     pub overrides: Vec<Overrides>,
 
     /// Preprocessor defines for the GLSL frontend, "KEY=VALUE"; repeatable.
-    #[arg(short = 'D', long = "defines", value_parser = parse_defines)]
+    #[arg(short = 'D', long = "defines", value_parser = parse_defines, group = "options")]
     pub defines: Vec<Defines>,
 
     /// Capabilities filter: comma-separated names, a numeric bitflags value, "none", or "all".
-    #[arg(long, default_value = "all", value_parser = parse_capabilities)]
+    #[arg(long, default_value = "all", value_parser = parse_capabilities, group = "options")]
     pub capabilities: naga::valid::Capabilities,
 
     /// Mesh shader task dispatch limits, as "X,Y".
-    #[arg(long, value_parser = parse_task_limits)]
+    #[arg(long, value_parser = parse_task_limits, group = "options")]
     pub task_limits: Option<naga::back::TaskDispatchLimits>,
 
     /// Whether the mesh shader output should be validated.
-    #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+    #[arg(long, default_value_t = true, action = clap::ArgAction::Set, group = "options")]
     pub validate_mesh_output: bool,
+
+    /// Read all translation options from a JSON config file (mutually exclusive with option flags).
+    #[arg(long, group = "config_input")]
+    pub config: Option<String>,
+
+    /// Read all translation options from an inline JSON string (mutually exclusive with option flags).
+    #[arg(long, group = "config_input", conflicts_with = "config")]
+    pub config_json: Option<String>,
+
+    /// Print the JSON Schema for the config document and exit.
+    #[arg(long)]
+    pub print_config_schema: bool,
 
     /// Input file (stdin if omitted), then output files. In bulk mode, all are inputs.
     pub files: Vec<String>,
