@@ -5,13 +5,6 @@ fn naga() -> Command {
     Command::new(env!("CARGO_BIN_EXE_naga"))
 }
 
-/// Resolve an example file relative to the naga-cli manifest directory.
-fn example_path(name: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("examples")
-        .join(name)
-}
-
 /// Write `contents` to `<temp_dir>/<dir>/<name>`, creating directories as needed.
 fn write_tmp(dir: &str, name: &str, contents: &str) -> std::path::PathBuf {
     let d = std::env::temp_dir().join(dir);
@@ -30,6 +23,13 @@ const TRIANGLE_WGSL: &str = r#"
 }
 @fragment fn fs_main() -> @location(0) vec4<f32> { return tint; }
 "#;
+
+/// A sample partial JSON config (mirrors the README example): only the specified
+/// keys are applied, everything else uses defaults.
+const SAMPLE_CONFIG_JSON: &str = r#"{
+  "spv_out": { "lang_version": [1, 3], "force_loop_bounding": false },
+  "msl": { "lang_version": [2, 0] }
+}"#;
 
 #[test]
 fn output_language_matrix_from_wgsl() {
@@ -682,6 +682,21 @@ fn help_matches_snapshot() {
 }
 
 #[test]
+fn config_schema_matches_snapshot() {
+    let expected = include_str!("snapshots/config-schema.json");
+    let out = naga().arg("--print-config-schema").output().unwrap();
+    assert!(out.status.success());
+    let actual = String::from_utf8(out.stdout).unwrap();
+    assert_eq!(
+        actual.trim_end(),
+        expected.trim_end(),
+        "--print-config-schema output changed (a naga Options field or schemars derive moved). \
+         If intentional, regenerate:\n\
+         cargo run -q -p naga-cli -- --print-config-schema > naga-cli/tests/snapshots/config-schema.json"
+    );
+}
+
+#[test]
 fn json_format_valid_shader_reflection() {
     let dir = std::env::temp_dir().join("naga_cli_p4_ok");
     std::fs::create_dir_all(&dir).unwrap();
@@ -1128,14 +1143,16 @@ fn json_debug_symbols_warning_is_a_diagnostic() {
 
 #[test]
 fn readme_config_file_example() {
-    let dir = std::env::temp_dir().join("naga_cli_p6_readme_cfg");
+    let dir = std::env::temp_dir().join("naga_cli_readme_cfg");
     std::fs::create_dir_all(&dir).unwrap();
+    let src = write_tmp("naga_cli_readme_cfg", "triangle.wgsl", TRIANGLE_WGSL);
+    let cfg = write_tmp("naga_cli_readme_cfg", "options.json", SAMPLE_CONFIG_JSON);
     let out = dir.join("tri.spv");
     let r = naga()
-        .arg(example_path("triangle.wgsl"))
+        .arg(&src)
         .arg(&out)
         .arg("--config")
-        .arg(example_path("options.json"))
+        .arg(&cfg)
         .output()
         .unwrap();
     assert!(
@@ -1151,8 +1168,9 @@ fn readme_config_file_example() {
 
 #[test]
 fn readme_json_reflection_example() {
+    let src = write_tmp("naga_cli_readme_json", "triangle.wgsl", TRIANGLE_WGSL);
     let r = naga()
-        .arg(example_path("triangle.wgsl"))
+        .arg(&src)
         .args(["--format", "json"])
         .output()
         .unwrap();

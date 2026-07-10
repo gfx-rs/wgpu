@@ -2,9 +2,43 @@
 
 use clap::{ArgGroup, Parser, ValueEnum};
 
+/// Expanded help shown by `naga --help` (the terse form is shown by `naga -h`).
+const LONG_ABOUT: &str = "\
+Translate and validate shaders between WGSL, SPIR-V, GLSL, MSL, HLSL, and DOT.
+
+The input format is inferred from the input file extension (override with --input-kind, or
+--stdin-file-path when reading stdin); the output format is inferred from the output file
+extension. With no output file, the shader is only validated.
+
+OPTIONS: FLAGS vs CONFIG
+  Translation options can be set either as individual flags OR via a JSON config
+  (--config <file> / --config-json <string>); the two are mutually exclusive. Run
+  `naga --print-config-schema` to see every config key and its type. Processing flags
+  (--compact, --before-compaction, -g, --spirv-val, --spirv-opt, --dxc) compose with either.
+
+STRUCTURED OUTPUT
+  --format json emits one JSON document on stdout with `diagnostics`
+  (severity/message/location/labels/notes) and `reflection` (entry points, resources,
+  overrides) — intended for editor integrations and CI.
+
+EXTERNAL TOOLS (must be on PATH)
+  --spirv-val and --spirv-opt validate / optimize SPIR-V output; --dxc compiles each HLSL
+  entry point to `<hlsl-stem>.<entry-point>.dxil`.
+
+NOTES
+  * Coordinate-space conversion is controlled by --keep-coordinate-space, not by spv_out.flags.
+  * --task-limits and --validate-mesh-output fan out to all applicable backends; in a config,
+    set the flat per-backend keys `task_dispatch_limits` / `mesh_shader_primitive_indices_clamp`.
+  * --print-config-schema omits `spv_out.capabilities` (its type has no JsonSchema impl), but
+    --config / --config-json still accept it.
+  * In --format json every diagnostic is `error` or `warning`, and SPIR-V parse errors have no
+    source location.
+  * `--zero-initialize-workgroup-memory native` is honored only by the SPIR-V backend; the other
+    backends treat it as `polyfill`.";
+
 /// Translate shaders to different formats.
 #[derive(Parser, Debug, Clone)]
-#[command(version, about, long_about = None)]
+#[command(version, about, long_about = LONG_ABOUT)]
 #[command(group(ArgGroup::new("options").multiple(true).conflicts_with("config_input").args([
     "fake_missing_bindings",
     "force_loop_bounding",
