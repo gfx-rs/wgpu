@@ -2,6 +2,7 @@ mod cli;
 mod config;
 mod core;
 mod error;
+mod hooks;
 mod output;
 mod params;
 
