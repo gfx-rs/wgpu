@@ -1,0 +1,35 @@
+capabilities = """
+  TEXTURE_AND_SAMPLER_BINDING_ARRAY
+  | TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+"""
+targets = "HLSL"
+
+[hlsl]
+sampler_binding = "Direct"
+fake_missing_bindings = true
+zero_initialize_workgroup_memory = true
+
+# tex
+[[hlsl.binding_map]]
+bind_target = { register = 0, space = 0 }
+resource_binding = { group = 0, binding = 0 }
+
+# samp
+[[hlsl.binding_map]]
+bind_target = { register = 0, space = 0 }
+resource_binding = { group = 0, binding = 1 }
+
+# depth_tex
+[[hlsl.binding_map]]
+bind_target = { register = 1, space = 0 }
+resource_binding = { group = 0, binding = 2 }
+
+# samp_comp
+[[hlsl.binding_map]]
+bind_target = { register = 1, space = 0 }
+resource_binding = { group = 0, binding = 3 }
+
+# samp_array
+[[hlsl.binding_map]]
+bind_target = { register = 2, space = 0, binding_array_size = 4 }
+resource_binding = { group = 0, binding = 4 }

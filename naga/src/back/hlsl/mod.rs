@@ -99,12 +99,17 @@ accessing individual columns by dynamic index.
 
 ## Sampler Handling
 
-Due to limitations in how sampler heaps work in D3D12, we need to access samplers
-through a layer of indirection. Instead of directly binding samplers, we bind the entire
-sampler heap as both a standard and a comparison sampler heap. We then use a sampler
-index buffer for each bind group. This buffer is accessed in the shader to get the actual
-sampler index within the heap. See the wgpu_hal dx12 backend documentation for more
-information.
+By default ([`SamplerBinding::Heap`]), due to limitations in how sampler heaps work in
+D3D12, we access samplers through a layer of indirection. Instead of directly binding
+samplers, we bind the entire sampler heap as both a standard and a comparison sampler
+heap. We then use a sampler index buffer for each bind group. This buffer is accessed in
+the shader to get the actual sampler index within the heap. See the wgpu_hal dx12 backend
+documentation for more information.
+
+Consumers that manage sampler descriptors themselves can instead set
+[`Options::sampler_binding`] to [`SamplerBinding::Direct`], which declares each sampler as
+an ordinary HLSL `SamplerState`/`SamplerComparisonState` bound directly to the register
+given by its [`Options::binding_map`] entry, with no heap indirection.
 
 # External textures
 
@@ -344,6 +349,32 @@ impl Default for SamplerHeapBindTargets {
     }
 }
 
+/// How the HLSL backend binds sampler global variables.
+///
+/// Selected via [`Options::sampler_binding`].
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Default)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub enum SamplerBinding {
+    /// Bind the entire sampler heap (as both a standard and a comparison
+    /// sampler heap) plus a per-bind-group sampler index buffer, and access
+    /// each sampler through that indirection.
+    ///
+    /// This is the layout the `wgpu` `dx12` backend expects. See the module
+    /// documentation's [Sampler Handling] section for details.
+    ///
+    /// [Sampler Handling]: index.html#sampler-handling
+    #[default]
+    Heap,
+    /// Declare each sampler as an ordinary HLSL `SamplerState` /
+    /// `SamplerComparisonState` bound directly to the register given by its
+    /// [`Options::binding_map`] entry, with no heap indirection.
+    ///
+    /// In this mode the [`Options::sampler_heap_target`] and
+    /// [`Options::sampler_buffer_binding_map`] options are unused.
+    Direct,
+}
+
 #[cfg(feature = "deserialize")]
 #[derive(serde::Deserialize)]
 struct SamplerIndexBufferBindingSerialization {
@@ -513,6 +544,19 @@ pub struct Options {
     /// [`D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS`]: https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_root_parameter_type
     pub immediates_target: Option<BindTarget>,
 
+    /// How sampler global variables are bound.
+    ///
+    /// Defaults to [`SamplerBinding::Heap`], which routes samplers through the
+    /// sampler heap described by [`sampler_heap_target`] and
+    /// [`sampler_buffer_binding_map`]. Set to [`SamplerBinding::Direct`] to
+    /// instead declare each sampler directly on the register given by its
+    /// [`binding_map`] entry.
+    ///
+    /// [`sampler_heap_target`]: Options::sampler_heap_target
+    /// [`sampler_buffer_binding_map`]: Options::sampler_buffer_binding_map
+    /// [`binding_map`]: Options::binding_map
+    pub sampler_binding: SamplerBinding,
+
     /// HLSL binding information for the sampler heap and comparison sampler heap.
     pub sampler_heap_target: SamplerHeapBindTargets,
 
@@ -570,6 +614,7 @@ impl Default for Options {
             binding_map: BindingMap::default(),
             fake_missing_bindings: true,
             special_constants_binding: None,
+            sampler_binding: SamplerBinding::default(),
             sampler_heap_target: SamplerHeapBindTargets::default(),
             sampler_buffer_binding_map: alloc::collections::BTreeMap::default(),
             immediates_target: None,

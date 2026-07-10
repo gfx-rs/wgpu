@@ -1502,6 +1502,7 @@ impl crate::Device for super::Device {
                 dynamic_storage_buffer_offsets_targets,
                 zero_initialize_workgroup_memory: true,
                 restrict_indexing: true,
+                sampler_binding: hlsl::SamplerBinding::Heap,
                 sampler_heap_target,
                 sampler_buffer_binding_map,
                 external_texture_binding_map,

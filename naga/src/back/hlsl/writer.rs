@@ -1229,13 +1229,19 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         let binding = *global.binding.as_ref().unwrap();
 
+        // This was already validated, so we can confidently unwrap it.
+        let bt = self.options.resolve_resource_binding(&binding).unwrap();
+
+        // In `Direct` mode, declare the sampler on its own register instead of
+        // routing it through the sampler heap.
+        if self.options.sampler_binding == super::SamplerBinding::Direct {
+            return self.write_global_sampler_direct(module, handle, global, bt);
+        }
+
         let key = super::SamplerIndexBufferKey {
             group: binding.group,
         };
         self.write_wrapped_sampler_buffer(key)?;
-
-        // This was already validated, so we can confidently unwrap it.
-        let bt = self.options.resolve_resource_binding(&binding).unwrap();
 
         match module.types[global.ty].inner {
             TypeInner::Sampler { comparison } => {
@@ -1277,6 +1283,54 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
             _ => unreachable!(),
         };
+
+        Ok(())
+    }
+
+    /// Write a sampler global for [`SamplerBinding::Direct`] mode: an ordinary
+    /// HLSL `SamplerState`/`SamplerComparisonState` bound directly to a register,
+    /// with no sampler heap indirection.
+    ///
+    /// [`SamplerBinding::Direct`]: super::SamplerBinding::Direct
+    fn write_global_sampler_direct(
+        &mut self,
+        module: &Module,
+        handle: Handle<crate::GlobalVariable>,
+        global: &crate::GlobalVariable,
+        bt: super::BindTarget,
+    ) -> BackendResult {
+        // Determine whether this is a comparison sampler and, for binding
+        // arrays, the element type and declared size.
+        let (comparison, array) = match module.types[global.ty].inner {
+            TypeInner::Sampler { comparison } => (comparison, None),
+            TypeInner::BindingArray { base, size } => match module.types[base].inner {
+                TypeInner::Sampler { comparison } => (comparison, Some((base, size))),
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        };
+
+        let ty_name = if comparison {
+            "SamplerComparisonState"
+        } else {
+            "SamplerState"
+        };
+        let name = &self.names[&NameKey::GlobalVariable(handle)];
+        write!(self.out, "{ty_name} {name}")?;
+
+        if let Some((base, size)) = array {
+            if let Some(overridden_size) = bt.binding_array_size {
+                write!(self.out, "[{overridden_size}]")?;
+            } else {
+                self.write_array_size(module, base, size)?;
+            }
+        }
+
+        write!(self.out, " : register(s{}", bt.register)?;
+        if bt.space != 0 {
+            write!(self.out, ", space{}", bt.space)?;
+        }
+        writeln!(self.out, ");")?;
 
         Ok(())
     }
@@ -3761,17 +3815,23 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 let global_variable = &module.global_variables[handle];
                 let ty = &module.types[global_variable.ty].inner;
 
-                // In the case of binding arrays of samplers, we need to not write anything
-                // as the we are in the wrong position to fully write the expression.
+                // In `Heap` mode, for binding arrays of samplers we need to not
+                // write anything here, as we are in the wrong position to fully
+                // write the expression; the entire writing is done by
+                // Access/AccessIndex via the sampler heap indirection.
                 //
-                // The entire writing is done by AccessIndex.
-                let is_binding_array_of_samplers = match *ty {
-                    TypeInner::BindingArray { base, .. } => {
-                        let base_ty = &module.types[base].inner;
-                        matches!(*base_ty, TypeInner::Sampler { .. })
-                    }
-                    _ => false,
-                };
+                // In `Direct` mode the sampler array is an ordinary HLSL array,
+                // so we write its name here and let Access/AccessIndex append
+                // the index normally.
+                let is_binding_array_of_samplers = self.options.sampler_binding
+                    == super::SamplerBinding::Heap
+                    && match *ty {
+                        TypeInner::BindingArray { base, .. } => {
+                            let base_ty = &module.types[base].inner;
+                            matches!(*base_ty, TypeInner::Sampler { .. })
+                        }
+                        _ => false,
+                    };
 
                 let is_storage_space =
                     matches!(global_variable.space, crate::AddressSpace::Storage { .. });
@@ -4730,6 +4790,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         base: Handle<crate::Expression>,
         resolved: &TypeInner,
     ) -> Option<BindingArraySamplerInfo> {
+        // In `Direct` mode samplers are declared as ordinary HLSL sampler
+        // arrays, so they are indexed directly with no heap indirection.
+        if self.options.sampler_binding == super::SamplerBinding::Direct {
+            return None;
+        }
+
         if let TypeInner::BindingArray {
             base: base_ty_handle,
             ..

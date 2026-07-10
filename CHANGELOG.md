@@ -161,6 +161,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - spirv-out ray tracing pipelines. By @Vecvec in [#9085](https://github.com/gfx-rs/wgpu/pull/9085).
 - Add `spirv-out` ray tracing pipelines. By @Vecvec in [#9085](https://github.com/gfx-rs/wgpu/pull/9085).
 - Add `naga::front::wgsl::ParseError::notes()`. By @kwillemsen in [#9572](https://github.com/gfx-rs/wgpu/pull/9572).
+- Add `hlsl::SamplerBinding` and the `hlsl::Options::sampler_binding` field. Set it to `SamplerBinding::Direct` to make the HLSL backend emit ordinary `SamplerState`/`SamplerComparisonState` declarations bound directly to a register, instead of routing all samplers through the D3D12 sampler heap. By @Inner-Daemons.
 
 ### Changes
 
