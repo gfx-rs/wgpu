@@ -39,6 +39,7 @@ use crate::{valid, FastHashSet};
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum BoundsCheckPolicy {
     /// Replace out-of-bounds indexes with some arbitrary in-bounds index.
     ///
@@ -67,6 +68,7 @@ pub enum BoundsCheckPolicy {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "deserialize", serde(default))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct BoundsCheckPolicies {
     /// How should the generated code handle array, vector, or matrix indices
     /// that are out of range?

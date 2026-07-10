@@ -12,6 +12,7 @@ pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum Version {
     /// `core` GLSL.
     Desktop(u16),
