@@ -126,6 +126,7 @@ rspirv.workspace = true
 # and then refuses to build instead of ignoring it.
 spirv.workspace = true
 serde = { workspace = true, features = ["default", "derive"] }
+serde_json = { workspace = true }
 strum = { workspace = true }
 walkdir.workspace = true
 
