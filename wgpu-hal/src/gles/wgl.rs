@@ -1,3 +1,8 @@
+#![expect(
+    missing_debug_implementations,
+    reason = "TODO: someone developing on Windows add Debug impls where possible"
+)]
+
 use alloc::{borrow::ToOwned as _, ffi::CString, string::String, sync::Arc, vec::Vec};
 use core::{
     ffi::{c_int, c_void, CStr},

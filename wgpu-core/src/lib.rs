@@ -40,6 +40,7 @@
     // `wgpu-core` isn't entirely user-facing, so it's useful to document internal items.
     rustdoc::private_intra_doc_links,
 )]
+#![expect(missing_debug_implementations, reason = "TODO")]
 #![warn(
     clippy::alloc_instead_of_core,
     clippy::ptr_as_ptr,
@@ -63,7 +64,7 @@
 
 extern crate alloc;
 extern crate naga_types as nt;
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", test))]
 extern crate std;
 extern crate wgpu_hal as hal;
 extern crate wgpu_types as wgt;

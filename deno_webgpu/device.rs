@@ -689,7 +689,7 @@ impl GPUDevice {
     GPURenderBundleEncoder {
       instance: self.instance.clone(),
       error_handler: self.error_handler.clone(),
-      encoder: RefCell::new(Some(encoder)),
+      encoder: RefCell::new(encoder),
       label: descriptor.label,
     }
   }

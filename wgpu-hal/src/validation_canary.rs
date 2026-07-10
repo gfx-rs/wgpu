@@ -21,6 +21,7 @@ pub static VALIDATION_CANARY: ValidationCanary = ValidationCanary {
 };
 
 /// Flag for internal testing.
+#[derive(Debug)]
 pub struct ValidationCanary {
     inner: Mutex<Vec<String>>,
 }

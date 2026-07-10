@@ -629,7 +629,7 @@ impl Options {
 }
 
 /// Reflection info for entry point names.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ReflectionInfo {
     /// Mapping of the entry point names.
     ///
@@ -720,6 +720,7 @@ impl Wrapped {
 /// If this is provided, vertex outputs will be removed if they are not inputs of this fragment
 /// entry point. This is necessary for generating correct HLSL when some of the vertex shader
 /// outputs are not consumed by the fragment shader.
+#[derive(Debug)]
 pub struct FragmentEntryPoint<'a> {
     module: &'a crate::Module,
     func: &'a crate::Function,
@@ -741,6 +742,7 @@ impl<'a> FragmentEntryPoint<'a> {
     }
 }
 
+#[expect(missing_debug_implementations, reason = "would be way too verbose?")]
 pub struct Writer<'a, W> {
     out: W,
     names: crate::FastHashMap<proc::NameKey, String>,

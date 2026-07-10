@@ -1,5 +1,7 @@
 //! Tests of [`wgpu::Texture`] and related.
 
+use std::sync::Arc;
+
 use wgpu_test::{fail, valid};
 
 /// Ensures that submitting a command buffer referencing an already destroyed texture
@@ -592,7 +594,7 @@ fn copy_buffer_to_texture_forbidden_format_aspect() {
     }
 }
 
-/// Ensures that attempting to create a texture with [`wgpu::TextureUsages::TRANSIENT`]
+/// Ensures that attempting to create a texture with [`wgpu::TextureUsages::TRANSIENT_ATTACHMENT`]
 /// and its unsupported usages fails validation.
 #[test]
 fn transient_invalid_usage() {
@@ -606,9 +608,12 @@ fn transient_invalid_usage() {
 
     let invalid_usages = wgpu::TextureUsages::all()
         - wgpu::TextureUsages::RENDER_ATTACHMENT
-        - wgpu::TextureUsages::TRANSIENT;
+        - wgpu::TextureUsages::TRANSIENT_ATTACHMENT;
 
     for usage in invalid_usages {
+        let usage = wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::TRANSIENT_ATTACHMENT
+            | usage;
         let invalid_texture_descriptor = wgpu::TextureDescriptor {
             label: None,
             size,
@@ -616,14 +621,14 @@ fn transient_invalid_usage() {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT | usage,
+            usage,
             view_formats: &[],
             mapped_at_creation: false,
         };
         fail(
             &device,
             || device.create_texture(&invalid_texture_descriptor),
-            Some(&format!("Texture usage TextureUsages(TRANSIENT) is not compatible with texture usage {usage:?}")),
+            Some(&format!("Transient texture usage must be equal to `TRANSIENT_ATTACHMENT | RENDER_ATTACHMENT`, but got `{usage:?}`")),
         );
     }
 
@@ -634,18 +639,18 @@ fn transient_invalid_usage() {
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::TRANSIENT,
+        usage: wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
         view_formats: &[],
         mapped_at_creation: false,
     };
     fail(
         &device,
         || device.create_texture(&invalid_texture_descriptor),
-        Some("Invalid usage flags TextureUsages(TRANSIENT)"),
+        Some("Transient texture usage must be equal to `TRANSIENT_ATTACHMENT | RENDER_ATTACHMENT`, but got `TextureUsages(TRANSIENT_ATTACHMENT)`"),
     );
 }
 
-/// Ensures that attempting to use a texture of [`wgpu::TextureUsages::TRANSIENT`]
+/// Ensures that attempting to use a texture of [`wgpu::TextureUsages::TRANSIENT_ATTACHMENT`]
 /// with [`wgpu::StoreOp::Store`] fails validation.
 #[test]
 fn transient_invalid_storeop() {
@@ -664,7 +669,7 @@ fn transient_invalid_storeop() {
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
         view_formats: &[],
         mapped_at_creation: false,
     });
@@ -695,6 +700,33 @@ fn transient_invalid_storeop() {
 
             encoder.finish()
         },
-      Some("Color attachment's usage contains TextureUsages(TRANSIENT). This can only be used with StoreOp::Discard, but StoreOp::Store was provided")
+      Some("Color attachment with `TRANSIENT_ATTACHMENT` usage can only be used with `LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and  `StoreOp::Discard`. Operations `(Clear(Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }), Store)` were provided")
     );
+}
+
+/// <https://bugzilla.mozilla.org/show_bug.cgi?id=2053860>
+#[test]
+fn no_overflow_in_texture_selector() {
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    // ignore validation errors to not panic before reaching `TextureView::invalid`
+    device.on_uncaptured_error(Arc::new(|_| {}));
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: 59,
+            height: 401,
+            depth_or_array_layers: 1948,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::R8Unorm,
+        usage: wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    let _view = texture.create_view(&wgpu::TextureViewDescriptor {
+        base_array_layer: 3385121660,
+        array_layer_count: Some(3815184380),
+        ..Default::default()
+    });
 }

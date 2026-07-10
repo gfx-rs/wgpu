@@ -8,6 +8,7 @@ use super::TextureFormatDesc;
 
 /// A wrapper around a [`glow::Context`] to provide a fake `lock()` api that makes it compatible
 /// with the `AdapterContext` API from the EGL implementation.
+#[derive(Debug)]
 pub struct AdapterContext {
     pub glow_context: glow::Context,
     pub webgl2_context: web_sys::WebGl2RenderingContext,

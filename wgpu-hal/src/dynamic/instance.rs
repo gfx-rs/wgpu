@@ -4,6 +4,7 @@ use crate::{Api, Capabilities, ExposedAdapter, Instance, InstanceError};
 
 use super::{DynAdapter, DynResource, DynResourceExt as _, DynSurface};
 
+#[expect(missing_debug_implementations, reason = "dyn")]
 pub struct DynExposedAdapter {
     pub adapter: Box<dyn DynAdapter>,
     pub info: wgt::AdapterInfo,
