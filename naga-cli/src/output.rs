@@ -278,6 +278,49 @@ mod tests {
     }
 
     #[test]
+    fn glsl_errors_become_diagnostics() {
+        // A definitely-invalid GLSL fragment — "this is not valid glsl" is not a
+        // statement, so the parser must emit at least one parse error.
+        let src = "#version 450\nvoid main() { this is not valid glsl }";
+        let mut fe = naga::front::glsl::Frontend::default();
+        let opts = naga::front::glsl::Options {
+            stage: naga::ShaderStage::Fragment,
+            defines: Default::default(),
+        };
+        let errs = fe.parse(&opts, src).unwrap_err();
+        let diags = glsl_parse_errors_to_diagnostics(&errs, src);
+        assert!(
+            !diags.is_empty(),
+            "expected ≥1 diagnostic from invalid GLSL"
+        );
+        assert!(
+            diags.iter().all(|d| matches!(d.severity, Severity::Error)),
+            "all GLSL parse diagnostics must be Error"
+        );
+        assert!(
+            diags.iter().all(|d| !d.message.is_empty()),
+            "all GLSL parse diagnostics must have a non-empty message"
+        );
+    }
+
+    #[test]
+    fn spv_error_becomes_diagnostic() {
+        // [0, 0, 0, 0] is four bytes that do not form a valid SPIR-V magic word,
+        // so parse_u8_slice must return an Err.
+        let err = naga::front::spv::parse_u8_slice(&[0, 0, 0, 0], &Default::default()).unwrap_err();
+        let d = spv_error_to_diagnostic(&err);
+        assert!(matches!(d.severity, Severity::Error));
+        assert!(
+            !d.message.is_empty(),
+            "spv error diagnostic must have a non-empty message"
+        );
+        assert!(
+            d.location.is_none(),
+            "spv error diagnostic must have no source location"
+        );
+    }
+
+    #[test]
     fn location_from_source_location() {
         let sl = naga::SourceLocation {
             line_number: 3,

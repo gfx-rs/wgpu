@@ -202,7 +202,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
     // Note that when output is to a non-WGSL shader language, we will call
     // `process_overrides`, which does its own compaction even if it is not
     // explicitly requested on the command line.
-    let info = if args.compact {
+    let info = if params.compact {
         // Compact only if validation succeeded. Otherwise, compaction may panic.
         if info.is_some() {
             // Write out the module state before compaction, if requested.

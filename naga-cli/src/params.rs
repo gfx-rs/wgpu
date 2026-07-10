@@ -189,4 +189,89 @@ mod tests {
             Args::try_parse_from(["naga", "--validate-mesh-output", "true", "in.wgsl"]).unwrap();
         assert!(args_true.validate_mesh_output);
     }
+
+    #[test]
+    fn force_loop_bounding_propagates() {
+        // --force-loop-bounding false must propagate to all three backends.
+        let args =
+            Args::try_parse_from(["naga", "--force-loop-bounding", "false", "in.wgsl"]).unwrap();
+        let params = build_parameters(&args).unwrap();
+        assert!(!params.spv_out.common.force_loop_bounding);
+        assert!(!params.msl.common.force_loop_bounding);
+        assert!(!params.hlsl.common.force_loop_bounding);
+
+        // default (omitted) must stay true on all three backends.
+        let args_default = Args::try_parse_from(["naga", "in.wgsl"]).unwrap();
+        let params_default = build_parameters(&args_default).unwrap();
+        assert!(params_default.spv_out.common.force_loop_bounding);
+        assert!(params_default.msl.common.force_loop_bounding);
+        assert!(params_default.hlsl.common.force_loop_bounding);
+    }
+
+    #[test]
+    fn fake_missing_bindings_propagates() {
+        // --fake-missing-bindings false must propagate to all three backends.
+        let args =
+            Args::try_parse_from(["naga", "--fake-missing-bindings", "false", "in.wgsl"]).unwrap();
+        let params = build_parameters(&args).unwrap();
+        assert!(!params.spv_out.common.fake_missing_bindings);
+        assert!(!params.msl.common.fake_missing_bindings);
+        assert!(!params.hlsl.common.fake_missing_bindings);
+
+        // default (omitted) must stay true on all three backends.
+        let args_default = Args::try_parse_from(["naga", "in.wgsl"]).unwrap();
+        let params_default = build_parameters(&args_default).unwrap();
+        assert!(params_default.spv_out.common.fake_missing_bindings);
+        assert!(params_default.msl.common.fake_missing_bindings);
+        assert!(params_default.hlsl.common.fake_missing_bindings);
+    }
+
+    #[test]
+    fn ray_query_initialization_tracking_propagates() {
+        // --ray-query-initialization-tracking false must propagate to all three backends.
+        let args = Args::try_parse_from([
+            "naga",
+            "--ray-query-initialization-tracking",
+            "false",
+            "in.wgsl",
+        ])
+        .unwrap();
+        let params = build_parameters(&args).unwrap();
+        assert!(!params.spv_out.common.ray_query_initialization_tracking);
+        assert!(!params.msl.common.ray_query_initialization_tracking);
+        assert!(!params.hlsl.common.ray_query_initialization_tracking);
+
+        // default (omitted) must stay true on all three backends.
+        let args_default = Args::try_parse_from(["naga", "in.wgsl"]).unwrap();
+        let params_default = build_parameters(&args_default).unwrap();
+        assert!(
+            params_default
+                .spv_out
+                .common
+                .ray_query_initialization_tracking
+        );
+        assert!(params_default.msl.common.ray_query_initialization_tracking);
+        assert!(params_default.hlsl.common.ray_query_initialization_tracking);
+    }
+
+    #[test]
+    fn task_limits_propagates() {
+        // --task-limits X,Y must propagate to all three backends as Some(TaskDispatchLimits{..}).
+        let args = Args::try_parse_from(["naga", "--task-limits", "8,16", "in.wgsl"]).unwrap();
+        let params = build_parameters(&args).unwrap();
+        let expected = Some(naga::back::TaskDispatchLimits {
+            max_mesh_workgroups_per_dim: 8,
+            max_mesh_workgroups_total: 16,
+        });
+        assert_eq!(params.spv_out.common.task_dispatch_limits, expected);
+        assert_eq!(params.msl.common.task_dispatch_limits, expected);
+        assert_eq!(params.hlsl.common.task_dispatch_limits, expected);
+
+        // default (omitted) must stay None on all three backends.
+        let args_default = Args::try_parse_from(["naga", "in.wgsl"]).unwrap();
+        let params_default = build_parameters(&args_default).unwrap();
+        assert_eq!(params_default.spv_out.common.task_dispatch_limits, None);
+        assert_eq!(params_default.msl.common.task_dispatch_limits, None);
+        assert_eq!(params_default.hlsl.common.task_dispatch_limits, None);
+    }
 }
