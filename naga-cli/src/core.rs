@@ -184,8 +184,10 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
         // Compact only if validation succeeded. Otherwise, compaction may panic.
         if info.is_some() {
             // Write out the module state before compaction, if requested.
+            // Tool hooks (dxc/spirv-opt/spirv-val) must NOT fire on this debug dump;
+            // pass a no-op Hooks so only the real output paths invoke them.
             if let Some(ref before_compaction) = args.before_compaction {
-                write_output(&module, &info, params, spv_out_with_debug.as_ref(), before_compaction, &hooks)?;
+                write_output(&module, &info, params, spv_out_with_debug.as_ref(), before_compaction, &crate::hooks::Hooks::default())?;
             }
 
             naga::compact::compact(&mut module, KeepUnused::No);
