@@ -1197,6 +1197,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         unimplemented!("resource tables land in a later change")
     }
 
+    unsafe fn resource_table_memory_barrier(&mut self) {
+        unimplemented!("resource tables land in a later change")
+    }
+
     unsafe fn set_immediates(
         &mut self,
         layout: &super::PipelineLayout,

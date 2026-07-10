@@ -820,6 +820,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         unimplemented!()
     }
 
+    unsafe fn resource_table_memory_barrier(&mut self) {
+        unimplemented!()
+    }
+
     unsafe fn set_immediates(
         &mut self,
         _layout: &super::PipelineLayout,

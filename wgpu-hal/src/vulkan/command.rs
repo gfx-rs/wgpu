@@ -1008,6 +1008,27 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
     }
 
+    unsafe fn resource_table_memory_barrier(&mut self) {
+        // A global compute→compute memory barrier, no image layout transition
+        // (work item 0.10; see the trait docs and `plans/resource-table.md`).
+        // Conservatively covers read/write in both directions so it serves
+        // write→table-read (RAW), table-read→write (WAR), and write→write.
+        let access = vk::AccessFlags::SHADER_READ | vk::AccessFlags::SHADER_WRITE;
+        unsafe {
+            self.device.raw.cmd_pipeline_barrier(
+                self.active,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::DependencyFlags::empty(),
+                &[vk::MemoryBarrier::default()
+                    .src_access_mask(access)
+                    .dst_access_mask(access)],
+                &[],
+                &[],
+            )
+        };
+    }
+
     unsafe fn set_immediates(
         &mut self,
         layout: &super::PipelineLayout,

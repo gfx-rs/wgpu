@@ -1674,6 +1674,26 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         table: &<Self::A as Api>::ResourceTable,
     );
 
+    /// Emit a global compute→compute memory barrier for the resource-table
+    /// dirty-bit hazard scheme (work item 0.10 of the bindless feature).
+    ///
+    /// This is a plain memory barrier (Vulkan `VkMemoryBarrier`, DX12 null-UAV
+    /// barrier, Metal `memoryBarrier(scope:)`) with no image layout transition:
+    /// it orders prior compute shader stores against subsequent compute shader
+    /// loads/stores across the whole submission. `wgpu-core` emits it inside a
+    /// table-bound compute pass when a dispatch may read through the table what
+    /// a prior dispatch wrote (or vice versa); layout correctness never depends
+    /// on this barrier (see `plans/resource-table.md`, Invariant 3).
+    ///
+    /// In M0 the resource-table feature is Vulkan-only, so this is only
+    /// implemented on the Vulkan and noop backends; other backends will
+    /// implement it alongside their resource-table support.
+    ///
+    /// # Safety
+    ///
+    /// - This [`CommandEncoder`] must be within a compute pass.
+    unsafe fn resource_table_memory_barrier(&mut self);
+
     /// Sets a range in immediate data.
     ///
     /// IMPORTANT: while the data is passed as words, the offset is in bytes!

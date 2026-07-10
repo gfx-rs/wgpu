@@ -74,6 +74,8 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         table: &dyn DynResourceTable,
     );
 
+    unsafe fn resource_table_memory_barrier(&mut self);
+
     unsafe fn set_immediates(
         &mut self,
         layout: &dyn DynPipelineLayout,
@@ -360,6 +362,10 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
         let layout = layout.expect_downcast_ref();
         let table = table.expect_downcast_ref();
         unsafe { C::set_resource_table(self, layout, index, table) };
+    }
+
+    unsafe fn resource_table_memory_barrier(&mut self) {
+        unsafe { C::resource_table_memory_barrier(self) };
     }
 
     unsafe fn set_immediates(

@@ -163,6 +163,7 @@ impl crate::CommandEncoder for CommandBuffer {
     ) {
     }
     unsafe fn set_resource_table(&mut self, layout: &Resource, index: u32, table: &Resource) {}
+    unsafe fn resource_table_memory_barrier(&mut self) {}
     unsafe fn set_immediates(&mut self, layout: &Resource, offset_bytes: u32, data: &[u32]) {}
 
     unsafe fn insert_debug_marker(&mut self, label: &str) {}
