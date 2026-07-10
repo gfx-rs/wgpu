@@ -690,7 +690,7 @@ fn write_output(
             fs::write(output_path, wgsl)?;
         }
         other => {
-            println!("Unknown output extension: {other}");
+            eprintln!("Unknown output extension: {other}");
         }
     }
 
