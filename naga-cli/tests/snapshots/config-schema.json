@@ -28,6 +28,14 @@
       ],
       "default": null
     },
+    "compact": {
+      "description": "Compact the module's IR and revalidate before output.",
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "default": null
+    },
     "defines": {
       "description": "Preprocessor defines for the GLSL frontend (`KEY → VALUE`).",
       "type": [
@@ -51,10 +59,26 @@
       ],
       "default": null
     },
+    "dxc": {
+      "description": "After writing HLSL output, compile each entry point to DXIL with `dxc` (must be on PATH).",
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "default": null
+    },
     "entry_point": {
       "description": "The shader entry point to target.",
       "type": [
         "string",
+        "null"
+      ],
+      "default": null
+    },
+    "generate_debug_symbols": {
+      "description": "Generate debug symbols (spv-out only, for now).",
+      "type": [
+        "boolean",
         "null"
       ],
       "default": null
@@ -113,6 +137,22 @@
         "type": "number",
         "format": "double"
       },
+      "default": null
+    },
+    "spirv_opt": {
+      "description": "After writing SPIR-V output, optimize it in place with `spirv-opt` (must be on PATH).",
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "default": null
+    },
+    "spirv_val": {
+      "description": "After writing SPIR-V output, validate it with `spirv-val` (must be on PATH).",
+      "type": [
+        "boolean",
+        "null"
+      ],
       "default": null
     },
     "spv_in": {

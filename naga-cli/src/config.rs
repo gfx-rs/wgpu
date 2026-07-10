@@ -49,6 +49,21 @@ pub struct Config {
 
     /// Options for the dot backend.
     pub dot: Option<naga::back::dot::Options>,
+
+    /// Compact the module's IR and revalidate before output.
+    pub compact: Option<bool>,
+
+    /// Generate debug symbols (spv-out only, for now).
+    pub generate_debug_symbols: Option<bool>,
+
+    /// After writing SPIR-V output, validate it with `spirv-val` (must be on PATH).
+    pub spirv_val: Option<bool>,
+
+    /// After writing SPIR-V output, optimize it in place with `spirv-opt` (must be on PATH).
+    pub spirv_opt: Option<bool>,
+
+    /// After writing HLSL output, compile each entry point to DXIL with `dxc` (must be on PATH).
+    pub dxc: Option<bool>,
 }
 
 /// Apply a loaded [`Config`] on top of already-built [`crate::params::Parameters`].
@@ -145,5 +160,23 @@ pub fn apply_config(config: Config, params: &mut crate::params::Parameters<'stat
     // Dot backend options.
     if let Some(dot) = config.dot {
         params.dot = dot;
+    }
+
+    // Processing actions. (--before-compaction stays a CLI-only I/O flag and can still
+    // force compaction; hence the `|| params.compact` to preserve an already-set value.)
+    if let Some(compact) = config.compact {
+        params.compact = compact || params.compact;
+    }
+    if let Some(g) = config.generate_debug_symbols {
+        params.generate_debug_symbols = g;
+    }
+    if let Some(v) = config.spirv_val {
+        params.spirv_val = v;
+    }
+    if let Some(o) = config.spirv_opt {
+        params.spirv_opt = o;
+    }
+    if let Some(d) = config.dxc {
+        params.dxc = d;
     }
 }
