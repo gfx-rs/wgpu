@@ -5,7 +5,12 @@ use clap::{ArgGroup, Parser, ValueEnum};
 /// Translate shaders to different formats.
 #[derive(Parser, Debug, Clone)]
 #[command(version, about, long_about = None)]
-#[command(group(ArgGroup::new("options").multiple(true).conflicts_with("config_input")))]
+#[command(group(ArgGroup::new("options").multiple(true).conflicts_with("config_input").args([
+    "fake_missing_bindings",
+    "force_loop_bounding",
+    "ray_query_initialization_tracking",
+    "zero_initialize_workgroup_memory",
+])))]
 pub struct Args {
     /// Bitmask of the ValidationFlags to be used; use 0 to disable validation.
     #[arg(long, group = "options")]
@@ -103,6 +108,14 @@ pub struct Args {
     /// Whether the mesh shader output should be validated.
     #[arg(long, default_value_t = true, action = clap::ArgAction::Set, group = "options")]
     pub validate_mesh_output: bool,
+
+    /// Options shared across the SPIR-V, MSL, and HLSL backends.
+    #[command(flatten)]
+    pub common: naga::back::CommonBackendOptions,
+
+    /// How to zero-initialize workgroup memory (native | polyfill | none).
+    #[arg(long, value_enum)]
+    pub zero_initialize_workgroup_memory: Option<naga::back::ZeroInitializeWorkgroupMemoryMode>,
 
     /// Read all translation options from a JSON config file (mutually exclusive with option flags).
     #[arg(long, group = "config_input")]

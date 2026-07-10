@@ -3,64 +3,134 @@ CLI for the naga shader translator and validator. Part of the wgpu project
 Usage: naga [OPTIONS] [FILES]...
 
 Arguments:
-  [FILES]...  Input file (stdin if omitted), then output files. In bulk mode, all are inputs
+  [FILES]...
+          Input file (stdin if omitted), then output files. In bulk mode, all are inputs
 
 Options:
       --validate <VALIDATE>
           Bitmask of the ValidationFlags to be used; use 0 to disable validation
+
       --index-bounds-check-policy <INDEX_BOUNDS_CHECK_POLICY>
-          Policy for index bounds checking of arrays, vectors, and matrices [possible values: restrict, read-zero-skip-write, unchecked]
+          Policy for index bounds checking of arrays, vectors, and matrices
+          
+          [possible values: restrict, read-zero-skip-write, unchecked]
+
       --buffer-bounds-check-policy <BUFFER_BOUNDS_CHECK_POLICY>
-          Bounds-check policy for arrays/vectors/matrices in `storage`/`uniform` globals. Defaults to the index bounds check policy [possible values: restrict, read-zero-skip-write, unchecked]
+          Bounds-check policy for arrays/vectors/matrices in `storage`/`uniform` globals. Defaults to the index bounds check policy
+          
+          [possible values: restrict, read-zero-skip-write, unchecked]
+
       --image-load-bounds-check-policy <IMAGE_LOAD_BOUNDS_CHECK_POLICY>
-          Bounds-check policy for texture loads. Defaults to the index bounds check policy [possible values: restrict, read-zero-skip-write, unchecked]
+          Bounds-check policy for texture loads. Defaults to the index bounds check policy
+          
+          [possible values: restrict, read-zero-skip-write, unchecked]
+
       --block-ctx-dir <BLOCK_CTX_DIR>
           Directory to dump the SPIR-V block context dump to
+
       --entry-point <ENTRY_POINT>
           The shader entrypoint. With `--compact`, anything unreachable from it is dropped
+
       --profile <PROFILE>
           GLSL profile to target, e.g. `es`, `core`, `es330`
+
       --shader-model <SHADER_MODEL>
           HLSL shader model, e.g. `50`, `51`, `60`..`67`
+
       --spirv-version <SPIRV_VERSION>
           SPIR-V version, e.g. `1.0`, `1.4`
+
       --shader-stage <SHADER_STAGE>
-          Shader stage; derived from the file extension if unspecified [possible values: vert, frag, comp]
+          Shader stage; derived from the file extension if unspecified
+          
+          [possible values: vert, frag, comp]
+
       --input-kind <INPUT_KIND>
-          Kind of input: `glsl`, `wgsl`, `spv`, or `bin` [possible values: bin, glsl, spv, wgsl]
+          Kind of input: `glsl`, `wgsl`, `spv`, or `bin`
+          
+          [possible values: bin, glsl, spv, wgsl]
+
       --metal-version <METAL_VERSION>
           Metal language version, e.g. `1.0`, `1.1`, `1.2`
+
       --keep-coordinate-space
           Disable coordinate-space conversions where the frontend/backend supports them
+
       --dot-cfg-only
           In dot output, include only the control flow graph
+
       --stdin-file-path <STDIN_FILE_PATH>
           Treat STDIN as if it were this file path (needed for extension-based detection)
+
   -g, --generate-debug-symbols
           Generate debug symbols (spv-out only, for now)
+
       --compact
           Compact the module's IR and revalidate
+
       --before-compaction <BEFORE_COMPACTION>
           Write the module's IR before compaction to the given file. Implies `--compact`
+
       --bulk-validate
           Bulk validation mode: all filenames are inputs to read and validate
+
       --override <OVERRIDES>
           Pipeline-constant override, of the form "foo=N,bar=M"; repeatable
+
   -D, --defines <DEFINES>
           Preprocessor defines for the GLSL frontend, "KEY=VALUE"; repeatable
+
       --capabilities <CAPABILITIES>
-          Capabilities filter: comma-separated names, a numeric bitflags value, "none", or "all" [default: all]
+          Capabilities filter: comma-separated names, a numeric bitflags value, "none", or "all"
+          
+          [default: all]
+
       --task-limits <TASK_LIMITS>
           Mesh shader task dispatch limits, as "X,Y"
+
       --validate-mesh-output <VALIDATE_MESH_OUTPUT>
-          Whether the mesh shader output should be validated [default: true] [possible values: true, false]
+          Whether the mesh shader output should be validated
+          
+          [default: true]
+          [possible values: true, false]
+
+      --fake-missing-bindings <FAKE_MISSING_BINDINGS>
+          Bind fake resources for shaders that reference missing bindings
+          
+          [default: true]
+          [possible values: true, false]
+
+      --force-loop-bounding <FORCE_LOOP_BOUNDING>
+          Add a bound to all loops that might not terminate
+          
+          [default: true]
+          [possible values: true, false]
+
+      --ray-query-initialization-tracking <RAY_QUERY_INITIALIZATION_TRACKING>
+          Track ray query initialization
+          
+          [default: true]
+          [possible values: true, false]
+
+      --zero-initialize-workgroup-memory <ZERO_INITIALIZE_WORKGROUP_MEMORY>
+          How to zero-initialize workgroup memory (native | polyfill | none)
+
+          Possible values:
+          - native:   Via `VK_KHR_zero_initialize_workgroup_memory` or Vulkan 1.3
+          - polyfill: Via assignments + barrier
+          - none
+
       --config <CONFIG>
           Read all translation options from a JSON config file (mutually exclusive with option flags)
+
       --config-json <CONFIG_JSON>
           Read all translation options from an inline JSON string (mutually exclusive with option flags)
+
       --print-config-schema
           Print the JSON Schema for the config document and exit
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
+
   -V, --version
           Print version

@@ -91,12 +91,28 @@ pub fn build_parameters(args: &Args) -> anyhow::Result<Parameters<'static>> {
     params.compact = args.compact || args.before_compaction.is_some();
     params.capabilities = args.capabilities;
 
-    params.spv_out.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
-    params.spv_out.task_dispatch_limits = args.task_limits;
-    params.msl.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
-    params.msl.task_dispatch_limits = args.task_limits;
-    params.hlsl.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
-    params.hlsl.task_dispatch_limits = args.task_limits;
+    // Apply CommonBackendOptions (fake_missing_bindings, force_loop_bounding,
+    // ray_query_initialization_tracking) to the three backends that embed it.
+    params.spv_out.common = args.common.clone();
+    params.msl.common = args.common.clone();
+    params.hlsl.common = args.common.clone();
+
+    // Apply --zero-initialize-workgroup-memory to all four backends.
+    if let Some(mode) = args.zero_initialize_workgroup_memory {
+        params.spv_out.zero_initialize_workgroup_memory = mode;
+        params.msl.zero_initialize_workgroup_memory = mode;
+        params.hlsl.zero_initialize_workgroup_memory = mode;
+        params.glsl.zero_initialize_workgroup_memory = mode;
+    }
+
+    // Bespoke overrides for fields in CommonBackendOptions that have their own CLI flags
+    // (--task-limits, --validate-mesh-output). These run AFTER the .common copy so they win.
+    params.spv_out.common.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
+    params.spv_out.common.task_dispatch_limits = args.task_limits;
+    params.msl.common.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
+    params.msl.common.task_dispatch_limits = args.task_limits;
+    params.hlsl.common.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
+    params.hlsl.common.task_dispatch_limits = args.task_limits;
 
     params.input_kind = args.input_kind;
     params.shader_stage = args.shader_stage;
@@ -145,17 +161,17 @@ mod tests {
             Args::try_parse_from(["naga", "--validate-mesh-output", "false", "in.wgsl"]).unwrap();
         assert!(!args.validate_mesh_output);
         let params = build_parameters(&args).unwrap();
-        assert!(!params.spv_out.mesh_shader_primitive_indices_clamp);
-        assert!(!params.msl.mesh_shader_primitive_indices_clamp);
-        assert!(!params.hlsl.mesh_shader_primitive_indices_clamp);
+        assert!(!params.spv_out.common.mesh_shader_primitive_indices_clamp);
+        assert!(!params.msl.common.mesh_shader_primitive_indices_clamp);
+        assert!(!params.hlsl.common.mesh_shader_primitive_indices_clamp);
 
         // default (omitted) stays true
         let args_default = Args::try_parse_from(["naga", "in.wgsl"]).unwrap();
         assert!(args_default.validate_mesh_output);
         let params_default = build_parameters(&args_default).unwrap();
-        assert!(params_default.spv_out.mesh_shader_primitive_indices_clamp);
-        assert!(params_default.msl.mesh_shader_primitive_indices_clamp);
-        assert!(params_default.hlsl.mesh_shader_primitive_indices_clamp);
+        assert!(params_default.spv_out.common.mesh_shader_primitive_indices_clamp);
+        assert!(params_default.msl.common.mesh_shader_primitive_indices_clamp);
+        assert!(params_default.hlsl.common.mesh_shader_primitive_indices_clamp);
 
         // explicit true also works
         let args_true =
