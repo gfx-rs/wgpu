@@ -1077,8 +1077,6 @@ pub struct Options<'a> {
     /// requires capabilities beyond these is rejected with an error.
     ///
     /// If this is `None`, all capabilities are permitted.
-    #[cfg_attr(feature = "serialize", serde(skip_serializing))]
-    #[cfg_attr(feature = "deserialize", serde(skip_deserializing))]
     pub capabilities: Option<crate::FastHashSet<Capability>>,
 
     /// How should generate code handle array, vector, matrix, or image texel
@@ -1103,6 +1101,7 @@ pub struct Options<'a> {
     /// When false, `f16` I/O is polyfilled using `f32` types with conversions.
     pub use_storage_input_output_16: bool,
 
+    // Skipped: lifetime-bearing, runtime-populated from `-g`, never in config.
     #[cfg_attr(feature = "serialize", serde(skip_serializing))]
     #[cfg_attr(feature = "deserialize", serde(skip_deserializing))]
     pub debug_info: Option<DebugInfo<'a>>,
@@ -1281,5 +1280,23 @@ mod serde_tests {
         let def: Options = serde_json::from_str(r#"{"lang_version":[1,3]}"#).unwrap();
         assert_eq!(def.lang_version, (1, 3));
         assert!(def.debug_info.is_none());
+        // capabilities defaults to None when not present in JSON
+        assert!(def.capabilities.is_none());
+    }
+
+    #[test]
+    fn spv_options_capabilities_round_trip() {
+        // capabilities must survive a serialize/deserialize round-trip.
+        let caps: crate::FastHashSet<Capability> =
+            [Capability::Shader].into_iter().collect();
+        let opts = Options {
+            capabilities: Some(caps.clone()),
+            ..Options::default()
+        };
+        let json = serde_json::to_string(&opts).unwrap();
+        let back: Options = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.capabilities, Some(caps));
+        // debug_info is always skipped regardless
+        assert!(back.debug_info.is_none());
     }
 }
