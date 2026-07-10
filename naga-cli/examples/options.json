@@ -1,0 +1,9 @@
+{
+  "spv_out": {
+    "lang_version": [1, 3],
+    "force_loop_bounding": false
+  },
+  "msl": {
+    "lang_version": [2, 0]
+  }
+}
