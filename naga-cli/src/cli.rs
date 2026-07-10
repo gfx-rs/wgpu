@@ -41,13 +41,13 @@ EXAMPLES
   naga --print-config-schema
 
 OPTIONS: FLAGS vs CONFIG
-  Options can be set either as individual flags OR via a JSON config (--config <file> /
-  --config-json <string>); the two are mutually exclusive — passing any option flag
-  (including --compact, -g, --spirv-val, --spirv-opt, --dxc) alongside --config is an error.
-  Each of those is a key in the config JSON instead. Run `naga --print-config-schema` to see
-  every config key and its type. Only I/O — where data comes from and goes to — composes with
-  either mode: the input/output paths, --input-kind, --shader-stage, --output-kind,
-  --before-compaction, and --format. Everything else is an option (a config key).
+  Options can be set as individual flags OR via a JSON config (--config <file> /
+  --config-json <string>), never both: passing ANY flag alongside --config is an error. In
+  config mode only the positional input/output file paths are accepted on the command line;
+  everything else lives in the JSON. Run `naga --print-config-schema` to see every config key
+  and its type. (Because the format specifiers are themselves flags, config mode reads and
+  writes files by extension only — stdin/stdout via `-`, --input-kind/--output-kind,
+  --format json, and --before-compaction are flag-mode features.)
 
 STRUCTURED OUTPUT
   --format json emits one JSON document on stdout with `diagnostics`
@@ -117,18 +117,18 @@ pub struct Args {
     pub spirv_version: Option<(u8, u8)>,
 
     /// Shader stage; derived from the file extension if unspecified. Selects the input
-    /// stage for GLSL (an input concern, so it composes with `--config`).
-    #[arg(long)]
+    /// stage for GLSL.
+    #[arg(long, group = "options")]
     pub shader_stage: Option<ShaderStageArg>,
 
     /// Kind of input: `glsl`, `wgsl`, `spv`, or `bin` (overrides extension detection;
-    /// required for stdin `-`). An input concern, so it composes with `--config`.
-    #[arg(long)]
+    /// required for stdin `-`).
+    #[arg(long, group = "options")]
     pub input_kind: Option<InputKind>,
 
     /// Output format when writing to stdout (output path `-`), which has no extension
     /// to infer from. Ignored when the output is a regular file.
-    #[arg(long, value_enum)]
+    #[arg(long, value_enum, group = "options")]
     pub output_kind: Option<OutputKind>,
 
     /// Metal language version, e.g. `1.0`, `1.1`, `1.2`.
@@ -152,11 +152,11 @@ pub struct Args {
     pub compact: bool,
 
     /// Write the module's IR before compaction to the given file. Implies `--compact`.
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub before_compaction: Option<String>,
 
     /// Bulk validation mode: all filenames are inputs to read and validate.
-    #[arg(long)]
+    #[arg(long, group = "options")]
     pub bulk_validate: bool,
 
     /// Pipeline-constant override, of the form "foo=N,bar=M"; repeatable.
@@ -212,7 +212,7 @@ pub struct Args {
     pub dxc: bool,
 
     /// Output format for diagnostics and reflection: `text` (human, default) or `json`.
-    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+    #[arg(long, value_enum, default_value_t = OutputFormat::Text, group = "options")]
     pub format: OutputFormat,
 
     /// Input file (stdin if omitted), then output files. In bulk mode, all are inputs.
